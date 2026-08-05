@@ -1,12 +1,13 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { FolderTree, ListTree } from "lucide-react";
+import { FolderTree, ListTree, Share2 } from "lucide-react";
 import MarkdownEditor from "../components/editor/MarkdownEditor";
 import { DocumentList } from "../components/editor/DocumentList";
 import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
 import { OutlinePanel } from "../components/editor/OutlinePanel";
 import { ResizablePanel } from "../components/editor/ResizablePanel";
+import { ShareDialog } from "../components/editor/ShareDialog";
 import { scrollToHeading, useOutline } from "../components/editor/useOutline";
 import {
   useCreateDocument,
@@ -37,6 +38,7 @@ export function EditorPage() {
   const confirmDelete = useDeleteConfirm();
 
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   // 折叠状态与面板宽度一样要记住，否则每次刷新都弹回展开态
   const [docsOpen, setDocsOpen] = usePersistedFlag(
     "koinote:panel-open:documents",
@@ -237,6 +239,22 @@ export function EditorPage() {
                 </span>
               )
             }
+            trailingControls={
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                title={t.editor.share}
+                aria-label={t.editor.share}
+                className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition ${
+                  doc.data.share
+                    ? "text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                    : "text-neutral-400 hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+                }`}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.editor.share}</span>
+              </button>
+            }
             outlineSlot={
               outlineOpen ? (
                 <ResizablePanel
@@ -261,6 +279,14 @@ export function EditorPage() {
           <Centered>{t.editor.loading}</Centered>
         )}
       </div>
+
+      {shareOpen && doc.data && (
+        <ShareDialog
+          docId={doc.data.docId}
+          share={doc.data.share}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
 
     </div>
   );

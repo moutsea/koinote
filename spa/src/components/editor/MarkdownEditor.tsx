@@ -29,6 +29,7 @@ export default function MarkdownEditor({
   onTitleCommitted,
   outlineSlot,
   leadingControls,
+  trailingControls,
 }: {
   document: Document;
   onEditorReady?: (editor: Editor | null) => void;
@@ -37,6 +38,8 @@ export default function MarkdownEditor({
   outlineSlot?: React.ReactNode;
   /** 标题栏左侧的控件（面板展开按钮） */
   leadingControls?: React.ReactNode;
+  /** 标题栏右侧的控件（分享、导出） */
+  trailingControls?: React.ReactNode;
 }) {
   const { t } = useI18n();
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -235,6 +238,7 @@ export default function MarkdownEditor({
             {statusText}
           </span>
         )}
+        {trailingControls}
       </div>
 
       {/* 大纲与正文同处一行：无分隔线、同底色，读起来是文档的导航而非另一个面板 */}
