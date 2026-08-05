@@ -121,8 +121,8 @@ export const en: Messages = {
     shareTitle: "Share this document",
     shareAccessLink: "Anyone with the link",
     shareAccessLinkHint: "The link is random and unguessable, but works for anyone who has it",
-    shareAccessPublic: "Public",
-    shareAccessPublicHint: "Same as above, and fine to publish openly",
+    shareTokenRotated:
+      "A new link was generated: removing the password invalidated the old link immediately. If you already sent the old one, share again.",
     shareAccessPassword: "Password required",
     shareAccessPasswordHint: "Visitors must enter a password, at least 6 characters",
     sharePasswordPlaceholder: "Set an access password",

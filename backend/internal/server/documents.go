@@ -150,7 +150,7 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 	if token := strings.TrimSpace(shareToken.String); token != "" {
 		doc.Share = &model.DocumentShare{
 			Token:            token,
-			Access:           strings.TrimSpace(shareAccess.String),
+			Access:           normalizeShareAccess(shareAccess.String),
 			RequiresPassword: sharePasswordHash.Valid && strings.TrimSpace(sharePasswordHash.String) != "",
 		}
 	}

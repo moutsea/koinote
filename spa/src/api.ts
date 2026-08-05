@@ -83,12 +83,16 @@ export function getSession() {
 
 // ---------- 文档 ----------
 
-export type ShareAccess = "link" | "public" | "password";
+// 曾有第三档 "public"，与 "link" 行为完全相同，已删。
+// 存量数据由后端 normalizeShareAccess 归一成 "link"，前端不必再认它。
+export type ShareAccess = "link" | "password";
 
 export type DocumentShare = {
   token: string;
   access: ShareAccess;
   requiresPassword: boolean;
+  /** 后端因放宽权限换了新 token，老链接已失效 —— 需要提示用户重新分享 */
+  tokenRotated?: boolean;
 };
 
 export type Document = {

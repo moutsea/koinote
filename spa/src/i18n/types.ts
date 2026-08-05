@@ -107,8 +107,7 @@ export interface Messages {
     shareTitle: string;
     shareAccessLink: string;
     shareAccessLinkHint: string;
-    shareAccessPublic: string;
-    shareAccessPublicHint: string;
+    shareTokenRotated: string;
     shareAccessPassword: string;
     shareAccessPasswordHint: string;
     sharePasswordPlaceholder: string;

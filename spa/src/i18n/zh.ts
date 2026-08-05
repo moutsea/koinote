@@ -120,8 +120,8 @@ export const zh: Messages = {
     shareTitle: "分享此文档",
     shareAccessLink: "知道链接的人可访问",
     shareAccessLinkHint: "链接随机不可猜，但拿到即可打开",
-    shareAccessPublic: "公开",
-    shareAccessPublicHint: "同上，且你可以放心公开传播",
+    shareTokenRotated:
+      "已生成新链接：口令保护被移除，原链接立即失效。若你已把旧链接发给别人，请重新分享。",
     shareAccessPassword: "需要口令",
     shareAccessPasswordHint: "访问者需输入口令，至少 6 位",
     sharePasswordPlaceholder: "设置访问口令",

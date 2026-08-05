@@ -122,8 +122,8 @@ export const fr: Messages = {
     shareTitle: "Partager ce document",
     shareAccessLink: "Toute personne ayant le lien",
     shareAccessLinkHint: "Le lien est aléatoire et indevinable, mais fonctionne pour quiconque l'obtient",
-    shareAccessPublic: "Public",
-    shareAccessPublicHint: "Comme ci-dessus, et publiable ouvertement",
+    shareTokenRotated:
+      "Un nouveau lien a été généré : la suppression du mot de passe a invalidé immédiatement l'ancien lien. Si vous l'avez déjà envoyé, partagez à nouveau.",
     shareAccessPassword: "Mot de passe requis",
     shareAccessPasswordHint: "Les visiteurs doivent saisir un mot de passe, au moins 6 caractères",
     sharePasswordPlaceholder: "Définir un mot de passe d'accès",

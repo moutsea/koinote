@@ -10,13 +10,13 @@ import (
 
 // Config 保存后端运行所需的环境配置。MVP 只需数据库、会话密钥、内部令牌与环境标识。
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	InternalToken string // Worker → 后端的内部鉴权令牌，同时用作 session 签名密钥
-	SessionSecret string // session HMAC 签名密钥（缺省回退到 InternalToken）
-	NodeEnv       string // "production" | "development"
-	AutoMigrate   bool
-	MigrationsDir string
+	Port           string
+	DatabaseURL    string
+	InternalToken  string // Worker → 后端的内部鉴权令牌，同时用作 session 签名密钥
+	SessionSecret  string // session HMAC 签名密钥（缺省回退到 InternalToken）
+	NodeEnv        string // "production" | "development"
+	AutoMigrate    bool
+	MigrationsDir  string
 	AllowedOrigins []string
 
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。

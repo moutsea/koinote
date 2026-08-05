@@ -22,8 +22,14 @@ import (
 
 const (
 	shareAccessLink     = "link"     // 知道链接即可访问
-	shareAccessPublic   = "public"   // 同上，但语义上允许被索引/列出
 	shareAccessPassword = "password" // 需要口令
+
+	// shareAccessPublicLegacy 是删掉的第三档。它与 link 行为完全相同：
+	// 后端从未有分支读它，而它声称的「允许被索引」也不存在 ——
+	// setShareResponseHeaders 给所有分享页无条件加了 noindex。
+	// 一个不改变任何行为的选项只会让用户误以为自己做了安全决策。
+	// 保留常量仅用于把存量行归一成 link。
+	shareAccessPublicLegacy = "public"
 
 	sharePasswordMinRunes = 6
 	sharePasswordMaxBytes = 256
@@ -40,8 +46,37 @@ const (
 func setShareResponseHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Vary", "Cookie")
-	// 分享页不该被搜索引擎收录（public 档也一样，由用户自己传播）
+	// 分享页一律不进搜索引擎，由用户自己传播
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+}
+
+// normalizeShareAccess 把库里读出的档位归一成当前支持的取值。
+// 存量的 public、空值、以及任何非预期取值都按最保守的 link 处理。
+//
+// 只用在读取路径。写入路径故意不用它：这里对未知值兜底成 link 是安全的
+// （真正的访问控制在 share_password_hash），但写入时兜底会把拼错的档位
+// 静默咽下去，那属于把错误藏起来。
+func normalizeShareAccess(raw string) string {
+	if strings.TrimSpace(raw) == shareAccessPassword {
+		return shareAccessPassword
+	}
+	return shareAccessLink
+}
+
+// shouldRotateShareToken 判断这次改动是否在「放宽权限」。
+//
+// 收紧权限（link → 口令）可以复用 token：老链接只会变得更严，
+// 拿着它的人从能读变成要输口令，安全性只增不减。
+//
+// 放宽权限（口令 → link）必须换 token。否则同一个 URL 会从「要口令」
+// 变成「谁拿到都能直接读全文」—— 之前被口令挡住的人瞬间全部获得访问权，
+// 而用户以为自己只是改了个设置。换 token 让老链接立刻失效，
+// 用户必须重新分享，这个动作本身就是知情确认。
+func shouldRotateShareToken(existingToken string, hadPassword, willHavePassword bool) bool {
+	if strings.TrimSpace(existingToken) == "" {
+		return false // 还没分享过，谈不上轮换
+	}
+	return hadPassword && !willHavePassword
 }
 
 func sharePasswordProblem(password string) string {
@@ -57,8 +92,11 @@ func sharePasswordProblem(password string) string {
 
 // ---------- 创建 / 更新分享 ----------
 
-// shareCreate 开启或更新分享。重复调用复用同一 token，只改权限，
-// 这样已发出的链接不会因为改了权限就失效。
+// shareCreate 开启或更新分享。
+//
+// 重复调用默认复用同一 token，这样已发出的链接不会因为改权限就失效。
+// 唯一例外是放宽权限（口令 → 无口令），此时必须换新 token，
+// 详见 shouldRotateShareToken。
 func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -83,7 +121,12 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 	if access == "" {
 		access = shareAccessLink
 	}
-	if access != shareAccessLink && access != shareAccessPublic && access != shareAccessPassword {
+	// 老页面（未刷新的标签页）可能还在发 public。它与 link 行为相同，
+	// 按 link 收下而不是报错 —— 拒绝会让用户看到一个无法理解的失败。
+	if access == shareAccessPublicLegacy {
+		access = shareAccessLink
+	}
+	if access != shareAccessLink && access != shareAccessPassword {
 		httpx.ErrorCode(w, http.StatusBadRequest, "share_access_invalid", "Invalid share access level")
 		return
 	}
@@ -104,11 +147,13 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 		passwordHash = sql.NullString{String: string(hashed), Valid: true}
 	}
 
-	// 先查现有 token，有则复用
+	// 现有 token 与现有口令状态都要查：是否轮换取决于「改动前有没有口令」
 	var existing sql.NullString
+	var existingHash sql.NullString
 	err := a.db.QueryRow(r.Context(), `
-		SELECT share_token FROM documents WHERE doc_id = $1 AND user_id = $2
-	`, docID, user.ID).Scan(&existing)
+		SELECT share_token, share_password_hash
+		FROM documents WHERE doc_id = $1 AND user_id = $2
+	`, docID, user.ID).Scan(&existing, &existingHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return
@@ -120,7 +165,10 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := strings.TrimSpace(existing.String)
-	if token == "" {
+	hadPassword := existingHash.Valid && strings.TrimSpace(existingHash.String) != ""
+	rotated := shouldRotateShareToken(token, hadPassword, passwordHash.Valid)
+
+	if token == "" || rotated {
 		generated, genErr := randomHex(16) // 32 位十六进制，不可枚举
 		if genErr != nil {
 			log.Printf("share token: %v", genErr)
@@ -151,6 +199,9 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 			"token":            token,
 			"access":           access,
 			"requiresPassword": passwordHash.Valid,
+			// 轮换必须回传：用户可能已经把老链接发给别人了，
+			// 界面得告诉他老链接已失效，需要重新分享。
+			"tokenRotated": rotated,
 		},
 	})
 }
@@ -213,7 +264,7 @@ func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDo
 		&doc.Title, &doc.Content, &access, &doc.PasswordHash,
 		&doc.UpdatedAt, &doc.OwnerName,
 	)
-	doc.Access = strings.TrimSpace(access.String)
+	doc.Access = normalizeShareAccess(access.String)
 	return doc, err
 }
 

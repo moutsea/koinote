@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Globe, Link2, Lock, X } from "lucide-react";
+import { Check, Copy, Link2, Lock, X } from "lucide-react";
 import { ApiError } from "../../api";
 import {
   useCreateShare,
@@ -26,6 +26,7 @@ export function ShareDialog({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [rotated, setRotated] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   const shareURL = share
@@ -53,12 +54,17 @@ export function ShareDialog({
   async function submit() {
     setError(null);
     try {
-      await create.mutateAsync({
+      const result = await create.mutateAsync({
         docId,
         access,
         password: access === "password" ? password : undefined,
       });
       setPassword(""); // 提交后不再留在内存里
+      // 放宽权限时后端换了 token，老链接已失效。用户可能已经把老链接
+      // 发出去了，必须显式告知，否则他不会知道要重新分享。
+      const didRotate = Boolean(result?.share?.tokenRotated);
+      setRotated(didRotate);
+      if (didRotate) setCopied(false); // 链接变了，"已复制"不再成立
     } catch (err) {
       setError(translateError(err));
     }
@@ -127,13 +133,6 @@ export function ShareDialog({
             onSelect={() => setAccess("link")}
           />
           <AccessOption
-            icon={<Globe className="h-4 w-4" />}
-            label={t.editor.shareAccessPublic}
-            hint={t.editor.shareAccessPublicHint}
-            checked={access === "public"}
-            onSelect={() => setAccess("public")}
-          />
-          <AccessOption
             icon={<Lock className="h-4 w-4" />}
             label={t.editor.shareAccessPassword}
             hint={t.editor.shareAccessPasswordHint}
@@ -159,6 +158,16 @@ export function ShareDialog({
             className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40 dark:text-red-400"
           >
             {error}
+          </p>
+        )}
+
+        {/* 紧贴链接输入框上方：用户正要复制链接时才最可能读到这句 */}
+        {rotated && (
+          <p
+            role="status"
+            className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+          >
+            {t.editor.shareTokenRotated}
           </p>
         )}
 

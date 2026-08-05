@@ -122,8 +122,8 @@ export const ja: Messages = {
     shareTitle: "このドキュメントを共有",
     shareAccessLink: "リンクを知っている人",
     shareAccessLinkHint: "リンクはランダムで推測できませんが、入手した人は誰でも開けます",
-    shareAccessPublic: "公開",
-    shareAccessPublicHint: "上と同じで、公に配布しても問題ありません",
+    shareTokenRotated:
+      "新しいリンクを生成しました：パスワード保護の解除により、以前のリンクは即座に無効になりました。既に配布済みの場合は再共有してください。",
     shareAccessPassword: "パスワードが必要",
     shareAccessPasswordHint: "閲覧者はパスワードの入力が必要です（6 文字以上）",
     sharePasswordPlaceholder: "アクセスパスワードを設定",

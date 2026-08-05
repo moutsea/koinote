@@ -136,13 +136,22 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 
 ## 分享
 
-三档权限，参考 keepask 的分享模型落地：
+两档权限：
 
 | 档位 | 含义 |
 |---|---|
 | `link` | 知道链接即可访问，token 随机 32 位十六进制不可枚举 |
-| `public` | 同上，语义上允许公开传播 |
 | `password` | 访问者需输入口令（bcrypt 存哈希，至少 6 字符） |
+
+原本还有第三档 `public`，已删。它与 `link` **行为完全相同**——后端从未有分支
+读它，而它声称的「允许被索引」也不存在：`setShareResponseHeaders` 给所有分享页
+无条件加了 `noindex`。界面提示语当时写的就是「同上」。一个不改变任何行为的
+选项只会让用户误以为自己做了一个安全决策。
+
+存量数据由 `normalizeShareAccess` 在读取时归一成 `link`；写入路径仍接受
+`public`（老页面可能还没刷新）并按 `link` 处理，但其余非法取值一律 400。
+读写不共用归一函数是有意的：读取时兜底成 `link` 是安全的（真正的访问控制在
+`share_password_hash`），写入时兜底则会把拼错的档位静默咽下去。
 
 端点：
 
@@ -158,11 +167,32 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 
 几处刻意的语义取舍：
 
-- **重复调用 POST 复用同一 token，只改权限** —— 已发出的链接不会因为改权限就失效
+- **重复调用 POST 默认复用同一 token** —— 已发出的链接不会因为改权限就失效
+- **但放宽权限时必须换 token**（见下）
 - **撤销后重新开启会换新 token** —— 老链接永久失效，这是撤销的意义所在
 - **已撤销与从未存在返回同一响应** —— 不泄露某个链接曾经有效
 - **口令档下 GET 只回 `requiresPassword` 标志** —— 正文一个字都不经过未验证的响应
 - **公开视图只输出 title / content / updatedAt / ownerName** —— 内部 id、user_id、doc_id、share_token 一律不外泄
+
+### 放宽权限必须换 token
+
+判定见 `shouldRotateShareToken`。规则不对称，因为风险不对称：
+
+| 改动 | token | 理由 |
+|---|---|---|
+| 收紧（`link` → `password`） | 复用 | 老链接只会变得更严，安全性只增不减 |
+| 改口令（`password` → `password`） | 复用 | 权限档未变 |
+| **放宽（`password` → `link`）** | **换新** | 见下 |
+
+放宽时若复用 token，同一个 URL 会从「要口令」变成「谁拿到都能直接读全文」，
+**之前被口令挡住的人瞬间全部获得访问权**，而用户以为自己只是改了个设置。
+这一步没有确认对话框拦着（撤销分享有），所以它是静默的权限放宽。
+
+换 token 让老链接立刻失效，用户必须重新分享——这个动作本身就是知情确认。
+响应回传 `tokenRotated`，界面据此显示提示，因为用户可能已经把老链接发出去了。
+
+选择换 token 而非加确认弹窗：弹窗可以被无脑点掉，而换 token 是结构性的——
+拿过老链接的人不会因为你调了个设置就突然获得访问权。
 
 口令爆破防护：两层限流（单 IP 20 次、单链接 10 次，15 分钟窗口），
 限流 key 用 token 的 sha256 而非明文。响应头 `Cache-Control: private, no-store`
@@ -310,7 +340,11 @@ pip install playwright pypdf pillow && playwright install chromium
 # 建议对着生产构建物跑（npm run build && npx vite preview）
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_pdf_export.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_export_formats.py
+PROBE_BASE=http://localhost:5274 python3 scripts/verify_share_rotation.py
 ```
+
+`verify_share_rotation.py` 验证放宽权限时老链接确实失效。这条必须走真实 HTTP：
+单元测试只能证明判定函数对，证明不了「那个 URL 真的打不开了」。
 
 `verify_pdf_export.py` 会解析 PDF 内部结构：页数、A4 尺寸、**每页内容流实际
 引用的 XObject**（判断分页是否正确 —— jsPDF 把所有位图放在一个共享资源字典里，
