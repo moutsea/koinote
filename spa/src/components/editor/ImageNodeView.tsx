@@ -78,8 +78,29 @@ export function ImageNodeView({
   return (
     <NodeViewWrapper className="my-2">
       <figure className="m-0">
-        {/* 图片始终在位。编辑时只是在下方追加源码行，不替换图片本身，
-            这样能边改边看，改完立刻知道换的是哪张。 */}
+        {/* 源码行在图片上方：编辑时视线与光标都在这一行，
+            图片留在下方作为即时预览，改完立刻知道换的是哪张。 */}
+        {editing && (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            spellCheck={false}
+            aria-label={t.editor.imageMarkdownLabel}
+            className="mb-1.5 w-full rounded-lg border border-sky-500/40 bg-sky-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-sky-500 dark:bg-sky-950/20"
+          />
+        )}
+
         <button
           type="button"
           // 编辑中点图片不该收起源码行。阻止默认行为避免抢走 input 焦点，
@@ -116,31 +137,12 @@ export function ImageNodeView({
           )}
         </button>
 
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                cancel();
-              }
-            }}
-            spellCheck={false}
-            aria-label={t.editor.imageMarkdownLabel}
-            className="mt-1.5 w-full rounded-lg border border-sky-500/40 bg-sky-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-sky-500 dark:bg-sky-950/20"
-          />
-        ) : (
-          alt && (
-            <figcaption className="mt-1 text-center text-xs text-neutral-400">
-              {alt}
-            </figcaption>
-          )
+        {/* 非编辑态用 alt 当图注。编辑态下源码行已经把 alt 显示出来了，
+            再挂一行图注是重复信息。 */}
+        {!editing && alt && (
+          <figcaption className="mt-1 text-center text-xs text-neutral-400">
+            {alt}
+          </figcaption>
         )}
       </figure>
     </NodeViewWrapper>
