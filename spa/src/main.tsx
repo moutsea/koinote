@@ -56,6 +56,12 @@ const registerRoute = createRoute({
     "RegisterRoute",
   ),
 });
+// 公开分享页：无需登录，token 即凭证
+const shareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/share/$token",
+  component: lazyRouteComponent(() => import("./pages/SharePage"), "SharePage"),
+});
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/dashboard",
@@ -72,6 +78,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   dashboardRoute,
+  shareRoute,
 ]);
 
 const router = createRouter({
