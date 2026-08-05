@@ -19,6 +19,8 @@
 
 # production
 /build
+# Vite 构建产物（由 npm run build 生成，不入版本控制）
+/spa/dist
 
 # misc
 .DS_Store

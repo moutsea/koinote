@@ -1,0 +1,132 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+html,
+body {
+  min-height: 100dvh;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ============ ProseMirror / TipTap 编辑器样式 ============ */
+.ProseMirror {
+  caret-color: var(--foreground);
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #9ca3af;
+}
+
+/* 任务列表：去掉默认项目符号，渲染复选框 */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 0.25rem;
+  user-select: none;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+}
+
+/* 代码块：等宽字体与背景 */
+.ProseMirror pre {
+  background: #0d1117;
+  color: #e6edf3;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.ProseMirror pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* highlight.js (lowlight) 语法高亮配色 —— GitHub Dark 精简版 */
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #ff7b72;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-tag {
+  color: #a5d6ff;
+}
+.hljs-number,
+.hljs-symbol {
+  color: #79c0ff;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #d2a8ff;
+}
+.hljs-variable,
+.hljs-name,
+.hljs-attribute {
+  color: #ffa657;
+}
+.hljs-built_in,
+.hljs-builtin-name {
+  color: #ffa657;
+}
+.hljs-meta {
+  color: #8b949e;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}

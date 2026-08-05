@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "koinote",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "spa/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "vars": {
+    "BACKEND_URL": "http://localhost:8080"
+  }
+
+  // 生产环境用 secret 覆盖：
+  // wrangler secret put BACKEND_URL
+  // wrangler secret put BACKEND_INTERNAL_TOKEN
+}

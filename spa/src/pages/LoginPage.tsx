@@ -1,0 +1,259 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { FileText } from "lucide-react";
+import { login, register, ApiError } from "../api";
+import { useI18n } from "../i18n";
+import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
+
+type Mode = "login" | "register";
+
+// OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
+function startOAuth(provider: "google" | "github") {
+  const search = new URLSearchParams({ redirectTo: "/dashboard" });
+  window.location.assign(`/api/auth/oauth/${provider}/start?${search.toString()}`);
+}
+
+export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { t } = useI18n();
+
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [identifier, setIdentifier] = useState(""); // 登录用：用户名或邮箱
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // 把后端错误码翻译成当前语言；未知码回退到后端英文 message 或通用提示。
+  function translateError(err: unknown): string {
+    if (err instanceof ApiError) {
+      if (err.code && t.errors[err.code]) return t.errors[err.code];
+      return err.message || t.auth.requestFailed;
+    }
+    if (err instanceof Error) return err.message;
+    return t.auth.requestFailed;
+  }
+
+  // OAuth 回调失败时后端会跳回 /login?error=<code>，这里读出来翻译展示。
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("error");
+    if (code) {
+      setError(t.errors[code] ?? t.auth.requestFailed);
+      // 清掉 URL 上的 error 参数，避免刷新时反复弹
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.toString());
+    }
+    // 仅挂载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(event: { preventDefault: () => void }) {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      if (mode === "login") {
+        await login(identifier, password);
+      } else {
+        if (password !== confirmPassword) {
+          setError(t.auth.passwordMismatch);
+          setLoading(false);
+          return;
+        }
+        await register({ username, email, password });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      void navigate({ to: "/dashboard" });
+    } catch (err) {
+      setError(translateError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-16">
+      <div className="w-full max-w-md">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+            <FileText className="h-6 w-6" />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">
+            {mode === "login" ? t.auth.loginTitle : t.auth.registerTitle}
+          </h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            {mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}
+          </p>
+        </div>
+
+        {/* 错误提示放在最上方，同时覆盖 OAuth 回调失败与表单提交失败两种来源 */}
+        {error && (
+          <p
+            role="alert"
+            className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40 dark:text-red-400"
+          >
+            {error}
+          </p>
+        )}
+
+        {/* 第三方登录：置顶作为首选入口，一步完成注册与登录 */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => startOAuth("google")}
+            className="flex w-full items-center justify-center gap-2.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-black/5 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 dark:hover:bg-white/10"
+          >
+            <GoogleIcon className="h-4 w-4" />
+            {t.auth.continueWithGoogle}
+          </button>
+          <button
+            type="button"
+            onClick={() => startOAuth("github")}
+            className="flex w-full items-center justify-center gap-2.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-black/5 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 dark:hover:bg-white/10"
+          >
+            <GitHubIcon className="h-4 w-4" />
+            {t.auth.continueWithGitHub}
+          </button>
+        </div>
+
+        {/* 分隔线 */}
+        <div className="my-6 flex items-center gap-3 text-xs text-neutral-400">
+          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+          <span className="uppercase tracking-wide">{t.auth.orDivider}</span>
+          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        </div>
+
+        <form
+          onSubmit={submit}
+          className="space-y-4 rounded-2xl border border-black/5 bg-white/60 p-6 dark:border-white/10 dark:bg-white/5"
+        >
+          {mode === "register" && (
+            <Field
+              label={t.auth.username}
+              value={username}
+              onChange={setUsername}
+              autoComplete="username"
+              placeholder={t.auth.usernamePlaceholder}
+            />
+          )}
+
+          {mode === "register" ? (
+            <Field
+              label={t.auth.email}
+              type="email"
+              value={email}
+              onChange={setEmail}
+              autoComplete="email"
+              placeholder={t.auth.emailPlaceholder}
+            />
+          ) : (
+            <Field
+              label={t.auth.identifier}
+              value={identifier}
+              onChange={setIdentifier}
+              autoComplete="username"
+              placeholder={t.auth.identifierPlaceholder}
+            />
+          )}
+
+          <Field
+            label={t.auth.password}
+            type="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            placeholder={
+              mode === "register"
+                ? t.auth.passwordPlaceholderRegister
+                : t.auth.passwordPlaceholderLogin
+            }
+          />
+
+          {mode === "register" && (
+            <Field
+              label={t.auth.confirmPassword}
+              type="password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
+              placeholder={t.auth.confirmPasswordPlaceholder}
+            />
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+          >
+            {loading
+              ? t.auth.processing
+              : mode === "login"
+                ? t.auth.submitLogin
+                : t.auth.submitRegister}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-neutral-500">
+          {mode === "login" ? t.auth.noAccount : t.auth.hasAccount}
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === "login" ? "register" : "login");
+              setError(null);
+            }}
+            className="ml-1 font-medium text-sky-600 hover:underline"
+          >
+            {mode === "login" ? t.auth.toRegister : t.auth.toLogin}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  autoComplete,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  autoComplete?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+        {label}
+      </span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        required
+        className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 dark:border-white/15 dark:bg-white/5"
+      />
+    </label>
+  );
+}
+
+// 供路由懒加载引用的包装导出，预设好 initialMode
+export function LoginRoute() {
+  return <LoginPage initialMode="login" />;
+}
+
+export function RegisterRoute() {
+  return <LoginPage initialMode="register" />;
+}

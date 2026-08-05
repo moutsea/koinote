@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-koinote}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-koinote}
+      POSTGRES_DB: ${POSTGRES_DB:-koinote}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - koinote-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-koinote} -d ${POSTGRES_DB:-koinote}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - koinote-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      sh -c 'redis-server --save 60 1 --appendonly yes --appendfsync everysec
+      ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - koinote-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - koinote-network
+
+  backend:
+    build:
+      context: ./backend
+    image: koinote-backend:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-koinote}:${POSTGRES_PASSWORD:-koinote}@postgres:5432/${POSTGRES_DB:-koinote}?sslmode=disable
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      AUTO_MIGRATE: "true"
+      MIGRATIONS_DIR: /app/migrations
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      BACKEND_INTERNAL_TOKEN: ${BACKEND_INTERNAL_TOKEN:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5273,http://localhost:3000}
+      # OAuth：APP_URL 用于拼回调地址，须与各 provider 后台登记的地址完全一致。
+      # 凭证留空时后端的 start 端点返回 501 oauth_not_configured。
+      APP_URL: ${APP_URL:-http://localhost:5273}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - koinote-network
+
+volumes:
+  koinote-postgres-data:
+  koinote-redis-data:
+
+networks:
+  koinote-network:
+    driver: bridge

@@ -2,25 +2,46 @@
   "name": "koinote",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy --keep-vars",
+    "typecheck:spa": "tsc -p spa/tsconfig.json --noEmit",
+    "typecheck:worker": "tsc -p worker/tsconfig.json --noEmit",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "backend:dev": "cd backend && go run ./cmd/server"
   },
   "dependencies": {
-    "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "@tanstack/react-query": "^5.90.2",
+    "@tanstack/react-router": "^1.132.0",
+    "@tiptap/extension-code-block-lowlight": "^3.27.2",
+    "@tiptap/extension-placeholder": "^3.27.2",
+    "@tiptap/extension-task-item": "^3.27.2",
+    "@tiptap/extension-task-list": "^3.27.2",
+    "@tiptap/extension-typography": "^3.27.2",
+    "@tiptap/pm": "^3.27.2",
+    "@tiptap/react": "^3.27.2",
+    "@tiptap/starter-kit": "^3.27.2",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^0.544.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "tiptap-markdown": "^0.9.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "wrangler": "^4.42.0"
   }
 }

@@ -1,0 +1,34 @@
+package model
+
+import "time"
+
+// Document 是对外暴露的文档模型，JSON 字段与前端 spa/src/api.ts 的 Document 类型对齐。
+// 内部自增 id 与 user_id 不外泄，对外只用 DocID 标识。
+type Document struct {
+	DocID     string     `json:"docId"`
+	Title     string     `json:"title"`
+	Content   string     `json:"content"`
+	CreatedAt *time.Time `json:"createdAt"`
+	UpdatedAt *time.Time `json:"updatedAt"`
+}
+
+// DocumentSummary 用于列表接口：不含 content，侧边栏渲染够用且省流量。
+type DocumentSummary struct {
+	DocID     string     `json:"docId"`
+	Title     string     `json:"title"`
+	UpdatedAt *time.Time `json:"updatedAt"`
+}
+
+// User 是对外暴露的用户模型，JSON 字段与前端 spa/src/api.ts 的 User 类型对齐。
+type User struct {
+	ID         int        `json:"id"`
+	AuthUserID string     `json:"authUserId"`
+	Email      string     `json:"email"`
+	Username   *string    `json:"username"`
+	Nickname   *string    `json:"nickname"`
+	AvatarURL  *string    `json:"avatarUrl"`
+	IsVerified bool       `json:"isVerified"`
+	IsAdmin    bool       `json:"isAdmin"`
+	CreatedAt  *time.Time `json:"createdAt"`
+	UpdatedAt  *time.Time `json:"updatedAt"`
+}
