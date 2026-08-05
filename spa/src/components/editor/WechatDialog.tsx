@@ -3,7 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import { buildWechatHTML, copyRichText } from "./exportWechat";
-import { WECHAT_THEMES, type WechatThemeId } from "./wechatThemes";
+import { groupWechatThemes, type WechatThemeId } from "./wechatThemes";
 
 export function WechatDialog({
   editor,
@@ -94,38 +94,47 @@ export function WechatDialog({
           </button>
         </div>
 
-        <div className="mt-4 space-y-1.5">
-          {WECHAT_THEMES.map((theme) => (
-            <button
-              key={theme.id}
-              type="button"
-              role="radio"
-              aria-checked={themeId === theme.id}
-              onClick={() => {
-                setThemeId(theme.id);
-                setDone(false);
-              }}
-              className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                themeId === theme.id
-                  ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30"
-                  : "border-black/10 hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/5"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 ${
-                  themeId === theme.id
-                    ? "border-sky-500 bg-sky-500"
-                    : "border-neutral-300 dark:border-neutral-600"
-                }`}
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">{theme.name}</span>
-                <span className="mt-0.5 block text-[11px] text-neutral-400">
-                  {theme.hint}
-                </span>
-              </span>
-            </button>
+        <div className="mt-4 space-y-4">
+          {groupWechatThemes().map(({ group, themes }) => (
+            <div key={group}>
+              <h3 className="mb-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                {group}
+              </h3>
+              <div className="space-y-1.5">
+                {themes.map((theme) => (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={themeId === theme.id}
+                    onClick={() => {
+                      setThemeId(theme.id);
+                      setDone(false);
+                    }}
+                    className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                      themeId === theme.id
+                        ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30"
+                        : "border-black/10 hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 ${
+                        themeId === theme.id
+                          ? "border-sky-500 bg-sky-500"
+                          : "border-neutral-300 dark:border-neutral-600"
+                      }`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{theme.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-neutral-400">
+                        {theme.hint}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 
