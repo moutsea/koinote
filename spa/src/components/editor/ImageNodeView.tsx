@@ -75,42 +75,29 @@ export function ImageNodeView({
     editor.commands.focus();
   }
 
-  if (editing) {
-    return (
-      <NodeViewWrapper className="my-2">
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              cancel();
-            }
-          }}
-          spellCheck={false}
-          aria-label={t.editor.imageMarkdownLabel}
-          className="w-full rounded-lg border border-sky-500/40 bg-sky-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-sky-500 dark:bg-sky-950/20"
-        />
-      </NodeViewWrapper>
-    );
-  }
-
   return (
     <NodeViewWrapper className="my-2">
       <figure className="m-0">
+        {/* 图片始终在位。编辑时只是在下方追加源码行，不替换图片本身，
+            这样能边改边看，改完立刻知道换的是哪张。 */}
         <button
           type="button"
-          onClick={() => setEditing(true)}
+          // 编辑中点图片不该收起源码行。阻止默认行为避免抢走 input 焦点，
+          // 否则 blur 触发 commit，源码行刚打开就被关掉。
+          onMouseDown={(e) => {
+            if (editing) e.preventDefault();
+          }}
+          onClick={() => {
+            if (!editing) setEditing(true);
+          }}
           title={t.editor.imageClickToEdit}
-          className={`block w-full cursor-pointer overflow-hidden rounded-lg border text-left transition ${
-            selected
-              ? "border-sky-500"
-              : "border-transparent hover:border-sky-500/40"
+          aria-expanded={editing}
+          className={`block w-full overflow-hidden rounded-lg border text-left transition ${
+            editing
+              ? "cursor-default border-sky-500"
+              : selected
+                ? "cursor-pointer border-sky-500"
+                : "cursor-pointer border-transparent hover:border-sky-500/40"
           }`}
         >
           {broken ? (
@@ -128,10 +115,32 @@ export function ImageNodeView({
             />
           )}
         </button>
-        {alt && (
-          <figcaption className="mt-1 text-center text-xs text-neutral-400">
-            {alt}
-          </figcaption>
+
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            spellCheck={false}
+            aria-label={t.editor.imageMarkdownLabel}
+            className="mt-1.5 w-full rounded-lg border border-sky-500/40 bg-sky-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-sky-500 dark:bg-sky-950/20"
+          />
+        ) : (
+          alt && (
+            <figcaption className="mt-1 text-center text-xs text-neutral-400">
+              {alt}
+            </figcaption>
+          )
         )}
       </figure>
     </NodeViewWrapper>
