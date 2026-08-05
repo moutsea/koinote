@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
-import { Code2, Download, FileText, FileType, Printer } from "lucide-react";
+import {
+  Code2,
+  Download,
+  FileDown,
+  FileText,
+  FileType,
+  Printer,
+} from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
+  downloadBlob,
   exportHTML,
   exportMarkdown,
-  exportPDF,
+  exportPrint,
   safeFilename,
 } from "./exportDocument";
 
@@ -102,11 +110,10 @@ export function ExportMenu({
             busy={busy === "docx"}
             onClick={() =>
               run("docx", async () => {
-                // 动态引入：docx 库约 1 MB，不该压在编辑器首屏
-                const [{ buildDocx }, { downloadBlob }] = await Promise.all([
-                  import("./exportDocx"),
-                  import("./exportDocument"),
-                ]);
+                // 只动态引入 exportDocx（docx 库约 1 MB，不该压在编辑器首屏）。
+                // exportDocument 已静态引入，再动态引一次拆不出 chunk，只会让
+                // Rollup 报警。
+                const { buildDocx } = await import("./exportDocx");
                 const blob = await buildDocx(editor, title, {
                   imageFailed: t.editor.exportFailed,
                 });
@@ -117,13 +124,28 @@ export function ExportMenu({
               })
             }
           />
-          <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
           <Item
-            icon={<Printer className="h-3.5 w-3.5" />}
+            icon={<FileDown className="h-3.5 w-3.5" />}
             label={t.editor.exportPDF}
             hint={t.editor.exportPDFHint}
             busy={busy === "pdf"}
-            onClick={() => run("pdf", () => exportPDF())}
+            onClick={() =>
+              run("pdf", async () => {
+                // html2canvas + jsPDF 合计约 600 KB，只在真导出时才下载
+                const { exportPDF } = await import("./exportPdf");
+                await exportPDF(editor, title, t.editor.untitled);
+              })
+            }
+          />
+          <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
+          <Item
+            icon={<Printer className="h-3.5 w-3.5" />}
+            label={t.editor.exportPrint}
+            hint={t.editor.exportPrintHint}
+            busy={busy === "print"}
+            onClick={() =>
+              run("print", () => exportPrint(title, t.editor.untitled))
+            }
           />
         </div>
       )}

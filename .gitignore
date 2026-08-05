@@ -34,8 +34,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+# 模板必须入库：README 的第一步就是 cp .env.example .env，
+# 被 .env* 一起忽略掉的话，新克隆的仓库照着文档走不通。
+!.env.example
 
 # vercel
 .vercel

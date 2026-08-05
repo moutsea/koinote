@@ -89,6 +89,12 @@ export default defineConfig(({ mode }) => {
         "@spa": resolve(rootDir, "spa/src"),
       },
     },
+    optimizeDeps: {
+      // 这两个只在导出 PDF 时按需 import。不预先声明的话，dev 环境下首次点
+      // 「导出 PDF」会触发 Vite 现场预构建并强制整页刷新 —— 刷新会掐断
+      // 正在进行的下载，表现为「点了没反应，再点一次才行」。
+      include: ["html2canvas-pro", "jspdf"],
+    },
     build: {
       outDir: "dist",
       emptyOutDir: true,
@@ -111,6 +117,18 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       // Vite 按最长前缀优先匹配，所以 /api/images 会胜过 /api。
       // 图片相关两条转给 wrangler（Worker 才有 R2 绑定），其余仍走 Go 后端。
+      proxy: {
+        "/api/images": workerProxy,
+        "/images": workerProxy,
+        "/api": backendProxy,
+        "/health": backendProxy,
+      },
+    },
+    // preview 用来在本地跑生产构建物。没有这段代理，preview 下所有 /api 请求
+    // 都会落到 SPA 的 index.html，登录直接失败 —— 于是生产构建只能靠部署验证。
+    preview: {
+      port: Number(env.PREVIEW_PORT || 5274),
+      strictPort: true,
       proxy: {
         "/api/images": workerProxy,
         "/images": workerProxy,

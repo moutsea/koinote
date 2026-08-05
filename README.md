@@ -72,8 +72,21 @@ npm run backend:dev
 npm run dev
 ```
 
-Vite 在 `:5173`，`/api/*` 与 `/health` 自动代理到后端 `:8080`。
-打开 http://localhost:5173 即可。
+Vite 端口由 `.env` 的 `DEV_PORT` 控制（默认 5173），`/api/*` 与 `/health`
+自动代理到后端，`/api/images` 与 `/images` 转给 wrangler（只有 Worker 有 R2 绑定）。
+
+`strictPort` 是开的：端口被占时宁可启动失败，也不静默递增 —— 否则 OAuth
+provider 按登记的端口回跳会打到空端口，报错还查不出来。
+
+### 跑生产构建物
+
+```bash
+npm run build
+npx vite preview        # 默认 :5274，代理配置与 dev 一致
+```
+
+`preview` 段的代理是必要的：没有它，`preview` 下所有 `/api` 请求都会落到 SPA 的
+`index.html`，登录直接失败，于是生产构建只能靠部署来验证。
 
 ### 全容器一键起
 
@@ -165,15 +178,41 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 | 格式 | 实现 |
 |---|---|
 | `.md` | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown |
-| `.html` | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN |
+| `.html` | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
 | `.docx` | `docx` 库，走 ProseMirror 文档树构建 |
-| PDF | 浏览器原生打印 + `@media print` |
+| `.pdf` | html2canvas-pro 栅格化 + jsPDF 分页，一键下载 |
+| 打印 / 另存为 PDF | 浏览器原生打印管道 + `@media print` |
 
-**PDF 为什么走打印而非 jsPDF**：jsPDF 要嵌 CJK 字体才能显示中文，
-常见变通是把文字栅格化成图片塞进 PDF —— 那样文字不可选、不可搜、体积大。
-对一个以文字为主的 Markdown 编辑器，这个代价不该付。打印路径下文字可选、
-CJK 正常，KaTeX 与代码高亮直接复用现有样式。代价是用户要在打印对话框里
-选「另存为 PDF」，而非一键下载。
+**PDF 为什么是两条路**：浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
+而打印对话框无法绕过。所以「一键下载」与「文字可选可搜」在纯前端不能同时成立，
+两条路各保留一条：
+
+| | 一键下载 | 文字可选可搜 | 体积 |
+|---|---|---|---|
+| `.pdf`（栅格） | 是 | 否，文字是位图 | 约 650 KB/页 |
+| 打印 / 另存为 PDF | 否，需在对话框选 | 是，矢量 | 小得多 |
+
+那个对话框与打印机无关：Chrome 选「另存为 PDF」时走的是 Skia 的 PDF 后端，
+不碰任何打印机驱动，未装打印机也能用。CSS 规范里这套东西叫 *paged media*，
+PDF 只是它的一个输出目标。
+
+栅格路径的实现取舍：
+
+- **栅格化真实 DOM，而不是手工在 canvas 上画字**。公式、代码高亮、表格边框
+  都由浏览器排版，不用自己写排版逻辑 —— 手绘方案要支持 LaTeX 等于重写一个
+  TeX 排版引擎。
+- **分页切口对齐到块元素边界**，避免把一行字横着切两半。但若紧随切点的元素
+  本身高过一页（长代码块），它无论如何都要被硬切，此时不提前断页，否则白扔
+  半页空白。
+- **图片先转 data URL 再栅格化**。跨域图片会让 canvas 变成 tainted，之后
+  `toDataURL` 直接抛 `SecurityError`，表现是整个导出失败而非少一张图。
+- **代码块在 PDF 里用浅底**，与打印路径一致；深底在纸上是整片实色，且位图
+  压缩率差得多。
+- **倍率 2 倍（≈192 DPI），无损 PNG**。压缩等级与去 alpha 通道都实测过，
+  对体积没有影响；唯一有效的是有损 JPEG（省 14%~40%），但中文小字在 JPEG 下
+  边缘起振铃，画质优先。
+- `html2canvas-pro` 而非 `html2canvas`：Tailwind v4 默认输出 `oklch()` 颜色，
+  原版认不出会渲染成透明或黑色。
 
 **DOCX 的降级取舍**：公式保留为 LaTeX 源文本（转 Word 的 OMML 是另一个量级的
 工作，保留源码至少无损可读）；代码块只给等宽字体加浅灰底，不做语法高亮着色；
@@ -194,8 +233,14 @@ webp 不被 docx 支持故降级成占位行；单张图片失败只留占位，
 - 点击公式可回到源码编辑
 - 语法错误时回落成红色等宽文本并标记，不静默失败
 
-两处需要留意的实现细节：
+三处需要留意的实现细节：
 
+0. **导出时必须自己调一遍 KaTeX。** 扩展的 `renderHTML` 只输出一个带
+   `data-latex` 的空元素（见 `extension-mathematics/dist/index.js`），公式的
+   可见形态完全由编辑器内的 nodeview 提供。导出走 `editor.getHTML()`，拿不到
+   nodeview —— 不补渲染的话，导出物里公式位置是**零高度的空白**，属于静默丢
+   内容。`spa/src/components/editor/renderMath.ts` 负责补这一步，HTML 与 PDF
+   两条导出路径共用。
 1. **分隔符是覆盖过的。** `@tiptap/extension-mathematics` 的输入规则用非标准写法
    （行内 `$$…$$`、块级 `$$$…$$$`），但它的序列化输出却是标准 `$…$` / `$$…$$` ——
    打字与存盘两头对不上。这里覆盖了输入规则，统一到标准写法。
@@ -250,6 +295,31 @@ wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
 `IMAGE_PUBLIC_BASE` 留空时图片经 Worker 代理读取，每次加载消耗一次 Worker 请求。
 在 Cloudflare 后台给 bucket 绑定自定义域名后填上它（如 `https://img.你的域名`），
 图片改走 CDN，不再计入 Worker 请求数。
+
+## 验证
+
+后端：`cd backend && go test ./...`（含 `-race`）。
+
+前端导出这块没有单元测试框架，改用**真浏览器端到端验证** —— 协议层的 curl
+验不了「点了导出按钮之后浏览器到底下载了什么」。两个脚本走完整链路：登录、
+写入含公式/代码/表格的内容、点菜单、抓下载文件、解析产物。
+
+```bash
+pip install playwright pypdf pillow && playwright install chromium
+
+# 建议对着生产构建物跑（npm run build && npx vite preview）
+PROBE_BASE=http://localhost:5274 python3 scripts/verify_pdf_export.py
+PROBE_BASE=http://localhost:5274 python3 scripts/verify_export_formats.py
+```
+
+`verify_pdf_export.py` 会解析 PDF 内部结构：页数、A4 尺寸、**每页内容流实际
+引用的 XObject**（判断分页是否正确 —— jsPDF 把所有位图放在一个共享资源字典里，
+所以不能只看 `page.images`）、各页位图指纹是否互不相同、分页填充率、单页体积，
+以及导出时按需加载了哪些 chunk。
+
+`verify_export_formats.py` 覆盖四种格式，重点是公式在每种格式里是否真的落地。
+
+两个脚本都需要后端与数据库在跑，且会在数据库里留下一个 `pdfprobe` 测试账号。
 
 ## 构建与部署
 

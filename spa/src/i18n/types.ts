@@ -135,6 +135,8 @@ export interface Messages {
     exportPDF: string;
     exportDOCX: string;
     exportPDFHint: string;
+    exportPrint: string;
+    exportPrintHint: string;
     exportFailed: string;
     exporting: string;
     importedLocalDraft: string;
