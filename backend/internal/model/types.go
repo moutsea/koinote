@@ -10,6 +10,15 @@ type Document struct {
 	Content   string     `json:"content"`
 	CreatedAt *time.Time `json:"createdAt"`
 	UpdatedAt *time.Time `json:"updatedAt"`
+	// Share 为空表示未分享。仅在文档主人自己读取时下发。
+	Share *DocumentShare `json:"share"`
+}
+
+// DocumentShare 是分享状态。不含 password_hash——那东西永不出后端。
+type DocumentShare struct {
+	Token            string `json:"token"`
+	Access           string `json:"access"`
+	RequiresPassword bool   `json:"requiresPassword"`
 }
 
 // DocumentSummary 用于列表接口：不含 content，侧边栏渲染够用且省流量。

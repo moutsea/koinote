@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,12 +16,25 @@ import (
 )
 
 type App struct {
-	cfg config.Config
-	db  *pgxpool.Pool
+	cfg         config.Config
+	db          *pgxpool.Pool
+	limiter     *rateLimiter
+	limiterOnce sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
-	return &App{cfg: cfg, db: db}
+	return &App{cfg: cfg, db: db, limiter: newRateLimiter()}
+}
+
+// rateLimit 惰性取限流器。测试里直接构造 App{} 时 limiter 为 nil，
+// 这里兜住，避免走到限流路径就 panic。
+func (a *App) rateLimit() *rateLimiter {
+	a.limiterOnce.Do(func() {
+		if a.limiter == nil {
+			a.limiter = newRateLimiter()
+		}
+	})
+	return a.limiter
 }
 
 // Routes 注册所有路由并套上 CORS 中间件。
@@ -40,6 +54,12 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/documents/{docId}", a.documentGet)
 	mux.HandleFunc("PUT /api/documents/{docId}", a.documentUpdate)
 	mux.HandleFunc("DELETE /api/documents/{docId}", a.documentDelete)
+
+	// 分享：前两条需登录且限本人文档，后两条公开（token 即凭证）
+	mux.HandleFunc("POST /api/documents/{docId}/share", a.shareCreate)
+	mux.HandleFunc("DELETE /api/documents/{docId}/share", a.shareRevoke)
+	mux.HandleFunc("GET /api/share/{token}", a.shareGet)
+	mux.HandleFunc("POST /api/share/{token}/verify", a.shareVerify)
 
 	return a.withCORS(mux)
 }

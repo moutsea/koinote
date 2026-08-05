@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -125,12 +126,15 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var doc model.Document
+	var shareToken, shareAccess, sharePasswordHash sql.NullString
 	err := a.db.QueryRow(r.Context(), `
-		SELECT doc_id, title, content, created_at, updated_at
+		SELECT doc_id, title, content, created_at, updated_at,
+		       share_token, share_access, share_password_hash
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2
 	`, docID, user.ID).Scan(
 		&doc.DocID, &doc.Title, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		&shareToken, &shareAccess, &sharePasswordHash,
 	)
 	// 他人文档与不存在的文档一律 404，不泄露「该文档存在」
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -141,6 +145,14 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 		log.Printf("document get: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
+	}
+
+	if token := strings.TrimSpace(shareToken.String); token != "" {
+		doc.Share = &model.DocumentShare{
+			Token:            token,
+			Access:           strings.TrimSpace(shareAccess.String),
+			RequiresPassword: sharePasswordHash.Valid && strings.TrimSpace(sharePasswordHash.String) != "",
+		}
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{"document": doc})
