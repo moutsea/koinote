@@ -23,9 +23,18 @@
     // 图片对外基址。留空时回落到 /images/<key> 由 Worker 代理，
     // 配上 R2 自定义域名后走 CDN，不再消耗 Worker 请求数。
     "IMAGE_PUBLIC_BASE": ""
-  }
+  },
 
   // 生产环境用 secret 覆盖：
   // wrangler secret put BACKEND_URL
   // wrangler secret put BACKEND_INTERNAL_TOKEN
+
+  // 生产环境覆盖：图片走 CDN。本地开发留空，回落到 Worker 代理。
+  "env": {
+    "production": {
+      "vars": {
+        "IMAGE_PUBLIC_BASE": "https://img.koinote.app"
+      }
+    }
+  }
 }
