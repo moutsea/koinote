@@ -150,6 +150,18 @@ export const en: Messages = {
     exportPDFHint: "Downloads directly; text becomes an image",
     exportPrint: "Print / Save as PDF",
     exportPrintHint: "Selectable, searchable text — choose “Save as PDF” in the dialog",
+    wechatExport: "WeChat Official Account",
+    wechatExportHint: "Pick a theme, then paste straight into the WeChat editor",
+    wechatTitle: "Export for WeChat",
+    wechatSubtitle:
+      "Styles are inlined per element so formatting survives the paste. Formulas become uploaded images.",
+    wechatCopy: "Copy to clipboard",
+    wechatCopied: "Copied — go paste it",
+    wechatWorking: "Working…",
+    wechatCodeNote:
+      "Note: WeChat strips class attributes, so syntax highlighting cannot survive. Code keeps only its monospace font and background.",
+    wechatMathConverted: "{n} formula(s) converted to images",
+    wechatMathFailed: "{n} formula(s) failed; fell back to LaTeX source",
     exportFailed: "Export failed",
     exporting: "Exporting…",
     importedLocalDraft: "Local draft imported",

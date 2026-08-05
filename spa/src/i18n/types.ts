@@ -136,6 +136,16 @@ export interface Messages {
     exportPDFHint: string;
     exportPrint: string;
     exportPrintHint: string;
+    wechatExport: string;
+    wechatExportHint: string;
+    wechatTitle: string;
+    wechatSubtitle: string;
+    wechatCopy: string;
+    wechatCopied: string;
+    wechatWorking: string;
+    wechatCodeNote: string;
+    wechatMathConverted: string;
+    wechatMathFailed: string;
     exportFailed: string;
     exporting: string;
     importedLocalDraft: string;

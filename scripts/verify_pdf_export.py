@@ -128,7 +128,8 @@ def main():
         items = page.locator('[role="menu"] button')
         labels = [items.nth(i).inner_text().strip() for i in range(items.count())]
         print(f"    菜单项: {labels}")
-        check("菜单含 5 项（4 格式 + 打印）", items.count() == 5, f"got {items.count()}")
+        # 4 种下载格式 + 微信公众号 + 打印
+        check("菜单含 6 项", items.count() == 6, f"got {items.count()}")
 
         # PDF 项是唯一含 "PDF" 且不含 Print/打印 的项
         pdf_index = next(

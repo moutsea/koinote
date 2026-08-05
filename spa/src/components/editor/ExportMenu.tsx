@@ -6,6 +6,7 @@ import {
   FileDown,
   FileText,
   FileType,
+  MessageSquare,
   Printer,
 } from "lucide-react";
 import { useI18n } from "../../i18n";
@@ -16,6 +17,7 @@ import {
   exportPrint,
   safeFilename,
 } from "./exportDocument";
+import { WechatDialog } from "./WechatDialog";
 
 export function ExportMenu({
   editor,
@@ -26,6 +28,7 @@ export function ExportMenu({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [wechatOpen, setWechatOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +140,15 @@ export function ExportMenu({
               })
             }
           />
+          <Item
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+            label={t.editor.wechatExport}
+            hint={t.editor.wechatExportHint}
+            onClick={() => {
+              setOpen(false);
+              setWechatOpen(true);
+            }}
+          />
           <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
           <Item
             icon={<Printer className="h-3.5 w-3.5" />}
@@ -157,6 +169,14 @@ export function ExportMenu({
         >
           {error}
         </p>
+      )}
+
+      {wechatOpen && (
+        <WechatDialog
+          editor={editor}
+          title={title}
+          onClose={() => setWechatOpen(false)}
+        />
       )}
     </div>
   );

@@ -148,6 +148,18 @@ export const zh: Messages = {
     exportPDFHint: "直接下载，文字为图片",
     exportPrint: "打印 / 另存为 PDF",
     exportPrintHint: "文字可选可搜，需在对话框选「另存为 PDF」",
+    wechatExport: "微信公众号",
+    wechatExportHint: "选主题后复制，直接粘贴进公众号编辑器",
+    wechatTitle: "导出到微信公众号",
+    wechatSubtitle:
+      "样式会内联到每个元素，粘贴后排版不丢。公式转成图片上传。",
+    wechatCopy: "复制到剪贴板",
+    wechatCopied: "已复制，去粘贴吧",
+    wechatWorking: "处理中…",
+    wechatCodeNote:
+      "注意：微信会剥掉 class，代码块的语法高亮无法保留，只保留等宽字体与底色。",
+    wechatMathConverted: "{n} 个公式已转为图片",
+    wechatMathFailed: "{n} 个公式转换失败，已降级为 LaTeX 源码",
     exportFailed: "导出失败",
     exporting: "导出中…",
     importedLocalDraft: "已导入本地草稿",

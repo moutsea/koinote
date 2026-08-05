@@ -49,18 +49,33 @@ def main():
         page.wait_for_timeout(1500)
 
         print("\n[1] 写入含公式的内容")
+        # 文档是异步加载的：过早输入会被随后到达的持久化内容盖掉，
+        # 断言就变成在验上一次测试留下的旧文档 —— 曾经因此出现过偶发失败。
         body = page.locator(".ProseMirror")
-        body.click()
-        page.keyboard.press("Control+A")
-        page.keyboard.press("Delete")
-        page.keyboard.type("# 公式落地测试\n")
-        page.keyboard.type("行内公式 ")
-        page.keyboard.type("$E=mc^2$")
-        page.keyboard.type(" 之后是块级：\n")
-        page.keyboard.type("$$\\frac{a}{b}=c$$\n")
-        page.keyboard.type("表格与代码也要在：\n")
-        page.keyboard.type("```js\nconst x = 1;\n")
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
+
+        MARKER = "公式落地测试"
+
+        def write_content():
+            body.click()
+            page.keyboard.press("Control+A")
+            page.keyboard.press("Delete")
+            page.keyboard.type(f"# {MARKER}\n")
+            page.keyboard.type("行内公式 ")
+            page.keyboard.type("$E=mc^2$")
+            page.keyboard.type(" 之后是块级：\n")
+            page.keyboard.type("$$\\frac{a}{b}=c$$\n")
+            page.keyboard.type("表格与代码也要在：\n")
+            page.keyboard.type("```js\nconst x = 1;\n")
+            page.wait_for_timeout(3000)
+
+        write_content()
+        if MARKER not in body.inner_text():
+            print("    首次输入被文档加载盖掉，重试一次")
+            write_content()
+
+        check("测试内容确实写进了编辑器", MARKER in body.inner_text(),
+              body.inner_text()[:80])
 
         html_in_editor = body.inner_html()
         check("编辑器内公式已渲染", "katex" in html_in_editor)

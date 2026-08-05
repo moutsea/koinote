@@ -211,6 +211,7 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 | `.html` | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
 | `.docx` | `docx` 库，走 ProseMirror 文档树构建 |
 | `.pdf` | html2canvas-pro 栅格化 + jsPDF 分页，一键下载 |
+| 微信公众号 | 主题样式内联 + 公式转图，写进剪贴板 |
 | 打印 / 另存为 PDF | 浏览器原生打印管道 + `@media print` |
 
 **PDF 为什么是两条路**：浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
@@ -250,6 +251,48 @@ PDF 只是它的一个输出目标。
 webp 不被 docx 支持故降级成占位行；单张图片失败只留占位，不让整个导出失败。
 
 `docx` 库约 1 MB，用动态 `import` 拆成独立 chunk，不压在编辑器首屏。
+
+### 微信公众号
+
+参考 `../keepask` 的 `dbskill_wechat_styles.go`。它有两条路：一条让 LLM 按样式
+指南生成 HTML，一条是纯字符串处理的样式内联器。**这里抄的是后者** —— koinote
+没有 AI 接入，而且内联那 248 行本来就不需要模型：正则抽 CSS、拍平成
+「标签 → 声明」、遍历 HTML 树写 `style` 属性。
+
+产物不落盘而是**写进剪贴板**（`text/html` + `text/plain` 双格式），因为用户的
+实际动作是「粘贴到公众号编辑器」，下载 .html 再打开再全选复制是多余的三步。
+
+微信编辑器的行为决定了实现的每一处：
+
+| 微信的行为 | 因此必须 |
+|---|---|
+| 剥掉 `<style>` 与外链 CSS | 样式只能进每个元素的 `style` 属性 |
+| 剥掉 `class` / `id` | 选择器只能是标签名 |
+| 剥掉 `<script>` 等 | 直接删掉整个子树 |
+| 粘贴时抓取外部图片转存 | 公式图片走 R2 真实 URL |
+
+**主题直接以「标签 → 声明串」存**（`wechatThemes.ts`），不存 CSS 文本。既然最终
+只能按标签查表，就省掉 keepask 那道从 markdown 正则抽 CSS 的环节。代价是失去
+CSS 的表达力，但那部分表达力在内联方案下本来就用不上——keepask 的主题里有
+`h2:before{content:""}` 这类装饰条，**内联时会被静默丢掉，在微信里根本不出现**。
+所以这里的五个主题都不依赖伪元素。唯一保留的后代选择器是 `pre code`（代码块内的
+`code` 与行内 `code` 视觉不同）。
+
+**公式必须转成图片。** KaTeX 的产物是几百个带 class 的 `<span>` 靠 `position`
+拼出来的排版，class 被剥掉后剩一堆错位的散字，比不显示更糟。流程是
+KaTeX → html2canvas（3 倍，公式字号小，低于 3 倍在手机上发虚）→ 上传 R2 →
+`<img>`。选 R2 而非 base64 data URL：微信抓取外链是你文档里普通图片已经验证过的
+行为，而 data URL 是否被接受无法确认。
+
+两处刻意的顺序，反了就出错：
+
+1. **先转公式图，再内联样式。** 反过来新插入的 `<img>` 拿不到主题的 `img` 规则。
+2. **公式图的宽高排在主题规则之后。** 主题的 `img` 规则里有 `height:auto`，
+   顺序反了会把公式压扁。这条靠 `data-wechat-keep-style` 传递，有专门的断言守着。
+
+**已知降级**：代码块的语法高亮无法保留（class 被剥），只剩等宽字体与底色。
+对话框里明写了这条，不让用户以为是 bug。公式转换失败时降级成 LaTeX 源码并提示
+数量——静默降级的话用户会以为公式本来就长那样。
 
 ## 代码高亮与 LaTeX
 
@@ -341,7 +384,16 @@ pip install playwright pypdf pillow && playwright install chromium
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_pdf_export.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_export_formats.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_share_rotation.py
+PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
 ```
+
+`verify_wechat_export.py` 检查产物是否真的满足微信约束：无 `<style>`、无 `class`、
+样式全在 `style` 属性上、公式变成指向 R2 的 `<img>` 且带显式宽高、剪贴板同时有
+`text/html` 与 `text/plain`。它需要 wrangler 在 8788（公式要上传 R2）。
+
+> 这几个脚本都会先确认「测试内容真的写进了编辑器」才继续。文档是异步加载的，
+> 过早输入会被随后到达的持久化内容盖掉 —— 曾经因此出现偶发失败，而且失败时
+> 断言实际验的是上一次测试留下的旧文档，比直接报错更难查。
 
 `verify_share_rotation.py` 验证放宽权限时老链接确实失效。这条必须走真实 HTTP：
 单元测试只能证明判定函数对，证明不了「那个 URL 真的打不开了」。

@@ -151,6 +151,18 @@ export const ja: Messages = {
     exportPDFHint: "そのままダウンロード。文字は画像になります",
     exportPrint: "印刷 / PDF として保存",
     exportPrintHint: "文字は選択・検索可能 — ダイアログで「PDF として保存」を選択",
+    wechatExport: "WeChat 公式アカウント",
+    wechatExportHint: "テーマを選んでコピー、WeChat エディタに貼り付け",
+    wechatTitle: "WeChat 向けにエクスポート",
+    wechatSubtitle:
+      "スタイルは要素ごとにインライン化され、貼り付け後も崩れません。数式は画像としてアップロードされます。",
+    wechatCopy: "クリップボードにコピー",
+    wechatCopied: "コピーしました",
+    wechatWorking: "処理中…",
+    wechatCodeNote:
+      "注意：WeChat は class 属性を削除するため、シンタックスハイライトは保持できません。",
+    wechatMathConverted: "{n} 個の数式を画像に変換しました",
+    wechatMathFailed: "{n} 個の数式が失敗し、LaTeX ソースにフォールバックしました",
     exportFailed: "エクスポートに失敗しました",
     exporting: "エクスポート中…",
     importedLocalDraft: "ローカルの下書きを取り込みました",

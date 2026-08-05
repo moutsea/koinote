@@ -151,6 +151,18 @@ export const fr: Messages = {
     exportPDFHint: "Téléchargement direct ; le texte devient une image",
     exportPrint: "Imprimer / Enregistrer en PDF",
     exportPrintHint: "Texte sélectionnable et recherchable — choisissez « Enregistrer au format PDF »",
+    wechatExport: "WeChat (compte officiel)",
+    wechatExportHint: "Choisissez un thème, puis collez dans l'éditeur WeChat",
+    wechatTitle: "Exporter vers WeChat",
+    wechatSubtitle:
+      "Les styles sont intégrés à chaque élément, la mise en page survit au collage. Les formules deviennent des images.",
+    wechatCopy: "Copier dans le presse-papiers",
+    wechatCopied: "Copié — collez-le",
+    wechatWorking: "Traitement…",
+    wechatCodeNote:
+      "Note : WeChat supprime les attributs class, la coloration syntaxique ne peut pas être conservée.",
+    wechatMathConverted: "{n} formule(s) converties en images",
+    wechatMathFailed: "{n} formule(s) en échec ; repli sur le source LaTeX",
     exportFailed: "Échec de l'export",
     exporting: "Export en cours…",
     importedLocalDraft: "Brouillon local importé",
