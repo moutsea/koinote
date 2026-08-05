@@ -19,6 +19,7 @@ function toMarkdown(alt: string, src: string, title: string): string {
 export function ImageNodeView({
   node,
   updateAttributes,
+  deleteNode,
   selected,
   editor,
 }: NodeViewProps) {
@@ -31,6 +32,9 @@ export function ImageNodeView({
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // 删除进行中的标记：deleteNode() 会卸载 input 触发 blur → commit，
+  // 那时节点已不存在，写属性会报错或复活一个空节点。
+  const removing = useRef(false);
 
   // 外部改动（撤销、协同、切换文档）要同步回草稿，否则显示的源码会过期
   useEffect(() => {
@@ -52,6 +56,7 @@ export function ImageNodeView({
   }, [editing]);
 
   function commit() {
+    if (removing.current) return; // 节点正在被删，不要再写属性
     const matched = MARKDOWN_IMAGE.exec(draft.trim());
     if (!matched) {
       // 解析不出来就当放弃，不静默写入坏数据
@@ -75,6 +80,19 @@ export function ImageNodeView({
     editor.commands.focus();
   }
 
+  /**
+   * 删掉整个图片节点。
+   *
+   * 先退出编辑态再删：留在编辑态时 input 会随节点一起卸载，
+   * 触发 blur → commit，对着已不存在的节点写属性。
+   */
+  function removeImage() {
+    removing.current = true;
+    setEditing(false);
+    deleteNode();
+    editor.commands.focus();
+  }
+
   return (
     <NodeViewWrapper className="my-2">
       <figure className="m-0">
@@ -90,9 +108,23 @@ export function ImageNodeView({
               if (e.key === "Enter") {
                 e.preventDefault();
                 commit();
-              } else if (e.key === "Escape") {
+                return;
+              }
+              if (e.key === "Escape") {
                 e.preventDefault();
                 cancel();
+                return;
+              }
+              // 退格/删除意在「删掉这张图」，不是逐字符改源码。
+              // 但整段选中时放行原生行为，否则改不了备注里的错字——
+              // 进入编辑态默认选中 alt，直接打字即替换，这条才成立。
+              if (e.key === "Backspace" || e.key === "Delete") {
+                const input = e.currentTarget;
+                const hasSelection =
+                  input.selectionStart !== input.selectionEnd;
+                if (hasSelection) return; // 有选区：正常编辑文本
+                e.preventDefault();
+                removeImage();
               }
             }}
             spellCheck={false}
@@ -110,6 +142,15 @@ export function ImageNodeView({
           }}
           onClick={() => {
             if (!editing) setEditing(true);
+          }}
+          // 图片本身获得焦点时（Tab 或点击后），退格/删除同样删整张图。
+          // 焦点在 button 上，ProseMirror 收不到这个按键，得自己接。
+          onKeyDown={(e) => {
+            if (editing) return;
+            if (e.key === "Backspace" || e.key === "Delete") {
+              e.preventDefault();
+              removeImage();
+            }
           }}
           title={t.editor.imageClickToEdit}
           aria-expanded={editing}
