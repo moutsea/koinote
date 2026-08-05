@@ -121,6 +121,67 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 `state` 用签名 cookie + nonce 双校验，回跳路径经 `sanitizeRedirectPath` 过滤，只允许站内相对路径。
 同邮箱的既有账号（如密码注册用户）在 OAuth 登录时会自动合并，不会重复建号。
 
+## 分享
+
+三档权限，参考 keepask 的分享模型落地：
+
+| 档位 | 含义 |
+|---|---|
+| `link` | 知道链接即可访问，token 随机 32 位十六进制不可枚举 |
+| `public` | 同上，语义上允许公开传播 |
+| `password` | 访问者需输入口令（bcrypt 存哈希，至少 6 字符） |
+
+端点：
+
+```
+POST   /api/documents/{docId}/share   开启或改权限（需登录且限本人）
+DELETE /api/documents/{docId}/share   撤销
+GET    /api/share/{token}             公开读取，token 即凭证
+POST   /api/share/{token}/verify      校验口令后返回正文
+```
+
+前端页面在 `/share/$token`，无需登录，只读视图复用编辑器的同一套扩展，
+所以代码高亮、公式、图片的呈现与编辑时一致。
+
+几处刻意的语义取舍：
+
+- **重复调用 POST 复用同一 token，只改权限** —— 已发出的链接不会因为改权限就失效
+- **撤销后重新开启会换新 token** —— 老链接永久失效，这是撤销的意义所在
+- **已撤销与从未存在返回同一响应** —— 不泄露某个链接曾经有效
+- **口令档下 GET 只回 `requiresPassword` 标志** —— 正文一个字都不经过未验证的响应
+- **公开视图只输出 title / content / updatedAt / ownerName** —— 内部 id、user_id、doc_id、share_token 一律不外泄
+
+口令爆破防护：两层限流（单 IP 20 次、单链接 10 次，15 分钟窗口），
+限流 key 用 token 的 sha256 而非明文。响应头 `Cache-Control: private, no-store`
+—— 口令档正文若被 CDN 缓存，拿到缓存就等于绕过口令。另加 `X-Robots-Tag: noindex`。
+
+> ⚠ **限流器是进程内存实现**（`go.mod` 尚无 Redis 客户端）。
+> 多实例部署时各进程独立计数，实际阈值被放大 N 倍。上多实例前必须换成 Redis。
+
+## 导出
+
+四种格式，全部在浏览器端完成，不占后端资源：
+
+| 格式 | 实现 |
+|---|---|
+| `.md` | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown |
+| `.html` | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN |
+| `.docx` | `docx` 库，走 ProseMirror 文档树构建 |
+| PDF | 浏览器原生打印 + `@media print` |
+
+**PDF 为什么走打印而非 jsPDF**：jsPDF 要嵌 CJK 字体才能显示中文，
+常见变通是把文字栅格化成图片塞进 PDF —— 那样文字不可选、不可搜、体积大。
+对一个以文字为主的 Markdown 编辑器，这个代价不该付。打印路径下文字可选、
+CJK 正常，KaTeX 与代码高亮直接复用现有样式。代价是用户要在打印对话框里
+选「另存为 PDF」，而非一键下载。
+
+**DOCX 的降级取舍**：公式保留为 LaTeX 源文本（转 Word 的 OMML 是另一个量级的
+工作，保留源码至少无损可读）；代码块只给等宽字体加浅灰底，不做语法高亮着色；
+图片逐张抓取内嵌，类型按文件头嗅探（把 JPEG 标成 png 会产出打不开的文档），
+webp 不被 docx 支持故降级成占位行；单张图片失败只留占位，不让整个导出失败。
+
+`docx` 库约 1 MB，用动态 `import` 拆成独立 chunk，不压在编辑器首屏。
+
 ## 代码高亮与 LaTeX
 
 **代码高亮**：lowlight（highlight.js）的 common 集，约 37 种主流语言。
