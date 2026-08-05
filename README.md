@@ -290,6 +290,11 @@ KaTeX → html2canvas（3 倍，公式字号小，低于 3 倍在手机上发虚
 2. **公式图的宽高排在主题规则之后。** 主题的 `img` 规则里有 `height:auto`，
    顺序反了会把公式压扁。这条靠 `data-wechat-keep-style` 传递，有专门的断言守着。
 
+**公式图会按 LaTeX 源码缓存。** 不缓存的话每次导出都重新栅格化并重新上传 ——
+实测切几次主题就能在 R2 里堆出 22 份同样的图，而且现在没有 images 表，这些对象
+无法列举也无法清理。缓存只在当前页面存活期内有效；跨会话去重要等 images 表落地后
+由服务端按内容哈希查重。
+
 **已知降级**：代码块的语法高亮无法保留（class 被剥），只剩等宽字体与底色。
 对话框里明写了这条，不让用户以为是 bug。公式转换失败时降级成 LaTeX 源码并提示
 数量——静默降级的话用户会以为公式本来就长那样。
@@ -365,13 +370,49 @@ wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
 # R2 绑定已写在 wrangler.jsonc，无需 secret
 ```
 
-`IMAGE_PUBLIC_BASE` 留空时图片经 Worker 代理读取，每次加载消耗一次 Worker 请求。
-在 Cloudflare 后台给 bucket 绑定自定义域名后填上它（如 `https://img.你的域名`），
-图片改走 CDN，不再计入 Worker 请求数。
+### 图片走 CDN（IMAGE_PUBLIC_BASE）
+
+留空时图片经 Worker 代理读取，**每次加载消耗一次 Worker 请求**。配上 R2 自定义
+域名后 `publicURL` 直接返回绝对地址，走 CDN，不再计入 Worker 请求数。
+
+对微信公众号导出尤其要紧：留空时产出的是相对路径 `/images/<key>`，浏览器会把它
+补成当前源（本地就成了 `localhost`），微信抓不到。配了绝对基址才是干净的做法。
+
+配置步骤（在 Cloudflare 后台手工做）：
+
+1. R2 → `koinote-images` → Settings → Public access → Connect Custom Domain
+2. 填一个已托管在 Cloudflare 的子域名，如 `img.你的域名`
+3. 等 DNS 与证书就绪
+4. 把它写进 `wrangler.jsonc` 的 `IMAGE_PUBLIC_BASE`，形如 `https://img.你的域名`
+
+**配完必须用自查端点确认，不要只看图片能不能显示：**
+
+```bash
+curl https://你的域名/api/images/config
+# {"mode":"cdn","base":"https://img.你的域名","valid":true,"warning":null}
+```
+
+自查端点存在的理由：配错时系统**回落到 Worker 代理，图片照样显示**，所以
+「图片能看」证明不了 CDN 生效了。没有这个端点，只能等月底看账单上多出的请求数。
+`mode` 不是 `cdn` 就说明没生效，`warning` 会说明原因。
+
+`normalizeImageBase`（`worker/images.ts`）的校验：必须带 scheme、只收 http(s)、
+拒绝带查询串或 fragment、去掉末尾斜杠、保留子路径（R2 自定义域名允许挂子路径）。
+配错不抛错而是回落 —— 抛错会让上传直接失败，那是更坏的结果。
+
+> 关于 workerd 的一个猜想被实测否定了，记在这里免得后人重走：曾以为 workerd 的
+> `URL` 会把无 scheme 的输入静默补成 `https://`（那样只靠 try/catch 校验就会在
+> 线上失效）。实际探针结果是 workerd 与 Node 一致，三种无 scheme 写法都抛
+> `TypeError`。代码里那条 scheme 正则因此是冗余的，保留只为让约束显式可读。
 
 ## 验证
 
 后端：`cd backend && go test ./...`（含 `-race`）。
+
+Worker：`npm run test:worker` —— `normalizeImageBase` 的 21 条纯函数断言。
+平台层另有 `python3 scripts/verify_image_base.py`，在真实 workerd 里确认
+`/api/images/config` 路由挂对、`env` 读到、响应结构正确（Node 那层验不了这些）。
+它会临时改写 `wrangler.jsonc` 再从 `git show HEAD` 还原。
 
 前端导出这块没有单元测试框架，改用**真浏览器端到端验证** —— 协议层的 curl
 验不了「点了导出按钮之后浏览器到底下载了什么」。两个脚本走完整链路：登录、

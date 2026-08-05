@@ -8,7 +8,7 @@
  * SEO 元数据注入、sitemap 等留到后续阶段，先保证代理与托管跑通。
  */
 
-import { handleImageGet, handleImageUpload } from "./images";
+import { handleImageConfig, handleImageGet, handleImageUpload } from "./images";
 
 type AssetFetcher = {
   fetch(request: Request): Promise<Response> | Response;
@@ -30,6 +30,11 @@ export default {
 
     // 图片上传由 Worker 直接落 R2，不转发给后端——
     // 字节走边缘，不占 VPS 带宽。鉴权仍回调后端校验会话。
+    // 必须排在 /api/images 之前：下面那条是精确匹配 POST，
+    // 但 API_PREFIXES 里的 /api/ 会把 config 转发给后端。
+    if (url.pathname === "/api/images/config" && request.method === "GET") {
+      return handleImageConfig(env);
+    }
     if (url.pathname === "/api/images" && request.method === "POST") {
       return handleImageUpload(request, env);
     }

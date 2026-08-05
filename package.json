@@ -10,6 +10,7 @@
     "deploy": "npm run build && wrangler deploy --keep-vars",
     "typecheck:spa": "tsc -p spa/tsconfig.json --noEmit",
     "typecheck:worker": "tsc -p worker/tsconfig.json --noEmit",
+    "test:worker": "esbuild worker/images.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_base_bundle.mjs --log-level=error && node scripts/_check_image_base.mjs; rm -f scripts/_image_base_bundle.mjs",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "backend:dev": "cd backend && go run ./cmd/server"

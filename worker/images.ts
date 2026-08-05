@@ -157,11 +157,72 @@ export async function handleImageUpload(
   });
 }
 
+/**
+ * 校验并归一 IMAGE_PUBLIC_BASE。配错时返回 null，由调用方回落到 Worker 代理。
+ *
+ * scheme 用正则显式卡一道，虽然 new URL() 对无 scheme 的输入本来就会抛
+ * TypeError（workerd 与 Node 在这点上一致，实测过）。留着它是为了让「必须带
+ * https://」成为读代码就看得见的约束，而不是依赖构造器的抛异常行为。
+ *
+ * 为什么配错不抛错而是回落：回落到 Worker 代理图片照样能显示，只是多消耗一个
+ * 请求。抛错会让上传直接失败，那是更坏的结果。代价是「配错了但看起来正常」，
+ * 所以另有 /api/images/config 自查端点把 warning 暴露出来。
+ */
+export function normalizeImageBase(raw: string | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+
+  // 必须带 scheme。workerd 会替你补 https:// 而不报错，这里不能依赖它
+  if (!/^https?:\/\//i.test(value)) return null;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  // 查询串与 fragment 拼在 key 前面会得到废地址，直接判为配错
+  if (url.search || url.hash) return null;
+
+  // 保留 pathname：R2 自定义域名允许挂子路径。去掉末尾斜杠避免出现 //
+  const path = url.pathname.replace(/\/+$/, "");
+  return `${url.origin}${path}`;
+}
+
 /** 图片对外 URL：配了自定义域名走 CDN，否则回落到 Worker 代理 */
 function publicURL(key: string, env: ImagesEnv): string {
-  const base = (env.IMAGE_PUBLIC_BASE ?? "").trim().replace(/\/$/, "");
+  const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
   if (base) return `${base}/${key}`;
+  if ((env.IMAGE_PUBLIC_BASE ?? "").trim()) {
+    // 配了但没通过校验 —— 日志里留痕，否则只会表现为账单上多出的请求数
+    console.warn(
+      `IMAGE_PUBLIC_BASE 配置无效，已回落到 Worker 代理: ${env.IMAGE_PUBLIC_BASE}`,
+    );
+  }
   return `/images/${key}`;
+}
+
+/**
+ * GET /api/images/config —— 配置自查。
+ *
+ * 存在的理由：配错时系统回落到 Worker 代理，图片照样显示，
+ * 所以「图片能看」证明不了 CDN 生效了。没有这个端点，只能等月底看账单。
+ */
+export function handleImageConfig(env: ImagesEnv): Response {
+  const raw = (env.IMAGE_PUBLIC_BASE ?? "").trim();
+  const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
+  return json(200, {
+    mode: base ? "cdn" : "worker-proxy",
+    base,
+    valid: base !== null,
+    warning:
+      raw && !base
+        ? "IMAGE_PUBLIC_BASE 已设置但无效（需形如 https://img.example.com），已回落到 Worker 代理"
+        : null,
+  });
 }
 
 /**

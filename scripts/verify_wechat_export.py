@@ -82,6 +82,20 @@ def main():
         inner = body.inner_html()
         check("测试内容确实写进了编辑器", MARKER in body.inner_text(),
               body.inner_text()[:80])
+
+        # 上传次数要跟「唯一公式数」比，不能写死。文档里可能残留上一轮的公式，
+        # 而且同一段 LaTeX 出现多次只该上传一次（见 wechatMath 的 uploadCache）。
+        unique_math = page.evaluate("""() => {
+          const pm = document.querySelector('.ProseMirror');
+          const keys = new Set();
+          for (const n of pm.querySelectorAll(
+                 '[data-type="inline-math"],[data-type="block-math"]')) {
+            const latex = (n.getAttribute('data-latex') || '').trim();
+            if (latex) keys.add(n.getAttribute('data-type') + '::' + latex);
+          }
+          return keys.size;
+        }""")
+        print(f"    文档内唯一公式数: {unique_math}")
         # 引用块是否产出取决于编辑器的输入规则，与微信导出无关。
         # 这里如实记录，避免把编辑器的行为误算成导出的缺陷。
         has_bq = "<blockquote" in inner
@@ -128,7 +142,12 @@ def main():
         check("没有报错提示", alert.count() == 0,
               alert.first.inner_text()[:80] if alert.count() else "")
         print(f"    /api/images POST 响应: {uploads}")
-        check("公式已上传（至少 2 次 POST）", len(uploads) >= 2, str(uploads))
+        # 上界同样要卡。曾经只写 >=2，结果两次导出实际上传了 14 次都没被发现 ——
+        # 每次导出重新上传同样的公式，在 R2 里堆同名内容的副本，而且没有
+        # images 表可以清理。文档里有 2 个公式，一次导出就该是 2 次。
+        check("上传次数等于唯一公式数（不重复上传）",
+              len(uploads) == unique_math,
+              f"上传 {len(uploads)} 次，唯一公式 {unique_math} 个: {uploads}")
         check("上传全部成功", all(s in (200, 201) for s in uploads), str(uploads))
 
         print("\n[5] 读剪贴板，检查产物是否满足微信约束")
@@ -204,6 +223,9 @@ def main():
           return '';
         }""")
         check("换主题后 HTML 不同", html2 != html and len(html2) > 200)
+        # 切主题只影响样式，公式图不该重新上传
+        check("切主题未触发重复上传", len(uploads) == unique_math,
+              f"切主题后累计 {len(uploads)} 次，唯一公式 {unique_math} 个")
         check("第三个主题是科技蓝", "#0b62d0" in html2, html2[:200])
 
         print("\n[8] JS 报错")

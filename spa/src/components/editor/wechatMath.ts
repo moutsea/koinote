@@ -15,6 +15,18 @@ import { uploadImage } from "../../api";
 /** 栅格倍率。公式字号本就小，低于 3 倍在手机上发虚。 */
 const MATH_SCALE = 3;
 
+/**
+ * 已上传公式的缓存，键是 LaTeX 源码。
+ *
+ * 没有它的话，每次导出都会把同样的公式重新栅格化并重新上传 —— 光是切主题
+ * 试排版就能在 R2 里堆出十几份同样的图。而且现在没有 images 表，这些对象
+ * 无法列举也无法清理，只能一直躺在那里。
+ *
+ * 只在当前页面存活期内有效。跨会话去重需要服务端按内容哈希查重，那要等
+ * images 表落地。
+ */
+const uploadCache = new Map<string, { url: string; width: number; height: number }>();
+
 export type MathConversion = {
   total: number;
   converted: number;
@@ -66,6 +78,13 @@ async function renderMathImage(
   latex: string,
   isBlock: boolean,
 ): Promise<HTMLElement> {
+  // 缓存键要带 displayMode：同一段 LaTeX 行内与块级的排版不同，不能混用
+  const cacheKey = `${isBlock ? "block" : "inline"}::${latex}`;
+  const cached = uploadCache.get(cacheKey);
+  if (cached) {
+    return buildMathImg(latex, isBlock, cached.url, cached.width, cached.height);
+  }
+
   // 舞台必须有布局才能被栅格化，所以挪到视口外而不是 display:none
   const stage = document.createElement("div");
   stage.style.cssText =
@@ -94,32 +113,47 @@ async function renderMathImage(
       new File([blob], `formula-${Date.now()}.png`, { type: "image/png" }),
     );
 
-    const img = document.createElement("img");
-    img.setAttribute("src", uploaded.url);
-    img.setAttribute("alt", latex);
-    // 显示尺寸用 CSS 尺寸而非画布尺寸，否则会按 3 倍大小铺出来。
-    // 走 data-wechat-keep-style 传递，让内联器把它排在主题规则之后生效
-    // —— 主题的 img 规则里有 height:auto，顺序反了公式就会被压扁。
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    if (isBlock) {
-      img.setAttribute(
-        "data-wechat-keep-style",
-        `width:${w}px;height:${h}px;max-width:100%;display:block;margin:18px auto;`,
-      );
-      const wrapper = document.createElement("p");
-      wrapper.style.textAlign = "center";
-      wrapper.appendChild(img);
-      return wrapper;
-    }
-    img.setAttribute(
-      "data-wechat-keep-style",
-      `width:${w}px;height:${h}px;display:inline-block;vertical-align:middle;margin:0 2px;`,
-    );
-    return img;
+    uploadCache.set(cacheKey, { url: uploaded.url, width: w, height: h });
+    return buildMathImg(latex, isBlock, uploaded.url, w, h);
   } finally {
     stage.remove();
   }
+}
+
+/**
+ * 组装公式 <img>。
+ *
+ * 显示尺寸用 CSS 尺寸而非画布尺寸，否则会按 3 倍大小铺出来。
+ * 走 data-wechat-keep-style 传递，让内联器把它排在主题规则之后生效
+ * —— 主题的 img 规则里有 height:auto，顺序反了公式就会被压扁。
+ */
+function buildMathImg(
+  latex: string,
+  isBlock: boolean,
+  url: string,
+  w: number,
+  h: number,
+): HTMLElement {
+  const img = document.createElement("img");
+  img.setAttribute("src", url);
+  img.setAttribute("alt", latex);
+  if (isBlock) {
+    img.setAttribute(
+      "data-wechat-keep-style",
+      `width:${w}px;height:${h}px;max-width:100%;display:block;margin:18px auto;`,
+    );
+    const wrapper = document.createElement("p");
+    wrapper.style.textAlign = "center";
+    wrapper.appendChild(img);
+    return wrapper;
+  }
+  img.setAttribute(
+    "data-wechat-keep-style",
+    `width:${w}px;height:${h}px;display:inline-block;vertical-align:middle;margin:0 2px;`,
+  );
+  return img;
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
