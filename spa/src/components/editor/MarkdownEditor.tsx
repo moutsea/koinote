@@ -4,9 +4,16 @@ import { createEditorExtensions } from "./extensions";
 import { EditorToolbar } from "./EditorToolbar";
 import { useI18n, interpolate } from "../../i18n";
 import { useSaveDocument } from "../../documents";
+import { ApiError, uploadImage } from "../../api";
 import type { Document } from "../../documents";
 
 const SAVE_DEBOUNCE_MS = 800;
+
+/** 从粘贴/拖放事件里挑出可上传的图片文件 */
+function imageFilesFrom(list: FileList | null | undefined): File[] {
+  if (!list) return [];
+  return Array.from(list).filter((f) => f.type.startsWith("image/"));
+}
 
 type SaveStatus = "idle" | "saving" | "saved" | "failed";
 
@@ -37,6 +44,43 @@ export default function MarkdownEditor({
   const [title, setTitle] = useState(document.title);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 粘贴/拖放处理器在 useEditor 的配置里，那时 editor 还不存在，
+  // 所以经 ref 间接拿实例，打破循环依赖。
+  const editorRef = useRef<Editor | null>(null);
+  const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      setUploadError(null);
+      for (const file of files) {
+        setUploading((n) => n + 1);
+        try {
+          const image = await uploadImage(file);
+          const instance = editorRef.current;
+          if (!instance) continue;
+          instance
+            .chain()
+            .focus()
+            .setImage({ src: image.url, alt: file.name })
+            .run();
+        } catch (err) {
+          // 上传失败必须显形。静默失败会让人以为图片存进去了，
+          // 等到重开文档才发现图没了。
+          if (err instanceof ApiError) {
+            setUploadError(
+              (err.code && t.errors[err.code]) || err.message || t.editor.uploadFailed,
+            );
+          } else {
+            setUploadError(t.editor.uploadFailed);
+          }
+        } finally {
+          setUploading((n) => Math.max(0, n - 1));
+        }
+      }
+    },
+    [t],
+  );
   // 最新待存内容，防抖回调触发时读它，避免闭包捕获旧值
   const pending = useRef<{ title: string; content: string }>({
     title: document.title,
@@ -84,6 +128,21 @@ export default function MarkdownEditor({
         class:
           "prose prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[60vh] px-2 py-4",
       },
+      handlePaste: (view, event) => {
+        const files = imageFilesFrom(event.clipboardData?.files);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void uploadFiles(files);
+        return true; // 已接手，阻止默认粘贴（否则会插入 base64 或本地 blob URL）
+      },
+      handleDrop: (view, event) => {
+        const dragEvent = event as DragEvent;
+        const files = imageFilesFrom(dragEvent.dataTransfer?.files);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void uploadFiles(files);
+        return true;
+      },
     },
     onUpdate: ({ editor }) => {
       pending.current = {
@@ -95,8 +154,9 @@ export default function MarkdownEditor({
     },
   });
 
-  // 把编辑器实例交给外层（大纲面板需要它）
+  // 把编辑器实例交给外层（大纲面板需要它），同时填进 ref 供上传回调使用
   useEffect(() => {
+    editorRef.current = editor;
     onEditorReady?.(editor);
     return () => onEditorReady?.(null);
   }, [editor, onEditorReady]);
@@ -151,6 +211,21 @@ export default function MarkdownEditor({
         <span className="shrink-0 text-xs text-neutral-400">
           {interpolate(t.editor.charCount, { n: charCount })}
         </span>
+        {uploading > 0 && (
+          <span className="shrink-0 text-xs text-neutral-400">
+            {interpolate(t.editor.uploadingImages, { n: uploading })}
+          </span>
+        )}
+        {uploadError && (
+          <button
+            type="button"
+            onClick={() => setUploadError(null)}
+            title={uploadError}
+            className="shrink-0 truncate text-xs text-red-600 hover:underline dark:text-red-400"
+          >
+            {uploadError}
+          </button>
+        )}
         {statusText && (
           <span
             className={`shrink-0 text-xs ${

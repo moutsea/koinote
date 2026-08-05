@@ -4,6 +4,7 @@ import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Typography from "@tiptap/extension-typography";
+import Image from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import { lowlight } from "./lowlight";
 
@@ -30,6 +31,9 @@ export function createEditorExtensions(placeholder: string) {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    // allowBase64 必须关：否则粘贴截图会以 data:image/... 内联进 Markdown，
+    // 文档瞬间膨胀到几 MB 且完全绕过图床。图片一律走 R2 拿到 URL 再插入。
+    Image.configure({ allowBase64: false, inline: false }),
     Typography,
     Placeholder.configure({ placeholder }),
     Markdown.configure({

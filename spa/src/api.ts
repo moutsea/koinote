@@ -125,6 +125,54 @@ export function updateDocument(
   );
 }
 
+// ---------- 图片 ----------
+
+export type UploadedImage = {
+  key: string;
+  url: string;
+  size: number;
+  contentType: string;
+};
+
+// Worker 侧按 magic byte 校验真实类型，允许的集合与之保持一致
+const UPLOADABLE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+export function isUploadableImage(file: File): boolean {
+  return UPLOADABLE_TYPES.has(file.type);
+}
+
+/**
+ * 上传图片到 R2（由 Worker 处理，不经过 Go 后端）。
+ *
+ * 直接发原始字节而非 FormData：Worker 读的是 request.arrayBuffer()，
+ * multipart 的分隔符会混进字节流，导致文件头校验失败。
+ * 也因此不能复用 apiJson —— 它会强制 Content-Type: application/json，
+ * 而 Worker 要拿这个头与真实文件头比对。
+ */
+export async function uploadImage(file: File): Promise<UploadedImage> {
+  if (!isUploadableImage(file)) {
+    // 前端先挡一道：服务端也会拒，但等一趟往返才报错体验更差
+    throw new ApiError(415, "Unsupported image type", "image_type_unsupported");
+  }
+
+  const response = await fetch("/api/images", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  const data = (await response.json()) as { image: UploadedImage };
+  return data.image;
+}
+
 export function deleteDocument(docId: string) {
   return apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}`,

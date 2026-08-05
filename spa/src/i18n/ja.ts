@@ -113,6 +113,8 @@ export const ja: Messages = {
     expandPanel: "パネルを展開",
     resizeDocuments: "ドキュメントパネルの幅を調整",
     resizeOutline: "アウトラインパネルの幅を調整",
+    uploadFailed: "画像のアップロードに失敗しました",
+    uploadingImages: "{n} 件アップロード中…",
     importedLocalDraft: "ローカルの下書きを取り込みました",
     toolbar: {
       bold: "太字",
@@ -182,5 +184,13 @@ function hello(name) {
     oauth_exchange_failed: "サインインを完了できませんでした。もう一度お試しください",
     oauth_profile_failed: "プロバイダからプロフィールを取得できませんでした",
     oauth_sync_failed: "アカウントの同期に失敗しました。もう一度お試しください",
+    title_too_long: "タイトルが長すぎます",
+    content_too_large: "ドキュメントが大きすぎて保存できません",
+    not_found: "この項目は存在しないか削除されています",
+    image_type_unsupported: "PNG / JPEG / GIF / WebP のみ対応しています",
+    image_type_mismatch: "ファイルの内容が形式と一致しません",
+    image_svg_rejected: "セキュリティ上の理由から SVG 画像は使用できません",
+    image_too_large: "画像が 10 MB の上限を超えています",
+    image_empty: "画像が空です",
   },
 };

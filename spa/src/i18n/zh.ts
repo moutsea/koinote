@@ -111,6 +111,8 @@ export const zh: Messages = {
     expandPanel: "展开面板",
     resizeDocuments: "调整文档面板宽度",
     resizeOutline: "调整大纲面板宽度",
+    uploadFailed: "图片上传失败",
+    uploadingImages: "上传中 {n} 张…",
     importedLocalDraft: "已导入本地草稿",
     toolbar: {
       bold: "粗体",
@@ -180,5 +182,13 @@ function hello(name) {
     oauth_exchange_failed: "登录未能完成，请重试",
     oauth_profile_failed: "无法从平台读取你的资料",
     oauth_sync_failed: "账号同步失败，请重试",
+    title_too_long: "标题过长",
+    content_too_large: "文档过大，无法保存",
+    not_found: "内容不存在或已被删除",
+    image_type_unsupported: "只支持 PNG / JPEG / GIF / WebP 格式",
+    image_type_mismatch: "文件内容与其格式不符",
+    image_svg_rejected: "出于安全考虑，不支持 SVG 图片",
+    image_too_large: "图片超过 10 MB 上限",
+    image_empty: "图片内容为空",
   },
 };

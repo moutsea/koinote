@@ -121,6 +121,49 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 `state` 用签名 cookie + nonce 双校验，回跳路径经 `sanitizeRedirectPath` 过滤，只允许站内相对路径。
 同邮箱的既有账号（如密码注册用户）在 OAuth 登录时会自动合并，不会重复建号。
 
+## 图床（Cloudflare R2）
+
+图片上传由 **Worker 直接落 R2**，不经过 Go 后端——字节走边缘，不占 VPS 带宽。
+鉴权仍回调后端：Worker 带着原始 cookie 打一次 `/api/auth/session` 拿身份。
+
+- `POST /api/images` —— 上传，请求体是**原始字节**（不是 multipart），
+  `Content-Type` 必须与真实文件头一致
+- `GET /images/<key>` —— 未配自定义域名时的回落读取路径
+- 编辑器里粘贴或拖入图片即自动上传，插入返回的 URL
+
+安全约束（都在 Worker 侧强制）：
+
+- 按 **magic byte 嗅探真实类型**，不信客户端声明的 `Content-Type`；声明与实际不符一律拒绝
+- **SVG 一律拒收**。SVG 能内嵌脚本，配上公开 bucket 就是储存型 XSS；
+  净化 SVG 是场跟绕过赛跑的长期战斗，不如不收
+- 上限 10 MiB，`Content-Length` 与实际字节数各挡一道
+- key 形如 `u/<authUserId>/<32位随机>.png`，随机且永不复用
+- 读取响应带 `X-Content-Type-Options: nosniff`
+
+### ⚠ 本地开发测不到上传
+
+`npm run dev` 是 Vite 直连 Go 后端，**Worker 不在链路里**，
+所以 `/api/images` 会 404——跟前端代码对不对无关。
+
+测上传要起 wrangler（自带本地 R2 模拟，不碰线上数据）：
+
+```bash
+npx wrangler dev --port 8788 --var BACKEND_URL:http://localhost:8090
+```
+
+本地对象存在 `.wrangler/state/v3/r2`（已在 `.gitignore` 中）。
+
+### 生产配置
+
+```bash
+wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
+# R2 绑定已写在 wrangler.jsonc，无需 secret
+```
+
+`IMAGE_PUBLIC_BASE` 留空时图片经 Worker 代理读取，每次加载消耗一次 Worker 请求。
+在 Cloudflare 后台给 bucket 绑定自定义域名后填上它（如 `https://img.你的域名`），
+图片改走 CDN，不再计入 Worker 请求数。
+
 ## 构建与部署
 
 ```bash

@@ -97,6 +97,8 @@ export interface Messages {
     expandPanel: string;
     resizeDocuments: string;
     resizeOutline: string;
+    uploadFailed: string;
+    uploadingImages: string; // 用 {n} 占位
     importedLocalDraft: string;
     // 工具栏
     toolbar: {

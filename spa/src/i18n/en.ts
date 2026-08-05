@@ -112,6 +112,8 @@ export const en: Messages = {
     expandPanel: "Expand panel",
     resizeDocuments: "Resize documents panel",
     resizeOutline: "Resize outline panel",
+    uploadFailed: "Image upload failed",
+    uploadingImages: "Uploading {n}…",
     importedLocalDraft: "Local draft imported",
     toolbar: {
       bold: "Bold",
@@ -181,5 +183,13 @@ function hello(name) {
     oauth_exchange_failed: "Failed to complete sign-in, please try again",
     oauth_profile_failed: "Could not read your profile from the provider",
     oauth_sync_failed: "Failed to sync your account, please try again",
+    title_too_long: "Title is too long",
+    content_too_large: "Document is too large to save",
+    not_found: "This item doesn't exist or has been deleted",
+    image_type_unsupported: "Only PNG, JPEG, GIF and WebP are supported",
+    image_type_mismatch: "File contents don't match the declared format",
+    image_svg_rejected: "SVG images aren't supported, for security reasons",
+    image_too_large: "Image exceeds the 10 MB limit",
+    image_empty: "The image is empty",
   },
 };

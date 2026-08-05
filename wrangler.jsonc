@@ -10,8 +10,19 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true
   },
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "koinote-images",
+      // wrangler dev 用本地模拟的 bucket，不碰线上数据
+      "preview_bucket_name": "koinote-images"
+    }
+  ],
   "vars": {
-    "BACKEND_URL": "http://localhost:8080"
+    "BACKEND_URL": "http://localhost:8080",
+    // 图片对外基址。留空时回落到 /images/<key> 由 Worker 代理，
+    // 配上 R2 自定义域名后走 CDN，不再消耗 Worker 请求数。
+    "IMAGE_PUBLIC_BASE": ""
   }
 
   // 生产环境用 secret 覆盖：

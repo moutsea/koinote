@@ -113,6 +113,8 @@ export const fr: Messages = {
     expandPanel: "Déplier le panneau",
     resizeDocuments: "Redimensionner le panneau des documents",
     resizeOutline: "Redimensionner le panneau du plan",
+    uploadFailed: "Échec du téléversement de l'image",
+    uploadingImages: "Téléversement de {n}…",
     importedLocalDraft: "Brouillon local importé",
     toolbar: {
       bold: "Gras",
@@ -182,5 +184,13 @@ function hello(name) {
     oauth_exchange_failed: "Échec de la connexion, veuillez réessayer",
     oauth_profile_failed: "Impossible de lire votre profil auprès du fournisseur",
     oauth_sync_failed: "Échec de la synchronisation du compte, veuillez réessayer",
+    title_too_long: "Le titre est trop long",
+    content_too_large: "Document trop volumineux pour être enregistré",
+    not_found: "Cet élément n'existe pas ou a été supprimé",
+    image_type_unsupported: "Seuls PNG, JPEG, GIF et WebP sont pris en charge",
+    image_type_mismatch: "Le contenu du fichier ne correspond pas à son format",
+    image_svg_rejected: "Les images SVG ne sont pas prises en charge, pour raisons de sécurité",
+    image_too_large: "L'image dépasse la limite de 10 Mo",
+    image_empty: "L'image est vide",
   },
 };

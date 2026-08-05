@@ -8,6 +8,8 @@
  * SEO 元数据注入、sitemap 等留到后续阶段，先保证代理与托管跑通。
  */
 
+import { handleImageGet, handleImageUpload } from "./images";
+
 type AssetFetcher = {
   fetch(request: Request): Promise<Response> | Response;
 };
@@ -16,6 +18,8 @@ export interface Env {
   ASSETS: AssetFetcher;
   BACKEND_URL: string;
   BACKEND_INTERNAL_TOKEN?: string;
+  IMAGES: R2Bucket;
+  IMAGE_PUBLIC_BASE?: string;
 }
 
 const API_PREFIXES = ["/api/", "/health"];
@@ -23,6 +27,20 @@ const API_PREFIXES = ["/api/", "/health"];
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // 图片上传由 Worker 直接落 R2，不转发给后端——
+    // 字节走边缘，不占 VPS 带宽。鉴权仍回调后端校验会话。
+    if (url.pathname === "/api/images" && request.method === "POST") {
+      return handleImageUpload(request, env);
+    }
+    // HEAD 也要走这里：CDN 与浏览器用它做缓存校验，
+    // 漏掉的话会落到 SPA 资源处理器，返回 text/html 的假响应。
+    if (
+      url.pathname.startsWith("/images/") &&
+      (request.method === "GET" || request.method === "HEAD")
+    ) {
+      return handleImageGet(request, env);
+    }
 
     if (
       API_PREFIXES.some(
