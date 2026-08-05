@@ -6,12 +6,16 @@ import {
 } from "@tanstack/react-query";
 import {
   createDocument,
+  createShare,
   deleteDocument,
   getDocument,
   listDocuments,
+  revokeShare,
   updateDocument,
   type Document,
+  type DocumentShare,
   type DocumentSummary,
+  type ShareAccess,
 } from "./api";
 
 // 列表与单篇分开缓存：列表频繁失效（标题/时间会变），单篇按 docId 各自独立。
@@ -84,10 +88,41 @@ export function useSaveDocument() {
   });
 }
 
+// ---------- 分享 ----------
+
+export function useCreateShare() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      access,
+      password,
+    }: {
+      docId: string;
+      access: ShareAccess;
+      password?: string;
+    }) => createShare(docId, { access, password }),
+    onSuccess: (_result, { docId }) => {
+      // 分享状态挂在单篇文档上，刷它以拿到最新 token
+      void queryClient.invalidateQueries({ queryKey: docKey(docId) });
+    },
+  });
+}
+
+export function useRevokeShare() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (docId: string) => revokeShare(docId),
+    onSuccess: (_result, docId) => {
+      void queryClient.invalidateQueries({ queryKey: docKey(docId) });
+    },
+  });
+}
+
 // 供编辑器在标题变化后手动刷新侧边栏列表
 export function useRefreshDocumentList() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: LIST_KEY });
 }
 
-export type { Document, DocumentSummary };
+export type { Document, DocumentShare, DocumentSummary, ShareAccess };

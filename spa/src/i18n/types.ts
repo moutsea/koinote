@@ -102,6 +102,41 @@ export interface Messages {
     imageClickToEdit: string;
     imageMarkdownLabel: string;
     imageBroken: string;
+    // 分享
+    share: string;
+    shareTitle: string;
+    shareAccessLink: string;
+    shareAccessLinkHint: string;
+    shareAccessPublic: string;
+    shareAccessPublicHint: string;
+    shareAccessPassword: string;
+    shareAccessPasswordHint: string;
+    sharePasswordPlaceholder: string;
+    shareEnable: string;
+    shareUpdate: string;
+    shareRevoke: string;
+    shareRevokeConfirm: string;
+    shareCopyLink: string;
+    shareCopied: string;
+    shareCopyFailed: string;
+    shareNotShared: string;
+    shareActive: string;
+    shareClose: string;
+    // 分享页（公开视图）
+    sharedBy: string; // 用 {name} 占位
+    sharedNotFound: string;
+    sharedPasswordPrompt: string;
+    sharedPasswordSubmit: string;
+    sharedOpenApp: string;
+    // 导出
+    exportLabel: string;
+    exportMarkdown: string;
+    exportHTML: string;
+    exportPDF: string;
+    exportDOCX: string;
+    exportPDFHint: string;
+    exportFailed: string;
+    exporting: string;
     importedLocalDraft: string;
     // 工具栏
     toolbar: {

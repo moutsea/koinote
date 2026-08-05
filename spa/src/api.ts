@@ -83,12 +83,30 @@ export function getSession() {
 
 // ---------- 文档 ----------
 
+export type ShareAccess = "link" | "public" | "password";
+
+export type DocumentShare = {
+  token: string;
+  access: ShareAccess;
+  requiresPassword: boolean;
+};
+
 export type Document = {
   docId: string;
   title: string;
   content: string;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** null 表示未分享 */
+  share?: DocumentShare | null;
+};
+
+/** 公开分享视图：不含任何内部标识 */
+export type SharedDocument = {
+  title: string;
+  content: string;
+  updatedAt?: string | null;
+  ownerName?: string;
 };
 
 // 列表接口不返回 content，只够侧边栏渲染
@@ -122,6 +140,39 @@ export function updateDocument(
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "PUT", body: JSON.stringify(params) },
+  );
+}
+
+// ---------- 分享 ----------
+
+export function createShare(
+  docId: string,
+  params: { access: ShareAccess; password?: string },
+) {
+  return apiJson<{ share: DocumentShare }>(
+    `/api/documents/${encodeURIComponent(docId)}/share`,
+    { method: "POST", body: JSON.stringify(params) },
+  );
+}
+
+export function revokeShare(docId: string) {
+  return apiJson<{ success: boolean }>(
+    `/api/documents/${encodeURIComponent(docId)}/share`,
+    { method: "DELETE" },
+  );
+}
+
+/** 公开读取。口令档时返回 { requiresPassword: true }，不含正文。 */
+export function getSharedDocument(token: string) {
+  return apiJson<{ document?: SharedDocument; requiresPassword?: boolean }>(
+    `/api/share/${encodeURIComponent(token)}`,
+  );
+}
+
+export function verifySharePassword(token: string, password: string) {
+  return apiJson<{ document: SharedDocument }>(
+    `/api/share/${encodeURIComponent(token)}/verify`,
+    { method: "POST", body: JSON.stringify({ password }) },
   );
 }
 
