@@ -1,11 +1,46 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/postcss";
-import { dirname, resolve } from "node:path";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
-import type { ProxyOptions } from "vite";
+import type { PluginOption, ProxyOptions } from "vite";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * KaTeX 的 CSS 用相对路径引字体（`url(fonts/KaTeX_*.woff2)`）。
+ * 产物 CSS 落在 /assets/ 下，这些相对路径便解析为 /assets/fonts/，
+ * 但 Vite 不会自动把 node_modules 里的字体搬过去 —— 不处理就全部 404，
+ * 公式会退化成后备字体，看起来"能显示但不对"。
+ *
+ * 从 node_modules 复制而非提交进 public/：包升级时字体自动跟着变，
+ * 不会留下一份静默过期的副本。
+ */
+function copyKatexFonts(): PluginOption {
+  return {
+    name: "koinote:copy-katex-fonts",
+    apply: "build",
+    async closeBundle() {
+      const source = resolve(rootDir, "node_modules/katex/dist/fonts");
+      const target = resolve(rootDir, "spa/dist/assets/fonts");
+      try {
+        await mkdir(target, { recursive: true });
+        const files = await readdir(source);
+        // 只搬 woff2：现代浏览器全支持，且是 CSS 里的首选格式。
+        // woff/ttf 会 404，但浏览器已用 woff2 渲染完成，不影响显示。
+        const woff2 = files.filter((f) => f.endsWith(".woff2"));
+        await Promise.all(
+          woff2.map((f) => copyFile(join(source, f), join(target, f))),
+        );
+        console.log(`[katex] 已复制 ${woff2.length} 个字体到 assets/fonts`);
+      } catch (err) {
+        // 字体缺失不该让构建失败，但必须喊出来
+        console.warn("[katex] 字体复制失败，公式将使用后备字体:", err);
+      }
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, rootDir, "");
@@ -42,7 +77,7 @@ export default defineConfig(({ mode }) => {
   return {
     root: "spa",
     publicDir: resolve(rootDir, "public"),
-    plugins: [react()],
+    plugins: [react(), copyKatexFonts()],
     css: {
       transformer: "postcss",
       postcss: {

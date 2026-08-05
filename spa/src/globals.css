@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* KaTeX 公式渲染样式。字体文件约 1.1 MB，Vite 会按实际引用打进产物 */
+@import "katex/dist/katex.min.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -67,6 +69,55 @@ body {
 
 .ProseMirror ul[data-type="taskList"] li > div {
   flex: 1 1 auto;
+}
+
+/* ---------- LaTeX 公式 ---------- */
+
+/* 块级公式居中独占一行 */
+.ProseMirror [data-type="block-math"] {
+  margin: 1rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+/* 行内公式跟随文字基线，不撑行高 */
+.ProseMirror [data-type="inline-math"] {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+/* 点击态提示可编辑 */
+.ProseMirror [data-type="block-math"],
+.ProseMirror [data-type="inline-math"] {
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.12s;
+}
+.ProseMirror [data-type="block-math"]:hover,
+.ProseMirror [data-type="inline-math"]:hover {
+  background: rgb(14 165 233 / 0.08);
+}
+
+/* 公式语法错误时扩展会回落成纯文本并挂这两个 class。
+   不给样式的话，写错的公式看起来和正文一样，用户不知道哪里出了问题。 */
+.ProseMirror .block-math-error,
+.ProseMirror .inline-math-error {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: #cf222e;
+  background: rgb(207 34 46 / 0.08);
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+}
+.dark .ProseMirror .block-math-error,
+.dark .ProseMirror .inline-math-error {
+  color: #ff7b72;
+  background: rgb(255 123 114 / 0.12);
+}
+
+/* KaTeX 在暗色下默认继承前景色，这里显式跟随主题 */
+.ProseMirror .katex {
+  color: inherit;
 }
 
 /* 代码块：等宽字体与背景 */

@@ -5,10 +5,13 @@ import { TaskItem } from "@tiptap/extension-task-item";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Typography from "@tiptap/extension-typography";
 import Image from "@tiptap/extension-image";
+import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import { InputRule } from "@tiptap/core";
 import { Markdown } from "tiptap-markdown";
 import { ImageNodeView } from "./ImageNodeView";
 import { lowlight } from "./lowlight";
+import { markdownMathPlugin } from "./markdownMath";
 
 /**
  * TipTap 扩展集合 —— Typora 式所见即所得的地基。
@@ -43,6 +46,77 @@ export function createEditorExtensions(placeholder: string) {
         return ReactNodeViewRenderer(ImageNodeView);
       },
     }),
+    // 行内公式 $…$
+    //
+    // 上游的输入规则用的是非标准分隔符（行内 $$…$$、块级 $$$…$$$），
+    // 但它的序列化输出却是标准的 $…$ / $$…$$ —— 打字与存盘两头对不上。
+    // README 承诺 Markdown 往返保真，这里覆盖成 CommonMark 通行的写法。
+    InlineMath.extend({
+      addInputRules() {
+        return [
+          new InputRule({
+            // 结尾 $ 刚打完就触发；前后不允许多余 $，避免与块级冲突
+            find: /(?<!\$)\$([^$\n]+?)\$$/,
+            handler: ({ state, range, match }) => {
+              state.tr.replaceWith(
+                range.from,
+                range.to,
+                this.type.create({ latex: match[1] }),
+              );
+            },
+          }),
+        ];
+      },
+      addStorage() {
+        return {
+          markdown: {
+            serialize(state: any, node: any) {
+              state.write(`$${node.attrs.latex ?? ""}$`);
+            },
+            parse: {
+              setup(markdownit: any) {
+                markdownit.use(markdownMathPlugin);
+              },
+            },
+          },
+        };
+      },
+    }),
+
+    // 块级公式 $$…$$
+    BlockMath.extend({
+      addInputRules() {
+        return [
+          new InputRule({
+            find: /^\$\$([^$]+?)\$\$$/,
+            handler: ({ state, range, match }) => {
+              state.tr.replaceWith(
+                range.from - 1,
+                range.to,
+                this.type.create({ latex: match[1].trim() }),
+              );
+            },
+          }),
+        ];
+      },
+      addStorage() {
+        return {
+          markdown: {
+            serialize(state: any, node: any) {
+              // 前后空行，保证块级语义（紧贴段落会被并进上一段）
+              state.write(`$$\n${node.attrs.latex ?? ""}\n$$`);
+              state.closeBlock(node);
+            },
+            parse: {
+              setup(markdownit: any) {
+                markdownit.use(markdownMathPlugin);
+              },
+            },
+          },
+        };
+      },
+    }),
+
     Typography,
     Placeholder.configure({ placeholder }),
     Markdown.configure({

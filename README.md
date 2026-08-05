@@ -121,6 +121,32 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 `state` 用签名 cookie + nonce 双校验，回跳路径经 `sanitizeRedirectPath` 过滤，只允许站内相对路径。
 同邮箱的既有账号（如密码注册用户）在 OAuth 登录时会自动合并，不会重复建号。
 
+## 代码高亮与 LaTeX
+
+**代码高亮**：lowlight（highlight.js）的 common 集，约 37 种主流语言。
+打三个反引号加语言名即可，如 ```` ```go ````。配色见 `globals.css` 的 GitHub Dark 精简版。
+
+**LaTeX**：KaTeX 渲染，用 CommonMark 通行的分隔符。
+
+- 行内：`$E = mc^2$`
+- 块级：`$$…$$`（同行或跨行皆可）
+- 点击公式可回到源码编辑
+- 语法错误时回落成红色等宽文本并标记，不静默失败
+
+两处需要留意的实现细节：
+
+1. **分隔符是覆盖过的。** `@tiptap/extension-mathematics` 的输入规则用非标准写法
+   （行内 `$$…$$`、块级 `$$$…$$$`），但它的序列化输出却是标准 `$…$` / `$$…$$` ——
+   打字与存盘两头对不上。这里覆盖了输入规则，统一到标准写法。
+2. **Markdown 往返靠自建的 markdown-it 插件**（`spa/src/components/editor/markdownMath.ts`）。
+   `tiptap-markdown` 不认识数学语法，扩展自带的 tokenizer 是给 TipTap 官方
+   markdown 包用的，这里用不上。插件里加了防误判规则：`$` 首尾不得为空白、
+   收尾 `$` 紧跟数字时按货币处理，否则「价格是 $100 和 $200」会被吞成一个公式。
+
+KaTeX 字体由 `vite.config.ts` 的 `copyKatexFonts` 插件在构建时从 `node_modules`
+复制到 `assets/fonts/`。不这么做的话 CSS 里的相对路径会全部 404，
+公式退化成后备字体——"能显示但不对"，很难察觉。
+
 ## 图床（Cloudflare R2）
 
 图片上传由 **Worker 直接落 R2**，不经过 Go 后端——字节走边缘，不占 VPS 带宽。
