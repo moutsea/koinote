@@ -156,6 +156,7 @@ export const ja: Messages = {
     wechatTitle: "WeChat 向けにエクスポート",
     wechatSubtitle:
       "スタイルは要素ごとにインライン化され、貼り付け後も崩れません。数式は画像としてアップロードされます。",
+    wechatThemeLabel: "テーマ",
     wechatCopy: "クリップボードにコピー",
     wechatCopied: "コピーしました",
     wechatWorking: "処理中…",

@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { Check, Copy, Loader2, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import { buildWechatHTML, copyRichText } from "./exportWechat";
-import { groupWechatThemes, type WechatThemeId } from "./wechatThemes";
+import {
+  findWechatTheme,
+  groupWechatThemes,
+  type WechatThemeId,
+} from "./wechatThemes";
 
 export function WechatDialog({
   editor,
@@ -94,48 +98,47 @@ export function WechatDialog({
           </button>
         </div>
 
-        <div className="mt-4 space-y-4">
-          {groupWechatThemes().map(({ group, themes }) => (
-            <div key={group}>
-              <h3 className="mb-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                {group}
-              </h3>
-              <div className="space-y-1.5">
-                {themes.map((theme) => (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={themeId === theme.id}
-                    onClick={() => {
-                      setThemeId(theme.id);
-                      setDone(false);
-                    }}
-                    className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                      themeId === theme.id
-                        ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30"
-                        : "border-black/10 hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 ${
-                        themeId === theme.id
-                          ? "border-sky-500 bg-sky-500"
-                          : "border-neutral-300 dark:border-neutral-600"
-                      }`}
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{theme.name}</span>
-                      <span className="mt-0.5 block text-[11px] text-neutral-400">
-                        {theme.hint}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="mt-4">
+          <label
+            htmlFor="wechat-theme"
+            className="block text-xs font-medium text-neutral-500 dark:text-neutral-400"
+          >
+            {t.editor.wechatThemeLabel}
+          </label>
+          {/* 原生 select：15 套主题平铺会把弹窗撑得很长，而 optgroup 的分组、
+              键盘选择、移动端滚轮都是系统给的，自己实现一遍不划算。
+              color-scheme 要跟着应用的深色模式走 —— 下拉列表和控件文字由系统绘制，
+              而这里的深色是 .dark class 手动切的，跟系统偏好无关；不声明的话
+              「系统亮色 + 应用深色」会得到深底配深字 */}
+          <div className="relative mt-1.5">
+            <select
+              id="wechat-theme"
+              value={themeId}
+              onChange={(e) => {
+                setThemeId(e.target.value as WechatThemeId);
+                setDone(false);
+              }}
+              className="w-full appearance-none rounded-xl border border-black/10 bg-[var(--background)] py-2.5 pl-3 pr-9 text-sm outline-none transition [color-scheme:light] focus:border-sky-500 dark:border-white/15 dark:[color-scheme:dark]"
+            >
+              {groupWechatThemes().map(({ group, themes }) => (
+                <optgroup key={group} label={group}>
+                  {themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+            />
+          </div>
+          {/* 选中项的适用场景。option 里塞不进第二行，只能放到外面 */}
+          <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-400">
+            {findWechatTheme(themeId).hint}
+          </p>
         </div>
 
         {note && (
