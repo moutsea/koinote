@@ -113,6 +113,9 @@ export const zh: Messages = {
     resizeOutline: "调整大纲面板宽度",
     uploadFailed: "图片上传失败",
     uploadingImages: "上传中 {n} 张…",
+    imageClickToEdit: "点击编辑图片 Markdown（备注与地址）",
+    imageMarkdownLabel: "图片 Markdown 源码",
+    imageBroken: "图片加载失败，点击编辑地址",
     importedLocalDraft: "已导入本地草稿",
     toolbar: {
       bold: "粗体",

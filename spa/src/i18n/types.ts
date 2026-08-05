@@ -99,6 +99,9 @@ export interface Messages {
     resizeOutline: string;
     uploadFailed: string;
     uploadingImages: string; // 用 {n} 占位
+    imageClickToEdit: string;
+    imageMarkdownLabel: string;
+    imageBroken: string;
     importedLocalDraft: string;
     // 工具栏
     toolbar: {

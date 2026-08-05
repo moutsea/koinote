@@ -115,6 +115,9 @@ export const fr: Messages = {
     resizeOutline: "Redimensionner le panneau du plan",
     uploadFailed: "Échec du téléversement de l'image",
     uploadingImages: "Téléversement de {n}…",
+    imageClickToEdit: "Cliquez pour modifier le Markdown de l'image (légende et URL)",
+    imageMarkdownLabel: "Source Markdown de l'image",
+    imageBroken: "Échec du chargement — cliquez pour modifier l'URL",
     importedLocalDraft: "Brouillon local importé",
     toolbar: {
       bold: "Gras",

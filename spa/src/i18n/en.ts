@@ -114,6 +114,9 @@ export const en: Messages = {
     resizeOutline: "Resize outline panel",
     uploadFailed: "Image upload failed",
     uploadingImages: "Uploading {n}…",
+    imageClickToEdit: "Click to edit image Markdown (caption and URL)",
+    imageMarkdownLabel: "Image Markdown source",
+    imageBroken: "Image failed to load — click to edit the URL",
     importedLocalDraft: "Local draft imported",
     toolbar: {
       bold: "Bold",

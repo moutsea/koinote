@@ -31,6 +31,14 @@ export default defineConfig(({ mode }) => {
     },
   };
 
+  // 图片上传只存在于 Worker（R2 绑定在那儿），Go 后端没有这个端点。
+  // 本地把 /api/images 与 /images 转给 wrangler dev，这样 5273 也能测上传，
+  // 不必切到 8788 去换取 HMR。wrangler 没起时这两条会连接被拒。
+  const workerProxy: ProxyOptions = {
+    target: env.WORKER_URL || "http://localhost:8788",
+    changeOrigin: false,
+  };
+
   return {
     root: "spa",
     publicDir: resolve(rootDir, "public"),
@@ -66,7 +74,11 @@ export default defineConfig(({ mode }) => {
       // 否则 provider 按登记的端口回跳会打到空端口，报错还查不出来。
       port: Number(env.DEV_PORT || 5273),
       strictPort: true,
+      // Vite 按最长前缀优先匹配，所以 /api/images 会胜过 /api。
+      // 图片相关两条转给 wrangler（Worker 才有 R2 绑定），其余仍走 Go 后端。
       proxy: {
+        "/api/images": workerProxy,
+        "/images": workerProxy,
         "/api": backendProxy,
         "/health": backendProxy,
       },

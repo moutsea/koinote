@@ -5,7 +5,9 @@ import { TaskItem } from "@tiptap/extension-task-item";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Typography from "@tiptap/extension-typography";
 import Image from "@tiptap/extension-image";
+import { ReactNodeViewRenderer } from "@tiptap/react";
 import { Markdown } from "tiptap-markdown";
+import { ImageNodeView } from "./ImageNodeView";
 import { lowlight } from "./lowlight";
 
 /**
@@ -33,7 +35,14 @@ export function createEditorExtensions(placeholder: string) {
     TaskItem.configure({ nested: true }),
     // allowBase64 必须关：否则粘贴截图会以 data:image/... 内联进 Markdown，
     // 文档瞬间膨胀到几 MB 且完全绕过图床。图片一律走 R2 拿到 URL 再插入。
-    Image.configure({ allowBase64: false, inline: false }),
+    //
+    // 挂自定义 NodeView 实现 Typora 式交互：点击图片浮出 `![备注](url)` 源码可编辑。
+    // 只影响编辑器内的呈现，序列化仍由 tiptap-markdown 输出标准 Markdown。
+    Image.configure({ allowBase64: false, inline: false }).extend({
+      addNodeView() {
+        return ReactNodeViewRenderer(ImageNodeView);
+      },
+    }),
     Typography,
     Placeholder.configure({ placeholder }),
     Markdown.configure({

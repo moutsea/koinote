@@ -115,6 +115,9 @@ export const ja: Messages = {
     resizeOutline: "アウトラインパネルの幅を調整",
     uploadFailed: "画像のアップロードに失敗しました",
     uploadingImages: "{n} 件アップロード中…",
+    imageClickToEdit: "クリックして画像の Markdown（キャプションと URL）を編集",
+    imageMarkdownLabel: "画像の Markdown ソース",
+    imageBroken: "画像を読み込めません — クリックして URL を編集",
     importedLocalDraft: "ローカルの下書きを取り込みました",
     toolbar: {
       bold: "太字",
