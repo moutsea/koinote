@@ -27,6 +27,7 @@
     "@tiptap/pm": "^3.27.2",
     "@tiptap/react": "^3.27.2",
     "@tiptap/starter-kit": "^3.27.2",
+    "docx": "^9.7.1",
     "katex": "^0.16.11",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.544.0",

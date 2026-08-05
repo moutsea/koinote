@@ -8,6 +8,7 @@ import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
 import { OutlinePanel } from "../components/editor/OutlinePanel";
 import { ResizablePanel } from "../components/editor/ResizablePanel";
 import { ShareDialog } from "../components/editor/ShareDialog";
+import { ExportMenu } from "../components/editor/ExportMenu";
 import { scrollToHeading, useOutline } from "../components/editor/useOutline";
 import {
   useCreateDocument,
@@ -240,6 +241,8 @@ export function EditorPage() {
               )
             }
             trailingControls={
+              <>
+              <ExportMenu editor={editor} title={doc.data.title} />
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
@@ -254,6 +257,7 @@ export function EditorPage() {
                 <Share2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t.editor.share}</span>
               </button>
+              </>
             }
             outlineSlot={
               outlineOpen ? (

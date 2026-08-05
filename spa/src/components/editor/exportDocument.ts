@@ -10,7 +10,7 @@ import type { Editor } from "@tiptap/react";
  */
 
 /** 触发浏览器下载。用完即释放 objectURL，否则整页存活期间都占着内存。 */
-function download(blob: Blob, filename: string) {
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -39,7 +39,7 @@ export function safeFilename(title: string, fallback: string): string {
 
 export function exportMarkdown(editor: Editor, title: string, fallback: string) {
   const markdown = editor.storage.markdown.getMarkdown() as string;
-  download(
+  downloadBlob(
     new Blob([markdown], { type: "text/markdown;charset=utf-8" }),
     `${safeFilename(title, fallback)}.md`,
   );
@@ -125,7 +125,7 @@ export function exportHTML(editor: Editor, title: string, fallback: string) {
   const name = safeFilename(title, fallback);
   const heading = title.trim() ? `<h1>${title.replace(/</g, "&lt;")}</h1>\n` : "";
   const html = htmlDocument(name, heading + editor.getHTML());
-  download(
+  downloadBlob(
     new Blob([html], { type: "text/html;charset=utf-8" }),
     `${name}.html`,
   );
