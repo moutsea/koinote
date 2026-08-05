@@ -71,6 +71,72 @@ body {
   flex: 1 1 auto;
 }
 
+/* ---------- 打印（PDF 导出走这条路） ----------
+   走浏览器原生打印而非 jsPDF：后者要嵌 CJK 字体才能显示中文，
+   常见变通是把文字栅格化成图片，那样文字不可选、不可搜、体积大。
+   打印路径下文字可选、CJK 正常，KaTeX 与代码高亮直接复用现有样式。 */
+@media print {
+  /* 页面 chrome 一律不印：导航、侧边栏、工具栏、按钮 */
+  body.koinote-printing header,
+  body.koinote-printing aside,
+  body.koinote-printing [role="toolbar"],
+  body.koinote-printing button {
+    display: none !important;
+  }
+
+  /* 正文铺满纸张，去掉滚动容器的高度限制 */
+  body.koinote-printing,
+  body.koinote-printing .ProseMirror {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body.koinote-printing .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  body.koinote-printing .prose {
+    max-width: none !important;
+  }
+
+  /* 标题不要孤零零落在页尾 */
+  h1, h2, h3, h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  /* 代码块、表格、图片、公式尽量不跨页断开 */
+  pre,
+  table,
+  img,
+  [data-type="block-math"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* 打印时代码块用浅底深字，深色底会吃掉大量墨 */
+  .ProseMirror pre {
+    background: #f6f8fa !important;
+    color: #1f2328 !important;
+    border: 1px solid #d0d7de;
+  }
+  .ProseMirror pre code,
+  .ProseMirror pre .hljs-comment,
+  .ProseMirror pre .hljs-keyword,
+  .ProseMirror pre .hljs-string,
+  .ProseMirror pre .hljs-number,
+  .ProseMirror pre .hljs-title,
+  .ProseMirror pre .hljs-variable {
+    color: #1f2328 !important;
+  }
+  /* 链接打印出地址，纸上才知道指向哪里 */
+  .ProseMirror a::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #57606a;
+  }
+  @page {
+    margin: 18mm 16mm;
+  }
+}
+
 /* ---------- LaTeX 公式 ---------- */
 
 /* 块级公式居中独占一行 */
