@@ -151,5 +151,37 @@ for (const [tabs, active] of [
   );
 }
 
+// ---------- 关闭后重新激活：双击才关闭的那个 bug ----------
+
+// close 之后若又用「已关掉的那个 id」去 activate，标签会被拉回来。
+// 这是纯函数层面的正确行为——它无从判断这个 id 刚被关掉。闸门只能在调用方做，
+// EditorPage 的 justClosed ref 负责这件事。这几条断言把这个契约钉住。
+{
+  const start = { openTabs: ["a", "b"], liveIds: ["b", "a"], activeDocId: "b" };
+  const closed = close(start, "b").next;
+  eq("关掉 b 后标签栏只剩 a", closed.openTabs, ["a"]);
+  eq("关掉 b 后当前是 a", closed.activeDocId, "a");
+
+  // 调用方若拿旧的 activeDocId（b）再 activate，b 会回来 —— 必须避免
+  const regressed = activate(closed, "b").next;
+  ok(
+    "用已关闭的 id 再 activate 会把它带回来（故此需要调用方闸门）",
+    regressed.openTabs.includes("b"),
+    "纯函数不该自己记住关闭历史",
+  );
+
+  // 用新的 activeDocId（a）再 activate 才是幂等的
+  const correct = activate(closed, "a");
+  eq("用新的当前 id 再 activate 幂等", correct.next, closed);
+  eq("幂等时无淘汰", correct.evicted, []);
+}
+
+// 关掉唯一标签后 activeDocId 为 null，此时调用方不该再 activate 任何东西
+{
+  const only = close({ openTabs: ["a"], liveIds: ["a"], activeDocId: "a" }, "a").next;
+  ok("关掉唯一标签后当前为 null", only.activeDocId === null);
+  ok("关掉唯一标签后池子为空", only.liveIds.length === 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

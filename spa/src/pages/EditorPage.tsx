@@ -127,19 +127,52 @@ export function EditorPage() {
     setTabState(hydrate(tabs, activeDocId ?? serverActive));
   }, [serverTabs.data, activeDocId]);
 
+  // saver 经 ref 用，不进 effect 依赖：它的 status 依赖 statuses，打字时身份会变，
+  // 放进依赖数组会让下面那个 effect 每次保存状态变化都重跑一遍
+  const saverRef = useRef(saver);
+  saverRef.current = saver;
+
+  /**
+   * 刚关掉的标签，闸门。
+   *
+   * 关闭是「先改状态、再改地址」，中间有几帧 activeDocId 还指着已关掉的那篇。
+   * 下面的 effect 那时会把它 activate 回来 —— 表现就是要点两次才关得掉。
+   */
+  const justClosed = useRef<string | null>(null);
+
+  // handleCloseTab 要在 updater 外面读当前标签状态
+  const tabStateRef = useRef(tabState);
+  tabStateRef.current = tabState;
+
+  /**
+   * 本次会话里由「+」新建的 docId。
+   *
+   * 用来区分「刚建的空文档」与「从服务端载入的空文档」—— 前者关掉标签就该删，
+   * 后者是用户的数据，不能因为关个标签就没了。
+   */
+  const createdHere = useRef<Set<string>>(new Set());
+
   // URL 是当前标签的唯一真相。地址栏变化（含前进后退、深链）都要落进标签状态
   useEffect(() => {
     if (!activeDocId) return;
+    if (justClosed.current === activeDocId) return; // 地址还没跟上，别把它拉回来
     setTabState((prev) => {
       if (prev.activeDocId === activeDocId && prev.openTabs.includes(activeDocId)) {
         return prev;
       }
       const { next, evicted } = activate(prev, activeDocId);
       // 被挤出池子的实例即将卸载，先把它们的待存内容发出去
-      for (const id of evicted) void saver.flush(id);
+      for (const id of evicted) void saverRef.current.flush(id);
       return next;
     });
-  }, [activeDocId, saver]);
+  }, [activeDocId]);
+
+  // 地址真的离开了，闸门就该撤掉，否则再打开这篇会被一直挡住
+  useEffect(() => {
+    if (justClosed.current && justClosed.current !== activeDocId) {
+      justClosed.current = null;
+    }
+  }, [activeDocId]);
 
   // 标签组同步到后端。防抖 —— 切标签很频繁，每次都打后端太吵
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,32 +222,61 @@ export function EditorPage() {
 
   const handleCloseTab = useCallback(
     (docId: string) => {
-      // 先把这篇的待存内容存掉再摘标签，否则防抖窗口内的编辑就没了
-      void saver.forget(docId);
-      setTabState((prev) => {
-        const { next, evicted } = close(prev, docId);
-        for (const id of evicted) void saver.flush(id);
-        // 当前标签换人了就跟着改地址；全关完回 /editor 触发新建
-        if (next.activeDocId !== prev.activeDocId) {
-          if (next.activeDocId) {
-            void navigate({
-              to: "/editor/$docId",
-              params: { docId: next.activeDocId },
-            });
-          } else {
-            bootstrapped.current = false;
-            void navigate({ to: "/editor" });
-          }
+      /**
+       * 点「+」会立刻 POST 建一篇真文档，所以关标签只摘标签的话，一篇没动过的空
+       * 文档会永久留在侧栏里。这里把它删掉。
+       *
+       * 三个条件都要满足才删：本次会话新建的、没有未落库的改动、标题与正文都空。
+       * 「本次会话新建」这条是关键 —— 少了它，关掉一篇从服务端载入的旧空文档的
+       * 标签会把那篇真删了。
+       */
+      const snapshot = saver.peek(docId);
+      const untouched =
+        createdHere.current.has(docId) &&
+        !saver.isDirty(docId) &&
+        !snapshot?.title.trim() &&
+        !snapshot?.content.trim();
+
+      if (untouched) {
+        // drop 而不是 forget：forget 会先 PUT 一次，而这篇马上就要删了
+        saver.drop(docId);
+        createdHere.current.delete(docId);
+        remove.mutate(docId);
+      } else {
+        // 先把待存内容存掉再摘标签，否则防抖窗口内的编辑就没了
+        void saver.forget(docId);
+      }
+
+      // 闸门要在改地址之前立起来，挡住 activeDocId 还没更新的那几帧
+      if (docId === tabStateRef.current.activeDocId) {
+        justClosed.current = docId;
+      }
+
+      const { next, evicted } = close(tabStateRef.current, docId);
+      for (const id of evicted) void saver.flush(id);
+      setTabState(next);
+
+      // navigate 放在 updater 外面：updater 在 StrictMode 下会跑两次，
+      // 副作用写在里面就会发两次导航
+      if (next.activeDocId !== tabStateRef.current.activeDocId) {
+        if (next.activeDocId) {
+          void navigate({
+            to: "/editor/$docId",
+            params: { docId: next.activeDocId },
+          });
+        } else {
+          bootstrapped.current = false;
+          void navigate({ to: "/editor" });
         }
-        return next;
-      });
+      }
     },
-    [saver, navigate],
+    [saver, navigate, remove],
   );
 
   const handleCreate = useCallback(() => {
     create.mutate(undefined, {
       onSuccess: ({ document }) => {
+        createdHere.current.add(document.docId);
         void navigate({
           to: "/editor/$docId",
           params: { docId: document.docId },

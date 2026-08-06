@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSaveDocument } from "../../documents";
 
 /**
@@ -52,6 +52,13 @@ export type DocumentSaver = {
   isDirty: (docId: string) => boolean;
   /** 关标签时调用：先存，再丢掉记录 */
   forget: (docId: string) => Promise<void>;
+  /**
+   * 直接丢掉记录，不保存。
+   *
+   * 用于「这篇文档即将被删除」：走 forget 会先 PUT 一次，而目标马上就没了 ——
+   * 请求要么 404 要么把刚删的内容又写回去。
+   */
+  drop: (docId: string) => void;
 };
 
 export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
@@ -180,6 +187,18 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [flush],
   );
 
+  const drop = useCallback((docId: string) => {
+    const entry = entries.current.get(docId);
+    if (entry?.timer) clearTimeout(entry.timer);
+    entries.current.delete(docId);
+    setStatuses((prev) => {
+      if (!(docId in prev)) return prev;
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+  }, []);
+
   const peek = useCallback(
     (docId: string) => entries.current.get(docId)?.pending ?? null,
     [],
@@ -206,5 +225,12 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     };
   }, [doSave]);
 
-  return { seed, queue, flush, peek, status, isDirty, forget };
+  // 必须 memo：返回对象字面量的话每次渲染都是新身份，把它放进 effect 依赖数组的
+  // 调用方就会变成「每次渲染都跑一遍」。EditorPage 的「URL → 标签状态」effect 正是
+  // 这么用的 —— 曾导致关标签后、路由还没更新的那几帧里又把它 activate 回来，
+  // 表现为要点两次才关得掉。
+  return useMemo(
+    () => ({ seed, queue, flush, peek, status, isDirty, forget, drop }),
+    [seed, queue, flush, peek, status, isDirty, forget, drop],
+  );
 }
