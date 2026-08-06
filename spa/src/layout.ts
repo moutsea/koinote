@@ -1,16 +1,24 @@
 /**
- * 版面宽度的唯一来源。
+ * 正文宽度的唯一来源。
  *
- * 页头和正文必须用同一个宽度，否则两者的左边缘会错开 —— 这个错开改过三轮：先是页头
- * max-w-6xl 配编辑器通栏，再是页头通栏配控制台 max-w-5xl，每次都是「一边改了另一边
- * 没跟上」。根因是宽度散在 AppShell 和五个页面里各自决定。
+ * 只管正文，不管页头 —— 页头始终通栏（见 AppShell）。它是全站导航，属于应用外壳；
+ * 正文收窄是为了行长和阅读，那个理由对一排图标按钮不成立。
  *
- * 现在只在这里定：路由 → 宽度。页头用 containerClass，页面用 PageContainer，
- * 两者都从这张表取值，漂开在结构上就不可能了。
+ * 集中在这里是因为宽度原先散在 AppShell 和五个页面里各自决定，改过三轮都是「一边改了
+ * 另一边没跟上」。现在页面一律走 PageContainer，宽度只在这张表里调。
  */
 
 /** 正文容器的宽度档位 */
 export type ContentWidth = "full" | "6xl" | "5xl" | "3xl";
+
+/**
+ * 页头与通栏正文共用的左右内边距。
+ *
+ * 导出而不是两边各写一个 px-3：编辑器页侧栏的左边缘要和页头的 logo 对齐，两边写死的话
+ * 改了一处就差几个像素，而几个像素的错位最难靠眼睛发现。12px 这个值本身取自编辑器
+ * 侧栏的内边距。
+ */
+export const EDGE_PADDING = "px-3";
 
 /**
  * 各路由的正文宽度。按前缀匹配，最长的前缀优先。
@@ -59,13 +67,14 @@ export function contentWidthFor(pathname: string): ContentWidth {
 /**
  * 宽度档位对应的容器 class。
  *
- * 通栏用 px-3 而不是 px-4 sm:px-6：编辑器的侧栏内边距是 12px，页头要与它取齐。
- * 收窄档用 px-4 sm:px-6，是移动端上更舒服的边距。
+ * 通栏用 px-3 而不是 px-4 sm:px-6，与页头及编辑器侧栏的 12px 取齐 —— 通栏页面的正文
+ * 左边缘要和页头的 logo 对上。收窄档用 px-4 sm:px-6，移动端上边距更舒服；那几页的正文
+ * 本来就和页头不对齐，不必迁就。
  */
 export function widthClass(width: ContentWidth): string {
   switch (width) {
     case "full":
-      return "w-full px-3";
+      return `w-full ${EDGE_PADDING}`;
     case "6xl":
       return "mx-auto w-full max-w-6xl px-4 sm:px-6";
     case "5xl":
@@ -75,12 +84,7 @@ export function widthClass(width: ContentWidth): string {
   }
 }
 
-/** 某个路径的容器 class。页头与正文都走这里 */
+/** 某个路径下正文容器的 class。页面通过 PageContainer 间接用它 */
 export function containerClass(pathname: string): string {
   return widthClass(contentWidthFor(pathname));
-}
-
-/** 正文是否通栏。只用于少数需要分支的地方 */
-export function isFullBleedRoute(pathname: string): boolean {
-  return contentWidthFor(pathname) === "full";
 }

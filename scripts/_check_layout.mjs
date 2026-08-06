@@ -1,10 +1,10 @@
 // 版面宽度的路由表。页头和正文都从它取值 —— 判错的表现是某一页的页头和正文左边缘
 // 错开，而这只有真去点那个页面才看得见。已经因此改过三轮，所以钉住。
 import {
+  EDGE_PADDING,
   ROUTE_WIDTHS,
   containerClass,
   contentWidthFor,
-  isFullBleedRoute,
   widthClass,
 } from "./_layout_bundle.mjs";
 
@@ -156,8 +156,7 @@ for (const w of ["6xl", "5xl", "3xl"]) {
   ok(`${w} 带对应 max-w`, widthClass(w).includes(`max-w-${w}`), widthClass(w));
 }
 
-// ---------- 不变量：页头与正文必须拿到同一个 class ----------
-// 这是整张表存在的理由。两边各自算宽度时曾错开过三轮
+// ---------- containerClass 与宽度表一致 ----------
 for (const path of [
   "/",
   "/editor",
@@ -168,18 +167,28 @@ for (const path of [
   "/editor-guide",
 ]) {
   eq(
-    `页头与正文同宽: ${path}`,
+    `containerClass 取自宽度表: ${path}`,
     containerClass(path),
     widthClass(contentWidthFor(path)),
   );
 }
 
-// ---------- isFullBleedRoute 与宽度表一致 ----------
-for (const path of ["/", "/editor", "/editor/x", "/dashboard", "/share/x", "/login"]) {
-  eq(
-    `isFullBleedRoute 与表一致: ${path}`,
-    isFullBleedRoute(path),
-    contentWidthFor(path) === "full",
+// ---------- 通栏页面的正文要和页头的 logo 对齐 ----------
+//
+// 页头始终通栏，内边距用的就是 EDGE_PADDING（见 AppShell），所以这条对齐是结构上
+// 保证的、不靠断言。这里只钉住通栏档确实用了它 —— 换成 px-4 之类，编辑器页侧栏的
+// 左边缘就会和 logo 差几个像素，而几个像素的错位最难靠眼睛发现。
+ok(
+  `通栏正文用 ${EDGE_PADDING}`,
+  widthClass("full").split(/\s+/).includes(EDGE_PADDING),
+  widthClass("full"),
+);
+// 收窄档不该用它：那几页的正文本来就和页头不对齐，移动端边距大一点更舒服
+for (const w of ["6xl", "5xl", "3xl"]) {
+  ok(
+    `${w} 档不用 ${EDGE_PADDING}`,
+    !widthClass(w).split(/\s+/).includes(EDGE_PADDING),
+    widthClass(w),
   );
 }
 

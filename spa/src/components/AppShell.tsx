@@ -4,7 +4,7 @@ import { Moon, Sun, FileText, Globe, Check } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
 import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
-import { containerClass } from "../layout";
+import { EDGE_PADDING } from "../layout";
 
 export function AppShell() {
   const session = useSession();
@@ -19,9 +19,6 @@ export function AppShell() {
     applyTheme(theme);
   }, [theme]);
 
-  // 页头与正文用同一张宽度表，见 ../layout
-  const container = containerClass(pathname);
-
   async function handleLogout() {
     await logout();
     void navigate({ to: "/" });
@@ -30,7 +27,13 @@ export function AppShell() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[var(--background)] text-[var(--foreground)]">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[var(--background)]/85 backdrop-blur dark:border-white/10">
-        <div className={`flex h-14 items-center gap-3 ${container}`}>
+        {/* 页头始终通栏，不跟着正文的宽度走。
+            它是全站导航（logo、语言、主题、登录态），属于应用外壳而不是页面内容 ——
+            正文收窄是为了行长和阅读，那个理由对一排图标按钮不成立。
+
+            内边距取 EDGE_PADDING，与通栏正文同源：编辑器页侧栏的左边缘要和 logo
+            对齐，两边各写一个 px-3 的话改了一处就差几个像素。 */}
+        <div className={`flex h-14 w-full items-center gap-3 ${EDGE_PADDING}`}>
           <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <FileText className="h-5 w-5 text-sky-600" />
             <span>Koinote</span>
