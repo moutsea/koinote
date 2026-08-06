@@ -33,6 +33,9 @@ function lastBg(decls) {
   return all?.[all.length - 1]?.match(/#[0-9a-fA-F]{3,6}/)?.[0] ?? null;
 }
 
+/** 应用深色模式的底色，见 spa/src/globals.css 的 .dark */
+const APP_DARK_BG = "#0a0a0a";
+
 const TAGS = new Set([
   "body", "h1", "h2", "h3", "h4", "p", "blockquote", "ul", "ol", "li",
   "strong", "em", "code", "pre", "pre code", "hr", "a", "img", "table",
@@ -57,13 +60,22 @@ for (const theme of WECHAT_THEMES) {
   check(`${id} dark.body 声明了 background`, /background:/.test(db));
   check(`${id} dark.body 声明了 color`, /color:/.test(db));
 
-  const bodyBg = lastBg(db);
-  check(`${id} dark.body 底色可解析`, Boolean(bodyBg), db);
-  if (bodyBg) {
+  // 底色必须跟随应用的 --background，不能是具体色值。
+  // 正文区是居中定宽列，底色与页面差一点点，左右就各留一道竖边 —— 深色下尤其明显
+  check(
+    `${id} dark.body 底色跟随 var(--background)`,
+    /background:\s*var\(--background\)/.test(db),
+    `实际 ${db.match(/background:[^;]*/)?.[0] ?? "无"}，深色底不该写死色值，会与页面留出接缝`,
+  );
+
+  // 文字色要能在应用的深色底（#0a0a0a）上读得出来
+  const textColor = db.match(/(?:^|;)\s*color:\s*(#[0-9a-fA-F]{3,6})/)?.[1];
+  check(`${id} dark.body 文字色可解析`, Boolean(textColor), db);
+  if (textColor) {
     check(
-      `${id} dark.body 底色确实是深色`,
-      luma(bodyBg) < 0.3,
-      `${bodyBg} 亮度 ${luma(bodyBg).toFixed(2)}，深色变体不该用亮底`,
+      `${id} dark.body 文字在应用底色上有足够反差`,
+      luma(textColor) - luma(APP_DARK_BG) > 0.45,
+      `文字 ${textColor} 亮度 ${luma(textColor).toFixed(2)}，底 ${APP_DARK_BG} 亮度 ${luma(APP_DARK_BG).toFixed(2)}`,
     );
   }
 
@@ -80,13 +92,13 @@ for (const theme of WECHAT_THEMES) {
     );
   }
 
-  // 正文色与底色不能撞：差值太小等于看不见字
-  const textColor = db.match(/(?:^|;)\s*color:\s*(#[0-9a-fA-F]{3,6})/)?.[1];
-  if (textColor && bodyBg) {
+  // 浅色规则里不能出现 var()：导出时这些声明会被内联进 style 属性，
+  // 微信那边没有我们的 CSS 变量，var(--background) 解析不出来，底色直接丢失
+  for (const [tag, value] of Object.entries(theme.rules)) {
     check(
-      `${id} 正文与底色有足够反差`,
-      Math.abs(luma(textColor) - luma(bodyBg)) > 0.45,
-      `文字 ${textColor} 与底 ${bodyBg} 亮度差 ${Math.abs(luma(textColor) - luma(bodyBg)).toFixed(2)}`,
+      `${id} rules.${tag} 不含 var()`,
+      !/var\(/.test(value),
+      `导出会内联这段声明，微信侧没有变量可解析：${value}`,
     );
   }
 

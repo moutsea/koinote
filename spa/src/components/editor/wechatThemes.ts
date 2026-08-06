@@ -163,13 +163,20 @@ const MONO = '"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
 /**
  * 深色变体的公共底座。
  *
- * 取值贴着应用自身的深色（globals.css 的 --background:#0a0a0a）：差一档而不是
- * 差一大截，编辑区才像同一个界面里的一块纸，而不是嵌进来的另一个网站。
- * 主题的辨识度靠强调色留在标题、边框、链接上，不靠底色。
+ * surface 直接引用应用自身的 --background，不给具体色值。
+ *
+ * 试过比应用底色亮一档（#101013），想让编辑区像「同一界面里的一块纸」——
+ * 不成立。正文区是居中的定宽列，底色只要和外面差一点，左右就各留一道竖边，
+ * 读起来是没对齐的瑕疵而不是层次。深色下对色差的容忍度比浅色低得多。
+ *
+ * 所以深色变体的底色一律交给 var(--background)：应用底色怎么变它就怎么变，
+ * 接缝从根上不存在。代价是 github 的 #0d1117、notion 的 #191919、ft 的暖褐底
+ * 这些「有辨识度的底色」在深色下都放弃了 —— 身份改由面内元素承担：代码块、
+ * 引用块、标题背景、边框、链接色，那些都还留着各自的主题色。
  */
 const DARK = {
-  /** 比应用底色亮一档，能看出是「纸」但不割裂 */
-  surface: "#101013",
+  /** 跟随应用底色，杜绝正文区与页面之间的接缝 */
+  surface: "var(--background)",
   text: "#e4e4e7",
   /** 次要文字：引用、em、说明 */
   muted: "#a1a1aa",
@@ -311,7 +318,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // 荧光黄与青本来就是深底上的配色，留着；翻的是「黑框白底」那部分
-      body: `color:${DARK.text};background:#0b0b0c;`,
+      body: `color:${DARK.text};background:var(--background);`,
       pre: `background:#000;color:#00e5ff;`,
       "pre code": "color:#00e5ff;",
       h1: "color:#f5ff00;border-color:#f5ff00;",
@@ -362,7 +369,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // 粉配柠檬绿在深底上更跳，浅粉背景要换掉
-      body: `color:${DARK.text};background:#0c0a0c;padding:20px 16px;`,
+      body: `color:${DARK.text};background:var(--background);padding:20px 16px;`,
       pre: "background:#000;color:#bcff2f;",
       "pre code": "color:#bcff2f;",
       h1: "background:#ff4fd8;color:#0c0a0c;box-shadow:8px 8px 0 #bcff2f;",
@@ -413,7 +420,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     dark: {
       ...darkShared("#a5a0ff"),
       // 底色带一点蓝，保住 Stripe 的冷调
-      body: `color:#dcdce4;background:#0d0d12;padding:20px 16px;`,
+      body: `color:#dcdce4;background:var(--background);padding:20px 16px;`,
       h1: "color:#fff;",
       h2: "background:#16161f;color:#c9c5ff;border-left-color:#7c74ff;",
       h3: "color:#b8b8c4;",
@@ -455,7 +462,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     dark: {
       ...darkShared("#2997ff"),
       // Apple 深色界面的惯用值：近黑底 + #f5f5f7 文字 + #2997ff 链接
-      body: "color:#f5f5f7;background:#0d0d0f;",
+      body: "color:#f5f5f7;background:var(--background);",
       h1: "color:#f5f5f7;",
       h2: "color:#f5f5f7;",
       h3: "color:#c7c7cc;",
@@ -501,7 +508,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // FT 的身份是那层暖粉底。深色下改成暖褐调，不退成中性灰
-      body: "color:#e8ded0;background:#14100c;padding:20px 16px;",
+      body: "color:#e8ded0;background:var(--background);padding:20px 16px;",
       pre: "background:#1c1611;color:#e8ded0;",
       "pre code": "color:#e8ded0;",
       code: "background:#1c1611;color:#d9a86c;",
@@ -549,7 +556,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // 本来就是深色设计。只把底色往应用底色靠一档，其余照旧
-      body: `color:#d7d7e1;background:#0d0d10;padding:20px 16px;`,
+      body: `color:#d7d7e1;background:var(--background);padding:20px 16px;`,
       pre: "background:#1a1a22;color:#c4b5fd;",
     },
   },
@@ -584,7 +591,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // 直接用 GitHub Dark 的官方取值，这套主题的辨识度全在配色上
-      body: "color:#e6edf3;background:#0d1117;",
+      body: "color:#e6edf3;background:var(--background);",
       pre: "background:#161b22;color:#e6edf3;",
       "pre code": "color:#e6edf3;",
       code: "background:#161b22;color:#e6edf3;",
@@ -633,7 +640,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     dark: {
       // Notion 深色的实际取值：#191919 底 + #d4d4d4 文字，高亮块换成低饱和棕
       ...darkShared("#a8a29e"),
-      body: "color:#d4d4d4;background:#191919;padding:20px 16px;",
+      body: "color:#d4d4d4;background:var(--background);padding:20px 16px;",
       h1: "color:#eaeaea;",
       h2: "background:#252525;color:#eaeaea;",
       h3: "color:#d4d4d4;",
@@ -682,7 +689,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       ...darkShared("#c8c8cd"),
-      body: "color:#dedede;background:#0f0f10;",
+      body: "color:#dedede;background:var(--background);",
       h1: "color:#fff;border-bottom-color:#5a5a5a;",
       h2: "color:#fff;",
       h3: "color:#d4d4d4;",
@@ -766,7 +773,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       ...darkShared("#c8c8cd"),
-      body: "color:#dcdcdc;background:#0f0f0f;",
+      body: "color:#dcdcdc;background:var(--background);",
       // 双线与粗横线是报刊的骨架，深色下必须提亮才留得住
       h1: "color:#fff;border-bottom-color:#8a8a8a;",
       h2: "color:#fff;border-top-color:#8a8a8a;",
@@ -848,7 +855,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     },
     dark: {
       // 深色下 #8f1f1d 这种暗红几乎黑掉，整套红要往亮处提
-      body: "color:#e8dcdc;background:#130f0f;",
+      body: "color:#e8dcdc;background:var(--background);",
       pre: "background:#1e1414;color:#f0b8b6;",
       "pre code": "color:#f0b8b6;",
       code: "background:#1e1414;color:#ff8a86;",
