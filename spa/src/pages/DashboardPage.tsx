@@ -48,7 +48,8 @@ export function DashboardPage() {
   const name = user.nickname || user.username || user.email;
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
+    // 通栏：不再 mx-auto max-w-5xl。px-3 与页头取齐，标题的左边缘才和 logo 对上
+    <div className="w-full flex-1 px-3 py-10">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">

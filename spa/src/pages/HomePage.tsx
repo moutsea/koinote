@@ -22,12 +22,15 @@ export function HomePage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-sky-50 to-transparent dark:from-sky-950/20" />
-        <div className="mx-auto w-full max-w-4xl px-4 py-20 text-center sm:py-28">
+        {/* 通栏。标题与副标题本身仍有 max-w 兜住行长 —— 通栏指的是版面占满，
+            不是让文字行拉到 2000px 那么长 */}
+        <div className="w-full px-3 py-20 text-center sm:py-28">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
             <Sparkles className="h-3.5 w-3.5" />
             {t.home.badge}
           </span>
-          <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
+          {/* max-w-4xl 兜住行长：版面通栏了，但一行标题横跨 2000px 没法读 */}
+          <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl">
             {t.home.title}
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-neutral-600 dark:text-neutral-300">
@@ -53,7 +56,9 @@ export function HomePage() {
       </section>
 
       {/* Features */}
-      <section className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
+      {/* 通栏。列数保持 3 而不是宽屏上再加一列：features 正好 6 条，
+          3 列是干净的两行，4 列会变成 4+2 的残行 */}
+      <section className="w-full px-3 pb-24">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {t.home.features.map((feature, i) => {
             const Icon = FEATURE_ICONS[i] ?? FileText;

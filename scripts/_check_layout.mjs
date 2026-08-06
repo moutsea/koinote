@@ -13,24 +13,32 @@ function eq(label, got, want) {
   }
 }
 
-// ---------- 通栏：编辑器 ----------
+// ---------- 通栏 ----------
 eq("/editor 通栏", isFullBleedRoute("/editor"), true);
 eq("/editor/ 通栏（末尾斜杠）", isFullBleedRoute("/editor/"), true);
 eq("/editor/<docId> 通栏", isFullBleedRoute("/editor/abc-123"), true);
 eq("/editor 的深层路径通栏", isFullBleedRoute("/editor/abc/def"), true);
+eq("/dashboard 通栏", isFullBleedRoute("/dashboard"), true);
+eq("首页通栏", isFullBleedRoute("/"), true);
+eq("空路径按首页算，通栏", isFullBleedRoute(""), true);
 
-// ---------- 收窄：其它页面 ----------
-eq("首页收窄", isFullBleedRoute("/"), false);
-eq("空路径收窄", isFullBleedRoute(""), false);
-eq("/dashboard 收窄", isFullBleedRoute("/dashboard"), false);
+// ---------- 收窄：登录表单该窄，分享页要控行长 ----------
 eq("/login 收窄", isFullBleedRoute("/login"), false);
+eq("/register 收窄", isFullBleedRoute("/register"), false);
 eq("/share/<token> 收窄", isFullBleedRoute("/share/tok3n"), false);
+
+// 关键：根路由 "/" 在列表里，但它只能匹配根本身。
+// 若按裸 startsWith("/") 判定，所有路径都会变成通栏 —— 登录页也会跟着通栏
+eq("根路由不把 /login 一起吃掉", isFullBleedRoute("/login"), false);
+eq("根路由不把 /share 一起吃掉", isFullBleedRoute("/share/x"), false);
 
 // ---------- 前缀陷阱：这几条是抽出这个函数的理由 ----------
 eq("/editor-guide 不算编辑器", isFullBleedRoute("/editor-guide"), false);
 eq("/editors 不算编辑器", isFullBleedRoute("/editors"), false);
 eq("/editorial 不算编辑器", isFullBleedRoute("/editorial"), false);
 eq("/editor2 不算编辑器", isFullBleedRoute("/editor2"), false);
+eq("/dashboards 不算控制台", isFullBleedRoute("/dashboards"), false);
+eq("/dashboard-old 不算控制台", isFullBleedRoute("/dashboard-old"), false);
 // 不在开头的 /editor 也不算
 eq("/docs/editor 不算编辑器", isFullBleedRoute("/docs/editor"), false);
 
@@ -41,7 +49,9 @@ for (const path of [
   "/editor/abc",
   "/dashboard",
   "/login",
+  "/register",
   "/editor-guide",
+  "/dashboards",
   "/share/tok3n",
 ]) {
   eq(
