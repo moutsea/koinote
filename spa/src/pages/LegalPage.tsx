@@ -35,7 +35,7 @@ function formatDate(iso: string, locale: Locale): string {
   });
 }
 
-/** 印章字：三份文档各盖一个不同的字，比全站一个「鲤」有意思些 */
+/** 印章字：三份文档各盖一个不同的字，比全站一个「書」有意思些 */
 const SEAL_LABEL: Record<LegalKind, string> = {
   privacy: "私",
   terms: "約",

@@ -11,10 +11,10 @@ import type { ReactNode } from "react";
  * 朱砂印章。
  *
  * 竖排（writing-mode: vertical-rl）是印章的常规款式，横排看着像徽标而不像印。
- * aria-hidden：它是装饰，读屏念一个孤立的「鲤」字只会让人困惑。
+ * aria-hidden：它是装饰，读屏念一个孤立的「書」字只会让人困惑。
  */
 export function InkSeal({
-  label = "鯉",
+  label = "書",
   className = "",
 }: {
   label?: string;
