@@ -56,6 +56,26 @@ export interface Messages {
     continueWithGoogle: string;
     continueWithGitHub: string;
   };
+  storage: {
+    /** 控制台卡片标题 */
+    title: string;
+    /** 「已用 {used} / 共 {quota}」 */
+    usedOf: string;
+    /** 「还剩 {remaining}」 */
+    remaining: string;
+    /** 接近上限时的提示 */
+    nearLimitHint: string;
+    /** 已满时的提示 */
+    fullHint: string;
+    loading: string;
+    loadFailed: string;
+    /** 超额弹窗 */
+    quotaDialogTitle: string;
+    quotaDialogBody: string;
+    quotaDialogHint: string;
+    quotaDialogDismiss: string;
+    quotaDialogManage: string;
+  };
   dashboard: {
     greeting: string; // 用 {name} 占位
     subtitle: string;

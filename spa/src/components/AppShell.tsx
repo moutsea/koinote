@@ -17,6 +17,7 @@ import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
 import { Avatar } from "./Avatar";
+import { QuotaDialog } from "./QuotaDialog";
 
 export function AppShell() {
   const session = useSession();
@@ -121,6 +122,10 @@ export function AppShell() {
       </main>
 
       {hasFooter(pathname) && <AppFooter />}
+
+      {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
+          而那条路不只在编辑器页面触发 */}
+      <QuotaDialog />
     </div>
   );
 }

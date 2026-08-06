@@ -5,6 +5,7 @@ import { useDocumentList } from "../documents";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { PaperCard } from "../components/Ink";
+import { StorageCard } from "../components/StorageCard";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -106,6 +107,12 @@ export function DashboardPage() {
           label={t.dashboard.joinedAt}
           value={joinedAt}
         />
+      </div>
+
+      {/* 图床用量。单独一行而不是挤进上面那三张卡：它有进度条和可能出现的警示文字，
+          高度和那三张不一致，并排会让整行参差 */}
+      <div className="mt-4">
+        <StorageCard />
       </div>
 
       {/* 文档列表 */}

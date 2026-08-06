@@ -71,6 +71,24 @@ export const fr: Messages = {
     continueWithGoogle: "Continuer avec Google",
     continueWithGitHub: "Continuer avec GitHub",
   },
+  storage: {
+    title: "Stockage d'images",
+    usedOf: "{used} sur {quota} utilisés",
+    remaining: "{remaining} restants",
+    nearLimitHint:
+      "Il vous reste peu d'espace. Supprimer les documents dont vous n'avez plus besoin en libérera.",
+    fullHint:
+      "Le stockage est plein, aucune nouvelle image ne peut être envoyée. Supprimez les documents inutiles pour libérer de l'espace.",
+    loading: "Chargement…",
+    loadFailed: "Impossible de charger l'utilisation du stockage",
+    quotaDialogTitle: "Stockage d'images plein",
+    quotaDialogBody:
+      "Vous avez utilisé {used} sur {quota} de stockage d'images, cette image n'a donc pas été envoyée.",
+    quotaDialogHint:
+      "Supprimer les documents dont vous n'avez plus besoin libérera de l'espace — leurs images sont nettoyées par une tâche de fond, généralement en quelques minutes.",
+    quotaDialogDismiss: "J'ai compris",
+    quotaDialogManage: "Voir l'utilisation",
+  },
   dashboard: {
     greeting: "Bonjour, {name}",
     subtitle: "Voici votre tableau de bord d'écriture.",
@@ -517,6 +535,7 @@ function hello(name) {
     image_type_mismatch: "Le contenu du fichier ne correspond pas à son format",
     image_svg_rejected: "Les images SVG ne sont pas prises en charge, pour raisons de sécurité",
     image_too_large: "L'image dépasse la limite de 10 Mo",
+    image_quota_exceeded: "Stockage d'images plein — supprimez les documents inutiles pour libérer de l'espace",
     image_empty: "L'image est vide",
     share_not_found: "Ce lien est invalide ou a été révoqué",
     share_access_invalid: "Niveau de partage invalide",

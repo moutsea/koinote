@@ -27,16 +27,55 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 图床超额事件。超额时全局弹一次窗，而不是只在编辑器角落显示一行错误。
+ *
+ * 用事件而不是把回调层层传下去：上传会在三个地方失败（拖放上传、粘贴 base64、
+ * 转存外链），加上 rehost 那条路，四处都要接同一个弹窗。事件让 api.ts 里
+ * 构造错误的那一处广播，AppShell 里监听一次就够。
+ *
+ * 这是全局的，所以只用于"必须打断用户"的情况。普通上传失败仍走编辑器内的行内提示。
+ */
+export const IMAGE_QUOTA_EVENT = "koinote:image-quota-exceeded";
+
+/** 超额错误码。与后端 image_quota.go、Worker images.ts 三处一致 */
+export const IMAGE_QUOTA_CODE = "image_quota_exceeded";
+
+export type ImageQuotaDetail = {
+  usedBytes: number;
+  quotaBytes: number;
+};
+
 async function toApiError(response: Response): Promise<ApiError> {
   let message = `Request failed (${response.status})`;
   let code: string | undefined;
+  let quota: ImageQuotaDetail | null = null;
   try {
     const data = await response.json();
     if (data && typeof data.error === "string") message = data.error;
     if (data && typeof data.code === "string") code = data.code;
+    // 后端在 409 里回了当前用量，弹窗要用它显示"已用多少 / 共多少"
+    if (
+      data &&
+      typeof data.usedBytes === "number" &&
+      typeof data.quotaBytes === "number"
+    ) {
+      quota = { usedBytes: data.usedBytes, quotaBytes: data.quotaBytes };
+    }
   } catch {
     // 忽略解析失败，落到状态码兜底
   }
+
+  if (code === IMAGE_QUOTA_CODE && typeof window !== "undefined") {
+    // 用量缺失时给 0/0：storage.ts 的 usageRatio 把 quota<=0 当作"满"，
+    // 弹窗仍然能正确表达"没空间了"，只是数字显示为 0
+    window.dispatchEvent(
+      new CustomEvent<ImageQuotaDetail>(IMAGE_QUOTA_EVENT, {
+        detail: quota ?? { usedBytes: 0, quotaBytes: 0 },
+      }),
+    );
+  }
+
   return new ApiError(response.status, message, code);
 }
 
@@ -321,6 +360,22 @@ export function fetchImageToBucket(url: string) {
     method: "POST",
     body: JSON.stringify({ url }),
   });
+}
+
+/** 图床用量。配额的真值在后端，前端不写死 */
+export type StorageUsage = {
+  usedBytes: number;
+  quotaBytes: number;
+};
+
+/**
+ * 查当前用户的图床用量。
+ *
+ * 路径是 /api/storage/usage 而不是 /api/images/usage：Worker 对 /api/images/ 下的
+ * 若干路径有专门分派，加一个同前缀的路由要改两处，容易漏。
+ */
+export function getStorageUsage() {
+  return apiJson<StorageUsage>("/api/storage/usage");
 }
 
 export function deleteDocument(docId: string) {
