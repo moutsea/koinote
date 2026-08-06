@@ -1,8 +1,10 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -25,6 +27,12 @@ type Config struct {
 	// WorkerURL 是 Cloudflare Worker 的基址，后端的图片回收任务调它删 R2 对象。
 	// 空表示不启动回收 —— 待删记录仍会入队，配好后重启即可补上。
 	WorkerURL string
+
+	// ImageQuotaBytes 是每用户的图床上限，来自 IMAGE_QUOTA_MB。
+	//
+	// 放环境变量而不是代码常量：这是运营旋钮，改它不该要重新编译，dev、自部署、
+	// 生产也本该能给不同的值。
+	ImageQuotaBytes int64
 
 	// OAuth：用于拼回调地址的对外基址，及各 provider 的凭证
 	AppURL            string
@@ -73,6 +81,8 @@ func Load() Config {
 		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
 		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
+		ImageQuotaBytes: imageQuotaBytes(),
+
 		// OAuth 回调基址：本地 dev 默认走 Vite dev server（前端同源代理 /api 到后端）
 		AppURL:            getenv("APP_URL", "http://localhost:5173"),
 		GoogleOAuthID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -104,4 +114,45 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// DefaultImageQuotaMB 是没配 IMAGE_QUOTA_MB 时的默认值。
+const DefaultImageQuotaMB int64 = 500
+
+// imageQuotaBytes 读 IMAGE_QUOTA_MB 并换成字节。
+//
+// 单位用 MB 而不是字节：让人在 .env 里写 500 比写 524288000 好 —— 后者既难读，
+// 也容易少打一个 0 而无人察觉。
+//
+// 解析失败或值非正时回落到默认值，而不是取 0：0 的后果是所有人都传不了图，
+// 也就是一个手滑的配置（`IMAGE_QUOTA_MB=` 或 `IMAGE_QUOTA_MB=五百`）能让功能整体失效。
+// 配置错误宁可退回一个能用的默认值，并在日志里说明。
+func imageQuotaBytes() int64 {
+	const mib = 1024 * 1024
+	raw := strings.TrimSpace(os.Getenv("IMAGE_QUOTA_MB"))
+	if raw == "" {
+		return DefaultImageQuotaMB * mib
+	}
+
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || parsed <= 0 {
+		log.Printf(
+			"IMAGE_QUOTA_MB=%q 无法解析为正整数，回落到默认的 %d MB",
+			raw, DefaultImageQuotaMB,
+		)
+		return DefaultImageQuotaMB * mib
+	}
+
+	// 上界：超过这个数就说明单位写错了（比如把字节数填进了 MB 字段）。
+	// 不加的话 parsed*mib 会溢出 int64 变成负数，而负配额意味着谁都传不了图
+	const maxMB = 1024 * 1024 // 1 PB，远超任何真实用途
+	if parsed > maxMB {
+		log.Printf(
+			"IMAGE_QUOTA_MB=%d 过大（上限 %d），回落到默认的 %d MB —— 单位是 MB，不是字节",
+			parsed, maxMB, DefaultImageQuotaMB,
+		)
+		return DefaultImageQuotaMB * mib
+	}
+
+	return parsed * mib
 }

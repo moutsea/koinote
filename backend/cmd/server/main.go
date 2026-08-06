@@ -29,6 +29,10 @@ func main() {
 		log.Println("警告: 未设置 SESSION_SECRET，已回退到 BACKEND_INTERNAL_TOKEN / 开发默认值")
 	}
 
+	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
+	// 启动日志里有这一行，一眼就能对上。
+	log.Printf("图床配额: 每用户 %d MB", cfg.ImageQuotaBytes/(1024*1024))
+
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {

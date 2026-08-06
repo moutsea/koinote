@@ -140,20 +140,57 @@ func TestImageKeyOwnerIsExactNotPrefix(t *testing.T) {
 	}
 }
 
-// 配额常量本身。改动它是产品决策，不该是手滑 —— 比如把 500*1024*1024 写成
-// 500*1000*1000，或者少写一个 1024 变成 500 KiB。
-func TestImageQuotaBytes(t *testing.T) {
-	const wantMiB = 500
-	if ImageQuotaBytes != wantMiB*1024*1024 {
-		t.Fatalf("ImageQuotaBytes = %d，期望 %d MiB (%d)",
-			ImageQuotaBytes, wantMiB, wantMiB*1024*1024)
+// imageQuota 必须永远返回正数。
+//
+// 配额为 0 或负数的后果是所有人都传不了图 —— 也就是一个手滑的配置能让功能整体失效。
+// 这道兜底是那件事唯一的防线，所以把各种坏 Config 都过一遍。
+func TestImageQuotaAlwaysPositive(t *testing.T) {
+	cases := []struct {
+		name       string
+		configured int64
+		want       int64
+	}{
+		{
+			name:       "正常配置照用",
+			configured: 200 * 1024 * 1024,
+			want:       200 * 1024 * 1024,
+		},
+		{
+			// Config 零值。测试里构造的 App、或将来别的加载路径都可能是这样
+			name:       "零回落到默认",
+			configured: 0,
+			want:       config.DefaultImageQuotaMB * 1024 * 1024,
+		},
+		{
+			name:       "负数回落到默认",
+			configured: -1,
+			want:       config.DefaultImageQuotaMB * 1024 * 1024,
+		},
 	}
-	// 与单图上限的关系：配额必须远大于单图上限，否则一张图就能占满，
-	// "配额"就没有意义了。Worker 侧 MAX_BYTES 是 10 MiB
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(config.Config{ImageQuotaBytes: tc.configured})
+			got := app.imageQuota()
+			if got != tc.want {
+				t.Fatalf("imageQuota() = %d，期望 %d", got, tc.want)
+			}
+			if got <= 0 {
+				t.Fatalf("配额必须为正，实际 %d", got)
+			}
+		})
+	}
+}
+
+// 默认配额与单图上限的关系：必须远大于单图上限，否则一张图就能占满，
+// "配额"就没有意义了。Worker 侧 MAX_BYTES 是 10 MiB。
+func TestDefaultQuotaFitsManyImages(t *testing.T) {
 	const singleImageMax = 10 * 1024 * 1024
-	if ImageQuotaBytes < singleImageMax*10 {
-		t.Fatalf("配额 %d 相对单图上限 %d 太小，至少该能放十张",
-			ImageQuotaBytes, singleImageMax)
+	defaultQuota := config.DefaultImageQuotaMB * 1024 * 1024
+
+	if defaultQuota < singleImageMax*10 {
+		t.Fatalf("默认配额 %d 相对单图上限 %d 太小，至少该能放十张",
+			defaultQuota, singleImageMax)
 	}
 }
 

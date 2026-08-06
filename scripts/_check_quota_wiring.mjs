@@ -79,14 +79,47 @@ for (const header of ["X-Koinote-Internal-Token", "X-Auth-User-Id"]) {
   ok(`后端认 ${header}`, session.includes(header), "backend/internal/server/session.go");
 }
 
-// ---------- 配额上限只在后端定义 ----------
+// ---------- 配额上限来自环境变量 ----------
 //
-// SPA 不该写死 500 MiB：两处各存一份必然会漂，而漂的表现是
-// 「控制台说还有空间，上传却被拒」
+// 配额是运营旋钮，改它不该要重新编译。真值在 IMAGE_QUOTA_MB，后端读进 Config。
+const configGo = read("backend/internal/config/config.go");
 ok(
-  "后端定义了 ImageQuotaBytes",
-  /ImageQuotaBytes\s+int64\s*=\s*500\s*\*\s*1024\s*\*\s*1024/.test(backend),
+  "config 读 IMAGE_QUOTA_MB",
+  configGo.includes("IMAGE_QUOTA_MB"),
+  "backend/internal/config/config.go",
+);
+ok(
+  "config 定义了 DefaultImageQuotaMB",
+  /DefaultImageQuotaMB\s+int64\s*=\s*500/.test(configGo),
+  "backend/internal/config/config.go",
+);
+// 后端各处必须走 imageQuota()，不能再有写死的常量 —— 那会让环境变量形同虚设
+ok(
+  "后端通过 imageQuota() 取配额",
+  backend.includes("func (a *App) imageQuota()"),
   "backend/image_quota.go",
+);
+ok(
+  "后端不再写死 500 MiB 的常量",
+  !/const\s+ImageQuotaBytes/.test(backend),
+  "配额应当来自 config，不是代码常量",
+);
+// 解析失败必须回落到默认值而不是 0：0 的后果是所有人都传不了图
+ok(
+  "解析失败回落到默认值",
+  configGo.includes("DefaultImageQuotaMB * mib"),
+  "backend/internal/config/config.go",
+);
+
+// .env.example 要有这一项，否则自部署的人不知道它可配
+const envExample = read(".env.example");
+ok("`.env.example` 里有 IMAGE_QUOTA_MB", envExample.includes("IMAGE_QUOTA_MB="), ".env.example");
+// compose 要透传，否则容器部署改了 .env 也不生效
+const compose = read("docker-compose.yml");
+ok(
+  "docker-compose 透传 IMAGE_QUOTA_MB",
+  compose.includes("IMAGE_QUOTA_MB:"),
+  "docker-compose.yml",
 );
 const storage = read("spa/src/storage.ts");
 ok(

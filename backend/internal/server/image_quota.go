@@ -7,17 +7,32 @@ import (
 	"log"
 	"net/http"
 
+	"koinote/backend/internal/config"
 	"koinote/backend/internal/httpx"
 )
 
 // 图片存储配额。
 //
-// 还没做订阅，所以每个用户一个固定上限。上限放在代码里而不是数据库：现在没有"按用户设
-// 不同额度"的需求，加一列 quota_bytes 只会多一处要维护的状态。等真有订阅了再搬。
-const ImageQuotaBytes int64 = 500 * 1024 * 1024 // 500 MiB
-
+// 上限来自 IMAGE_QUOTA_MB 环境变量（见 config.imageQuotaBytes），默认 500 MB。
+// 放配置而不是代码常量：这是运营旋钮，改它不该要重新编译，dev、自部署、生产也本该
+// 能给不同的值。
+//
+// 还没做订阅，所以是全局一个值，不按用户区分 —— 那才需要数据库里加一列。
+//
 // errQuotaExceeded 由 recordImageObject 在超额时返回。
 var errQuotaExceeded = errors.New("image quota exceeded")
+
+// imageQuota 返回当前生效的配额上限。
+//
+// 包一层而不是各处直接读 a.cfg.ImageQuotaBytes：配额为 0 或负数意味着谁都传不了图，
+// 而 Config 是可以被测试或将来别的加载路径构造出来的。这里兜一道底，
+// 保证「配额永远是个正数」这件事只在一个地方保证。
+func (a *App) imageQuota() int64 {
+	if a.cfg.ImageQuotaBytes > 0 {
+		return a.cfg.ImageQuotaBytes
+	}
+	return config.DefaultImageQuotaMB * 1024 * 1024
+}
 
 // imageUsage 查某用户已占用的字节数。
 //
@@ -60,7 +75,7 @@ func (a *App) recordImageObject(
 			(SELECT SUM(bytes) FROM image_objects WHERE user_id = $2), 0
 		) + $3 <= $4
 		ON CONFLICT (object_key) DO NOTHING
-	`, key, userID, bytes, ImageQuotaBytes)
+	`, key, userID, bytes, a.imageQuota())
 	if err != nil {
 		return 0, err
 	}
@@ -121,7 +136,7 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"usedBytes":  used,
-		"quotaBytes": ImageQuotaBytes,
+		"quotaBytes": a.imageQuota(),
 	})
 }
 
@@ -176,7 +191,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusConflict, map[string]any{
 			"code":       "image_quota_exceeded",
 			"usedBytes":  used,
-			"quotaBytes": ImageQuotaBytes,
+			"quotaBytes": a.imageQuota(),
 		})
 		return
 	}
@@ -188,6 +203,6 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"usedBytes":  used,
-		"quotaBytes": ImageQuotaBytes,
+		"quotaBytes": a.imageQuota(),
 	})
 }

@@ -80,3 +80,88 @@ func TestLoadDotEnvMissingIsNotFatal(t *testing.T) {
 		t.Fatalf("期望没找到 .env 时返回空路径，实际 %q", path)
 	}
 }
+
+// ---------- 图床配额 ----------
+
+// IMAGE_QUOTA_MB 的解析。
+//
+// 这里的每一条坏输入都对应一种真实的手滑，而它们的后果是同一个：配额变成 0 或负数，
+// 于是所有人都传不了图。所以解析失败必须回落到默认值，不能取零值。
+func TestImageQuotaBytes(t *testing.T) {
+	const mib int64 = 1024 * 1024
+	fallback := DefaultImageQuotaMB * mib
+
+	cases := []struct {
+		name string
+		set  bool
+		raw  string
+		want int64
+	}{
+		{name: "未设置时用默认", set: false, want: fallback},
+		{name: "空串用默认", set: true, raw: "", want: fallback},
+		{name: "只有空白用默认", set: true, raw: "   ", want: fallback},
+
+		{name: "常规值", set: true, raw: "500", want: 500 * mib},
+		{name: "较小的值", set: true, raw: "50", want: 50 * mib},
+		{name: "1 MB", set: true, raw: "1", want: 1 * mib},
+		{name: "两侧空白被裁掉", set: true, raw: "  250  ", want: 250 * mib},
+
+		// 零和负数：语义上是"谁都不能传图"，几乎肯定不是本意
+		{name: "0 回落", set: true, raw: "0", want: fallback},
+		{name: "负数回落", set: true, raw: "-100", want: fallback},
+
+		// 非数字
+		{name: "非数字回落", set: true, raw: "五百", want: fallback},
+		{name: "带单位后缀回落", set: true, raw: "500MB", want: fallback},
+		{name: "小数回落", set: true, raw: "500.5", want: fallback},
+
+		// 把字节数误填进 MB 字段。不设上界的话 parsed*mib 会溢出 int64 变成负数，
+		// 而负配额同样意味着谁都传不了图 —— 这是最隐蔽的一种手滑
+		{name: "疑似填了字节数，回落", set: true, raw: "524288000", want: fallback},
+		{name: "int64 溢出边界，回落", set: true, raw: "9223372036854775807", want: fallback},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.set {
+				t.Setenv("IMAGE_QUOTA_MB", tc.raw)
+			} else {
+				t.Setenv("IMAGE_QUOTA_MB", "")
+				_ = os.Unsetenv("IMAGE_QUOTA_MB")
+			}
+
+			got := imageQuotaBytes()
+			if got != tc.want {
+				t.Fatalf("IMAGE_QUOTA_MB=%q → %d，期望 %d", tc.raw, got, tc.want)
+			}
+			// 无论输入多离谱，结果必须是正数
+			if got <= 0 {
+				t.Fatalf("IMAGE_QUOTA_MB=%q 得到非正配额 %d", tc.raw, got)
+			}
+		})
+	}
+}
+
+// Load 要把配额填进 Config，而不是留零值。
+func TestLoadPopulatesImageQuota(t *testing.T) {
+	chdir(t, t.TempDir()) // 避免读到仓库里真实的 .env
+	t.Setenv("IMAGE_QUOTA_MB", "128")
+
+	cfg := Load()
+	if want := int64(128 * 1024 * 1024); cfg.ImageQuotaBytes != want {
+		t.Fatalf("cfg.ImageQuotaBytes = %d，期望 %d", cfg.ImageQuotaBytes, want)
+	}
+}
+
+// 没配时 Load 也要给出正数，否则默认部署直接不能传图。
+func TestLoadImageQuotaDefaultsWhenUnset(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("IMAGE_QUOTA_MB", "")
+	_ = os.Unsetenv("IMAGE_QUOTA_MB")
+
+	cfg := Load()
+	if cfg.ImageQuotaBytes != DefaultImageQuotaMB*1024*1024 {
+		t.Fatalf("未配置时 cfg.ImageQuotaBytes = %d，期望默认 %d MB 对应的字节数",
+			cfg.ImageQuotaBytes, DefaultImageQuotaMB)
+	}
+}
