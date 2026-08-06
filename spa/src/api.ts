@@ -120,6 +120,8 @@ export type SharedDocument = {
 export type DocumentSummary = {
   docId: string;
   title: string;
+  /** null 表示在根下 */
+  folderId: string | null;
   updatedAt?: string | null;
 };
 
@@ -147,6 +149,57 @@ export function updateDocument(
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "PUT", body: JSON.stringify(params) },
+  );
+}
+
+// ---------- 文件夹 ----------
+
+export type Folder = {
+  folderId: string;
+  name: string;
+  /** null 表示在根下 */
+  parentFolderId: string | null;
+};
+
+export function listFolders() {
+  return apiJson<{ folders: Folder[] }>("/api/folders");
+}
+
+export function createFolder(params: {
+  name: string;
+  parentFolderId: string | null;
+}) {
+  return apiJson<{ folder: Folder }>("/api/folders", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function renameFolder(folderId: string, name: string) {
+  return apiJson<{ folder: Folder }>(
+    `/api/folders/${encodeURIComponent(folderId)}`,
+    { method: "PUT", body: JSON.stringify({ name }) },
+  );
+}
+
+export function deleteFolder(folderId: string) {
+  return apiJson<{ ok: boolean }>(
+    `/api/folders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function moveFolder(folderId: string, parentFolderId: string | null) {
+  return apiJson<{ ok: boolean }>(
+    `/api/folders/${encodeURIComponent(folderId)}/parent`,
+    { method: "PUT", body: JSON.stringify({ parentFolderId }) },
+  );
+}
+
+export function moveDocument(docId: string, folderId: string | null) {
+  return apiJson<{ ok: boolean }>(
+    `/api/documents/${encodeURIComponent(docId)}/folder`,
+    { method: "PUT", body: JSON.stringify({ folderId }) },
   );
 }
 

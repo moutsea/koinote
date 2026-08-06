@@ -1,34 +1,102 @@
-import { ChevronLeft, FileText, Plus, Trash2 } from "lucide-react";
-import { useI18n, type Locale } from "../../i18n";
-import type { DocumentSummary } from "../../documents";
+import { useCallback, useMemo, useState } from "react";
+import { ChevronLeft, FolderPlus, Plus } from "lucide-react";
+import { useI18n } from "../../i18n";
+import type { DocumentSummary, Folder } from "../../documents";
+import { buildTree, canDropDoc, canDropFolder } from "./tree";
+import { FolderRow, DocRow, type DragPayload, type TreeRowHandlers } from "./TreeRow";
 
-const DATE_LOCALE: Record<Locale, string> = {
-  en: "en-US",
-  zh: "zh-CN",
-  fr: "fr-FR",
-  ja: "ja-JP",
-};
-
+/**
+ * 侧栏文件树。
+ *
+ * 拖拽用原生 HTML5 DnD 而不是引库：只需要「拖到某个文件夹上」这一种交互，不需要
+ * 同层排序、不需要跨列表、不需要触摸支持 —— 原生够用，且不增加依赖。
+ *
+ * 原生 DnD 键盘不可达。文件夹的重命名与删除有按钮兜住，但「移动」目前只能靠拖 ——
+ * 这是这一版的无障碍缺口，右键菜单「移动到…」待补。
+ */
 export function DocumentList({
   documents,
+  folders,
   activeDocId,
   loading,
   creating,
   onSelect,
   onCreate,
+  onCreateFolder,
   onDelete,
+  onRenameFolder,
+  onDeleteFolder,
+  onMoveDoc,
+  onMoveFolder,
   onCollapse,
 }: {
   documents: DocumentSummary[];
+  folders: Folder[];
   activeDocId?: string;
   loading: boolean;
   creating: boolean;
   onSelect: (docId: string) => void;
   onCreate: () => void;
+  onCreateFolder: () => void;
   onDelete: (docId: string, title: string) => void;
+  onRenameFolder: (folderId: string, name: string) => void;
+  onDeleteFolder: (folderId: string, name: string) => void;
+  onMoveDoc: (docId: string, folderId: string | null) => void;
+  onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+  const [rootOver, setRootOver] = useState(false);
+
+  const tree = useMemo(() => buildTree(folders, documents), [folders, documents]);
+
+  const onToggle = useCallback((folderId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  }, []);
+
+  const canDropOn = useCallback(
+    (payload: DragPayload, targetFolderId: string | null) =>
+      payload.kind === "folder"
+        ? canDropFolder(folders, payload.id, targetFolderId).ok
+        : canDropDoc(documents, payload.id, targetFolderId).ok,
+    [folders, documents],
+  );
+
+  const onDrop = useCallback(
+    (payload: DragPayload, targetFolderId: string | null) => {
+      setDragging(null);
+      if (!canDropOn(payload, targetFolderId)) return;
+      if (payload.kind === "folder") onMoveFolder(payload.id, targetFolderId);
+      else onMoveDoc(payload.id, targetFolderId);
+      // 放进去就展开，否则拖进去的东西「消失」了，还得自己点开才看得见
+      if (targetFolderId) setExpanded((prev) => new Set(prev).add(targetFolderId));
+    },
+    [canDropOn, onMoveFolder, onMoveDoc],
+  );
+
+  const handlers: TreeRowHandlers = {
+    activeDocId,
+    expanded,
+    onToggle,
+    onSelectDoc: onSelect,
+    onDeleteDoc: onDelete,
+    onRenameFolder,
+    onDeleteFolder,
+    onDrop,
+    canDropOn,
+    dragging,
+    setDragging,
+  };
+
+  const rootAcceptsDrop = dragging ? canDropOn(dragging, null) : false;
+  const isEmpty = folders.length === 0 && documents.length === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -36,6 +104,15 @@ export function DocumentList({
         <span className="flex-1 truncate text-xs font-semibold uppercase tracking-wide text-neutral-400">
           {t.editor.documentsPanel}
         </span>
+        <button
+          type="button"
+          onClick={onCreateFolder}
+          aria-label={t.editor.newFolder}
+          title={t.editor.newFolder}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-black/5 hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white"
+        >
+          <FolderPlus className="h-4 w-4" />
+        </button>
         <button
           type="button"
           onClick={onCreate}
@@ -58,64 +135,48 @@ export function DocumentList({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      {/* 整个滚动区都是「根」的放置区：拖到空白处即移出文件夹。
+          提示只在拖动中显现，静止时不该有多余的框 */}
+      <div
+        onDragOver={(e) => {
+          if (!rootAcceptsDrop) return;
+          e.preventDefault(); // 不调用它浏览器不会触发 drop
+          setRootOver(true);
+        }}
+        onDragLeave={() => setRootOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setRootOver(false);
+          if (dragging && rootAcceptsDrop) onDrop(dragging, null);
+        }}
+        className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
+          rootOver && rootAcceptsDrop ? "rounded-lg ring-1 ring-inset ring-sky-400" : ""
+        }`}
+      >
         {loading ? (
           <p className="px-2 py-4 text-xs text-neutral-400">{t.editor.loading}</p>
-        ) : documents.length === 0 ? (
+        ) : isEmpty ? (
           <p className="px-2 py-4 text-xs leading-relaxed text-neutral-400">
             {t.editor.emptyDocuments}
           </p>
         ) : (
           <ul className="space-y-0.5">
-            {documents.map((doc) => {
-              const title = doc.title.trim() || t.editor.untitled;
-              const active = doc.docId === activeDocId;
-              return (
-                <li key={doc.docId} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(doc.docId)}
-                    aria-current={active ? "true" : undefined}
-                    className={`flex w-full items-start gap-2 rounded-lg px-2 py-2 pr-8 text-left transition ${
-                      active
-                        ? "bg-sky-50 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
-                        : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
-                    }`}
-                  >
-                    <FileText
-                      className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                        active ? "text-sky-600 dark:text-sky-400" : "text-neutral-400"
-                      }`}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm">{title}</span>
-                      {doc.updatedAt && (
-                        <span className="mt-0.5 block text-[11px] text-neutral-400">
-                          {new Date(doc.updatedAt).toLocaleDateString(
-                            DATE_LOCALE[locale],
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-
-                  {/* 删除按钮：悬停或键盘聚焦时出现，避免误触 */}
-                  <button
-                    type="button"
-                    onClick={() => onDelete(doc.docId, title)}
-                    aria-label={t.editor.deleteDocument}
-                    title={t.editor.deleteDocument}
-                    className="absolute right-1 top-2 flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              );
-            })}
+            {tree.folders.map((folder) => (
+              <FolderRow key={folder.folderId} folder={folder} depth={0} h={handlers} />
+            ))}
+            {tree.docs.map((docNode) => (
+              <DocRow key={docNode.docId} doc={docNode} depth={0} h={handlers} />
+            ))}
           </ul>
+        )}
+
+        {/* 拖动中给一条明确落点：内容可能占满滚动区，没有空白可拖 */}
+        {dragging && rootAcceptsDrop && (
+          <div className="mt-1 rounded-lg border border-dashed border-sky-400 px-2 py-2 text-center text-[11px] text-sky-600 dark:text-sky-400">
+            {t.editor.dropToRoot}
+          </div>
         )}
       </div>
     </div>
   );
 }
-

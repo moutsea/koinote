@@ -31,10 +31,11 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := a.db.Query(r.Context(), `
-		SELECT doc_id, title, updated_at
-		FROM documents
-		WHERE user_id = $1
-		ORDER BY updated_at DESC
+		SELECT d.doc_id, d.title, d.updated_at, COALESCE(f.folder_id, '')
+		FROM documents d
+		LEFT JOIN folders f ON f.id = d.folder_id
+		WHERE d.user_id = $1
+		ORDER BY d.updated_at DESC
 	`, user.ID)
 	if err != nil {
 		log.Printf("documents list: %v", err)
@@ -47,10 +48,16 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	documents := make([]model.DocumentSummary, 0)
 	for rows.Next() {
 		var d model.DocumentSummary
-		if err := rows.Scan(&d.DocID, &d.Title, &d.UpdatedAt); err != nil {
+		var folder string
+		if err := rows.Scan(&d.DocID, &d.Title, &d.UpdatedAt, &folder); err != nil {
 			log.Printf("documents scan: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return
+		}
+		// 空串代表根下；JSON 里用 null 表达，与前端的 folderId: string|null 对齐
+		if folder != "" {
+			f := folder
+			d.FolderID = &f
 		}
 		documents = append(documents, d)
 	}

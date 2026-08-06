@@ -49,6 +49,13 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/start", a.oauthStart)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.oauthCallback)
 
+	mux.HandleFunc("GET /api/folders", a.foldersList)
+	mux.HandleFunc("POST /api/folders", a.folderCreate)
+	mux.HandleFunc("PUT /api/folders/{folderId}", a.folderRename)
+	mux.HandleFunc("DELETE /api/folders/{folderId}", a.folderDelete)
+	mux.HandleFunc("PUT /api/folders/{folderId}/parent", a.folderMove)
+	mux.HandleFunc("PUT /api/documents/{docId}/folder", a.documentMove)
+
 	mux.HandleFunc("GET /api/editor/tabs", a.editorTabsGet)
 	mux.HandleFunc("PUT /api/editor/tabs", a.editorTabsPut)
 

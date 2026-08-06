@@ -6,18 +6,25 @@ import {
 } from "@tanstack/react-query";
 import {
   createDocument,
+  createFolder,
   createShare,
   deleteDocument,
+  deleteFolder,
   getDocument,
   getEditorTabs,
   listDocuments,
+  listFolders,
+  moveDocument,
+  moveFolder,
   putEditorTabs,
+  renameFolder,
   revokeShare,
   updateDocument,
   type Document,
   type DocumentShare,
   type DocumentSummary,
   type EditorTabs,
+  type Folder,
   type ShareAccess,
 } from "./api";
 
@@ -93,6 +100,65 @@ export function useSaveDocument() {
   });
 }
 
+// ---------- 文件夹 ----------
+
+const FOLDERS_KEY = ["folders"] as const;
+
+export function useFolderList(enabled: boolean) {
+  return useQuery({
+    queryKey: FOLDERS_KEY,
+    queryFn: listFolders,
+    enabled,
+    select: (data) => data.folders,
+  });
+}
+
+/**
+ * 文件夹的五种写操作共用一套失效逻辑。
+ *
+ * 移动、删除都会改到文档的归属（删文件夹时子项提到父级），所以文档列表也要失效 ——
+ * 只失效 folders 的话侧栏里文档会留在原位，直到下次别的原因触发重取。
+ */
+function useFolderMutation<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY });
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+    },
+  });
+}
+
+export function useCreateFolder() {
+  return useFolderMutation((args: { name: string; parentFolderId: string | null }) =>
+    createFolder(args),
+  );
+}
+
+export function useRenameFolder() {
+  return useFolderMutation((args: { folderId: string; name: string }) =>
+    renameFolder(args.folderId, args.name),
+  );
+}
+
+export function useDeleteFolder() {
+  return useFolderMutation((folderId: string) => deleteFolder(folderId));
+}
+
+export function useMoveFolder() {
+  return useFolderMutation(
+    (args: { folderId: string; parentFolderId: string | null }) =>
+      moveFolder(args.folderId, args.parentFolderId),
+  );
+}
+
+export function useMoveDocument() {
+  return useFolderMutation((args: { docId: string; folderId: string | null }) =>
+    moveDocument(args.docId, args.folderId),
+  );
+}
+
 // ---------- 编辑器标签页 ----------
 
 const TABS_KEY = ["editor-tabs"] as const;
@@ -165,4 +231,4 @@ export function useRefreshDocumentList() {
   return () => queryClient.invalidateQueries({ queryKey: LIST_KEY });
 }
 
-export type { Document, DocumentShare, DocumentSummary, ShareAccess };
+export type { Document, DocumentShare, DocumentSummary, Folder, ShareAccess };

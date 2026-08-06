@@ -144,6 +144,14 @@ export interface Messages {
     themeNone: string;
     tabsLabel: string;
     closeTab: string;
+    newFolder: string;
+    renameFolder: string;
+    deleteFolder: string;
+    deleteFolderConfirm: string;
+    untitledFolder: string;
+    folderNamePlaceholder: string;
+    dropToRoot: string;
+    cannotDropIntoSelf: string;
     wechatCopy: string;
     wechatCopied: string;
     wechatWorking: string;

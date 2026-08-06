@@ -12,11 +12,17 @@ import { ExportMenu } from "../components/editor/ExportMenu";
 import { scrollToHeading, useOutline } from "../components/editor/useOutline";
 import {
   useCreateDocument,
+  useCreateFolder,
   useDeleteDocument,
+  useDeleteFolder,
   useDocument,
   useDocumentList,
   useEditorTabs,
+  useFolderList,
+  useMoveDocument,
+  useMoveFolder,
   useRefreshDocumentList,
+  useRenameFolder,
   useSyncEditorTabs,
 } from "../documents";
 import { TabBar } from "../components/editor/TabBar";
@@ -30,7 +36,7 @@ import {
   type TabState,
 } from "../components/editor/tabPool";
 import { useSession } from "../auth";
-import { useI18n } from "../i18n";
+import { interpolate, useI18n } from "../i18n";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -47,6 +53,12 @@ export function EditorPage() {
   const list = useDocumentList(loggedIn);
   const create = useCreateDocument();
   const remove = useDeleteDocument();
+  const folderList = useFolderList(loggedIn);
+  const createFolder = useCreateFolder();
+  const renameFolderMut = useRenameFolder();
+  const deleteFolderMut = useDeleteFolder();
+  const moveFolderMut = useMoveFolder();
+  const moveDocMut = useMoveDocument();
   const refreshList = useRefreshDocumentList();
   const confirmDelete = useDeleteConfirm();
 
@@ -313,6 +325,44 @@ export function EditorPage() {
     [confirmDelete, remove, activeDocId, documents, navigate, saver],
   );
 
+  // ---------- 文件夹 ----------
+
+  const handleCreateFolder = useCallback(() => {
+    // 建在根下、名字留空，由用户双击重命名。先弹输入框会多一步交互，
+    // 而新建后立刻改名是更常见的路径
+    createFolder.mutate({ name: "", parentFolderId: null });
+  }, [createFolder]);
+
+  const handleRenameFolder = useCallback(
+    (folderId: string, name: string) => {
+      renameFolderMut.mutate({ folderId, name });
+    },
+    [renameFolderMut],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (folderId: string, name: string) => {
+      // 说清楚「里面的东西不会被删」—— 否则用户不敢删，或者删了以为丢了正文
+      if (!window.confirm(interpolate(t.editor.deleteFolderConfirm, { name }))) return;
+      deleteFolderMut.mutate(folderId);
+    },
+    [deleteFolderMut, t.editor.deleteFolderConfirm],
+  );
+
+  const handleMoveDoc = useCallback(
+    (docId: string, folderId: string | null) => {
+      moveDocMut.mutate({ docId, folderId });
+    },
+    [moveDocMut],
+  );
+
+  const handleMoveFolder = useCallback(
+    (folderId: string, parentFolderId: string | null) => {
+      moveFolderMut.mutate({ folderId, parentFolderId });
+    },
+    [moveFolderMut],
+  );
+
   // ---------- 门禁与加载态 ----------
 
   if (session.isLoading) {
@@ -367,12 +417,18 @@ export function EditorPage() {
         >
           <DocumentList
             documents={documents ?? []}
+            folders={folderList.data ?? []}
             activeDocId={activeDocId}
             loading={list.isLoading}
             creating={create.isPending}
             onSelect={handleSelect}
             onCreate={handleCreate}
+            onCreateFolder={handleCreateFolder}
             onDelete={handleDelete}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
+            onMoveDoc={handleMoveDoc}
+            onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
           />
         </ResizablePanel>

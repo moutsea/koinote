@@ -13,6 +13,7 @@
     "test:worker": "esbuild worker/images.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_base_bundle.mjs --log-level=error && node scripts/_check_image_base.mjs; rm -f scripts/_image_base_bundle.mjs",
     "test:themes": "esbuild spa/src/components/editor/wechatThemes.ts --bundle --format=esm --platform=neutral --outfile=scripts/_themes_bundle.mjs --log-level=error && esbuild spa/src/components/editor/themeCss.ts --bundle --format=esm --platform=neutral --outfile=scripts/_theme_css_bundle.mjs --log-level=error && node scripts/_check_themes.mjs; rm -f scripts/_themes_bundle.mjs scripts/_theme_css_bundle.mjs",
     "test:tabs": "esbuild spa/src/components/editor/tabPool.ts --bundle --format=esm --platform=neutral --outfile=scripts/_tab_pool_bundle.mjs --log-level=error && node scripts/_check_tab_pool.mjs; rm -f scripts/_tab_pool_bundle.mjs",
+    "test:tree": "esbuild spa/src/components/editor/tree.ts --bundle --format=esm --platform=neutral --outfile=scripts/_tree_bundle.mjs --log-level=error && node scripts/_check_tree.mjs; rm -f scripts/_tree_bundle.mjs",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "backend:dev": "cd backend && go run ./cmd/server"
