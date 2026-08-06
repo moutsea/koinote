@@ -3,6 +3,7 @@ import { FileText, Plus, Clock, User as UserIcon } from "lucide-react";
 import { useSession } from "../auth";
 import { useDocumentList } from "../documents";
 import { useI18n, interpolate, type Locale } from "../i18n";
+import { PageContainer } from "../components/PageContainer";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -48,8 +49,7 @@ export function DashboardPage() {
   const name = user.nickname || user.username || user.email;
 
   return (
-    // 通栏：不再 mx-auto max-w-5xl。px-3 与页头取齐，标题的左边缘才和 logo 对上
-    <div className="w-full flex-1 px-3 py-10">
+    <PageContainer className="flex-1 py-10">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
@@ -127,7 +127,7 @@ export function DashboardPage() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

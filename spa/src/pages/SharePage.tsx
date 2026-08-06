@@ -16,6 +16,7 @@ import {
   themeToCSS,
 } from "../components/editor/themeCss";
 import { interpolate, useI18n, type Locale } from "../i18n";
+import { PageContainer } from "../components/PageContainer";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -175,7 +176,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     : "";
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
+    <PageContainer className="flex-1 py-10">
       <header className="mb-8 border-b border-black/5 pb-5 dark:border-white/10">
         <h1 className="text-2xl font-bold tracking-tight">
           {shared.title.trim() || t.editor.untitled}
@@ -202,7 +203,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
           {t.editor.sharedOpenApp}
         </Link>
       </footer>
-    </div>
+    </PageContainer>
   );
 }
 

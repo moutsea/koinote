@@ -1,36 +1,86 @@
 /**
- * 页头宽度要跟着正文走。
+ * 版面宽度的唯一来源。
  *
- * 大部分页面的正文是居中收窄的（dashboard max-w-5xl、share max-w-3xl、home
- * max-w-6xl），页头也收窄才对得上；编辑器是通栏的，页头收窄就会和下方紧贴视口边缘的
- * 侧栏、标签行错开一大截 —— 宽屏上 logo 落在 400px 开外，而它正下方的侧栏标题在
- * 12px 处。
+ * 页头和正文必须用同一个宽度，否则两者的左边缘会错开 —— 这个错开改过三轮：先是页头
+ * max-w-6xl 配编辑器通栏，再是页头通栏配控制台 max-w-5xl，每次都是「一边改了另一边
+ * 没跟上」。根因是宽度散在 AppShell 和五个页面里各自决定。
  *
- * 抽成纯函数是因为「前缀匹配」这件事很容易写错：startsWith("/editor") 会把
- * /editor-guide 之类的路由也算进来。按路径分段比对才是对的。
+ * 现在只在这里定：路由 → 宽度。页头用 containerClass，页面用 PageContainer，
+ * 两者都从这张表取值，漂开在结构上就不可能了。
  */
 
-/**
- * 正文通栏（不居中收窄）的路由前缀。
- *
- * 加新页面时要么把它列进来、要么让它的正文居中收窄 —— 两者不一致的话，页头和正文的
- * 左边缘会错开，而这只有真去点那个页面才看得见。
- *
- * 目前只有 /login 和 /share 还是收窄的：登录表单本来就该窄（max-w-md），
- * 分享页是给外人读的长文（max-w-3xl 是为了行长）。
- */
-const FULL_BLEED_ROUTES = ["/editor", "/dashboard", "/"];
+/** 正文容器的宽度档位 */
+export type ContentWidth = "full" | "6xl" | "5xl" | "3xl";
 
 /**
- * 这个路径下的正文是不是通栏的。
+ * 各路由的正文宽度。按前缀匹配，最长的前缀优先。
  *
- * 按分段比对而不是裸 startsWith：/editor 与 /editor/<docId> 都算，
- * 但 /editor-guide 不算 —— 它是另一个页面，不该继承编辑器的布局。
+ * 为什么不是一律通栏：通栏只对「内容本身能铺开」的版面成立。编辑器有侧栏和正文两列，
+ * 铺得越开越好用；首页是营销版面，卡片网格按列数自适应。而控制台是一列信息卡加一份
+ * 列表 —— 列表行是「标题在左、日期在右」，拉到 2560px 就变成两头各一个字、中间一片
+ * 空白，读起来像坏了而不是宽敞。
  */
-export function isFullBleedRoute(pathname: string): boolean {
-  // 去掉末尾斜杠，让 /editor/ 与 /editor 判定一致
+export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
+  // 编辑器：两列版面，铺满才好用
+  { prefix: "/editor", width: "full" },
+  // 控制台：信息卡 + 文档列表，需要收窄兜住行内的左右间距
+  { prefix: "/dashboard", width: "5xl" },
+  // 分享页给外人读长文，3xl 是为了行长
+  { prefix: "/share", width: "3xl" },
+  // 首页是营销版面，通栏
+  { prefix: "/", width: "full" },
+];
+
+/** 没匹配上时的兜底。登录、注册这类页面自己会再收窄一层 */
+const DEFAULT_WIDTH: ContentWidth = "6xl";
+
+/**
+ * 这个路径的正文该用多宽。
+ *
+ * 按路径分段比对而不是裸 startsWith：
+ *   - startsWith("/editor") 会把 /editor-guide 也算成编辑器
+ *   - 表里有 "/"，裸 startsWith 会让每个路径都命中它
+ *
+ * 分段比对下 "/" 只能命中根本身（path.startsWith("//") 永不成立），所以它不会抢走
+ * /dashboard。取最长前缀是为另一种情况准备的：将来若给 /editor/settings 之类单独设
+ * 宽度，它必须赢过 /editor，且不能依赖两者在表里的先后。
+ */
+export function contentWidthFor(pathname: string): ContentWidth {
+  // 去掉末尾斜杠，让 /editor/ 与 /editor 判定一致；空串按根算
   const path = pathname.replace(/\/+$/, "") || "/";
-  return FULL_BLEED_ROUTES.some(
-    (route) => path === route || path.startsWith(`${route}/`),
+  const matches = ROUTE_WIDTHS.filter(
+    ({ prefix }) => path === prefix || path.startsWith(`${prefix}/`),
   );
+  if (matches.length === 0) return DEFAULT_WIDTH;
+  // 最长前缀优先："/" 会匹配一切，但更具体的路由该赢
+  return matches.reduce((a, b) => (b.prefix.length > a.prefix.length ? b : a)).width;
+}
+
+/**
+ * 宽度档位对应的容器 class。
+ *
+ * 通栏用 px-3 而不是 px-4 sm:px-6：编辑器的侧栏内边距是 12px，页头要与它取齐。
+ * 收窄档用 px-4 sm:px-6，是移动端上更舒服的边距。
+ */
+export function widthClass(width: ContentWidth): string {
+  switch (width) {
+    case "full":
+      return "w-full px-3";
+    case "6xl":
+      return "mx-auto w-full max-w-6xl px-4 sm:px-6";
+    case "5xl":
+      return "mx-auto w-full max-w-5xl px-4 sm:px-6";
+    case "3xl":
+      return "mx-auto w-full max-w-3xl px-4 sm:px-6";
+  }
+}
+
+/** 某个路径的容器 class。页头与正文都走这里 */
+export function containerClass(pathname: string): string {
+  return widthClass(contentWidthFor(pathname));
+}
+
+/** 正文是否通栏。只用于少数需要分支的地方 */
+export function isFullBleedRoute(pathname: string): boolean {
+  return contentWidthFor(pathname) === "full";
 }

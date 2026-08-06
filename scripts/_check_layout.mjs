@@ -1,63 +1,185 @@
-// 页头宽度的路由判定。裸 startsWith 会把 /editor-guide 之类也算成编辑器，
-// 症状是某个页面的页头突然通栏 —— 只有真去点那个页面才看得见。
-import { isFullBleedRoute } from "./_layout_bundle.mjs";
+// 版面宽度的路由表。页头和正文都从它取值 —— 判错的表现是某一页的页头和正文左边缘
+// 错开，而这只有真去点那个页面才看得见。已经因此改过三轮，所以钉住。
+import {
+  ROUTE_WIDTHS,
+  containerClass,
+  contentWidthFor,
+  isFullBleedRoute,
+  widthClass,
+} from "./_layout_bundle.mjs";
 
 let pass = 0;
 let fail = 0;
 
 function eq(label, got, want) {
-  if (got === want) pass += 1;
+  const g = JSON.stringify(got);
+  const w = JSON.stringify(want);
+  if (g === w) pass += 1;
   else {
     fail += 1;
-    console.error(`FAIL  ${label} —— 得到 ${got}，期望 ${want}`);
+    console.error(`FAIL  ${label} —— 得到 ${g}，期望 ${w}`);
   }
 }
 
-// ---------- 通栏 ----------
-eq("/editor 通栏", isFullBleedRoute("/editor"), true);
-eq("/editor/ 通栏（末尾斜杠）", isFullBleedRoute("/editor/"), true);
-eq("/editor/<docId> 通栏", isFullBleedRoute("/editor/abc-123"), true);
-eq("/editor 的深层路径通栏", isFullBleedRoute("/editor/abc/def"), true);
-eq("/dashboard 通栏", isFullBleedRoute("/dashboard"), true);
-eq("首页通栏", isFullBleedRoute("/"), true);
-eq("空路径按首页算，通栏", isFullBleedRoute(""), true);
+function ok(label, cond, detail) {
+  if (cond) pass += 1;
+  else {
+    fail += 1;
+    console.error(`FAIL  ${label}${detail ? ` — ${detail}` : ""}`);
+  }
+}
 
-// ---------- 收窄：登录表单该窄，分享页要控行长 ----------
-eq("/login 收窄", isFullBleedRoute("/login"), false);
-eq("/register 收窄", isFullBleedRoute("/register"), false);
-eq("/share/<token> 收窄", isFullBleedRoute("/share/tok3n"), false);
+// ---------- 各路由的宽度 ----------
+eq("编辑器通栏", contentWidthFor("/editor"), "full");
+eq("编辑器带 docId 通栏", contentWidthFor("/editor/abc-123"), "full");
+eq("编辑器深层路径通栏", contentWidthFor("/editor/a/b/c"), "full");
+eq("首页通栏", contentWidthFor("/"), "full");
+eq("空路径按首页算", contentWidthFor(""), "full");
+// 控制台不通栏：信息卡和文档列表拉到 2560px 会变成两头各一个字、中间一片空白
+eq("控制台收到 5xl", contentWidthFor("/dashboard"), "5xl");
+eq("分享页收到 3xl", contentWidthFor("/share/tok3n"), "3xl");
+// 表里没列的路由走兜底
+eq("登录页走兜底", contentWidthFor("/login"), "6xl");
+eq("注册页走兜底", contentWidthFor("/register"), "6xl");
 
-// 关键：根路由 "/" 在列表里，但它只能匹配根本身。
-// 若按裸 startsWith("/") 判定，所有路径都会变成通栏 —— 登录页也会跟着通栏
-eq("根路由不把 /login 一起吃掉", isFullBleedRoute("/login"), false);
-eq("根路由不把 /share 一起吃掉", isFullBleedRoute("/share/x"), false);
+// ---------- 最长前缀优先 ----------
+//
+// 表里有 "/"，它匹配一切；更具体的路由必须赢，否则控制台会被首页的通栏抢走。
+//
+// 只写 contentWidthFor("/dashboard") === "5xl" 是空断言 —— 当前表恰好按前缀长度
+// 降序排列，first-match 的实现也能过。所以直接打乱表序再验一遍：真正要钉的是
+// 「结果与表序无关」。
+{
+  eq("控制台不被根路由抢走", contentWidthFor("/dashboard"), "5xl");
+  eq("分享页不被根路由抢走", contentWidthFor("/share/x"), "3xl");
+  eq("编辑器不被根路由抢走", contentWidthFor("/editor"), "full");
 
-// ---------- 前缀陷阱：这几条是抽出这个函数的理由 ----------
-eq("/editor-guide 不算编辑器", isFullBleedRoute("/editor-guide"), false);
-eq("/editors 不算编辑器", isFullBleedRoute("/editors"), false);
-eq("/editorial 不算编辑器", isFullBleedRoute("/editorial"), false);
-eq("/editor2 不算编辑器", isFullBleedRoute("/editor2"), false);
-eq("/dashboards 不算控制台", isFullBleedRoute("/dashboards"), false);
-eq("/dashboard-old 不算控制台", isFullBleedRoute("/dashboard-old"), false);
-// 不在开头的 /editor 也不算
-eq("/docs/editor 不算编辑器", isFullBleedRoute("/docs/editor"), false);
+  // 把 "/" 挪到表首 —— first-match 实现在这里会让每个路径都变成 full
+  const original = [...ROUTE_WIDTHS];
+  const root = ROUTE_WIDTHS.findIndex(({ prefix }) => prefix === "/");
+  ok("表里有根路由（不然下面这组白测）", root >= 0);
+  if (root >= 0) {
+    const [rootEntry] = ROUTE_WIDTHS.splice(root, 1);
+    ROUTE_WIDTHS.unshift(rootEntry);
+    try {
+      eq("根路由排在表首时，控制台仍是 5xl", contentWidthFor("/dashboard"), "5xl");
+      eq("根路由排在表首时，分享页仍是 3xl", contentWidthFor("/share/x"), "3xl");
+      eq("根路由排在表首时，编辑器仍是 full", contentWidthFor("/editor"), "full");
+      eq("根路由排在表首时，根本身仍是 full", contentWidthFor("/"), "full");
+    } finally {
+      ROUTE_WIDTHS.length = 0;
+      ROUTE_WIDTHS.push(...original);
+    }
+  }
 
-// ---------- 不变量：加了末尾斜杠不该改变判定 ----------
+  // 完全反转表序，再全量比一遍
+  const before = new Map(
+    ["/", "/editor", "/editor/x", "/dashboard", "/share/x", "/login"].map((p) => [
+      p,
+      contentWidthFor(p),
+    ]),
+  );
+  ROUTE_WIDTHS.reverse();
+  try {
+    for (const [path, want] of before) {
+      eq(`表序反转后仍一致: ${path}`, contentWidthFor(path), want);
+    }
+  } finally {
+    ROUTE_WIDTHS.reverse();
+  }
+}
+
+// ---------- 嵌套前缀：真正让「最长优先」有意义的场景 ----------
+//
+// 上面那组其实测不出 first-match 与 longest-prefix 的差别：分段匹配下 "/" 只能命中
+// 根本身（path.startsWith("//") 永不成立），当前表里也没有互相嵌套的非根前缀 ——
+// 两种实现结果一样。
+//
+// 所以这里临时塞一对嵌套前缀，把那条分支真正跑起来。未来真要给 /editor/settings
+// 之类单独设宽度时，靠的就是它。
+{
+  const original = [...ROUTE_WIDTHS];
+  try {
+    ROUTE_WIDTHS.push({ prefix: "/editor/settings", width: "3xl" });
+    eq("更长的嵌套前缀胜出（排在后）", contentWidthFor("/editor/settings"), "3xl");
+    eq("嵌套前缀的子路径也胜出", contentWidthFor("/editor/settings/x"), "3xl");
+    eq("父前缀不受影响", contentWidthFor("/editor"), "full");
+    eq("父前缀的其它子路径不受影响", contentWidthFor("/editor/abc"), "full");
+    // 兄弟路径不该被误伤：/editor/settings-old 不是 /editor/settings 的子路径
+    eq("同名前缀的兄弟路径不受影响", contentWidthFor("/editor/settings-old"), "full");
+
+    // 把嵌套前缀挪到父前缀之前，结果必须不变 —— first-match 在这两种排法里必有一种错
+    ROUTE_WIDTHS.length = 0;
+    ROUTE_WIDTHS.push({ prefix: "/editor/settings", width: "3xl" }, ...original);
+    eq("更长的嵌套前缀胜出（排在前）", contentWidthFor("/editor/settings"), "3xl");
+    eq("排在前时父前缀仍是 full", contentWidthFor("/editor"), "full");
+  } finally {
+    ROUTE_WIDTHS.length = 0;
+    ROUTE_WIDTHS.push(...original);
+  }
+}
+
+// ---------- 前缀陷阱：分段比对而非裸 startsWith ----------
+eq("/editor-guide 不算编辑器", contentWidthFor("/editor-guide"), "6xl");
+eq("/editors 不算编辑器", contentWidthFor("/editors"), "6xl");
+eq("/editorial 不算编辑器", contentWidthFor("/editorial"), "6xl");
+eq("/dashboards 不算控制台", contentWidthFor("/dashboards"), "6xl");
+eq("/dashboard-old 不算控制台", contentWidthFor("/dashboard-old"), "6xl");
+eq("/shared 不算分享页", contentWidthFor("/shared"), "6xl");
+eq("/docs/editor 不算编辑器", contentWidthFor("/docs/editor"), "6xl");
+
+// ---------- 末尾斜杠不影响判定 ----------
 for (const path of [
   "/",
   "/editor",
   "/editor/abc",
   "/dashboard",
+  "/share/tok3n",
   "/login",
-  "/register",
   "/editor-guide",
   "/dashboards",
-  "/share/tok3n",
 ]) {
   eq(
-    `末尾斜杠不影响判定: ${path}`,
+    `末尾斜杠不影响: ${path}`,
+    contentWidthFor(path),
+    contentWidthFor(`${path}/`),
+  );
+}
+
+// ---------- widthClass ----------
+ok("通栏不含 max-w", !widthClass("full").includes("max-w"), widthClass("full"));
+ok("通栏不居中", !widthClass("full").includes("mx-auto"), widthClass("full"));
+// 通栏用 px-3 与编辑器侧栏的内边距取齐
+ok("通栏用 px-3", widthClass("full").includes("px-3"), widthClass("full"));
+for (const w of ["6xl", "5xl", "3xl"]) {
+  ok(`${w} 居中`, widthClass(w).includes("mx-auto"), widthClass(w));
+  ok(`${w} 带对应 max-w`, widthClass(w).includes(`max-w-${w}`), widthClass(w));
+}
+
+// ---------- 不变量：页头与正文必须拿到同一个 class ----------
+// 这是整张表存在的理由。两边各自算宽度时曾错开过三轮
+for (const path of [
+  "/",
+  "/editor",
+  "/editor/abc-123",
+  "/dashboard",
+  "/share/tok3n",
+  "/login",
+  "/editor-guide",
+]) {
+  eq(
+    `页头与正文同宽: ${path}`,
+    containerClass(path),
+    widthClass(contentWidthFor(path)),
+  );
+}
+
+// ---------- isFullBleedRoute 与宽度表一致 ----------
+for (const path of ["/", "/editor", "/editor/x", "/dashboard", "/share/x", "/login"]) {
+  eq(
+    `isFullBleedRoute 与表一致: ${path}`,
     isFullBleedRoute(path),
-    isFullBleedRoute(`${path}/`),
+    contentWidthFor(path) === "full",
   );
 }
 

@@ -4,7 +4,7 @@ import { Moon, Sun, FileText, Globe, Check } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
 import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
-import { isFullBleedRoute } from "../layout";
+import { containerClass } from "../layout";
 
 export function AppShell() {
   const session = useSession();
@@ -19,8 +19,8 @@ export function AppShell() {
     applyTheme(theme);
   }, [theme]);
 
-  // 页头宽度跟着正文走，判定见 ../layout
-  const fullBleed = isFullBleedRoute(pathname);
+  // 页头与正文用同一张宽度表，见 ../layout
+  const container = containerClass(pathname);
 
   async function handleLogout() {
     await logout();
@@ -30,16 +30,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[var(--background)] text-[var(--foreground)]">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[var(--background)]/85 backdrop-blur dark:border-white/10">
-        <div
-          className={`flex h-14 w-full items-center gap-3 ${
-            fullBleed
-              ? // 编辑器是通栏的，侧栏紧贴视口左边、标签行紧贴右边。页头再居中收窄的话，
-                // 宽屏上 logo 会落在 400px 开外，而它正下方的侧栏标题在 12px 处 ——
-                // 两条本该对齐的左边缘差出一大截。px-3 与侧栏的内边距取齐
-                "px-3"
-              : "mx-auto max-w-6xl px-4 sm:px-6"
-          }`}
-        >
+        <div className={`flex h-14 items-center gap-3 ${container}`}>
           <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <FileText className="h-5 w-5 text-sky-600" />
             <span>Koinote</span>

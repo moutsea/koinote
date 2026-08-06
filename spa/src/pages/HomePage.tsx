@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useCurrentUser } from "../auth";
 import { useI18n } from "../i18n";
+import { PageContainer } from "../components/PageContainer";
 
 // 图标与文案一一对应，文案按语言从 t.home.features 取。
 const FEATURE_ICONS = [Eye, FileText, ImageIcon, Sparkles, Download, Zap];
@@ -22,9 +23,9 @@ export function HomePage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-sky-50 to-transparent dark:from-sky-950/20" />
-        {/* 通栏。标题与副标题本身仍有 max-w 兜住行长 —— 通栏指的是版面占满，
-            不是让文字行拉到 2000px 那么长 */}
-        <div className="w-full px-3 py-20 text-center sm:py-28">
+        {/* 宽度取自 layout.ts 的路由表。标题与副标题各自有 max-w 兜住行长 ——
+            通栏指版面占满，不是让文字行拉到 2000px 那么长 */}
+        <PageContainer className="py-20 text-center sm:py-28">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
             <Sparkles className="h-3.5 w-3.5" />
             {t.home.badge}
@@ -52,32 +53,34 @@ export function HomePage() {
               </Link>
             )}
           </div>
-        </div>
+        </PageContainer>
       </section>
 
       {/* Features */}
-      {/* 通栏。列数保持 3 而不是宽屏上再加一列：features 正好 6 条，
+      {/* 列数保持 3 而不是宽屏上再加一列：features 正好 6 条，
           3 列是干净的两行，4 列会变成 4+2 的残行 */}
-      <section className="w-full px-3 pb-24">
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {t.home.features.map((feature, i) => {
-            const Icon = FEATURE_ICONS[i] ?? FileText;
-            return (
-              <div
-                key={feature.title}
-                className="rounded-2xl border border-black/5 bg-white/60 p-6 transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/5"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
-                  <Icon className="h-5 w-5" />
+      <section>
+        <PageContainer className="pb-24">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {t.home.features.map((feature, i) => {
+              const Icon = FEATURE_ICONS[i] ?? FileText;
+              return (
+                <div
+                  key={feature.title}
+                  className="rounded-2xl border border-black/5 bg-white/60 p-6 transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/5"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 font-semibold">{feature.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                    {feature.desc}
+                  </p>
                 </div>
-                <h3 className="mt-4 font-semibold">{feature.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-                  {feature.desc}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </PageContainer>
       </section>
     </div>
   );
