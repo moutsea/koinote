@@ -327,10 +327,15 @@ export function EditorPage() {
 
   // ---------- 文件夹 ----------
 
+  // 新建成功后让那一行直接进入改名态：名字是空的，不聚焦的话用户得先猜到
+  // 「双击可以改名」，加上失败无提示，整件事看起来就像按钮没反应
+  const [autoEditFolderId, setAutoEditFolderId] = useState<string | null>(null);
+
   const handleCreateFolder = useCallback(() => {
-    // 建在根下、名字留空，由用户双击重命名。先弹输入框会多一步交互，
-    // 而新建后立刻改名是更常见的路径
-    createFolder.mutate({ name: "", parentFolderId: null });
+    createFolder.mutate(
+      { name: "", parentFolderId: null },
+      { onSuccess: ({ folder }) => setAutoEditFolderId(folder.folderId) },
+    );
   }, [createFolder]);
 
   const handleRenameFolder = useCallback(
@@ -362,6 +367,21 @@ export function EditorPage() {
     },
     [moveFolderMut],
   );
+
+  /**
+   * 文件夹五种写操作的失败合成一条提示。
+   *
+   * 之前全都静默吞掉了 —— 后端没起、没登录、表还没建，点按钮都是「没反应」，
+   * 而这个仓库其它地方（保存、导出、上传）都会把失败说出来。
+   */
+  const folderError =
+    createFolder.isError ||
+    renameFolderMut.isError ||
+    deleteFolderMut.isError ||
+    moveFolderMut.isError ||
+    moveDocMut.isError
+      ? t.auth.requestFailed
+      : null;
 
   // ---------- 门禁与加载态 ----------
 
@@ -430,6 +450,9 @@ export function EditorPage() {
             onMoveDoc={handleMoveDoc}
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
+            error={folderError}
+            autoEditFolderId={autoEditFolderId}
+            onAutoEditDone={() => setAutoEditFolderId(null)}
           />
         </ResizablePanel>
       ) : null}

@@ -29,12 +29,19 @@ export function DocumentList({
   onMoveDoc,
   onMoveFolder,
   onCollapse,
+  error,
+  autoEditFolderId,
+  onAutoEditDone,
 }: {
   documents: DocumentSummary[];
   folders: Folder[];
   activeDocId?: string;
   loading: boolean;
   creating: boolean;
+  /** 文件夹的增删改移任何一步失败都落在这里。静默失败会让用户以为按钮坏了 */
+  error?: string | null;
+  autoEditFolderId?: string | null;
+  onAutoEditDone?: () => void;
   onSelect: (docId: string) => void;
   onCreate: () => void;
   onCreateFolder: () => void;
@@ -83,6 +90,8 @@ export function DocumentList({
 
   const handlers: TreeRowHandlers = {
     activeDocId,
+    autoEditFolderId,
+    onAutoEditDone,
     expanded,
     onToggle,
     onSelectDoc: onSelect,
@@ -153,6 +162,15 @@ export function DocumentList({
           rootOver && rootAcceptsDrop ? "rounded-lg ring-1 ring-inset ring-sky-400" : ""
         }`}
       >
+        {error && (
+          <p
+            role="alert"
+            className="mb-1 rounded-lg bg-red-50 px-2 py-1.5 text-[11px] leading-relaxed text-red-600 dark:bg-red-950/40 dark:text-red-400"
+          >
+            {error}
+          </p>
+        )}
+
         {loading ? (
           <p className="px-2 py-4 text-xs text-neutral-400">{t.editor.loading}</p>
         ) : isEmpty ? (

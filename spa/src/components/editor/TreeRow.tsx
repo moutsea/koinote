@@ -26,6 +26,14 @@ export type DragPayload =
 
 export type TreeRowHandlers = {
   activeDocId?: string;
+  /**
+   * 刚建出来的文件夹，直接进入改名态。
+   *
+   * 新建时名字是空的，行上只显示「未命名文件夹」—— 不自动聚焦的话，用户得先猜到
+   * 「双击可以改名」。加上后端失败时也没提示，整件事看起来就像按钮没反应。
+   */
+  autoEditFolderId?: string | null;
+  onAutoEditDone?: () => void;
   expanded: Set<string>;
   onToggle: (folderId: string) => void;
   onSelectDoc: (docId: string) => void;
@@ -59,6 +67,15 @@ export function FolderRow({
   useEffect(() => {
     if (editing) inputRef.current?.select();
   }, [editing]);
+
+  // 刚建出来的那个直接进改名态。清掉标记，避免每次渲染都重新进入
+  useEffect(() => {
+    if (h.autoEditFolderId === folder.folderId) {
+      setDraft(folder.name);
+      setEditing(true);
+      h.onAutoEditDone?.();
+    }
+  }, [h.autoEditFolderId, folder.folderId, folder.name, h]);
 
   const name = folder.name.trim() || t.editor.untitledFolder;
   const acceptsDrop = h.dragging ? h.canDropOn(h.dragging, folder.folderId) : false;

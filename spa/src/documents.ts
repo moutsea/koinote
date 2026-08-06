@@ -119,7 +119,7 @@ export function useFolderList(enabled: boolean) {
  * 移动、删除都会改到文档的归属（删文件夹时子项提到父级），所以文档列表也要失效 ——
  * 只失效 folders 的话侧栏里文档会留在原位，直到下次别的原因触发重取。
  */
-function useFolderMutation<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
+function useFolderMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
