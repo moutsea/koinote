@@ -108,21 +108,38 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 
 	// folder_id 与 documentMove 同一套写法：子查询带 user_id 过滤，传别人的
 	// folderId 会解析成 NULL（落到根下），而不是报外键错误泄露「该文件夹存在」
+	// 配额判定写进 INSERT ... SELECT ... WHERE，与图片记账同一套做法
+	// （见 recordImageObject）：分成先查后插会让并发创建各自读到同一个用量。
+	//
+	// 与 documentUpdate 不同，这里没有"缩小则放行"的例外：新建文档只会让用量增加，
+	// 而且用户没有正在编辑的内容会因此丢失 —— 拒绝新建是安全的。
 	var doc model.Document
 	err = a.db.QueryRow(r.Context(), `
 		INSERT INTO documents (doc_id, user_id, title, content, folder_id, created_at, updated_at)
-		VALUES (
+		SELECT
 			$1, $2, $3, $4,
 			CASE
 				WHEN $5 = '' THEN NULL
 				ELSE (SELECT id FROM folders WHERE folder_id = $5 AND user_id = $2)
 			END,
 			now(), now()
-		)
+		WHERE COALESCE((
+			SELECT SUM(octet_length(content) + octet_length(title))
+			FROM documents WHERE user_id = $2
+		), 0) + COALESCE((
+			SELECT SUM(bytes) FROM image_objects WHERE user_id = $2
+		), 0) + octet_length($4) + octet_length($3) <= $6
 		RETURNING doc_id, title, theme, content, created_at, updated_at
-	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID)).Scan(
+	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID), a.imageQuota()).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// INSERT 的 WHERE 不成立 —— 唯一的原因就是超额（docID 是刚生成的随机值，
+		// 不可能撞已有行）
+		httpx.ErrorCode(w, http.StatusConflict, "storage_quota_exceeded",
+			"Cloud storage quota exceeded")
+		return
+	}
 	if err != nil {
 		log.Printf("document create: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
@@ -209,16 +226,56 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	theme := normalizeDocumentTheme(body.Theme)
 
+	// 配额判定与写入合成一句，理由同图片记账（见 recordImageObject）：
+	// 分成"先查用量再更新"的话，并发保存会各自读到同一个用量。
+	//
+	// 关键在最后那个 OR：只在文档「变大」时才卡配额。
+	//
+	// 无条件拒绝会有两个后果，都比超一点点存储更糟：
+	//   1. 用户正在写的内容保存不了，可能丢稿 —— 而自动保存是每几秒一次，
+	//      用户未必看得见错误提示
+	//   2. 超额后就再也删不动了：删正文也是一次 UPDATE，如果它同样被拒，
+	//      用户会被锁死在超额状态，没有任何自救途径
+	//
+	// 所以缩小或不变一律放行。超额的人只能越写越少，直到回到线内。
 	var doc model.Document
 	err := a.db.QueryRow(r.Context(), `
 		UPDATE documents
 		SET title = $3, theme = $4, content = $5, updated_at = now()
 		WHERE doc_id = $1 AND user_id = $2
+		  AND (
+		    COALESCE((
+		      SELECT SUM(octet_length(d.content) + octet_length(d.title))
+		      FROM documents d WHERE d.user_id = $2 AND d.doc_id <> $1
+		    ), 0)
+		    + COALESCE((
+		      SELECT SUM(bytes) FROM image_objects WHERE user_id = $2
+		    ), 0)
+		    + octet_length($5) + octet_length($3) <= $6
+		    OR octet_length($5) + octet_length($3)
+		       <= octet_length(content) + octet_length(title)
+		  )
 		RETURNING doc_id, title, theme, content, created_at, updated_at
-	`, docID, user.ID, title, theme, content).Scan(
+	`, docID, user.ID, title, theme, content, a.imageQuota()).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// 没更新到行有两种原因：文档不存在，或者被配额挡下。
+		// 两者要给不同的错误码，否则用户会以为文档丢了
+		var exists bool
+		if qerr := a.db.QueryRow(r.Context(),
+			`SELECT EXISTS (SELECT 1 FROM documents WHERE doc_id = $1 AND user_id = $2)`,
+			docID, user.ID,
+		).Scan(&exists); qerr != nil {
+			log.Printf("document update: 判断文档是否存在时出错: %v", qerr)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if exists {
+			httpx.ErrorCode(w, http.StatusConflict, "storage_quota_exceeded",
+				"Cloud storage quota exceeded")
+			return
+		}
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return
 	}

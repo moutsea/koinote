@@ -301,6 +301,120 @@ func TestQuotaRoutesRejectUnauthenticated(t *testing.T) {
 	}
 }
 
+// 用量口径必须把文档正文算进去。
+//
+// 配额是"云端存储"而不是"图床"：文档正文存在 Postgres 里，也是用户存在云端的东西。
+// 只算 R2 会让一个写了几百篇长文的人看到"用量 0"，也让配额可以被无限绕过 ——
+// 纯文字文档不受任何限制。
+func TestStorageUsageCountsDocuments(t *testing.T) {
+	src := readQuotaSource(t)
+
+	idx := strings.Index(src, "func (a *App) storageUsageFor")
+	if idx < 0 {
+		t.Fatal("找不到 storageUsageFor")
+	}
+	body := src[idx : idx+1200]
+
+	if !strings.Contains(body, "FROM documents") {
+		t.Error("用量查询没有统计 documents 表 —— 文档正文也占云端存储")
+	}
+	if !strings.Contains(body, "FROM image_objects") {
+		t.Error("用量查询没有统计 image_objects 表")
+	}
+	// octet_length 而不是 length：后者按字符数算，中文正文会少算约三分之二
+	// （UTF-8 下一个汉字 3 字节）。存储占用要的是字节
+	if !strings.Contains(body, "octet_length") {
+		t.Error("文档字节数必须用 octet_length；length 按字符算，中文会大幅少算")
+	}
+	if strings.Contains(body, "length(content)") &&
+		!strings.Contains(body, "octet_length(content)") {
+		t.Error("用了 length(content) 而非 octet_length(content)")
+	}
+}
+
+// 三处配额判定都必须把文档字节算进去。
+//
+// 漏掉任何一处的表现都是"配额在那条路径上不生效"，而且不会报错：
+//   - recordImageObject 漏了 → 文档占的空间不挡图片上传
+//   - documentCreate 漏了 → 能无限新建文档
+//   - documentUpdate 漏了 → 能把单篇写到无限大（受单篇 1 MiB 限制，但篇数无限）
+func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
+	quotaSrc := readQuotaSource(t)
+	docsSrc := readSourceFile(t, "documents.go")
+
+	cases := []struct {
+		name   string
+		src    string
+		anchor string
+	}{
+		{"图片记账", quotaSrc, "INSERT INTO image_objects"},
+		{"新建文档", docsSrc, "INSERT INTO documents"},
+		{"更新文档", docsSrc, "UPDATE documents"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := strings.Index(tc.src, tc.anchor)
+			if idx < 0 {
+				t.Fatalf("找不到 %q", tc.anchor)
+			}
+			end := strings.Index(tc.src[idx:], "`")
+			if end < 0 {
+				t.Fatal("找不到 SQL 字面量结尾")
+			}
+			stmt := tc.src[idx : idx+end]
+
+			for _, want := range []string{"image_objects", "octet_length"} {
+				if !strings.Contains(stmt, want) {
+					t.Errorf("配额判定里缺 %q —— 三处判定都要按「文档 + 图片」的总量算。\n语句:\n%s",
+						want, stmt)
+				}
+			}
+			// 判定必须在同一句里（WHERE 子句），不能拆成先查后改
+			if !strings.Contains(stmt, "WHERE") {
+				t.Errorf("语句里没有 WHERE，判定可能被拆成了两句\n语句:\n%s", stmt)
+			}
+		})
+	}
+}
+
+// documentUpdate 必须留"缩小则放行"的例外。
+//
+// 没有它会有两个后果，都比超一点点存储更糟：正在写的内容保存不了可能丢稿；
+// 以及超额后连删正文都做不到（删也是一次 UPDATE），用户被锁死没有自救途径。
+func TestDocumentUpdateAllowsShrinking(t *testing.T) {
+	src := readSourceFile(t, "documents.go")
+
+	idx := strings.Index(src, "UPDATE documents")
+	if idx < 0 {
+		t.Fatal("找不到 UPDATE documents")
+	}
+	end := strings.Index(src[idx:], "`")
+	stmt := src[idx : idx+end]
+
+	if !strings.Contains(stmt, "OR") {
+		t.Fatal("UPDATE 的配额判定里没有 OR 分支 —— 缺少「缩小则放行」的例外，" +
+			"超额用户会连删正文都做不到")
+	}
+	// 例外的实质：新内容不大于旧内容时放行
+	if !strings.Contains(stmt, "<= octet_length(content) + octet_length(title)") {
+		t.Error("找不到「新内容 <= 旧内容」的比较，「缩小则放行」可能没写对")
+	}
+}
+
+func readQuotaSource(t *testing.T) string {
+	return readSourceFile(t, "image_quota.go")
+}
+
+func readSourceFile(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatalf("读 %s: %v", name, err)
+	}
+	return string(data)
+}
+
 // 记账语句必须是"判断与插入在同一句"。
 //
 // 这条性质的正确性没有真数据库验不了（并发行为属于集成测试），但它有一种很具体的退化

@@ -34,17 +34,45 @@ func (a *App) imageQuota() int64 {
 	return config.DefaultImageQuotaMB * 1024 * 1024
 }
 
-// imageUsage 查某用户已占用的字节数。
+// storageBreakdown 是用户占用的云端存储，按来源分开。
+//
+// 分开而不是只给一个总数：用户看到"满了"之后要知道该删什么。只报总数的话，
+// 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
+type storageBreakdown struct {
+	// DocumentBytes 是文档正文与标题的字节数（Postgres 里的 text）
+	DocumentBytes int64
+	// ImageBytes 是图床对象的字节数（R2）
+	ImageBytes int64
+}
+
+func (s storageBreakdown) Total() int64 {
+	return s.DocumentBytes + s.ImageBytes
+}
+
+// storageUsageFor 查某用户占用的云端存储。
+//
+// 两项都算：图片在 R2，文档正文在 Postgres —— 两者都是"用户存在云端的东西"，
+// 只算前者会让一个写了几百篇长文的人看到"用量 0"。
+//
+// 文档用 octet_length 而不是 length：后者按字符数算，中文正文会少算三分之二
+// （UTF-8 下一个汉字 3 字节）。存储占用要的是字节。
 //
 // 每次都 SUM 而不是维护计数器：见 migrations/0008_image_quota.sql 里的说明。
-// user_id 上有索引，这个查询在几千行的量级下是微秒级的。
-func (a *App) imageUsage(ctx context.Context, userID int) (int64, error) {
-	var used int64
-	// COALESCE：没有任何图时 SUM 返回 NULL，直接 Scan 进 int64 会报错
+// 文档那一项无法维护计数器 —— 自动保存每几秒就改一次正文长度。
+func (a *App) storageUsageFor(ctx context.Context, userID int) (storageBreakdown, error) {
+	var out storageBreakdown
+	// COALESCE：没有任何行时 SUM 返回 NULL，直接 Scan 进 int64 会报错
 	err := a.db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(bytes), 0) FROM image_objects WHERE user_id = $1
-	`, userID).Scan(&used)
-	return used, err
+		SELECT
+			COALESCE((
+				SELECT SUM(octet_length(content) + octet_length(title))
+				FROM documents WHERE user_id = $1
+			), 0),
+			COALESCE((
+				SELECT SUM(bytes) FROM image_objects WHERE user_id = $1
+			), 0)
+	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes)
+	return out, err
 }
 
 // recordImageObject 把一个刚写进 R2 的对象记进账本，超额则拒绝。
@@ -65,24 +93,30 @@ func (a *App) recordImageObject(
 	userID int,
 	key string,
 	bytes int64,
-) (int64, error) {
+) (storageBreakdown, error) {
 	// ON CONFLICT DO NOTHING：Worker 重试报账时同一个 key 可能报两次，不能重复计费。
-	// key 是主键，冲突即说明已经记过了
+	// key 是主键，冲突即说明已经记过了。
+	//
+	// 判定里要把文档正文也算上 —— 配额是"云端存储"而不是"图床"，
+	// 少算文档会让一个写了几百篇长文的人凭空多出配额
 	tag, err := a.db.Exec(ctx, `
 		INSERT INTO image_objects (object_key, user_id, bytes)
 		SELECT $1, $2, $3
 		WHERE COALESCE(
 			(SELECT SUM(bytes) FROM image_objects WHERE user_id = $2), 0
+		) + COALESCE(
+			(SELECT SUM(octet_length(content) + octet_length(title))
+			 FROM documents WHERE user_id = $2), 0
 		) + $3 <= $4
 		ON CONFLICT (object_key) DO NOTHING
 	`, key, userID, bytes, a.imageQuota())
 	if err != nil {
-		return 0, err
+		return storageBreakdown{}, err
 	}
 
-	used, uerr := a.imageUsage(ctx, userID)
+	used, uerr := a.storageUsageFor(ctx, userID)
 	if uerr != nil {
-		return 0, uerr
+		return storageBreakdown{}, uerr
 	}
 
 	if tag.RowsAffected() == 0 {
@@ -92,7 +126,7 @@ func (a *App) recordImageObject(
 		if err := a.db.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM image_objects WHERE object_key = $1)`, key,
 		).Scan(&exists); err != nil {
-			return 0, err
+			return storageBreakdown{}, err
 		}
 		if !exists {
 			return used, errQuotaExceeded
@@ -127,16 +161,20 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	used, err := a.imageUsage(r.Context(), user.ID)
+	used, err := a.storageUsageFor(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("storage usage: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
 
+	// 分项一起给：用户看到"满了"之后要知道该删什么。只报总数的话，
+	// 一个存了 400 MB 图片的人可能会去删文档，白费功夫
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"usedBytes":  used,
-		"quotaBytes": a.imageQuota(),
+		"usedBytes":     used.Total(),
+		"documentBytes": used.DocumentBytes,
+		"imageBytes":    used.ImageBytes,
+		"quotaBytes":    a.imageQuota(),
 	})
 }
 
@@ -189,9 +227,11 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		// 409 而不是 413：413 是"这一张太大"，这里是"总量满了"。
 		// Worker 要据此区分回给前端哪个错误码
 		httpx.JSON(w, http.StatusConflict, map[string]any{
-			"code":       "image_quota_exceeded",
-			"usedBytes":  used,
-			"quotaBytes": a.imageQuota(),
+			"code":          "image_quota_exceeded",
+			"usedBytes":     used.Total(),
+			"documentBytes": used.DocumentBytes,
+			"imageBytes":    used.ImageBytes,
+			"quotaBytes":    a.imageQuota(),
 		})
 		return
 	}
@@ -202,7 +242,9 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"usedBytes":  used,
-		"quotaBytes": a.imageQuota(),
+		"usedBytes":     used.Total(),
+		"documentBytes": used.DocumentBytes,
+		"imageBytes":    used.ImageBytes,
+		"quotaBytes":    a.imageQuota(),
 	})
 }
