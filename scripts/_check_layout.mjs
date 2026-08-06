@@ -35,8 +35,10 @@ function ok(label, cond, detail) {
 eq("编辑器通栏", contentWidthFor("/editor"), "full");
 eq("编辑器带 docId 通栏", contentWidthFor("/editor/abc-123"), "full");
 eq("编辑器深层路径通栏", contentWidthFor("/editor/a/b/c"), "full");
-eq("首页通栏", contentWidthFor("/"), "full");
-eq("空路径按首页算", contentWidthFor(""), "full");
+// 首页收窄到 6xl：通栏在超宽屏上把 hero 文字丢进一片空地，特性卡片也散成三块板子
+eq("首页收窄", contentWidthFor("/"), "6xl");
+eq("空路径按首页算", contentWidthFor(""), "6xl");
+ok("首页不通栏", contentWidthFor("/") !== "full", contentWidthFor("/"));
 // 控制台不通栏：信息卡和文档列表拉到 2560px 会变成两头各一个字、中间一片空白
 eq("控制台收到 5xl", contentWidthFor("/dashboard"), "5xl");
 eq("分享页收到 3xl", contentWidthFor("/share/tok3n"), "3xl");
@@ -67,7 +69,7 @@ eq("注册页走兜底", contentWidthFor("/register"), "6xl");
       eq("根路由排在表首时，控制台仍是 5xl", contentWidthFor("/dashboard"), "5xl");
       eq("根路由排在表首时，分享页仍是 3xl", contentWidthFor("/share/x"), "3xl");
       eq("根路由排在表首时，编辑器仍是 full", contentWidthFor("/editor"), "full");
-      eq("根路由排在表首时，根本身仍是 full", contentWidthFor("/"), "full");
+      eq("根路由排在表首时，根本身仍是 6xl", contentWidthFor("/"), "6xl");
     } finally {
       ROUTE_WIDTHS.length = 0;
       ROUTE_WIDTHS.push(...original);

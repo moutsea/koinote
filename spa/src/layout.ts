@@ -40,8 +40,16 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/privacy", width: "5xl" },
   { prefix: "/terms", width: "5xl" },
   { prefix: "/cookies", width: "5xl" },
-  // 首页是营销版面，通栏
-  { prefix: "/", width: "full" },
+  // 首页收窄到 6xl。
+  //
+  // 原先是通栏，但超宽屏上撑得太开：hero 的标题和副标题本来就各有 max-w 兜着，
+  // 通栏只是把那两段文字放到一片空地中间；下面的特性网格三列一拉，卡片之间的
+  // 间距远大于卡片内的留白，看着是三块孤立的板子而不是一组。
+  //
+  // 6xl 与登录、注册的兜底同档 —— 那两页也是「一栏内容居中」的版面。
+  // 墨云背景仍然是通栏的：它画在 PageContainer 之外（见 HomePage 的 InkClouds），
+  // 收窄的只是内容。
+  { prefix: "/", width: "6xl" },
 ];
 
 /** 没匹配上时的兜底。登录、注册这类页面自己会再收窄一层 */

@@ -25,8 +25,8 @@ export function HomePage() {
       <section className="relative overflow-hidden">
         <InkClouds withCinnabar />
 
-        {/* 宽度取自 layout.ts 的路由表。标题与副标题各自有 max-w 兜住行长 ——
-            通栏指版面占满，不是让文字行拉到 2000px 那么长 */}
+        {/* 宽度取自 layout.ts 的路由表（首页是 6xl）。标题与副标题另有各自的 max-w：
+            6xl 是版面的外框，那两个管的是文字行长，两层都要 */}
         <PageContainer className="py-20 text-center sm:py-28">
           <span
             className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
@@ -40,7 +40,8 @@ export function HomePage() {
             {t.home.badge}
           </span>
 
-          {/* max-w-4xl 兜住行长：版面通栏了，但一行标题横跨 2000px 没法读 */}
+          {/* max-w-4xl 比容器的 6xl 更窄，所以仍然在起作用：
+              标题居中且行长收在 4xl，两侧留白是刻意的 */}
           <h1
             className="kn-heading-cn kn-ink-bloom mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl"
             style={{ color: "var(--ink-black)" }}
