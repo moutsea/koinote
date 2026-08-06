@@ -242,7 +242,11 @@ export function EditorPage() {
             }
             trailingControls={
               <>
-              <ExportMenu editor={editor} title={doc.data.title} />
+              <ExportMenu
+                editor={editor}
+                title={doc.data.title}
+                themeId={doc.data.theme ?? ""}
+              />
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}

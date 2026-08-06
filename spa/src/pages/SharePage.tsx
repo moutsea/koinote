@@ -10,6 +10,11 @@ import {
   type SharedDocument,
 } from "../api";
 import { createEditorExtensions } from "../components/editor/extensions";
+import {
+  THEME_SCOPE,
+  shareContentClass,
+  themeToCSS,
+} from "../components/editor/themeCss";
 import { interpolate, useI18n, type Locale } from "../i18n";
 
 const DATE_LOCALE: Record<Locale, string> = {
@@ -157,11 +162,13 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     immediatelyRender: false,
     content: shared.content,
     editorProps: {
-      attributes: {
-        class: "prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
-      },
+      attributes: { class: shareContentClass(shared.theme ?? "") },
     },
   });
+
+  // 分享页要和作者编辑区一致：主题跟着文档一起下发
+  const themeId = shared.theme ?? "";
+  const themeCSS = themeToCSS(themeId);
 
   const updatedAt = shared.updatedAt
     ? new Date(shared.updatedAt).toLocaleDateString(DATE_LOCALE[locale])
@@ -182,7 +189,10 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         </p>
       </header>
 
-      <EditorContent editor={editor} />
+      {themeCSS && <style>{themeCSS}</style>}
+      <div className={themeId ? THEME_SCOPE : undefined}>
+        <EditorContent editor={editor} />
+      </div>
 
       <footer className="mt-12 border-t border-black/5 pt-5 text-center dark:border-white/10">
         <Link

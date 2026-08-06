@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createEditorExtensions } from "./extensions";
 import { EditorToolbar } from "./EditorToolbar";
 import { useI18n, interpolate } from "../../i18n";
+import { ThemePicker } from "./ThemePicker";
+import { THEME_SCOPE, editorContentClass, themeToCSS } from "./themeCss";
 import { useSaveDocument } from "../../documents";
 import { ApiError, uploadImage } from "../../api";
 import type { Document } from "../../documents";
@@ -45,6 +47,7 @@ export default function MarkdownEditor({
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [charCount, setCharCount] = useState(0);
   const [title, setTitle] = useState(document.title);
+  const [themeId, setThemeId] = useState(document.theme ?? "");
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 粘贴/拖放处理器在 useEditor 的配置里，那时 editor 还不存在，
@@ -85,9 +88,10 @@ export default function MarkdownEditor({
     [t],
   );
   // 最新待存内容，防抖回调触发时读它，避免闭包捕获旧值
-  const pending = useRef<{ title: string; content: string }>({
+  const pending = useRef<{ title: string; content: string; theme: string }>({
     title: document.title,
     content: document.content,
+    theme: document.theme ?? "",
   });
   // 标题落库后要刷新侧边栏列表，但内容变化不需要——用它区分
   const titleDirty = useRef(false);
@@ -106,6 +110,7 @@ export default function MarkdownEditor({
         docId: document.docId,
         title: payload.title,
         content: payload.content,
+        theme: payload.theme,
       });
       setStatus("saved");
       if (titleDirty.current) {
@@ -123,14 +128,30 @@ export default function MarkdownEditor({
     saveTimer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
   }, [flush]);
 
+  /**
+   * 换主题：立刻存，不进防抖队列。
+   *
+   * 打字要防抖是因为每个字符都触发保存太吵；换主题是一次显式点击，等 800ms
+   * 再存没有意义，而且用户可能立刻关掉标签页 —— 那时防抖里的改动就丢了。
+   */
+  const changeTheme = useCallback(
+    (next: string) => {
+      setThemeId(next);
+      pending.current = { ...pending.current, theme: next };
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      void flush();
+    },
+    [flush],
+  );
+
+  const themeCSS = useMemo(() => themeToCSS(themeId), [themeId]);
+
+
   const editor = useEditor({
     extensions,
     immediatelyRender: false,
     editorProps: {
-      attributes: {
-        class:
-          "prose prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[60vh] px-2 py-4",
-      },
+      attributes: { class: editorContentClass(document.theme ?? "") },
       handlePaste: (view, event) => {
         const files = imageFilesFrom(event.clipboardData?.files);
         if (files.length === 0) return false;
@@ -164,13 +185,28 @@ export default function MarkdownEditor({
     return () => onEditorReady?.(null);
   }, [editor, onEditorReady]);
 
+  // editorProps 只在 useEditor 初始化时读一次，换主题必须显式改写。
+  // 切的是 prose 的有无：套主题时 prose 会用 code::before 给行内代码补反引号，
+  // 还有一堆主题不知道的 margin，留着就打架
+  useEffect(() => {
+    if (!editor) return;
+    editor.setOptions({
+      editorProps: { attributes: { class: editorContentClass(themeId) } },
+    });
+  }, [editor, themeId]);
+
   // 切换文档时重新灌入内容。docId 变化才重置，避免自己保存后被回写覆盖。
   useEffect(() => {
     if (!editor) return;
     editor.commands.setContent(document.content);
     setCharCount(editor.getText().length);
     setTitle(document.title);
-    pending.current = { title: document.title, content: document.content };
+    setThemeId(document.theme ?? "");
+    pending.current = {
+      title: document.title,
+      content: document.content,
+      theme: document.theme ?? "",
+    };
     titleDirty.current = false;
     setStatus("idle");
     // 仅在文档切换或实例就绪时执行；document 对象本身会因保存而变新引用，
@@ -238,6 +274,7 @@ export default function MarkdownEditor({
             {statusText}
           </span>
         )}
+        <ThemePicker value={themeId} onChange={changeTheme} />
         {trailingControls}
       </div>
 
@@ -249,7 +286,12 @@ export default function MarkdownEditor({
           <EditorToolbar editor={editor} />
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-3xl px-4">
+            {/* 主题 CSS 随文档走，挂在作用域容器上。空串时 themeCSS 是空的，
+                editorContentClass 会把 prose 加回来，观感回到没有主题的样子 */}
+            {themeCSS && <style>{themeCSS}</style>}
+            <div
+              className={`mx-auto w-full max-w-3xl px-4 ${themeId ? THEME_SCOPE : ""}`}
+            >
               <EditorContent editor={editor} />
             </div>
           </div>

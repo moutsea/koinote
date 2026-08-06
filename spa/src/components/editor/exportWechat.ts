@@ -8,6 +8,9 @@ import { findWechatTheme } from "./wechatThemes";
  *
  * 与另外几种导出的区别：产物不落盘，而是写进剪贴板。用户的实际动作是
  * 「粘贴到公众号编辑器」，下载一个 .html 再打开再全选复制是多余的三步。
+ *
+ * 这里不做预览：主题已经在编辑区生效（themeCss.ts），编辑区就是预览。导出只是
+ * 把同一套规则从 CSS 换成内联 style，没有第二种可能的样子需要先看一眼。
  */
 
 export type WechatExportResult = {
@@ -22,8 +25,6 @@ export async function buildWechatHTML(
   title: string,
   themeId: string,
 ): Promise<WechatExportResult> {
-  const theme = findWechatTheme(themeId);
-
   const stage = document.createElement("div");
   // 需要真实布局：公式栅格化要量尺寸。挪到视口外，不能 display:none
   stage.style.cssText =
@@ -36,6 +37,7 @@ export async function buildWechatHTML(
     // 顺序要紧：先把公式换成 img，再内联样式。
     // 反过来的话新插入的 img 拿不到主题的 img 规则。
     const math = await replaceMathWithImages(stage);
+    const theme = findWechatTheme(themeId);
     const stats = inlineWechatStyles(stage, theme.rules);
     const html = wrapWechatBody(stage.innerHTML, theme.rules.body);
     return {
@@ -48,6 +50,7 @@ export async function buildWechatHTML(
     stage.remove();
   }
 }
+
 
 function escapeHTML(value: string): string {
   return value

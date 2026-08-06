@@ -97,9 +97,9 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	err = a.db.QueryRow(r.Context(), `
 		INSERT INTO documents (doc_id, user_id, title, content, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, now(), now())
-		RETURNING doc_id, title, content, created_at, updated_at
+		RETURNING doc_id, title, theme, content, created_at, updated_at
 	`, docID, user.ID, title, content).Scan(
-		&doc.DocID, &doc.Title, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if err != nil {
 		log.Printf("document create: %v", err)
@@ -128,12 +128,12 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 	var doc model.Document
 	var shareToken, shareAccess, sharePasswordHash sql.NullString
 	err := a.db.QueryRow(r.Context(), `
-		SELECT doc_id, title, content, created_at, updated_at,
+		SELECT doc_id, title, theme, content, created_at, updated_at,
 		       share_token, share_access, share_password_hash
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2
 	`, docID, user.ID).Scan(
-		&doc.DocID, &doc.Title, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 		&shareToken, &shareAccess, &sharePasswordHash,
 	)
 	// 他人文档与不存在的文档一律 404，不泄露「该文档存在」
@@ -173,6 +173,7 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		Title   string `json:"title"`
+		Theme   string `json:"theme"`
 		Content string `json:"content"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -184,15 +185,16 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	theme := normalizeDocumentTheme(body.Theme)
 
 	var doc model.Document
 	err := a.db.QueryRow(r.Context(), `
 		UPDATE documents
-		SET title = $3, content = $4, updated_at = now()
+		SET title = $3, theme = $4, content = $5, updated_at = now()
 		WHERE doc_id = $1 AND user_id = $2
-		RETURNING doc_id, title, content, created_at, updated_at
-	`, docID, user.ID, title, content).Scan(
-		&doc.DocID, &doc.Title, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		RETURNING doc_id, title, theme, content, created_at, updated_at
+	`, docID, user.ID, title, theme, content).Scan(
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
@@ -239,6 +241,28 @@ func (a *App) documentDelete(w http.ResponseWriter, r *http.Request) {
 // ---------- 输入校验 ----------
 
 // validateDocumentInput 归一化并校验标题与正文，超限时写错误响应并返回 ok=false。
+// 主题 id 白名单，与前端 spa/src/components/editor/wechatThemes.ts 的
+// WechatThemeId 对齐。空串是「不套主题」。
+//
+// 为什么非法值落回默认而不是返 400：主题是排版偏好，前端传错不该让整篇文档
+// 保存失败 —— 用户正在写的内容比这个字段重要得多。
+var documentThemes = map[string]bool{
+	"": true, "minimal": true, "medium": true, "wired": true, "verge": true,
+	"stripe": true, "apple": true, "ft": true, "linear": true, "github": true,
+	"notion": true, "magazine": true, "editorial": true, "newspaper": true,
+	"course": true, "event": true,
+}
+
+const defaultDocumentTheme = "minimal"
+
+func normalizeDocumentTheme(raw string) string {
+	theme := strings.TrimSpace(raw)
+	if documentThemes[theme] {
+		return theme
+	}
+	return defaultDocumentTheme
+}
+
 func validateDocumentInput(w http.ResponseWriter, rawTitle, content string) (string, string, bool) {
 	title := strings.TrimSpace(rawTitle)
 	if utf8.RuneCountInString(title) > maxTitleRunes {

@@ -156,6 +156,7 @@ export const en: Messages = {
     wechatSubtitle:
       "Styles are inlined per element so formatting survives the paste. Formulas become uploaded images.",
     wechatThemeLabel: "Theme",
+    themeNone: "Default styling",
     wechatCopy: "Copy to clipboard",
     wechatCopied: "Copied — go paste it",
     wechatWorking: "Working…",

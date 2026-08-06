@@ -5,8 +5,10 @@ import "time"
 // Document 是对外暴露的文档模型，JSON 字段与前端 spa/src/api.ts 的 Document 类型对齐。
 // 内部自增 id 与 user_id 不外泄，对外只用 DocID 标识。
 type Document struct {
-	DocID     string     `json:"docId"`
-	Title     string     `json:"title"`
+	DocID string `json:"docId"`
+	Title string `json:"title"`
+	// Theme 是微信排版主题 id，空串表示不套主题。取值由 server 侧白名单约束。
+	Theme     string     `json:"theme"`
 	Content   string     `json:"content"`
 	CreatedAt *time.Time `json:"createdAt"`
 	UpdatedAt *time.Time `json:"updatedAt"`

@@ -243,6 +243,7 @@ func (a *App) shareRevoke(w http.ResponseWriter, r *http.Request) {
 
 type sharedDocument struct {
 	Title        string
+	Theme        string
 	Content      string
 	Access       string
 	PasswordHash sql.NullString
@@ -254,14 +255,14 @@ func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDo
 	var doc sharedDocument
 	var access sql.NullString
 	err := a.db.QueryRow(ctx, `
-		SELECT d.title, d.content, d.share_access, d.share_password_hash,
+		SELECT d.title, d.theme, d.content, d.share_access, d.share_password_hash,
 		       d.updated_at, COALESCE(u.nickname, u.username)
 		FROM documents d
 		JOIN users u ON u.id = d.user_id
 		WHERE d.share_token = $1
 		LIMIT 1
 	`, token).Scan(
-		&doc.Title, &doc.Content, &access, &doc.PasswordHash,
+		&doc.Title, &doc.Theme, &doc.Content, &access, &doc.PasswordHash,
 		&doc.UpdatedAt, &doc.OwnerName,
 	)
 	doc.Access = normalizeShareAccess(access.String)
@@ -362,7 +363,9 @@ func (a *App) shareVerify(w http.ResponseWriter, r *http.Request) {
 func writeSharedDocument(w http.ResponseWriter, doc sharedDocument) {
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"document": map[string]any{
-			"title":     doc.Title,
+			"title": doc.Title,
+			// 分享页要和编辑区排版一致，主题得跟着出去
+			"theme":     doc.Theme,
 			"content":   doc.Content,
 			"updatedAt": doc.UpdatedAt,
 			"ownerName": strings.TrimSpace(doc.OwnerName.String),

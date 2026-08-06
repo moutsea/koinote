@@ -174,3 +174,37 @@ func TestValidateDocumentInput(t *testing.T) {
 		}
 	})
 }
+
+// ---------- 主题白名单 ----------
+
+// 主题 id 直接进 SQL 的 UPDATE，白名单是它唯一的约束。
+// 非法值必须落回默认而不是原样写库，也不该让整篇文档保存失败。
+func TestNormalizeDocumentTheme(t *testing.T) {
+	t.Run("白名单内的 id 原样保留", func(t *testing.T) {
+		for _, id := range []string{"minimal", "linear", "event", "magazine"} {
+			if got := normalizeDocumentTheme(id); got != id {
+				t.Errorf("%q 应原样保留，实际 %q", id, got)
+			}
+		}
+	})
+
+	t.Run("空串是合法值：表示不套主题", func(t *testing.T) {
+		if got := normalizeDocumentTheme(""); got != "" {
+			t.Errorf("空串应保留为空串，实际 %q", got)
+		}
+	})
+
+	t.Run("首尾空白被去掉后仍能命中白名单", func(t *testing.T) {
+		if got := normalizeDocumentTheme("  minimal  "); got != "minimal" {
+			t.Errorf("期望 minimal，实际 %q", got)
+		}
+	})
+
+	t.Run("未知 id 落回默认", func(t *testing.T) {
+		for _, id := range []string{"nope", "MINIMAL", "../etc/passwd", "'; DROP TABLE documents;--"} {
+			if got := normalizeDocumentTheme(id); got != defaultDocumentTheme {
+				t.Errorf("%q 应落回 %q，实际 %q", id, defaultDocumentTheme, got)
+			}
+		}
+	})
+}

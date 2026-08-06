@@ -22,9 +22,12 @@ import { WechatDialog } from "./WechatDialog";
 export function ExportMenu({
   editor,
   title,
+  themeId,
 }: {
   editor: Editor | null;
   title: string;
+  /** 文档当前的排版主题，微信导出直接用它 —— 不在导出弹窗里二次选择 */
+  themeId: string;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -175,6 +178,7 @@ export function ExportMenu({
         <WechatDialog
           editor={editor}
           title={title}
+          themeId={themeId}
           onClose={() => setWechatOpen(false)}
         />
       )}

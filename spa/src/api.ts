@@ -98,6 +98,8 @@ export type DocumentShare = {
 export type Document = {
   docId: string;
   title: string;
+  /** 微信排版主题 id，空串表示不套主题 */
+  theme: string;
   content: string;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -108,6 +110,7 @@ export type Document = {
 /** 公开分享视图：不含任何内部标识 */
 export type SharedDocument = {
   title: string;
+  theme?: string;
   content: string;
   updatedAt?: string | null;
   ownerName?: string;
@@ -139,7 +142,7 @@ export function getDocument(docId: string) {
 
 export function updateDocument(
   docId: string,
-  params: { title: string; content: string },
+  params: { title: string; content: string; theme?: string },
 ) {
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,

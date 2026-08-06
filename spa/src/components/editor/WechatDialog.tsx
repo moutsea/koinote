@@ -1,25 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { Check, ChevronDown, Copy, Loader2, X } from "lucide-react";
+import { Check, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import { buildWechatHTML, copyRichText } from "./exportWechat";
-import {
-  findWechatTheme,
-  groupWechatThemes,
-  type WechatThemeId,
-} from "./wechatThemes";
+import { findWechatTheme } from "./wechatThemes";
 
+/**
+ * 导出到微信公众号。
+ *
+ * 不带主题选择也不带预览：主题是文档属性，在编辑区已经生效了。这里只做一件事
+ * —— 把编辑区看到的样子转成内联 style 的 HTML 写进剪贴板。
+ */
 export function WechatDialog({
   editor,
   title,
+  themeId,
   onClose,
 }: {
   editor: Editor;
   title: string;
+  themeId: string;
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [themeId, setThemeId] = useState<WechatThemeId>("minimal");
+  const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +45,12 @@ export function WechatDialog({
     setDone(false);
     setBusy(true);
     try {
+      // 公式栅格化 + 上传放在这里而不是打开弹窗时：只是点开看看又关掉的话，
+      // 不该往 R2 里堆图（现在没有 images 表，堆进去也没法列举清理）
       const result = await buildWechatHTML(editor, title, themeId);
       await copyRichText(result.html, editor.storage.markdown.getMarkdown());
       setDone(true);
+      setBytes(result.bytes);
 
       // 公式失败要说出来。静默降级成 LaTeX 源码，用户会以为公式本来就长那样
       if (result.math.failed > 0) {
@@ -98,48 +105,15 @@ export function WechatDialog({
           </button>
         </div>
 
-        <div className="mt-4">
-          <label
-            htmlFor="wechat-theme"
-            className="block text-xs font-medium text-neutral-500 dark:text-neutral-400"
-          >
-            {t.editor.wechatThemeLabel}
-          </label>
-          {/* 原生 select：15 套主题平铺会把弹窗撑得很长，而 optgroup 的分组、
-              键盘选择、移动端滚轮都是系统给的，自己实现一遍不划算。
-              color-scheme 要跟着应用的深色模式走 —— 下拉列表和控件文字由系统绘制，
-              而这里的深色是 .dark class 手动切的，跟系统偏好无关；不声明的话
-              「系统亮色 + 应用深色」会得到深底配深字 */}
-          <div className="relative mt-1.5">
-            <select
-              id="wechat-theme"
-              value={themeId}
-              onChange={(e) => {
-                setThemeId(e.target.value as WechatThemeId);
-                setDone(false);
-              }}
-              className="w-full appearance-none rounded-xl border border-black/10 bg-[var(--background)] py-2.5 pl-3 pr-9 text-sm outline-none transition [color-scheme:light] focus:border-sky-500 dark:border-white/15 dark:[color-scheme:dark]"
-            >
-              {groupWechatThemes().map(({ group, themes }) => (
-                <optgroup key={group} label={group}>
-                  {themes.map((theme) => (
-                    <option key={theme.id} value={theme.id}>
-                      {theme.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <ChevronDown
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-            />
-          </div>
-          {/* 选中项的适用场景。option 里塞不进第二行，只能放到外面 */}
-          <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-400">
-            {findWechatTheme(themeId).hint}
-          </p>
-        </div>
+        {/* 当前用的是哪套主题。改主题要回编辑区改 —— 那里改完立刻能看见效果，
+            在这个弹窗里改反而看不见 */}
+        <p className="mt-4 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-neutral-500 dark:bg-white/5 dark:text-neutral-400">
+          {t.editor.wechatThemeLabel}
+          <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
+          <span className="font-medium text-neutral-700 dark:text-neutral-200">
+            {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
+          </span>
+        </p>
 
         {note && (
           <p
@@ -194,6 +168,12 @@ export function WechatDialog({
           >
             {t.editor.shareClose}
           </button>
+          {/* 微信对单篇体积有上限，复制完把实际大小说出来 */}
+          {bytes !== null && (
+            <span className="ml-auto text-[11px] tabular-nums text-neutral-400">
+              ~{Math.round(bytes / 1024)} KB
+            </span>
+          )}
         </div>
       </div>
     </div>

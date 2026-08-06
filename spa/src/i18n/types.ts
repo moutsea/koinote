@@ -141,6 +141,7 @@ export interface Messages {
     wechatTitle: string;
     wechatSubtitle: string;
     wechatThemeLabel: string;
+    themeNone: string;
     wechatCopy: string;
     wechatCopied: string;
     wechatWorking: string;

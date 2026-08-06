@@ -77,11 +77,13 @@ export function useSaveDocument() {
       docId,
       title,
       content,
+      theme,
     }: {
       docId: string;
       title: string;
       content: string;
-    }) => updateDocument(docId, { title, content }),
+      theme?: string;
+    }) => updateDocument(docId, { title, content, theme }),
     onSuccess: ({ document }) => {
       queryClient.setQueryData(docKey(document.docId), document);
     },
