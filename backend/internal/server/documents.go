@@ -79,9 +79,13 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 请求体可选：允许空 body 直接建一篇空文档（前端「新建」按钮就是这么用的）
+	//
+	// FolderID 让「在这个文件夹里新建文档」一次请求完成。先建到根下再调移动接口也能
+	// 做到，但那样新文档会先在根下闪一下，且移动失败时它就留在根下了。
 	var body struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title    string  `json:"title"`
+		Content  string  `json:"content"`
+		FolderID *string `json:"folderId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
@@ -100,12 +104,21 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// folder_id 与 documentMove 同一套写法：子查询带 user_id 过滤，传别人的
+	// folderId 会解析成 NULL（落到根下），而不是报外键错误泄露「该文件夹存在」
 	var doc model.Document
 	err = a.db.QueryRow(r.Context(), `
-		INSERT INTO documents (doc_id, user_id, title, content, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, now(), now())
+		INSERT INTO documents (doc_id, user_id, title, content, folder_id, created_at, updated_at)
+		VALUES (
+			$1, $2, $3, $4,
+			CASE
+				WHEN $5 = '' THEN NULL
+				ELSE (SELECT id FROM folders WHERE folder_id = $5 AND user_id = $2)
+			END,
+			now(), now()
+		)
 		RETURNING doc_id, title, theme, content, created_at, updated_at
-	`, docID, user.ID, title, content).Scan(
+	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID)).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if err != nil {

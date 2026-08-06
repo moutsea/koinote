@@ -152,6 +152,9 @@ export interface Messages {
     folderNamePlaceholder: string;
     dropToRoot: string;
     cannotDropIntoSelf: string;
+    newSubfolder: string;
+    newDocumentHere: string;
+    treeMenu: string;
     wechatCopy: string;
     wechatCopied: string;
     wechatWorking: string;

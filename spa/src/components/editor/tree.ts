@@ -6,6 +6,25 @@
  * 这条必须有断言钉住。
  */
 
+/**
+ * 嵌套深度上限，与后端 folders.go 的 maxFolderDepth 对齐。
+ *
+ * 前端有这个常量只为把「新建子文件夹」置灰 —— 让菜单项点不动比点了报错好。
+ * 真正的约束在服务端，改这里不会放宽任何限制。
+ */
+export const MAX_FOLDER_DEPTH = 8;
+
+/**
+ * 在某个容器里还能不能再建一层文件夹。用于把右键菜单的「新建子文件夹」置灰。
+ *
+ * containerDepth 是容器的 0-based 渲染层号，根是 -1。渲染在 depth d 的文件夹处在第
+ * d+1 层，它里面的新文件夹就是第 d+2 层 —— 这个 +2 容易写错成 +1，而错了的表现只是
+ * 菜单项能点、点了报错，手点很容易当成后端的问题，所以放在这里由断言钉住。
+ */
+export function canCreateSubfolder(containerDepth: number): boolean {
+  return containerDepth + 2 <= MAX_FOLDER_DEPTH;
+}
+
 export type FolderNode = {
   folderId: string;
   name: string;

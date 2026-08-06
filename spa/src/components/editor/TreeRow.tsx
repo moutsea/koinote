@@ -24,6 +24,24 @@ export type DragPayload =
   | { kind: "doc"; id: string }
   | { kind: "folder"; id: string };
 
+/**
+ * 右键菜单指向的对象。root 是侧栏空白处。
+ *
+ * depth 都是渲染用的 0-based 层号，菜单靠它判断「再建一层会不会超出深度上限」。
+ * 文档带上 folderId 是为了让「新建」落在它所在的那个文件夹里，而不是根下 ——
+ * 右键一篇文档要新建时，想要的是它的同级。
+ */
+export type MenuTarget =
+  | { kind: "root" }
+  | { kind: "folder"; folderId: string; name: string; depth: number }
+  | {
+      kind: "doc";
+      docId: string;
+      title: string;
+      folderId: string | null;
+      depth: number;
+    };
+
 export type TreeRowHandlers = {
   activeDocId?: string;
   /**
@@ -46,6 +64,10 @@ export type TreeRowHandlers = {
   canDropOn: (payload: DragPayload, targetFolderId: string | null) => boolean;
   dragging: DragPayload | null;
   setDragging: (p: DragPayload | null) => void;
+  /** 右键。在行上按下时要阻止冒泡，否则会被空白处的根菜单接走 */
+  onContextMenu: (e: React.MouseEvent, target: MenuTarget) => void;
+  /** 菜单当前指向的行，用来给它加一个持续的高亮 */
+  menuTargetId?: string | null;
 };
 
 export function FolderRow({
@@ -79,6 +101,8 @@ export function FolderRow({
 
   const name = folder.name.trim() || t.editor.untitledFolder;
   const acceptsDrop = h.dragging ? h.canDropOn(h.dragging, folder.folderId) : false;
+  // 菜单打开时这一行保持高亮：菜单在指针位置弹出，不标出来的话看不清操作的是哪一行
+  const menuOpen = h.menuTargetId === folder.folderId;
 
   function commitRename() {
     setEditing(false);
@@ -104,10 +128,20 @@ export function FolderRow({
         draggable={!editing}
         onDragStart={() => h.setDragging({ kind: "folder", id: folder.folderId })}
         onDragEnd={() => h.setDragging(null)}
+        onContextMenu={(e) =>
+          h.onContextMenu(e, {
+            kind: "folder",
+            folderId: folder.folderId,
+            name,
+            depth,
+          })
+        }
         className={`group relative flex items-center rounded-lg transition ${
           over && acceptsDrop
             ? "bg-sky-100 ring-1 ring-sky-400 dark:bg-sky-900/40"
-            : "hover:bg-black/5 dark:hover:bg-white/10"
+            : menuOpen
+              ? "bg-black/5 dark:bg-white/10"
+              : "hover:bg-black/5 dark:hover:bg-white/10"
         }`}
         style={{ paddingLeft: folderPad(depth) }}
       >
@@ -219,6 +253,7 @@ export function DocRow({
   const { t, locale } = useI18n();
   const title = doc.title.trim() || t.editor.untitled;
   const active = doc.docId === h.activeDocId;
+  const menuOpen = h.menuTargetId === doc.docId;
 
   return (
     <li
@@ -226,6 +261,15 @@ export function DocRow({
       draggable
       onDragStart={() => h.setDragging({ kind: "doc", id: doc.docId })}
       onDragEnd={() => h.setDragging(null)}
+      onContextMenu={(e) =>
+        h.onContextMenu(e, {
+          kind: "doc",
+          docId: doc.docId,
+          title,
+          folderId: doc.folderId,
+          depth,
+        })
+      }
     >
       <button
         type="button"
@@ -234,7 +278,9 @@ export function DocRow({
         className={`flex w-full items-start gap-2 rounded-lg py-1.5 pr-8 text-left transition ${
           active
             ? "bg-sky-50 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
-            : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+            : menuOpen
+              ? "bg-black/5 text-neutral-600 dark:bg-white/10 dark:text-neutral-300"
+              : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
         }`}
         style={{ paddingLeft: docPad(depth) }}
       >

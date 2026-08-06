@@ -97,6 +97,37 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 深度上限。folderMove 一直有这个检查，create 之前没有 —— 只要一层层往里建就能
+	// 绕过上限，而移动同一棵树反倒会被挡。右键菜单能在文件夹里直接建子文件夹之后，
+	// 这条路径是日常操作，必须补上。
+	//
+	// 找不到父文件夹时按 0 处理：可能是不存在，也可能是别人的。两种情况下面的
+	// INSERT 子查询都会解析成 NULL（落到根下），深度就是 1，不该被挡。
+	if parent := derefOrEmpty(body.ParentFolderID); parent != "" {
+		var parentID int
+		err := a.db.QueryRow(r.Context(),
+			`SELECT id FROM folders WHERE folder_id = $1 AND user_id = $2`,
+			parent, user.ID,
+		).Scan(&parentID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("folder create parent lookup: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if err == nil {
+			depth, err := a.folderDepth(r.Context(), parentID)
+			if err != nil {
+				log.Printf("folder create depth: %v", err)
+				httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+				return
+			}
+			if depth+1 > maxFolderDepth {
+				httpx.ErrorCode(w, http.StatusBadRequest, "too_deep", "Folder nesting is too deep")
+				return
+			}
+		}
+	}
+
 	// parent_id 经子查询解析并带 user_id 过滤：传别人的 folderId 会解析成 NULL
 	// （落到根下）而不是报外键错误 —— 后者会泄露「该文件夹存在」
 	var created model.Folder

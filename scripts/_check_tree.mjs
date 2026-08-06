@@ -3,11 +3,13 @@
 import {
   ancestorsOf,
   buildTree,
+  canCreateSubfolder,
   canDropDoc,
   canDropFolder,
   countDocs,
   countFolders,
   isDescendant,
+  MAX_FOLDER_DEPTH,
 } from "./_tree_bundle.mjs";
 
 let pass = 0,
@@ -231,6 +233,24 @@ const d = (docId, title, folderId = null, updatedAt = null) => ({
       );
     }
   }
+}
+
+// 右键菜单的深度闸门。+2 写成 +1 的话最深一层的「新建子文件夹」还能点，点了报错
+{
+  eq("根下还能建", canCreateSubfolder(-1), true);
+  eq("depth 0 的文件夹里还能建", canCreateSubfolder(0), true);
+  // 渲染在 depth 6 的文件夹在第 7 层，它的子文件夹是第 8 层 —— 正好到上限
+  eq("倒数第二层还能建", canCreateSubfolder(MAX_FOLDER_DEPTH - 2), true);
+  // depth 7 在第 8 层，再建就是第 9 层，超了
+  eq("最深一层不能再建", canCreateSubfolder(MAX_FOLDER_DEPTH - 1), false);
+  eq("超出后仍然不能建", canCreateSubfolder(MAX_FOLDER_DEPTH), false);
+
+  // 闸门允许的最深一次新建，落点不能超过上限
+  let deepest = -1;
+  for (let d = -1; d <= MAX_FOLDER_DEPTH + 2; d += 1) {
+    if (canCreateSubfolder(d)) deepest = d;
+  }
+  eq("闸门允许的最深新建正好落在上限", deepest + 2, MAX_FOLDER_DEPTH);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -129,7 +129,12 @@ export function listDocuments() {
   return apiJson<{ documents: DocumentSummary[] }>("/api/documents");
 }
 
-export function createDocument(params?: { title?: string; content?: string }) {
+export function createDocument(params?: {
+  title?: string;
+  content?: string;
+  /** 直接建在这个文件夹里。省掉「建到根下再移动」那一步的闪烁 */
+  folderId?: string | null;
+}) {
   return apiJson<{ document: Document }>("/api/documents", {
     method: "POST",
     body: JSON.stringify(params ?? {}),

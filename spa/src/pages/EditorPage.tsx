@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { FolderTree, ListTree, Share2 } from "lucide-react";
 import { LiveEditor } from "../components/editor/LiveEditor";
@@ -36,6 +36,7 @@ import {
   type TabState,
 } from "../components/editor/tabPool";
 import { useSession } from "../auth";
+import { ApiError } from "../api";
 import { interpolate, useI18n } from "../i18n";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
@@ -285,17 +286,25 @@ export function EditorPage() {
     [saver, navigate, remove],
   );
 
-  const handleCreate = useCallback(() => {
-    create.mutate(undefined, {
-      onSuccess: ({ document }) => {
-        createdHere.current.add(document.docId);
-        void navigate({
-          to: "/editor/$docId",
-          params: { docId: document.docId },
-        });
-      },
-    });
-  }, [create, navigate]);
+  const handleCreate = useCallback(
+    (folderId?: string | null) => {
+      // folderId 直接进 POST，不走「先建到根下再移动」：那样新文档会在根下闪一下，
+      // 且移动失败时它就留在根下了
+      create.mutate(
+        { folderId: folderId ?? null },
+        {
+          onSuccess: ({ document }) => {
+            createdHere.current.add(document.docId);
+            void navigate({
+              to: "/editor/$docId",
+              params: { docId: document.docId },
+            });
+          },
+        },
+      );
+    },
+    [create, navigate],
+  );
 
   const handleDelete = useCallback(
     (docId: string, title: string) => {
@@ -331,12 +340,15 @@ export function EditorPage() {
   // 「双击可以改名」，加上失败无提示，整件事看起来就像按钮没反应
   const [autoEditFolderId, setAutoEditFolderId] = useState<string | null>(null);
 
-  const handleCreateFolder = useCallback(() => {
-    createFolder.mutate(
-      { name: "", parentFolderId: null },
-      { onSuccess: ({ folder }) => setAutoEditFolderId(folder.folderId) },
-    );
-  }, [createFolder]);
+  const handleCreateFolder = useCallback(
+    (parentFolderId?: string | null) => {
+      createFolder.mutate(
+        { name: "", parentFolderId: parentFolderId ?? null },
+        { onSuccess: ({ folder }) => setAutoEditFolderId(folder.folderId) },
+      );
+    },
+    [createFolder],
+  );
 
   const handleRenameFolder = useCallback(
     (folderId: string, name: string) => {
@@ -369,19 +381,38 @@ export function EditorPage() {
   );
 
   /**
-   * 文件夹五种写操作的失败合成一条提示。
+   * 文件夹六种写操作的失败合成一条提示。
    *
    * 之前全都静默吞掉了 —— 后端没起、没登录、表还没建，点按钮都是「没反应」，
    * 而这个仓库其它地方（保存、导出、上传）都会把失败说出来。
+   *
+   * 有错误码时优先用码对应的文案：深度超限、名字过长这类是规则违例，报「请求失败」
+   * 会让用户以为是网络问题，去重试同一个必然失败的操作。
    */
-  const folderError =
-    createFolder.isError ||
-    renameFolderMut.isError ||
-    deleteFolderMut.isError ||
-    moveFolderMut.isError ||
-    moveDocMut.isError
-      ? t.auth.requestFailed
-      : null;
+  const folderError = useMemo(() => {
+    const failed = [
+      create,
+      createFolder,
+      renameFolderMut,
+      deleteFolderMut,
+      moveFolderMut,
+      moveDocMut,
+    ].find((m) => m.isError);
+    if (!failed) return null;
+    const err = failed.error;
+    if (err instanceof ApiError && err.code && t.errors[err.code]) {
+      return t.errors[err.code];
+    }
+    return t.auth.requestFailed;
+  }, [
+    create,
+    createFolder,
+    renameFolderMut,
+    deleteFolderMut,
+    moveFolderMut,
+    moveDocMut,
+    t,
+  ]);
 
   // ---------- 门禁与加载态 ----------
 

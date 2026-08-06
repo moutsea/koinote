@@ -58,11 +58,16 @@ export function useDocument(docId: string | undefined) {
 export function useCreateDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params?: { title?: string; content?: string }) =>
-      createDocument(params),
+    mutationFn: (params?: {
+      title?: string;
+      content?: string;
+      folderId?: string | null;
+    }) => createDocument(params),
     onSuccess: ({ document }) => {
       queryClient.setQueryData(docKey(document.docId), document);
       void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      // 建在文件夹里的话，文件夹树上的归属也变了
+      void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY });
     },
   });
 }
