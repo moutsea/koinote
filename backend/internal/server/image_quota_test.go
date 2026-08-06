@@ -1,9 +1,13 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"koinote/backend/internal/config"
 )
 
 // imageKeyOwner 是记账时的归属边界：Worker 报上来的 key 前缀必须是报账者自己。
@@ -150,6 +154,113 @@ func TestImageQuotaBytes(t *testing.T) {
 	if ImageQuotaBytes < singleImageMax*10 {
 		t.Fatalf("配额 %d 相对单图上限 %d 太小，至少该能放十张",
 			ImageQuotaBytes, singleImageMax)
+	}
+}
+
+// hasInternalToken 是 /api/images/record 的守卫。
+//
+// 它防的是一个具体的配额绕过：光用 requireUser 的话，那个函数也接受浏览器的会话
+// cookie，于是任何登录用户都能自己报账 —— 对一个记账曾经失败的 key 报 bytes=1，
+// ON CONFLICT DO NOTHING 会把这个错误的大小固定下来，之后再没人纠正。
+//
+// 直接测这个函数而不是打 /api/images/record：newTestApp 的 db 是 nil，走路由的话
+// requireUser 会因为查不到用户而先返回 401，于是无论有没有这道守卫都是 401 ——
+// 那样的断言分辨不出两者，是空的（已验证：去掉守卫，路由级断言仍然全绿）。
+func TestHasInternalToken(t *testing.T) {
+	cases := []struct {
+		name       string
+		configured string
+		sent       string
+		want       bool
+	}{
+		{
+			name:       "令牌正确",
+			configured: "real-token",
+			sent:       "real-token",
+			want:       true,
+		},
+		{
+			name:       "令牌错误",
+			configured: "real-token",
+			sent:       "wrong-token",
+			want:       false,
+		},
+		{
+			// hmac.Equal 不该因为前缀对就放行
+			name:       "令牌是正确值的前缀",
+			configured: "real-token",
+			sent:       "real",
+			want:       false,
+		},
+		{
+			name:       "令牌是正确值的超集",
+			configured: "real-token",
+			sent:       "real-token-extra",
+			want:       false,
+		},
+		{
+			name:       "没带令牌头",
+			configured: "real-token",
+			sent:       "",
+			want:       false,
+		},
+		{
+			// 关键：未配置令牌时，任何请求都不该通过。
+			// 否则空令牌的部署等于这个端点完全敞开 —— 连空头都能过
+			name:       "未配置令牌，带空头",
+			configured: "",
+			sent:       "",
+			want:       false,
+		},
+		{
+			name:       "未配置令牌，带任意值",
+			configured: "",
+			sent:       "anything",
+			want:       false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(config.Config{InternalToken: tc.configured})
+			req := httptest.NewRequest(http.MethodPost, "/api/images/record", nil)
+			if tc.sent != "" {
+				req.Header.Set("X-Koinote-Internal-Token", tc.sent)
+			}
+			if got := app.hasInternalToken(req); got != tc.want {
+				t.Fatalf("hasInternalToken = %v，期望 %v（配置 %q，发送 %q）",
+					got, tc.want, tc.configured, tc.sent)
+			}
+		})
+	}
+}
+
+// 路由存在且未登录时不返回 2xx。
+//
+// 这条不区分"被守卫拒"和"被 requireUser 拒"（db 为 nil，见上面的说明），
+// 只保证这两个端点没有敞着。
+func TestQuotaRoutesRejectUnauthenticated(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "s", InternalToken: "real-token"})
+
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodGet, "/api/storage/usage", ""},
+		{http.MethodPost, "/api/images/record", `{"key":"u/alice/` + hexA + `.png","bytes":1}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+			app.Routes().ServeHTTP(rec, req)
+
+			if rec.Code >= 200 && rec.Code < 300 {
+				t.Fatalf("未登录不该成功，实际 %d", rec.Code)
+			}
+		})
 	}
 }
 

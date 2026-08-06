@@ -38,6 +38,61 @@ function errorCode(status: number, code: string, message: string): Response {
   return json(status, { code, error: message });
 }
 
+/** 报账请求的超时。后端就在同一片网络里，不该慢 */
+const RECORD_TIMEOUT_MS = 5_000;
+
+/**
+ * 向后端报账：这个对象归谁、多少字节。
+ *
+ * 返回 "ok"、"quota"（超额，调用方要把对象删掉）或 "error"（报账本身失败）。
+ *
+ * 为什么在写 R2 之后才报账、而不是先问"还够不够"：
+ *   先问后写的话，两次调用之间有窗口，并发上传各自都会得到"够"的答复。把判定放在
+ *   后端那条 INSERT ... WHERE 里、写完再报，才能让配额判定是原子的。代价是超额时
+ *   白写一次 R2，随后删掉 —— 那是超额路径，不是常规路径。
+ */
+async function recordUsage(
+  key: string,
+  bytes: number,
+  authUserId: string,
+  env: ImagesEnv,
+): Promise<"ok" | "quota" | "error"> {
+  if (!env.BACKEND_INTERNAL_TOKEN) {
+    // 没配令牌就没法报账。此时放行而不是拒绝上传：配额是运营诉求，
+    // 而"配置缺失导致所有人不能贴图"是更坏的故障
+    console.warn("images: BACKEND_INTERNAL_TOKEN 未配置，跳过用量记账");
+    return "ok";
+  }
+
+  const url = new URL("/api/images/record", env.BACKEND_URL);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RECORD_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // 内部令牌 + 用户头：后端的 authUserIDFromRequest 认这一对
+        "X-Koinote-Internal-Token": env.BACKEND_INTERNAL_TOKEN,
+        "X-Auth-User-Id": authUserId,
+      },
+      body: JSON.stringify({ key, bytes }),
+      signal: controller.signal,
+    });
+    if (resp.status === 409) return "quota";
+    if (!resp.ok) {
+      console.error(`images: 记账失败 ${resp.status}`);
+      return "error";
+    }
+    return "ok";
+  } catch (err) {
+    console.error("images: 记账请求异常", err);
+    return "error";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** 回调后端校验会话，返回 authUserId；未登录返回 null。 */
 async function resolveUser(
   request: Request,
@@ -136,6 +191,32 @@ async function storeImage(
     },
     customMetadata: { authUserId },
   });
+
+  // 报账。配额判定在后端（那条 INSERT ... WHERE 是原子的），这里只按结果行事
+  const recorded = await recordUsage(key, buffer.byteLength, authUserId, env);
+
+  if (recorded === "quota") {
+    // 超额：把刚写的对象删掉，别留下不计入账本的孤儿。
+    // 删失败也只能记日志 —— 此时回收队列里没有它（那张表是删文档时才入队的），
+    // 所以这是唯一的清理时机，失败就成了真正的孤儿对象
+    try {
+      await env.IMAGES.delete(key);
+    } catch (err) {
+      console.error(`images: 超额回滚删除失败，${key} 成为孤儿对象`, err);
+    }
+    return errorCode(
+      413,
+      "image_quota_exceeded",
+      "Storage quota exceeded",
+    );
+  }
+
+  if (recorded === "error") {
+    // 报账失败但对象已经写进去了。放行 —— 此时用量会少算这一张。
+    // 反过来（删掉并报错）会让后端抖一下就贴不了图，那更糟。
+    // 少算的后果是配额略微宽松，且可以靠对账补回来
+    console.warn(`images: ${key} 已写入但未计入用量`);
+  }
 
   return json(200, {
     image: {

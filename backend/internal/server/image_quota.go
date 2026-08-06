@@ -133,6 +133,16 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 // 它必须能拒绝：超额时返回 409，Worker 收到后把刚写的对象删掉。配额判定因此只有一个
 // 实现，在数据库里。
 func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
+	// 必须带内部令牌 —— 只有 Worker 该调这个端点。
+	//
+	// 光用 requireUser 不够：它也接受浏览器的会话 cookie，于是任何登录用户都能自己
+	// 报账。危害具体是这样的：对一个记账曾经失败的 key 报 bytes=1，ON CONFLICT
+	// DO NOTHING 会把这个错误的大小固定下来，之后再没人纠正 —— 等于绕过配额。
+	if !a.hasInternalToken(r) {
+		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
+		return
+	}
+
 	user, ok := a.requireUser(w, r)
 	if !ok {
 		return

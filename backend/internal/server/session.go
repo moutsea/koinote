@@ -74,6 +74,20 @@ func (a *App) clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
+// hasInternalToken 判断请求是否带了正确的内部令牌。
+//
+// 给「只能由 Worker 调用」的端点用。与 authUserIDFromRequest 里那段判断分开是因为
+// 语义不同：那里是"如果带了令牌就信它给的身份"，这里是"没带令牌就一律拒绝"。
+//
+// 用 hmac.Equal 而不是 ==：字符串比较会在第一个不同的字节处返回，泄露令牌前缀。
+func (a *App) hasInternalToken(r *http.Request) bool {
+	if a.cfg.InternalToken == "" {
+		return false
+	}
+	got := r.Header.Get("X-Koinote-Internal-Token")
+	return hmac.Equal([]byte(got), []byte(a.cfg.InternalToken))
+}
+
 // authUserIDFromRequest 解析当前请求的用户身份：
 //  1. Worker → 后端：内部令牌 + X-Auth-User-Id 头
 //  2. 浏览器：ka_session cookie
