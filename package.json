@@ -21,6 +21,7 @@
     "test:shortcut": "esbuild spa/src/components/editor/saveShortcut.ts --bundle --format=esm --platform=neutral --outfile=scripts/_save_shortcut_bundle.mjs --log-level=error && node scripts/_check_save_shortcut.mjs; rm -f scripts/_save_shortcut_bundle.mjs",
     "test:i18n": "esbuild scripts/_i18n_entry.ts --bundle --format=esm --platform=neutral --outfile=scripts/_i18n_bundle.mjs --log-level=error && node scripts/_check_i18n.mjs; rm -f scripts/_i18n_bundle.mjs",
     "test:contrast": "node scripts/_check_contrast.mjs",
+    "test:avatar": "esbuild spa/src/components/Avatar.tsx --bundle --format=esm --platform=neutral --external:react --external:lucide-react --outfile=scripts/_avatar_bundle.mjs --log-level=error && node scripts/_check_avatar.mjs; rm -f scripts/_avatar_bundle.mjs",
     "verify:tree": "python3 scripts/verify_tree_create.py",
     "verify:images": "python3 scripts/verify_image_paste.py",
     "verify:image-fetch": "python3 scripts/verify_image_fetch.py",

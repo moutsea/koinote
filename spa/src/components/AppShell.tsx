@@ -6,7 +6,6 @@ import {
   FileText,
   Globe,
   Check,
-  User,
   ChevronDown,
   LayoutDashboard,
   LogOut,
@@ -17,6 +16,7 @@ import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
 import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
+import { Avatar } from "./Avatar";
 
 export function AppShell() {
   const session = useSession();
@@ -98,6 +98,7 @@ export function AppShell() {
               <UserMenu
                 name={user.nickname || user.username || user.email}
                 email={user.email}
+                avatarUrl={user.avatarUrl}
                 dashboardActive={isUnder(pathname, "/dashboard")}
                 onLogout={handleLogout}
               />
@@ -133,11 +134,14 @@ export function AppShell() {
 function UserMenu({
   name,
   email,
+  avatarUrl,
   dashboardActive,
   onLogout,
 }: {
   name: string;
   email: string;
+  /** OAuth 登录（Google / GitHub）时后端会存下来；邮箱注册的用户为空 */
+  avatarUrl?: string | null;
   dashboardActive: boolean;
   onLogout: () => void | Promise<void>;
 }) {
@@ -170,10 +174,12 @@ function UserMenu({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="flex h-9 max-w-40 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+        // 左侧 pl-1 比右侧窄：头像是个圆，视觉上比方形文字更"靠外"，
+        // 两边等距时看着偏右
+        className="flex h-9 max-w-44 items-center gap-1.5 rounded-full border pl-1 pr-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
         style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
       >
-        <User className="h-4 w-4 shrink-0" style={{ color: "var(--ink-mid)" }} />
+        <Avatar name={name} avatarUrl={avatarUrl} size={26} />
         {/* 用户名可能很长，截断而不是把页头挤变形 */}
         <span className="hidden truncate sm:inline">{name}</span>
         <ChevronDown
@@ -192,23 +198,28 @@ function UserMenu({
             background: "var(--ink-paper-soft)",
           }}
         >
-          {/* 账号身份：菜单里重复一次，因为触发器在小屏上只有图标 */}
+          {/* 账号身份：菜单里重复一次，因为触发器在小屏上只有头像 */}
           <div
-            className="border-b px-3 pb-2 pt-1.5"
+            className="flex items-center gap-2.5 border-b px-3 pb-2.5 pt-2"
             style={{ borderColor: "var(--ink-line)" }}
           >
-            <p
-              className="truncate text-sm font-medium"
-              style={{ color: "var(--ink-black)" }}
-            >
-              {name}
-            </p>
-            {/* 昵称存在时 name 就不是邮箱，这时补一行邮箱；相等则不重复显示 */}
-            {email && email !== name && (
-              <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }}>
-                {email}
+            <Avatar name={name} avatarUrl={avatarUrl} size={36} />
+            {/* min-w-0 是 truncate 在 flex 子项里生效的前提：
+                flex item 默认 min-width:auto，不会缩到内容宽度以下 */}
+            <div className="min-w-0">
+              <p
+                className="truncate text-sm font-medium"
+                style={{ color: "var(--ink-black)" }}
+              >
+                {name}
               </p>
-            )}
+              {/* 昵称存在时 name 就不是邮箱，这时补一行邮箱；相等则不重复显示 */}
+              {email && email !== name && (
+                <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }}>
+                  {email}
+                </p>
+              )}
+            </div>
           </div>
 
           <Link
