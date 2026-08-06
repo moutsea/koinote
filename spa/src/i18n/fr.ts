@@ -158,6 +158,8 @@ export const fr: Messages = {
       "Les styles sont intégrés à chaque élément, la mise en page survit au collage. Les formules deviennent des images.",
     wechatThemeLabel: "Thème",
     themeNone: "Style par défaut",
+    tabsLabel: "Documents ouverts",
+    closeTab: "Fermer l'onglet",
     wechatCopy: "Copier dans le presse-papiers",
     wechatCopied: "Copié — collez-le",
     wechatWorking: "Traitement…",

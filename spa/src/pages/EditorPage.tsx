@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { FolderTree, ListTree, Share2 } from "lucide-react";
-import MarkdownEditor from "../components/editor/MarkdownEditor";
+import { LiveEditor } from "../components/editor/LiveEditor";
 import { DocumentList } from "../components/editor/DocumentList";
 import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
 import { OutlinePanel } from "../components/editor/OutlinePanel";
@@ -15,8 +15,20 @@ import {
   useDeleteDocument,
   useDocument,
   useDocumentList,
+  useEditorTabs,
   useRefreshDocumentList,
+  useSyncEditorTabs,
 } from "../documents";
+import { TabBar } from "../components/editor/TabBar";
+import { useDocumentSaver } from "../components/editor/useDocumentSaver";
+import {
+  EMPTY_TABS,
+  activate,
+  close,
+  hydrate,
+  removeDeleted,
+  type TabState,
+} from "../components/editor/tabPool";
 import { useSession } from "../auth";
 import { useI18n } from "../i18n";
 
@@ -40,6 +52,10 @@ export function EditorPage() {
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
+  const saver = useDocumentSaver(refreshList);
+  const serverTabs = useEditorTabs(loggedIn);
+  const syncTabs = useSyncEditorTabs();
   // 折叠状态与面板宽度一样要记住，否则每次刷新都弹回展开态
   const [docsOpen, setDocsOpen] = usePersistedFlag(
     "koinote:panel-open:documents",
@@ -98,11 +114,102 @@ export function EditorPage() {
 
   const doc = useDocument(activeDocId);
 
+  // ---------- 标签页 ----------
+
+  // 恢复上次的标签组。只做一次：之后真相在客户端，再读会把刚开的标签覆盖回旧状态
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current || !serverTabs.data) return;
+    hydrated.current = true;
+    const { tabs, activeDocId: serverActive } = serverTabs.data;
+    if (tabs.length === 0) return;
+    // URL 里的 docId 优先：深链或刷新时用户明确要看的是那一篇
+    setTabState(hydrate(tabs, activeDocId ?? serverActive));
+  }, [serverTabs.data, activeDocId]);
+
+  // URL 是当前标签的唯一真相。地址栏变化（含前进后退、深链）都要落进标签状态
+  useEffect(() => {
+    if (!activeDocId) return;
+    setTabState((prev) => {
+      if (prev.activeDocId === activeDocId && prev.openTabs.includes(activeDocId)) {
+        return prev;
+      }
+      const { next, evicted } = activate(prev, activeDocId);
+      // 被挤出池子的实例即将卸载，先把它们的待存内容发出去
+      for (const id of evicted) void saver.flush(id);
+      return next;
+    });
+  }, [activeDocId, saver]);
+
+  // 标签组同步到后端。防抖 —— 切标签很频繁，每次都打后端太吵
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncRef = useRef(syncTabs.mutate);
+  syncRef.current = syncTabs.mutate;
+  useEffect(() => {
+    if (!loggedIn || !hydrated.current) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      syncRef.current({
+        tabs: tabState.openTabs,
+        activeDocId: tabState.activeDocId,
+      });
+    }, 600);
+    return () => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+    };
+  }, [loggedIn, tabState.openTabs, tabState.activeDocId]);
+
   const handleSelect = useCallback(
     (docId: string) => {
       void navigate({ to: "/editor/$docId", params: { docId } });
     },
     [navigate],
+  );
+
+  /**
+   * 标签上显示的标题。
+   *
+   * 单独存一份而不是从 saver.peek 读：peek 读的是 ref，改动不触发渲染，标签标题
+   * 会等到保存完成才更新 —— 打字时看着像卡住了。
+   */
+  const [liveTitles, setLiveTitles] = useState<Record<string, string>>({});
+
+  const handleTitleChange = useCallback((docId: string, title: string) => {
+    setLiveTitles((prev) => (prev[docId] === title ? prev : { ...prev, [docId]: title }));
+  }, []);
+
+  const titleOf = useCallback(
+    (docId: string) => {
+      const live = liveTitles[docId];
+      if (live !== undefined) return live;
+      return (documents ?? []).find((d) => d.docId === docId)?.title ?? "";
+    },
+    [liveTitles, documents],
+  );
+
+  const handleCloseTab = useCallback(
+    (docId: string) => {
+      // 先把这篇的待存内容存掉再摘标签，否则防抖窗口内的编辑就没了
+      void saver.forget(docId);
+      setTabState((prev) => {
+        const { next, evicted } = close(prev, docId);
+        for (const id of evicted) void saver.flush(id);
+        // 当前标签换人了就跟着改地址；全关完回 /editor 触发新建
+        if (next.activeDocId !== prev.activeDocId) {
+          if (next.activeDocId) {
+            void navigate({
+              to: "/editor/$docId",
+              params: { docId: next.activeDocId },
+            });
+          } else {
+            bootstrapped.current = false;
+            void navigate({ to: "/editor" });
+          }
+        }
+        return next;
+      });
+    },
+    [saver, navigate],
   );
 
   const handleCreate = useCallback(() => {
@@ -121,6 +228,11 @@ export function EditorPage() {
       if (!confirmDelete(title)) return;
       remove.mutate(docId, {
         onSuccess: () => {
+          // 删掉的文档不该再留着待存内容 —— 发出去只会 404
+          void saver.forget(docId);
+          // 标签也要摘掉。数据库那边有外键 CASCADE 兜底，但本地状态得立刻反映
+          setTabState((prev) => removeDeleted(prev, docId).next);
+
           // 删的是当前打开的那篇，就跳到剩下的第一篇（没有则回 /editor 触发新建）
           if (docId !== activeDocId) return;
           const rest = (documents ?? []).filter((d) => d.docId !== docId);
@@ -136,7 +248,7 @@ export function EditorPage() {
         },
       });
     },
-    [confirmDelete, remove, activeDocId, documents, navigate],
+    [confirmDelete, remove, activeDocId, documents, navigate, saver],
   );
 
   // ---------- 门禁与加载态 ----------
@@ -214,6 +326,20 @@ export function EditorPage() {
           </div>
         )}
 
+        <TabBar
+          tabs={tabState.openTabs}
+          activeDocId={tabState.activeDocId}
+          titleOf={titleOf}
+          statusOf={saver.status}
+          dirtyOf={saver.isDirty}
+          onSelect={handleSelect}
+          onClose={handleCloseTab}
+          onCreate={handleCreate}
+          creating={create.isPending}
+        />
+
+        {/* 加载与错误态盖在池子上方，池子本身继续挂着 ——
+            否则切到一篇还在拉取的文档会把其他标签的实例一起卸载 */}
         {doc.isLoading || (!activeDocId && create.isPending) ? (
           <Centered>{t.editor.loading}</Centered>
         ) : doc.isError ? (
@@ -227,12 +353,17 @@ export function EditorPage() {
               {t.editor.backToList}
             </button>
           </div>
-        ) : doc.data ? (
-          <MarkdownEditor
-            key={doc.data.docId}
-            document={doc.data}
+        ) : null}
+
+        {/* 挂载池：liveIds 里的都挂着，只有当前那个可见 */}
+        {tabState.liveIds.map((liveId) => (
+          <LiveEditor
+            key={liveId}
+            docId={liveId}
+            visible={liveId === tabState.activeDocId && !doc.isLoading && !doc.isError}
+            saver={saver}
             onEditorReady={setEditor}
-            onTitleCommitted={refreshList}
+            onTitleChange={handleTitleChange}
             leadingControls={
               (!docsOpen || !outlineOpen) && (
                 <span className="hidden shrink-0 items-center gap-1 lg:flex">
@@ -241,30 +372,35 @@ export function EditorPage() {
               )
             }
             trailingControls={
-              <>
-              <ExportMenu
-                editor={editor}
-                title={doc.data.title}
-                themeId={doc.data.theme ?? ""}
-              />
-              <button
-                type="button"
-                onClick={() => setShareOpen(true)}
-                title={t.editor.share}
-                aria-label={t.editor.share}
-                className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition ${
-                  doc.data.share
-                    ? "text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
-                    : "text-neutral-400 hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
-                }`}
-              >
-                <Share2 className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.editor.share}</span>
-              </button>
-              </>
+              // 导出与分享只给当前标签：它们作用于「正在看的这篇」，
+              // 后台实例也渲染一份会让 ExportMenu 的弹层出现多个同 id 节点
+              liveId === tabState.activeDocId && doc.data ? (
+                <>
+                  <ExportMenu
+                    editor={editor}
+                    title={doc.data.title}
+                    themeId={doc.data.theme ?? ""}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShareOpen(true)}
+                    title={t.editor.share}
+                    aria-label={t.editor.share}
+                    className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition ${
+                      doc.data.share
+                        ? "text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                        : "text-neutral-400 hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+                    }`}
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t.editor.share}</span>
+                  </button>
+                </>
+              ) : null
             }
             outlineSlot={
-              outlineOpen ? (
+              // 大纲同理，只跟当前标签
+              liveId === tabState.activeDocId && outlineOpen ? (
                 <ResizablePanel
                   storageKey="koinote:panel-width:outline"
                   defaultWidth={208}
@@ -283,9 +419,7 @@ export function EditorPage() {
               ) : null
             }
           />
-        ) : (
-          <Centered>{t.editor.loading}</Centered>
-        )}
+        ))}
       </div>
 
       {shareOpen && doc.data && (

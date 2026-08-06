@@ -1,0 +1,117 @@
+import { Plus, X } from "lucide-react";
+import { useI18n } from "../../i18n";
+import type { SaveStatus } from "./useDocumentSaver";
+
+/**
+ * 标签栏。
+ *
+ * 放在正文列顶部而不是跨整个窗口：左侧文件树是文档间的导航，与标签是两个层级 ——
+ * 标签属于「正在编辑的这一组」，跨过去会让层级关系错乱。
+ *
+ * 保存失败必须落到标签上。单开文档时这个信号在标题栏一处就够，多开之后失败的
+ * 那篇可能正在后台，标题栏根本看不见。
+ */
+export function TabBar({
+  tabs,
+  activeDocId,
+  titleOf,
+  statusOf,
+  dirtyOf,
+  onSelect,
+  onClose,
+  onCreate,
+  creating,
+}: {
+  tabs: string[];
+  activeDocId: string | null;
+  titleOf: (docId: string) => string;
+  statusOf: (docId: string) => SaveStatus;
+  dirtyOf: (docId: string) => boolean;
+  onSelect: (docId: string) => void;
+  onClose: (docId: string) => void;
+  onCreate: () => void;
+  creating: boolean;
+}) {
+  const { t } = useI18n();
+
+  if (tabs.length === 0) return null;
+
+  return (
+    <div
+      role="tablist"
+      aria-label={t.editor.tabsLabel}
+      className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto border-b border-black/5 px-1.5 pt-1.5 dark:border-white/10"
+    >
+      {tabs.map((docId) => {
+        const active = docId === activeDocId;
+        const failed = statusOf(docId) === "failed";
+        return (
+          <div
+            key={docId}
+            role="tab"
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onSelect(docId)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(docId);
+              }
+            }}
+            // 中键关闭：浏览器标签的通用手势，习惯了的人会直接试
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                onClose(docId);
+              }
+            }}
+            className={`group flex max-w-44 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border-b-2 px-2.5 py-1.5 text-xs transition ${
+              active
+                ? "border-sky-500 bg-black/[0.03] font-medium dark:bg-white/[0.06]"
+                : "border-transparent text-neutral-500 hover:bg-black/[0.02] dark:text-neutral-400 dark:hover:bg-white/[0.03]"
+            }`}
+          >
+            <span
+              className={`min-w-0 truncate ${failed ? "text-red-600 dark:text-red-400" : ""}`}
+              title={failed ? t.editor.saveFailed : titleOf(docId)}
+            >
+              {titleOf(docId) || t.editor.untitled}
+            </span>
+
+            {/* 未保存圆点。占位固定宽度，避免出现/消失时标签宽度跳动 */}
+            <span aria-hidden="true" className="flex h-3 w-3 shrink-0 items-center justify-center">
+              {dirtyOf(docId) && !failed && (
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
+              )}
+              {failed && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
+            </span>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation(); // 否则会连带触发标签的 onSelect
+                onClose(docId);
+              }}
+              aria-label={t.editor.closeTab}
+              title={t.editor.closeTab}
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-400 opacity-0 transition group-hover:opacity-100 hover:bg-black/10 hover:text-neutral-700 focus-visible:opacity-100 dark:hover:bg-white/15 dark:hover:text-neutral-200"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={creating}
+        aria-label={t.editor.newDocument}
+        title={t.editor.newDocument}
+        className="my-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}

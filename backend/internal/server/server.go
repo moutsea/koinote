@@ -49,6 +49,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/start", a.oauthStart)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.oauthCallback)
 
+	mux.HandleFunc("GET /api/editor/tabs", a.editorTabsGet)
+	mux.HandleFunc("PUT /api/editor/tabs", a.editorTabsPut)
+
 	mux.HandleFunc("GET /api/documents", a.documentsList)
 	mux.HandleFunc("POST /api/documents", a.documentCreate)
 	mux.HandleFunc("GET /api/documents/{docId}", a.documentGet)

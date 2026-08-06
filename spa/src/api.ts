@@ -150,6 +150,25 @@ export function updateDocument(
   );
 }
 
+// ---------- 编辑器标签页 ----------
+
+export type EditorTabs = {
+  tabs: string[];
+  /** null 表示一个都没打开 */
+  activeDocId: string | null;
+};
+
+export function getEditorTabs() {
+  return apiJson<EditorTabs>("/api/editor/tabs");
+}
+
+export function putEditorTabs(params: EditorTabs) {
+  return apiJson<EditorTabs>("/api/editor/tabs", {
+    method: "PUT",
+    body: JSON.stringify(params),
+  });
+}
+
 // ---------- 分享 ----------
 
 export function createShare(

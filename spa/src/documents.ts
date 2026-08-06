@@ -9,12 +9,15 @@ import {
   createShare,
   deleteDocument,
   getDocument,
+  getEditorTabs,
   listDocuments,
+  putEditorTabs,
   revokeShare,
   updateDocument,
   type Document,
   type DocumentShare,
   type DocumentSummary,
+  type EditorTabs,
   type ShareAccess,
 } from "./api";
 
@@ -86,6 +89,41 @@ export function useSaveDocument() {
     }) => updateDocument(docId, { title, content, theme }),
     onSuccess: ({ document }) => {
       queryClient.setQueryData(docKey(document.docId), document);
+    },
+  });
+}
+
+// ---------- 编辑器标签页 ----------
+
+const TABS_KEY = ["editor-tabs"] as const;
+
+/**
+ * 服务端的标签组。只在进入编辑器时读一次用于恢复会话 ——
+ * staleTime: Infinity 是必要的：之后的真相在客户端，重新拉取会把用户刚开的标签
+ * 覆盖回旧状态。
+ */
+export function useEditorTabs(enabled: boolean) {
+  return useQuery({
+    queryKey: TABS_KEY,
+    queryFn: getEditorTabs,
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/**
+ * 同步标签组。
+ *
+ * 不做乐观更新也不失效缓存：客户端状态才是真相，服务端只是备份。回写缓存是为了
+ * 同一会话内二次进入编辑器时不倒退。
+ */
+export function useSyncEditorTabs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: EditorTabs) => putEditorTabs(params),
+    onSuccess: (result) => {
+      queryClient.setQueryData(TABS_KEY, result);
     },
   });
 }

@@ -158,6 +158,8 @@ export const ja: Messages = {
       "スタイルは要素ごとにインライン化され、貼り付け後も崩れません。数式は画像としてアップロードされます。",
     wechatThemeLabel: "テーマ",
     themeNone: "デフォルト書式",
+    tabsLabel: "開いているドキュメント",
+    closeTab: "タブを閉じる",
     wechatCopy: "クリップボードにコピー",
     wechatCopied: "コピーしました",
     wechatWorking: "処理中…",

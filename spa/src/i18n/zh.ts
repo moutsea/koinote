@@ -155,6 +155,8 @@ export const zh: Messages = {
       "样式会内联到每个元素，粘贴后排版不丢。公式转成图片上传。",
     wechatThemeLabel: "排版主题",
     themeNone: "默认排版",
+    tabsLabel: "已打开的文档",
+    closeTab: "关闭标签",
     wechatCopy: "复制到剪贴板",
     wechatCopied: "已复制，去粘贴吧",
     wechatWorking: "处理中…",

@@ -5,11 +5,9 @@ import { EditorToolbar } from "./EditorToolbar";
 import { useI18n, interpolate } from "../../i18n";
 import { ThemePicker } from "./ThemePicker";
 import { THEME_SCOPE, editorContentClass, themeToCSS } from "./themeCss";
-import { useSaveDocument } from "../../documents";
+import type { DocPatch, SaveStatus } from "./useDocumentSaver";
 import { ApiError, uploadImage } from "../../api";
 import type { Document } from "../../documents";
-
-const SAVE_DEBOUNCE_MS = 800;
 
 /** 从粘贴/拖放事件里挑出可上传的图片文件 */
 function imageFilesFrom(list: FileList | null | undefined): File[] {
@@ -17,25 +15,32 @@ function imageFilesFrom(list: FileList | null | undefined): File[] {
   return Array.from(list).filter((f) => f.type.startsWith("image/"));
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "failed";
-
 /**
- * 文档驱动的编辑器。
+ * 文档驱动的编辑器。受控组件 —— 待存内容与保存状态都在页面层（useDocumentSaver）。
  *
- * 与早期版本的区别：内容不再存 localStorage，而是防抖写回后端。
- * 保存失败会显式提示——静默失败会让用户以为写进去了。
+ * 为什么保存不放在这里（原来就在这里）：多开标签后实例会被 LRU 淘汰，卸载时组件里
+ * 的待存内容就没了。而且保存失败时组件已经不存在，没人重试也没人提示。
  */
 export default function MarkdownEditor({
   document,
+  status,
+  onChange,
+  onFlush,
   onEditorReady,
-  onTitleCommitted,
+  scrollContainerRef,
   outlineSlot,
   leadingControls,
   trailingControls,
 }: {
   document: Document;
+  /** 保存状态由页面给 —— 待存内容不再随实例存亡，见 useDocumentSaver */
+  status: SaveStatus;
+  onChange: (patch: DocPatch) => void;
+  /** 立刻存。换主题时用：那是一次显式动作，等防抖没意义 */
+  onFlush: () => void;
   onEditorReady?: (editor: Editor | null) => void;
-  onTitleCommitted?: () => void;
+  /** 滚动容器。多开时由外层持有，用于在标签隐藏/显示间存取滚动位置 */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   /** 大纲渲染在正文区左侧、标题栏之下——它是正文的一部分，不是独立侧栏 */
   outlineSlot?: React.ReactNode;
   /** 标题栏左侧的控件（面板展开按钮） */
@@ -44,12 +49,9 @@ export default function MarkdownEditor({
   trailingControls?: React.ReactNode;
 }) {
   const { t } = useI18n();
-  const [status, setStatus] = useState<SaveStatus>("idle");
   const [charCount, setCharCount] = useState(0);
   const [title, setTitle] = useState(document.title);
   const [themeId, setThemeId] = useState(document.theme ?? "");
-
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 粘贴/拖放处理器在 useEditor 的配置里，那时 editor 还不存在，
   // 所以经 ref 间接拿实例，打破循环依赖。
   const editorRef = useRef<Editor | null>(null);
@@ -87,46 +89,10 @@ export default function MarkdownEditor({
     },
     [t],
   );
-  // 最新待存内容，防抖回调触发时读它，避免闭包捕获旧值
-  const pending = useRef<{ title: string; content: string; theme: string }>({
-    title: document.title,
-    content: document.content,
-    theme: document.theme ?? "",
-  });
-  // 标题落库后要刷新侧边栏列表，但内容变化不需要——用它区分
-  const titleDirty = useRef(false);
-  const save = useSaveDocument();
-
   const extensions = useMemo(
     () => createEditorExtensions(t.editor.placeholder),
     [t.editor.placeholder],
   );
-
-  const flush = useCallback(async () => {
-    const payload = pending.current;
-    setStatus("saving");
-    try {
-      await save.mutateAsync({
-        docId: document.docId,
-        title: payload.title,
-        content: payload.content,
-        theme: payload.theme,
-      });
-      setStatus("saved");
-      if (titleDirty.current) {
-        titleDirty.current = false;
-        onTitleCommitted?.();
-      }
-    } catch {
-      // 明确告知失败，不静默吞掉
-      setStatus("failed");
-    }
-  }, [document.docId, save, onTitleCommitted]);
-
-  const scheduleSave = useCallback(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
-  }, [flush]);
 
   /**
    * 换主题：立刻存，不进防抖队列。
@@ -137,11 +103,10 @@ export default function MarkdownEditor({
   const changeTheme = useCallback(
     (next: string) => {
       setThemeId(next);
-      pending.current = { ...pending.current, theme: next };
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      void flush();
+      onChange({ theme: next });
+      onFlush();
     },
-    [flush],
+    [onChange, onFlush],
   );
 
   const themeCSS = useMemo(() => themeToCSS(themeId), [themeId]);
@@ -169,12 +134,8 @@ export default function MarkdownEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      pending.current = {
-        ...pending.current,
-        content: editor.storage.markdown.getMarkdown(),
-      };
+      onChange({ content: editor.storage.markdown.getMarkdown() });
       setCharCount(editor.getText().length);
-      scheduleSave();
     },
   });
 
@@ -195,36 +156,26 @@ export default function MarkdownEditor({
     });
   }, [editor, themeId]);
 
-  // 切换文档时重新灌入内容。docId 变化才重置，避免自己保存后被回写覆盖。
+  // 挂载或换文档时灌入内容。
+  //
+  // document 由页面传下来，已经把未落库的待存改动合并进去了（见 EditorPage 的
+  // peek 合并）—— 所以被 LRU 淘汰又点回来的标签会恢复到离开时的文字，而不是
+  // 退回服务端那份。撕销历史与光标位置恢复不了，那是 3 个活实例上限的代价。
+  //
+  // 只依赖 docId：document 对象本身会因保存而变新引用，依赖它会导致每次保存后
+  // 重灌内容、光标跳回开头。
   useEffect(() => {
     if (!editor) return;
     editor.commands.setContent(document.content);
     setCharCount(editor.getText().length);
     setTitle(document.title);
     setThemeId(document.theme ?? "");
-    pending.current = {
-      title: document.title,
-      content: document.content,
-      theme: document.theme ?? "",
-    };
-    titleDirty.current = false;
-    setStatus("idle");
-    // 仅在文档切换或实例就绪时执行；document 对象本身会因保存而变新引用，
-    // 依赖它会导致每次保存后重灌内容、光标跳回开头。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, document.docId]);
 
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, []);
-
   function handleTitleChange(next: string) {
     setTitle(next);
-    pending.current = { ...pending.current, title: next };
-    titleDirty.current = true;
-    scheduleSave();
+    onChange({ title: next });
   }
 
   const statusText =
@@ -285,7 +236,7 @@ export default function MarkdownEditor({
         <div className="flex min-w-0 flex-1 flex-col">
           <EditorToolbar editor={editor} />
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
             {/* 主题 CSS 随文档走，挂在作用域容器上。空串时 themeCSS 是空的，
                 editorContentClass 会把 prose 加回来，观感回到没有主题的样子 */}
             {themeCSS && <style>{themeCSS}</style>}
