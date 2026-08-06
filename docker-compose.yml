@@ -62,6 +62,9 @@ services:
       MIGRATIONS_DIR: /app/migrations
       SESSION_SECRET: ${SESSION_SECRET:-}
       BACKEND_INTERNAL_TOKEN: ${BACKEND_INTERNAL_TOKEN:-}
+      # 图片回收任务调 Worker 的删除端点。留空则不启动回收，
+      # 待删记录仍会入队，配好后重启即可补上
+      WORKER_URL: ${WORKER_URL:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5273,http://localhost:3000}
       # OAuth：APP_URL 用于拼回调地址，须与各 provider 后台登记的地址完全一致。
       # 凭证留空时后端的 start 端点返回 501 oauth_not_configured。

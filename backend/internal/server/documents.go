@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -242,18 +244,29 @@ func (a *App) documentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := a.db.Exec(r.Context(), `
+	// DELETE ... RETURNING content：删除的同时把正文拿回来，用于回收里面的图片。
+	// 先 SELECT 再 DELETE 的话，两步之间正文可能被改（另一个标签页正在保存），
+	// 那就会漏掉或错删图片。
+	var content string
+	err := a.db.QueryRow(r.Context(), `
 		DELETE FROM documents WHERE doc_id = $1 AND user_id = $2
-	`, docID, user.ID)
+		RETURNING content
+	`, docID, user.ID).Scan(&content)
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+		return
+	}
 	if err != nil {
 		log.Printf("document delete: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
-		return
-	}
+
+	// 回收正文里的图片。用 context.WithoutCancel：请求返回后 r.Context() 就取消了，
+	// 而入队还得往数据库写一次 —— 挂在请求 context 上会被打断
+	gcCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+	defer cancel()
+	a.enqueueOrphanedImages(gcCtx, userRef{ID: user.ID, AuthUserID: user.AuthUserID}, content)
 
 	httpx.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }

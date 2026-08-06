@@ -115,6 +115,8 @@ export const fr: Messages = {
     resizeOutline: "Redimensionner le panneau du plan",
     uploadFailed: "Échec du téléversement de l'image",
     uploadingImages: "Téléversement de {n}…",
+    rehostFailed:
+      "Certaines images n'ont pas pu être copiées dans votre stockage et pointent toujours vers le site d'origine",
     imageClickToEdit: "Cliquez pour modifier le Markdown de l'image (légende et URL)",
     imageMarkdownLabel: "Source Markdown de l'image",
     imageBroken: "Échec du chargement — cliquez pour modifier l'URL",
@@ -252,6 +254,8 @@ function hello(name) {
     oauth_sync_failed: "Échec de la synchronisation du compte, veuillez réessayer",
     title_too_long: "Le titre est trop long",
     content_too_large: "Document trop volumineux pour être enregistré",
+    image_fetch_rejected: "Cette adresse d'image n'est pas autorisée",
+    image_fetch_failed: "Impossible de récupérer cette image depuis son site d'origine",
     too_deep: "Les dossiers sont trop imbriqués pour en créer un autre à l'intérieur",
     name_too_long: "Nom de dossier trop long",
     invalid_move: "Impossible de déplacer ce dossier ici",

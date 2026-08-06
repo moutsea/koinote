@@ -43,6 +43,13 @@ func main() {
 	}
 
 	app := server.New(cfg, pool)
+
+	// 图片回收：删文档后排队删 R2 对象，由这个循环消费队列。
+	// gcCtx 在收到退出信号时取消，让循环跟着 HTTP 服务一起收摊
+	gcCtx, stopGC := context.WithCancel(ctx)
+	defer stopGC()
+	app.StartImageGC(gcCtx)
+
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),
 		Handler:           app.Routes(),
@@ -61,6 +68,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("正在关闭服务…")
+	stopGC()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -22,6 +22,10 @@ type Config struct {
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
 
+	// WorkerURL 是 Cloudflare Worker 的基址，后端的图片回收任务调它删 R2 对象。
+	// 空表示不启动回收 —— 待删记录仍会入队，配好后重启即可补上。
+	WorkerURL string
+
 	// OAuth：用于拼回调地址的对外基址，及各 provider 的凭证
 	AppURL            string
 	GoogleOAuthID     string
@@ -67,6 +71,7 @@ func Load() Config {
 		NodeEnv:       getenv("NODE_ENV", "development"),
 		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
 		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
+		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
 		// OAuth 回调基址：本地 dev 默认走 Vite dev server（前端同源代理 /api 到后端）
 		AppURL:            getenv("APP_URL", "http://localhost:5173"),

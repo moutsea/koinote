@@ -39,6 +39,9 @@ yarn-error.log*
 # 模板必须入库：README 的第一步就是 cp .env.example .env，
 # 被 .env* 一起忽略掉的话，新克隆的仓库照着文档走不通。
 !.env.example
+# wrangler dev 的本地变量，同样带 BACKEND_INTERNAL_TOKEN
+.dev.vars
+.dev.vars.*
 
 # vercel
 .vercel

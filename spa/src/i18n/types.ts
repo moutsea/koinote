@@ -99,6 +99,7 @@ export interface Messages {
     resizeOutline: string;
     uploadFailed: string;
     uploadingImages: string; // 用 {n} 占位
+    rehostFailed: string;
     imageClickToEdit: string;
     imageMarkdownLabel: string;
     imageBroken: string;
