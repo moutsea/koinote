@@ -4,6 +4,7 @@ import { getStorageUsage } from "../api";
 import { useI18n, interpolate } from "../i18n";
 import { PaperCard } from "./Ink";
 import {
+  barSegments,
   formatBytes,
   remainingBytes,
   usageLevel,
@@ -32,7 +33,10 @@ const LEVEL_COLOR: Record<UsageLevel, string> = {
 };
 
 /**
- * 图床用量卡片。
+ * 云端存储用量卡片。
+ *
+ * 统计的是文档正文加图片两项 —— 都是用户存在云端的东西。只算图片会让一个写了
+ * 几百篇长文的人看到"用量 0"。
  *
  * 放在控制台的账户信息卡下面 —— 它比邮箱、注册时间更需要被看到，尤其是快满的时候。
  */
@@ -62,10 +66,20 @@ export function StorageCard() {
     );
   }
 
-  const { usedBytes, quotaBytes } = usage.data;
+  const { usedBytes, documentBytes, imageBytes, quotaBytes } = usage.data;
   const level = usageLevel(usedBytes, quotaBytes);
   const ratio = usageRatio(usedBytes, quotaBytes);
   const color = LEVEL_COLOR[level];
+
+  // 两段宽度的算法在 storage.ts，那里有断言钉住"两段之和 <= 100"
+  const segments = barSegments(documentBytes, imageBytes, quotaBytes);
+
+  // 接近上限时两段都转朱砂：此时"哪部分占得多"已经不重要，
+  // 重要的是"满了"。正常状态下才用两色区分
+  const barColors =
+    level === "normal"
+      ? { documents: "var(--ink-faint)", images: "var(--cinnabar)" }
+      : { documents: "var(--cinnabar)", images: "var(--cinnabar)" };
 
   return (
     <PaperCard className="p-5">
@@ -92,15 +106,52 @@ export function StorageCard() {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={t.storage.title}
-        className="mt-2.5 h-2 w-full overflow-hidden rounded-full"
+        className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full"
         style={{ background: "var(--ink-wash-strong)" }}
       >
+        {/* 两段：文档 + 图片。分段而不是一整条，是为了让下面那两个色块图例
+            真的有对应物 —— 只有一整条的话，图例的颜色是没有出处的装饰。
+            接近上限时整条转朱砂（下面 barColors 里处理），此时分段意义不大，
+            但保持结构一致比多一个分支简单 */}
         <div
-          className="h-full rounded-full transition-[width] duration-500"
-          // 至少 2%：用量极小时零宽的条看着像"没在统计"
-          style={{ width: `${Math.max(2, ratio * 100)}%`, background: color }}
+          className="h-full transition-[width] duration-500"
+          style={{ width: `${segments.documents}%`, background: barColors.documents }}
+        />
+        <div
+          className="h-full transition-[width] duration-500"
+          style={{ width: `${segments.images}%`, background: barColors.images }}
         />
       </div>
+
+      {/* 分项：满了之后要知道该删什么。只报总数的话，一个存了 400 MB 图片的人
+          可能会去删文档，白费功夫 */}
+      <dl
+        className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs"
+        style={{ color: "var(--ink-mid)" }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-sm"
+            style={{ background: barColors.documents }}
+          />
+          <dt>{t.storage.documents}</dt>
+          <dd style={{ color: "var(--ink-strong)" }}>
+            {formatBytes(documentBytes, locale)}
+          </dd>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-sm"
+            style={{ background: barColors.images }}
+          />
+          <dt>{t.storage.images}</dt>
+          <dd style={{ color: "var(--ink-strong)" }}>
+            {formatBytes(imageBytes, locale)}
+          </dd>
+        </div>
+      </dl>
 
       {/* 只在需要提醒时出文字。正常状态下多一行字是噪音 */}
       {level !== "normal" && (

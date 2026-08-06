@@ -28,16 +28,76 @@ const api = read("spa/src/api.ts");
 const gc = read("backend/internal/server/image_gc.go");
 const migration = read("backend/migrations/0008_image_quota.sql");
 
-// ---------- 错误码三处一致 ----------
+// ---------- 错误码一致 ----------
+//
+// 两个码：图片上传超额由 Worker 回 image_quota_exceeded，文档保存超额由后端回
+// storage_quota_exceeded。两者都要触发同一个弹窗。
 const CODE = "image_quota_exceeded";
 ok(`后端用 ${CODE}`, backend.includes(`"${CODE}"`), "backend/image_quota.go 里找不到");
 ok(`Worker 用 ${CODE}`, worker.includes(`"${CODE}"`), "worker/images.ts 里找不到");
 ok(`SPA 用 ${CODE}`, api.includes(`"${CODE}"`), "spa/src/api.ts 里找不到");
 
-// 四份译文都要有这个码，否则超额时用户看到的是英文兜底
+const DOC_CODE = "storage_quota_exceeded";
+const documentsGo = read("backend/internal/server/documents.go");
+ok(`后端文档路径用 ${DOC_CODE}`, documentsGo.includes(`"${DOC_CODE}"`), "documents.go");
+ok(`SPA 认 ${DOC_CODE}`, api.includes(`"${DOC_CODE}"`), "spa/src/api.ts");
+
+// 两个码都要能触发弹窗。只认一个的表现是"文档存不下时静默失败"
+ok(
+  "SPA 把两个码都算作配额错误",
+  /QUOTA_CODES\s*=\s*new Set<string>\(\[\s*IMAGE_QUOTA_CODE,\s*STORAGE_QUOTA_CODE/.test(api),
+  "spa/src/api.ts 里 QUOTA_CODES 应含两个码",
+);
+
+// 四份译文都要有这两个码，否则超额时用户看到的是英文兜底
 for (const locale of ["zh", "en", "fr", "ja"]) {
   const messages = read(`spa/src/i18n/${locale}.ts`);
   ok(`${locale} 有 ${CODE} 的译文`, messages.includes(`${CODE}:`), `spa/src/i18n/${locale}.ts`);
+  ok(`${locale} 有 ${DOC_CODE} 的译文`, messages.includes(`${DOC_CODE}:`), `spa/src/i18n/${locale}.ts`);
+}
+
+// ---------- 用量口径含文档 ----------
+//
+// 配额是"云端存储"而不是"图床"。漏掉文档不只是显示不准 ——
+// 纯文字文档会完全不受限制，配额可以被无限绕过。
+ok(
+  "用量查询统计 documents",
+  /storageUsageFor[\s\S]{0,900}FROM documents/.test(backend),
+  "backend/image_quota.go",
+);
+// octet_length 而不是 length：后者按字符算，中文正文少算约三分之二
+ok(
+  "文档字节用 octet_length",
+  /storageUsageFor[\s\S]{0,900}octet_length\(content\)/.test(backend),
+  "length() 按字符算，中文会大幅少算",
+);
+// 三处判定都要按总量算
+for (const [name, src, anchor] of [
+  ["图片记账", backend, "INSERT INTO image_objects"],
+  ["新建文档", documentsGo, "INSERT INTO documents"],
+  ["更新文档", documentsGo, "UPDATE documents"],
+]) {
+  const idx = src.indexOf(anchor);
+  ok(`找到${name}的语句`, idx >= 0, anchor);
+  if (idx >= 0) {
+    const stmt = src.slice(idx, src.indexOf("`", idx));
+    ok(`${name}的判定含 image_objects`, stmt.includes("image_objects"), "要按文档+图片总量算");
+    ok(`${name}的判定含 octet_length`, stmt.includes("octet_length"), "要按文档+图片总量算");
+  }
+}
+
+// 更新文档必须留"缩小则放行"的例外，否则超额用户连删正文都做不到
+ok(
+  "更新文档允许缩小",
+  /UPDATE documents[\s\S]{0,700}OR octet_length/.test(documentsGo),
+  "缺少例外会让超额用户被锁死，没有自救途径",
+);
+
+// SPA 要用后端给的分项。写死成只显示总数就失去了"该删什么"的信息
+const storageCardSrc = read("spa/src/components/StorageCard.tsx");
+for (const field of ["documentBytes", "imageBytes"]) {
+  ok(`StorageCard 用了 ${field}`, storageCardSrc.includes(field), "spa/src/components/StorageCard.tsx");
+  ok(`api.ts 声明了 ${field}`, api.includes(field), "spa/src/api.ts");
 }
 
 // ---------- 路由路径两处一致 ----------

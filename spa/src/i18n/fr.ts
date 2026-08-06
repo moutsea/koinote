@@ -72,18 +72,20 @@ export const fr: Messages = {
     continueWithGitHub: "Continuer avec GitHub",
   },
   storage: {
-    title: "Stockage d'images",
+    title: "Stockage cloud",
+    documents: "Documents",
+    images: "Images",
     usedOf: "{used} sur {quota} utilisés",
     remaining: "{remaining} restants",
     nearLimitHint:
-      "Il vous reste peu d'espace. Supprimer les documents dont vous n'avez plus besoin en libérera.",
+      "Il vous reste peu d'espace cloud. Supprimer les documents dont vous n'avez plus besoin en libérera.",
     fullHint:
-      "Le stockage est plein, aucune nouvelle image ne peut être envoyée. Supprimez les documents inutiles pour libérer de l'espace.",
+      "Le stockage cloud est plein : impossible d'enregistrer de nouveaux documents ou images. Supprimez les documents inutiles pour libérer de l'espace.",
     loading: "Chargement…",
     loadFailed: "Impossible de charger l'utilisation du stockage",
-    quotaDialogTitle: "Stockage d'images plein",
+    quotaDialogTitle: "Stockage cloud plein",
     quotaDialogBody:
-      "Vous avez utilisé {used} sur {quota} de stockage d'images, cette image n'a donc pas été envoyée.",
+      "Vous avez utilisé {used} sur {quota} de stockage cloud, l'opération n'a donc pas abouti.",
     quotaDialogHint:
       "Supprimer les documents dont vous n'avez plus besoin libérera de l'espace — leurs images sont nettoyées par une tâche de fond, généralement en quelques minutes.",
     quotaDialogDismiss: "J'ai compris",
@@ -536,6 +538,7 @@ function hello(name) {
     image_svg_rejected: "Les images SVG ne sont pas prises en charge, pour raisons de sécurité",
     image_too_large: "L'image dépasse la limite de 10 Mo",
     image_quota_exceeded: "Stockage d'images plein — supprimez les documents inutiles pour libérer de l'espace",
+    storage_quota_exceeded: "Stockage cloud plein — supprimez les documents inutiles pour libérer de l'espace",
     image_empty: "L'image est vide",
     share_not_found: "Ce lien est invalide ou a été révoqué",
     share_access_invalid: "Niveau de partage invalide",

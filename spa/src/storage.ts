@@ -41,6 +41,32 @@ export function remainingBytes(usedBytes: number, quotaBytes: number): number {
   return Math.max(0, quotaBytes - used);
 }
 
+/**
+ * 分段进度条各段的宽度（百分比）。
+ *
+ * 控制台把条分成「文档」「图片」两段。两段之和绝不能超过 100 —— 它们是 flex 子项，
+ * 超了会把前一段挤出去或溢出圆角容器。
+ *
+ * 分别算各自占配额的比例、再给图片段封顶，而不是「先算总比例再按各自权重切」：
+ * 后者在超额时有舍入误差累积，而前者的每一段都已经被 usageRatio 钳在 1 以内。
+ *
+ * 放在这里而不是留在组件里，是为了能被断言覆盖 —— 那条"两段之和 <= 100"的不变量
+ * 值得钉住，而抄一份到测试里等于没钉。
+ */
+export function barSegments(
+  documentBytes: number,
+  imageBytes: number,
+  quotaBytes: number,
+): { documents: number; images: number } {
+  const documents = usageRatio(documentBytes, quotaBytes) * 100;
+  const images = Math.min(
+    // 图片段不能把文档段挤出去
+    Math.max(0, 100 - documents),
+    usageRatio(imageBytes, quotaBytes) * 100,
+  );
+  return { documents, images };
+}
+
 const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 /**

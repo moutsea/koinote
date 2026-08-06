@@ -72,18 +72,20 @@ export const ja: Messages = {
     continueWithGitHub: "GitHub で続ける",
   },
   storage: {
-    title: "画像ストレージ",
+    title: "クラウドストレージ",
+    documents: "ドキュメント",
+    images: "画像",
     usedOf: "{quota} 中 {used} 使用",
     remaining: "残り {remaining}",
     nearLimitHint:
-      "残り容量が少なくなっています。不要なドキュメントを削除すると空き容量が増えます。",
+      "クラウドの残り容量が少なくなっています。不要なドキュメントを削除すると空き容量が増えます。",
     fullHint:
-      "容量がいっぱいのため、新しい画像はアップロードできません。不要なドキュメントを削除すると空き容量が増えます。",
+      "クラウドの容量がいっぱいのため、新しいドキュメントや画像を保存できません。不要なドキュメントを削除すると空き容量が増えます。",
     loading: "読み込み中…",
     loadFailed: "使用量を読み込めませんでした",
-    quotaDialogTitle: "画像ストレージがいっぱいです",
+    quotaDialogTitle: "クラウドストレージがいっぱいです",
     quotaDialogBody:
-      "画像ストレージを {quota} 中 {used} 使用しているため、この画像はアップロードされませんでした。",
+      "クラウドストレージを {quota} 中 {used} 使用しているため、処理を完了できませんでした。",
     quotaDialogHint:
       "不要なドキュメントを削除すると空き容量が増えます。含まれる画像はバックグラウンド処理で削除され、通常は数分以内に完了します。",
     quotaDialogDismiss: "了解",
@@ -529,6 +531,7 @@ function hello(name) {
     image_svg_rejected: "セキュリティ上の理由から SVG 画像は使用できません",
     image_too_large: "画像が 10 MB の上限を超えています",
     image_quota_exceeded: "画像ストレージがいっぱいです。不要なドキュメントを削除すると空き容量が増えます",
+    storage_quota_exceeded: "クラウドの容量がいっぱいです。不要なドキュメントを削除すると空き容量が増えます",
     image_empty: "画像が空です",
     share_not_found: "このリンクは無効か、取り消されています",
     share_access_invalid: "共有権限の設定が無効です",

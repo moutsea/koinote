@@ -72,18 +72,20 @@ export const en: Messages = {
     continueWithGitHub: "Continue with GitHub",
   },
   storage: {
-    title: "Image storage",
+    title: "Cloud storage",
+    documents: "Documents",
+    images: "Images",
     usedOf: "{used} of {quota} used",
     remaining: "{remaining} left",
     nearLimitHint:
-      "You're running low on space. Deleting documents you no longer need will free some up.",
+      "You're running low on cloud storage. Deleting documents you no longer need will free some up.",
     fullHint:
-      "Storage is full, so new images can't be uploaded. Delete documents you no longer need to free up space.",
+      "Cloud storage is full, so new documents and images can't be saved. Delete documents you no longer need to free up space.",
     loading: "Loading…",
     loadFailed: "Couldn't load storage usage",
-    quotaDialogTitle: "Image storage is full",
+    quotaDialogTitle: "Cloud storage is full",
     quotaDialogBody:
-      "You've used {used} of your {quota} image storage, so this image wasn't uploaded.",
+      "You've used {used} of your {quota} cloud storage, so that didn't go through.",
     quotaDialogHint:
       "Deleting documents you no longer need will free up space — their images are cleaned up by a background job, usually within a few minutes.",
     quotaDialogDismiss: "Got it",
@@ -526,6 +528,7 @@ function hello(name) {
     image_svg_rejected: "SVG images aren't supported, for security reasons",
     image_too_large: "Image exceeds the 10 MB limit",
     image_quota_exceeded: "Image storage is full — delete documents you no longer need to free up space",
+    storage_quota_exceeded: "Cloud storage is full — delete documents you no longer need to free up space",
     image_empty: "The image is empty",
     share_not_found: "This link is invalid or has been revoked",
     share_access_invalid: "Invalid share access level",

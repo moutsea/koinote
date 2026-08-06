@@ -38,12 +38,24 @@ export class ApiError extends Error {
  */
 export const IMAGE_QUOTA_EVENT = "koinote:image-quota-exceeded";
 
-/** 超额错误码。与后端 image_quota.go、Worker images.ts 三处一致 */
+/**
+ * 超额错误码。
+ *
+ * 两个而不是一个：图片上传超额由 Worker 回 image_quota_exceeded，
+ * 文档保存超额由后端回 storage_quota_exceeded。两条路径的用户动作不同
+ * （贴图 vs 打字），但要弹同一个窗 —— 都是"云端空间满了"。
+ */
 export const IMAGE_QUOTA_CODE = "image_quota_exceeded";
+export const STORAGE_QUOTA_CODE = "storage_quota_exceeded";
+
+const QUOTA_CODES = new Set<string>([IMAGE_QUOTA_CODE, STORAGE_QUOTA_CODE]);
 
 export type ImageQuotaDetail = {
   usedBytes: number;
   quotaBytes: number;
+  /** 分项。旧版后端可能不返回，所以是可选的 */
+  documentBytes?: number;
+  imageBytes?: number;
 };
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -60,13 +72,22 @@ async function toApiError(response: Response): Promise<ApiError> {
       typeof data.usedBytes === "number" &&
       typeof data.quotaBytes === "number"
     ) {
-      quota = { usedBytes: data.usedBytes, quotaBytes: data.quotaBytes };
+      quota = {
+        usedBytes: data.usedBytes,
+        quotaBytes: data.quotaBytes,
+        ...(typeof data.documentBytes === "number"
+          ? { documentBytes: data.documentBytes }
+          : {}),
+        ...(typeof data.imageBytes === "number"
+          ? { imageBytes: data.imageBytes }
+          : {}),
+      };
     }
   } catch {
     // 忽略解析失败，落到状态码兜底
   }
 
-  if (code === IMAGE_QUOTA_CODE && typeof window !== "undefined") {
+  if (code !== undefined && QUOTA_CODES.has(code) && typeof window !== "undefined") {
     // 用量缺失时给 0/0：storage.ts 的 usageRatio 把 quota<=0 当作"满"，
     // 弹窗仍然能正确表达"没空间了"，只是数字显示为 0
     window.dispatchEvent(
@@ -362,14 +383,24 @@ export function fetchImageToBucket(url: string) {
   });
 }
 
-/** 图床用量。配额的真值在后端，前端不写死 */
+/**
+ * 云端存储用量。配额的真值在后端，前端不写死。
+ *
+ * 分项给出是因为用户看到"满了"之后要知道该删什么 —— 只报总数的话，
+ * 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
+ */
 export type StorageUsage = {
+  /** 总量，等于 documentBytes + imageBytes */
   usedBytes: number;
+  /** 文档正文与标题（Postgres） */
+  documentBytes: number;
+  /** 图床对象（R2） */
+  imageBytes: number;
   quotaBytes: number;
 };
 
 /**
- * 查当前用户的图床用量。
+ * 查当前用户的云端存储用量。
  *
  * 路径是 /api/storage/usage 而不是 /api/images/usage：Worker 对 /api/images/ 下的
  * 若干路径有专门分派，加一个同前缀的路由要改两处，容易漏。

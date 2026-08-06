@@ -63,6 +63,10 @@ export interface Messages {
     usedOf: string;
     /** 「还剩 {remaining}」 */
     remaining: string;
+    /** 分项标签：文档 */
+    documents: string;
+    /** 分项标签：图片 */
+    images: string;
     /** 接近上限时的提示 */
     nearLimitHint: string;
     /** 已满时的提示 */

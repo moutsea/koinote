@@ -4,6 +4,7 @@
 // 这类矛盾的观感。边界情况（0、超额、quota 为 0）比常规值更值得钉。
 import {
   NEAR_LIMIT_RATIO,
+  barSegments,
   formatBytes,
   remainingBytes,
   usageLevel,
@@ -150,6 +151,57 @@ eq("超大值停在 TB", formatBytes(5 * 1024 * 1024 * MiB, "en-US"), "5 TB");
 for (const bytes of [0, 1, 1023, 1024, 1536, MiB, QUOTA, 1024 ** 4]) {
   const out = formatBytes(bytes, "en-US");
   ok(`"${out}" 形状正确`, /^[\d.,  ]+ (B|KB|MB|GB|TB)$/.test(out), out);
+}
+
+// ---------- 分段进度条的宽度 ----------
+//
+// StorageCard 把条分成「文档」「图片」两段。两段之和绝不能超过容器宽度，
+// 否则第二段会把第一段挤出去或溢出圆角容器 —— 这是 flex 布局下的真实后果。
+//
+// 直接测 storage.ts 导出的 barSegments，不在这里抄一份算法 ——
+// 抄一份的话组件改了算法这些断言照旧全绿，等于没钉。
+function segments(docBytes, imgBytes, quota) {
+  const { documents, images } = barSegments(docBytes, imgBytes, quota);
+  return { docWidth: documents, imageWidth: images };
+}
+
+{
+  const cases = [
+    ["都空", 0, 0],
+    ["只有文档", 100 * MiB, 0],
+    ["只有图片", 0, 100 * MiB],
+    ["各占一半", 250 * MiB, 250 * MiB],
+    ["刚好占满", 200 * MiB, 300 * MiB],
+    ["文档单独超额", QUOTA * 2, 0],
+    ["图片单独超额", 0, QUOTA * 2],
+    ["两者都超额", QUOTA, QUOTA],
+    ["文档满且有图片", QUOTA, 10 * MiB],
+    ["极小值", 1, 1],
+  ];
+
+  for (const [name, doc, img] of cases) {
+    const { docWidth, imageWidth } = segments(doc, img, QUOTA);
+    const total = docWidth + imageWidth;
+
+    ok(`${name}: 两段之和不超过 100`, total <= 100 + 1e-9, total);
+    ok(`${name}: 文档段非负`, docWidth >= 0, docWidth);
+    ok(`${name}: 图片段非负`, imageWidth >= 0, imageWidth);
+    ok(`${name}: 文档段不超过 100`, docWidth <= 100, docWidth);
+  }
+}
+
+// 文档已占满时，图片段必须是 0 —— 否则会溢出
+{
+  const { docWidth, imageWidth } = segments(QUOTA, 50 * MiB, QUOTA);
+  eq("文档占满时文档段为 100", docWidth, 100);
+  eq("文档占满时图片段为 0", imageWidth, 0);
+}
+
+// 两段的比例要正确反映各自占比，而不是被压缩
+{
+  const { docWidth, imageWidth } = segments(100 * MiB, 200 * MiB, QUOTA);
+  eq("文档 100/500 → 20%", docWidth, 20);
+  eq("图片 200/500 → 40%", imageWidth, 40);
 }
 
 // ---------- 阈值常量 ----------
