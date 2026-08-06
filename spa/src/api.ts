@@ -308,6 +308,21 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
   return data.image;
 }
 
+/**
+ * 让服务端代抓一个外链图片并转存进图床。
+ *
+ * 为什么不在前端抓：浏览器受 CORS 限制读不到跨站图片的字节。<img> 能显示它，但
+ * canvas/fetch 拿不到内容，所以「粘贴网页里的图并转存」只能由服务端代抓。
+ *
+ * 服务端那侧是个 SSRF 原语，防护见 worker/ssrf.ts。
+ */
+export function fetchImageToBucket(url: string) {
+  return apiJson<{ image: UploadedImage }>("/api/images/fetch", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
 export function deleteDocument(docId: string) {
   return apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}`,

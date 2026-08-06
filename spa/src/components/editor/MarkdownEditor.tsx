@@ -6,7 +6,14 @@ import { useI18n, interpolate } from "../../i18n";
 import { ThemePicker } from "./ThemePicker";
 import { THEME_SCOPE, editorContentClass, themeToCSS } from "./themeCss";
 import type { DocPatch, SaveStatus } from "./useDocumentSaver";
-import { ApiError, uploadImage } from "../../api";
+import { ApiError, fetchImageToBucket, uploadImage } from "../../api";
+import {
+  dataUriToFile,
+  imageSrcsFromHtml,
+  isDataUri,
+  needsRehost,
+  replaceImageSrcs,
+} from "./rehost";
 import type { Document } from "../../documents";
 
 /** 从粘贴/拖放事件里挑出可上传的图片文件 */
@@ -89,6 +96,115 @@ export default function MarkdownEditor({
     },
     [t],
   );
+  /**
+   * 把正文里的外链图片转存进图床。
+   *
+   * 走「插入之后再扫一遍」而不是拦住粘贴、先改 HTML 再插入：粘贴 HTML、粘贴
+   * Markdown（tiptap-markdown 会把 ![](url) 解析成图片节点）、拖入链接三条路都会汇到
+   * 同一处，只写一遍。代价是外链地址会先在编辑器里显示一小会儿 —— 那反而是好事，
+   * 用户立刻看到图，转存在背后进行。
+   *
+   * 按 src 值定位节点而不是记位置：转存是异步的，期间用户可能继续打字，位置会失效。
+   * 同一个 src 出现多次时一次全换掉。
+   */
+  const rehostRemoteImages = useCallback(async () => {
+    const instance = editorRef.current;
+    if (!instance) return;
+
+    const targets = new Set<string>();
+    instance.state.doc.descendants((node) => {
+      if (node.type.name !== "image") return;
+      const src = node.attrs.src;
+      if (typeof src === "string" && needsRehost(src)) targets.add(src);
+    });
+    if (targets.size === 0) return;
+
+    setUploadError(null);
+    for (const src of targets) {
+      setUploading((n) => n + 1);
+      try {
+        const { image } = await fetchImageToBucket(src);
+        const live = editorRef.current;
+        if (!live) continue;
+
+        // 一个事务里把所有引用这个 src 的节点都换掉
+        const tr = live.state.tr;
+        let touched = false;
+        live.state.doc.descendants((node, pos) => {
+          if (node.type.name !== "image" || node.attrs.src !== src) return;
+          tr.setNodeMarkup(pos, undefined, { ...node.attrs, src: image.url });
+          touched = true;
+        });
+        // addToHistory: false —— 转存是后台行为，不该占一步撤销。
+        // 否则用户按一次 Ctrl+Z 只是把图片地址退回外链，很费解
+        if (touched) live.view.dispatch(tr.setMeta("addToHistory", false));
+      } catch (err) {
+        // 转存失败不撤掉已插入的图：外链虽然可能失效，但比让图直接消失好。
+        // 提示要给到，否则用户以为图已经进图床了
+        if (err instanceof ApiError) {
+          setUploadError(
+            (err.code && t.errors[err.code]) || err.message || t.editor.rehostFailed,
+          );
+        } else {
+          setUploadError(t.editor.rehostFailed);
+        }
+      } finally {
+        setUploading((n) => Math.max(0, n - 1));
+      }
+    }
+  }, [t]);
+
+  /**
+   * 粘贴带 base64 图的 HTML（Word、Google Docs、部分截图工具）。
+   *
+   * 这一条必须在解析前接手：编辑器配了 allowBase64: false，解析器会把 data: 的图片
+   * 节点直接丢掉 —— 图无声消失。所以先把 data URI 抽出来上传，把 HTML 里的地址换成
+   * R2 的，再交给编辑器解析。
+   *
+   * 返回 true 表示已接手。
+   */
+  const pasteHtmlWithDataUris = useCallback(
+    (html: string): boolean => {
+      const dataUris = imageSrcsFromHtml(html).filter(isDataUri);
+      if (dataUris.length === 0) return false;
+
+      void (async () => {
+        setUploadError(null);
+        const mapping = new Map<string, string>();
+        for (const [i, uri] of dataUris.entries()) {
+          const file = dataUriToFile(uri, i);
+          if (!file) continue;
+          setUploading((n) => n + 1);
+          try {
+            const image = await uploadImage(file);
+            mapping.set(uri, image.url);
+          } catch (err) {
+            if (err instanceof ApiError) {
+              setUploadError(
+                (err.code && t.errors[err.code]) || err.message || t.editor.uploadFailed,
+              );
+            } else {
+              setUploadError(t.editor.uploadFailed);
+            }
+          } finally {
+            setUploading((n) => Math.max(0, n - 1));
+          }
+        }
+
+        const instance = editorRef.current;
+        if (!instance) return;
+        // 上传失败的 data URI 留在 mapping 外，替换后仍是 data: —— 解析器会丢掉它们，
+        // 这时错误提示已经给出去了
+        instance.chain().focus().insertContent(replaceImageSrcs(html, mapping)).run();
+        // 插进去的 HTML 里可能还有外链图，接着扫一遍
+        void rehostRemoteImages();
+      })();
+
+      return true;
+    },
+    [t, rehostRemoteImages],
+  );
+
   const extensions = useMemo(
     () => createEditorExtensions(t.editor.placeholder),
     [t.editor.placeholder],
@@ -118,19 +234,38 @@ export default function MarkdownEditor({
     editorProps: {
       attributes: { class: editorContentClass(document.theme ?? "") },
       handlePaste: (view, event) => {
+        // 1) 剪贴板里直接是图片文件（截图、从 Finder 复制）—— 上传后插入
         const files = imageFilesFrom(event.clipboardData?.files);
-        if (files.length === 0) return false;
-        event.preventDefault();
-        void uploadFiles(files);
-        return true; // 已接手，阻止默认粘贴（否则会插入 base64 或本地 blob URL）
+        if (files.length > 0) {
+          event.preventDefault();
+          void uploadFiles(files);
+          return true; // 已接手，阻止默认粘贴（否则会插入 base64 或本地 blob URL）
+        }
+
+        // 2) HTML 里带 base64 图 —— 必须在解析前接手，否则 allowBase64: false
+        //    会让解析器把这些节点直接丢掉
+        const html = event.clipboardData?.getData("text/html");
+        if (html && pasteHtmlWithDataUris(html)) {
+          event.preventDefault();
+          return true;
+        }
+
+        // 3) 其余情况（HTML 里的外链图、Markdown 的 ![](url)）交给默认粘贴，
+        //    插进来之后再扫一遍转存。放在微任务里等这次事务落定
+        queueMicrotask(() => void rehostRemoteImages());
+        return false;
       },
       handleDrop: (view, event) => {
         const dragEvent = event as DragEvent;
         const files = imageFilesFrom(dragEvent.dataTransfer?.files);
-        if (files.length === 0) return false;
-        event.preventDefault();
-        void uploadFiles(files);
-        return true;
+        if (files.length > 0) {
+          event.preventDefault();
+          void uploadFiles(files);
+          return true;
+        }
+        // 拖进来的可能是一个图片链接，同样走转存
+        queueMicrotask(() => void rehostRemoteImages());
+        return false;
       },
     },
     onUpdate: ({ editor }) => {

@@ -8,7 +8,13 @@
  * SEO 元数据注入、sitemap 等留到后续阶段，先保证代理与托管跑通。
  */
 
-import { handleImageConfig, handleImageGet, handleImageUpload } from "./images";
+import {
+  handleImageConfig,
+  handleImageDelete,
+  handleImageFetch,
+  handleImageGet,
+  handleImageUpload,
+} from "./images";
 
 type AssetFetcher = {
   fetch(request: Request): Promise<Response> | Response;
@@ -34,6 +40,15 @@ export default {
     // 但 API_PREFIXES 里的 /api/ 会把 config 转发给后端。
     if (url.pathname === "/api/images/config" && request.method === "GET") {
       return handleImageConfig(env);
+    }
+    // 代抓外链图片：从网页/Markdown 粘贴来的图要转存进图床，而浏览器受 CORS
+    // 限制读不到跨站字节，只能服务端代抓。防护见 ssrf.ts
+    if (url.pathname === "/api/images/fetch" && request.method === "POST") {
+      return handleImageFetch(request, env);
+    }
+    // 回收：后端的后台任务调它删 R2 对象，用内部令牌鉴权而非会话
+    if (url.pathname === "/api/images/delete" && request.method === "POST") {
+      return handleImageDelete(request, env);
     }
     if (url.pathname === "/api/images" && request.method === "POST") {
       return handleImageUpload(request, env);

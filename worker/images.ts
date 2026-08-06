@@ -6,10 +6,14 @@
  * 图片字节本身不经过 VPS。
  */
 
+import { checkFetchTarget } from "./ssrf";
+
 export type ImagesEnv = {
   IMAGES: R2Bucket;
   BACKEND_URL: string;
   IMAGE_PUBLIC_BASE?: string;
+  /** 后端调删除端点时用的共享令牌。缺省时删除端点一律 503 */
+  BACKEND_INTERNAL_TOKEN?: string;
 };
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
@@ -82,6 +86,67 @@ function randomKey(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * 校验字节并写入 R2。上传与代抓共用。
+ *
+ * declared 是「声称的类型」：上传时来自请求头，代抓时来自上游响应头。两条路都必须
+ * 与文件头一致才放行 —— 抽出来共用是为了防止其中一条路以后漏掉某道校验。
+ */
+async function storeImage(
+  buffer: ArrayBuffer,
+  declared: string,
+  authUserId: string,
+  env: ImagesEnv,
+): Promise<Response> {
+  if (buffer.byteLength === 0) {
+    return errorCode(400, "image_empty", "Empty image");
+  }
+  if (buffer.byteLength > MAX_BYTES) {
+    return errorCode(413, "image_too_large", "Image is too large");
+  }
+
+  if (declared === "image/svg+xml") {
+    // SVG 能内嵌脚本，公开 bucket 下等于储存型 XSS。
+    // 直接拒掉比做净化可靠——净化 SVG 是个长期跟绕过赛跑的活。
+    return errorCode(415, "image_svg_rejected", "SVG uploads are not allowed");
+  }
+  if (!ALLOWED.has(declared)) {
+    return errorCode(415, "image_type_unsupported", "Unsupported image type");
+  }
+
+  const bytes = new Uint8Array(buffer);
+  const sniffed = sniffImageType(bytes);
+  if (!sniffed) {
+    return errorCode(415, "image_type_unsupported", "Unsupported image type");
+  }
+  if (sniffed !== declared) {
+    // 声明与实际不符，一律拒绝，避免类型混淆
+    return errorCode(415, "image_type_mismatch", "Image type does not match its content");
+  }
+
+  const extension = ALLOWED.get(sniffed)!;
+  // key 里带 authUserId 前缀：便于按用户列举与配额统计，也天然隔离
+  const key = `u/${authUserId}/${randomKey()}.${extension}`;
+
+  await env.IMAGES.put(key, buffer, {
+    httpMetadata: {
+      contentType: sniffed,
+      // 内容不可变（key 随机且永不复用），放心长缓存
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+    customMetadata: { authUserId },
+  });
+
+  return json(200, {
+    image: {
+      key,
+      url: publicURL(key, env),
+      size: buffer.byteLength,
+      contentType: sniffed,
+    },
+  });
+}
+
 /** POST /api/images —— 上传一张图 */
 export async function handleImageUpload(
   request: Request,
@@ -96,6 +161,7 @@ export async function handleImageUpload(
     .split(";")[0]
     .trim()
     .toLowerCase();
+  // SVG 要走 storeImage 里那条专门的错误码，不能在这里被当成「不支持的类型」吞掉
   if (!ALLOWED.has(declared)) {
     return errorCode(415, "image_type_unsupported", "Unsupported image type");
   }
@@ -106,55 +172,168 @@ export async function handleImageUpload(
     return errorCode(413, "image_too_large", "Image is too large");
   }
 
+  // 真实长度由 storeImage 再挡一道：Content-Length 可以撒谎
   const buffer = await request.arrayBuffer();
-  // 真实长度再挡一道：Content-Length 可以撒谢
-  if (buffer.byteLength === 0) {
-    return errorCode(400, "image_empty", "Empty image");
+  return storeImage(buffer, declared, authUserId, env);
+}
+
+/** 代抓时最多跟几跳重定向。图床类地址正常一两跳就到 */
+const MAX_REDIRECTS = 3;
+/** 上游超时。卡住的目标不能拖着 Worker 的请求配额 */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * POST /api/images/fetch —— 代抓一个外链图片并转存进 R2。
+ *
+ * 为什么要服务端代抓：浏览器读不到跨站图片的字节（CORS），所以「从网页复制粘贴的图
+ * 片转存进图床」在前端做不到。
+ *
+ * 这个端点是 SSRF 原语，防护见 ssrf.ts。除了地址校验，这里还做三件事：
+ *   - 手动跟重定向，每一跳都重新校验（公网 URL 可以 302 到 127.0.0.1）
+ *   - 边读边计长度，不信 Content-Length（它可以撒谎，也可能没有）
+ *   - 超时，否则慢速上游能一直占着请求
+ */
+export async function handleImageFetch(
+  request: Request,
+  env: ImagesEnv,
+): Promise<Response> {
+  const authUserId = await resolveUser(request, env);
+  if (!authUserId) {
+    return errorCode(401, "unauthorized", "Not logged in");
   }
-  if (buffer.byteLength > MAX_BYTES) {
+
+  let body: { url?: string };
+  try {
+    body = (await request.json()) as { url?: string };
+  } catch {
+    return errorCode(400, "bad_request", "Invalid request");
+  }
+
+  const verdict = checkFetchTarget(body.url ?? "");
+  if (!verdict.ok) {
+    // 原因回给前端只为便于排查，不含任何探测到的内网信息
+    return errorCode(400, "image_fetch_rejected", `Refused to fetch: ${verdict.reason}`);
+  }
+
+  let target = verdict.url;
+  let response: Response | null = null;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    let hopResponse: Response;
+    try {
+      hopResponse = await fetch(target.toString(), {
+        method: "GET",
+        redirect: "manual", // 自己跟，才能逐跳校验
+        headers: {
+          // 有些站按 Accept 返回不同格式；也有站没有 UA 就 403
+          accept: "image/avif,image/webp,image/png,image/jpeg,image/gif,image/*,*/*;q=0.5",
+          "user-agent": "koinote-image-fetcher",
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch {
+      // DNS 失败、连接被拒、超时都到这里。不回传底层错误 —— 那本身就是内网探测信号
+      return errorCode(502, "image_fetch_failed", "Could not fetch that image");
+    }
+
+    const location = hopResponse.headers.get("location");
+    const isRedirect = hopResponse.status >= 300 && hopResponse.status < 400;
+    if (!isRedirect || !location) {
+      response = hopResponse;
+      break;
+    }
+    if (hop === MAX_REDIRECTS) {
+      return errorCode(502, "image_fetch_failed", "Too many redirects");
+    }
+
+    // 相对 Location 要按当前地址解析
+    let next: string;
+    try {
+      next = new URL(location, target).toString();
+    } catch {
+      return errorCode(502, "image_fetch_failed", "Bad redirect");
+    }
+    // 关键：重定向后的地址重新过一遍校验
+    const hopVerdict = checkFetchTarget(next);
+    if (!hopVerdict.ok) {
+      return errorCode(
+        400,
+        "image_fetch_rejected",
+        `Refused to follow redirect: ${hopVerdict.reason}`,
+      );
+    }
+    target = hopVerdict.url;
+  }
+
+  if (!response) {
+    return errorCode(502, "image_fetch_failed", "Could not fetch that image");
+  }
+  if (!response.ok) {
+    return errorCode(502, "image_fetch_failed", "Could not fetch that image");
+  }
+
+  // Content-Length 若在且超限，直接拒，省得白读
+  const advertised = Number(response.headers.get("content-length") ?? "0");
+  if (advertised > MAX_BYTES) {
     return errorCode(413, "image_too_large", "Image is too large");
   }
 
-  const bytes = new Uint8Array(buffer);
-  let contentType = declared;
-
-  if (declared === "image/svg+xml") {
-    // SVG 能内嵌脚本，公开 bucket 下等于储存型 XSS。
-    // 直接拒掉比做净化可靠——净化 SVG 是个长期跟绕过赛跑的活。
-    return errorCode(415, "image_svg_rejected", "SVG uploads are not allowed");
+  const buffer = await readCapped(response, MAX_BYTES);
+  if (buffer === null) {
+    return errorCode(413, "image_too_large", "Image is too large");
   }
 
-  const sniffed = sniffImageType(bytes);
-  if (!sniffed) {
-    return errorCode(415, "image_type_unsupported", "Unsupported image type");
+  const declared = (response.headers.get("content-type") ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  // 上游的 Content-Type 常常是错的或缺失的（尤其 CDN 上的图）。storeImage 会按文件头
+  // 复核，所以这里在缺失/不认识时改用嗅探结果，而不是直接拒 —— 否则很多正常图抓不回来
+  const sniffed = sniffImageType(new Uint8Array(buffer));
+  const effective = ALLOWED.has(declared) ? declared : (sniffed ?? declared);
+
+  return storeImage(buffer, effective, authUserId, env);
+}
+
+/**
+ * 读取响应体，超过 limit 就放弃并返回 null。
+ *
+ * 不用 arrayBuffer()：那会先把整个响应读进内存，一个声称 1KB 实际发 1GB 的上游就能
+ * 把 Worker 打爆。这里边读边算，超了立刻断开。
+ */
+async function readCapped(
+  response: Response,
+  limit: number,
+): Promise<ArrayBuffer | null> {
+  const body = response.body;
+  if (!body) return new ArrayBuffer(0);
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
   }
-  if (sniffed !== declared) {
-    // 声明与实际不符，一律按实际类型走且拒绝，避免类型混淆
-    return errorCode(415, "image_type_mismatch", "Image type does not match its content");
+
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
   }
-  contentType = sniffed;
-
-  const extension = ALLOWED.get(contentType)!;
-  // key 里带 authUserId 前缀：便于按用户列举与配额统计，也天然隔离
-  const key = `u/${authUserId}/${randomKey()}.${extension}`;
-
-  await env.IMAGES.put(key, buffer, {
-    httpMetadata: {
-      contentType,
-      // 内容不可变（key 随机且永不复用），放心长缓存
-      cacheControl: "public, max-age=31536000, immutable",
-    },
-    customMetadata: { authUserId },
-  });
-
-  return json(200, {
-    image: {
-      key,
-      url: publicURL(key, env),
-      size: buffer.byteLength,
-      contentType,
-    },
-  });
+  return out.buffer;
 }
 
 /**
@@ -223,6 +402,77 @@ export function handleImageConfig(env: ImagesEnv): Response {
         ? "IMAGE_PUBLIC_BASE 已设置但无效（需形如 https://img.example.com），已回落到 Worker 代理"
         : null,
   });
+}
+
+/**
+ * POST /api/images/delete —— 后端的回收任务调它删 R2 对象。
+ *
+ * 鉴权用共享令牌而不是会话 cookie：调用方是后端的后台 goroutine，那时早已没有用户请求
+ * 上下文了。令牌没配就一律 503 —— 开着一个无鉴权的删除端点比不能回收糟得多。
+ *
+ * 归属由后端负责判定（它才有数据库）。这里只做一道前缀形状校验兜底，防止传进来
+ * `../` 之类的东西。
+ */
+export async function handleImageDelete(
+  request: Request,
+  env: ImagesEnv,
+): Promise<Response> {
+  const expected = (env.BACKEND_INTERNAL_TOKEN ?? "").trim();
+  if (!expected) {
+    console.warn("BACKEND_INTERNAL_TOKEN 未配置，图片删除端点已禁用");
+    return errorCode(503, "not_configured", "Image deletion is not configured");
+  }
+  const presented = request.headers.get("x-koinote-internal-token") ?? "";
+  if (!timingSafeEqual(presented, expected)) {
+    return errorCode(401, "unauthorized", "Bad token");
+  }
+
+  let body: { keys?: unknown };
+  try {
+    body = (await request.json()) as { keys?: unknown };
+  } catch {
+    return errorCode(400, "bad_request", "Invalid request");
+  }
+  if (!Array.isArray(body.keys)) {
+    return errorCode(400, "bad_request", "keys must be an array");
+  }
+  if (body.keys.length > 100) {
+    return errorCode(400, "bad_request", "Too many keys");
+  }
+
+  const deleted: string[] = [];
+  const rejected: string[] = [];
+  for (const raw of body.keys) {
+    if (typeof raw !== "string" || !isSafeImageKey(raw)) {
+      rejected.push(String(raw));
+      continue;
+    }
+    deleted.push(raw);
+  }
+
+  if (deleted.length > 0) {
+    // R2 的 delete 对不存在的 key 也算成功，正好符合回收语义（重试要幂等）
+    await env.IMAGES.delete(deleted);
+  }
+
+  return json(200, { deleted: deleted.length, rejected });
+}
+
+/** key 必须形如 u/<id>/<hex>.<ext>，不含路径穿越 */
+export function isSafeImageKey(key: string): boolean {
+  if (!key || key.length > 256) return false;
+  if (key.includes("..") || key.includes("//")) return false;
+  return /^u\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8,64}\.(png|jpg|gif|webp)$/.test(key);
+}
+
+/** 常量时间比较，避免令牌被逐字符试出来 */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 /**
