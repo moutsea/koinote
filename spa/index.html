@@ -8,6 +8,10 @@
       name="description"
       content="Typora 式所见即所得的在线 Markdown 编辑器，边写边渲染，随时导出。"
     />
+    <!-- 文件在仓库根的 public/（vite.config.ts 里 publicDir 指向那里，不是 spa/public/）。
+         用 SVG 而非 .ico：一个文件覆盖所有尺寸，仓库里也不必放二进制资源。 -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
   </head>
   <body class="min-h-full">
     <div id="root"></div>
