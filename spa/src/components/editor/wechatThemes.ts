@@ -1,5 +1,23 @@
 /**
- * 微信公众号主题，15 套。
+ * 微信公众号主题，15 套 × 浅色/深色两个变体。
+ *
+ * ┌─ 新增主题的硬性约束 ────────────────────────────────────────────┐
+ * │ 1. rules 与 dark 都必须给。dark 里 body 与 pre 是必填 —— 类型会拦。   │
+ * │ 2. dark.body 必须同时声明 background 与 color，且底色确实是深色、    │
+ * │    与文字色有足够反差；dark.pre 的底色必须是深色。这三条类型拦不住，  │
+ * │    由 npm run test:themes 在运行时拦。                            │
+ * │ 3. 只写与浅色不同的声明，其余自动沿用 —— 不要整套复制粘贴，那样改一处 │
+ * │    要记得改两处，迟早漂移。                                        │
+ * │ 4. 伪元素一律不能用，见下方第 1 条限制。                            │
+ * └──────────────────────────────────────────────────────────────┘
+ *
+ * 两个变体的分工：
+ *   · 浅色 (rules)：编辑区、分享页的浅色模式，以及**所有微信导出**。公众号的
+ *     阅读界面是白底，把深色 section 粘进去，读者看到的是一块突兀的黑区。
+ *   · 深色 (dark)：只作用于编辑区与分享页的深色模式，不参与导出。
+ *
+ * 因此深色模式下「所见即所得」有一处让位：你在深色下写，粘出去是浅色版。这是
+ * 有意的 —— 另一种做法是深色模式下把编辑区强行留白，那样整个界面更割裂。
  *
  * 为什么是「标签名 → 声明串」而不是 CSS 文本：
  * 微信编辑器会剥掉 <style> 标签和 class 选择器，样式必须内联到每个元素的
@@ -91,6 +109,19 @@ export type WechatThemeRules = {
   td: string;
 };
 
+/**
+ * 深色变体：只写与浅色不同的那些标签，其余自动沿用浅色。
+ *
+ * body 与 pre 是必填，不给默认沿用：
+ *   · body 决定整块的底色与文字色，不重写就会在深色模式下留一块白板 ——
+ *     这正是要解决的问题
+ *   · pre 的底色决定代码高亮走哪套配色（themeCss.ts 按亮度分流），浅底代码块
+ *     配在深色页面上会突然亮一块
+ * 其余标签按需覆盖。新增主题时这两项漏了就是编译错误。
+ */
+export type WechatThemeDark = Partial<WechatThemeRules> &
+  Pick<WechatThemeRules, "body" | "pre">;
+
 export type WechatTheme = {
   id: WechatThemeId;
   /** 主题名，四语言共用 —— 风格名不翻译，译了反而认不出 */
@@ -98,8 +129,29 @@ export type WechatTheme = {
   /** 一句话说明适用场景 */
   hint: string;
   group: WechatThemeGroup;
+  /** 浅色变体。微信导出恒定用这一套 —— 公众号阅读界面是白底 */
   rules: WechatThemeRules;
+  /** 深色变体。只作用于编辑区与分享页，不参与导出 */
+  dark: WechatThemeDark;
 };
+
+/**
+ * 合出某一模式下的完整规则表。
+ *
+ * 浅色声明在前、深色覆盖在后靠 CSS 后来者优先生效，与 wechatInline 里
+ * 「主题规则在前、保留样式在后」是同一个手法。
+ */
+export function resolveThemeRules(
+  theme: WechatTheme,
+  mode: "light" | "dark",
+): WechatThemeRules {
+  if (mode === "light") return theme.rules;
+  const merged = { ...theme.rules } as Record<string, string>;
+  for (const [tag, value] of Object.entries(theme.dark)) {
+    if (value) merged[tag] = `${merged[tag] ?? ""}${value}`;
+  }
+  return merged as unknown as WechatThemeRules;
+}
 
 const SANS =
   '-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
@@ -107,6 +159,39 @@ const SERIF =
   'Georgia,"Times New Roman","Songti SC","Noto Serif CJK SC",SimSun,serif';
 const SONGTI = '"Songti SC","Noto Serif CJK SC",Georgia,"Times New Roman",SimSun,serif';
 const MONO = '"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
+
+/**
+ * 深色变体的公共底座。
+ *
+ * 取值贴着应用自身的深色（globals.css 的 --background:#0a0a0a）：差一档而不是
+ * 差一大截，编辑区才像同一个界面里的一块纸，而不是嵌进来的另一个网站。
+ * 主题的辨识度靠强调色留在标题、边框、链接上，不靠底色。
+ */
+const DARK = {
+  /** 比应用底色亮一档，能看出是「纸」但不割裂 */
+  surface: "#101013",
+  text: "#e4e4e7",
+  /** 次要文字：引用、em、说明 */
+  muted: "#a1a1aa",
+  border: "#2a2a31",
+  /** 代码块底色。必须是深底，否则高亮配色会被判成浅色那套 */
+  code: "#17171b",
+  codeText: "#d4d4d8",
+};
+
+/** 深色下表格与引用的公共写法，15 套里大部分只需要换强调色 */
+const darkShared = (accent: string) => ({
+  body: `color:${DARK.text};background:${DARK.surface};`,
+  pre: `background:${DARK.code};color:${DARK.codeText};`,
+  "pre code": `color:${DARK.codeText};`,
+  code: `background:${DARK.code};color:${accent};`,
+  blockquote: `background:#16161a;border-color:${accent};color:${DARK.muted};`,
+  em: `color:${DARK.muted};`,
+  hr: `border-color:${DARK.border};`,
+  a: `color:${accent};`,
+  th: `background:#1b1b20;border-color:${DARK.border};color:${DARK.text};`,
+  td: `border-color:${DARK.border};`,
+});
 
 /** 图片在微信里必须收宽度，否则溢出容器 */
 const IMG = "max-width:100%;height:auto;display:block;margin:18px auto;";
@@ -144,6 +229,15 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #ddd;padding:8px 10px;background:#f5f5f5;font-weight:700;text-align:left;",
       td: "border:1px solid #ddd;padding:8px 10px;",
     },
+    dark: {
+      ...darkShared("#e4e4e7"),
+      // 极简的强调本来就是纯黑，深色下翻成纯白
+      h1: `color:#fff;border-color:#52525b;`,
+      h2: `color:#fff;border-left-color:#fff;`,
+      h3: `color:${DARK.text};`,
+      h4: `color:${DARK.muted};`,
+      strong: `color:#fff;`,
+    },
   },
   {
     id: "medium",
@@ -173,6 +267,17 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #d8d8d8;padding:8px 10px;background:#fafafa;font-weight:700;text-align:left;",
       td: "border:1px solid #d8d8d8;padding:8px 10px;",
+    },
+    dark: {
+      // 衬线正文在深色下要略降字重，否则笔画糊在一起
+      ...darkShared("#c8c8cd"),
+      body: `color:#dcdce0;background:${DARK.surface};`,
+      h1: `color:#fff;`,
+      h2: `color:#fff;`,
+      h3: `color:${DARK.text};`,
+      h4: `color:${DARK.muted};`,
+      blockquote: `border-color:#71717a;color:${DARK.muted};`,
+      strong: `color:#fff;`,
     },
   },
   {
@@ -204,6 +309,27 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:3px solid #111;padding:8px 10px;background:#111;color:#f5ff00;font-weight:950;text-align:left;",
       td: "border:3px solid #111;padding:8px 10px;",
     },
+    dark: {
+      // 荧光黄与青本来就是深底上的配色，留着；翻的是「黑框白底」那部分
+      body: `color:${DARK.text};background:#0b0b0c;`,
+      pre: `background:#000;color:#00e5ff;`,
+      "pre code": "color:#00e5ff;",
+      h1: "color:#f5ff00;border-color:#f5ff00;",
+      h2: "background:#f5ff00;color:#0b0b0c;",
+      h3: "color:#fff;",
+      h4: "color:#f5ff00;",
+      blockquote: "background:#f5ff00;color:#0b0b0c;",
+      // 卡片式 li 的浅灰底在深色下要压掉
+      li: "background:#16161a;border-left-color:#f5ff00;",
+      strong: "background:#f5ff00;color:#0b0b0c;",
+      em: `color:${DARK.muted};`,
+      code: "background:#000;color:#00e5ff;",
+      a: "color:#0b0b0c;background:#f5ff00;",
+      hr: "background:#f5ff00;",
+      img: "border-color:#f5ff00;",
+      th: "background:#f5ff00;color:#0b0b0c;border-color:#f5ff00;",
+      td: "border-color:#f5ff00;",
+    },
   },
   {
     id: "verge",
@@ -233,6 +359,26 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:3px solid #111;padding:8px 10px;background:#111;color:#bcff2f;font-weight:950;text-align:left;",
       td: "border:3px solid #111;padding:8px 10px;",
+    },
+    dark: {
+      // 粉配柠檬绿在深底上更跳，浅粉背景要换掉
+      body: `color:${DARK.text};background:#0c0a0c;padding:20px 16px;`,
+      pre: "background:#000;color:#bcff2f;",
+      "pre code": "color:#bcff2f;",
+      h1: "background:#ff4fd8;color:#0c0a0c;box-shadow:8px 8px 0 #bcff2f;",
+      h2: "background:#bcff2f;color:#0c0a0c;",
+      h3: "color:#fff;border-bottom-color:#ff4fd8;",
+      h4: "color:#ff8ae6;",
+      blockquote: "border-color:#ff4fd8;background:#16121a;color:#e9e9ee;",
+      li: "background:#16121a;border-left-color:#ff4fd8;",
+      strong: "background:#bcff2f;color:#0c0a0c;",
+      em: "color:#ff8ae6;",
+      code: "background:#000;color:#bcff2f;",
+      a: "color:#0c0a0c;background:#bcff2f;",
+      hr: "background:#ff4fd8;",
+      img: "border-color:#ff4fd8;",
+      th: "background:#ff4fd8;color:#0c0a0c;border-color:#ff4fd8;",
+      td: "border-color:#ff4fd8;",
     },
   },
   {
@@ -264,6 +410,18 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #d9e2f3;padding:8px 10px;background:#f1f5ff;font-weight:700;text-align:left;color:#0a2540;",
       td: "border:1px solid #d9e2f3;padding:8px 10px;",
     },
+    dark: {
+      ...darkShared("#a5a0ff"),
+      // 底色带一点蓝，保住 Stripe 的冷调
+      body: `color:#dcdce4;background:#0d0d12;padding:20px 16px;`,
+      h1: "color:#fff;",
+      h2: "background:#16161f;color:#c9c5ff;border-left-color:#7c74ff;",
+      h3: "color:#b8b8c4;",
+      h4: "color:#9c9caa;",
+      blockquote: "background:#14141a;border-color:#7c74ff;color:#c4c4d0;",
+      li: "background:#14141a;border-color:#26262f;border-left-color:#7c74ff;",
+      strong: "color:#fff;",
+    },
   },
   {
     id: "apple",
@@ -293,6 +451,23 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #d2d2d7;padding:8px 10px;background:#f5f5f7;font-weight:700;text-align:left;",
       td: "border:1px solid #d2d2d7;padding:8px 10px;",
+    },
+    dark: {
+      ...darkShared("#2997ff"),
+      // Apple 深色界面的惯用值：近黑底 + #f5f5f7 文字 + #2997ff 链接
+      body: "color:#f5f5f7;background:#0d0d0f;",
+      h1: "color:#f5f5f7;",
+      h2: "color:#f5f5f7;",
+      h3: "color:#c7c7cc;",
+      h4: "color:#aeaeb2;",
+      blockquote: "background:#1c1c1e;color:#c7c7cc;border-radius:10px;",
+      pre: "background:#1c1c1e;color:#f5f5f7;border-radius:10px;",
+      "pre code": "color:#f5f5f7;",
+      code: "background:#1c1c1e;color:#f5f5f7;",
+      strong: "color:#f5f5f7;",
+      hr: "border-color:#38383a;",
+      th: "background:#1c1c1e;border-color:#38383a;color:#f5f5f7;",
+      td: "border-color:#38383a;",
     },
   },
   {
@@ -324,6 +499,24 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #8a7356;padding:8px 10px;background:#f5dec4;font-weight:800;text-align:left;color:#3b2b1d;",
       td: "border:1px solid #8a7356;padding:8px 10px;",
     },
+    dark: {
+      // FT 的身份是那层暖粉底。深色下改成暖褐调，不退成中性灰
+      body: "color:#e8ded0;background:#14100c;padding:20px 16px;",
+      pre: "background:#1c1611;color:#e8ded0;",
+      "pre code": "color:#e8ded0;",
+      code: "background:#1c1611;color:#d9a86c;",
+      h1: "color:#f5ead8;border-bottom-color:#8a7356;",
+      h2: "color:#e8d3b5;border-top-color:#6b5a44;",
+      h3: "color:#d4bd9c;",
+      h4: "color:#b8a184;",
+      blockquote: "background:#1c1611;border-color:#8a7356;color:#cbb99f;",
+      strong: "color:#f5ead8;",
+      em: "color:#c0ab90;",
+      a: "color:#d9a86c;",
+      hr: "border-color:#4a3d2e;",
+      th: "background:#1c1611;border-color:#4a3d2e;color:#e8d3b5;",
+      td: "border-color:#4a3d2e;",
+    },
   },
   {
     id: "linear",
@@ -353,6 +546,11 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #2b2b33;padding:8px 10px;background:#242432;font-weight:800;text-align:left;color:#c4b5fd;",
       td: "border:1px solid #2b2b33;padding:8px 10px;color:#d7d7e1;",
+    },
+    dark: {
+      // 本来就是深色设计。只把底色往应用底色靠一档，其余照旧
+      body: `color:#d7d7e1;background:#0d0d10;padding:20px 16px;`,
+      pre: "background:#1a1a22;color:#c4b5fd;",
     },
   },
   {
@@ -384,6 +582,24 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #d0d7de;padding:8px 10px;background:#f6f8fa;font-weight:700;text-align:left;",
       td: "border:1px solid #d0d7de;padding:8px 10px;",
     },
+    dark: {
+      // 直接用 GitHub Dark 的官方取值，这套主题的辨识度全在配色上
+      body: "color:#e6edf3;background:#0d1117;",
+      pre: "background:#161b22;color:#e6edf3;",
+      "pre code": "color:#e6edf3;",
+      code: "background:#161b22;color:#e6edf3;",
+      h1: "color:#e6edf3;border-bottom-color:#30363d;",
+      h2: "color:#e6edf3;border-bottom-color:#21262d;",
+      h3: "color:#e6edf3;",
+      h4: "color:#c9d1d9;",
+      blockquote: "border-color:#30363d;background:#0d1117;color:#8b949e;",
+      strong: "color:#e6edf3;",
+      em: "color:#8b949e;",
+      a: "color:#4493f8;",
+      hr: "border-color:#30363d;",
+      th: "background:#161b22;border-color:#30363d;color:#e6edf3;",
+      td: "border-color:#30363d;",
+    },
   },
   {
     id: "notion",
@@ -413,6 +629,24 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #e7e6e2;padding:8px 10px;background:#f7f6f3;font-weight:700;text-align:left;",
       td: "border:1px solid #e7e6e2;padding:8px 10px;",
+    },
+    dark: {
+      // Notion 深色的实际取值：#191919 底 + #d4d4d4 文字，高亮块换成低饱和棕
+      ...darkShared("#a8a29e"),
+      body: "color:#d4d4d4;background:#191919;padding:20px 16px;",
+      h1: "color:#eaeaea;",
+      h2: "background:#252525;color:#eaeaea;",
+      h3: "color:#d4d4d4;",
+      h4: "color:#a8a8a8;",
+      blockquote: "background:#252525;border-color:#5a5a5a;color:#b4b4b4;",
+      pre: "background:#252525;color:#d4d4d4;",
+      "pre code": "color:#d4d4d4;",
+      code: "background:#252525;color:#d4d4d4;",
+      // 浅色下是 #fff2cc 荧光块，深色下亮黄会刺眼
+      strong: "background:#3d3527;color:#f5e6c8;",
+      hr: "border-color:#2f2f2f;",
+      th: "background:#252525;border-color:#2f2f2f;color:#eaeaea;",
+      td: "border-color:#2f2f2f;",
     },
   },
   {
@@ -446,6 +680,18 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #bdbdbd;padding:8px 10px;background:#fafafa;font-weight:700;text-align:left;",
       td: "border:1px solid #bdbdbd;padding:8px 10px;",
     },
+    dark: {
+      ...darkShared("#c8c8cd"),
+      body: "color:#dedede;background:#0f0f10;",
+      h1: "color:#fff;border-bottom-color:#5a5a5a;",
+      h2: "color:#fff;",
+      h3: "color:#d4d4d4;",
+      h4: "color:#b4b4b4;",
+      // 上下细线的 pull quote 在深色下要提亮线条才看得见
+      blockquote: "border-top-color:#3f3f46;border-bottom-color:#3f3f46;background:transparent;color:#b4b4b4;",
+      strong: "color:#fff;",
+      hr: "border-color:#4a4a4a;",
+    },
   },
   {
     id: "editorial",
@@ -478,6 +724,16 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #e0e0e0;padding:8px 10px;background:#f5f5f5;font-weight:700;text-align:left;",
       td: "border:1px solid #e0e0e0;padding:8px 10px;",
     },
+    dark: {
+      ...darkShared("#d4d4d8"),
+      h1: "color:#fff;",
+      h2: "color:#fff;border-left-color:#fff;",
+      h3: "color:#d4d4d8;",
+      h4: "color:#a1a1aa;",
+      blockquote: "border-color:#71717a;background:transparent;color:#b4b4bb;",
+      // 荧光笔渐变在深底上要用深灰，浅灰会盖住文字
+      strong: "color:#fff;background:linear-gradient(transparent 62%,#3f3f46 0);",
+    },
   },
   {
     id: "newspaper",
@@ -507,6 +763,18 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #999;padding:7px 9px;background:#eee;font-weight:700;text-align:left;",
       td: "border:1px solid #999;padding:7px 9px;",
+    },
+    dark: {
+      ...darkShared("#c8c8cd"),
+      body: "color:#dcdcdc;background:#0f0f0f;",
+      // 双线与粗横线是报刊的骨架，深色下必须提亮才留得住
+      h1: "color:#fff;border-bottom-color:#8a8a8a;",
+      h2: "color:#fff;border-top-color:#8a8a8a;",
+      h3: "color:#d4d4d4;",
+      h4: "color:#b4b4b4;",
+      blockquote: "border-color:#6b6b6b;background:#161616;color:#b4b4b4;",
+      strong: "color:#fff;",
+      hr: "border-color:#5a5a5a;",
     },
   },
   {
@@ -538,6 +806,16 @@ export const WECHAT_THEMES: WechatTheme[] = [
       th: "border:1px solid #ddd;padding:8px 10px;background:#f3f3f3;font-weight:700;text-align:left;",
       td: "border:1px solid #ddd;padding:8px 10px;",
     },
+    dark: {
+      ...darkShared("#7dd3fc"),
+      h1: "color:#fff;",
+      h2: "background:#1c1c22;color:#fff;",
+      h3: "color:#e4e4e7;border-bottom-color:#52525b;",
+      h4: "color:#a1a1aa;",
+      blockquote:
+        "background:#16161a;border-top-color:#2f2f36;border-bottom-color:#2f2f36;color:#b4b4bb;",
+      strong: "color:#fff;",
+    },
   },
   {
     id: "event",
@@ -567,6 +845,24 @@ export const WECHAT_THEMES: WechatTheme[] = [
       table: TABLE,
       th: "border:1px solid #e8c4c4;padding:8px 10px;background:#fff0f0;font-weight:800;text-align:left;color:#8f1f1d;",
       td: "border:1px solid #e8c4c4;padding:8px 10px;",
+    },
+    dark: {
+      // 深色下 #8f1f1d 这种暗红几乎黑掉，整套红要往亮处提
+      body: "color:#e8dcdc;background:#130f0f;",
+      pre: "background:#1e1414;color:#f0b8b6;",
+      "pre code": "color:#f0b8b6;",
+      code: "background:#1e1414;color:#ff8a86;",
+      h1: "color:#ff8a86;border-color:#ff8a86;background:#1a1212;",
+      h2: "color:#ff8a86;border-bottom-color:#ff8a86;",
+      h3: "color:#e8c4c2;",
+      h4: "color:#c9a4a2;",
+      blockquote: "background:#7a1a18;color:#ffe8e7;",
+      strong: "color:#ff8a86;",
+      em: "color:#c9a4a2;",
+      a: "color:#ff8a86;",
+      hr: "background:#ff8a86;",
+      th: "background:#1e1414;border-color:#4a2c2c;color:#ff8a86;",
+      td: "border-color:#4a2c2c;",
     },
   },
 ];

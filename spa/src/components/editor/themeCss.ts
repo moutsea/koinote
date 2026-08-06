@@ -1,4 +1,8 @@
-import { findWechatTheme, type WechatThemeRules } from "./wechatThemes";
+import {
+  findWechatTheme,
+  resolveThemeRules,
+  type WechatThemeRules,
+} from "./wechatThemes";
 
 /**
  * 把主题规则转成作用域 CSS，让编辑区直接显示排版效果。
@@ -26,7 +30,8 @@ const FALLBACK = `
 .${THEME_SCOPE} .ProseMirror h6{font-weight:700;margin:20px 0 8px;}
 .${THEME_SCOPE} .ProseMirror s,
 .${THEME_SCOPE} .ProseMirror del{text-decoration:line-through;opacity:.75;}
-.${THEME_SCOPE} .ProseMirror mark{background:#fff3a3;color:inherit;padding:0 2px;}
+.${THEME_SCOPE} .ProseMirror mark{background:#fff3a3;color:#1a1a1a;padding:0 2px;}
+.dark .${THEME_SCOPE} .ProseMirror mark{background:#4a3f1f;color:#f5e6c8;}
 .${THEME_SCOPE} .ProseMirror sub,
 .${THEME_SCOPE} .ProseMirror sup{font-size:.75em;}
 `;
@@ -37,52 +42,107 @@ const FALLBACK = `
  * globals.css 里那套是 GitHub Dark，字符串用 #a5d6ff 这类亮色 —— 落在 minimal
  * 的 #f2f2f2 代码块上基本看不见。主题的 pre 底色深浅不一，得按亮度分流。
  */
-const HLJS_LIGHT = `
-.${THEME_SCOPE} .hljs-comment,.${THEME_SCOPE} .hljs-quote{color:#6a737d;}
-.${THEME_SCOPE} .hljs-keyword,.${THEME_SCOPE} .hljs-selector-tag,
-.${THEME_SCOPE} .hljs-literal,.${THEME_SCOPE} .hljs-type{color:#d73a49;}
-.${THEME_SCOPE} .hljs-string,.${THEME_SCOPE} .hljs-attr,
-.${THEME_SCOPE} .hljs-template-tag{color:#032f62;}
-.${THEME_SCOPE} .hljs-number,.${THEME_SCOPE} .hljs-symbol{color:#005cc5;}
-.${THEME_SCOPE} .hljs-title,.${THEME_SCOPE} .hljs-title.function_,
-.${THEME_SCOPE} .hljs-section{color:#6f42c1;}
-.${THEME_SCOPE} .hljs-variable,.${THEME_SCOPE} .hljs-name,
-.${THEME_SCOPE} .hljs-attribute{color:#e36209;}
-.${THEME_SCOPE} .hljs-built_in,.${THEME_SCOPE} .hljs-builtin-name{color:#e36209;}
-.${THEME_SCOPE} .hljs-meta{color:#6a737d;}
-`;
+/** GitHub Light 精简版，用于浅底代码块 */
+const HLJS_LIGHT = {
+  comment: "#6a737d",
+  keyword: "#d73a49",
+  string: "#032f62",
+  number: "#005cc5",
+  title: "#6f42c1",
+  variable: "#e36209",
+};
+
+/** GitHub Dark 精简版，与 globals.css 里那套一致 */
+const HLJS_DARK = {
+  comment: "#8b949e",
+  keyword: "#ff7b72",
+  string: "#a5d6ff",
+  number: "#79c0ff",
+  title: "#d2a8ff",
+  variable: "#ffa657",
+};
+
+/** 按作用域前缀生成一套 hljs 配色 */
+function hljsCSS(scope: string, c: typeof HLJS_LIGHT): string {
+  const s = (names: string[], color: string) =>
+    `${names.map((n) => `${scope} .hljs-${n}`).join(",")}{color:${color};}`;
+  return [
+    s(["comment", "quote"], c.comment),
+    s(["keyword", "selector-tag", "literal", "type"], c.keyword),
+    s(["string", "attr", "template-tag"], c.string),
+    s(["number", "symbol"], c.number),
+    s(["title", "title.function_", "section"], c.title),
+    s(["variable", "name", "attribute"], c.variable),
+    s(["built_in", "builtin-name"], c.variable),
+    s(["meta"], c.comment),
+  ].join("\n");
+}
 
 /** 规则表里需要特殊处理的键，其余按标签名直接拼 */
 const SPECIAL = new Set(["body", "pre code"]);
 
+/** 生成某一模式下的规则块。scope 决定它挂在浅色还是 .dark 下 */
+function blockFor(
+  rules: Record<string, string | undefined>,
+  scope: string,
+): string[] {
+  const parts: string[] = [
+    `${scope}{${rules.body ?? ""}}`,
+    // ProseMirror 自己有 padding/min-height，别被主题的 body 规则顶掉
+    `${scope} .ProseMirror{background:transparent;color:inherit;}`,
+  ];
+
+  for (const [key, value] of Object.entries(rules)) {
+    if (!value || SPECIAL.has(key)) continue;
+    parts.push(`${scope} .ProseMirror ${key}{${value}}`);
+  }
+
+  const preCode = rules["pre code"];
+  if (preCode) parts.push(`${scope} .ProseMirror pre code{${preCode}}`);
+
+  return parts;
+}
+
 /**
- * 生成整段 CSS。
+ * 生成整段 CSS：浅色块 + .dark 作用域下的深色块。
+ *
+ * 两套同时输出而不是按当前模式只出一套：应用的深色是 .dark class 切的，切换时
+ * 不该重新生成样式表 —— 那会让主题在切换瞬间闪一下。
  *
  * body 规则落到作用域容器自身：字体、字号、行高、背景由子元素继承，这跟导出时
  * 把 body 声明写在最外层 <section> 上是同一个道理。
  */
 export function themeToCSS(themeId: string): string {
   if (!themeId) return ""; // 空串 = 不套主题，保留应用默认排版
-  const rules = findWechatTheme(themeId).rules as Record<string, string | undefined>;
+  const theme = findWechatTheme(themeId);
+  const light = theme.rules as unknown as Record<string, string | undefined>;
+  const dark = resolveThemeRules(theme, "dark") as unknown as Record<
+    string,
+    string | undefined
+  >;
 
-  const parts: string[] = [
-    `.${THEME_SCOPE}{${rules.body ?? ""}}`,
-    // ProseMirror 自己有 padding/min-height，别被主题的 body 规则顶掉
-    `.${THEME_SCOPE} .ProseMirror{background:transparent;color:inherit;}`,
+  const parts = [
+    ...blockFor(light, `.${THEME_SCOPE}`),
+    ...blockFor(dark, `.dark .${THEME_SCOPE}`),
   ];
 
-  for (const [key, value] of Object.entries(rules)) {
-    if (!value || SPECIAL.has(key)) continue;
-    parts.push(`.${THEME_SCOPE} .ProseMirror ${key}{${value}}`);
-  }
-
-  const preCode = rules["pre code"];
-  if (preCode) {
-    parts.push(`.${THEME_SCOPE} .ProseMirror pre code{${preCode}}`);
-  }
-
   parts.push(FALLBACK);
-  if (isLightBackground(rules.pre)) parts.push(HLJS_LIGHT);
+
+  // 代码高亮按各模式下 pre 的实际底色分流。
+  //
+  // 两种模式都显式输出，即使某套主题的取值恰好与 globals.css 相同 ——
+  // 靠继承的话，globals.css 那套配色一改，这些主题会跟着变，而「它依赖全局配色」
+  // 这件事在主题定义里看不出来。
+  parts.push(
+    hljsCSS(
+      `.${THEME_SCOPE}`,
+      isLightBackground(light.pre) ? HLJS_LIGHT : HLJS_DARK,
+    ),
+    hljsCSS(
+      `.dark .${THEME_SCOPE}`,
+      isLightBackground(dark.pre) ? HLJS_LIGHT : HLJS_DARK,
+    ),
+  );
 
   return parts.join("\n");
 }
@@ -92,9 +152,14 @@ export function themeToCSS(themeId: string): string {
  *
  * 只认 #rgb / #rrggbb —— 主题里的 pre 背景都是这两种写法。取不到就当深色，
  * 沿用 globals.css 的 GitHub Dark 配色（那是没有主题时的现状，不改更安全）。
+ *
+ * 取最后一个 background 而不是第一个：深色变体是「浅色声明 + 深色声明」拼出来
+ * 的，同一个声明串里会出现两次 background，CSS 里生效的是后者。取第一个会把
+ * 深色模式全判成浅底，高亮配色整套错。
  */
 function isLightBackground(preRules: string | undefined): boolean {
-  const hex = preRules?.match(/background:\s*(#[0-9a-fA-F]{3,6})/)?.[1];
+  const matches = preRules?.match(/background:\s*(#[0-9a-fA-F]{3,6})/g);
+  const hex = matches?.[matches.length - 1]?.match(/#[0-9a-fA-F]{3,6}/)?.[0];
   if (!hex) return false;
   const full =
     hex.length === 4
