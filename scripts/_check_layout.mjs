@@ -7,6 +7,7 @@ import {
   containerClass,
   contentWidthFor,
   hasFooter,
+  isUnder,
   widthClass,
 } from "./_layout_bundle.mjs";
 
@@ -252,6 +253,40 @@ for (const prefix of FOOTERLESS_PREFIXES) {
     `${prefix} 在宽度表里`,
     ROUTE_WIDTHS.some((entry) => entry.prefix === prefix),
     ROUTE_WIDTHS.map((e) => e.prefix),
+  );
+}
+
+// ---------- isUnder：三处共用的前缀判定 ----------
+//
+// 宽度表、页脚开关、页头导航高亮都走它。原先这条规则在三个地方各写了一遍，
+// 现在收成一个函数，所以这里把它自己钉住。
+ok("精确命中", isUnder("/editor", "/editor"), true);
+ok("子路径命中", isUnder("/editor/abc", "/editor"), true);
+ok("深层子路径命中", isUnder("/editor/a/b/c", "/editor"), true);
+ok("末尾斜杠等同", isUnder("/editor/", "/editor"), true);
+ok("多个末尾斜杠等同", isUnder("/editor///", "/editor"), true);
+
+// 关键的一条：同名前缀的兄弟路径不算命中。
+// 裸 startsWith 在这里会返回 true，于是访问 /editor-guide 时页头的「编辑器」会高亮、
+// 页脚会消失 —— 两个都是很难联想到前缀匹配的症状
+ok("同名前缀不命中", !isUnder("/editor-guide", "/editor"), false);
+ok("同名前缀不命中(2)", !isUnder("/editorx", "/editor"), false);
+ok("不相关路径不命中", !isUnder("/dashboard", "/editor"), false);
+ok("父路径不命中子前缀", !isUnder("/editor", "/editor/settings"), false);
+
+// 根前缀只命中根本身，否则它会吃掉一切
+ok("根命中根", isUnder("/", "/"), true);
+ok("空串按根算", isUnder("", "/"), true);
+ok("根不命中 /dashboard", !isUnder("/dashboard", "/"), false);
+ok("根不命中 /editor", !isUnder("/editor", "/"), false);
+
+// hasFooter 与 contentWidthFor 都建立在 isUnder 之上，这里确认它们真的一致：
+// 若哪天有人给其中一个换了匹配规则，这组会失败
+for (const path of ["/editor", "/editor/x", "/editor-guide", "/share/x", "/shared"]) {
+  eq(
+    `hasFooter 与 isUnder 一致: ${path}`,
+    hasFooter(path),
+    !FOOTERLESS_PREFIXES.some((p) => isUnder(path, p)),
   );
 }
 

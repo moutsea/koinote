@@ -1,10 +1,20 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Moon, Sun, FileText, Globe, Check } from "lucide-react";
+import {
+  Moon,
+  Sun,
+  FileText,
+  Globe,
+  Check,
+  User,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+} from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
 import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
-import { EDGE_PADDING, hasFooter } from "../layout";
+import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
 
@@ -55,18 +65,15 @@ export function AppShell() {
             <InkSeal className="ml-0.5 hidden h-7 px-0.5 text-[10px] sm:inline-flex" />
           </Link>
 
+          {/* 主导航只留编辑器。控制台是账号自己的东西（我的文档、注册时间、邮箱），
+              归到右侧的账户菜单里；顶栏留给「产品能做什么」那一类入口 */}
           <nav
             className="ml-4 hidden items-center gap-5 text-sm sm:flex"
             style={{ color: "var(--ink-mid)" }}
           >
-            <HeaderLink to="/editor" active={pathname.startsWith("/editor")}>
+            <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
-            {user && (
-              <HeaderLink to="/dashboard" active={pathname.startsWith("/dashboard")}>
-                {t.nav.dashboard}
-              </HeaderLink>
-            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
@@ -88,22 +95,12 @@ export function AppShell() {
             </button>
 
             {session.isLoading ? null : user ? (
-              <div className="flex items-center gap-3">
-                <span
-                  className="hidden text-sm sm:inline"
-                  style={{ color: "var(--ink-mid)" }}
-                >
-                  {user.nickname || user.username || user.email}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-full border px-4 py-1.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
-                  style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
-                >
-                  {t.nav.logout}
-                </button>
-              </div>
+              <UserMenu
+                name={user.nickname || user.username || user.email}
+                email={user.email}
+                dashboardActive={isUnder(pathname, "/dashboard")}
+                onLogout={handleLogout}
+              />
             ) : (
               // 主行动按钮走朱砂，全站唯一的高饱和色留给它
               <Link
@@ -123,6 +120,126 @@ export function AppShell() {
       </main>
 
       {hasFooter(pathname) && <AppFooter />}
+    </div>
+  );
+}
+
+/**
+ * 账户菜单。控制台入口从顶栏挪进来了。
+ *
+ * 触发器上显示用户名，但读屏只念一个人名不知道那是什么，所以 aria-label 写「账户菜单」，
+ * 靠 aria-expanded 播报开合状态。
+ */
+function UserMenu({
+  name,
+  email,
+  dashboardActive,
+  onLogout,
+}: {
+  name: string;
+  email: string;
+  dashboardActive: boolean;
+  onLogout: () => void | Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label={t.nav.userMenu}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          // 不冒泡到 window：否则上面那个 close 会立刻把刚打开的菜单关掉
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="flex h-9 max-w-40 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+        style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+      >
+        <User className="h-4 w-4 shrink-0" style={{ color: "var(--ink-mid)" }} />
+        {/* 用户名可能很长，截断而不是把页头挤变形 */}
+        <span className="hidden truncate sm:inline">{name}</span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          style={{ color: "var(--ink-faint)" }}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={t.nav.userMenu}
+          className="absolute right-0 top-11 z-50 min-w-52 overflow-hidden rounded-xl border py-1 shadow-lg"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+          }}
+        >
+          {/* 账号身份：菜单里重复一次，因为触发器在小屏上只有图标 */}
+          <div
+            className="border-b px-3 pb-2 pt-1.5"
+            style={{ borderColor: "var(--ink-line)" }}
+          >
+            <p
+              className="truncate text-sm font-medium"
+              style={{ color: "var(--ink-black)" }}
+            >
+              {name}
+            </p>
+            {/* 昵称存在时 name 就不是邮箱，这时补一行邮箱；相等则不重复显示 */}
+            {email && email !== name && (
+              <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }}>
+                {email}
+              </p>
+            )}
+          </div>
+
+          <Link
+            to="/dashboard"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: dashboardActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: dashboardActive ? 500 : undefined,
+            }}
+          >
+            <LayoutDashboard className="h-4 w-4 shrink-0" />
+            {t.nav.dashboard}
+          </Link>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              void onLogout();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{ color: "var(--ink-strong)" }}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {t.nav.logout}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ export const fr: Messages = {
     dashboard: "Tableau de bord",
     login: "Se connecter",
     logout: "Se déconnecter",
+    userMenu: "Menu du compte",
   },
   home: {
     badge: "Markdown × IA, conçu pour l'écriture",

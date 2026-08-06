@@ -6,6 +6,7 @@ export const ja: Messages = {
     dashboard: "ダッシュボード",
     login: "ログイン",
     logout: "ログアウト",
+    userMenu: "アカウントメニュー",
   },
   home: {
     badge: "Markdown × AI、書くために生まれた",

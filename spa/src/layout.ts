@@ -58,20 +58,12 @@ const DEFAULT_WIDTH: ContentWidth = "6xl";
 /**
  * 这个路径的正文该用多宽。
  *
- * 按路径分段比对而不是裸 startsWith：
- *   - startsWith("/editor") 会把 /editor-guide 也算成编辑器
- *   - 表里有 "/"，裸 startsWith 会让每个路径都命中它
- *
- * 分段比对下 "/" 只能命中根本身（path.startsWith("//") 永不成立），所以它不会抢走
+ * 匹配规则见 isUnder。分段比对下 "/" 只能命中根本身（"//" 永不成立），所以它不会抢走
  * /dashboard。取最长前缀是为另一种情况准备的：将来若给 /editor/settings 之类单独设
  * 宽度，它必须赢过 /editor，且不能依赖两者在表里的先后。
  */
 export function contentWidthFor(pathname: string): ContentWidth {
-  // 去掉末尾斜杠，让 /editor/ 与 /editor 判定一致；空串按根算
-  const path = pathname.replace(/\/+$/, "") || "/";
-  const matches = ROUTE_WIDTHS.filter(
-    ({ prefix }) => path === prefix || path.startsWith(`${prefix}/`),
-  );
+  const matches = ROUTE_WIDTHS.filter(({ prefix }) => isUnder(pathname, prefix));
   if (matches.length === 0) return DEFAULT_WIDTH;
   // 最长前缀优先："/" 会匹配一切，但更具体的路由该赢
   return matches.reduce((a, b) => (b.prefix.length > a.prefix.length ? b : a)).width;
@@ -103,6 +95,20 @@ export function containerClass(pathname: string): string {
 }
 
 /**
+ * 路径是否落在某个路由前缀之下。
+ *
+ * 全站按前缀判路由的地方都走这里：宽度表、页脚开关、页头导航的高亮态。
+ * 按分段比对而不是裸 startsWith —— 后者会把 /editor-guide 判成编辑器，
+ * 而这类错判的表现（导航项莫名高亮、页脚莫名消失）很难联想到是前缀匹配的问题。
+ *
+ * 末尾斜杠先去掉，让 /editor/ 与 /editor 判定一致；空串按根算。
+ */
+export function isUnder(pathname: string, prefix: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+/**
  * 不挂全站页脚的路由前缀。
  *
  * 编辑器是撑满视口高度的两列工作区，自己管滚动；底下接一段页脚的话，要么被挤出视口
@@ -111,15 +117,7 @@ export function containerClass(pathname: string): string {
  */
 export const FOOTERLESS_PREFIXES = ["/editor", "/share"];
 
-/**
- * 这个路径要不要挂全站页脚。
- *
- * 与 contentWidthFor 一样按分段比对，不用裸 startsWith —— 后者会把 /editor-guide
- * 之类的路径也判成编辑器。
- */
+/** 这个路径要不要挂全站页脚 */
 export function hasFooter(pathname: string): boolean {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return !FOOTERLESS_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
-  );
+  return !FOOTERLESS_PREFIXES.some((prefix) => isUnder(pathname, prefix));
 }

@@ -6,6 +6,7 @@ export const zh: Messages = {
     dashboard: "控制台",
     login: "登录",
     logout: "登出",
+    userMenu: "账户菜单",
   },
   home: {
     badge: "Markdown × AI，为创作而生",

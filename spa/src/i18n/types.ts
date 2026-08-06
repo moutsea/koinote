@@ -16,6 +16,8 @@ export interface Messages {
     dashboard: string;
     login: string;
     logout: string;
+    /** 账户菜单触发器的无障碍名。按钮上显示的是用户名，读屏需要知道它是个菜单 */
+    userMenu: string;
   };
   home: {
     badge: string;

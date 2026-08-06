@@ -6,6 +6,7 @@ export const en: Messages = {
     dashboard: "Dashboard",
     login: "Log in",
     logout: "Log out",
+    userMenu: "Account menu",
   },
   home: {
     badge: "Markdown × AI, built for writing",
