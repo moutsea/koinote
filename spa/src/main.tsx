@@ -71,6 +71,24 @@ const dashboardRoute = createRoute({
   ),
 });
 
+// 条款页：三条路由共用一个 LegalPage，内容按 kind 从 i18n 取。
+// 懒加载同一个 chunk —— 三页的代码完全相同，读者也常常连着看两页
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: lazyRouteComponent(() => import("./pages/LegalPage"), "PrivacyPage"),
+});
+const termsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/terms",
+  component: lazyRouteComponent(() => import("./pages/LegalPage"), "TermsPage"),
+});
+const cookiesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cookies",
+  component: lazyRouteComponent(() => import("./pages/LegalPage"), "CookiesPage"),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   editorRoute,
@@ -79,6 +97,9 @@ const routeTree = rootRoute.addChildren([
   registerRoute,
   dashboardRoute,
   shareRoute,
+  privacyRoute,
+  termsRoute,
+  cookiesRoute,
 ]);
 
 const router = createRouter({

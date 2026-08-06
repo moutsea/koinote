@@ -67,7 +67,7 @@ export function TabBar({
             }}
             className={`group flex max-w-44 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border-b-2 px-2.5 py-1.5 text-xs transition ${
               active
-                ? "border-sky-500 bg-black/[0.03] font-medium dark:bg-white/[0.06]"
+                ? "border-cinnabar-500 bg-black/[0.03] font-medium dark:bg-white/[0.06]"
                 : "border-transparent text-neutral-500 hover:bg-black/[0.02] dark:text-neutral-400 dark:hover:bg-white/[0.03]"
             }`}
           >

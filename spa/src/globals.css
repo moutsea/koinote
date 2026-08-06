@@ -5,19 +5,76 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* =========================================================================
+   水墨 · Ink-wash 设计令牌
+   koinote 的 koi 是锦鲤，全站取中国风：宣纸作底、焦墨为字、朱砂点睛。
+   浅色 = 宣纸微黄 + 焦墨；深色 = 玄墨底 + 淡墨银。朱砂在两个主题下都要拿得住，
+   所以深色下换成更亮的一档（#d8503a），照搬浅色的 #b93b28 会糊在墨底里。
+   ========================================================================= */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f4ee; /* 宣纸 */
+  --foreground: #1f2328; /* 焦墨 */
+
+  --ink-paper: #f6f4ee; /* 宣纸底 */
+  --ink-paper-soft: #fdfcf9; /* 抬起的纸面（卡片） */
+  --ink-black: #1f2328; /* 焦墨 */
+  --ink-strong: #34383f; /* 浓墨 */
+  --ink-mid: #626872; /* 中墨 */
+  --ink-faint: #949aa3; /* 淡墨 */
+  --ink-line: #ddd8cb; /* 飞白描边 */
+  --ink-wash: rgba(142, 116, 70, 0.055); /* 墨晕 */
+  --ink-wash-strong: rgba(142, 116, 70, 0.1);
+  --cinnabar: #b93b28; /* 朱砂 */
+  --cinnabar-soft: rgba(185, 59, 40, 0.14);
+  --ink-footer: #24231f; /* 卷末：比正文更沉 */
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #14130f; /* 玄墨 */
+  --foreground: #ece6d6; /* 淡墨银 */
+
+  --ink-paper: #14130f;
+  --ink-paper-soft: #1c1a15;
+  --ink-black: #ece6d6; /* 深色下反相为亮 */
+  --ink-strong: #d8d1bf;
+  --ink-mid: #9a9483;
+  --ink-faint: #6f6a5c;
+  --ink-line: rgba(236, 230, 214, 0.12);
+  --ink-wash: rgba(236, 230, 214, 0.05);
+  --ink-wash-strong: rgba(236, 230, 214, 0.1);
+  --cinnabar: #d8503a;
+  --cinnabar-soft: rgba(216, 80, 58, 0.18);
+  --ink-footer: #0f0e0b;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+}
+
+/* 朱砂色阶。
+   编辑器里有四十多处强调色（选中态、焦点环、拖放目标环、主按钮），原先是 Tailwind 的
+   sky-*。注册成色阶而不是逐个改写成 var(--cinnabar) 的内联样式：那四十多处用的是
+   bg-/text-/ring-/border- 各种前缀，还带 dark: 变体和 /40 透明度后缀，内联样式表达
+   不了这些，而色阶能让原来的类名原样继续用。
+
+   600 是浅色主题的朱砂本色（与 --cinnabar 同值）；深色主题下 UI 该用 400/500，
+   道理和 --cinnabar 在 .dark 里换亮一档一样 —— #b93b28 压在墨底上会糊掉。
+
+   这是静态色阶，所以用独立的 @theme 而不是上面的 @theme inline：inline 是给
+   「值本身是 var()」的令牌用的。 */
+@theme {
+  --color-cinnabar-50: #fdf4f2;
+  --color-cinnabar-100: #fbe7e3;
+  --color-cinnabar-200: #f7d0c8;
+  --color-cinnabar-300: #efaea1;
+  --color-cinnabar-400: #e4826f;
+  --color-cinnabar-500: #d45a43;
+  --color-cinnabar-600: #b93b28;
+  --color-cinnabar-700: #9c3020;
+  --color-cinnabar-800: #82291d;
+  --color-cinnabar-900: #6d251b;
+  --color-cinnabar-950: #3b0f0a;
 }
 
 html,
@@ -35,6 +92,134 @@ body {
   font-family:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ============ 水墨风装饰件 ============
+   正文一律留给无衬线：宋楷在小字号、低 DPI 屏上笔画会断，长段落读着累。
+   宋体只上标题和品牌字这类大字号、短文本的位置。 */
+
+/* 品牌字：锦鲤笔记这类短标题用楷体，有手写的笔意 */
+.kn-brand-cn {
+  font-family: "Kaiti SC", "STKaiti", "KaiTi", "DFKai-SB", "Songti SC", serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* 标题字：宋体骨架比楷体端正，撑得住大字号 */
+.kn-heading-cn {
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+/* 宣纸纹理：极淡噪点，增纸感而不喧宾夺主。
+   用 radial-gradient 而不是贴图：没有额外请求，且随主题令牌自动换色 */
+.kn-paper-grain {
+  background-image: radial-gradient(var(--ink-wash) 0.5px, transparent 0.5px);
+  background-size: 4px 4px;
+}
+
+/* 墨色链接：hover 由中墨转焦墨。伪类写不进内联 style，只能收在这里 */
+.kn-ink-link:hover {
+  color: var(--ink-black) !important;
+}
+
+/* 墨滴晕开 */
+@keyframes kn-ink-bloom {
+  0% {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+/* 卷轴自上展开 */
+@keyframes kn-scroll-unfurl {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
+  }
+}
+
+/* 朱砂印章盖落：先大后回弹，像手上盖下去的力道 */
+@keyframes kn-seal-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.8) rotate(-12deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.92) rotate(2deg);
+  }
+  75% {
+    transform: scale(1.04) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* 背景墨云缓动 */
+@keyframes kn-ink-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate3d(2%, -3%, 0) scale(1.08);
+    opacity: 0.9;
+  }
+}
+
+.kn-ink-bloom {
+  animation: kn-ink-bloom 1.1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.kn-scroll-unfurl {
+  animation: kn-scroll-unfurl 1.2s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.kn-seal-stamp {
+  animation: kn-seal-stamp 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.kn-ink-drift {
+  animation: kn-ink-drift 14s ease-in-out infinite;
+}
+
+/* 页脚固定深底，不随主题翻转：卷末压一道墨。
+   因此要在这里把墨色令牌就地反相，否则浅色主题下深底上会是深字 */
+.kn-app-footer {
+  --ink-black: #f7f3eb;
+  --ink-strong: #e8e2d7;
+  --ink-mid: #c4beb2;
+  --ink-faint: #928d84;
+  --ink-line: rgba(247, 243, 235, 0.14);
+  --ink-wash: rgba(247, 243, 235, 0.07);
+  --ink-wash-strong: rgba(247, 243, 235, 0.12);
+  --cinnabar: #df6a56;
+  --cinnabar-soft: rgba(223, 106, 86, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-ink-bloom,
+  .kn-scroll-unfurl,
+  .kn-seal-stamp,
+  .kn-ink-drift {
+    animation: none;
+  }
 }
 
 /* ============ ProseMirror / TipTap 编辑器样式 ============ */

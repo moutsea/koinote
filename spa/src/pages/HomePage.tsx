@@ -10,44 +10,83 @@ import {
 import { useCurrentUser } from "../auth";
 import { useI18n } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
+import { InkSeal, InkClouds, ScrollRod, PaperCard } from "../components/Ink";
 
 // 图标与文案一一对应，文案按语言从 t.home.features 取。
 const FEATURE_ICONS = [Eye, FileText, ImageIcon, Sparkles, Download, Zap];
 
 export function HomePage() {
   const user = useCurrentUser();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   return (
-    <div className="flex flex-1 flex-col">
-      {/* Hero */}
+    <div className="flex flex-1 flex-col" style={{ background: "var(--ink-paper)" }}>
+      {/* Hero：墨云铺底，标题竖排印章压角 */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-sky-50 to-transparent dark:from-sky-950/20" />
+        <InkClouds withCinnabar />
+
         {/* 宽度取自 layout.ts 的路由表。标题与副标题各自有 max-w 兜住行长 ——
             通栏指版面占满，不是让文字行拉到 2000px 那么长 */}
         <PageContainer className="py-20 text-center sm:py-28">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
+            style={{
+              borderColor: "var(--cinnabar)",
+              background: "var(--cinnabar-soft)",
+              color: "var(--cinnabar)",
+            }}
+          >
             <Sparkles className="h-3.5 w-3.5" />
             {t.home.badge}
           </span>
+
           {/* max-w-4xl 兜住行长：版面通栏了，但一行标题横跨 2000px 没法读 */}
-          <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1
+            className="kn-heading-cn kn-ink-bloom mx-auto mt-6 max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl"
+            style={{ color: "var(--ink-black)" }}
+          >
             {t.home.title}
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-neutral-600 dark:text-neutral-300">
+
+          {/* 中文品牌名与印章：只在中文界面出现。
+              其他语言下「锦鲤笔记」四个字对读者没有信息量，只是装饰 */}
+          {locale === "zh" && (
+            <div className="mt-5 flex items-center justify-center gap-3">
+              <ScrollRod className="w-16" />
+              <span
+                className="kn-brand-cn text-xl"
+                style={{ color: "var(--ink-mid)" }}
+              >
+                锦鲤笔记
+              </span>
+              <InkSeal className="h-8 px-0.5 text-xs" />
+              <ScrollRod className="w-16" />
+            </div>
+          )}
+
+          <p
+            className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed"
+            style={{ color: "var(--ink-mid)" }}
+          >
             {t.home.subtitle}
           </p>
-          <div className="mt-9 flex items-center justify-center gap-3">
+
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/editor"
-              className="rounded-full bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-500"
+              className="rounded-full px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              style={{ background: "var(--cinnabar)" }}
             >
               {t.home.ctaStart}
             </Link>
             {!user && (
               <Link
                 to="/register"
-                className="rounded-full border border-black/10 px-6 py-3 text-sm font-semibold transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                className="rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-[var(--ink-wash-strong)]"
+                style={{
+                  borderColor: "var(--ink-line)",
+                  color: "var(--ink-strong)",
+                }}
               >
                 {t.home.ctaRegister}
               </Link>
@@ -65,18 +104,29 @@ export function HomePage() {
             {t.home.features.map((feature, i) => {
               const Icon = FEATURE_ICONS[i] ?? FileText;
               return (
-                <div
-                  key={feature.title}
-                  className="rounded-2xl border border-black/5 bg-white/60 p-6 transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/5"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+                <PaperCard key={feature.title} hover className="p-6">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-lg"
+                    style={{
+                      background: "var(--cinnabar-soft)",
+                      color: "var(--cinnabar)",
+                    }}
+                  >
                     <Icon className="h-5 w-5" />
                   </div>
-                  <h3 className="mt-4 font-semibold">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                  <h3
+                    className="kn-heading-cn mt-4 font-semibold"
+                    style={{ color: "var(--ink-black)" }}
+                  >
+                    {feature.title}
+                  </h3>
+                  <p
+                    className="mt-2 text-sm leading-relaxed"
+                    style={{ color: "var(--ink-mid)" }}
+                  >
                     {feature.desc}
                   </p>
-                </div>
+                </PaperCard>
               );
             })}
           </div>

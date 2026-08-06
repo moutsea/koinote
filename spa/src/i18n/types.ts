@@ -188,6 +188,49 @@ export interface Messages {
     theme: string;
     language: string;
   };
+  footer: {
+    tagline: string;
+    brandCn: string;
+    product: string;
+    editor: string;
+    dashboard: string;
+    home: string;
+    built: string;
+    company: string;
+    companyName: string;
+    legal: string;
+    privacy: string;
+    terms: string;
+    cookies: string;
+    copyright: string;
+    allRightsReserved: string;
+    contact: string;
+  };
+  legal: {
+    /** 「更新于 / 生效于」两个标签，日期由代码按 locale 格式化 */
+    updatedLabel: string;
+    effectiveLabel: string;
+    backHome: string;
+    relatedTitle: string;
+    privacy: LegalDoc;
+    terms: LegalDoc;
+    cookies: LegalDoc;
+  };
   // 后端错误码 → 文案。key 与 Go 后端返回的 code 对齐。
   errors: Record<string, string>;
+}
+
+/** 一份法律文档：标题 + 摘要 + 若干条款 */
+export interface LegalDoc {
+  title: string;
+  summary: string;
+  sections: LegalSection[];
+}
+
+export interface LegalSection {
+  title: string;
+  /** 段落。每项一段 */
+  body: string[];
+  /** 可选的要点列表，渲染成 ul */
+  items?: string[];
 }

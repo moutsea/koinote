@@ -286,7 +286,8 @@ export function DocumentList({
         // 空白处右键 = 根菜单。行上的右键已经 stopPropagation，不会走到这里
         onContextMenu={(e) => openMenu(e, { kind: "root" })}
         className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
-          rootOver && rootAcceptsDrop ? "rounded-lg ring-1 ring-inset ring-sky-400" : ""
+          // 500 而不是 400，理由同 TreeRow：拖放落点提示要够 3:1
+          rootOver && rootAcceptsDrop ? "rounded-lg ring-1 ring-inset ring-cinnabar-500" : ""
         }`}
       >
         {error && (
@@ -317,7 +318,7 @@ export function DocumentList({
 
         {/* 拖动中给一条明确落点：内容可能占满滚动区，没有空白可拖 */}
         {dragging && rootAcceptsDrop && (
-          <div className="mt-1 rounded-lg border border-dashed border-sky-400 px-2 py-2 text-center text-[11px] text-sky-600 dark:text-sky-400">
+          <div className="mt-1 rounded-lg border border-dashed border-cinnabar-500 px-2 py-2 text-center text-[11px] text-cinnabar-600 dark:text-cinnabar-400">
             {t.editor.dropToRoot}
           </div>
         )}

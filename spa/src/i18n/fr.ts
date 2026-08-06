@@ -234,6 +234,258 @@ function hello(name) {
     theme: "Changer de thème",
     language: "Langue",
   },
+  footer: {
+    tagline:
+      "Koinote est un éditeur Markdown en ligne WYSIWYG : rendu au fil de la frappe, images envoyées directement vers votre hébergeur, export et partage en un clic.",
+    brandCn: "锦鲤笔记",
+    product: "Produit",
+    editor: "Éditeur",
+    dashboard: "Tableau de bord",
+    home: "Accueil",
+    built: "Nous avons aussi créé",
+    company: "Société",
+    companyName: "Fomalhaut Labs",
+    legal: "Mentions légales",
+    privacy: "Politique de confidentialité",
+    terms: "Conditions d’utilisation",
+    cookies: "Politique de cookies",
+    copyright: "Koinote",
+    allRightsReserved: "Tous droits réservés",
+    contact: "Contact",
+  },
+  legal: {
+    updatedLabel: "Mis à jour le",
+    effectiveLabel: "En vigueur le",
+    backHome: "Retour à l’accueil",
+    relatedTitle: "Textes associés",
+    terms: {
+      title: "Conditions d’utilisation",
+      summary:
+        "Ces conditions encadrent votre utilisation de Koinote. En continuant à utiliser le service, vous les acceptez.",
+      sections: [
+        {
+          title: "Acceptation des conditions",
+          body: [
+            "En accédant à Koinote ou en l’utilisant, vous acceptez d’être lié par ces conditions. Si vous n’en acceptez pas une partie, veuillez cesser d’utiliser le service.",
+          ],
+        },
+        {
+          title: "Description du service",
+          body: [
+            "Koinote fournit l’écriture, le stockage, l’export et le partage de Markdown en ligne.",
+          ],
+          items: [
+            "Édition Markdown WYSIWYG avec sauvegarde automatique",
+            "Gestion des documents et des dossiers",
+            "Envoi et hébergement d’images",
+            "Export en Markdown, HTML, PDF, DOCX et format article WeChat",
+            "Liens de partage en lecture seule, protégés par mot de passe si vous le souhaitez",
+          ],
+        },
+        {
+          title: "Votre compte",
+          body: [
+            "Vous êtes responsable de toute activité sur votre compte, y compris de la protection de votre mot de passe et de vos sessions. Si vous pensez que votre compte est compromis, contactez-nous rapidement.",
+          ],
+          items: [
+            "Ne pas s’inscrire sous l’identité d’autrui",
+            "Ne pas partager vos identifiants",
+            "Signaler les problèmes de sécurité de manière responsable plutôt que de les exploiter publiquement",
+          ],
+        },
+        {
+          title: "Vos contenus",
+          body: [
+            "Les documents que vous écrivez et les images que vous envoyez restent les vôtres. Nous n’en revendiquons aucune propriété et ne les utilisons pas à des fins étrangères au fonctionnement du service.",
+            "Pour faire fonctionner le service, nous devons stocker, transmettre et afficher ces contenus dans la mesure nécessaire : écrire les documents en base, placer les images dans le stockage objet, et les montrer aux visiteurs lorsque vous activez le partage.",
+          ],
+        },
+        {
+          title: "Usage acceptable",
+          body: [
+            "Les comportements suivants peuvent entraîner une suspension ou une résiliation.",
+          ],
+          items: [
+            "Envoyer ou partager des contenus illicites, y compris contrefaisants",
+            "Utiliser l’hébergement d’images comme service général de distribution de fichiers ou de hotlinking",
+            "Contourner les quotas par automatisation, ou effectuer des tests de charge sur le service",
+            "Tenter d’accéder sans autorisation aux documents ou liens de partage d’autrui",
+          ],
+        },
+        {
+          title: "Liens de partage",
+          body: [
+            "Une fois le partage activé, toute personne disposant du lien peut consulter le document sans se connecter. Un mot de passe ajoute une protection, mais un lien divulgué équivaut à un document divulgué : jugez vous-même de ce qu’il est approprié de partager.",
+            "Vous pouvez révoquer le partage ou régénérer le lien à tout moment ; les anciens liens cessent immédiatement de fonctionner.",
+          ],
+        },
+        {
+          title: "Disponibilité",
+          body: [
+            "Nous visons la stabilité mais ne garantissons pas un accès ininterrompu. Maintenances, mises à niveau et pannes de tiers peuvent provoquer des indisponibilités temporaires. Conservez une sauvegarde exportée de ce qui compte.",
+          ],
+        },
+        {
+          title: "Résiliation",
+          body: [
+            "Nous pouvons suspendre ou résilier l’accès en cas d’abus, de fraude, de risque de sécurité ou de violation de ces conditions. Vous pouvez cesser d’utiliser le service à tout moment.",
+            "Lorsqu’un compte ou un document est supprimé, les images associées sont retirées de l’hébergement par une tâche de fond asynchrone, généralement en quelques minutes.",
+          ],
+        },
+        {
+          title: "Avertissement et limitation de responsabilité",
+          body: [
+            "Le service est fourni « en l’état ». Dans la limite maximale permise par la loi applicable, nous ne sommes pas responsables des pertes indirectes, pertes de données ou pertes de profits résultant de l’utilisation ou de l’impossibilité d’utiliser le service.",
+          ],
+        },
+        {
+          title: "Modification des conditions",
+          body: [
+            "Nous pouvons mettre à jour ces conditions. Les changements substantiels seront reflétés par la date de mise à jour de cette page ; l’usage continu vaut acceptation.",
+          ],
+        },
+        {
+          title: "Contact",
+          body: [
+            "Les questions sur ces conditions peuvent être envoyées à cfjwlchangji@gmail.com.",
+          ],
+        },
+      ],
+    },
+    privacy: {
+      title: "Politique de confidentialité",
+      summary:
+        "Cette politique explique quelles informations Koinote collecte, pourquoi, comment elles sont utilisées et protégées, et comment vous pouvez les contrôler.",
+      sections: [
+        {
+          title: "Informations collectées",
+          body: [
+            "Nous ne collectons que ce qui est nécessaire pour fournir le service.",
+          ],
+          items: [
+            "Données de compte : e-mail, nom d’utilisateur, nom affiché et mot de passe haché",
+            "En cas de connexion sociale, le profil de base renvoyé par Google ou GitHub (e-mail, nom d’utilisateur, avatar)",
+            "Vos contenus : titres et corps des documents, arborescence des dossiers, images envoyées",
+            "Paramètres de partage : jetons de partage et mots de passe d’accès hachés",
+            "Journaux d’exploitation : horodatage, IP et User-Agent, nécessaires au débogage et à la lutte contre les abus",
+          ],
+        },
+        {
+          title: "Ce que nous ne collectons pas",
+          body: [
+            "Aucun SDK publicitaire ni d’analyse comportementale tierce. Nous ne établissons pas de profil publicitaire et n’utilisons pas le contenu de vos documents pour entraîner des modèles.",
+          ],
+        },
+        {
+          title: "Utilisation des informations",
+          body: [
+            "Les informations collectées servent uniquement aux finalités suivantes.",
+          ],
+          items: [
+            "Fournir les fonctions essentielles : sauvegarde et synchronisation des documents, hébergement des images, génération des liens de partage",
+            "Vous authentifier et maintenir votre session",
+            "Diagnostiquer les pannes et prévenir les abus ou attaques",
+            "Répondre lorsque vous nous contactez",
+          ],
+        },
+        {
+          title: "Lieu de stockage",
+          body: [
+            "Le corps des documents et les données de compte résident dans notre base PostgreSQL auto-hébergée. Les images résident dans Cloudflare R2 et sont servies via notre Worker, ce qui signifie que les identifiants de stockage ne sont jamais transmis au navigateur.",
+          ],
+        },
+        {
+          title: "Tiers",
+          body: [
+            "Le fonctionnement de Koinote repose sur un petit nombre de fournisseurs d’infrastructure, chacun ne traitant les données que dans son propre rôle.",
+          ],
+          items: [
+            "Cloudflare : CDN, Workers et stockage objet R2",
+            "Google et GitHub : vérification d’identité, uniquement si vous choisissez de vous connecter avec eux",
+          ],
+        },
+        {
+          title: "Conservation et suppression",
+          body: [
+            "Les documents sont retirés de la base dès que vous les supprimez. Les images qu’ils référençaient — et qu’aucun de vos autres documents ne référence — sont mises en file d’attente de suppression par une tâche de fond.",
+            "Pour supprimer l’intégralité de votre compte et de ses données, écrivez-nous.",
+          ],
+        },
+        {
+          title: "Sécurité",
+          body: [
+            "Nous utilisons HTTPS en transit, le stockage haché des mots de passe et l’isolation des permissions en base. Aucun système ne peut être garanti parfaitement sûr : évitez de conserver dans vos notes des éléments très sensibles comme des numéros de carte ou des pièces d’identité.",
+          ],
+        },
+        {
+          title: "Vos droits",
+          body: [
+            "Vous pouvez consulter et modifier les informations de votre compte, exporter tous vos documents, et supprimer des documents ou votre compte à tout moment. Si votre droit local vous accorde des droits d’accès, de rectification, de portabilité ou d’effacement, vous pouvez les exercer via l’adresse ci-dessous.",
+          ],
+        },
+        {
+          title: "Enfants",
+          body: [
+            "Le service ne s’adresse pas aux enfants de moins de 14 ans. Si nous découvrons un tel compte, nous le supprimons.",
+          ],
+        },
+        {
+          title: "Contact",
+          body: [
+            "Les demandes relatives à la confidentialité peuvent être envoyées à cfjwlchangji@gmail.com.",
+          ],
+        },
+      ],
+    },
+    cookies: {
+      title: "Politique de cookies",
+      summary:
+        "Cette politique explique quels cookies et quel stockage navigateur Koinote utilise, et à quoi chacun sert.",
+      sections: [
+        {
+          title: "Cookies essentiels",
+          body: [
+            "Nous utilisons un unique cookie de session pour mémoriser votre connexion. Il est HttpOnly et SameSite, donc illisible par les scripts de la page. Le bloquer rend la connexion impossible.",
+          ],
+        },
+        {
+          title: "Stockage local du navigateur",
+          body: [
+            "Les préférences suivantes sont conservées dans le localStorage de votre navigateur et ne sont jamais envoyées au serveur. Effacer les données du navigateur les réinitialise.",
+          ],
+          items: [
+            "koinote-theme : choix du thème clair ou sombre",
+            "koinote-locale : langue de l’interface",
+            "Brouillons locaux écrits hors connexion, importés dans votre compte après connexion",
+          ],
+        },
+        {
+          title: "Ce que nous n’utilisons pas",
+          body: [
+            "Pas de cookies publicitaires, pas de pixels de suivi intersites, pas de scripts d’analyse comportementale tiers.",
+          ],
+        },
+        {
+          title: "Cookies tiers",
+          body: [
+            "Choisir de se connecter avec Google ou GitHub vous redirige vers leur site, qui peut déposer ses propres cookies. Cela relève de leurs politiques de confidentialité respectives.",
+          ],
+        },
+        {
+          title: "Gérer les cookies",
+          body: [
+            "La plupart des navigateurs permettent d’inspecter, bloquer ou supprimer les cookies. Notez que bloquer le cookie de session vous empêchera de rester connecté.",
+          ],
+        },
+        {
+          title: "Contact",
+          body: [
+            "Les questions sur les cookies peuvent être envoyées à cfjwlchangji@gmail.com.",
+          ],
+        },
+      ],
+    },
+  },
   errors: {
     bad_request: "Requête invalide",
     missing_fields: "Le nom d'utilisateur, l'e-mail et le mot de passe sont tous requis",

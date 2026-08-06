@@ -253,7 +253,7 @@ function Btn({
       onClick={onClick}
       className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
         active
-          ? "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
+          ? "bg-cinnabar-100 text-cinnabar-700 dark:bg-cinnabar-950/60 dark:text-cinnabar-300"
           : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white"
       }`}
     >

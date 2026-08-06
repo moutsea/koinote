@@ -2,9 +2,11 @@
 // 错开，而这只有真去点那个页面才看得见。已经因此改过三轮，所以钉住。
 import {
   EDGE_PADDING,
+  FOOTERLESS_PREFIXES,
   ROUTE_WIDTHS,
   containerClass,
   contentWidthFor,
+  hasFooter,
   widthClass,
 } from "./_layout_bundle.mjs";
 
@@ -189,6 +191,65 @@ for (const w of ["6xl", "5xl", "3xl"]) {
     `${w} 档不用 ${EDGE_PADDING}`,
     !widthClass(w).split(/\s+/).includes(EDGE_PADDING),
     widthClass(w),
+  );
+}
+
+// ---------- 条款页 ----------
+//
+// 三份条款整页都是段落，通栏会让行长失控。它们必须收窄。
+for (const path of ["/privacy", "/terms", "/cookies"]) {
+  eq(`${path} 收窄`, contentWidthFor(path), "5xl");
+  ok(
+    `${path} 不通栏`,
+    contentWidthFor(path) !== "full",
+    contentWidthFor(path),
+  );
+}
+
+// ---------- 页脚挂载 ----------
+//
+// 编辑器撑满视口自己管滚动，分享页自己收尾，两者都不挂全站页脚。
+for (const path of [
+  "/editor",
+  "/editor/",
+  "/editor/abc123",
+  "/share/tok",
+]) {
+  ok(`${path} 不挂页脚`, !hasFooter(path), hasFooter(path));
+}
+// 其余页面都要有页脚 —— 隐私政策、服务条款这些入口只在页脚里，
+// 首页丢了页脚就等于全站找不到条款页
+for (const path of [
+  "/",
+  "/dashboard",
+  "/login",
+  "/register",
+  "/privacy",
+  "/terms",
+  "/cookies",
+]) {
+  ok(`${path} 挂页脚`, hasFooter(path), hasFooter(path));
+}
+// 分段比对，不是裸 startsWith：/editor-guide 不是编辑器
+ok("/editor-guide 挂页脚", hasFooter("/editor-guide"), hasFooter("/editor-guide"));
+ok("/shared-notes 挂页脚", hasFooter("/shared-notes"), hasFooter("/shared-notes"));
+
+// 页脚里排着三条条款链接，宽度表里也得有对应条目，否则那三页会掉到兜底档
+for (const path of ["/privacy", "/terms", "/cookies"]) {
+  ok(
+    `宽度表里有 ${path}`,
+    ROUTE_WIDTHS.some((entry) => entry.prefix === path),
+    ROUTE_WIDTHS.map((e) => e.prefix),
+  );
+}
+
+// 不挂页脚的前缀必须在宽度表里有自己的条目：两张表都按前缀分派，
+// 一边加了另一边忘了，页面会掉到兜底宽度
+for (const prefix of FOOTERLESS_PREFIXES) {
+  ok(
+    `${prefix} 在宽度表里`,
+    ROUTE_WIDTHS.some((entry) => entry.prefix === prefix),
+    ROUTE_WIDTHS.map((e) => e.prefix),
   );
 }
 

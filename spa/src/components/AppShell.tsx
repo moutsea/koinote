@@ -4,7 +4,9 @@ import { Moon, Sun, FileText, Globe, Check } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
 import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
-import { EDGE_PADDING } from "../layout";
+import { EDGE_PADDING, hasFooter } from "../layout";
+import { AppFooter } from "./AppFooter";
+import { InkSeal } from "./Ink";
 
 export function AppShell() {
   const session = useSession();
@@ -25,8 +27,19 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[var(--background)] text-[var(--foreground)]">
-      <header className="sticky top-0 z-50 border-b border-black/5 bg-[var(--background)]/85 backdrop-blur dark:border-white/10">
+    <div
+      className="flex min-h-[100dvh] flex-col"
+      style={{ background: "var(--ink-paper)", color: "var(--ink-black)" }}
+    >
+      <header
+        className="sticky top-0 z-50 border-b backdrop-blur"
+        style={{
+          borderColor: "var(--ink-line)",
+          // 半透明纸底：滚动时下方内容透出来一点，但仍能压住文字。
+          // color-mix 而不是 /85 后缀 —— 令牌是 var()，Tailwind 的透明度语法对它无效
+          background: "color-mix(in srgb, var(--ink-paper) 88%, transparent)",
+        }}
+      >
         {/* 页头始终通栏，不跟着正文的宽度走。
             它是全站导航（logo、语言、主题、登录态），属于应用外壳而不是页面内容 ——
             正文收窄是为了行长和阅读，那个理由对一排图标按钮不成立。
@@ -35,11 +48,17 @@ export function AppShell() {
             对齐，两边各写一个 px-3 的话改了一处就差几个像素。 */}
         <div className={`flex h-14 w-full items-center gap-3 ${EDGE_PADDING}`}>
           <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <FileText className="h-5 w-5 text-sky-600" />
-            <span>Koinote</span>
+            <FileText className="h-5 w-5" style={{ color: "var(--cinnabar)" }} />
+            <span className="kn-heading-cn text-lg">Koinote</span>
+            {/* 印章只在 sm 以上出现：手机上页头横向就那么点地方，
+                先让位给语言、主题和登录态 */}
+            <InkSeal className="ml-0.5 hidden h-7 px-0.5 text-[10px] sm:inline-flex" />
           </Link>
 
-          <nav className="ml-4 hidden items-center gap-5 text-sm text-neutral-600 dark:text-neutral-300 sm:flex">
+          <nav
+            className="ml-4 hidden items-center gap-5 text-sm sm:flex"
+            style={{ color: "var(--ink-mid)" }}
+          >
             <HeaderLink to="/editor" active={pathname.startsWith("/editor")}>
               {t.nav.editor}
             </HeaderLink>
@@ -62,28 +81,35 @@ export function AppShell() {
               aria-label={t.common.theme}
               title={t.common.theme}
               onClick={() => setTheme((cur) => (cur === "dark" ? "light" : "dark"))}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-mid)" }}
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
             {session.isLoading ? null : user ? (
               <div className="flex items-center gap-3">
-                <span className="hidden text-sm text-neutral-600 dark:text-neutral-300 sm:inline">
+                <span
+                  className="hidden text-sm sm:inline"
+                  style={{ color: "var(--ink-mid)" }}
+                >
                   {user.nickname || user.username || user.email}
                 </span>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="rounded-full border border-black/10 px-4 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                  className="rounded-full border px-4 py-1.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+                  style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                 >
                   {t.nav.logout}
                 </button>
               </div>
             ) : (
+              // 主行动按钮走朱砂，全站唯一的高饱和色留给它
               <Link
                 to="/login"
-                className="rounded-full bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-sky-500"
+                className="rounded-full px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ background: "var(--cinnabar)" }}
               >
                 {t.nav.login}
               </Link>
@@ -95,6 +121,8 @@ export function AppShell() {
       <main className="flex flex-1 flex-col">
         <Outlet />
       </main>
+
+      {hasFooter(pathname) && <AppFooter />}
     </div>
   );
 }
@@ -127,13 +155,20 @@ function LocaleSwitcher({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-sm text-neutral-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+        className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+        style={{ color: "var(--ink-mid)" }}
       >
         <Globe className="h-4 w-4" />
         <span className="hidden sm:inline">{LOCALE_LABELS[locale]}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 min-w-36 overflow-hidden rounded-xl border border-black/10 bg-[var(--background)] py-1 shadow-lg dark:border-white/15">
+        <div
+          className="absolute right-0 top-11 z-50 min-w-36 overflow-hidden rounded-xl border py-1 shadow-lg"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+          }}
+        >
           {LOCALES.map((l) => (
             <button
               key={l}
@@ -142,10 +177,13 @@ function LocaleSwitcher({
                 setLocale(l);
                 setOpen(false);
               }}
-              className="flex w-full items-center justify-between px-3 py-2 text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="flex w-full items-center justify-between px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-strong)" }}
             >
               <span>{LOCALE_LABELS[l]}</span>
-              {l === locale && <Check className="h-4 w-4 text-sky-600" />}
+              {l === locale && (
+                <Check className="h-4 w-4" style={{ color: "var(--cinnabar)" }} />
+              )}
             </button>
           ))}
         </div>
@@ -166,13 +204,18 @@ function HeaderLink({
   return (
     <Link
       to={to}
-      className={
-        active
-          ? "font-medium text-sky-600"
-          : "transition hover:text-neutral-900 dark:hover:text-white"
-      }
+      // 当前项用朱砂 + 下方短横，等同于书页上的朱笔圈点
+      className={`kn-ink-link relative transition ${active ? "font-medium" : ""}`}
+      style={{ color: active ? "var(--cinnabar)" : "var(--ink-mid)" }}
     >
       {children}
+      {active && (
+        <span
+          aria-hidden
+          className="absolute -bottom-1.5 left-0 h-0.5 w-full rounded-full"
+          style={{ background: "var(--cinnabar)" }}
+        />
+      )}
     </Link>
   );
 }

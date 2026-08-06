@@ -35,6 +35,11 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/dashboard", width: "5xl" },
   // 分享页给外人读长文，3xl 是为了行长
   { prefix: "/share", width: "3xl" },
+  // 条款页同理：整页都是段落，宽了没法读。卷轴的纸面宽度在页面内另有 max-w-3xl，
+  // 这里给 5xl 是留出纸面两侧的余地，好让墨云背景露出来
+  { prefix: "/privacy", width: "5xl" },
+  { prefix: "/terms", width: "5xl" },
+  { prefix: "/cookies", width: "5xl" },
   // 首页是营销版面，通栏
   { prefix: "/", width: "full" },
 ];
@@ -87,4 +92,26 @@ export function widthClass(width: ContentWidth): string {
 /** 某个路径下正文容器的 class。页面通过 PageContainer 间接用它 */
 export function containerClass(pathname: string): string {
   return widthClass(contentWidthFor(pathname));
+}
+
+/**
+ * 不挂全站页脚的路由前缀。
+ *
+ * 编辑器是撑满视口高度的两列工作区，自己管滚动；底下接一段页脚的话，要么被挤出视口
+ * 白占高度，要么把编辑区压扁。分享页是给外人读一篇文档的落地页，末尾自己收了个尾，
+ * 再叠一堆站内导航是喧宾夺主。
+ */
+export const FOOTERLESS_PREFIXES = ["/editor", "/share"];
+
+/**
+ * 这个路径要不要挂全站页脚。
+ *
+ * 与 contentWidthFor 一样按分段比对，不用裸 startsWith —— 后者会把 /editor-guide
+ * 之类的路径也判成编辑器。
+ */
+export function hasFooter(pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return !FOOTERLESS_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
 }

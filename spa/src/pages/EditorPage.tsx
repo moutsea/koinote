@@ -455,7 +455,7 @@ export function EditorPage() {
         <p className="text-sm text-neutral-500">{t.editor.loginRequiredHint}</p>
         <Link
           to="/login"
-          className="rounded-full bg-sky-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500"
+          className="rounded-full bg-cinnabar-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-cinnabar-500"
         >
           {t.editor.goLogin}
         </Link>
@@ -548,7 +548,7 @@ export function EditorPage() {
             <button
               type="button"
               onClick={() => void navigate({ to: "/editor" })}
-              className="text-sm font-medium text-sky-600 hover:underline"
+              className="text-sm font-medium text-cinnabar-600 hover:underline"
             >
               {t.editor.backToList}
             </button>
@@ -588,7 +588,7 @@ export function EditorPage() {
                     aria-label={t.editor.share}
                     className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition ${
                       doc.data.share
-                        ? "text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                        ? "text-cinnabar-600 hover:bg-cinnabar-50 dark:text-cinnabar-400 dark:hover:bg-cinnabar-950/40"
                         : "text-neutral-400 hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
                     }`}
                   >

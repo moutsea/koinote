@@ -142,7 +142,7 @@ export function WechatDialog({
             type="button"
             onClick={run}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-cinnabar-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-cinnabar-500 disabled:opacity-60"
           >
             {busy ? (
               <>

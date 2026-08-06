@@ -19,6 +19,8 @@
     "test:rehost": "esbuild spa/src/components/editor/rehost.ts --bundle --format=esm --platform=neutral --outfile=scripts/_rehost_bundle.mjs --log-level=error && node scripts/_check_rehost.mjs; rm -f scripts/_rehost_bundle.mjs",
     "test:layout": "esbuild spa/src/layout.ts --bundle --format=esm --platform=neutral --outfile=scripts/_layout_bundle.mjs --log-level=error && node scripts/_check_layout.mjs; rm -f scripts/_layout_bundle.mjs",
     "test:shortcut": "esbuild spa/src/components/editor/saveShortcut.ts --bundle --format=esm --platform=neutral --outfile=scripts/_save_shortcut_bundle.mjs --log-level=error && node scripts/_check_save_shortcut.mjs; rm -f scripts/_save_shortcut_bundle.mjs",
+    "test:i18n": "esbuild scripts/_i18n_entry.ts --bundle --format=esm --platform=neutral --outfile=scripts/_i18n_bundle.mjs --log-level=error && node scripts/_check_i18n.mjs; rm -f scripts/_i18n_bundle.mjs",
+    "test:contrast": "node scripts/_check_contrast.mjs",
     "verify:tree": "python3 scripts/verify_tree_create.py",
     "verify:images": "python3 scripts/verify_image_paste.py",
     "verify:image-fetch": "python3 scripts/verify_image_fetch.py",

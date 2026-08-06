@@ -17,6 +17,7 @@ import {
 } from "../components/editor/themeCss";
 import { interpolate, useI18n, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
+import { InkSeal } from "../components/Ink";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -51,9 +52,15 @@ export function SharePage() {
   if (query.isError || (!shared && !needsPassword)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-24 text-center">
-        <FileText className="h-10 w-10 text-neutral-300 dark:text-neutral-600" />
-        <p className="text-sm text-neutral-500">{t.editor.sharedNotFound}</p>
-        <Link to="/" className="text-sm font-medium text-sky-600 hover:underline">
+        <FileText className="h-10 w-10" style={{ color: "var(--ink-faint)" }} />
+        <p className="text-sm" style={{ color: "var(--ink-mid)" }}>
+          {t.editor.sharedNotFound}
+        </p>
+        <Link
+          to="/"
+          className="text-sm font-medium hover:underline"
+          style={{ color: "var(--cinnabar)" }}
+        >
           {t.editor.sharedOpenApp}
         </Link>
       </div>
@@ -109,10 +116,13 @@ function PasswordGate({
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
       <form onSubmit={submit} className="w-full max-w-sm text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+        <div
+          className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl"
+          style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+        >
           <Lock className="h-5 w-5" />
         </div>
-        <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-300">
+        <p className="mt-4 text-sm" style={{ color: "var(--ink-mid)" }}>
           {t.editor.sharedPasswordPrompt}
         </p>
 
@@ -123,7 +133,12 @@ function PasswordGate({
           autoComplete="current-password"
           autoFocus
           aria-label={t.editor.sharePasswordPlaceholder}
-          className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-500 dark:border-white/15 dark:bg-white/5"
+          className="mt-4 w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+            color: "var(--ink-black)",
+          }}
         />
 
         {error && (
@@ -138,7 +153,8 @@ function PasswordGate({
         <button
           type="submit"
           disabled={busy || password === ""}
-          className="mt-4 w-full rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+          className="mt-4 w-full rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          style={{ background: "var(--cinnabar)" }}
         >
           {busy ? t.auth.processing : t.editor.sharedPasswordSubmit}
         </button>
@@ -177,11 +193,20 @@ function SharedView({ shared }: { shared: SharedDocument }) {
 
   return (
     <PageContainer className="flex-1 py-10">
-      <header className="mb-8 border-b border-black/5 pb-5 dark:border-white/10">
-        <h1 className="text-2xl font-bold tracking-tight">
+      <header
+        className="mb-8 border-b pb-5"
+        style={{ borderColor: "var(--ink-line)" }}
+      >
+        <h1
+          className="kn-heading-cn text-2xl font-bold tracking-tight"
+          style={{ color: "var(--ink-black)" }}
+        >
           {shared.title.trim() || t.editor.untitled}
         </h1>
-        <p className="mt-2 flex items-center gap-2 text-xs text-neutral-400">
+        <p
+          className="mt-2 flex items-center gap-2 text-xs"
+          style={{ color: "var(--ink-faint)" }}
+        >
           {shared.ownerName && (
             <span>{interpolate(t.editor.sharedBy, { name: shared.ownerName })}</span>
           )}
@@ -195,10 +220,17 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         <EditorContent editor={editor} />
       </div>
 
-      <footer className="mt-12 border-t border-black/5 pt-5 text-center dark:border-white/10">
+      {/* 分享页自己收尾，不挂全站页脚（见 AppShell 的 FOOTERLESS_PREFIXES）：
+          这是给外人读一篇文档的落地页，末尾塞一堆站内导航是喧宾夺主 */}
+      <footer
+        className="mt-12 flex flex-col items-center gap-3 border-t pt-5 text-center"
+        style={{ borderColor: "var(--ink-line)" }}
+      >
+        <InkSeal className="h-8 px-0.5 text-[10px]" />
         <Link
           to="/"
-          className="text-xs font-medium text-neutral-400 transition hover:text-sky-600"
+          className="kn-ink-link text-xs font-medium transition"
+          style={{ color: "var(--ink-faint)" }}
         >
           {t.editor.sharedOpenApp}
         </Link>
@@ -209,7 +241,10 @@ function SharedView({ shared }: { shared: SharedDocument }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 items-center justify-center py-24 text-sm text-neutral-400">
+    <div
+      className="flex flex-1 items-center justify-center py-24 text-sm"
+      style={{ color: "var(--ink-faint)" }}
+    >
       {children}
     </div>
   );

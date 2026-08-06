@@ -138,7 +138,9 @@ export function FolderRow({
         }
         className={`group relative flex items-center rounded-lg transition ${
           over && acceptsDrop
-            ? "bg-sky-100 ring-1 ring-sky-400 dark:bg-sky-900/40"
+            // 拖放目标环用 500 而不是 400：400 压在宣纸上只有 2.47:1，
+            // 达不到非文字元素的 3:1。这个环是拖拽时唯一的落点提示，看不见就等于没有
+            ? "bg-cinnabar-100 ring-1 ring-cinnabar-500 dark:bg-cinnabar-900/40"
             : menuOpen
               ? "bg-black/5 dark:bg-white/10"
               : "hover:bg-black/5 dark:hover:bg-white/10"
@@ -158,7 +160,7 @@ export function FolderRow({
             <ChevronRight className="h-3 w-3 shrink-0 text-neutral-400" />
           )}
           {open ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-cinnabar-600 dark:text-cinnabar-400" />
           ) : (
             <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
           )}
@@ -178,7 +180,8 @@ export function FolderRow({
               onClick={(e) => e.stopPropagation()}
               placeholder={t.editor.folderNamePlaceholder}
               aria-label={t.editor.folderNamePlaceholder}
-              className="min-w-0 flex-1 rounded border border-sky-400 bg-[var(--background)] px-1 text-sm outline-none"
+              // 500 而不是 400：这是重命名输入框唯一的边界提示，需要 3:1
+              className="min-w-0 flex-1 rounded border border-cinnabar-500 bg-[var(--background)] px-1 text-sm outline-none"
             />
           ) : (
             <span
@@ -277,7 +280,7 @@ export function DocRow({
         aria-current={active ? "true" : undefined}
         className={`flex w-full items-start gap-2 rounded-lg py-1.5 pr-8 text-left transition ${
           active
-            ? "bg-sky-50 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+            ? "bg-cinnabar-50 text-cinnabar-800 dark:bg-cinnabar-950/50 dark:text-cinnabar-200"
             : menuOpen
               ? "bg-black/5 text-neutral-600 dark:bg-white/10 dark:text-neutral-300"
               : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
@@ -286,7 +289,7 @@ export function DocRow({
       >
         <FileText
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-            active ? "text-sky-600 dark:text-sky-400" : "text-neutral-400"
+            active ? "text-cinnabar-600 dark:text-cinnabar-400" : "text-neutral-400"
           }`}
         />
         <span className="min-w-0 flex-1">

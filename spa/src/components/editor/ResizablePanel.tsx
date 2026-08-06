@@ -125,10 +125,10 @@ export function ResizablePanel({
         onKeyDown={handleKeyDown}
         className={`absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize transition-colors focus:outline-none ${
           bordered
-            ? "hover:bg-sky-500/30 focus:bg-sky-500/40"
+            ? "hover:bg-cinnabar-500/30 focus:bg-cinnabar-500/40"
             : // 无边框场景（大纲嵌在正文里）：拖拽热区更含蓄，只在交互时透出一点
-              "hover:bg-sky-500/15 focus:bg-sky-500/25"
-        } ${dragging ? (bordered ? "bg-sky-500/40" : "bg-sky-500/25") : "bg-transparent"}`}
+              "hover:bg-cinnabar-500/15 focus:bg-cinnabar-500/25"
+        } ${dragging ? (bordered ? "bg-cinnabar-500/40" : "bg-cinnabar-500/25") : "bg-transparent"}`}
       />
     </div>
   );

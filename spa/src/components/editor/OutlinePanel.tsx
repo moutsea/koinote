@@ -56,7 +56,7 @@ export function OutlinePanel({
                 <button
                   type="button"
                   onClick={() => onJump(item.pos)}
-                  className={`block w-full truncate rounded-md py-1 pr-2 text-left text-[13px] leading-relaxed text-neutral-500 transition hover:text-sky-600 dark:text-neutral-400 dark:hover:text-sky-400 ${
+                  className={`block w-full truncate rounded-md py-1 pr-2 text-left text-[13px] leading-relaxed text-neutral-500 transition hover:text-cinnabar-600 dark:text-neutral-400 dark:hover:text-cinnabar-400 ${
                     INDENT[Math.min(item.level, 6)] ?? "pl-2"
                   } ${item.level === 1 ? "font-medium text-neutral-600 dark:text-neutral-300" : ""}`}
                   title={item.text}

@@ -129,7 +129,7 @@ export function ImageNodeView({
             }}
             spellCheck={false}
             aria-label={t.editor.imageMarkdownLabel}
-            className="mb-1.5 w-full rounded-lg border border-sky-500/40 bg-sky-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-sky-500 dark:bg-sky-950/20"
+            className="mb-1.5 w-full rounded-lg border border-cinnabar-500/40 bg-cinnabar-50/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-cinnabar-500 dark:bg-cinnabar-950/20"
           />
         )}
 
@@ -156,10 +156,10 @@ export function ImageNodeView({
           aria-expanded={editing}
           className={`block w-full overflow-hidden rounded-lg border text-left transition ${
             editing
-              ? "cursor-default border-sky-500"
+              ? "cursor-default border-cinnabar-500"
               : selected
-                ? "cursor-pointer border-sky-500"
-                : "cursor-pointer border-transparent hover:border-sky-500/40"
+                ? "cursor-pointer border-cinnabar-500"
+                : "cursor-pointer border-transparent hover:border-cinnabar-500/40"
           }`}
         >
           {broken ? (

@@ -148,7 +148,7 @@ export function ShareDialog({
             onChange={(e) => setPassword(e.target.value)}
             placeholder={t.editor.sharePasswordPlaceholder}
             autoComplete="new-password"
-            className="mt-3 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-500 dark:border-white/15 dark:bg-white/5"
+            className="mt-3 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-cinnabar-500 dark:border-white/15 dark:bg-white/5"
           />
         )}
 
@@ -206,7 +206,7 @@ export function ShareDialog({
             type="button"
             onClick={submit}
             disabled={busy}
-            className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+            className="rounded-full bg-cinnabar-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-cinnabar-500 disabled:opacity-60"
           >
             {share ? t.editor.shareUpdate : t.editor.shareEnable}
           </button>
@@ -247,12 +247,12 @@ function AccessOption({
       aria-pressed={checked}
       className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
         checked
-          ? "border-sky-500 bg-sky-50/60 dark:bg-sky-950/30"
+          ? "border-cinnabar-500 bg-cinnabar-50/60 dark:bg-cinnabar-950/30"
           : "border-black/10 hover:bg-black/[0.03] dark:border-white/15 dark:hover:bg-white/5"
       }`}
     >
       <span
-        className={`mt-0.5 shrink-0 ${checked ? "text-sky-600 dark:text-sky-400" : "text-neutral-400"}`}
+        className={`mt-0.5 shrink-0 ${checked ? "text-cinnabar-600 dark:text-cinnabar-400" : "text-neutral-400"}`}
       >
         {icon}
       </span>

@@ -5,6 +5,7 @@ import { FileText } from "lucide-react";
 import { login, register, ApiError } from "../api";
 import { useI18n } from "../i18n";
 import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
+import { InkClouds } from "../components/Ink";
 
 type Mode = "login" | "register";
 
@@ -77,16 +78,29 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
+    <div
+      className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-16"
+      style={{ background: "var(--ink-paper)" }}
+    >
+      <InkClouds />
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-xl"
+            style={{
+              background: "var(--cinnabar-soft)",
+              color: "var(--cinnabar)",
+            }}
+          >
             <FileText className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight">
+          <h1
+            className="kn-heading-cn mt-4 text-2xl font-bold tracking-tight"
+            style={{ color: "var(--ink-black)" }}
+          >
             {mode === "login" ? t.auth.loginTitle : t.auth.registerTitle}
           </h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm" style={{ color: "var(--ink-mid)" }}>
             {mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}
           </p>
         </div>
@@ -103,34 +117,33 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
 
         {/* 第三方登录：置顶作为首选入口，一步完成注册与登录 */}
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => startOAuth("google")}
-            className="flex w-full items-center justify-center gap-2.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-black/5 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 dark:hover:bg-white/10"
-          >
+          <OAuthButton onClick={() => startOAuth("google")}>
             <GoogleIcon className="h-4 w-4" />
             {t.auth.continueWithGoogle}
-          </button>
-          <button
-            type="button"
-            onClick={() => startOAuth("github")}
-            className="flex w-full items-center justify-center gap-2.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-black/5 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 dark:hover:bg-white/10"
-          >
+          </OAuthButton>
+          <OAuthButton onClick={() => startOAuth("github")}>
             <GitHubIcon className="h-4 w-4" />
             {t.auth.continueWithGitHub}
-          </button>
+          </OAuthButton>
         </div>
 
         {/* 分隔线 */}
-        <div className="my-6 flex items-center gap-3 text-xs text-neutral-400">
-          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        <div
+          className="my-6 flex items-center gap-3 text-xs"
+          style={{ color: "var(--ink-faint)" }}
+        >
+          <span className="h-px flex-1" style={{ background: "var(--ink-line)" }} />
           <span className="uppercase tracking-wide">{t.auth.orDivider}</span>
-          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+          <span className="h-px flex-1" style={{ background: "var(--ink-line)" }} />
         </div>
 
         <form
           onSubmit={submit}
-          className="space-y-4 rounded-2xl border border-black/5 bg-white/60 p-6 dark:border-white/10 dark:bg-white/5"
+          className="space-y-4 rounded-xl border p-6"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+          }}
         >
           {mode === "register" && (
             <Field
@@ -188,7 +201,8 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+            className="w-full rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            style={{ background: "var(--cinnabar)" }}
           >
             {loading
               ? t.auth.processing
@@ -198,7 +212,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-neutral-500">
+        <p className="mt-6 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
           {mode === "login" ? t.auth.noAccount : t.auth.hasAccount}
           <button
             type="button"
@@ -206,13 +220,37 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
             }}
-            className="ml-1 font-medium text-sky-600 hover:underline"
+            className="ml-1 font-medium hover:underline"
+            style={{ color: "var(--cinnabar)" }}
           >
             {mode === "login" ? t.auth.toRegister : t.auth.toLogin}
           </button>
         </p>
       </div>
     </div>
+  );
+}
+
+function OAuthButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-2.5 rounded-full border px-5 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+      style={{
+        borderColor: "var(--ink-line)",
+        background: "var(--ink-paper-soft)",
+        color: "var(--ink-strong)",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -233,7 +271,10 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+      <span
+        className="mb-1.5 block text-sm font-medium"
+        style={{ color: "var(--ink-strong)" }}
+      >
         {label}
       </span>
       <input
@@ -243,7 +284,13 @@ function Field({
         autoComplete={autoComplete}
         placeholder={placeholder}
         required
-        className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 dark:border-white/15 dark:bg-white/5"
+        // 焦点环用朱砂：全站的强调色只有这一个
+        className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+        style={{
+          borderColor: "var(--ink-line)",
+          background: "var(--ink-paper)",
+          color: "var(--ink-black)",
+        }}
       />
     </label>
   );
