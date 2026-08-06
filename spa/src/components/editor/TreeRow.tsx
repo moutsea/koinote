@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useI18n, type Locale } from "../../i18n";
+import { docPad, folderPad, guideX } from "./indent";
 import type { DocNode, TreeFolder } from "./tree";
 
 const DATE_LOCALE: Record<Locale, string> = {
@@ -17,8 +18,7 @@ const DATE_LOCALE: Record<Locale, string> = {
   ja: "ja-JP",
 };
 
-/** 每层缩进的像素。用 padding 而非 margin —— 整行都要可点、可放置 */
-const INDENT = 12;
+// 缩进用 padding 而非 margin —— 整行都要可点、可放置。具体数值见 ./indent
 
 export type DragPayload =
   | { kind: "doc"; id: string }
@@ -109,7 +109,7 @@ export function FolderRow({
             ? "bg-sky-100 ring-1 ring-sky-400 dark:bg-sky-900/40"
             : "hover:bg-black/5 dark:hover:bg-white/10"
         }`}
-        style={{ paddingLeft: depth * INDENT }}
+        style={{ paddingLeft: folderPad(depth) }}
       >
         <button
           type="button"
@@ -188,7 +188,13 @@ export function FolderRow({
       </div>
 
       {open && (
-        <ul>
+        <ul className="relative">
+          {/* 竖线落在本行 chevron 的中心，把子项在视觉上收到这个文件夹下面 */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 w-px bg-black/10 dark:bg-white/10"
+            style={{ left: guideX(depth) }}
+          />
           {folder.folders.map((child) => (
             <FolderRow key={child.folderId} folder={child} depth={depth + 1} h={h} />
           ))}
@@ -230,7 +236,7 @@ export function DocRow({
             ? "bg-sky-50 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
             : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
         }`}
-        style={{ paddingLeft: depth * INDENT + 8 }}
+        style={{ paddingLeft: docPad(depth) }}
       >
         <FileText
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
