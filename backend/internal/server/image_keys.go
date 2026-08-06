@@ -65,3 +65,28 @@ func isSafeImageKey(key string) bool {
 	}
 	return safeImageKeyPattern.MatchString(key)
 }
+
+// ownedKeyPattern 在 safeImageKeyPattern 的基础上把 authUserId 段捕获出来。
+//
+// 两个正则分开写会漂，所以这里只加一对捕获括号，其余部分逐字相同 —— 有断言钉住
+// 「isSafeImageKey 为真 ⟺ imageKeyOwner 能解析」。
+var ownedKeyPattern = regexp.MustCompile(
+	`^u/([A-Za-z0-9_-]{1,128})/[0-9a-f]{8,64}\.(?:png|jpg|gif|webp)$`,
+)
+
+// imageKeyOwner 取出 key 里的 authUserId 段。
+//
+// 记账时用它判归属：Worker 报上来的 key 必须前缀是报账者自己，否则一个用户能把对象
+// 记到别人账上 —— 既能耗尽别人的配额，也能让自己的用量不涨。
+//
+// 先过 isSafeImageKey：那里挡掉了 ".." 和 "//"，正则本身锚定但不查这两样。
+func imageKeyOwner(key string) (string, bool) {
+	if !isSafeImageKey(key) {
+		return "", false
+	}
+	match := ownedKeyPattern.FindStringSubmatch(key)
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
+}

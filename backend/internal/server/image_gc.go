@@ -192,6 +192,16 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		return fmt.Errorf("调 Worker 删除: %w", err)
 	}
 
+	// 对象已从 R2 删掉，把它们从用量账本里移除 —— 用户的已用空间到这一步才真正下降。
+	//
+	// 放在 R2 删除之后：反过来先减账本的话，中间失败会让这些对象永远不再计入配额，
+	// 而它们还占着存储。宁可用量短暂偏高（下轮会补上），也不能让配额算漏。
+	if err := a.forgetImageObjects(ctx, keys); err != nil {
+		// 只记日志不返回：对象已经删了，队列记录该清掉。账本这几行留着的后果是
+		// 用量偏高，下面那条 DELETE 成功后就再没人来减了 —— 所以这里明确记下来
+		log.Printf("image gc: 从用量账本移除失败（%d 个 key），用量会偏高: %v", len(keys), err)
+	}
+
 	// 删成功就把记录清掉，不留档 —— 留着只会让表无限长
 	if _, err := a.db.Exec(ctx,
 		`DELETE FROM pending_image_deletions WHERE id = ANY($1)`, ids,
