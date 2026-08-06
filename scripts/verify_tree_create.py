@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """验证右键新建所依赖的两个服务端改动。
 
 1. POST /api/documents 接受 folderId，一次请求就把文档建进文件夹
