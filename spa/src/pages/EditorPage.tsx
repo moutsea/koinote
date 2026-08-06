@@ -27,6 +27,7 @@ import {
 } from "../documents";
 import { TabBar } from "../components/editor/TabBar";
 import { useDocumentSaver } from "../components/editor/useDocumentSaver";
+import { isSaveShortcut } from "../components/editor/saveShortcut";
 import {
   EMPTY_TABS,
   activate,
@@ -211,6 +212,33 @@ export function EditorPage() {
     },
     [navigate],
   );
+
+  /**
+   * Ctrl+S / Cmd+S 立刻保存当前文档。
+   *
+   * 内容本来就有 800ms 防抖自动保存，这个快捷键要的不是「否则会丢」，而是让「我按过
+   * 保存了」这件事有确认 —— 浏览器默认会弹「保存网页」对话框，不拦的话用户以为编辑器
+   * 没响应。
+   *
+   * 监听挂在页面层而不是 MarkdownEditor 里：多开时最多 3 个实例同时挂载（非当前的用
+   * display:none 藏着），在组件里挂 window 监听会一次按键触发 3 次，把后台那两篇也
+   * 一起存了。这里只有一个监听，且天然知道哪篇是当前的。
+   *
+   * 挂 window 而不是编辑器容器：焦点可能在标题输入框、侧栏、工具栏上，那时也该能存。
+   */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isSaveShortcut(e)) return;
+      // 一定要拦掉，否则浏览器弹「保存网页」
+      e.preventDefault();
+      const docId = activeDocId;
+      if (!docId) return;
+      // flush 内部对「没有待存改动」是空操作，所以重复按不会产生多余请求
+      void saver.flush(docId);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeDocId, saver]);
 
   /**
    * 标签上显示的标题。
