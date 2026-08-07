@@ -197,7 +197,7 @@ export const en: Messages = {
     wechatCopied: "Copied — go paste it",
     wechatWorking: "Working…",
     wechatCodeNote:
-      "Highlighting is inlined as element styles; indentation and line breaks use non-breaking spaces and <br>, so they hold up even after WeChat strips CSS. Tabs expand to 4 spaces.",
+      "Code blocks get Mac window dots, and highlighting is inlined as element styles; indentation and line breaks use non-breaking spaces and <br>, so they hold up even after WeChat strips CSS. Tabs expand to 4 spaces.",
     wechatMathConverted: "{n} formula(s) converted to images",
     wechatMathFailed: "{n} formula(s) failed; fell back to LaTeX source",
     exportFailed: "Export failed",

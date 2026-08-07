@@ -1,3 +1,4 @@
+import { macWindowCSS } from "./macWindow";
 import {
   findWechatTheme,
   resolveThemeRules,
@@ -127,6 +128,16 @@ export function themeToCSS(themeId: string): string {
   ];
 
   parts.push(FALLBACK);
+
+  // 代码块顶部的 Mac 窗口三点。
+  //
+  // 编辑区用伪元素，导出用真实元素（见 macWindow.ts）—— 同一效果两套实现是
+  // 有意的：这里用伪元素才不会污染 ProseMirror 的文档模型（否则光标能移进去、
+  // 复制会带出三个 ● 字符），而微信剥 <style>，那边只能用真实元素。
+  parts.push(
+    macWindowCSS(`.${THEME_SCOPE}`, !isLightBackground(light.pre)),
+    macWindowCSS(`.dark .${THEME_SCOPE}`, !isLightBackground(dark.pre)),
+  );
 
   // 代码高亮按各模式下 pre 的实际底色分流。
   //

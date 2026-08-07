@@ -10,6 +10,7 @@ import { highlightCodeBlocks } from "./_highlight_code_bundle.mjs";
 import { inlineWechatStyles, wrapWechatBody } from "./_wechat_inline_bundle.mjs";
 import { WECHAT_THEMES, resolveThemeRules } from "./_wechat_themes_bundle.mjs";
 import { structuralizeCodeWhitespace } from "./_wechat_whitespace_bundle.mjs";
+import { addMacWindows } from "./_mac_window_bundle.mjs";
 
 const NBSP = " ";
 
@@ -50,6 +51,7 @@ function exportPipeline(bodyHTML, rules) {
   const stage = document.getElementById("stage");
   const highlighted = highlightCodeBlocks(stage);
   structuralizeCodeWhitespace(stage);
+  addMacWindows(stage, rules.pre ?? "");
   const stats = inlineWechatStyles(stage, rules);
   return { html: wrapWechatBody(stage.innerHTML, rules.body), stats, highlighted, stage };
 }
@@ -235,6 +237,30 @@ for (const theme of WECHAT_THEMES) {
     `${theme.id}: 第 3 行缩进 8`,
     (lines[2].match(new RegExp(`^${NBSP}*`)) ?? [""])[0].length,
     8,
+  );
+}
+
+// Mac 窗口栏不能污染代码内容。
+//
+// 三个 ● 是插在 <pre> 里、<code> 外的。如果位置错了（插进 code 内），
+// 读者复制代码时会带出三个圆点 —— 而上面那组「原文可还原」的断言恰好会漏掉
+// 这种情况，因为它取的就是 code 的内容。所以这里单独钉一遍。
+for (const theme of WECHAT_THEMES) {
+  const { stage } = exportPipeline(
+    `<pre><code class="language-python">${escapeHTML("def f():\n    return 1")}</code></pre>`,
+    theme.rules,
+  );
+  const code = stage.querySelector("pre > code");
+  const bar = stage.querySelector("pre > span");
+  ok(`${theme.id}: 有窗口栏`, !!bar);
+  ok(`${theme.id}: code 内不含 ●`, !code.textContent.includes("●"), code.textContent.slice(0, 30));
+  eq(`${theme.id}: 窗口栏在 code 之外`, bar.querySelector("code"), null);
+  // 复制出来的代码应当只有代码。
+  // 换行现在是 <br>，textContent 里不会有 \n —— 按行还原再比。
+  eq(
+    `${theme.id}: 代码内容纯净`,
+    renderWithWhitespaceStripped(code).join("\n").replaceAll(NBSP, " "),
+    "def f():\n    return 1",
   );
 }
 

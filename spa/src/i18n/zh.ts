@@ -192,7 +192,7 @@ export const zh: Messages = {
     wechatCopied: "已复制，去粘贴吧",
     wechatWorking: "处理中…",
     wechatCodeNote:
-      "代码块的高亮已内联为行内样式，缩进与换行改用不换行空格和 <br> 承载，微信剥掉样式后也不会塌。制表符按 4 空格展开。",
+      "代码块带 Mac 窗口三点，高亮已内联为行内样式；缩进与换行改用不换行空格和 <br> 承载，微信剥掉样式后也不会塌。制表符按 4 空格展开。",
     wechatMathConverted: "{n} 个公式已转为图片",
     wechatMathFailed: "{n} 个公式转换失败，已降级为 LaTeX 源码",
     exportFailed: "导出失败",

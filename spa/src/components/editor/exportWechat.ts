@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { highlightCodeBlocks } from "./highlightCode";
+import { addMacWindows } from "./macWindow";
 import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInline";
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
@@ -42,6 +43,8 @@ export async function buildWechatHTML(
   stage.innerHTML = heading + editor.getHTML();
   document.body.appendChild(stage);
 
+  const theme = findWechatTheme(themeId);
+
   try {
     // 顺序要紧：先把公式换成 img，再内联样式。
     // 反过来的话新插入的 img 拿不到主题的 img 规则。
@@ -55,7 +58,10 @@ export async function buildWechatHTML(
     // 放在高亮之后：这样它遍历的是已经带 span 的树，逐个文本节点处理，
     // 不会碰到标签和 style 里的空格。见 wechatWhitespace.ts。
     structuralizeCodeWhitespace(stage);
-    const theme = findWechatTheme(themeId);
+    // Mac 窗口三点。必须在内联之前：它靠 data-wechat-keep-style 把样式带过去，
+    // 那是内联器保留内联样式的唯一通道（span 没有主题规则，style 会被清掉）。
+    // 用真实元素而不是伪元素 —— 微信剥 <style>，伪元素没有内联等价写法。
+    addMacWindows(stage, theme.rules.pre ?? "");
     const stats = inlineWechatStyles(stage, theme.rules);
     const html = wrapWechatBody(stage.innerHTML, theme.rules.body);
     return {
