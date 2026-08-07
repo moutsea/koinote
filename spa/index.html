@@ -9,9 +9,13 @@
       content="Typora 式所见即所得的在线 Markdown 编辑器，边写边渲染，随时导出。"
     />
     <!-- 文件在仓库根的 public/（vite.config.ts 里 publicDir 指向那里，不是 spa/public/）。
-         用 SVG 而非 .ico：一个文件覆盖所有尺寸，仓库里也不必放二进制资源。 -->
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+         PNG 而非 SVG：logo 是真实水墨笔触，有笔丝、墨色渐变和飞白，矢量化会把
+         笔锋全洗掉。
+         favicon 用「焦墨底 + 反白笔触」而不是站内那张透明淡墨图：细笔触缩到
+         32px 会淡到认不出，而且透明底在深色标签栏上直接消失。深底在两种标签栏
+         上都立得住，一张够用。 -->
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body class="min-h-full">
     <div id="root"></div>

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileText } from "lucide-react";
 import { login, register, ApiError } from "../api";
 import { useI18n } from "../i18n";
 import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
 import { InkClouds } from "../components/Ink";
+import { Logo } from "../components/Logo";
 
 type Mode = "login" | "register";
 
@@ -85,15 +85,9 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
       <InkClouds />
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-xl"
-            style={{
-              background: "var(--cinnabar-soft)",
-              color: "var(--cinnabar)",
-            }}
-          >
-            <FileText className="h-6 w-6" />
-          </div>
+          {/* 不再套朱砂色块：logo 自己已经有朱砂，底色会和它打架。
+              直接放大摆着，登录页本就该让品牌大方一点 */}
+          <Logo className="h-14 w-14" />
           <h1
             className="kn-heading-cn mt-4 text-2xl font-bold tracking-tight"
             style={{ color: "var(--ink-black)" }}

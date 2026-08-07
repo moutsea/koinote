@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   Moon,
   Sun,
-  FileText,
   Globe,
   Check,
   ChevronDown,
@@ -16,6 +15,7 @@ import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
 import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
+import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
 
@@ -59,7 +59,9 @@ export function AppShell() {
             对齐，两边各写一个 px-3 的话改了一处就差几个像素。 */}
         <div className={`flex h-14 w-full items-center gap-3 ${EDGE_PADDING}`}>
           <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <FileText className="h-5 w-5" style={{ color: "var(--cinnabar)" }} />
+            {/* 9（36px）而不是 5（20px）：这是水墨笔触，笔丝在小尺寸下会被
+                重采样平均掉 —— 20px 时整条尾巴淡成一道钩，认不出是鱼尾 */}
+            <Logo className="h-9 w-9" />
             <span className="kn-heading-cn text-lg">Koinote</span>
             {/* 印章只在 sm 以上出现：手机上页头横向就那么点地方，
                 先让位给语言、主题和登录态 */}

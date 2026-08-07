@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Github, Mail, Twitter, ExternalLink, FileText } from "lucide-react";
+import { Github, Mail, Twitter, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { InkSeal } from "./Ink";
+import { Logo } from "./Logo";
 import { EDGE_PADDING } from "../layout";
 
 /** 兄弟站点。与 KeepAsk 的页脚同源，改一处这里也要跟着改 */
@@ -50,7 +51,9 @@ export function AppFooter() {
           {/* 品牌 */}
           <div className="space-y-5 md:col-span-5">
             <div className="flex items-center gap-2.5">
-              <FileText className="h-6 w-6" style={{ color: "var(--cinnabar)" }} />
+              {/* 页脚恒定是深色面板（.kn-app-footer 把墨色 token 整套反过来），
+                  所以这里固定用反白那张，不跟随主题 */}
+              <Logo className="h-8 w-8" variant="reversed" />
               <span
                 className="kn-heading-cn text-2xl font-bold"
                 style={{ color: "var(--ink-black)" }}
