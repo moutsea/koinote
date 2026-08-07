@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { EXPORT_BASE_CSS, EXPORT_DARK_CSS } from "./exportStyles";
+import { highlightCodeBlocks } from "./highlightCode";
 import { renderMathInHTML } from "./renderMath";
 
 /**
@@ -11,6 +12,14 @@ import { renderMathInHTML } from "./renderMath";
  * 浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，这个对话框绕不开，
  * 所以「一键」与「文字可选」在纯前端无法同时成立。
  */
+
+/** 字符串进、字符串出地补高亮。HTML 导出走的是字符串拼接，不经过 DOM 舞台。 */
+function withHighlightedCode(html: string): string {
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  highlightCodeBlocks(holder);
+  return holder.innerHTML;
+}
 
 /** 触发浏览器下载。用完即释放 objectURL，否则整页存活期间都占着内存。 */
 export function downloadBlob(blob: Blob, filename: string) {
@@ -83,7 +92,13 @@ export function exportHTML(editor: Editor, title: string, fallback: string) {
   const heading = title.trim() ? `<h1>${title.replace(/</g, "&lt;")}</h1>\n` : "";
   // 导出的 .html 是静态文件，不执行 JS。公式必须在这里就渲染成 KaTeX 标签，
   // 否则只剩一个带 data-latex 的空元素，打开是空白。
-  const html = htmlDocument(name, renderMathInHTML(heading + editor.getHTML()));
+  //
+  // 高亮同理：getHTML() 里没有 hljs span，EXPORT_BASE_CSS 的 .hljs-* 规则
+  // 无从匹配。不补这一步，导出的 .html 里代码块是整段单色。
+  const html = htmlDocument(
+    name,
+    withHighlightedCode(renderMathInHTML(heading + editor.getHTML())),
+  );
   downloadBlob(
     new Blob([html], { type: "text/html;charset=utf-8" }),
     `${name}.html`,

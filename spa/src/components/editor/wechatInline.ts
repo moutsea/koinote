@@ -183,9 +183,23 @@ export function inlineWechatStyles(
  * 把 body 级样式包在最外层。
  * 微信里没有 <body> 可写，只能套一个 <section> 承载字体、字号、行高，
  * 由子元素继承 —— 这是让正文整体换字体的唯一办法。
+ *
+ * bodyRules 必须转义双引号：字体栈里全是 "PingFang SC"、"Microsoft YaHei"
+ * 这种带引号的族名，直接插进 style="..." 会被第一个双引号提前截断 ——
+ * 属性到那里就结束了，后面的 font-size / line-height / color 全部丢失，
+ * 剩下的片段还会被解析成一堆垃圾属性。30 个主题变体的 body 规则无一例外。
  */
 export function wrapWechatBody(innerHTML: string, bodyRules: string): string {
-  return `<section style="${bodyRules}">${innerHTML}</section>`;
+  return `<section style="${escapeAttr(bodyRules)}">${innerHTML}</section>`;
+}
+
+/**
+ * 转义要放进双引号属性值里的字符串。
+ *
+ * & 必须先转，否则会把后面产生的 &quot; 再转一次成 &amp;quot;。
+ */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
 /** 粗略估算粘贴体积。微信对单篇有上限，太大时值得提醒。 */

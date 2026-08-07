@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/react";
+import { highlightCodeBlocks } from "./highlightCode";
 import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInline";
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
@@ -44,6 +45,10 @@ export async function buildWechatHTML(
     // 顺序要紧：先把公式换成 img，再内联样式。
     // 反过来的话新插入的 img 拿不到主题的 img 规则。
     const math = await replaceMathWithImages(stage);
+    // 高亮必须在内联之前：getHTML() 的产物里没有 hljs span（高亮在编辑器里是
+    // ProseMirror 装饰，不进文档），得先补出来，内联器才有 class 可读。
+    // 详见 highlightCode.ts 的头注。
+    highlightCodeBlocks(stage);
     const theme = findWechatTheme(themeId);
     const stats = inlineWechatStyles(stage, theme.rules);
     const html = wrapWechatBody(stage.innerHTML, theme.rules.body);

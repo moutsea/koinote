@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { safeFilename } from "./exportDocument";
 import { EXPORT_BASE_CSS, EXPORT_PDF_CSS } from "./exportStyles";
+import { highlightCodeBlocks } from "./highlightCode";
 import { renderMathInElement } from "./renderMath";
 
 /**
@@ -45,6 +46,9 @@ export async function exportPDF(
 
   try {
     renderMathInElement(stage);
+    // 补高亮 span，否则 EXPORT_PDF_CSS 里那几条 .hljs-* 规则没有元素可匹配，
+    // 代码块在 PDF 里是整段单色。见 highlightCode.ts。
+    highlightCodeBlocks(stage);
     // 图片必须先转成 data URL：跨域图片会污染 canvas，导致 toDataURL 抛
     // SecurityError，整个导出失败。R2 自定义域名启用后所有图片都是跨域的。
     await inlineImages(stage);
