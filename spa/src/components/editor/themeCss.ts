@@ -93,8 +93,10 @@ const SPECIAL = new Set(["body", "pre code"]);
  * 只改屏幕呈现，不动 theme.rules —— 那张表要原样导出到微信，公众号阅读界面是
  * 白底，导出物的 #fff 是对的，不能跟着改。
  *
- * 例外是本来就用深色底的浅色变体（linear 的 #111114）：那是主题刻意的身份，
- * 而且它的正文字色 #d7d7e1 压在宣纸上只有 1.3:1，换底色会直接读不了。
+ * 例外是本来就用深色底的浅色变体（linear 的 #111114）：那是主题刻意的身份
+ * （仿 Linear 的 changelog 页面），而且它的正文字色 #d7d7e1 压在宣纸上只有
+ * 1.3:1，换底色会直接读不了。深底能活过微信的过滤器已实测确认，
+ * 见 wechatThemes.ts 头注 —— 所以不必为导出单独做浅色版。
  * 判据用亮度而不是主题 id 白名单 —— 后者在新增主题时必然会漏。
  */
 function surfaceOverride(bodyRules: string | undefined): string {
