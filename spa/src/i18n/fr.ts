@@ -199,7 +199,7 @@ export const fr: Messages = {
     wechatCopied: "Copié — collez-le",
     wechatWorking: "Traitement…",
     wechatCodeNote:
-      "La coloration syntaxique est intégrée en styles en ligne : elle survit dans WeChat. Les longues lignes passent à la ligne au lieu de défiler.",
+      "La coloration est intégrée en styles en ligne ; l'indentation et les retours à la ligne reposent sur des espaces insécables et <br>, ils tiennent donc même après que WeChat a supprimé le CSS. Les tabulations valent 4 espaces.",
     wechatMathConverted: "{n} formule(s) converties en images",
     wechatMathFailed: "{n} formule(s) en échec ; repli sur le source LaTeX",
     exportFailed: "Échec de l'export",

@@ -3,6 +3,7 @@ import { highlightCodeBlocks } from "./highlightCode";
 import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInline";
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
+import { structuralizeCodeWhitespace } from "./wechatWhitespace";
 
 /**
  * 导出为微信公众号可直接粘贴的 HTML。
@@ -49,6 +50,11 @@ export async function buildWechatHTML(
     // ProseMirror 装饰，不进文档），得先补出来，内联器才有 class 可读。
     // 详见 highlightCode.ts 的头注。
     highlightCodeBlocks(stage);
+    // 再把代码块里的空白改成 NBSP + <br>。实测微信会剥掉 white-space 声明，
+    // 只靠 CSS 的话缩进会被空白折叠吃掉 —— 必须让空白本身不需要 CSS 维持。
+    // 放在高亮之后：这样它遍历的是已经带 span 的树，逐个文本节点处理，
+    // 不会碰到标签和 style 里的空格。见 wechatWhitespace.ts。
+    structuralizeCodeWhitespace(stage);
     const theme = findWechatTheme(themeId);
     const stats = inlineWechatStyles(stage, theme.rules);
     const html = wrapWechatBody(stage.innerHTML, theme.rules.body);

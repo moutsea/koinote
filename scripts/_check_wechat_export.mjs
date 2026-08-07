@@ -9,6 +9,9 @@ import { parseHTML } from "linkedom";
 import { highlightCodeBlocks } from "./_highlight_code_bundle.mjs";
 import { inlineWechatStyles, wrapWechatBody } from "./_wechat_inline_bundle.mjs";
 import { WECHAT_THEMES, resolveThemeRules } from "./_wechat_themes_bundle.mjs";
+import { structuralizeCodeWhitespace } from "./_wechat_whitespace_bundle.mjs";
+
+const NBSP = " ";
 
 let pass = 0;
 let fail = 0;
@@ -46,8 +49,37 @@ function exportPipeline(bodyHTML, rules) {
   const { document } = parseHTML(`<div id="stage">${bodyHTML}</div>`);
   const stage = document.getElementById("stage");
   const highlighted = highlightCodeBlocks(stage);
+  structuralizeCodeWhitespace(stage);
   const stats = inlineWechatStyles(stage, rules);
   return { html: wrapWechatBody(stage.innerHTML, rules.body), stats, highlighted, stage };
+}
+
+/**
+ * 模拟微信剥掉 white-space 之后读者看到的行。
+ *
+ * 实测微信确实会剥 —— 所以这才是产物要面对的真实条件，
+ * 只断言「HTML 里有 white-space 声明」是不够的。
+ */
+function renderWithWhitespaceStripped(element) {
+  const lines = [];
+  let current = "";
+  const walk = (node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        current += (child.nodeValue ?? "").replace(/[ \t\n\r]+/g, " ");
+      } else if (child.nodeType === 1) {
+        if (child.tagName.toLowerCase() === "br") {
+          lines.push(current);
+          current = "";
+        } else {
+          walk(child);
+        }
+      }
+    }
+  };
+  walk(element);
+  lines.push(current);
+  return lines;
 }
 
 const PY = 'def greet(name):\n    # 打招呼\n    return f"hello {name}"';
@@ -92,14 +124,18 @@ for (const theme of WECHAT_THEMES) {
 
 // ---------- 代码原文不能被链路改坏 ----------
 //
-// 走完全链路之后，把 HTML 重新解析出来，textContent 必须与输入一字不差。
-// 这比只测高亮那一步更严：内联器也会改写 DOM。
+// 走完全链路之后重新解析产物，还原出的代码必须与输入等价。
+//
+// 「等价」而不是「全等」：换行现在是 <br> 元素、空格是 NBSP、tab 展开成 4 空格 ——
+// 这是为了让缩进不依赖 CSS 而有意做的转换（见 wechatWhitespace.ts）。
+// 所以比较前要把这三样还原回去。除此之外一个字符都不该变。
 for (const code of [
   PY,
   "def f():\n\tif a < b and c > d:\n\t\treturn 1",
   'const s = "a & b";\nif (x < y) {}',
   "# 中文注释\nx = '🎉'",
   "u = 'https://example.com/a?b=c&d=e'",
+  "s = '  两端留白  '",
 ]) {
   const rules = WECHAT_THEMES[0].rules;
   const { html } = exportPipeline(
@@ -107,11 +143,12 @@ for (const code of [
     rules,
   );
   const { document } = parseHTML(`<div id="c">${html}</div>`);
-  eq(
-    `端到端保留原文：${JSON.stringify(code.slice(0, 24))}`,
-    document.querySelector("code").textContent,
-    code,
-  );
+  const restored = renderWithWhitespaceStripped(document.querySelector("code"))
+    .join("\n")
+    .replaceAll(NBSP, " ");
+  // tab 已被有意展开成 4 空格，期望值也照此归一
+  const expected = code.replace(/\t/g, "    ");
+  eq(`端到端保留原文：${JSON.stringify(code.slice(0, 24))}`, restored, expected);
 }
 
 // ---------- 三条修复必须同时在产物里 ----------
@@ -170,6 +207,50 @@ for (const code of [
   // 这是反序的后果：span 在，颜色没有。断言它确实坏掉，以此证明顺序是有意义的
   eq("反序则 span 全无颜色（证明顺序要紧）", colored.length, 0);
   ok("反序产物里没有 color 的 span", !/<span style="[^"]*color:/.test(html), html.slice(0, 300));
+}
+
+// ---------- 缩进在 white-space 被剥掉之后仍然存在 ----------
+//
+// 实测微信剥掉了 white-space，缩进全丢（高亮还在）。所以缩进必须靠结构维持：
+// NBSP + <br>。这一组在「声明已被剥掉」的条件下断言，那才是真实条件。
+//
+// 每套主题都要过：主题只影响颜色和底色，但漏测的话某套主题万一改了 pre 规则
+// 就会静默失效。
+for (const theme of WECHAT_THEMES) {
+  const rules = theme.rules;
+  const { stage } = exportPipeline(
+    `<pre><code class="language-python">${escapeHTML(
+      'def f(x):\n    if x:\n        return "y"',
+    )}</code></pre>`,
+    rules,
+  );
+  const lines = renderWithWhitespaceStripped(stage.querySelector("pre > code"));
+  eq(`${theme.id}: 折叠后仍是 3 行`, lines.length, 3);
+  eq(
+    `${theme.id}: 第 2 行缩进 4`,
+    (lines[1].match(new RegExp(`^${NBSP}*`)) ?? [""])[0].length,
+    4,
+  );
+  eq(
+    `${theme.id}: 第 3 行缩进 8`,
+    (lines[2].match(new RegExp(`^${NBSP}*`)) ?? [""])[0].length,
+    8,
+  );
+}
+
+// 缩进与高亮必须同时成立 —— 这次修复不能把上次修好的高亮弄坏
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { stage, html } = exportPipeline(
+    `<pre><code class="language-python">${escapeHTML(
+      'def f():\n    # 注释\n    return "s"',
+    )}</code></pre>`,
+    rules,
+  );
+  const lines = renderWithWhitespaceStripped(stage.querySelector("pre > code"));
+  ok("缩进还在", lines[1].startsWith(NBSP.repeat(4)), lines);
+  ok("颜色还在", /<span style="[^"]*color:#/.test(html), html.slice(0, 400));
+  ok("产出了 br", stage.querySelectorAll("pre br").length > 0);
 }
 
 // ---------- 最外层 section 的 style 不能被字体栈截断 ----------
