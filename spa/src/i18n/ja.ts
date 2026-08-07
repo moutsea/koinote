@@ -198,7 +198,7 @@ export const ja: Messages = {
     wechatCopied: "コピーしました",
     wechatWorking: "処理中…",
     wechatCodeNote:
-      "注意：WeChat は class 属性を削除するため、シンタックスハイライトは保持できません。",
+      "シンタックスハイライトはインラインスタイルとして埋め込まれるため、WeChat でも表示されます。長い行は横スクロールせず折り返します。",
     wechatMathConverted: "{n} 個の数式を画像に変換しました",
     wechatMathFailed: "{n} 個の数式が失敗し、LaTeX ソースにフォールバックしました",
     exportFailed: "エクスポートに失敗しました",

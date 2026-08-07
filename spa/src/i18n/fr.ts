@@ -199,7 +199,7 @@ export const fr: Messages = {
     wechatCopied: "Copié — collez-le",
     wechatWorking: "Traitement…",
     wechatCodeNote:
-      "Note : WeChat supprime les attributs class, la coloration syntaxique ne peut pas être conservée.",
+      "La coloration syntaxique est intégrée en styles en ligne : elle survit dans WeChat. Les longues lignes passent à la ligne au lieu de défiler.",
     wechatMathConverted: "{n} formule(s) converties en images",
     wechatMathFailed: "{n} formule(s) en échec ; repli sur le source LaTeX",
     exportFailed: "Échec de l'export",

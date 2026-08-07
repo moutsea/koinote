@@ -197,7 +197,7 @@ export const en: Messages = {
     wechatCopied: "Copied — go paste it",
     wechatWorking: "Working…",
     wechatCodeNote:
-      "Note: WeChat strips class attributes, so syntax highlighting cannot survive. Code keeps only its monospace font and background.",
+      "Syntax highlighting is inlined as element styles, so it survives in WeChat. Long lines wrap instead of scrolling sideways.",
     wechatMathConverted: "{n} formula(s) converted to images",
     wechatMathFailed: "{n} formula(s) failed; fell back to LaTeX source",
     exportFailed: "Export failed",

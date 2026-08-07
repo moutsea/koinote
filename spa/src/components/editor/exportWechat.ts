@@ -18,6 +18,13 @@ export type WechatExportResult = {
   bytes: number;
   math: MathConversion;
   styledElements: number;
+  /**
+   * 内联了代码高亮的元素数。
+   *
+   * 传出来是为了能在对话框里区分两种情况：文章本来没有代码块（0 是对的），
+   * 还是有代码块但高亮没内联上（0 是 bug）。只看导出的 HTML 分不出这两者。
+   */
+  highlightedElements: number;
 };
 
 export async function buildWechatHTML(
@@ -45,6 +52,7 @@ export async function buildWechatHTML(
       bytes: estimateBytes(html),
       math,
       styledElements: stats.styled,
+      highlightedElements: stats.highlighted,
     };
   } finally {
     stage.remove();

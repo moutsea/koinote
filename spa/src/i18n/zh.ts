@@ -192,7 +192,7 @@ export const zh: Messages = {
     wechatCopied: "已复制，去粘贴吧",
     wechatWorking: "处理中…",
     wechatCodeNote:
-      "注意：微信会剥掉 class，代码块的语法高亮无法保留，只保留等宽字体与底色。",
+      "代码块的语法高亮已内联为行内样式，微信里能正常显示。长行会自动折行而不是横向滚动。",
     wechatMathConverted: "{n} 个公式已转为图片",
     wechatMathFailed: "{n} 个公式转换失败，已降级为 LaTeX 源码",
     exportFailed: "导出失败",
