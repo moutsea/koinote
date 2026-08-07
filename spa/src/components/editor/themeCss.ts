@@ -82,13 +82,34 @@ function hljsCSS(scope: string, c: typeof HLJS_LIGHT): string {
 /** 规则表里需要特殊处理的键，其余按标签名直接拼 */
 const SPECIAL = new Set(["body", "pre code"]);
 
+/**
+ * 屏幕上正文区的底色一律跟随应用底色。
+ *
+ * 浅色主题的 body 底色大多是 #fff（15 套里 11 套），而站点底色是宣纸 #f6f4ee ——
+ * 正文区是居中的定宽列，底色差这一点点，左右就各留一道竖边，读起来是「没对齐
+ * 的瑕疵」而不是层次。深色变体早就是这么处理的（见 wechatThemes.ts 里 DARK.surface
+ * 的注释：试过亮一档，不成立），浅色这边漏了。
+ *
+ * 只改屏幕呈现，不动 theme.rules —— 那张表要原样导出到微信，公众号阅读界面是
+ * 白底，导出物的 #fff 是对的，不能跟着改。
+ *
+ * 例外是本来就用深色底的浅色变体（linear 的 #111114）：那是主题刻意的身份，
+ * 而且它的正文字色 #d7d7e1 压在宣纸上只有 1.3:1，换底色会直接读不了。
+ * 判据用亮度而不是主题 id 白名单 —— 后者在新增主题时必然会漏。
+ */
+function surfaceOverride(bodyRules: string | undefined): string {
+  if (!isLightBackground(bodyRules)) return "";
+  return "background:var(--background);";
+}
+
 /** 生成某一模式下的规则块。scope 决定它挂在浅色还是 .dark 下 */
 function blockFor(
   rules: Record<string, string | undefined>,
   scope: string,
 ): string[] {
   const parts: string[] = [
-    `${scope}{${rules.body ?? ""}}`,
+    // 底色覆盖排在主题声明之后才能生效
+    `${scope}{${rules.body ?? ""}${surfaceOverride(rules.body)}}`,
     // ProseMirror 自己有 padding/min-height，别被主题的 body 规则顶掉
     `${scope} .ProseMirror{background:transparent;color:inherit;}`,
   ];

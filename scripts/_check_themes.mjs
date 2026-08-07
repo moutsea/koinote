@@ -137,5 +137,61 @@ for (const theme of WECHAT_THEMES) {
 // 不套主题时不该产出任何 CSS
 check("空串不产出 CSS", themeToCSS("") === "");
 
+// ---------- 屏幕上正文区底色必须跟随应用底色 ----------
+//
+// 浅色主题的 body 底色大多是 #fff，而站点底色是宣纸 #f6f4ee。正文区是居中的
+// 定宽列，底色差一点点，左右就各留一道竖边 —— 读起来是没对齐的瑕疵而不是层次。
+// 深色变体早就用 var(--background) 解决了这个问题，浅色这边原本漏了。
+//
+// 关键约束：只能改屏幕呈现，theme.rules 必须保持原样导出到微信 ——
+// 公众号阅读界面是白底，导出物的 #fff 是对的。
+for (const theme of WECHAT_THEMES) {
+  const { id } = theme;
+  const css = themeToCSS(id);
+  const lightBody = /(?:^|\n)\.koinote-themed\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const darkBody = /\.dark \.koinote-themed\{([^}]*)\}/.exec(css)?.[1] ?? "";
+
+  const bodyBg = lastBg(theme.rules.body);
+  const isLightSurface = bodyBg ? luma(bodyBg) > 0.6 : false;
+
+  if (isLightSurface) {
+    // 浅底主题：屏幕上必须跟随应用底色，且覆盖要排在主题声明之后才生效
+    check(
+      `${id} 浅色屏幕底色跟随应用`,
+      lightBody.includes("background:var(--background)"),
+      lightBody,
+    );
+    const idx = lightBody.lastIndexOf("background:var(--background)");
+    const lastLiteral = lightBody.lastIndexOf(`background:${bodyBg}`);
+    check(
+      `${id} 覆盖排在主题声明之后`,
+      idx > lastLiteral,
+      `var 在 ${idx}，字面色在 ${lastLiteral}`,
+    );
+  } else {
+    // 深底的浅色变体（linear）：那是主题刻意的身份，且正文字色压在宣纸上读不了，
+    // 必须保留。判据是亮度而不是 id 白名单 —— 后者新增主题时必然会漏。
+    check(
+      `${id} 深底浅色变体保留自己的底色`,
+      !lightBody.includes("background:var(--background)"),
+      lightBody,
+    );
+  }
+
+  // 深色变体本来就该跟随应用底色，这条是原有行为，一并钉住防回退
+  check(
+    `${id} 深色屏幕底色跟随应用`,
+    darkBody.includes("background:var(--background)"),
+    darkBody,
+  );
+
+  // 导出用的规则表不能被这次改动污染：微信侧没有 CSS 变量可解析
+  check(
+    `${id} 导出规则不含 var()`,
+    !/var\(/.test(theme.rules.body),
+    theme.rules.body,
+  );
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
