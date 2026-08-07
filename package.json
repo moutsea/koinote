@@ -23,6 +23,7 @@
     "test:contrast": "node scripts/_check_contrast.mjs",
     "test:storage": "esbuild spa/src/storage.ts --bundle --format=esm --platform=neutral --outfile=scripts/_storage_bundle.mjs --log-level=error && node scripts/_check_storage.mjs; rm -f scripts/_storage_bundle.mjs",
     "test:quota": "node scripts/_check_quota_wiring.mjs",
+    "test:wechat-hljs": "esbuild spa/src/components/editor/wechatHljs.ts --bundle --format=esm --platform=neutral --outfile=scripts/_wechat_hljs_bundle.mjs --log-level=error && node scripts/_check_wechat_hljs.mjs; rm -f scripts/_wechat_hljs_bundle.mjs",
     "test:avatar": "esbuild spa/src/components/Avatar.tsx --bundle --format=esm --platform=neutral --external:react --external:lucide-react --outfile=scripts/_avatar_bundle.mjs --log-level=error && node scripts/_check_avatar.mjs; rm -f scripts/_avatar_bundle.mjs",
     "verify:tree": "python3 scripts/verify_tree_create.py",
     "verify:images": "python3 scripts/verify_image_paste.py",
