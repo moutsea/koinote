@@ -77,9 +77,16 @@ export const HLJS_LIGHT: HljsPalette = {
  * 取不到时返回 null，调用方据此回落。
  */
 export function backgroundFrom(declarations: string): string | null {
-  const match = /(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i.exec(declarations);
-  if (!match) return null;
-  return match[1].trim() || null;
+  // 取最后一个而不是第一个：深色变体是「浅色声明 + 深色声明」拼出来的
+  // （见 wechatThemes.ts 的 resolveThemeRules），同一个声明串里会出现两次
+  // background，而 CSS 里生效的是后者。取第一个会把深色变体全判成浅底 ——
+  // 高亮配色整套错，Mac 窗口标题栏也会用错底色。
+  // themeCss.ts 的 isLightBackground 早就踩过这个坑，那里有同样的注释。
+  const matches = [
+    ...declarations.matchAll(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/gi),
+  ];
+  if (!matches.length) return null;
+  return matches[matches.length - 1][1].trim() || null;
 }
 
 /**

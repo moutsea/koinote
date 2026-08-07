@@ -1,11 +1,15 @@
-// 代码块顶部的 Mac 窗口三点。
+// 代码块的 Mac 窗口外观：标题栏 + 三点 + 圆角 + 投影。
 //
-// 这个效果在微信里能不能活，取决于它只依赖已经被证实存活的东西：
-// span 上的 color（语法高亮就是靠它活下来的）和 NBSP（缩进靠它）。
-// 反过来说，任何依赖 width / height / border-radius / 伪元素的方案都不可信 ——
-// 微信剥掉 <style>，而这几条声明是否在内联时存活我们没有证据。
+// 上一版这里断言的是「不得出现 width/height/border-radius」，理由是那些声明
+// 是否在微信里存活没有证据，只有 color 有（语法高亮靠它活下来）。
+// 那个前提已被推翻 —— mdnice 导出到微信的产物里明确带着这些声明且能正常显示，
+// 所以现在用真实圆形。字符方案的问题正是尺寸受字体摆布，三个 ● 胖瘦不一。
 //
-// 所以断言的重点是「不依赖不可信的东西」，以及与前两次修复不冲突。
+// 断言重点相应改成：三点是真实圆形（有尺寸、有 border-radius:50%、有背景色）、
+// 标题栏与代码区同底色连成一块面板、pre 的 padding 被归零（否则标题栏齐不了边）、
+// 以及不能破坏前两次修好的高亮与缩进。
+//
+// 伪元素仍然不能用于导出 —— 那条限制没变，微信剥 <style>。
 import { parseHTML } from "linkedom";
 import { addMacWindows, buildMacBar, dotsFor, macWindowCSS } from "./_mac_window_bundle.mjs";
 import { highlightCodeBlocks } from "./_highlight_code_bundle.mjs";
@@ -80,55 +84,95 @@ const BLOCK = `<pre><code class="language-python">${escapeHTML(CODE)}</code></pr
   const rules = WECHAT_THEMES[0].rules;
   const { root } = pipeline(BLOCK, rules);
   const bar = root.querySelector("pre > span");
-  ok("窗口栏存在", !!bar);
+  ok("标题栏存在", !!bar);
   const barStyle = bar.getAttribute("style") ?? "";
   const dots = [...bar.querySelectorAll("span")];
   eq("有三个点", dots.length, 3);
 
-  // 点必须靠 color 显色 —— 那是唯一有实证会存活的属性
   for (const [i, dot] of dots.entries()) {
     const style = dot.getAttribute("style") ?? "";
-    ok(`第 ${i + 1} 点有 color`, /color:#[0-9a-f]{6}/i.test(style), style);
-    // 内容必须是可见字符，不能靠尺寸撑出来
-    ok(`第 ${i + 1} 点有字符内容`, dot.textContent.trim().length > 0, dot.textContent);
+    const n = i + 1;
+    // 圆形三要素：尺寸、50% 圆角、背景色。缺任何一条就不是圆点
+    ok(`第 ${n} 点有 width`, /width:\d+px/.test(style), style);
+    ok(`第 ${n} 点有 height`, /(?:^|;)height:\d+px/.test(style), style);
+    ok(`第 ${n} 点是圆的`, style.includes("border-radius:50%"), style);
+    ok(`第 ${n} 点有背景色`, /background:#[0-9a-f]{6}/i.test(style), style);
+    // inline-block 才能让 width/height 生效 —— 纯 inline 元素两者都不起作用
+    ok(`第 ${n} 点是 inline-block`, style.includes("display:inline-block"), style);
+    // 宽高必须相等，否则是椭圆
+    const w = Number(/width:(\d+)px/.exec(style)?.[1]);
+    const h = Number(/(?:^|;)height:(\d+)px/.exec(style)?.[1]);
+    eq(`第 ${n} 点宽高相等`, w, h);
+    // 不能有字符内容 —— 圆形靠尺寸撑出来，混进字符会把它顶高
+    eq(`第 ${n} 点无文字内容`, dot.textContent, "");
   }
 
-  // 不能依赖这些：任何一条被剥掉，方块方案就会消失（零尺寸）或变成直角块。
-  //
-  // height 要用「前面不是 line-」的写法排除 line-height —— 后者是必需的
-  // （压住微信塞的行高），不是尺寸依赖。
-  const allStyles = barStyle + dots.map((d) => d.getAttribute("style")).join("");
-  for (const [label, pattern] of [
-    ["width", /(?:^|;)\s*width:/],
-    ["height", /(?:^|;|[^-])\bheight:/],
-    ["border-radius", /border-radius:/],
-  ]) {
-    ok(`不依赖 ${label}`, !pattern.test(allStyles), allStyles);
-  }
-  // 反过来确认 line-height 确实在（上面那条排除规则不能把它一起排掉）
-  ok("line-height 仍在", allStyles.includes("line-height:"), allStyles);
-  // 也不能用伪元素（内联时会被静默丢掉）
-  ok("不含伪元素写法", !allStyles.includes("::"), allStyles);
-
-  // 三点之间必须是 NBSP：普通空格会被折叠（white-space 已被微信剥掉）
-  ok("点之间是 NBSP", bar.textContent.includes(NBSP), JSON.stringify(bar.textContent));
+  // 前两个点要有右间距，最后一个不要（否则三点整体偏左，看着不居中）
+  eq(
+    "前两点有右间距",
+    dots
+      .slice(0, 2)
+      .filter((d) => (d.getAttribute("style") ?? "").includes("margin-right:")).length,
+    2,
+  );
   ok(
-    "点之间不是普通空格",
-    !/●[ \t]●/.test(bar.textContent),
-    JSON.stringify(bar.textContent),
+    "最后一点无右间距",
+    !(dots[2].getAttribute("style") ?? "").includes("margin-right:"),
+    dots[2].getAttribute("style"),
   );
 
-  // 行高必须压住：不写的话微信塞自己的行高，顶部会多出一大片空白
-  ok("窗口栏压了行高", barStyle.includes("line-height:1"), barStyle);
-  for (const [i, dot] of dots.entries()) {
+  // 标题栏本身
+  ok("标题栏是 block", barStyle.includes("display:block"), barStyle);
+  ok("标题栏有高度", /height:\d+px/.test(barStyle), barStyle);
+  // font-size:0 防止混进来的空白文本节点用行高把标题栏顶高
+  ok("标题栏 font-size 归零", barStyle.includes("font-size:0"), barStyle);
+  // 顶部两角圆、底部不圆 —— 它要和下面的代码区连成一块
+  ok("标题栏只有上圆角", /border-radius:\S+ \S+ 0 0/.test(barStyle), barStyle);
+
+  // 伪元素在导出里仍然用不了（微信剥 <style>）
+  const allStyles = barStyle + dots.map((d) => d.getAttribute("style")).join("");
+  ok("不含伪元素写法", !allStyles.includes("::"), allStyles);
+}
+
+// ---------- 标题栏与代码区连成一块面板 ----------
+//
+// 这是「像个窗口」而不是「三个点浮在代码上面」的关键。
+for (const theme of WECHAT_THEMES) {
+  const { root } = pipeline(BLOCK, theme.rules);
+  const pre = root.querySelector("pre");
+  const bar = root.querySelector("pre > span");
+  const code = root.querySelector("pre > code");
+  const preStyle = pre.getAttribute("style") ?? "";
+  const barStyle = bar.getAttribute("style") ?? "";
+  const codeStyle = code.getAttribute("style") ?? "";
+
+  // 标题栏底色必须与主题的 pre 底色一致，否则中间会出现一条色差横条
+  const preBg = /background:(#[0-9a-f]{3,6})/i.exec(theme.rules.pre)?.[1];
+  if (preBg) {
     ok(
-      `第 ${i + 1} 点压了行高`,
-      (dot.getAttribute("style") ?? "").includes("line-height:1"),
-      dot.getAttribute("style"),
+      `${theme.id}: 标题栏与代码区同底色`,
+      barStyle.toLowerCase().includes(`background:${preBg.toLowerCase()}`),
+      { barStyle, preBg },
     );
   }
-  // display:block 让它独占一行
-  ok("窗口栏是 block", barStyle.includes("display:block"), barStyle);
+
+  // pre 的 padding 必须归零 —— 留着的话标题栏会被往里缩一圈，像贴歪的贴纸。
+  // 内联顺序是「主题规则 + 补充 + 高亮 + 保留样式」，生效的是最后一个
+  const pads = [...preStyle.matchAll(/(?:^|;)padding:([^;]+)/g)].map((m) => m[1]);
+  eq(`${theme.id}: pre 最终 padding 为 0`, pads[pads.length - 1], "0");
+
+  // 内边距移到 code 上，且必须 display:block（行内元素的上下 padding 不占布局）
+  ok(`${theme.id}: code 是 block`, codeStyle.includes("display:block"), codeStyle);
+  const codePads = [...codeStyle.matchAll(/(?:^|;)padding:([^;]+)/g)].map((m) => m[1]);
+  ok(
+    `${theme.id}: code 有内边距`,
+    codePads.length > 0 && codePads[codePads.length - 1] !== "0",
+    codeStyle,
+  );
+
+  // 圆角与投影落在 pre 上
+  ok(`${theme.id}: pre 有圆角`, /border-radius:\d+px;/.test(preStyle), preStyle);
+  ok(`${theme.id}: pre 有投影`, preStyle.includes("box-shadow:"), preStyle);
 }
 
 // ---------- 位置：必须在 code 之前 ----------
@@ -146,8 +190,9 @@ for (const theme of WECHAT_THEMES) {
   eq(`${theme.id}: 插了 1 条`, added, 1);
   const dots = [...root.querySelectorAll("pre > span > span")];
   eq(`${theme.id}: 有 3 个点`, dots.length, 3);
+  // 点色现在走 background（真实圆形），不是 color（字符方案）
   const colors = dots.map((d) =>
-    ((d.getAttribute("style") ?? "").match(/color:(#[0-9a-f]{6})/i) ?? [])[1],
+    ((d.getAttribute("style") ?? "").match(/background:(#[0-9a-f]{6})/i) ?? [])[1],
   );
   eq(`${theme.id}: 三点颜色齐全`, colors.filter(Boolean).length, 3);
   eq(`${theme.id}: 三点颜色互不相同`, new Set(colors).size, 3);

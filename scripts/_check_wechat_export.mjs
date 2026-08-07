@@ -172,13 +172,17 @@ for (const code of [
     preCode.getAttribute("style"),
   );
 
-  // 2. 每个高亮 span 都要写行高 —— 微信会给行内元素塞自己的行高
-  const spans = [...stage.querySelectorAll("pre span")];
+  // 2. 每个高亮 span 都要写行高 —— 微信会给行内元素塞自己的行高。
+  //
+  // 只看 code 内的 span：标题栏那三个点也是 pre 里的 span，但它们是定尺寸的
+  // 装饰块（width/height/border-radius），不参与文字排版，塞行高反而会把
+  // 标题栏顶高。它们的形状由 test:mac-window 另行断言。
+  const spans = [...stage.querySelectorAll("pre > code span")];
   ok("产出了 span", spans.length > 0);
   const withoutLineHeight = spans.filter(
     (s) => !(s.getAttribute("style") ?? "").includes("line-height:"),
   );
-  eq("每个 span 都有 line-height", withoutLineHeight.length, 0);
+  eq("每个代码 span 都有 line-height", withoutLineHeight.length, 0);
 
   // 3. 颜色
   const withColor = spans.filter((s) =>
