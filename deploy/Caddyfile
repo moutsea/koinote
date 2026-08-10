@@ -1,0 +1,41 @@
+# 后端的 TLS 终止 + 反向代理。
+#
+# 为什么源站也要 HTTPS：Cloudflare 的 Flexible 模式下，浏览器→CF 是加密的，
+# 但 CF→源站是明文 HTTP。而 Worker 会把浏览器的会话 cookie 转发给后端 ——
+# 那段明文里就带着能直接登录任意账号的令牌。所以这里必须有真证书，
+# 且 Cloudflare 的 SSL 模式要设成 Full (strict)。
+#
+# caddy 自动申请并续期 Let's Encrypt 证书，不需要 certbot 那套 cron。
+# 证书存在 caddy-data 卷里（见 docker-compose.prod.yml），重启不会重签。
+
+api.koinote.app {
+	# 后端在主机的回环口上（compose.prod 把它绑到 127.0.0.1:8080）
+	reverse_proxy 127.0.0.1:8080 {
+		# 把真实客户端 IP 传给后端。
+		#
+		# 后端的 requestIP()（ratelimit.go）读 X-Forwarded-For 做限流分桶，
+		# 不传的话所有请求看起来都来自 caddy 一个 IP —— 限流会把全站用户
+		# 当成同一个来源，10 次失败登录就能锁住所有人。
+		#
+		# 这里的值来自 Cloudflare 设的 CF-Connecting-IP：链路是
+		# 浏览器 → CF → Worker → CF → caddy → 后端，而 Worker 已经把
+		# cf-connecting-ip 写进 X-Forwarded-For（见 worker/index.ts）。
+		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+	}
+
+	# 只接受来自 Cloudflare 的请求会更严，但那需要维护 CF 的 IP 段列表，
+	# 且列表变动时会静默拒绝所有流量。这里不做 —— 源站 IP 已被橙云隐藏，
+	# 而真正的鉴权在应用层（会话 cookie + 内部令牌）。
+
+	encode gzip
+
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+		# 不记录请求体与 cookie —— 那里面有会话令牌和文档内容
+		format json
+	}
+}

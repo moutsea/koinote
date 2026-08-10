@@ -25,15 +25,58 @@
     "IMAGE_PUBLIC_BASE": ""
   },
 
-  // 生产环境用 secret 覆盖：
-  // wrangler secret put BACKEND_URL
-  // wrangler secret put BACKEND_INTERNAL_TOKEN
+  // 生产环境的 secret（不入库，用命令设）：
+  //   wrangler secret put BACKEND_URL --env production
+  //   wrangler secret put BACKEND_INTERNAL_TOKEN --env production
 
-  // 生产环境覆盖：图片走 CDN。本地开发留空，回落到 Worker 代理。
+  // ⚠ Cloudflare 的命名环境**不继承**顶层的绑定与变量。
+  //
+  // r2_buckets、assets、vars 这些都必须在 env.production 里重写一遍 ——
+  // 只在顶层写的话，部署到 production 后 env.IMAGES 是 undefined，
+  // 图片上传直接 500，而 wrangler 只在部署时打一行 WARNING 提示，很容易划过去。
+  // （实测：wrangler secret list --env production 会明确报 "r2_buckets exists at
+  // the top level, but not on env.production"。）
+  //
+  // 所以下面是有意的重复，不是冗余。改顶层时两处都要改。
   "env": {
     "production": {
+      "assets": {
+        "directory": "spa/dist",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": true
+      },
+      "r2_buckets": [
+        {
+          "binding": "IMAGES",
+          "bucket_name": "koinote-images"
+        }
+      ],
+      // 绑定到 koinote.app 根域。
+      //
+      // custom_domain 而不是 routes：前者让 Cloudflare 自动建 DNS 记录并签证书，
+      // 后者要求你先自己把 DNS 指过来。根域用 custom_domain 更省事。
+      //
+      // 没有这一段的话，部署只会产出一个 *.workers.dev 地址，koinote.app 仍指向
+      // 原来的位置 —— 而 OAuth 回调登记的是 koinote.app，登录会直接失败。
+      "routes": [
+        {
+          "pattern": "koinote.app",
+          "custom_domain": true
+        }
+      ],
       "vars": {
+        // 图片走 R2 自定义域名（已在 Cloudflare 后台连好，ssl_status active），
+        // 不再消耗 Worker 请求数。配错时会回落到 Worker 代理且图片照样显示，
+        // 所以部署后必须用 /api/images/config 自查，不能只看图能不能打开。
         "IMAGE_PUBLIC_BASE": "https://img.koinote.app"
+        // BACKEND_URL 故意不写在这里 —— 它由 secret 提供。
+        //
+        // wrangler 会为此报一条 WARNING（"BACKEND_URL exists at the top level,
+        // but not on env.production.vars"），那条可以忽略：顶层那个值是
+        // http://localhost:8080，把它继承进生产只会让线上代理打向自己。
+        // 不设 secret 时 env.BACKEND_URL 是 undefined，Worker 直接返回
+        // 500 "BACKEND_URL is not configured" —— 显式失败，而不是静默连本机。
       }
     }
   }

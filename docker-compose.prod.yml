@@ -1,0 +1,52 @@
+# 生产覆盖层。用法：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 与开发配置的三处差别，每一处都是安全或可用性上的必需：
+#
+#   1. Postgres 不再暴露端口。开发时映射到主机是为了用 psql 连，生产上那等于把
+#      数据库开到公网 —— ufw 挡得住，但依赖防火墙配置正确是不必要的风险。
+#      后端和它在同一个 compose 网络里，用服务名 postgres 就能连。
+#   2. 后端也不暴露端口。它只该由 caddy 反代访问，直接开 8080 到公网意味着
+#      BACKEND_INTERNAL_TOKEN 成为唯一防线（那个头能伪造任意用户身份）。
+#   3. 加 caddy 做 TLS 终止。Cloudflare 到源站这一段也要加密（Full strict），
+#      否则中间那段是明文，而浏览器的会话 cookie 会经过它。
+
+services:
+  postgres:
+    # ⚠ compose 的 ports 是**合并**而不是替换 —— 在覆盖文件里再写一条
+    # "127.0.0.1:5432:5432" 会得到两条映射（开发那条 0.0.0.0 + 这条），
+    # 两者抢同一个端口，postgres 直接起不来：
+    #   failed to bind host port 127.0.0.1:5432/tcp: address already in use
+    # （实测踩过，而报错信息指向"端口被占"，很容易误以为是别的进程。）
+    #
+    # 收窄监听面的正确做法是用 POSTGRES_PORT 变量把它绑到回环 ——
+    # 基础文件写的是 "${POSTGRES_PORT:-5432}:5432"，而 compose 允许
+    # 变量里带 host_ip。所以生产 .env 里设 POSTGRES_PORT=127.0.0.1:5432。
+    #
+    # 这里不再重复声明 ports。
+    environment:
+      # 生产不需要 TZ 之外的差异，这一段留着是为了让文件结构清晰
+      TZ: ${TZ:-Asia/Shanghai}
+
+  backend:
+    # 同理，端口由 .env 的 BACKEND_PORT 控制，见基础文件的
+    # "${BACKEND_PORT:-8080}:8080"。生产设 BACKEND_PORT=127.0.0.1:8080。
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # host 网络模式：caddy 要能同时访问 127.0.0.1:8080（后端）与公网 80/443。
+    # 用 bridge 网络的话 127.0.0.1 指向容器自己，连不到后端。
+    network_mode: host
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # 证书与 ACME 账号，必须持久化否则每次重启重新签
+      - caddy-config:/config
+    depends_on:
+      - backend
+
+volumes:
+  caddy-data:
+  caddy-config:
