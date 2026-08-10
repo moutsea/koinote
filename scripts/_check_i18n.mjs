@@ -145,5 +145,31 @@ for (const [name, messages] of Object.entries(LOCALES)) {
   eq(`${name}.footer.brandCn 是「锦鲤笔记」`, messages.footer.brandCn, "锦鲤笔记");
 }
 
+// ---------- 占位符四语必须齐全 ----------
+//
+// 这些串是靠 .replace("{n}", ...) 填的，漏一个占位符不会报错 —— 用户看到的是
+// 字面的「{hosts}」，或者更糟：数字/主机名整个消失，提示变成一句没有信息的空话。
+// TS 只知道它是 string，管不到里面有没有那对花括号。
+const PLACEHOLDERS = {
+  "editor.wechatMathConverted": ["{n}"],
+  "editor.wechatMathFailed": ["{n}"],
+  "editor.wechatImagesUnreachable": ["{n}", "{hosts}"],
+  "editor.uploadingImages": ["{n}"],
+};
+for (const [path, tokens] of Object.entries(PLACEHOLDERS)) {
+  const [group, key] = path.split(".");
+  for (const [name, messages] of Object.entries(LOCALES)) {
+    const value = messages[group][key];
+    ok(
+      `${name}.${path} 非空`,
+      typeof value === "string" && value.trim().length > 0,
+      value,
+    );
+    for (const token of tokens) {
+      ok(`${name}.${path} 含 ${token}`, String(value).includes(token), value);
+    }
+  }
+}
+
 console.log(`\ni18n: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

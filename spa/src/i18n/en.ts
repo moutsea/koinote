@@ -200,6 +200,8 @@ export const en: Messages = {
       "Code blocks get Mac window dots, and highlighting is inlined as element styles; indentation and line breaks use non-breaking spaces and <br>, so they hold up even after WeChat strips CSS. Tabs expand to 4 spaces.",
     wechatMathConverted: "{n} formula(s) converted to images",
     wechatMathFailed: "{n} formula(s) failed; fell back to LaTeX source",
+    wechatImagesUnreachable:
+      "{n} image(s) point at {hosts}, which WeChat's servers cannot reach — they will show as broken after pasting. Your image host needs a publicly reachable domain (IMAGE_PUBLIC_BASE).",
     exportFailed: "Export failed",
     exporting: "Exporting…",
     importedLocalDraft: "Local draft imported",

@@ -202,6 +202,8 @@ export const fr: Messages = {
       "Les blocs de code affichent les trois points d'une fenêtre Mac et la coloration est intégrée en styles en ligne ; l'indentation et les retours à la ligne reposent sur des espaces insécables et <br>, ils tiennent donc même après que WeChat a supprimé le CSS. Les tabulations valent 4 espaces.",
     wechatMathConverted: "{n} formule(s) converties en images",
     wechatMathFailed: "{n} formule(s) en échec ; repli sur le source LaTeX",
+    wechatImagesUnreachable:
+      "{n} image(s) pointent vers {hosts}, que les serveurs de WeChat ne peuvent pas atteindre — elles apparaîtront cassées après le collage. Votre hébergeur d'images doit avoir un domaine public (IMAGE_PUBLIC_BASE).",
     exportFailed: "Échec de l'export",
     exporting: "Export en cours…",
     importedLocalDraft: "Brouillon local importé",

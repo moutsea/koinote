@@ -195,6 +195,8 @@ export const zh: Messages = {
       "代码块带 Mac 窗口三点，高亮已内联为行内样式；缩进与换行改用不换行空格和 <br> 承载，微信剥掉样式后也不会塌。制表符按 4 空格展开。",
     wechatMathConverted: "{n} 个公式已转为图片",
     wechatMathFailed: "{n} 个公式转换失败，已降级为 LaTeX 源码",
+    wechatImagesUnreachable:
+      "{n} 张图片的地址是 {hosts}，微信的服务器抓不到，粘贴后会显示为裂图。图床需要配置公网可访问的域名（IMAGE_PUBLIC_BASE）。",
     exportFailed: "导出失败",
     exporting: "导出中…",
     importedLocalDraft: "已导入本地草稿",

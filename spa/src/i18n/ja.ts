@@ -201,6 +201,8 @@ export const ja: Messages = {
       "コードブロックに Mac ウィンドウの 3 つのドットが付き、ハイライトはインラインスタイルとして埋め込まれます。インデントと改行はノーブレークスペースと <br> で保持するため、WeChat が CSS を削除しても崩れません。タブは 4 スペースに展開されます。",
     wechatMathConverted: "{n} 個の数式を画像に変換しました",
     wechatMathFailed: "{n} 個の数式が失敗し、LaTeX ソースにフォールバックしました",
+    wechatImagesUnreachable:
+      "{n} 枚の画像が {hosts} を指しており、WeChat のサーバーから取得できません。貼り付け後は画像切れになります。画像ホストに公開ドメイン（IMAGE_PUBLIC_BASE）の設定が必要です。",
     exportFailed: "エクスポートに失敗しました",
     exporting: "エクスポート中…",
     importedLocalDraft: "ローカルの下書きを取り込みました",

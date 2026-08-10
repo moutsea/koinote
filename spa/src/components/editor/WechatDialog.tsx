@@ -28,6 +28,9 @@ export function WechatDialog({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // 与 note 分开：图片抓不到和公式降级可能同时发生，共用一个槽会互相顶掉，
+  // 而被顶掉的恰好是更严重的那条
+  const [imageWarning, setImageWarning] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export function WechatDialog({
   async function run() {
     setError(null);
     setNote(null);
+    setImageWarning(null);
     setDone(false);
     setBusy(true);
     try {
@@ -51,6 +55,16 @@ export function WechatDialog({
       await copyRichText(result.html, editor.storage.markdown.getMarkdown());
       setDone(true);
       setBytes(result.bytes);
+
+      // 图片抓不到是比公式更严重的问题：粘贴不报错，要等文章预览才看到裂图。
+      // 所以它单独占一条警告，不跟公式那条抢同一个位置
+      if (result.images.unreachable > 0) {
+        setImageWarning(
+          t.editor.wechatImagesUnreachable
+            .replace("{n}", String(result.images.unreachable))
+            .replace("{hosts}", result.images.unreachableHosts.join("、")),
+        );
+      }
 
       // 公式失败要说出来。静默降级成 LaTeX 源码，用户会以为公式本来就长那样
       if (result.math.failed > 0) {
@@ -114,6 +128,16 @@ export function WechatDialog({
             {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
           </span>
         </p>
+
+        {/* 排在公式提示之前：这条更严重（图会裂），先看到它 */}
+        {imageWarning && (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+          >
+            {imageWarning}
+          </p>
+        )}
 
         {note && (
           <p

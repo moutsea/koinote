@@ -11,6 +11,7 @@ import { inlineWechatStyles, wrapWechatBody } from "./_wechat_inline_bundle.mjs"
 import { WECHAT_THEMES, resolveThemeRules } from "./_wechat_themes_bundle.mjs";
 import { structuralizeCodeWhitespace } from "./_wechat_whitespace_bundle.mjs";
 import { addMacWindows } from "./_mac_window_bundle.mjs";
+import { auditWechatImages } from "./_wechat_images_bundle.mjs";
 
 const NBSP = " ";
 
@@ -46,14 +47,21 @@ function escapeHTML(value) {
  *
  * 顺序与产品代码一致：先补高亮，再内联。公式那步依赖 canvas，跳过。
  */
-function exportPipeline(bodyHTML, rules) {
+function exportPipeline(bodyHTML, rules, origin = "https://koinote.app") {
   const { document } = parseHTML(`<div id="stage">${bodyHTML}</div>`);
   const stage = document.getElementById("stage");
   const highlighted = highlightCodeBlocks(stage);
   structuralizeCodeWhitespace(stage);
   addMacWindows(stage, rules.pre ?? "");
+  const images = auditWechatImages(stage, origin);
   const stats = inlineWechatStyles(stage, rules);
-  return { html: wrapWechatBody(stage.innerHTML, rules.body), stats, highlighted, stage };
+  return {
+    html: wrapWechatBody(stage.innerHTML, rules.body),
+    stats,
+    highlighted,
+    images,
+    stage,
+  };
 }
 
 /**
@@ -341,6 +349,47 @@ for (const theme of WECHAT_THEMES) {
   for (const pre of document.querySelectorAll("pre")) {
     ok("每个 pre 内都有带色 span", /color:/.test(pre.innerHTML), pre.innerHTML.slice(0, 200));
   }
+}
+
+// ---------- 图片地址：产物里不能留相对地址 ----------
+//
+// 对应用户报的现象：「复制之后在公众号里图片的链接都是 localhost 开头的」。
+// 断言的对象同样是最终那串 HTML —— 内联器会重写 style，得确认它没把 src 弄回去。
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { html, images } = exportPipeline(
+    '<p><img src="/images/u/user1/deadbeef12345678.png" alt="图"></p>',
+    rules,
+  );
+
+  eq("线上域：绝对化了 1 张", images.absolutized, 1);
+  eq("线上域：没有不可达的图", images.unreachable, 0);
+  ok(
+    "产物里 src 是绝对地址",
+    html.includes('src="https://koinote.app/images/u/user1/deadbeef12345678.png"'),
+    html.slice(0, 400),
+  );
+  // 关键：内联器跑完之后 src 仍然是绝对的。它会遍历所有属性删掉非白名单项，
+  // src 在白名单里，但这条断言钉住「顺序没搞反、src 没被覆盖」
+  ok("产物里不再有相对 src", !/src="\/images\//.test(html), html.slice(0, 400));
+}
+
+{
+  // 本地开发的形态：能跑通，但要如实报出不可达
+  const rules = WECHAT_THEMES[0].rules;
+  const { html, images } = exportPipeline(
+    '<p><img src="/images/u/user1/deadbeef12345678.png"></p>',
+    rules,
+    "http://localhost:5273",
+  );
+  eq("本地域：1 张不可达", images.unreachable, 1);
+  eq("本地域：主机名报出来", images.unreachableHosts, ["localhost"]);
+  // 即便不可达，src 也已经绝对化 —— 产物是确定的，不依赖粘贴方去补域名
+  ok(
+    "本地域：src 仍被绝对化",
+    html.includes('src="http://localhost:5273/images/'),
+    html.slice(0, 400),
+  );
 }
 
 console.log(`\nwechat export e2e: ${pass} passed, ${fail} failed`);

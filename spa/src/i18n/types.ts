@@ -188,6 +188,7 @@ export interface Messages {
     wechatCodeNote: string;
     wechatMathConverted: string;
     wechatMathFailed: string;
+    wechatImagesUnreachable: string; // 用 {n} 和 {hosts} 占位
     exportFailed: string;
     exporting: string;
     importedLocalDraft: string;

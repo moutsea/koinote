@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { highlightCodeBlocks } from "./highlightCode";
 import { addMacWindows } from "./macWindow";
+import { auditWechatImages, type ImageAudit } from "./wechatImages";
 import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInline";
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
@@ -28,6 +29,13 @@ export type WechatExportResult = {
    * 还是有代码块但高亮没内联上（0 是 bug）。只看导出的 HTML 分不出这两者。
    */
   highlightedElements: number;
+  /**
+   * 图片地址的绝对化与可达性统计。
+   *
+   * unreachable > 0 必须报出来：粘贴那一刻不会失败，微信照样收下这段 HTML，
+   * 要等文章预览时才看到裂图 —— 那时用户早已离开我们的页面，无从判断是哪一步错了。
+   */
+  images: ImageAudit;
 };
 
 export async function buildWechatHTML(
@@ -62,6 +70,11 @@ export async function buildWechatHTML(
     // 那是内联器保留内联样式的唯一通道（span 没有主题规则，style 会被清掉）。
     // 用真实元素而不是伪元素 —— 微信剥 <style>，伪元素没有内联等价写法。
     addMacWindows(stage, theme.rules.pre ?? "");
+    // 图片地址补成绝对的。必须在公式那步之后：公式图也是 img，同样要补
+    // （未配 IMAGE_PUBLIC_BASE 时它拿到的也是 /images/<key>）。
+    // 放在内联之前是因为内联器会重写 style 但不碰 src，先后其实都行 ——
+    // 排在这里只为与"所有 img 都已就位"这个前提对齐。见 wechatImages.ts。
+    const images = auditWechatImages(stage, window.location.origin);
     const stats = inlineWechatStyles(stage, theme.rules);
     const html = wrapWechatBody(stage.innerHTML, theme.rules.body);
     return {
@@ -70,6 +83,7 @@ export async function buildWechatHTML(
       math,
       styledElements: stats.styled,
       highlightedElements: stats.highlighted,
+      images,
     };
   } finally {
     stage.remove();
