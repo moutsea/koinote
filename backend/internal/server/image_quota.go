@@ -99,15 +99,30 @@ func (a *App) recordImageObject(
 	//
 	// 判定里要把文档正文也算上 —— 配额是"云端存储"而不是"图床"，
 	// 少算文档会让一个写了几百篇长文的人凭空多出配额
+	// $3 必须显式标注 ::bigint，否则整条语句在 Postgres 侧 prepare 就失败。
+	//
+	// 原因：bytes 列是 bigint，所以 INSERT 的目标列把 $3 推成 bigint；而下面
+	// WHERE 里 SUM(bytes) 返回的是 numeric（Postgres 对 bigint 求和会提升类型，
+	// 防溢出），于是 `+ $3` 那处把 $3 推成 numeric。同一参数两种类型 →
+	// 「inconsistent types deduced for parameter $3」（SQLSTATE 42P08）。
+	//
+	// 后果是这个功能**从来没工作过**：记账每次都 500，image_objects 全库 0 条，
+	// 于是图片体积完全不计入配额 —— 用户看到的"云端存储用量"只有文档正文。
+	// 而 Worker 侧对记账失败的处理是「放行上传，只记一行日志」（见 images.ts 的
+	// recordUsage：宁可少算也不让用户贴不了图），所以前端完全无感，
+	// 唯一的痕迹是 Worker 日志里的一行 warn。
+	//
+	// 与 documents.go 里新建文档那条是同一类错误（同一天发现的两处），
+	// 都由 TestDocumentSQLPrepares 之外的 TestImageQuotaSQLPrepares 兜住。
 	tag, err := a.db.Exec(ctx, `
 		INSERT INTO image_objects (object_key, user_id, bytes)
-		SELECT $1, $2, $3
+		SELECT $1, $2, $3::bigint
 		WHERE COALESCE(
 			(SELECT SUM(bytes) FROM image_objects WHERE user_id = $2), 0
 		) + COALESCE(
 			(SELECT SUM(octet_length(content) + octet_length(title))
 			 FROM documents WHERE user_id = $2), 0
-		) + $3 <= $4
+		) + $3::bigint <= $4
 		ON CONFLICT (object_key) DO NOTHING
 	`, key, userID, bytes, a.imageQuota())
 	if err != nil {

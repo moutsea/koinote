@@ -92,7 +92,7 @@ jobs:
         # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，
         # 而 rateLimiter 正是最该验竞态的地方）
         #
-        # TEST_DATABASE_URL 让 TestDocumentSQLPrepares 真正跑起来 —— 不设的话
+        # TEST_DATABASE_URL 让 TestAllSQLPrepares 真正跑起来 —— 不设的话
         # 它会 skip，而那条正是唯一能发现 SQL 类型推导错误的断言。
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
@@ -108,7 +108,7 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: |
-          out=$(go test ./internal/server/ -run TestDocumentSQLPrepares -v 2>&1)
+          out=$(go test ./internal/server/ -run TestAllSQLPrepares -v 2>&1)
           echo "$out"
           if echo "$out" | grep -q "SKIP"; then
             echo "::error::SQL PREPARE 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ import (
 //
 // 没有 TEST_DATABASE_URL 时跳过 —— 本地 go test 不该强依赖数据库。CI 里挂了
 // postgres service 并设了这个变量，所以那边一定会跑到。
-func TestDocumentSQLPrepares(t *testing.T) {
+func TestAllSQLPrepares(t *testing.T) {
 	dsn := strings.TrimSpace(os.Getenv("TEST_DATABASE_URL"))
 	if dsn == "" {
 		t.Skip("未设 TEST_DATABASE_URL，跳过真实数据库校验（CI 里会跑）")
@@ -60,7 +61,7 @@ func TestDocumentSQLPrepares(t *testing.T) {
 	}
 	defer conn.Release()
 
-	stmts := documentSQLStatements(t)
+	stmts := allSQLStatements(t)
 	if len(stmts) < 3 {
 		t.Fatalf("只抽到 %d 条 SQL，抽取逻辑可能失效了", len(stmts))
 	}
@@ -86,7 +87,7 @@ type namedSQL struct {
 //
 // 只收看起来像完整语句的（以 SELECT/INSERT/UPDATE/DELETE/WITH 开头），
 // 跳过带 %s 之类格式化占位的 —— 那些不是能直接 prepare 的完整语句。
-func documentSQLStatements(t *testing.T) []namedSQL {
+func allSQLStatements(t *testing.T) []namedSQL {
 	t.Helper()
 
 	verb := regexp.MustCompile(`(?is)^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b`)
@@ -96,7 +97,22 @@ func documentSQLStatements(t *testing.T) []namedSQL {
 	// 判断内容段，多一个反引号就整体错位
 	literal := regexp.MustCompile("(?s)`([^`]*)`")
 
-	for _, file := range []string{"documents.go", "folders.go", "folder_move.go", "share.go"} {
+	// 自动枚举本包所有非测试的 .go，而不是手写文件名列表。
+	//
+	// 手写列表的问题实测过：第一版只写了 documents/folders/folder_move/share，
+	// 漏了 image_quota.go —— 而它里面正好也有一处同类错误（bytes 列是 bigint，
+	// SUM(bytes) 是 numeric，$3 被推出两种类型），漏掉的代价是「图片记账从来
+	// 没工作过」而没人发现。列表要靠人维护，就一定会漏。
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("枚举源码失败: %v", err)
+	}
+
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file := filepath.Base(path)
 		src := readSourceFile(t, file)
 		for _, m := range literal.FindAllStringSubmatch(src, -1) {
 			sql := m[1]
