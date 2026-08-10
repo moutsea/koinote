@@ -335,12 +335,29 @@ export function EditorPage() {
   );
 
   const handleDelete = useCallback(
-    (docId: string, title: string) => {
+    async (docId: string, title: string) => {
       if (!confirmDelete(title)) return;
+
+      // 先把未存的改动落库，再删。
+      //
+      // 顺序不能反：后端删文档时会读正文、把里面的图片排进回收队列，读到的是库里
+      // 那一版。而防抖窗口是 800ms —— 刚粘进去的图很可能还没保存，此时先删就等于
+      // 让后端看不见那些图，它们会成为没人回收的孤儿，永久占着用户的配额。
+      //
+      // flush 失败也继续删：那说明这篇存不进去（可能已被别处删掉），
+      // 卡住删除操作只会让用户困在一篇删不掉的文档上。孤儿图后果轻得多。
+      try {
+        await saver.flush(docId);
+      } catch {
+        // 交给下面的删除继续走，不打断
+      }
+
       remove.mutate(docId, {
         onSuccess: () => {
-          // 删掉的文档不该再留着待存内容 —— 发出去只会 404
-          void saver.forget(docId);
+          // 用 drop 而不是 forget：forget 会先 flush 一次，而文档此刻已经删了，
+          // 那个 PUT 必然 404 —— 白发一次请求，还会把保存状态标成失败。
+          // 上面已经 flush 过，这里只需丢掉本地记录。
+          saver.drop(docId);
           // 标签也要摘掉。数据库那边有外键 CASCADE 兜底，但本地状态得立刻反映
           setTabState((prev) => removeDeleted(prev, docId).next);
 

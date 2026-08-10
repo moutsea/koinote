@@ -171,11 +171,56 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		return nil
 	}
 
+	// 删之前复查一次引用，把重新被用起来的图从这批里剔掉。
+	//
+	// 入队时判定过一次，但那是至少 30 秒前的事（轮询间隔），退避后可能是几十分钟前。
+	// 这中间图可能重新回到正文里：
+	//   · 用户删了图又按 Ctrl+Z 撤销
+	//   · 把同一张图重新粘贴/复制到别处
+	//   · 多标签编辑，另一篇文档引用了它
+	// 少了这道复查，上面任一情形都会在 30 秒后把一张正在显示的图删掉 —— 用户看到
+	// 的是"图片加载失败"，而正文里的地址看着完全正常。实测在生产上发生过。
+	//
+	// 复查放在这里而不是入队时加锁：加锁要横跨一次 HTTP 调用（删 R2），
+	// 而这里只要在删之前的最后一刻确认一次，代价是一条查询。
 	keys := make([]string, 0, len(batch))
 	ids := make([]int, 0, len(batch))
+	var revived []int
 	for _, p := range batch {
+		var referenced bool
+		err := a.db.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM documents WHERE position($1 in content) > 0
+			)
+		`, p.key).Scan(&referenced)
+		if err != nil {
+			// 查不动就跳过这一个，留到下轮 —— 宁可晚点回收，也不能删掉可能还在用的图
+			log.Printf("image gc: 删除前复查引用失败，跳过 %s: %v", p.key, err)
+			continue
+		}
+		if referenced {
+			// 重新被引用了，撤销这条删除令
+			revived = append(revived, p.id)
+			continue
+		}
 		keys = append(keys, p.key)
 		ids = append(ids, p.id)
+	}
+
+	// 复活的直接从队列里删掉。留着的话每轮都要复查一次，且 attempts 到上限后
+	// 会以"失败"的形态永久留在表里，看起来像有问题
+	if len(revived) > 0 {
+		if _, err := a.db.Exec(ctx,
+			`DELETE FROM pending_image_deletions WHERE id = ANY($1)`, revived,
+		); err != nil {
+			log.Printf("image gc: 移除已复活记录失败: %v", err)
+		} else {
+			log.Printf("image gc: %d 个对象重新被引用，已撤销删除", len(revived))
+		}
+	}
+
+	if len(keys) == 0 {
+		return nil
 	}
 
 	if err := a.deleteImagesViaWorker(ctx, keys); err != nil {
@@ -196,10 +241,24 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	//
 	// 放在 R2 删除之后：反过来先减账本的话，中间失败会让这些对象永远不再计入配额，
 	// 而它们还占着存储。宁可用量短暂偏高（下轮会补上），也不能让配额算漏。
+	// 账本没减成功就保留队列记录，退避后重试 —— 不能往下走。
+	//
+	// 原来这里只记日志然后继续删队列记录，那等于把"用量永久偏高"固化下来：
+	// 队列记录一删就再没人来减这几行账，而对象已经不在 R2 里了。用户为不存在的
+	// 图付配额，最坏情况是配额被占满、再也传不了新图，且没有任何自救途径。
+	//
+	// 重试是安全的：R2 的 delete 幂等，重复删不报错；forgetImageObjects 是按 key
+	// 删行，重复执行也是幂等的。
 	if err := a.forgetImageObjects(ctx, keys); err != nil {
-		// 只记日志不返回：对象已经删了，队列记录该清掉。账本这几行留着的后果是
-		// 用量偏高，下面那条 DELETE 成功后就再没人来减了 —— 所以这里明确记下来
-		log.Printf("image gc: 从用量账本移除失败（%d 个 key），用量会偏高: %v", len(keys), err)
+		backoff := gcBackoff(batch[0].attempts)
+		if _, uerr := a.db.Exec(ctx, `
+			UPDATE pending_image_deletions
+			SET attempts = attempts + 1, last_error = $2, next_try_at = now() + $3::interval
+			WHERE id = ANY($1)
+		`, ids, "账本移除失败: "+err.Error(), backoff.String()); uerr != nil {
+			log.Printf("image gc: 记录账本失败状态时又出错: %v", uerr)
+		}
+		return fmt.Errorf("从用量账本移除（%d 个 key）: %w", len(keys), err)
 	}
 
 	// 删成功就把记录清掉，不留档 —— 留着只会让表无限长
@@ -263,8 +322,15 @@ func (a *App) deleteImagesViaWorker(ctx context.Context, keys []string) error {
 		return fmt.Errorf("解析响应: %w", err)
 	}
 	if len(result.Rejected) > 0 {
-		// Worker 拒了某些 key。这说明两边的 isSafeImageKey 漂开了，是个 bug
+		// Worker 拒了某些 key，说明两边的 isSafeImageKey 漂开了。
+		//
+		// 必须返回错误而不是只记日志：调用方把"没返回错误"理解成整批都删掉了，
+		// 于是这些 key 会被清出队列，而对象还在 R2 里 —— 成了没人再回收的孤儿，
+		// 且账本也跟着被减掉，用量比实际占用少，配额从此算不准。
+		// 报错会让整批退避重试，attempts 到上限后 last_error 里留着这条线索。
 		log.Printf("image gc: Worker 拒绝了 %d 个 key: %v", len(result.Rejected), result.Rejected)
+		return fmt.Errorf("worker 拒绝了 %d 个 key（两端 isSafeImageKey 不一致）: %v",
+			len(result.Rejected), result.Rejected)
 	}
 	return nil
 }

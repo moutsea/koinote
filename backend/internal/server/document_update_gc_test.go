@@ -234,3 +234,42 @@ func TestUpdateWontRecycleOtherUsersImage(t *testing.T) {
 		t.Fatalf("别人的图被排进了我的回收队列: %v", got)
 	}
 }
+
+// 入队之后图片又被重新引用，GC 必须撤销这条删除令。
+//
+// 这是生产上真实发生过的数据丢失：图入队后，用户撤销删除（Ctrl+Z）或重新粘贴同一张
+// 图，正文里那张图回来了，但队列里的删除令仍在倒计时 —— 约 30 秒后图被删掉，用户看到
+// "图片加载失败"，而正文里的地址看着完全正常。
+//
+// 入队时判定一次是不够的：判定与执行之间隔着至少一个轮询周期（退避后可能几十分钟）。
+// 所以 runImageGCOnce 必须在真正删之前复查引用。
+func TestGCSkipsRevivedImage(t *testing.T) {
+	pool := newGCTestPool(t)
+	defer pool.Close()
+
+	revived := gcKey("gcuser4", gcHexA)
+	// 文档正文里有这张图 —— 模拟"删了又撤销回来"的最终状态
+	content := "![](https://img.koinote.app/" + revived + ")"
+	user, _ := seedGCUser(t, pool, "gcuser4", content)
+
+	ctx := context.Background()
+	// 直接入队，模拟先前那次"图被删掉"的编辑已经把它排进了回收队列
+	if err := (&App{db: pool}).enqueueImageDeletions(ctx, user.ID, []string{revived}); err != nil {
+		t.Fatalf("入队失败: %v", err)
+	}
+	if got := pendingKeys(t, pool, user.AuthUserID); len(got) != 1 {
+		t.Fatalf("前置条件不成立，队列里应该有 1 条，实际 %v", got)
+	}
+
+	// 复查逻辑：runImageGCOnce 在删之前跑的就是这条查询。
+	// 断言它能看出这张图仍被引用 —— 看不出就会删掉一张正在显示的图。
+	var referenced bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM documents WHERE position($1 in content) > 0)
+	`, revived).Scan(&referenced); err != nil {
+		t.Fatalf("复查引用失败: %v", err)
+	}
+	if !referenced {
+		t.Fatal("这张图仍在正文里，复查却认为没有引用 —— GC 会删掉一张正在显示的图")
+	}
+}
