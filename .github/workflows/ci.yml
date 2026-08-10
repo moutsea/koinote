@@ -149,14 +149,22 @@ jobs:
           echo "凭据类变量均留空"
 
       - name: 不能有硬编码会话密钥
+        env:
+          # 拆成两半再拼，这样这个文件里不出现完整字符串。
+          #
+          # 直接写字面量的话，git grep 会命中 ci.yml 自己这一行 —— 检查被自己判为
+          # 失败。第一次 CI 就是这么红的：本地手动跑那条 grep 是过的（当时 ci.yml
+          # 还没提交进 git，git grep 只搜已跟踪文件），一提交上去就命中自己。
+          #
+          # 同理排除 _test.go：那条 Go 断言
+          # （TestNoHardcodedSessionSecretInSource）本身要提到这个字符串才能检查它。
+          NEEDLE_A: koinote-dev
+          NEEDLE_B: session-secret
         run: |
           # 这个常量曾经是 sessionSecret() 的兜底值。开源之后它等于公开签名密钥，
           # 任何人拿它就能签出任意用户的会话。已删除，这里防止被"顺手"加回来。
-          #
-          # 排除 _test.go：那条 Go 断言
-          # （TestNoHardcodedSessionSecretInSource）本身就要提到这个字符串才能
-          # 检查它。不排除的话这一步会被自己的守卫测试判为失败 —— 实测过。
-          if git grep -n "koinote-dev-session-secret" -- ':!*_test.go' ; then
-            echo "发现硬编码会话密钥"; exit 1
+          needle="${NEEDLE_A}-${NEEDLE_B}"
+          if git grep -n -- "$needle" ':!*_test.go' ':!.github/workflows/ci.yml' ; then
+            echo "::error::发现硬编码会话密钥"; exit 1
           fi
           echo "无硬编码密钥"
