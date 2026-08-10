@@ -51,6 +51,29 @@ jobs:
   # 后端：vet + 全部 go 测试
   backend:
     runs-on: ubuntu-latest
+
+    # 挂一个真实 Postgres，专门给 SQL 的 PREPARE 校验用。
+    #
+    # 为什么值得多这一个 service：新建文档那条 INSERT 曾经必然失败
+    # （参数类型推导冲突，SQLSTATE 42P08），而当时所有测试都是绿的 —— 因为它们
+    # 只断言源码文本里有没有某些字符串，而类型推导只有 Postgres 的解析器知道。
+    # 表现是前端无限重试、页面永远「加载中」，界面上看不出任何 SQL 线索。
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: koinote
+          POSTGRES_PASSWORD: koinote
+          POSTGRES_DB: koinote
+        ports:
+          - 5432:5432
+        # 等健康再跑，否则测试可能在库起来之前就连
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -68,7 +91,30 @@ jobs:
         working-directory: backend
         # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，
         # 而 rateLimiter 正是最该验竞态的地方）
+        #
+        # TEST_DATABASE_URL 让 TestDocumentSQLPrepares 真正跑起来 —— 不设的话
+        # 它会 skip，而那条正是唯一能发现 SQL 类型推导错误的断言。
+        env:
+          TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: go test -race ./...
+
+      # 确认上一步没有静默 skip 掉数据库校验。
+      #
+      # 必要性：没有 TEST_DATABASE_URL 时那条测试会 skip，而 go test 对 skip
+      # 报的是 ok —— 于是「连不上库」和「SQL 都没问题」在退出码上无法区分，
+      # 这道防线可以在无人察觉的情况下失效。
+      - name: 确认 SQL PREPARE 校验真的跑了
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
+        run: |
+          out=$(go test ./internal/server/ -run TestDocumentSQLPrepares -v 2>&1)
+          echo "$out"
+          if echo "$out" | grep -q "SKIP"; then
+            echo "::error::SQL PREPARE 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"
+            exit 1
+          fi
+          echo "$out" | grep -qE "^--- PASS|^ok" || { echo "::error::未见通过标记"; exit 1; }
 
       # 编译通得过才算完。test 只编译被测包，main 包不在其中
       - name: 构建

@@ -113,11 +113,24 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	//
 	// 与 documentUpdate 不同，这里没有"缩小则放行"的例外：新建文档只会让用量增加，
 	// 而且用户没有正在编辑的内容会因此丢失 —— 拒绝新建是安全的。
+	// $3 / $4 必须显式标注 ::text，否则整条语句在 Postgres 侧就 prepare 失败。
+	//
+	// 原因：title 列是 varchar(255)，所以从 INSERT 的目标列推出 $3 是
+	// character varying；而 octet_length() 有 bit/bytea/character/text 四个重载，
+	// 解析器从那里推出的是 text。同一个参数被推出两种类型，直接报
+	// 「inconsistent types deduced for parameter $3」（SQLSTATE 42P08）。
+	//
+	// 表现极具误导性：**新建文档必然 500**，而前端在 /editor 无文档时会自动建一篇，
+	// 失败后重试 —— 于是变成对 /api/documents 的无限重试（实测 9 秒内 1546 次），
+	// 页面永远停在「加载中」。看日志才知道是 SQL prepare 失败，从界面上完全看不出。
+	//
+	// UPDATE 那条没这个问题：SET title = $3 与 octet_length($3) 都推出 text，
+	// 不冲突。所以「能保存、不能新建」，更难联想到是同一个函数的重载问题。
 	var doc model.Document
 	err = a.db.QueryRow(r.Context(), `
 		INSERT INTO documents (doc_id, user_id, title, content, folder_id, created_at, updated_at)
 		SELECT
-			$1, $2, $3, $4,
+			$1, $2, $3::text, $4::text,
 			CASE
 				WHEN $5 = '' THEN NULL
 				ELSE (SELECT id FROM folders WHERE folder_id = $5 AND user_id = $2)
@@ -128,7 +141,7 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 			FROM documents WHERE user_id = $2
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM image_objects WHERE user_id = $2
-		), 0) + octet_length($4) + octet_length($3) <= $6
+		), 0) + octet_length($4::text) + octet_length($3::text) <= $6
 		RETURNING doc_id, title, theme, content, created_at, updated_at
 	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID), a.imageQuota()).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
