@@ -139,6 +139,7 @@ export const en: Messages = {
     imageClickToEdit: "Click to edit image Markdown (caption and URL)",
     imageMarkdownLabel: "Image Markdown source",
     imageBroken: "Image failed to load — click to edit the URL",
+    imageRetrying: "Loading image, retrying…",
     share: "Share",
     shareTitle: "Share this document",
     shareAccessLink: "Anyone with the link",

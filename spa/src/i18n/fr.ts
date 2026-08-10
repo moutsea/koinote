@@ -141,6 +141,7 @@ export const fr: Messages = {
     imageClickToEdit: "Cliquez pour modifier le Markdown de l'image (légende et URL)",
     imageMarkdownLabel: "Source Markdown de l'image",
     imageBroken: "Échec du chargement — cliquez pour modifier l'URL",
+    imageRetrying: "Chargement de l'image, nouvelle tentative…",
     share: "Partager",
     shareTitle: "Partager ce document",
     shareAccessLink: "Toute personne ayant le lien",

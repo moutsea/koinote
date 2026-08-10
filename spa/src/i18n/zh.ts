@@ -135,6 +135,7 @@ export const zh: Messages = {
     imageClickToEdit: "点击编辑图片 Markdown（备注与地址）",
     imageMarkdownLabel: "图片 Markdown 源码",
     imageBroken: "图片加载失败，点击编辑地址",
+    imageRetrying: "图片加载中，正在重试…",
     share: "分享",
     shareTitle: "分享此文档",
     shareAccessLink: "知道链接的人可访问",

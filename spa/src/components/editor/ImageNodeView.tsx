@@ -11,6 +11,15 @@ import { useI18n } from "../../i18n";
 
 const MARKDOWN_IMAGE = /^!\[([^\]]*)\]\(\s*(\S+?)(?:\s+"([^"]*)")?\s*\)$/;
 
+/**
+ * 加载失败后最多重试几次，以及第一次重试等多久（之后每次翻倍）。
+ *
+ * 600ms / 1.2s / 2.4s，累计约 4 秒。上限的取舍：刚上传的图在 CDN 边缘就绪前
+ * 会失败，重试能自愈；而真正坏掉的地址不该转太久，那会让用户以为页面卡住。
+ */
+const MAX_IMAGE_RETRIES = 3;
+const IMAGE_RETRY_BASE_MS = 600;
+
 function toMarkdown(alt: string, src: string, title: string): string {
   const titlePart = title ? ` "${title}"` : "";
   return `![${alt}](${src}${titlePart})`;
@@ -31,6 +40,9 @@ export function ImageNodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
+  // 重试轮次。既驱动退避定时器，也拼进 <img> 的 key 强制重新发请求 ——
+  // 光改 state 不会让浏览器重发一个 src 没变的请求
+  const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   // 删除进行中的标记：deleteNode() 会卸载 input 触发 blur → commit，
   // 那时节点已不存在，写属性会报错或复活一个空节点。
@@ -41,17 +53,35 @@ export function ImageNodeView({
     if (!editing) setDraft(toMarkdown(alt, src, title));
   }, [alt, src, title, editing]);
 
-  // src 变了就重新给这张图一次机会。
-  //
-  // 没有这条的话 broken 是单向闸门：onError 置上就再也回不去。后果有两个，
-  // 第二个更要紧：
-  //   1. 改地址救不回来 —— 用户点开源码把 URL 改对，组件仍显示"加载失败"，
-  //      看起来像是新地址也坏了。
-  //   2. 一次偶发失败（弱网、CDN 冷启动、刚上传时边缘还没有对象）就把图永久
-  //      判死，只有刷新页面才恢复。图在服务端明明是好的。
+  // src 变了就重新给这张图一次机会（比如用户点开源码把地址改对）。
+  // 同时把重试轮次归零 —— 换了地址，之前那张图的失败次数不该算在它头上。
   useEffect(() => {
     setBroken(false);
+    setAttempt(0);
   }, [src]);
+
+  // 加载失败后退避重试。
+  //
+  // 为什么必须有这个：刚上传的图 src 从头到尾不变，所以「src 变化时重置
+  // broken」那条救不了它 —— onError 一触发就永久显示"加载失败"，而图在服务端
+  // 是好的（实测：R2 里有对象、账本有记录、CDN 与 Worker 代理都返回 200）。
+  //
+  // 失败的原因是时序：上传响应一回来就把 <img> 插进文档，而 Cloudflare 边缘
+  // 此刻可能还没有这个对象（实测过 cf-cache-status: MISS）。这种失败会自愈，
+  // 只要再问一次。
+  //
+  // 退避而不是立刻重试：立刻重试大概率撞上同一个还没就绪的边缘节点，
+  // 白费一次请求还是失败。600ms / 1.2s / 2.4s 三次，累计约 4 秒 —— 覆盖边缘
+  // 回源的正常耗时，又不会让真正坏掉的地址转很久。
+  useEffect(() => {
+    if (!broken || attempt >= MAX_IMAGE_RETRIES) return;
+    const delay = IMAGE_RETRY_BASE_MS * 2 ** attempt;
+    const timer = setTimeout(() => {
+      setAttempt((n) => n + 1);
+      setBroken(false); // 清掉才会重新渲染 <img>，配合 key 变化触发新请求
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [broken, attempt]);
 
   useEffect(() => {
     if (!editing) return;
@@ -205,12 +235,24 @@ export function ImageNodeView({
           }`}
         >
           {broken ? (
-            // 图挂了也要能点开改 URL，否则用户被困在一个坏节点上
+            // 图挂了也要能点开改 URL，否则用户被困在一个坏节点上。
+            // 还在重试期间给不同的文案：那几秒里说"加载失败"会让人以为已经没救，
+            // 于是去动一个其实马上就会自己好的地址
             <span className="block px-3 py-6 text-center text-xs text-neutral-400">
-              {t.editor.imageBroken}
+              {attempt < MAX_IMAGE_RETRIES
+                ? t.editor.imageRetrying
+                : t.editor.imageBroken}
             </span>
           ) : (
             <img
+              // key 里带 attempt：不换 key 的话 React 会复用同一个 <img> DOM
+              // 节点，而 src 没变的节点浏览器不会重新发请求 —— 重试就成了空转。
+              // 换 key 让它重新挂载，才会真的再问一次。
+              //
+              // 用 key 而不是给 src 拼 ?retry=n：那样会绕开 CDN 缓存、也让
+              // 已缓存的正常图片白下载一遍，而且真正需要重试的恰好是还没进
+              // 缓存的那些 —— 拼参数解决不了它们的问题。
+              key={attempt}
               src={src}
               alt={alt}
               title={title || undefined}

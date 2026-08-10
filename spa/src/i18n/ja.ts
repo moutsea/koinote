@@ -140,6 +140,7 @@ export const ja: Messages = {
     imageClickToEdit: "クリックして画像の Markdown（キャプションと URL）を編集",
     imageMarkdownLabel: "画像の Markdown ソース",
     imageBroken: "画像を読み込めません — クリックして URL を編集",
+    imageRetrying: "画像を読み込み中、再試行しています…",
     share: "共有",
     shareTitle: "このドキュメントを共有",
     shareAccessLink: "リンクを知っている人",

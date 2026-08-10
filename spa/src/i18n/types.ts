@@ -129,6 +129,8 @@ export interface Messages {
     imageClickToEdit: string;
     imageMarkdownLabel: string;
     imageBroken: string;
+    /** 重试期间的提示，与 imageBroken 分开：那 4 秒里说"加载失败"会让人以为没救了 */
+    imageRetrying: string;
     // 分享
     share: string;
     shareTitle: string;
