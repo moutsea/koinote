@@ -55,7 +55,30 @@ export function ImageNodeView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  function commit() {
+  /**
+   * 收回焦点给编辑器。
+   *
+   * 只在键盘操作（Enter / Esc / 退格删图）后调用 —— 那时用户想继续打字，
+   * 把焦点送回正文是对的。
+   *
+   * 失焦退出时**绝不能**调它：`focus()` 不带位置时，若当前选区不是文本选区
+   * （点过图片之后就是这张图的 NodeSelection），TipTap 会走 delayedFocus 并
+   * 顺手 scrollIntoView —— 滚回那个 NodeSelection，也就是刚才那张图。
+   * 于是「点图 A → 往下滚 → 点图 B」会在 B 的 mousedown 触发 A 的 blur 时
+   * 被拽回 A。见 @tiptap/core 的 focus 命令：position === null 且选区非文本
+   * 选区时进 delayedFocus，其中 scrollIntoView 默认为 true。
+   */
+  function refocusEditor() {
+    editor.commands.focus();
+  }
+
+  /**
+   * 提交草稿。
+   *
+   * refocus 由调用方决定：键盘操作要把焦点送回正文，失焦退出不要 ——
+   * 那时焦点该落在用户刚点的地方。
+   */
+  function commit({ refocus }: { refocus: boolean }) {
     if (removing.current) return; // 节点正在被删，不要再写属性
     const matched = MARKDOWN_IMAGE.exec(draft.trim());
     if (!matched) {
@@ -71,13 +94,14 @@ export function ImageNodeView({
       title: nextTitle ?? null,
     });
     setEditing(false);
-    editor.commands.focus();
+    if (refocus) refocusEditor();
   }
 
   function cancel() {
     setDraft(toMarkdown(alt, src, title));
     setEditing(false);
-    editor.commands.focus();
+    // Esc 是键盘操作，焦点该回到正文
+    refocusEditor();
   }
 
   /**
@@ -90,7 +114,9 @@ export function ImageNodeView({
     removing.current = true;
     setEditing(false);
     deleteNode();
-    editor.commands.focus();
+    // 删图是键盘操作（退格/删除），焦点该回到正文继续编辑。
+    // 这里也不会有跳位问题：节点已经删掉，那个 NodeSelection 不复存在
+    refocusEditor();
   }
 
   return (
@@ -103,11 +129,15 @@ export function ImageNodeView({
             ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
+            // 失焦提交但不抢焦点：用户点了别处，焦点该留在那儿。
+            // 送回编辑器会连带 scrollIntoView 滚回这张图 —— 就是「点另一张图
+            // 却被拽回上一张」那个 bug。见 refocusEditor 的注释。
+            onBlur={() => commit({ refocus: false })}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                commit();
+                // 回车是显式确认，焦点回正文继续打字
+                commit({ refocus: true });
                 return;
               }
               if (e.key === "Escape") {
