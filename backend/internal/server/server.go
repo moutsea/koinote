@@ -86,7 +86,7 @@ func (a *App) health(w http.ResponseWriter, _ *http.Request) {
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// withCORS 允许白名单来源携带 cookie 的跨域请求（dev 下 Vite:5173 直连后端时需要）。
+// withCORS 允许白名单来源携带 cookie 的跨域请求（dev 下 Vite:5273 直连后端时需要）。
 func (a *App) withCORS(next http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(a.cfg.AllowedOrigins))
 	for _, o := range a.cfg.AllowedOrigins {

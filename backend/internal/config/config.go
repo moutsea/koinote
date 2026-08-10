@@ -83,15 +83,19 @@ func Load() Config {
 
 		ImageQuotaBytes: imageQuotaBytes(),
 
-		// OAuth 回调基址：本地 dev 默认走 Vite dev server（前端同源代理 /api 到后端）
-		AppURL:            getenv("APP_URL", "http://localhost:5173"),
+		// OAuth 回调基址：本地 dev 默认走 Vite dev server（前端同源代理 /api 到后端）。
+		// 5273 要与 vite.config.ts 的 DEV_PORT 回落值一致 —— 这两处默认值不一致时，
+		// 没设 DEV_PORT 的人会遇到「前端在 5273，而 OAuth 回跳去 5173」，
+		// 而 provider 按登记地址回跳打到空端口，报错还查不出来。
+		AppURL:            getenv("APP_URL", "http://localhost:5273"),
 		GoogleOAuthID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleOAuthSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GitHubOAuthID:     os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubOAuthSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
 	}
 
-	origins := getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+	// 同上：5273 与 vite 的默认端口对齐
+	origins := getenv("ALLOWED_ORIGINS", "http://localhost:5273,http://localhost:3000")
 	for _, o := range strings.Split(origins, ",") {
 		if trimmed := strings.TrimSpace(o); trimmed != "" {
 			cfg.AllowedOrigins = append(cfg.AllowedOrigins, trimmed)
