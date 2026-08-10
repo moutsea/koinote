@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,36 +23,69 @@ func appWithSecret(secret string) *App {
 	return newTestApp(config.Config{SessionSecret: secret})
 }
 
-// ---------- 密钥回退优先级 ----------
+// ---------- 会话密钥只认 SESSION_SECRET ----------
+//
+// 这组断言取代了原来的「回退优先级」测试 —— 那套回退本身就是漏洞。
+//
+// 原链条：SESSION_SECRET → BACKEND_INTERNAL_TOKEN → 硬编码 "koinote-dev-session-secret"。
+// 开源之后最后那个常量公开可见，拿它就能签出任意用户的会话，不需要密码。
+// 而拦这件事的 main.go 检查只在 NODE_ENV=production 时生效，.env.example 里
+// 写的却是 development —— 照 README 走一遍就绕过去了。
+//
+// 所以现在：只认 SESSION_SECRET，缺失即 panic（启动期由 main.go 提前 Fatal）。
 
-func TestSessionSecretPriority(t *testing.T) {
-	cases := []struct {
-		name     string
-		cfg      config.Config
-		expected string
-	}{
-		{
-			name:     "SESSION_SECRET 优先",
-			cfg:      config.Config{SessionSecret: "primary", InternalToken: "fallback"},
-			expected: "primary",
-		},
-		{
-			name:     "缺省回退到 InternalToken",
-			cfg:      config.Config{InternalToken: "fallback"},
-			expected: "fallback",
-		},
-		{
-			name:     "两者皆空用开发默认值",
-			cfg:      config.Config{},
-			expected: "koinote-dev-session-secret",
-		},
+func TestSessionSecretOnlyUsesSessionSecret(t *testing.T) {
+	if got := appWithSecret("primary").sessionSecret(); got != "primary" {
+		t.Fatalf("期望 primary，实际 %q", got)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := newTestApp(tc.cfg).sessionSecret(); got != tc.expected {
-				t.Fatalf("期望密钥 %q，实际 %q", tc.expected, got)
-			}
-		})
+}
+
+// 内部令牌绝不能再充当会话密钥。
+//
+// 它是 Worker → 后端的横向凭据，与会话签名是两种用途、两种轮换周期。混用意味着
+// 轮换内部令牌会把所有人踢下线，且任何能读到内部令牌的组件都顺带获得了伪造
+// 任意会话的能力。
+func TestSessionSecretIgnoresInternalToken(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "real", InternalToken: "internal"})
+	if got := app.sessionSecret(); got != "real" {
+		t.Fatalf("期望 real，实际 %q", got)
+	}
+
+	// 只有内部令牌、没有会话密钥时不许"凑合能用"，必须炸
+	defer func() {
+		if recover() == nil {
+			t.Fatal("只配了 InternalToken 时应当 panic，不能拿它当会话密钥")
+		}
+	}()
+	newTestApp(config.Config{InternalToken: "internal"}).sessionSecret()
+}
+
+// 空密钥必须 panic 而不是返回空串。
+//
+// 返回空串的后果比崩溃严重得多：HMAC 用空密钥照样能算，于是任何人都能自己
+// 算出合法签名 —— 全站会话可伪造，而且没有任何报错。
+func TestSessionSecretPanicsWhenEmpty(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("密钥为空时必须 panic，不能用空密钥签名")
+		}
+	}()
+	newTestApp(config.Config{}).sessionSecret()
+}
+
+// 那个曾经的硬编码兜底不能再出现在源码里。
+//
+// 单靠上面几条行为断言不够：有人可能"顺手"把常量加回去作为默认值，而行为测试
+// 只覆盖了 cfg 为空的路径。直接读源码把这个字符串钉死。
+func TestNoHardcodedSessionSecretInSource(t *testing.T) {
+	for _, path := range []string{"session.go", "../config/config.go"} {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("读 %s: %v", path, err)
+		}
+		if strings.Contains(string(src), "koinote-dev-session-secret") {
+			t.Errorf("%s 里仍有硬编码会话密钥 —— 开源后等于公开签名密钥", path)
+		}
 	}
 }
 

@@ -24,15 +24,27 @@ type sessionPayload struct {
 	ExpiresAt  int64  `json:"expiresAt"`
 }
 
-// sessionSecret 会话签名密钥：优先 SESSION_SECRET，回退 InternalToken，最后开发默认值。
+// sessionSecret 会话签名密钥，只认 SESSION_SECRET。
+//
+// 曾经有两级回退：InternalToken，再兜底一个硬编码常量。两级都删了。
+//
+// 硬编码兜底在开源仓库里等于把会话签名密钥公开 —— 任何人拿那个字符串就能签出
+// 任意用户的会话，不需要密码。原本有一道 main.go 的 Fatal 拦它，但那道检查挂在
+// NODE_ENV=production 上，而 .env.example 里写的是 development，照 README
+// 走一遍（cp .env.example .env）就把它绕过去了。
+//
+// 回退到 InternalToken 也删掉：那是 Worker → 后端的横向凭据，与会话签名是两种
+// 用途、两种轮换周期。混用意味着轮换内部令牌会把所有人踢下线，而且任何能读到
+// 内部令牌的组件都顺带获得了伪造任意会话的能力。
+//
+// 现在缺失即启动失败（见 main.go），所以这里到不了空串。留一个 panic 而不是
+// 返回空：万一将来有人绕过 main.go 直接构造 App，用空密钥签名会让所有令牌
+// 都"有效"，那是静默的灾难，不如当场炸掉。
 func (a *App) sessionSecret() string {
-	if a.cfg.SessionSecret != "" {
-		return a.cfg.SessionSecret
+	if a.cfg.SessionSecret == "" {
+		panic("SESSION_SECRET 为空：不能用空密钥签名会话（应由 main.go 在启动时拦下）")
 	}
-	if a.cfg.InternalToken != "" {
-		return a.cfg.InternalToken
-	}
-	return "koinote-dev-session-secret"
+	return a.cfg.SessionSecret
 }
 
 func (a *App) sessionSignature(encodedPayload string) string {

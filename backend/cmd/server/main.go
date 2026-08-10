@@ -21,12 +21,17 @@ func main() {
 	if cfg.DotEnvPath != "" {
 		log.Printf("已加载环境变量文件 %s", cfg.DotEnvPath)
 	}
-	// 会话密钥缺省时会回退到 BACKEND_INTERNAL_TOKEN 或开发默认值，生产环境必须显式配置。
+	// 会话密钥缺失一律拒绝启动，不分环境。
+	//
+	// 以前这道检查只在 NODE_ENV=production 时生效，缺失时回退到一个硬编码常量。
+	// 那条路在开源之后是致命的：常量公开可见，拿它就能签出任意用户的会话。
+	// 而 .env.example 里的 NODE_ENV 是 development，照 README 走一遍就绕过了检查
+	// —— 三个各自合理的决定凑成一个默认不安全的部署。
+	//
+	// 不给开发环境留后门：生成一个密钥是十几秒的事，而"开发环境能跑、生产环境
+	// 忘了配"这条缝隙的代价是全站会话可伪造。宁可让第一次 clone 的人多跑一行命令。
 	if cfg.SessionSecret == "" {
-		if cfg.IsProduction() {
-			log.Fatal("生产环境必须设置 SESSION_SECRET（可用 `openssl rand -base64 48` 生成）")
-		}
-		log.Println("警告: 未设置 SESSION_SECRET，已回退到 BACKEND_INTERNAL_TOKEN / 开发默认值")
+		log.Fatal("必须设置 SESSION_SECRET。生成一个：openssl rand -base64 48")
 	}
 
 	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
