@@ -13,7 +13,9 @@ import (
 	"koinote/backend/internal/model"
 )
 
-const sessionCookieName = "ka_session"
+// 用 koinote 全名而不是缩写前缀：cookie 名在同一域下是全局的，
+// 缩写容易和同域上跑的其他项目撞名，撞了就是互相顶掉登录态。
+const sessionCookieName = "koinote_session"
 const sessionTTL = 7 * 24 * time.Hour
 
 // sessionPayload 是无状态会话令牌的载荷，签名后放进 cookie，不落库。
@@ -90,7 +92,7 @@ func (a *App) hasInternalToken(r *http.Request) bool {
 
 // authUserIDFromRequest 解析当前请求的用户身份：
 //  1. Worker → 后端：内部令牌 + X-Auth-User-Id 头
-//  2. 浏览器：ka_session cookie
+//  2. 浏览器：koinote_session cookie
 func (a *App) authUserIDFromRequest(r *http.Request) string {
 	if a.cfg.InternalToken != "" &&
 		r.Header.Get("X-Koinote-Internal-Token") == a.cfg.InternalToken {

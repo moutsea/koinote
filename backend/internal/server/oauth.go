@@ -10,7 +10,7 @@ import (
 	"koinote/backend/internal/httpx"
 )
 
-const oauthStateCookieName = "ka_oauth_state"
+const oauthStateCookieName = "koinote_oauth_state"
 const oauthStateTTL = 10 * time.Minute
 
 type oauthProviderConfig struct {
@@ -23,7 +23,7 @@ type oauthProviderConfig struct {
 	RedirectURI  string
 }
 
-// state 载荷：签名后放进 ka_oauth_state cookie，callback 时校验。
+// state 载荷：签名后放进 koinote_oauth_state cookie，callback 时校验。
 type oauthStatePayload struct {
 	Provider   string `json:"provider"`
 	RedirectTo string `json:"redirectTo"`
