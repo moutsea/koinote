@@ -193,5 +193,66 @@ for (const theme of WECHAT_THEMES) {
   );
 }
 
+// ---------- 文档标题跟着主题的 h1 走 ----------
+//
+// 标题在导出时就是正文的第一个 h1（各 export*.ts 里拼的 heading），所以编辑区
+// 也必须用同一套排版。漏掉任何一套主题，表现就是那套主题下标题和正文的第一个
+// h1 长得不一样 —— 而「编辑区即预览」本来是主题功能的全部意义。
+//
+// 挂在 .kn-doc-title 容器上而不是里面的 textarea：h1 的声明里既有排版也有盒模型
+// （magazine 的上下 6px 实线、popart 的 box-shadow、多套主题的 border-bottom），
+// 挂容器才能让边框和底色包住整块。
+for (const theme of WECHAT_THEMES) {
+  const { id } = theme;
+  const css = themeToCSS(id);
+
+  for (const [mode, prefix] of [
+    ["浅色", ".koinote-themed"],
+    ["深色", ".dark .koinote-themed"],
+  ]) {
+    // 收集该模式下所有 .kn-doc-title 规则块，按出现顺序拼起来（后面的覆盖前面的）
+    const blocks = [
+      ...css.matchAll(
+        new RegExp(
+          `(?:^|\\n)${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\.kn-doc-title\\{([^}]*)\\}`,
+          "g",
+        ),
+      ),
+    ].map((m) => m[1]);
+
+    check(`${id} ${mode}模式有标题规则`, blocks.length > 0, String(blocks.length));
+
+    const combined = blocks.join("");
+    // 字号是「标题看起来像标题」的最低要求
+    check(
+      `${id} ${mode}模式标题有 font-size`,
+      /font-size:/.test(combined),
+      combined,
+    );
+
+    // 首个标题的上边距必须归零。主题的 h1 margin-top 是给正文中间的 h1 定的
+    // （34~42px），标题在最上面，那段空白会白留一大片。
+    // 而且覆盖必须排在主题声明之后 —— 顺序反了就不生效。
+    const lastMarginTop = combined.lastIndexOf("margin-top:0");
+    const lastMargin = Math.max(
+      combined.lastIndexOf("margin:"),
+      combined.lastIndexOf("margin-top:34"),
+    );
+    check(
+      `${id} ${mode}模式标题上边距归零且排在主题声明之后`,
+      lastMarginTop > lastMargin,
+      `margin-top:0 在 ${lastMarginTop}，主题 margin 在 ${lastMargin}：${combined}`,
+    );
+  }
+
+  // 标题规则不能只挂在 textarea 上 —— 那样带边框的主题（magazine / newsprint /
+  // github 等）的线会画在输入框上而不是包住整块标题
+  check(
+    `${id} 标题规则挂在容器而非 textarea`,
+    !/\.kn-doc-title\s*>\s*textarea\{/.test(css),
+    "themeCss 不该直接给 textarea 出规则",
+  );
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

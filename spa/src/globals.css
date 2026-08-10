@@ -256,6 +256,63 @@ body {
   flex: 1 1 auto;
 }
 
+/* ---------- 文档标题 ----------
+   标题在导出时就是正文的第一个 h1，所以在编辑区也让它长成 h1 的样子，
+   排版规则由主题的 h1 提供（见 themeCss.ts）。
+
+   自增高用「网格 + ::after 镜像」而不是 JS 量 scrollHeight：
+   镜像里放同一份文本，用同一套字体字号排版，浏览器算出的高度就是 textarea
+   需要的高度。换主题（字号变）、改窗宽（折行变）、系统缩放都自动跟上，
+   不需要盯着 value / themeId / ResizeObserver 三个来源各挂一次监听。
+
+   1fr 不能写在这儿：两个子元素都放进同一个网格单元，让它们互相叠着 ——
+   高度由较高的那个（镜像）决定，textarea 被拉满。 */
+.kn-doc-title {
+  display: grid;
+}
+
+.kn-doc-title > textarea,
+.kn-doc-title::after {
+  /* 两者必须占同一个网格单元，否则镜像会把内容顶下去而不是叠在一起 */
+  grid-area: 1 / 1 / 2 / 2;
+  /* 排版三要素必须完全一致，差一点镜像量出来的行数就不对 */
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  /* 折行行为一致：都按空白折行、都允许长词断开 */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.kn-doc-title::after {
+  /* 末尾补一个空格：光标停在行尾时镜像要为它留出宽度，否则最后一行会抖 */
+  content: attr(data-title) " ";
+  visibility: hidden;
+  /* 镜像只用来撑高度，不该能被选中或点到 */
+  pointer-events: none;
+  user-select: none;
+}
+
+.kn-doc-title > textarea {
+  /* resize 手柄要去掉：高度由镜像决定，手动拖拽会立刻被覆盖，只是个坏掉的控件 */
+  resize: none;
+  overflow: hidden;
+  color: inherit;
+  outline: none;
+  /* 没有主题时（prose 被摘掉的场景之外）给一个体面的默认字号 */
+  width: 100%;
+}
+
+.kn-doc-title > textarea::placeholder {
+  color: var(--ink-faint, #9ca3af);
+  opacity: 1;
+}
+
 /* ---------- 打印（PDF 导出走这条路） ----------
    走浏览器原生打印而非 jsPDF：后者要嵌 CJK 字体才能显示中文，
    常见变通是把文字栅格化成图片，那样文字不可选、不可搜、体积大。

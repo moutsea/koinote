@@ -116,6 +116,22 @@ function blockFor(
     `${scope} .ProseMirror{background:transparent;color:inherit;}`,
   ];
 
+  // 文档标题跟着主题的 h1 走。
+  //
+  // 标题在导出时就是正文的第一个 h1（见各 export*.ts 的 heading 拼接），
+  // 所以编辑区也得用同一套排版，否则「编辑区即预览」在标题这一项上是假的。
+  //
+  // 规则挂在 .kn-doc-title 容器上而不是里面的 textarea：h1 的声明里既有排版
+  // （font-size / line-height）也有盒模型（margin / padding / border，magazine
+  // 是上下 6px 实线，popart 有 box-shadow）。挂容器上，边框和底色才能包住整块；
+  // textarea 与镜像用 font:inherit 继承排版部分。
+  if (rules.h1) {
+    parts.push(`${scope} .kn-doc-title{${rules.h1}}`);
+    // 首个标题不该顶着工具栏。主题的 h1 margin-top 是给"正文中间的 h1"定的
+    // （34~42px），标题在最上面，那个上边距会白留一大片。
+    parts.push(`${scope} .kn-doc-title{margin-top:0;}`);
+  }
+
   for (const [key, value] of Object.entries(rules)) {
     if (!value || SPECIAL.has(key)) continue;
     parts.push(`${scope} .ProseMirror ${key}{${value}}`);

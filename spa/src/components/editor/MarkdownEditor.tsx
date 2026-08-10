@@ -1,6 +1,7 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createEditorExtensions } from "./extensions";
+import { DocTitle } from "./DocTitle";
 import { EditorToolbar } from "./EditorToolbar";
 import { useI18n, interpolate } from "../../i18n";
 import { ThemePicker } from "./ThemePicker";
@@ -15,6 +16,17 @@ import {
   replaceImageSrcs,
 } from "./rehost";
 import type { Document } from "../../documents";
+
+/**
+ * 没套主题时标题的排版。
+ *
+ * 有主题时由主题的 h1 规则接管（themeCss.ts），这里只管「不套主题」那种情况。
+ * 不能直接用 prose 的 h1 样式：prose 只作用在 .ProseMirror 内部，标题在它外面。
+ * 数值对着 exportStyles.ts 的 `h1 { font-size: 1.9em }` 抄 —— 那是导出 HTML/PDF
+ * 时不套主题的标题样式，两边保持一致，编辑区才等于预览。
+ */
+const DEFAULT_TITLE_CLASS =
+  "mb-3 mt-4 text-[1.9em] font-bold leading-[1.3] tracking-tight";
 
 /** 从粘贴/拖放事件里挑出可上传的图片文件 */
 function imageFilesFrom(list: FileList | null | undefined): File[] {
@@ -313,6 +325,21 @@ export default function MarkdownEditor({
     onChange({ title: next });
   }
 
+  /**
+   * 标题里按回车 → 光标进正文开头。
+   *
+   * 标题和正文现在上下相邻，回车是「写完标题开始写内容」最自然的动作。
+   * 不这么做的话，textarea 里的回车会被剥成空格（见 DocTitle），什么也不发生 ——
+   * 那种"按了没反应"比换行更让人困惑。
+   */
+  const focusBody = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    // 'start' 而不是 focus()：后者会落回上次的光标位置，可能在文档中间。
+    // 刚写完标题，要去的是正文开头。
+    editor.commands.focus("start");
+  }, []);
+
   const statusText =
     status === "saving"
       ? t.editor.saving
@@ -324,15 +351,11 @@ export default function MarkdownEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* 控件栏不再放标题输入框 —— 标题挪到正文列里了（见下方 DocTitle）。
+          这一行现在只承载状态与操作，所以留一个 flex-1 的空位把右侧控件推到边上 */}
       <div className="flex items-center gap-3 border-b border-black/5 px-4 py-2 dark:border-white/10">
         {leadingControls}
-        <input
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder={t.editor.titlePlaceholder}
-          aria-label={t.editor.titlePlaceholder}
-          className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-neutral-400"
-        />
+        <span className="min-w-0 flex-1" />
         <span className="shrink-0 text-xs text-neutral-400">
           {interpolate(t.editor.charCount, { n: charCount })}
         </span>
@@ -378,6 +401,15 @@ export default function MarkdownEditor({
             <div
               className={`mx-auto w-full max-w-3xl px-4 ${themeId ? THEME_SCOPE : ""}`}
             >
+              {/* 标题在作用域容器内、正文之前：这样它拿得到主题的 h1 规则，
+                  且与正文同宽同左边缘 —— 它本来就是这篇文档的第一个 h1 */}
+              <div className={themeId ? "" : DEFAULT_TITLE_CLASS}>
+                <DocTitle
+                  value={title}
+                  onChange={handleTitleChange}
+                  onEnter={focusBody}
+                />
+              </div>
               <EditorContent editor={editor} />
             </div>
           </div>
