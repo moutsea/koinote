@@ -29,7 +29,13 @@ export function TabBar({
   dirtyOf: (docId: string) => boolean;
   onSelect: (docId: string) => void;
   onClose: (docId: string) => void;
-  onCreate: () => void;
+  /**
+   * 签名要和 EditorPage 的 handleCreate 一致（带上那个可选参数），不能简写成
+   * `() => void`。写成无参的话，`onClick={onCreate}` 这种绑定在类型上是合法的
+   * —— 参数少的函数可以赋给参数多的类型 —— 于是 React 把点击事件当成 folderId
+   * 传了进去，而这一层的类型已经把它擦掉了，TS 查不出来。
+   */
+  onCreate: (folderId?: string | null) => void;
   creating: boolean;
 }) {
   const { t } = useI18n();
@@ -104,7 +110,10 @@ export function TabBar({
 
       <button
         type="button"
-        onClick={onCreate}
+        // 必须包一层箭头函数并显式传 null：直接写 onClick={onCreate} 会把 React
+        // 的点击事件当成 folderId 传下去，那个对象里 view 指向 window（循环引用），
+        // JSON.stringify 直接抛 TypeError —— 请求根本发不出去，只剩一句「请求失败」
+        onClick={() => onCreate(null)}
         disabled={creating}
         aria-label={t.editor.newDocument}
         title={t.editor.newDocument}
