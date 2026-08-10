@@ -280,6 +280,44 @@ func TestAuthUserIDFromRequestInternalToken(t *testing.T) {
 	}
 }
 
+// .env.example 不能给出可用的内部令牌值。
+//
+// 这个头能让持有者伪造成任意用户 —— 后端见到它就信 X-Auth-User-Id 给的身份，
+// 不再校验会话。所以它等同于全站管理员凭据。
+//
+// 之前 .env.example 里写的是 koinote-internal-dev-token，开源之后那就是一把公开
+// 的万能钥匙。实测拿它加上任意已知 authUserId 直连后端，能拿到那个用户的全部
+// 文档（HTTP 200）。而 README 的第一步就是 cp .env.example .env —— 照文档部署的
+// 人默认就带着这把钥匙上线。
+//
+// 现在改成留空。留空是安全的（上面那组用例已覆盖「令牌未配置则忽略头部」），
+// 后果只是图片记账不生效，比留一个能用的公开值好得多。
+func TestExampleEnvHasNoUsableInternalToken(t *testing.T) {
+	raw, err := os.ReadFile("../../../.env.example")
+	if err != nil {
+		t.Fatalf("读 .env.example: %v", err)
+	}
+
+	for _, line := range strings.Split(string(raw), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue // 注释里提到旧值是在解释历史，不算配置
+		}
+		name, value, found := strings.Cut(trimmed, "=")
+		if !found {
+			continue
+		}
+		switch strings.TrimSpace(name) {
+		case "BACKEND_INTERNAL_TOKEN", "SESSION_SECRET":
+			if strings.TrimSpace(value) != "" {
+				t.Errorf("%s 在 .env.example 里有值 %q —— 凭据类变量必须留空，"+
+					"否则照文档 cp 成 .env 的人会带着公开凭据上线",
+					strings.TrimSpace(name), strings.TrimSpace(value))
+			}
+		}
+	}
+}
+
 // 内部令牌无效时应继续回退到 cookie 校验，两条路径不能互相干扰。
 func TestAuthUserIDFallsBackToCookie(t *testing.T) {
 	app := newTestApp(config.Config{InternalToken: "real-token", SessionSecret: "sess"})

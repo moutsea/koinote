@@ -139,6 +139,32 @@ openssl rand -base64 48
 
 **换密钥会让所有已签发的会话立即失效**，用户需重新登录。
 
+### 内部令牌（BACKEND_INTERNAL_TOKEN）
+
+Worker → 后端的横向鉴权。**必填，自己生成，别用任何示例值。**
+
+```bash
+openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
+```
+
+这个头能让持有者**伪造成任意用户** —— 后端见到它就信 `X-Auth-User-Id` 给的身份，
+不再校验会话（见 `authUserIDFromRequest`）。所以它等同于全站管理员凭据，
+和 `SESSION_SECRET` 是两种用途，不要共用一个值。
+
+`.env.example` 里刻意留空。之前给的示例值是 `koinote-internal-dev-token` ——
+开源之后那就是一把公开的万能钥匙，而 README 第一步就是 `cp .env.example .env`，
+照文档部署的人默认带着它上线。实测拿它加上任意已知 `authUserId` 直连后端，
+能拿到那个用户的全部文档（HTTP 200）。留空是安全的：后端见到空令牌会完全忽略
+那两个头，后果只是图片记账不生效。
+
+三处必须一致，不一致的表现是**图片记账静默失败**（用量统计不到，配额形同虚设）：
+
+| 位置 | 用途 |
+| --- | --- |
+| `.env` | 后端读，也给 docker-compose |
+| `.dev.vars` | 本地 `wrangler dev` |
+| `wrangler secret put BACKEND_INTERNAL_TOKEN` | 生产的 Worker |
+
 ### 限流
 
 | 端点 | 维度 | 阈值 |
