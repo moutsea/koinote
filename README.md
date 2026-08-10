@@ -2,6 +2,22 @@
 
 Typora 式所见即所得的在线 Markdown 编辑器，集成图床与 AI（规划中），采用订阅制。
 
+以 [MIT 许可证](LICENSE) 开源。
+
+## 自建须知
+
+自己部署的话，这几条会直接影响安全，值得先看一眼：
+
+- **`SESSION_SECRET` 必填**，没有回退，留空后端拒绝启动。生成：
+  `openssl rand -base64 48`。细节见[会话密钥](#会话密钥session_secret)。
+- **`NODE_ENV` 决定 cookie 的 `Secure` 标志**。`.env.example` 默认给
+  `production`，本地开发要自己改回 `development`（否则 http://localhost
+  下登录态存不住）。
+- **图片是「知道 URL 即可读」的**：key 随机不可枚举，但没有鉴权。私有文档里的
+  图片，链接泄漏后任何人都能看。这是图床的常规做法，但用户通常会假设
+  「私有文档里的图也是私有的」—— 如果你的场景不能接受，得改成签名 URL。
+- **限流是进程内的**，多实例部署时阈值会被放大 N 倍，见[限流](#限流)。
+
 ## 架构
 
 ```
@@ -98,24 +114,72 @@ npm run docker:up   # postgres + redis + backend 全部进容器
 
 - 注册 / 登录 / 登出 / 会话查询：`POST /api/auth/{register,login,logout}`、`GET /api/auth/session`
 - 第三方登录：`GET /api/auth/oauth/{google,github}/{start,callback}`
-- 会话是无状态 HMAC-SHA256 签名的 `ka_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），**不落库**
+- 会话是无状态 HMAC-SHA256 签名的 `koinote_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），**不落库**
 - 密码 bcrypt（cost 10）哈希；登录支持用户名或邮箱，大小写不敏感
 - MVP 简化：注册即 `is_verified=true` 可直接登录；邮箱验证 / 支付留待后续阶段
 
 ### 会话密钥（SESSION_SECRET）
 
-`ka_session` 的 HMAC 签名密钥，取值优先级：
-`SESSION_SECRET` → `BACKEND_INTERNAL_TOKEN` → 开发默认值。
-
-生成一个高强度值放进 `.env`：
+`koinote_session` 的 HMAC 签名密钥。**必填，没有任何回退** ——
+留空后端直接拒绝启动，不分环境（本地也一样）。
 
 ```bash
 openssl rand -base64 48
 ```
 
-- 生产环境**必须**显式设置，否则启动直接失败；开发环境缺省只打警告。
-- 不要和 `BACKEND_INTERNAL_TOKEN` 共用同一个值，否则一处泄露等于两处失守。
-- **换密钥会让所有已签发的会话立即失效**，用户需重新登录。
+曾经有两级回退：`BACKEND_INTERNAL_TOKEN`，再兜底一个硬编码常量。两级都删了：
+
+- 硬编码兜底在开源仓库里等于**公开签名密钥** —— 拿那个字符串就能签出任意用户的
+  会话，不需要密码。原本有一道「生产环境必须配」的检查拦它，但那道检查挂在
+  `NODE_ENV=production` 上，而 `.env.example` 里写的是 `development`，
+  照文档走一遍就绕过去了。三个各自合理的决定凑成一个默认不安全的部署。
+- 回退到 `BACKEND_INTERNAL_TOKEN` 也删了：那是 Worker → 后端的横向凭据，
+  与会话签名是两种用途、两种轮换周期。混用意味着轮换内部令牌会把所有人踢下线，
+  且任何能读到内部令牌的组件都顺带获得了伪造任意会话的能力。
+
+**换密钥会让所有已签发的会话立即失效**，用户需重新登录。
+
+### 限流
+
+| 端点 | 维度 | 阈值 |
+| --- | --- | --- |
+| 登录 | IP | 10 次 / 15 分钟 |
+| 登录 | 账号 | 100 次 / 15 分钟 |
+| 注册 | IP | 5 次 / 小时 |
+| 分享口令校验 | IP | 20 次 / 15 分钟 |
+| 分享口令校验 | 链接 | 10 次 / 15 分钟 |
+
+两处刻意的设计，都容易做反：
+
+**账号维度的阈值远高于 IP 维度**（100 对 10）。任何人都能对着别人的账号发失败
+请求，所以账号维度要是收得和 IP 一样紧，攻击者用 10 个请求就能把任意用户锁在门外
+15 分钟 —— 那是自己造出来的拒绝服务，比它挡住的撞库更容易被利用。它只做兜底，
+挡分布式撞库（很多 IP 各试几次，永远碰不到 IP 阈值）。
+
+**限流排在参数校验之后**，只对「格式合法、真的在试一组凭证」的请求计数。放在最
+前面的话，用户在注册页手滑五次（密码太短、邮箱漏了 `@`）就被锁一小时，而他一个号
+都没注册成功。挡刷号的效果不受影响：批量注册必须发合法请求，而合法请求全都计数。
+
+限流器是**进程内**的（`ratelimit.go`）。多实例部署时各进程独立计数，实际阈值被
+放大 N 倍 —— 上多实例前要换成 Redis。
+
+### 安全响应头
+
+由 Worker 在唯一出口统一加（`worker/securityHeaders.ts`）：CSP、HSTS、
+`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`、
+`Cross-Origin-Opener-Policy`、`X-Content-Type-Options`。
+
+包在入口而不是各分支里加：Worker 有 7 条返回路径，逐个加迟早漏一条，
+而漏掉的那条不会有任何报错，只是那个端点静默地少了防护。
+
+两处不能随手"收紧"的地方：
+
+- `style-src` 必须保留 `'unsafe-inline'`。主题 CSS 是运行时注入的 `<style>`
+  （主题随文档变，算不出 hash），KaTeX 渲染公式时给每个 span 写 `style` 属性。
+  收紧的结果是公式不显示、主题失效 —— 那种"坏了"往往以整条删掉 CSP 收场，
+  比不加更糟。`script-src` 则收到了 `'self'`，没有 `unsafe-inline`。
+- HSTS 只在 https 下发。在 http 上发会把 `localhost` 钉成 https，
+  开发机在浏览器里彻底打不开，且 `max-age` 期间清不掉。
 
 ### 第三方登录配置
 
@@ -375,8 +439,14 @@ wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
 留空时图片经 Worker 代理读取，**每次加载消耗一次 Worker 请求**。配上 R2 自定义
 域名后 `publicURL` 直接返回绝对地址，走 CDN，不再计入 Worker 请求数。
 
-对微信公众号导出尤其要紧：留空时产出的是相对路径 `/images/<key>`，浏览器会把它
-补成当前源（本地就成了 `localhost`），微信抓不到。配了绝对基址才是干净的做法。
+留空**不影响**微信导出的正确性：导出时 `auditWechatImages`
+（`spa/src/components/editor/wechatImages.ts`）会把 `/images/<key>` 按当前源补成
+绝对地址，所以线上部署后即使走 Worker 代理，微信也抓得到，只是每次加载多花一个
+Worker 请求。
+
+真正抓不到的场景是**本地开发**：补出来的是 `http://localhost:5273/...`，微信的
+服务器访问不到。这时导出对话框会直接报出「N 张图片抓不到 + 主机名」——
+必须在点复制的时候就说，因为粘贴那一刻微信不会报错，要等文章预览才看到裂图。
 
 配置步骤（在 Cloudflare 后台手工做）：
 
@@ -407,9 +477,25 @@ curl https://你的域名/api/images/config
 
 ## 验证
 
-后端：`cd backend && go test ./...`（含 `-race`）。
+一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 25 个断言套件）：
+
+```bash
+npm test          # typecheck × 2 + 25 个套件，失败即停
+npm run go:test   # go vet + go test（后端）
+```
+
+两者由 GitHub Actions 在每次 push 与 PR 上跑（`.github/workflows/ci.yml`），
+另有一个 job 检查密钥卫生：`.env*` / `.dev.vars` 没被提交、源码里没有硬编码密钥。
+
+> 各套件脚本末尾是 `; ec=$?; rm -f ...; exit $ec` 而不是 `; rm -f ...`。
+> 后者会让 npm 读到 `rm` 的退出码（永远 0）—— 测试失败也报成功，CI 接上去
+> 等于没接。这个坑实测过：改坏一处源码，套件明明打印「1 失败」，
+> `npm run` 的退出码仍是 0。
+
+后端：`cd backend && go test ./...`（CI 里带 `-race`）。
 
 Worker：`npm run test:worker` —— `normalizeImageBase` 的 21 条纯函数断言。
+`npm run test:security-headers` —— 安全响应头的 35 条断言。
 平台层另有 `python3 scripts/verify_image_base.py`，在真实 workerd 里确认
 `/api/images/config` 路由挂对、`env` 读到、响应结构正确（Node 那层验不了这些）。
 它会临时改写 `wrangler.jsonc` 再从 `git show HEAD` 还原。

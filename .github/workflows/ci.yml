@@ -1,0 +1,103 @@
+name: CI
+
+# 开源之后 CI 从"锦上添花"变成必需品：收到外部 PR 时，没有 CI 就等于每个 PR
+# 都要手动 clone 下来跑 25 个套件 + go test，那个负担会直接变成"懒得看 PR"。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支的新 push 取消上一次未跑完的运行 —— 连续提交时不必等旧的跑完
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 前端 + Worker：typecheck 两端，再跑全部断言套件
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # npm ci 而不是 npm install：严格按 lock 文件装，
+      # 装出来的依赖树和本地一致，否则 CI 绿了本地红也说明不了问题
+      - run: npm ci
+
+      # 这一步内含 typecheck:spa + typecheck:worker + 25 个套件。
+      # 串成一条是有意的：失败即停，第一个红的就是要看的那个。
+      - run: npm test
+
+      # 构建必须过。typecheck 过而 build 挂是可能的
+      # （Vite 插件、KaTeX 字体复制这些只在构建期跑）
+      - run: npm run build
+
+      # 断言构建产物真的成型了。build 退出 0 但产物缺东西是有过的坑：
+      # KaTeX 字体复制失败时只 warn 不报错（见 vite.config.ts 的注释）
+      - name: 检查构建产物
+        run: |
+          test -f spa/dist/index.html || { echo "缺 index.html"; exit 1; }
+          ls spa/dist/assets/*.js >/dev/null || { echo "缺 JS 产物"; exit 1; }
+          ls spa/dist/assets/*.css >/dev/null || { echo "缺 CSS 产物"; exit 1; }
+          # 字体缺失时公式会静默退化成后备字形——显示得出来但字是错的
+          count=$(ls spa/dist/assets/fonts/*.woff2 2>/dev/null | wc -l)
+          test "$count" -gt 0 || { echo "缺 KaTeX 字体，公式会用后备字形"; exit 1; }
+          echo "产物完整，KaTeX 字体 $count 个"
+
+  # 后端：vet + 全部 go 测试
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # 跟着 backend/go.mod 走，避免版本漂移
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: go vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: go test
+        working-directory: backend
+        # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，
+        # 而 rateLimiter 正是最该验竞态的地方）
+        run: go test -race ./...
+
+      # 编译通得过才算完。test 只编译被测包，main 包不在其中
+      - name: 构建
+        working-directory: backend
+        run: go build ./...
+
+  # 密钥卫生：防止 .env / 硬编码密钥被提交进来
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 不能提交 env 文件
+        run: |
+          # .env.example 是模板，必须在库里；其余 .env* 一律不许
+          bad=$(git ls-files | grep -E '^\.env' | grep -v '^\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "以下 env 文件被提交了：$bad"; exit 1; fi
+          bad=$(git ls-files | grep -E '^\.dev\.vars' || true)
+          if [ -n "$bad" ]; then echo "以下 wrangler 变量文件被提交了：$bad"; exit 1; fi
+
+      - name: 不能有硬编码会话密钥
+        run: |
+          # 这个常量曾经是 sessionSecret() 的兜底值。开源之后它等于公开签名密钥，
+          # 任何人拿它就能签出任意用户的会话。已删除，这里防止被"顺手"加回来。
+          #
+          # 排除 _test.go：那条 Go 断言
+          # （TestNoHardcodedSessionSecretInSource）本身就要提到这个字符串才能
+          # 检查它。不排除的话这一步会被自己的守卫测试判为失败 —— 实测过。
+          if git grep -n "koinote-dev-session-secret" -- ':!*_test.go' ; then
+            echo "发现硬编码会话密钥"; exit 1
+          fi
+          echo "无硬编码密钥"
