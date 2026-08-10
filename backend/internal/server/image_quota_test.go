@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -396,8 +397,15 @@ func TestDocumentUpdateAllowsShrinking(t *testing.T) {
 		t.Fatal("UPDATE 的配额判定里没有 OR 分支 —— 缺少「缩小则放行」的例外，" +
 			"超额用户会连删正文都做不到")
 	}
-	// 例外的实质：新内容不大于旧内容时放行
-	if !strings.Contains(stmt, "<= octet_length(content) + octet_length(title)") {
+	// 例外的实质：新内容不大于旧内容时放行。
+	//
+	// 表限定前缀是可选的：那条 UPDATE 自连接了一份旧行来取被覆盖的正文
+	// （用于回收删掉的图），于是裸 content 会歧义，必须写成 documents.content。
+	// 断言只钉住"拿旧的长度作比较"这件事，不钉写法 —— 否则加个限定名就红，
+	// 而语义完全没变（UPDATE 的 WHERE 里读到的 documents.content 就是更新前的值）。
+	shrink := regexp.MustCompile(
+		`<=\s*octet_length\((?:documents\.)?content\)\s*\+\s*octet_length\((?:documents\.)?title\)`)
+	if !shrink.MatchString(stmt) {
 		t.Error("找不到「新内容 <= 旧内容」的比较，「缩小则放行」可能没写对")
 	}
 }

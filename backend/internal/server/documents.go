@@ -251,11 +251,29 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	//      用户会被锁死在超额状态，没有任何自救途径
 	//
 	// 所以缩小或不变一律放行。超额的人只能越写越少，直到回到线内。
+	// prev 是本次覆盖掉的旧正文，用来回收被删掉的图片。
+	//
+	// 为什么要自连接 old 而不是 RETURNING content：RETURNING 看到的是更新后的行，
+	// 拿回来的是新正文，比对结果永远是空集。PG 18 有 RETURNING old.content，
+	// 但生产跑的是 16，所以用 FROM 自连接把旧行带进来。
+	//
+	// 为什么不先 SELECT 再 UPDATE：两步之间正文可能被另一个标签页改掉
+	// （自动保存每几秒一次，多开同一篇很常见），那就会把仍在使用的图判成孤儿。
+	// 同一句里读到的 old 行和被更新的是同一行，没有这个窗口。
+	var prev string
 	var doc model.Document
 	err := a.db.QueryRow(r.Context(), `
 		UPDATE documents
 		SET title = $3, theme = $4, content = $5, updated_at = now()
-		WHERE doc_id = $1 AND user_id = $2
+		FROM (
+			-- 别名成 prev_content：叫 content 的话下面那句缩小判定里的裸 content
+			-- 会歧义（documents.content 和 old.content 都叫这个名），
+			-- Postgres 直接报 column reference "content" is ambiguous
+			SELECT doc_id, content AS prev_content FROM documents
+			WHERE doc_id = $1 AND user_id = $2
+			FOR UPDATE
+		) AS old
+		WHERE documents.doc_id = old.doc_id AND documents.user_id = $2
 		  AND (
 		    COALESCE((
 		      SELECT SUM(octet_length(d.content) + octet_length(d.title))
@@ -266,11 +284,14 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		    ), 0)
 		    + octet_length($5) + octet_length($3) <= $6
 		    OR octet_length($5) + octet_length($3)
-		       <= octet_length(content) + octet_length(title)
+		       <= octet_length(documents.content) + octet_length(documents.title)
 		  )
-		RETURNING doc_id, title, theme, content, created_at, updated_at
+		RETURNING documents.doc_id, documents.title, documents.theme,
+		          documents.content, documents.created_at, documents.updated_at,
+		          old.prev_content
 	`, docID, user.ID, title, theme, content, a.imageQuota()).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		&prev,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// 没更新到行有两种原因：文档不存在，或者被配额挡下。
@@ -296,6 +317,23 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		log.Printf("document update: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
+	}
+
+	// 回收这次编辑里被删掉的图片。
+	//
+	// 之前只有删文档才回收，于是「把图从正文里删掉再保存」不减用量 ——
+	// R2 对象和 image_objects 的记账行都留着，用户看到已用空间不降。
+	//
+	// 只在正文真的变了时才跑：改标题、切主题也走这个接口，每次都扫一遍正文、
+	// 再对每个 key 查一次引用是白费往返。
+	//
+	// 传 prev（旧正文）而不是新正文：enqueueOrphanedImages 的语义是「这段正文里
+	// 的图，还有没有别的文档在引用」。新正文里的图正被自己引用着，一个都不会入队。
+	// 而且它查引用时读的是已经写好的新行，所以留在正文里的图仍算有引用，不会误删。
+	if prev != content {
+		gcCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+		defer cancel()
+		a.enqueueOrphanedImages(gcCtx, userRef{ID: user.ID, AuthUserID: user.AuthUserID}, prev)
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{"document": doc})
