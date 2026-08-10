@@ -1,6 +1,11 @@
 <div align="center">
 
-<img src="public/logo.png" alt="Koinote" width="96" height="96">
+<!-- logo.png is near-black ink (mean brightness 3/255) and vanishes on GitHub's
+     dark theme. <picture> switches by theme; GitHub honours prefers-color-scheme. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/logo-dark.png">
+  <img src="public/logo.png" alt="Koinote" width="96" height="96">
+</picture>
 
 # Koinote
 
@@ -10,6 +15,8 @@ Renders as you type, uploads images straight to your own bucket,
 exports and shares in one click.
 
 [中文](README.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
+
+[![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
 </div>
 
@@ -96,7 +103,7 @@ Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the data
 You'll need Node 20+, Go 1.23+, and Docker.
 
 ```bash
-git clone <your-repo-url> koinote && cd koinote
+git clone https://github.com/moutsea/koinote.git && cd koinote
 cp .env.example .env
 ```
 

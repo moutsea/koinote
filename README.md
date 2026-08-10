@@ -1,6 +1,11 @@
 <div align="center">
 
-<img src="public/logo.png" alt="Koinote" width="96" height="96">
+<!-- logo.png 是几乎纯黑的墨（平均亮度 3/255），在 GitHub 深色主题下会整个消失。
+     用 <picture> 按主题切换：GitHub 支持 prefers-color-scheme 媒体查询。 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/logo-dark.png">
+  <img src="public/logo.png" alt="Koinote" width="96" height="96">
+</picture>
 
 # Koinote 锦鲤笔记
 
@@ -9,6 +14,8 @@
 边写边渲染，图片直接进图床，一键导出与分享。
 
 [English](README.en.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
+
+[![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
 </div>
 
@@ -88,7 +95,7 @@
 需要 Node 20+、Go 1.23+、Docker。
 
 ```bash
-git clone <你的仓库地址> koinote && cd koinote
+git clone https://github.com/moutsea/koinote.git && cd koinote
 cp .env.example .env
 ```
 
