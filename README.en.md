@@ -14,6 +14,8 @@
 Renders as you type, uploads images straight to your own bucket,
 exports and shares in one click.
 
+**[koinote.app](https://koinote.app)** — try it without deploying anything
+
 [中文](README.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
@@ -189,6 +191,22 @@ wrangler secret put BACKEND_INTERNAL_TOKEN   # same value as the backend
 
 Serving images over a CDN (optional, saves Worker requests) is covered in the
 [design notes](docs/DESIGN.en.md#serving-images-over-a-cdn).
+
+### Continuous deployment
+
+`.github/workflows/deploy.yml` deploys the Worker and the backend on every push
+to `main` once CI passes, then health-checks the backend (`/health`) and the site
+(`/api/images/config`).
+
+Required repository secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Needs Workers Scripts edit, Workers R2 edit, Workers Routes edit |
+| `CLOUDFLARE_ACCOUNT_ID` | Shown by `wrangler whoami` |
+| `VPS_HOST` | Backend server address |
+| `VPS_SSH_KEY` | Deploy-only private key (generate a dedicated one, don't reuse your personal key) |
+| `VPS_HOST_KEY` | The server's known_hosts entry, used to pin the host key |
 
 ## Tests
 

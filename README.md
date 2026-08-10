@@ -13,6 +13,8 @@
 
 边写边渲染，图片直接进图床，一键导出与分享。
 
+**[koinote.app](https://koinote.app)** —— 打开即用，不必自己部署
+
 [English](README.en.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
@@ -173,6 +175,21 @@ wrangler secret put BACKEND_INTERNAL_TOKEN   # 与后端同值
 ```
 
 图片走 CDN（可选，省 Worker 请求数）见[设计文档](docs/DESIGN.zh.md#图片走-cdn)。
+
+### 自动部署
+
+`.github/workflows/deploy.yml`：push 到 `main` 且 CI 全绿后自动部署 Worker
+与后端，部署完验活后端 `/health` 与站点 `/api/images/config`。
+
+需要这几个仓库 secret：
+
+| secret | 用途 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | 权限：Workers Scripts 编辑、Workers R2 编辑、Workers Routes 编辑 |
+| `CLOUDFLARE_ACCOUNT_ID` | `wrangler whoami` 能看到 |
+| `VPS_HOST` | 后端服务器地址 |
+| `VPS_SSH_KEY` | 部署专用私钥（建议单独生成一把，不要复用个人密钥） |
+| `VPS_HOST_KEY` | 服务器的 known_hosts 条目，用于固定 host key |
 
 ## 测试
 
