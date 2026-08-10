@@ -86,12 +86,27 @@ for (const [name, src, anchor] of [
   }
 }
 
-// 更新文档必须留"缩小则放行"的例外，否则超额用户连删正文都做不到
-ok(
-  "更新文档允许缩小",
-  /UPDATE documents[\s\S]{0,700}OR octet_length/.test(documentsGo),
-  "缺少例外会让超额用户被锁死，没有自救途径",
-);
+// 更新文档必须留"缩小则放行"的例外，否则超额用户连删正文都做不到。
+//
+// 判据是"存在一条把新长度和旧长度相比的 OR 分支"，而不是按字符距离开窗口。
+// 原来写的是 /UPDATE documents[\s\S]{0,700}OR octet_length/ —— 那条在给
+// UPDATE 加了自连接（取被覆盖的旧正文用于回收图片）之后就红了，因为新增的
+// 子查询和注释把 OR 推出了 700 字符的窗口。语义完全没变，只是窗口太窄。
+//
+// 距离窗口这种写法本身就会随无关改动漂移，所以换成锚定实际比较式。
+// 表限定前缀可选：自连接之后裸 content 会歧义，必须写成 documents.content。
+{
+  const idx = documentsGo.indexOf("UPDATE documents");
+  const stmt = idx >= 0 ? documentsGo.slice(idx, documentsGo.indexOf("`", idx)) : "";
+  ok(
+    "更新文档允许缩小",
+    /OR\s+octet_length/.test(stmt) &&
+      /<=\s*octet_length\((?:documents\.)?content\)\s*\+\s*octet_length\((?:documents\.)?title\)/.test(
+        stmt,
+      ),
+    "缺少例外会让超额用户被锁死，没有自救途径",
+  );
+}
 
 // SPA 要用后端给的分项。写死成只显示总数就失去了"该删什么"的信息
 const storageCardSrc = read("spa/src/components/StorageCard.tsx");
