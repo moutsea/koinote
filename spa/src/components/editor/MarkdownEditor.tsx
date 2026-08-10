@@ -86,11 +86,13 @@ export default function MarkdownEditor({
           const image = await uploadImage(file);
           const instance = editorRef.current;
           if (!instance) continue;
-          instance
-            .chain()
-            .focus()
-            .setImage({ src: image.url, alt: file.name })
-            .run();
+          // alt 留空，不拿 file.name 顶上。
+          //
+          // 文件名不是备注：截图默认叫 image.png / 企业微信截图_xxx.png，
+          // 粘贴一张图就白得一行"image.png"图注，还得手动删。空 alt 时
+          // ImageNodeView 不渲染 figcaption，导出的 Markdown 是 ![](url)，
+          // 想写备注点开源码行加就行。
+          instance.chain().focus().setImage({ src: image.url }).run();
         } catch (err) {
           // 上传失败必须显形。静默失败会让人以为图片存进去了，
           // 等到重开文档才发现图没了。
