@@ -546,6 +546,42 @@ authorization check, so a leaked link to an image inside a private document is
 viewable by anyone. This is normal for image hosting, but users generally assume
 otherwise — switch to signed URLs if your case can't accept it.
 
+### Backfilling pre-existing objects
+
+`scripts/backfill_image_objects.py` records objects that are already in R2 but
+missing from the `image_objects` ledger.
+
+It's needed because of a bug: the accounting statement had a type-inference error
+(`bytes` is `bigint`, `SUM(bytes)` is `numeric`, so `$3` was deduced as both), which
+means **image accounting never worked** — the ledger stayed empty and usage showed
+only document text. The fix records new uploads, but doesn't apply retroactively.
+
+```bash
+python3 scripts/backfill_image_objects.py            # dry run
+python3 scripts/backfill_image_objects.py --apply    # write
+```
+
+It scans image keys out of all document bodies (using the same regex and ownership
+rule as `image_keys.go`), HEADs each one for `content-length`, and inserts. Idempotent:
+keys already in the ledger are skipped, so re-running never double-counts.
+
+Three deliberate choices:
+
+- **It bypasses the quota check.** These objects already occupy R2 space; the ledger
+  is only recording an existing fact. Using the `WHERE`-guarded statement would refuse
+  to write when over quota, leaving usage still invisible — the opposite of the point.
+- **Keys missing from R2 are skipped and reported.** Those are bodies referencing
+  deleted objects; inserting a nonexistent object would inflate usage permanently
+  with nobody to correct it.
+- **Orphans aren't found.** R2 may hold images no document references anymore
+  (deleted ones, uploads never saved); scanning bodies can't see them. Covering those
+  would need a listing endpoint on the Worker — and orphans should be deleted by the
+  GC task rather than billed indefinitely.
+
+On startup the script reads `image_keys.go` and compares regexes, exiting if they
+differ. Both sides carry a copy, and drift would mean silently missing one file
+extension — and missing part is harder to notice than not running at all.
+
 ### Upload can't be tested by `npm run dev` alone
 
 `npm run dev` wires Vite straight to the Go backend, so **the Worker isn't in the
