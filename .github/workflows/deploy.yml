@@ -1,0 +1,178 @@
+name: Deploy
+
+# push 到 main 且 CI 全绿之后自动部署。
+#
+# 为什么用 workflow_run 而不是在 ci.yml 里加个 deploy job：
+# 同一个 workflow 里的 job 只能靠 needs 串联，而 ci.yml 也跑在 pull_request 上 ——
+# 那样得在每个部署步骤上重复 if 条件判断事件类型和分支，漏一个就是"PR 触发了生产
+# 部署"。workflow_run 天然只在指定 workflow 完成后触发，再加一道 conclusion 判断
+# 就够了，条件只写一处。
+#
+# 代价是这个文件的改动要先合进 main 才生效（workflow_run 读的是默认分支的定义），
+# 所以调试它没法靠开 PR 看效果。
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# 不允许并发部署。两次部署重叠时，后一次可能先完成，
+# 于是线上跑的是更旧的那份代码 —— 而且没有任何报错。
+# 这里不用 cancel-in-progress：部署中途被取消会留下半截状态
+# （Worker 已更新但后端没有），比多等一轮糟。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # CI 失败/取消时绝不部署。workflow_run 在 CI 结束就触发，
+    # 不管它是绿是红 —— 少了这条判断等于没有 CI 门禁。
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      # 显式 checkout CI 跑过的那个 commit。
+      #
+      # 不能用默认的 checkout：workflow_run 的默认 ref 是默认分支的最新提交，
+      # 如果期间又有新 push，部署的就不是刚验证过的那份代码。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # 先确认 secret 都在。缺哪个就在这里说清楚 ——
+      # 否则表现为后面某一步的含混报错（wrangler 报 authentication error、
+      # ssh 报 Permission denied），排查得先猜是不是漏配了
+      - name: 检查必需的 secret
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          missing=""
+          for name in CF_TOKEN CF_ACCOUNT VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+            eval "value=\${$name}"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "缺少 secret：$missing"
+            echo "在 Settings → Secrets and variables → Actions 里补上"
+            exit 1
+          fi
+          echo "secret 齐全"
+
+      - run: npm ci
+
+      # 重新构建而不是复用 CI 的产物：跨 workflow 传 artifact 要加
+      # upload/download 两步和一份保留策略，而构建只要几秒。
+      - run: npm run build
+
+      # 部署 Worker（同时上传 SPA 静态资源，assets 绑定在 wrangler.jsonc 里）
+      - name: 部署 Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production
+
+      # 后端部署走 SSH：把源码同步到 VPS 再重建容器。
+      #
+      # 为什么不在 CI 里构建镜像推到 registry：那要多一个 registry 账号、
+      # 一份凭据、以及"镜像和 compose 文件版本对不上"这类新故障模式。
+      # 项目规模下直接在 VPS 上 build 更简单，代价是部署慢几十秒。
+      # 私钥经环境变量传入，不用 ${{ }} 直接插进脚本体。
+      #
+      # 两个理由，第一个是硬性的：
+      #   1. ${{ }} 是文本替换，插进缩进的 heredoc 里时每行都会带上前导空格，
+      #      而 OpenSSH 对私钥格式零容忍，得到的是 "invalid format"。
+      #   2. 插进脚本体的值会出现在 shell 命令里；走 env 则不进命令行。
+      - name: 准备 SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # 固定 host key 而不是 StrictHostKeyChecking=no ——
+          # 后者让中间人可以冒充服务器，而部署会把源码和数据库迁移送过去
+          printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # 私钥格式坏掉时在这里就失败，而不是拖到后面报一个含混的连接错误
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null || {
+            echo "VPS_SSH_KEY 不是合法的私钥（注意要存完整内容，含首尾的 BEGIN/END 行）"
+            exit 1
+          }
+
+      - name: 同步后端源码到 VPS
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          # --delete 让远端和仓库一致：不加的话删掉的文件会留在服务器上，
+          # Go 会把它们一起编译进去
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            backend/ "root@$HOST:/opt/koinote/backend/"
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            docker-compose.yml docker-compose.prod.yml "root@$HOST:/opt/koinote/"
+
+      - name: 重建并重启后端
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          # --build 是必须的：docker compose up -d 不会重建镜像，
+          # 少了它容器会继续跑旧代码，而命令照样报 Started（实测踩过，
+          # 那次线上镜像比源码旧了 4 天，期间所有"验证"都验的是旧代码）
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "root@$HOST" \
+            'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend'
+
+      # 部署完必须验活。没有这一步，容器起不来时 workflow 照样绿，
+      # 而故障要等用户来报
+      - name: 验活
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          for i in $(seq 1 30); do
+            code=$(ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "root@$HOST" 'curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health' || true)
+            if [ "$code" = "200" ]; then
+              echo "后端健康检查通过"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "后端 30 次探测都没通过（最后一次 HTTP $code），转印容器日志："
+              ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+                "root@$HOST" 'cd /opt/koinote && docker compose logs --tail=50 backend'
+              exit 1
+            fi
+            sleep 2
+          done
+
+      # 站点也验一遍：Worker 部署成功但配置错误（比如 BACKEND_URL 没设）时，
+      # 上面的后端健康检查照样通过，而用户打开页面是 500
+      - name: 验活（站点）
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" https://koinote.app/api/images/config || true)
+            if [ "$code" = "200" ]; then
+              echo "站点检查通过"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "站点 /api/images/config 没有返回 200"
+          exit 1
+
+      - name: 清理密钥
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
