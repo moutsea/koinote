@@ -15,6 +15,7 @@ import {
   handleImageGet,
   handleImageUpload,
 } from "./images";
+import { applySecurityHeaders } from "./securityHeaders";
 
 type AssetFetcher = {
   fetch(request: Request): Promise<Response> | Response;
@@ -33,47 +34,56 @@ const API_PREFIXES = ["/api/", "/health"];
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-
-    // 图片上传由 Worker 直接落 R2，不转发给后端——
-    // 字节走边缘，不占 VPS 带宽。鉴权仍回调后端校验会话。
-    // 必须排在 /api/images 之前：下面那条是精确匹配 POST，
-    // 但 API_PREFIXES 里的 /api/ 会把 config 转发给后端。
-    if (url.pathname === "/api/images/config" && request.method === "GET") {
-      return handleImageConfig(env);
-    }
-    // 代抓外链图片：从网页/Markdown 粘贴来的图要转存进图床，而浏览器受 CORS
-    // 限制读不到跨站字节，只能服务端代抓。防护见 ssrf.ts
-    if (url.pathname === "/api/images/fetch" && request.method === "POST") {
-      return handleImageFetch(request, env);
-    }
-    // 回收：后端的后台任务调它删 R2 对象，用内部令牌鉴权而非会话
-    if (url.pathname === "/api/images/delete" && request.method === "POST") {
-      return handleImageDelete(request, env);
-    }
-    if (url.pathname === "/api/images" && request.method === "POST") {
-      return handleImageUpload(request, env);
-    }
-    // HEAD 也要走这里：CDN 与浏览器用它做缓存校验，
-    // 漏掉的话会落到 SPA 资源处理器，返回 text/html 的假响应。
-    if (
-      url.pathname.startsWith("/images/") &&
-      (request.method === "GET" || request.method === "HEAD")
-    ) {
-      return handleImageGet(request, env);
-    }
-
-    if (
-      API_PREFIXES.some(
-        (prefix) => url.pathname === prefix || url.pathname.startsWith(prefix),
-      )
-    ) {
-      return proxyToBackend(request, env);
-    }
-
-    // 静态资源（SPA），404 交给 not_found_handling: single-page-application
-    return env.ASSETS.fetch(request);
+    // 安全头在这一层统一加，而不是在每个分支里各加一次：
+    // 下面有 7 条返回路径，逐个加迟早漏一条，而漏掉的那条不会有任何报错 ——
+    // 只是那个端点静默地少了防护。包在唯一入口上，漏不掉。
+    return applySecurityHeaders(await route(request, env), url);
   },
 };
+
+/** 路由分发。安全头由上面的 fetch 统一包，这里只管选处理器。 */
+async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+
+  // 图片上传由 Worker 直接落 R2，不转发给后端——
+  // 字节走边缘，不占 VPS 带宽。鉴权仍回调后端校验会话。
+  // 必须排在 /api/images 之前：下面那条是精确匹配 POST，
+  // 但 API_PREFIXES 里的 /api/ 会把 config 转发给后端。
+  if (url.pathname === "/api/images/config" && request.method === "GET") {
+    return handleImageConfig(env);
+  }
+  // 代抓外链图片：从网页/Markdown 粘贴来的图要转存进图床，而浏览器受 CORS
+  // 限制读不到跨站字节，只能服务端代抓。防护见 ssrf.ts
+  if (url.pathname === "/api/images/fetch" && request.method === "POST") {
+    return handleImageFetch(request, env);
+  }
+  // 回收：后端的后台任务调它删 R2 对象，用内部令牌鉴权而非会话
+  if (url.pathname === "/api/images/delete" && request.method === "POST") {
+    return handleImageDelete(request, env);
+  }
+  if (url.pathname === "/api/images" && request.method === "POST") {
+    return handleImageUpload(request, env);
+  }
+  // HEAD 也要走这里：CDN 与浏览器用它做缓存校验，
+  // 漏掉的话会落到 SPA 资源处理器，返回 text/html 的假响应。
+  if (
+    url.pathname.startsWith("/images/") &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
+    return handleImageGet(request, env);
+  }
+
+  if (
+    API_PREFIXES.some(
+      (prefix) => url.pathname === prefix || url.pathname.startsWith(prefix),
+    )
+  ) {
+    return proxyToBackend(request, env);
+  }
+
+  // 静态资源（SPA），404 交给 not_found_handling: single-page-application
+  return env.ASSETS.fetch(request);
+}
 
 async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   if (!env.BACKEND_URL) {
