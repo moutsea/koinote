@@ -187,5 +187,34 @@ ok(
   );
 }
 
+// ---------- broken 不能是单向闸门 ----------
+//
+// onError 置 broken=true 之后必须有路径能清掉它，否则：
+//   · 用户点开源码把地址改对，仍然显示"加载失败"，看着像新地址也坏了
+//   · 一次偶发失败（弱网、CDN 冷启动）就把一张服务端完好的图永久判死，
+//     只有刷新页面能恢复
+// 判据是「存在一个依赖 src 的 effect 会 setBroken(false)」。
+{
+  ok(
+    "onError 会置 broken",
+    /onError=\{\(\)\s*=>\s*setBroken\(true\)\}/.test(bare),
+    "图挂了要显形，否则用户看到的是一个碎图图标",
+  );
+
+  // 找出所有 useEffect(...)，看有没有哪个既 setBroken(false) 又以 src 为依赖
+  const effects = bare.match(/useEffect\(\s*\(\)\s*=>\s*\{[\s\S]*?\}\s*,\s*\[[^\]]*\]\s*\)/g) ?? [];
+  const resetsOnSrc = effects.some((body) => {
+    if (!/setBroken\(false\)/.test(body)) return false;
+    const deps = body.slice(body.lastIndexOf("["));
+    // src 必须在依赖里，否则只在挂载时跑一次，等于没有重置
+    return /\bsrc\b/.test(deps);
+  });
+  ok(
+    "src 变化会重置 broken",
+    resetsOnSrc,
+    "缺这条 broken 就是单向闸门：改对地址也回不来，偶发失败永久判死",
+  );
+}
+
 console.log(`\n图片焦点：${pass} 通过，${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

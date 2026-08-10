@@ -41,6 +41,18 @@ export function ImageNodeView({
     if (!editing) setDraft(toMarkdown(alt, src, title));
   }, [alt, src, title, editing]);
 
+  // src 变了就重新给这张图一次机会。
+  //
+  // 没有这条的话 broken 是单向闸门：onError 置上就再也回不去。后果有两个，
+  // 第二个更要紧：
+  //   1. 改地址救不回来 —— 用户点开源码把 URL 改对，组件仍显示"加载失败"，
+  //      看起来像是新地址也坏了。
+  //   2. 一次偶发失败（弱网、CDN 冷启动、刚上传时边缘还没有对象）就把图永久
+  //      判死，只有刷新页面才恢复。图在服务端明明是好的。
+  useEffect(() => {
+    setBroken(false);
+  }, [src]);
+
   useEffect(() => {
     if (!editing) return;
     const input = inputRef.current;
