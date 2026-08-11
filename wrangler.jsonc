@@ -18,11 +18,19 @@
       "preview_bucket_name": "koinote-images"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["verify@koinote.app"]
+    }
+  ],
   "vars": {
     "BACKEND_URL": "http://localhost:8080",
     // 图片对外基址。留空时回落到 /images/<key> 由 Worker 代理，
     // 配上 R2 自定义域名后走 CDN，不再消耗 Worker 请求数。
-    "IMAGE_PUBLIC_BASE": ""
+    "IMAGE_PUBLIC_BASE": "",
+    "EMAIL_FROM_ADDRESS": "verify@koinote.app",
+    "EMAIL_FROM_NAME": "Koinote"
   },
 
   // 生产环境的 secret（不入库，用命令设）：
@@ -30,6 +38,7 @@
   //   wrangler secret put BACKEND_INTERNAL_TOKEN --env production
   //   wrangler secret put CLOUDFLARE_ZONE_ID --env production
   //   wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
+  // Email Sending 使用上面的 EMAIL binding，不需要额外 API token。
   // 后两项用于删除 R2 对象后全局 purge 自定义域名缓存；token 只授予
   // Zone / Cache Purge 权限。CDN 模式缺任一项时删除端点会返回 503。
 
@@ -56,6 +65,12 @@
           "bucket_name": "koinote-images"
         }
       ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["verify@koinote.app"]
+        }
+      ],
       // 绑定到 koinote.app 根域。
       //
       // custom_domain 而不是 routes：前者让 Cloudflare 自动建 DNS 记录并签证书，
@@ -73,7 +88,9 @@
         // 图片走 R2 自定义域名（已在 Cloudflare 后台连好，ssl_status active），
         // 不再消耗 Worker 请求数。配错时会回落到 Worker 代理且图片照样显示，
         // 所以部署后必须用 /api/images/config 自查，不能只看图能不能打开。
-        "IMAGE_PUBLIC_BASE": "https://img.koinote.app"
+        "IMAGE_PUBLIC_BASE": "https://img.koinote.app",
+        "EMAIL_FROM_ADDRESS": "verify@koinote.app",
+        "EMAIL_FROM_NAME": "Koinote"
         // BACKEND_URL 故意不写在这里 —— 它由 secret 提供。
         //
         // wrangler 会为此报一条 WARNING（"BACKEND_URL exists at the top level,

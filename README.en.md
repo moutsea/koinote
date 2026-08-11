@@ -35,8 +35,8 @@ base64), **export for WeChat** (15 typographic themes, styles inlined into the
 form the WeChat editor accepts), and **documents live in the cloud** (multi-device,
 shareable).
 
-> This is the first open-source release. Editing, image hosting, export, and
-> sharing all work; AI assistance and subscription billing are not implemented yet.
+> The current open-source scope covers editing, image hosting, export, sharing,
+> and the account flow; AI assistance and subscription billing are not implemented yet.
 
 ## Features
 
@@ -55,13 +55,17 @@ shareable).
   break when the original site deletes them
 - Real file type sniffed from magic bytes; SVG is rejected outright (it can embed scripts)
 - Per-user quota (500 MB by default, covering document text and images)
+- First-party images use the same-origin `/images/...` path in the web UI while
+  exports keep CDN URLs, avoiding false CORS / Local Network Access blocks
+- Images no longer referenced by documents are reclaimed asynchronously; references
+  are rechecked before deletion and CDN caches are purged
 
 **Export**
 
 | Format | Notes |
 |---|---|
 | Markdown | As-is |
-| HTML | Self-contained single file, styles inlined |
+| HTML | One HTML file with embedded document styles; KaTeX CSS and images remain external |
 | DOCX | Built from the document tree; formulas keep their LaTeX source |
 | PDF | One-click download (rasterized) |
 | Print / Save as PDF | Vector text — selectable and searchable |
@@ -83,26 +87,28 @@ rasterized and uploaded as images.
 
 - UI in Chinese, English, Japanese, and French
 - Light and dark themes, ink-wash visual style
-- Email/password plus Google and GitHub sign-in
+- Verified email registration and password login, plus Google and GitHub OAuth
 
 ## Stack
 
 ```
 Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
-                                └─ /api/* reverse proxy ──▶ Go backend + Postgres
-                                   images go straight to R2
+                                ├─ /api/images/* and /images/* ──▶ R2
+                                ├─ /api/internal/email/* ──▶ Email Sending
+                                └─ other /api/* ──▶ Go backend ──▶ PostgreSQL
+Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
 ```
 
 - **Frontend** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
 - **Editor** TipTap v3 (ProseMirror) · tiptap-markdown · KaTeX · lowlight
 - **Backend** Go (stdlib `net/http`) · pgx · PostgreSQL 16
-- **Edge** Cloudflare Worker · R2
+- **Edge** Cloudflare Worker · R2 · Email Sending
 
 Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the database.
 
 ## Quick start
 
-You'll need Node 20+, Go 1.23+, and Docker.
+You'll need Node 20.19+ (or 22.12+), Go 1.23+, and Docker Compose.
 
 ```bash
 git clone https://github.com/moutsea/koinote.git && cd koinote
@@ -121,13 +127,14 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 
 Put those into `SESSION_SECRET` and `BACKEND_INTERNAL_TOKEN`, and set `NODE_ENV`
 to `development` — local dev runs over http, and `production` marks the cookie
-`Secure`, which means it won't stick.
+`Secure`, which means it won't stick. Set `ENABLE_MOCK_EMAIL=true` for local
+email-registration testing; the form fills the development code without sending mail.
 
 Then:
 
 ```bash
-npm install
-docker compose up -d postgres redis   # database
+npm ci
+docker compose up -d postgres         # database; Redis is currently reserved
 npm run backend:dev                   # backend (runs migrations automatically)
 npm run dev                           # frontend → http://localhost:5273
 ```
@@ -135,11 +142,21 @@ npm run dev                           # frontend → http://localhost:5273
 Image upload needs wrangler as well — the R2 binding only exists on the Worker
 side, and wrangler ships a local emulation:
 
-```bash
-npx wrangler dev --port 8788 --var BACKEND_URL:http://localhost:8090
+First create an ignored `.dev.vars` file at the repository root:
+
+```dotenv
+BACKEND_INTERNAL_TOKEN=<the same value used in .env>
 ```
 
-> `BACKEND_INTERNAL_TOKEN` in `.dev.vars` must match the one in `.env`.
+Then start the Worker:
+
+```bash
+npx wrangler dev --port 8788
+```
+
+The local Worker proxies to `http://localhost:8080` by default. If the backend uses
+another port, override it with `--var BACKEND_URL:http://localhost:<port>`; changing
+`.env` alone does not pass the value to Wrangler.
 
 For the full walkthrough, port conflicts, and all-in-Docker startup, see the
 [design notes](docs/DESIGN.en.md#local-development).
@@ -157,6 +174,10 @@ header lets the bearer impersonate any user: the backend trusts `X-Auth-User-Id`
 on sight and skips session validation, so it is effectively a site-wide admin
 credential. `.env.example` deliberately leaves it blank.
 
+**Production requires a separate `EMAIL_VERIFICATION_SECRET`.** The backend refuses
+to reuse `SESSION_SECRET` in production, so rotating verification keys does not log
+everyone out and an email-path secret leak cannot become session forgery.
+
 **`NODE_ENV` controls the cookie's `Secure` flag.** It must be `production` in production.
 
 **Images are readable by anyone who has the URL.** Keys are random and
@@ -166,7 +187,8 @@ users generally assume images in a private document are private too. If that
 doesn't work for your case, switch to signed URLs.
 
 **Rate limiting is per-process.** Across multiple instances each process counts
-separately, so effective thresholds multiply by N. Move it to Redis before scaling out.
+separately, so effective thresholds multiply by N. Move it to shared storage before
+scaling out. The Redis service in Compose is only reserved; the backend does not use it yet.
 
 **Rebuild the image after changing backend code.** `docker compose up -d` does not
 rebuild; use `docker compose up -d --build backend`. Otherwise the code changes
@@ -176,47 +198,100 @@ and the behaviour doesn't, with no error to tell you.
 
 ```bash
 npm run build     # → spa/dist
-npm run deploy    # wrangler deploy (configure secrets first)
+npm run deploy    # build and deploy the production Worker + SPA, not the backend
 ```
 
-For the backend, `cd backend && docker build -t koinote-backend .`, deploy to a
-VPS, and point the Worker's `BACKEND_URL` secret at its public address.
-
-Secrets to set in production:
+For the first backend deployment, configure `.env` and `deploy/Caddyfile` on the VPS,
+then run this from the repository root:
 
 ```bash
-wrangler secret put BACKEND_URL
-wrangler secret put BACKEND_INTERNAL_TOKEN   # same value as the backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
+
+The production `.env` should set `POSTGRES_PORT=127.0.0.1:5432` and
+`BACKEND_PORT=127.0.0.1:8080`, plus `NODE_ENV=production`, `APP_URL`, `WORKER_URL`,
+and the session/OAuth credentials. The checked-in `koinote.app`, `api.koinote.app`, `img.koinote.app`, and
+`verify@koinote.app` values belong to the hosted deployment; self-hosters must update
+`wrangler.jsonc`, `deploy/Caddyfile`, and their OAuth callback configuration together.
+
+Secrets required by the production Worker:
+
+```bash
+npx wrangler secret put BACKEND_URL --env production
+npx wrangler secret put BACKEND_INTERNAL_TOKEN --env production   # same as the backend
+npx wrangler secret put CLOUDFLARE_ZONE_ID --env production
+npx wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
+```
+
+`BACKEND_URL` must point to the HTTPS backend origin, such as
+`https://api.koinote.app`; `BACKEND_INTERNAL_TOKEN` must exactly match the VPS `.env`.
+
+The last two secrets purge the image CDN after deletion; switching to Worker-proxied
+images also requires changing `IMAGE_PUBLIC_BASE` and the deployment workflow. Email
+registration uses Cloudflare Email Sending. Onboard the domain before the first deployment:
+
+```bash
+KOINOTE_DOMAIN=koinote.app
+npx wrangler email sending enable "$KOINOTE_DOMAIN"
+```
+
+The Worker sends from `verify@koinote.app` through the `EMAIL` binding, so no email API
+token is needed. Set `WORKER_URL=https://koinote.app` in the VPS `.env`, with the same
+`BACKEND_INTERNAL_TOKEN` as the Worker, plus an independent
+`EMAIL_VERIFICATION_SECRET`. Verification codes are stored only as HMACs in Postgres
+and expire after 10 minutes.
+
+Verify onboarding with `npx wrangler email sending list` and
+`npx wrangler email sending dns get "$KOINOTE_DOMAIN"`. Email Sending intentionally
+places its bounce MX and SPF records on `cf-bounce.<domain>` and DKIM on
+`cf-bounce._domainkey.<domain>`; no root-domain MX only means the root domain does not
+receive mail and does not indicate that sending is disabled.
 
 Serving images over a CDN (optional, saves Worker requests) is covered in the
 [design notes](docs/DESIGN.en.md#serving-images-over-a-cdn).
 
 ### Continuous deployment
 
-`.github/workflows/deploy.yml` deploys the Worker and the backend on every push
-to `main` once CI passes, then health-checks the backend (`/health`) and the site
+`.github/workflows/deploy.yml` deploys and health-checks the backend first on every
+push to `main` once CI passes, then deploys the Worker and SPA and checks the site
 (`/api/images/config`).
 
 Required repository secrets:
 
 | Secret | Purpose |
 | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Needs Workers Scripts edit, Workers R2 edit, Workers Routes edit |
+| `CLOUDFLARE_API_TOKEN` | Deployment needs Workers Scripts, R2, and Routes edit; add Email Sending edit if the token also onboards the sending domain |
 | `CLOUDFLARE_ACCOUNT_ID` | Shown by `wrangler whoami` |
+| `CLOUDFLARE_ZONE_ID` | Zone hosting the image CDN, used for cache purge after deletion |
+| `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge |
+| `EMAIL_VERIFICATION_SECRET` | Independent verification-code HMAC key, written safely to the VPS `.env` |
 | `VPS_HOST` | Backend server address |
 | `VPS_SSH_KEY` | Deploy-only private key (generate a dedicated one, don't reuse your personal key) |
 | `VPS_HOST_KEY` | The server's known_hosts entry, used to pin the host key |
 
+To create or rotate the verification-code secret, run this from the repository:
+
+```bash
+openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
+gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
+```
+
+The second command shows only the secret name and update time; it cannot read the
+secret value. Before deploying, the workflow checks that every required secret exists.
+It then updates `/opt/koinote/.env` atomically over stdin before restarting the backend,
+so the verification secret does not need to be copied into the production `.env`
+manually. The repository secret must still be set before the first deployment.
+
 ## Tests
 
 ```bash
-npm test          # typecheck (both sides) + 25 assertion suites
-npm run go:test   # go vet + go test
+npm test          # typecheck (both sides) + all frontend/Worker assertion suites
+npm run go:test   # go vet + go test; DB integration tests skip without TEST_DATABASE_URL
 ```
 
-GitHub Actions runs both on every push and pull request, plus a job that checks
-secret hygiene.
+On every push and pull request, GitHub Actions also builds both sides and runs
+`go test -race` plus SQL PREPARE checks against a real PostgreSQL service. A separate
+job checks secret hygiene.
 
 Export and sharing also have Playwright end-to-end scripts — see the
 [design notes](docs/DESIGN.en.md#verification).

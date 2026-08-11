@@ -66,9 +66,8 @@ export function ImageNodeView({
   // broken」那条救不了它 —— onError 一触发就永久显示"加载失败"，而图在服务端
   // 是好的（实测：R2 里有对象、账本有记录、CDN 与 Worker 代理都返回 200）。
   //
-  // 失败可能来自两类瞬时问题：Cloudflare 边缘尚未回源，或本地代理把图床域名
-  // 解析到了 fake-IP，触发 Chrome 的 local address space 拦截。后者会在重试时
-  // 改走同源 /images/...，前者则由同源 R2 读取一并绕过。
+  // 自有图床从第一次显示就走同源 /images/...，避免本地代理 fake-IP 触发 Chrome
+  // local address space 拦截。重试仍用于处理 Worker/R2 的瞬时失败和普通外链弱网。
   //
   // 退避而不是立刻重试：立刻重试大概率撞上同一个还没就绪的边缘节点，
   // 白费一次请求还是失败。600ms / 1.2s / 2.4s 三次，累计约 4 秒 —— 覆盖边缘
@@ -245,8 +244,8 @@ export function ImageNodeView({
             </span>
           ) : (
             <img
-              // key 强制重挂 DOM；自有 CDN 失败后改走同源 /images/...，其他图片
-              // 则用轮次查询串绕过失败缓存。正文里的原始 src 始终不变。
+              // key 强制重挂 DOM；自有 CDN 从首次显示起就映射到同源 /images/...，
+              // 其他图片重试时用轮次查询串绕过失败缓存。正文 src 始终不变。
               key={attempt}
               src={imageURLForAttempt(src, attempt)}
               alt={alt}

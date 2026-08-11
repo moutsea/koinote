@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 
 	"koinote/backend/internal/httpx"
@@ -27,13 +29,13 @@ const bcryptCost = 10
 //
 // 登录按两个维度计，两者的阈值差一个数量级，这是刻意的：
 //
-//   · IP（10 次/15 分钟）—— 主防线，挡一个来源反复试。这个维度可以收得很紧，
-//     因为被限的只是攻击者自己的出口。
+//	· IP（10 次/15 分钟）—— 主防线，挡一个来源反复试。这个维度可以收得很紧，
+//	  因为被限的只是攻击者自己的出口。
 //
-//   · 账号（100 次/15 分钟）—— 兜底，挡分布式撞库（很多 IP 各试几次，永远碰不到
-//     IP 阈值）。必须放得很宽，因为**任何人都能对着别人的账号发失败请求** ——
-//     阈值定成 10 的话，攻击者用 10 个请求就能把任意用户锁在门外 15 分钟，
-//     那是我们自己造出来的拒绝服务，比它挡住的撞库更容易被利用。
+//	· 账号（100 次/15 分钟）—— 兜底，挡分布式撞库（很多 IP 各试几次，永远碰不到
+//	  IP 阈值）。必须放得很宽，因为**任何人都能对着别人的账号发失败请求** ——
+//	  阈值定成 10 的话，攻击者用 10 个请求就能把任意用户锁在门外 15 分钟，
+//	  那是我们自己造出来的拒绝服务，比它挡住的撞库更容易被利用。
 //
 // 这条是写测试时发现的：一开始两个维度都取 10，那条「不同 IP 互不牵连」的断言
 // 直接失败 —— IP B 明明是干净的，却因为 IP A 对同一个账号试满了而被挡。
@@ -87,12 +89,31 @@ func tooManyAttempts(w http.ResponseWriter) {
 		"Too many attempts, please try again later")
 }
 
-// authRegister 注册新用户。MVP 简化：注册即 is_verified=true，直接可登录（邮箱验证留待后续）。
+func (a *App) takeLoginAttempt(w http.ResponseWriter, r *http.Request, identifier string) (*rateLimiter, string, string, bool) {
+	limiter := a.rateLimit()
+	ipKey := "login:ip:" + requestIP(r)
+	if !limiter.allow(ipKey, loginIPAttempts, loginWindow) {
+		tooManyAttempts(w)
+		return nil, "", "", false
+	}
+
+	accountKey := fmt.Sprintf("login:acct:%x",
+		sha256.Sum256([]byte(strings.ToLower(identifier))))
+	if !limiter.allow(accountKey, loginAccountAttempts, loginWindow) {
+		tooManyAttempts(w)
+		return nil, "", "", false
+	}
+	return limiter, ipKey, accountKey, true
+}
+
+// authRegister 注册新用户。验证码消费、用户写入与验证码删除在同一事务内完成：
+// 任一步失败都会回滚，用户可以用原验证码重试，不会出现“验证码吃掉了但账号没建成”。
 func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Username         string `json:"username"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		VerificationCode string `json:"verificationCode"`
 	}
 	if !decodeAuthBody(w, r, &body) {
 		return
@@ -105,12 +126,16 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "missing_fields", "Username, email and password are all required")
 		return
 	}
-	if !strings.Contains(body.Email, "@") {
+	if !validRegistrationEmail(body.Email) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
 		return
 	}
 	if utf8.RuneCountInString(body.Password) < 6 {
 		httpx.ErrorCode(w, http.StatusBadRequest, "password_too_short", "Password must be at least 6 characters")
+		return
+	}
+	if body.VerificationCode == "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "verification_code_required", "Email verification code is required")
 		return
 	}
 
@@ -149,13 +174,47 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := a.db.Begin(r.Context())
+	if err != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	verification, verifyErr := a.verifyEmailCode(r.Context(), tx, body.Email, body.VerificationCode)
+	if verifyErr != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	if verification != verificationValid {
+		if err := tx.Commit(r.Context()); err != nil {
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		verificationError(w, verification)
+		return
+	}
+
 	var newAuthUserID string
-	err = a.db.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		INSERT INTO users (auth_user_id, email, username, password_hash, is_verified, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, true, now(), now())
 		RETURNING auth_user_id
 	`, authUserID, body.Email, body.Username, string(passwordHash)).Scan(&newAuthUserID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			httpx.ErrorCode(w, http.StatusConflict, "conflict", "Email or username is already taken")
+			return
+		}
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `DELETE FROM email_verification_codes WHERE email = $1`, body.Email); err != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
@@ -194,23 +253,10 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 	// 限流放在参数校验之后，理由同 authRegister：只对「真的在试一组凭证」的请求
 	// 计数。空账号/空密码这类请求根本没验过任何口令，算进去只会让填错表单的
 	// 真实用户被锁，挡不住任何爆破 —— 爆破必须发出完整的凭证组合。
-	limiter := a.rateLimit()
-	ipKey := "login:ip:" + requestIP(r)
-	if !limiter.allow(ipKey, loginIPAttempts, loginWindow) {
-		tooManyAttempts(w)
-		return
-	}
-
-	// 账号维度：挡「很多 IP 试同一个账号」（撞库、代理池）。IP 维度对此无效。
-	//
-	// key 用标识符的哈希而不是明文：内存表里不该出现用户名和邮箱，
-	// 与分享口令那处用 token 哈希同一个理由。
-	// 归一成小写，否则 Alice / alice 会各自拿到一份独立配额 —— 登录本身是
-	// 大小写不敏感的（见 passwordLoginRecord），限流也必须跟着不敏感。
-	accountKey := fmt.Sprintf("login:acct:%x",
-		sha256.Sum256([]byte(strings.ToLower(identifier))))
-	if !limiter.allow(accountKey, loginAccountAttempts, loginWindow) {
-		tooManyAttempts(w)
+	// 账号维度与 IP 维度共用一组辅助函数；邮箱恢复端点也调用它，避免攻击者在
+	// /login 和 /verify-email 之间轮换，把密码尝试次数翻倍。
+	limiter, ipKey, accountKey, allowed := a.takeLoginAttempt(w, r, identifier)
+	if !allowed {
 		return
 	}
 
@@ -227,6 +273,12 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.PasswordHash), []byte(body.Password)) != nil {
 		httpx.ErrorCode(w, http.StatusUnauthorized, "invalid_credentials", "Incorrect account or password")
+		return
+	}
+	if !rec.IsVerified {
+		httpx.JSON(w, http.StatusForbidden, map[string]string{
+			"code": "email_not_verified", "error": "Email address has not been verified", "email": rec.Email,
+		})
 		return
 	}
 

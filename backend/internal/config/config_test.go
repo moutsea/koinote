@@ -165,3 +165,23 @@ func TestLoadImageQuotaDefaultsWhenUnset(t *testing.T) {
 			cfg.ImageQuotaBytes, DefaultImageQuotaMB)
 	}
 }
+
+func TestMockEmailCanOnlyBeEnabledOutsideProduction(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		nodeEnv string
+		want    bool
+	}{
+		{name: "development 可启用", nodeEnv: "development", want: true},
+		{name: "production 强制关闭", nodeEnv: "production", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			t.Setenv("NODE_ENV", tc.nodeEnv)
+			t.Setenv("ENABLE_MOCK_EMAIL", "true")
+			if got := Load().EnableMockEmail; got != tc.want {
+				t.Fatalf("NODE_ENV=%s 时 EnableMockEmail=%v，期望 %v", tc.nodeEnv, got, tc.want)
+			}
+		})
+	}
+}

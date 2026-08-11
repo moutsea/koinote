@@ -308,7 +308,7 @@ func TestExampleEnvHasNoUsableInternalToken(t *testing.T) {
 			continue
 		}
 		switch strings.TrimSpace(name) {
-		case "BACKEND_INTERNAL_TOKEN", "SESSION_SECRET":
+		case "BACKEND_INTERNAL_TOKEN", "SESSION_SECRET", "EMAIL_VERIFICATION_SECRET":
 			if strings.TrimSpace(value) != "" {
 				t.Errorf("%s 在 .env.example 里有值 %q —— 凭据类变量必须留空，"+
 					"否则照文档 cp 成 .env 的人会带着公开凭据上线",

@@ -43,6 +43,18 @@ export interface Messages {
     passwordPlaceholderRegister: string;
     confirmPassword: string;
     confirmPasswordPlaceholder: string;
+    verificationCode: string;
+    verificationCodePlaceholder: string;
+    sendVerificationCode: string;
+    resendVerificationCode: string;
+    sendingVerificationCode: string;
+    verificationSent: string;
+    verificationMockFilled: string;
+    emailVerificationRequired: string;
+    verifyEmailTitle: string;
+    verifyEmailDescription: string;
+    verifyAndLogin: string;
+    backToLogin: string;
     submitLogin: string;
     submitRegister: string;
     processing: string;

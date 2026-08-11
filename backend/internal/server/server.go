@@ -18,12 +18,18 @@ import (
 type App struct {
 	cfg         config.Config
 	db          *pgxpool.Pool
+	emailSender verificationEmailSender
 	limiter     *rateLimiter
 	limiterOnce sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
-	return &App{cfg: cfg, db: db, limiter: newRateLimiter()}
+	return &App{
+		cfg:         cfg,
+		db:          db,
+		emailSender: newWorkerVerificationEmailSender(cfg),
+		limiter:     newRateLimiter(),
+	}
 }
 
 // rateLimit 惰性取限流器。测试里直接构造 App{} 时 limiter 为 nil，
@@ -43,6 +49,8 @@ func (a *App) Routes() http.Handler {
 
 	mux.HandleFunc("GET /health", a.health)
 	mux.HandleFunc("POST /api/auth/register", a.authRegister)
+	mux.HandleFunc("POST /api/auth/verification-code", a.authVerificationCode)
+	mux.HandleFunc("POST /api/auth/verify-email", a.authVerifyEmail)
 	mux.HandleFunc("POST /api/auth/login", a.authLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.authLogout)
 	mux.HandleFunc("GET /api/auth/session", a.authSession)
@@ -126,6 +134,7 @@ func (a *App) getUserByAuthUserID(ctx context.Context, authUserID string) (model
 
 type loginRecord struct {
 	AuthUserID   string
+	Email        string
 	PasswordHash string
 	IsVerified   bool
 }
@@ -133,11 +142,11 @@ type loginRecord struct {
 func (a *App) passwordLoginRecord(ctx context.Context, identifier string) (loginRecord, bool, error) {
 	var rec loginRecord
 	err := a.db.QueryRow(ctx, `
-		SELECT auth_user_id, coalesce(password_hash, ''), is_verified
+		SELECT auth_user_id, email, coalesce(password_hash, ''), is_verified
 		FROM users
 		WHERE lower(email) = lower($1) OR lower(username) = lower($1)
 		LIMIT 1
-	`, identifier).Scan(&rec.AuthUserID, &rec.PasswordHash, &rec.IsVerified)
+	`, identifier).Scan(&rec.AuthUserID, &rec.Email, &rec.PasswordHash, &rec.IsVerified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return loginRecord{}, false, nil
 	}

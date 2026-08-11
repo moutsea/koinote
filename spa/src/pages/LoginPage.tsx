@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { login, register, ApiError } from "../api";
+import {
+  login,
+  register,
+  sendVerificationCode,
+  verifyEmail,
+  ApiError,
+} from "../api";
 import { useI18n } from "../i18n";
 import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
 import { InkClouds } from "../components/Ink";
@@ -18,7 +24,7 @@ function startOAuth(provider: "google" | "github") {
 export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [identifier, setIdentifier] = useState(""); // 登录用：用户名或邮箱
@@ -26,8 +32,14 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isEmailRecovery = mode === "login" && recoveryEmail !== null;
 
   // 把后端错误码翻译成当前语言；未知码回退到后端英文 message 或通用提示。
   function translateError(err: unknown): string {
@@ -53,25 +65,70 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (codeCooldown <= 0) return;
+    const timer = window.setTimeout(() => setCodeCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [codeCooldown]);
+
+  async function requestCode() {
+    setError(null);
+    setNotice(null);
+    const targetEmail = recoveryEmail ?? email;
+    if (!/^\S+@\S+\.\S+$/.test(targetEmail)) {
+      setError(t.errors.invalid_email ?? t.auth.requestFailed);
+      return;
+    }
+    setSendingCode(true);
+    try {
+      const result = await sendVerificationCode(targetEmail, locale);
+      if (result.devCode) setVerificationCode(result.devCode);
+      setCodeCooldown(result.retryAfterSeconds || 60);
+      setNotice(
+        result.devCode ? t.auth.verificationMockFilled : t.auth.verificationSent,
+      );
+    } catch (err) {
+      setError(translateError(err));
+    } finally {
+      setSendingCode(false);
+    }
+  }
+
   async function submit(event: { preventDefault: () => void }) {
     event.preventDefault();
     setError(null);
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(identifier, password);
+        if (recoveryEmail) {
+          await verifyEmail({ email: recoveryEmail, password, verificationCode });
+        } else {
+          await login(identifier, password);
+        }
       } else {
         if (password !== confirmPassword) {
           setError(t.auth.passwordMismatch);
           setLoading(false);
           return;
         }
-        await register({ username, email, password });
+        await register({ username, email, password, verificationCode });
       }
       await queryClient.invalidateQueries({ queryKey: ["session"] });
       void navigate({ to: "/dashboard" });
     } catch (err) {
-      setError(translateError(err));
+      if (err instanceof ApiError && err.code === "email_not_verified") {
+        const accountEmail = err.email ?? (/^\S+@\S+\.\S+$/.test(identifier) ? identifier : "");
+        if (accountEmail) {
+          setRecoveryEmail(accountEmail);
+          setVerificationCode("");
+          setNotice(t.auth.emailVerificationRequired);
+          setError(null);
+        } else {
+          setError(translateError(err));
+        }
+      } else {
+        setError(translateError(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -139,6 +196,23 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             background: "var(--ink-paper-soft)",
           }}
         >
+          {isEmailRecovery && (
+            <div
+              role="status"
+              className="rounded-lg border px-3 py-3 text-sm"
+              style={{
+                borderColor: "var(--ink-line)",
+                background: "var(--ink-wash)",
+                color: "var(--ink-mid)",
+              }}
+            >
+              <p className="font-semibold" style={{ color: "var(--ink-strong)" }}>
+                {t.auth.verifyEmailTitle}
+              </p>
+              <p className="mt-1 text-xs">{t.auth.verifyEmailDescription}</p>
+            </div>
+          )}
+
           {mode === "register" && (
             <Field
               label={t.auth.username}
@@ -154,9 +228,23 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
               label={t.auth.email}
               type="email"
               value={email}
-              onChange={setEmail}
+              onChange={(value) => {
+                setEmail(value);
+                setVerificationCode("");
+                setCodeCooldown(0);
+                setNotice(null);
+              }}
               autoComplete="email"
               placeholder={t.auth.emailPlaceholder}
+            />
+          ) : isEmailRecovery ? (
+            <Field
+              label={t.auth.email}
+              type="email"
+              value={recoveryEmail}
+              onChange={() => {}}
+              autoComplete="email"
+              readOnly
             />
           ) : (
             <Field
@@ -192,6 +280,61 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             />
           )}
 
+          {(mode === "register" || isEmailRecovery) && (
+            <label className="block">
+              <span
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: "var(--ink-strong)" }}
+              >
+                {t.auth.verificationCode}
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) =>
+                    setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder={t.auth.verificationCodePlaceholder}
+                  required
+                  className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+                  style={{
+                    borderColor: "var(--ink-line)",
+                    background: "var(--ink-paper)",
+                    color: "var(--ink-black)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={requestCode}
+                  disabled={sendingCode || codeCooldown > 0}
+                  className="shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-[var(--ink-wash-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ borderColor: "var(--ink-line)", color: "var(--cinnabar)" }}
+                >
+                  {sendingCode
+                    ? t.auth.sendingVerificationCode
+                    : codeCooldown > 0
+                      ? `${t.auth.resendVerificationCode} ${codeCooldown}s`
+                      : t.auth.sendVerificationCode}
+                </button>
+              </div>
+            </label>
+          )}
+
+          {notice && (
+            <p
+              role="status"
+              className="rounded-lg px-3 py-2 text-xs"
+              style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}
+            >
+              {notice}
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -200,24 +343,41 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           >
             {loading
               ? t.auth.processing
-              : mode === "login"
+              : isEmailRecovery
+                ? t.auth.verifyAndLogin
+                : mode === "login"
                 ? t.auth.submitLogin
                 : t.auth.submitRegister}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
-          {mode === "login" ? t.auth.noAccount : t.auth.hasAccount}
+          {isEmailRecovery
+            ? ""
+            : mode === "login"
+              ? t.auth.noAccount
+              : t.auth.hasAccount}
           <button
             type="button"
             onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
+              if (isEmailRecovery) {
+                setRecoveryEmail(null);
+                setVerificationCode("");
+                setCodeCooldown(0);
+                setNotice(null);
+              } else {
+                setMode(mode === "login" ? "register" : "login");
+              }
               setError(null);
             }}
-            className="ml-1 font-medium hover:underline"
+            className={isEmailRecovery ? "font-medium hover:underline" : "ml-1 font-medium hover:underline"}
             style={{ color: "var(--cinnabar)" }}
           >
-            {mode === "login" ? t.auth.toRegister : t.auth.toLogin}
+            {isEmailRecovery
+              ? t.auth.backToLogin
+              : mode === "login"
+                ? t.auth.toRegister
+                : t.auth.toLogin}
           </button>
         </p>
       </div>
@@ -255,6 +415,7 @@ function Field({
   type = "text",
   autoComplete,
   placeholder,
+  readOnly = false,
 }: {
   label: string;
   value: string;
@@ -262,6 +423,7 @@ function Field({
   type?: string;
   autoComplete?: string;
   placeholder?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="block">
@@ -277,6 +439,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
         placeholder={placeholder}
+        readOnly={readOnly}
         required
         // 焦点环用朱砂：全站的强调色只有这一个
         className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"

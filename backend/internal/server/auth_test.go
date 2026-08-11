@@ -55,6 +55,7 @@ func TestAuthRegisterValidation(t *testing.T) {
 		{"邮箱仅空白", `{"username":"u","email":"   ","password":"secret123"}`, http.StatusBadRequest, "missing_fields"},
 		{"邮箱无 @", `{"username":"u","email":"notanemail","password":"secret123"}`, http.StatusBadRequest, "invalid_email"},
 		{"密码过短", `{"username":"u","email":"a@b.com","password":"12345"}`, http.StatusBadRequest, "password_too_short"},
+		{"缺验证码", `{"username":"u","email":"a@b.com","password":"secret123"}`, http.StatusBadRequest, "verification_code_required"},
 	}
 
 	for _, tc := range cases {
@@ -89,6 +90,22 @@ func TestAuthRegisterFailureIssuesNoCookie(t *testing.T) {
 		if c.Name == sessionCookieName && c.Value != "" {
 			t.Fatal("注册校验失败却签发了会话 cookie")
 		}
+	}
+}
+
+func TestAuthRegisterDoesNotTrustProxyHeadersToSkipVerification(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "s", InternalToken: "internal"})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
+		`{"username":"u","email":"a@b.com","password":"secret123"}`,
+	))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Koinote-Internal-Token", "internal")
+	req.Header.Set("X-Koinote-Worker", "cloudflare")
+	rec := httptest.NewRecorder()
+	app.authRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest || decodeErrorCode(t, rec) != "verification_code_required" {
+		t.Fatalf("即使请求来自可信代理也必须要求验证码，实际 %d（%s）", rec.Code, rec.Body.String())
 	}
 }
 

@@ -53,12 +53,13 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CF_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+          EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -74,21 +75,6 @@ jobs:
       # 重新构建而不是复用 CI 的产物：跨 workflow 传 artifact 要加
       # upload/download 两步和一份保留策略，而构建只要几秒。
       - run: npm run build
-
-      # 部署 Worker（同时上传 SPA 静态资源，assets 绑定在 wrangler.jsonc 里）
-      - name: 部署 Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --env production
-          environment: production
-          secrets: |
-            CLOUDFLARE_ZONE_ID
-            CLOUDFLARE_CACHE_PURGE_TOKEN
-        env:
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
 
       # 后端部署走 SSH：把源码同步到 VPS 再重建容器。
       #
@@ -134,6 +120,31 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
             docker-compose.yml docker-compose.prod.yml "root@$HOST:/opt/koinote/"
 
+      # 独立验证码密钥通过 stdin 送到远端，不出现在 SSH 命令参数和日志里。
+      # 远端用同目录临时文件原子替换，避免部署中断留下半行或空文件。
+      - name: 更新后端验证码密钥
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
+        run: |
+          printf '%s\n' "$EMAIL_VERIFICATION_SECRET" | \
+            ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "root@$HOST" '
+                set -eu
+                IFS= read -r email_verification_secret
+                test -n "$email_verification_secret"
+                env_file=/opt/koinote/.env
+                test -f "$env_file"
+                temp_file=$(mktemp /opt/koinote/.env.XXXXXX)
+                trap "rm -f \"$temp_file\"" EXIT HUP INT TERM
+                awk "!/^EMAIL_VERIFICATION_SECRET=/" "$env_file" > "$temp_file"
+                printf "EMAIL_VERIFICATION_SECRET=%s\n" "$email_verification_secret" >> "$temp_file"
+                chmod --reference="$env_file" "$temp_file"
+                chown --reference="$env_file" "$temp_file"
+                mv "$temp_file" "$env_file"
+                trap - EXIT HUP INT TERM
+              '
+
       - name: 重建并重启后端
         env:
           HOST: ${{ secrets.VPS_HOST }}
@@ -145,7 +156,8 @@ jobs:
             "root@$HOST" \
             'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend'
 
-      # 部署完必须验活。没有这一步，容器起不来时 workflow 照样绿，
+      # 后端先部署并跑完迁移，再发布会调用新路由的 Worker/SPA。
+      # 没有这一步，容器起不来时 workflow 照样绿，
       # 而故障要等用户来报
       - name: 验活
         env:
@@ -166,6 +178,22 @@ jobs:
             fi
             sleep 2
           done
+
+      # 部署 Worker（同时上传 SPA 静态资源，assets 绑定在 wrangler.jsonc 里）。
+      # 放在后端健康检查之后，避免新注册页先请求尚不存在的验证码路由。
+      - name: 部署 Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production
+          environment: production
+          secrets: |
+            CLOUDFLARE_ZONE_ID
+            CLOUDFLARE_CACHE_PURGE_TOKEN
+        env:
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
 
       # 站点也验一遍：Worker 部署成功但配置错误（比如 BACKEND_URL 没设）时，
       # 上面的后端健康检查照样通过，而用户打开页面是 500

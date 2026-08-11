@@ -33,6 +33,9 @@ func main() {
 	if cfg.SessionSecret == "" {
 		log.Fatal("必须设置 SESSION_SECRET。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.EmailVerificationSecret == "" {
+		log.Fatal("生产环境必须设置独立的 EMAIL_VERIFICATION_SECRET。生成一个：openssl rand -base64 48")
+	}
 
 	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
 	// 启动日志里有这一行，一眼就能对上。

@@ -191,7 +191,7 @@ func TestRegisterRateLimitedByIP(t *testing.T) {
 
 	blocked := false
 	for i := 0; i < registerIPAttempts+3; i++ {
-		body := `{"username":"u` + itoa(i) + `","email":"u` + itoa(i) + `@example.com","password":"secret123"}`
+		body := `{"username":"u` + itoa(i) + `","email":"u` + itoa(i) + `@example.com","password":"secret123","verificationCode":"123456"}`
 		if limited(app.authRegister, "203.0.113.99", body) {
 			blocked = true
 			if i < registerIPAttempts {
@@ -233,7 +233,7 @@ func TestRegisterInvalidInputDoesNotConsumeQuota(t *testing.T) {
 
 	// 配额应当还是满的：紧接着发一个合法请求，不该被挡
 	if limited(app.authRegister, ip,
-		`{"username":"real","email":"real@example.com","password":"secret123"}`) {
+		`{"username":"real","email":"real@example.com","password":"secret123","verificationCode":"123456"}`) {
 		t.Fatal("20 个非法请求之后合法请求被限流 —— 说明非法请求消耗了配额")
 	}
 }
@@ -260,8 +260,10 @@ func TestAuthBodySizeLimited(t *testing.T) {
 		strings.Repeat("x", authBodyMax+1024) + `"}`
 
 	for name, handler := range map[string]http.HandlerFunc{
-		"register": app.authRegister,
-		"login":    app.authLogin,
+		"register":          app.authRegister,
+		"login":             app.authLogin,
+		"verification-code": app.authVerificationCode,
+		"verify-email":      app.authVerifyEmail,
 	} {
 		rec, _ := postJSONFrom(handler, "203.0.113.200", huge)
 		if rec.Code != http.StatusRequestEntityTooLarge {

@@ -62,8 +62,10 @@ services:
       MIGRATIONS_DIR: /app/migrations
       SESSION_SECRET: ${SESSION_SECRET:-}
       BACKEND_INTERNAL_TOKEN: ${BACKEND_INTERNAL_TOKEN:-}
-      # 图片回收任务调 Worker 的删除端点。留空则不启动回收，
-      # 待删记录仍会入队，配好后重启即可补上
+      EMAIL_VERIFICATION_SECRET: ${EMAIL_VERIFICATION_SECRET:-}
+      ENABLE_MOCK_EMAIL: ${ENABLE_MOCK_EMAIL:-false}
+      # 图片回收和邮箱验证码发信都由后端回调 Worker。生产环境必须配置；
+      # 留空时图片待删记录仍会排队，但邮箱注册无法发送验证码。
       WORKER_URL: ${WORKER_URL:-}
       # 每用户云端存储上限（文档正文 + 图片），单位 MB。留空用后端默认的 500。
       # 非正数或非数字会回落到默认值，不会变成"谁都传不了图"

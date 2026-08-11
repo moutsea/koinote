@@ -201,6 +201,8 @@ func TestAuthRoutesRejectWrongMethod(t *testing.T) {
 	}{
 		{http.MethodGet, "/api/auth/login"},
 		{http.MethodGet, "/api/auth/register"},
+		{http.MethodGet, "/api/auth/verification-code"},
+		{http.MethodGet, "/api/auth/verify-email"},
 		{http.MethodGet, "/api/auth/logout"},
 		{http.MethodPost, "/api/auth/session"},
 	}

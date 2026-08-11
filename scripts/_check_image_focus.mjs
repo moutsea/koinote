@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs";
 import {
   imageURLForAttempt,
-  sameOriginImageFallback,
+  sameOriginImageURL,
 } from "./_image_loading_bundle.mjs";
 
 let pass = 0;
@@ -264,23 +264,27 @@ ok(
   );
 }
 
-// ---------- 自有 CDN 失败后走同源代理 ----------
+// ---------- 网页端自有图片始终走同源代理 ----------
 {
   const key = "u/google_104742467398561921274/d1991a338129b31bd0da4ad9c49dd1e4.png";
   const cdn = `https://img.koinote.app/${key}`;
-  ok("首次仍使用 CDN 地址", imageURLForAttempt(cdn, 0) === cdn, imageURLForAttempt(cdn, 0));
   ok(
-    "自有 CDN 能映射到同源代理",
-    sameOriginImageFallback(cdn) === `/images/${key}`,
-    String(sameOriginImageFallback(cdn)),
+    "首次加载直接使用同源代理",
+    imageURLForAttempt(cdn, 0) === `/images/${key}`,
+    imageURLForAttempt(cdn, 0),
   );
   ok(
-    "第一次重试切到同源代理",
+    "自有 CDN 能映射到同源代理",
+    sameOriginImageURL(cdn) === `/images/${key}`,
+    String(sameOriginImageURL(cdn)),
+  );
+  ok(
+    "第一次重试仍使用同源代理",
     imageURLForAttempt(cdn, 1) === `/images/${key}?__koinote_retry=1`,
     imageURLForAttempt(cdn, 1),
   );
   ok(
-    "查询串与 fragment 在回退时保留",
+    "查询串与 fragment 在同源映射时保留",
     imageURLForAttempt(`${cdn}?v=2#preview`, 2) ===
       `/images/${key}?v=2&__koinote_retry=2#preview`,
     imageURLForAttempt(`${cdn}?v=2#preview`, 2),
@@ -289,15 +293,22 @@ ok(
   const lookalike = `https://example.com/${key}`;
   ok(
     "普通外站即使路径相似也不走站内代理",
-    sameOriginImageFallback(lookalike) === null &&
+    sameOriginImageURL(lookalike) === null &&
+      imageURLForAttempt(lookalike, 0) === lookalike &&
       imageURLForAttempt(lookalike, 1) === `${lookalike}?__koinote_retry=1`,
     imageURLForAttempt(lookalike, 1),
   );
   const invalid = "https://img.koinote.app/u/alice/abc.png";
   ok(
     "非法对象 key 不走站内代理",
-    sameOriginImageFallback(invalid) === null,
-    String(sameOriginImageFallback(invalid)),
+    sameOriginImageURL(invalid) === null,
+    String(sameOriginImageURL(invalid)),
+  );
+  const workerProxy = `/images/${key}`;
+  ok(
+    "已经是同源代理的地址保持不变",
+    imageURLForAttempt(workerProxy, 0) === workerProxy,
+    imageURLForAttempt(workerProxy, 0),
   );
 }
 

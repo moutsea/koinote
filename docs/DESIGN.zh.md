@@ -58,14 +58,16 @@ docker-compose.yml  postgres + redis + backend
 
 ## 本地开发
 
-需要三样：Node 20+、Go 1.23+、Docker。
+需要三样：Node 20.19+（或 22.12+）、Go 1.23+、Docker Compose。
 
 ### 1. 起数据库
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
+
+Compose 里的 Redis 目前只是为将来的共享限流预留，本地裸跑后端不会使用它。
 
 > ⚠️ **端口冲突提醒**：若本机已跑着原生 PostgreSQL 占用 5432，容器会连不上。
 > 在 `.env` 里改 `POSTGRES_PORT=5433`（或其他空闲端口），并同步把
@@ -90,7 +92,7 @@ npm run backend:dev
 npm run dev
 ```
 
-Vite 端口由 `.env` 的 `DEV_PORT` 控制（默认 5173），`/api/*` 与 `/health`
+Vite 端口由 `.env` 的 `DEV_PORT` 控制（默认 5273），`/api/*` 与 `/health`
 自动代理到后端，`/api/images` 与 `/images` 转给 wrangler（只有 Worker 有 R2 绑定）。
 
 `strictPort` 是开的：端口被占时宁可启动失败，也不静默递增 —— 否则 OAuth
@@ -118,11 +120,14 @@ npm run docker:up   # postgres + redis + backend 全部进容器
 
 ## 认证
 
-- 注册 / 登录 / 登出 / 会话查询：`POST /api/auth/{register,login,logout}`、`GET /api/auth/session`
+- 邮箱注册：先 `POST /api/auth/verification-code` 发码，再把验证码交给
+  `POST /api/auth/register`；存量未验证账号走 `POST /api/auth/verify-email`
+- 登录 / 登出 / 会话查询：`POST /api/auth/{login,logout}`、`GET /api/auth/session`
 - 第三方登录：`GET /api/auth/oauth/{google,github}/{start,callback}`
 - 会话是无状态 HMAC-SHA256 签名的 `koinote_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），**不落库**
 - 密码 bcrypt（cost 10）哈希；登录支持用户名或邮箱，大小写不敏感
-- MVP 简化：注册即 `is_verified=true` 可直接登录；邮箱验证 / 支付留待后续阶段
+- 验证码只存 HMAC，10 分钟过期；消费验证码、建用户和删除验证码在同一事务中
+- OAuth 账号由 provider 视为已验证；订阅计费仍留待后续阶段
 
 ### 会话密钥 SESSION_SECRET
 
@@ -137,7 +142,7 @@ openssl rand -base64 48
 
 - 硬编码兜底在开源仓库里等于**公开签名密钥** —— 拿那个字符串就能签出任意用户的
   会话，不需要密码。原本有一道「生产环境必须配」的检查拦它，但那道检查挂在
-  `NODE_ENV=production` 上，而 `.env.example` 里写的是 `development`，
+  `NODE_ENV=production` 上，而当时的 `.env.example` 写的是 `development`，
   照文档走一遍就绕过去了。三个各自合理的决定凑成一个默认不安全的部署。
 - 回退到 `BACKEND_INTERNAL_TOKEN` 也删了：那是 Worker → 后端的横向凭据，
   与会话签名是两种用途、两种轮换周期。混用意味着轮换内部令牌会把所有人踢下线，
@@ -160,16 +165,16 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 `.env.example` 里刻意留空。之前给的示例值是 `koinote-internal-dev-token` ——
 开源之后那就是一把公开的万能钥匙，而 README 第一步就是 `cp .env.example .env`，
 照文档部署的人默认带着它上线。实测拿它加上任意已知 `authUserId` 直连后端，
-能拿到那个用户的全部文档（HTTP 200）。留空是安全的：后端见到空令牌会完全忽略
-那两个头，后果只是图片记账不生效。
+能拿到那个用户的全部文档（HTTP 200）。留空不会产生这条越权路径，但图片记账、
+图片回收和验证码发信这些 Worker ↔ 后端内部调用都会失效。
 
-三处必须一致，不一致的表现是**图片记账静默失败**（用量统计不到，配额形同虚设）：
+三处必须一致；不一致会让图片记账/回收失败，并让邮箱验证码发送返回 503：
 
 | 位置 | 用途 |
 | --- | --- |
 | `.env` | 后端读，也给 docker-compose |
 | `.dev.vars` | 本地 `wrangler dev` |
-| `wrangler secret put BACKEND_INTERNAL_TOKEN` | 生产的 Worker |
+| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | 生产的 Worker |
 
 ### 限流
 
@@ -178,6 +183,9 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 | 登录 | IP | 10 次 / 15 分钟 |
 | 登录 | 账号 | 100 次 / 15 分钟 |
 | 注册 | IP | 5 次 / 小时 |
+| 验证码发送 | 邮箱 | 5 次 / 小时，且至少间隔 1 分钟 |
+| 验证码发送 | IP | 20 次 / 小时 |
+| 验证码校验 | 邮箱 / 验证码 | 最多失败 5 次 |
 | 分享口令校验 | IP | 20 次 / 15 分钟 |
 | 分享口令校验 | 链接 | 10 次 / 15 分钟 |
 
@@ -192,8 +200,9 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 前面的话，用户在注册页手滑五次（密码太短、邮箱漏了 `@`）就被锁一小时，而他一个号
 都没注册成功。挡刷号的效果不受影响：批量注册必须发合法请求，而合法请求全都计数。
 
-限流器是**进程内**的（`ratelimit.go`）。多实例部署时各进程独立计数，实际阈值被
-放大 N 倍 —— 上多实例前要换成 Redis。
+登录、注册与分享限流器是**进程内**的（`ratelimit.go`）；验证码发送次数同时落库，
+可跨重启保留。多实例下进程内桶仍各自计数，实际阈值被放大 N 倍 —— 上多实例前要
+换成共享存储。Compose 里的 Redis 目前只是预留服务，后端尚未使用它。
 
 ### 安全响应头
 
@@ -201,7 +210,7 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 `X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`、
 `Cross-Origin-Opener-Policy`、`X-Content-Type-Options`。
 
-包在入口而不是各分支里加：Worker 有 7 条返回路径，逐个加迟早漏一条，
+包在入口而不是各分支里加：Worker 有多条返回路径，逐个加迟早漏一条，
 而漏掉的那条不会有任何报错，只是那个端点静默地少了防护。
 
 两处不能随手"收紧"的地方：
@@ -508,35 +517,50 @@ python3 scripts/backfill_image_objects.py --apply    # 真写
 脚本启动时会读 `image_keys.go` 比对正则，不一致就直接退出 —— 两边抄了同一个正则，
 漂移的后果是「漏掉一类扩展名」，而漏一部分比整个没跑更难发现。
 
-### ⚠ 本地开发测不到上传
+### 本地上传需要 Wrangler
 
-`npm run dev` 是 Vite 直连 Go 后端，**Worker 不在链路里**，
-所以 `/api/images` 会 404——跟前端代码对不对无关。
+Vite 会把 `/api/images` 与 `/images` 代理到 `http://localhost:8788`。Worker 没启动时
+上传会连接失败；Go 后端本身没有 R2 端点。
 
-测上传要起 wrangler（自带本地 R2 模拟，不碰线上数据）：
+先在仓库根目录创建已被 `.gitignore` 排除的 `.dev.vars`：
+
+```dotenv
+BACKEND_INTERNAL_TOKEN=<与 .env 相同的值>
+```
+
+再启动 wrangler（自带本地 R2 模拟，不碰线上数据）：
 
 ```bash
-npx wrangler dev --port 8788 --var BACKEND_URL:http://localhost:8090
+npx wrangler dev --port 8788
 ```
+
+Worker 默认把后端请求发到 `http://localhost:8080`；后端改端口时用
+`--var BACKEND_URL:http://localhost:<端口>` 覆盖。
 
 本地对象存在 `.wrangler/state/v3/r2`（已在 `.gitignore` 中）。
 
 ### 生产配置
 
 ```bash
-wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
-wrangler secret put BACKEND_INTERNAL_TOKEN   # 与后端使用同一个值
-wrangler secret put CLOUDFLARE_ZONE_ID --env production
-wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
+npx wrangler secret put BACKEND_URL --env production          # 指向 Go 后端 HTTPS 源站
+npx wrangler secret put BACKEND_INTERNAL_TOKEN --env production   # 与后端使用同一个值
+npx wrangler secret put CLOUDFLARE_ZONE_ID --env production
+npx wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
 # R2 绑定已写在 wrangler.jsonc，无需 secret
 ```
 
-### 图片走 CDN
+### 图片地址分层：网页同源，导出 CDN
 
 由 `IMAGE_PUBLIC_BASE` 控制。
 
-留空时图片经 Worker 代理读取，**每次加载消耗一次 Worker 请求**。配上 R2 自定义
-域名后 `publicURL` 直接返回绝对地址，走 CDN，不再计入 Worker 请求数。
+配上 R2 自定义域名后，`publicURL` 返回 CDN 绝对地址并写入文档，作为图片的规范地址。
+网页渲染时 `ImageNodeView` 只改实际 `<img src>`，把自有 CDN 地址映射成同源
+`/images/<key>`：这样不受浏览器 CORS / Local Network Access 影响。TipTap 节点里的
+地址不变，所以 Markdown、HTML、微信等导出仍使用 CDN，旧文档也无需迁移。
+
+这层稳定性有明确代价：网页首次加载一张图片会消耗一次 Worker 请求；浏览器拿到的
+响应带一年 immutable 缓存，重复打开不会每次都请求。外部导出内容和直接访问 CDN
+仍不经过 Worker。
 
 留空**不影响**微信导出的正确性：导出时 `auditWechatImages`
 （`spa/src/components/editor/wechatImages.ts`）会把 `/images/<key>` 按当前源补成
@@ -556,7 +580,7 @@ Worker 请求。
 5. 创建一个只带 `Zone / Cache Purge` 权限的 API token，再把
    `CLOUDFLARE_ZONE_ID` 与 `CLOUDFLARE_CACHE_PURGE_TOKEN` 设成 Worker secret
 6. 给图片域名加 Cache Rule，把 404 的 Edge TTL 设为 0。Cloudflare 默认会缓存
-   R2 自定义域名的 404；编辑器重试时也会加只用于显示的查询参数绕开负缓存
+   R2 自定义域名的 404；旧文档、导出内容和直接访问仍可能命中该域名
 
 **配完必须用自查端点确认，不要只看图片能不能显示：**
 
@@ -589,10 +613,10 @@ curl https://你的域名/api/images/config
 
 ## 验证
 
-一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 25 个断言套件）：
+一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 26 个断言套件）：
 
 ```bash
-npm test          # typecheck × 2 + 25 个套件，失败即停
+npm test          # typecheck × 2 + 26 个套件，失败即停
 npm run go:test   # go vet + go test（后端）
 ```
 
@@ -650,8 +674,14 @@ PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
 
 ```bash
 npm run build     # vite build → spa/dist
-npm run deploy    # 构建并 wrangler deploy（需先配 wrangler 与 secrets）
+npm run deploy    # 构建并部署 production Worker + SPA（不部署后端）
 ```
 
-后端：`cd backend && docker build -t koinote-backend .`，部署到 VPS，
-Worker 的 `BACKEND_URL` secret 指向后端公网地址。
+后端首次部署在 VPS 配好 `.env` 与 `deploy/Caddyfile` 后，从仓库根目录运行：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+后续官方部署由 `.github/workflows/deploy.yml` 先同步并重建后端、跑健康检查，再发布
+Worker 与 SPA；`BACKEND_URL` secret 指向后端 HTTPS 源站。

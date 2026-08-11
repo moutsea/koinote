@@ -15,18 +15,12 @@ import {
   handleImageGet,
   handleImageUpload,
 } from "./images";
+import { handleVerificationEmail } from "./email";
 import { applySecurityHeaders } from "./securityHeaders";
 
-type AssetFetcher = {
-  fetch(request: Request): Promise<Response> | Response;
-};
-
-export interface Env {
-  ASSETS: AssetFetcher;
+export interface Env extends Cloudflare.Env {
   BACKEND_URL: string;
   BACKEND_INTERNAL_TOKEN?: string;
-  IMAGES: R2Bucket;
-  IMAGE_PUBLIC_BASE?: string;
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
 }
@@ -65,6 +59,13 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/images" && request.method === "POST") {
     return handleImageUpload(request, env);
+  }
+  // 后端生成并落库验证码后调用这里发信。只接受内部令牌，浏览器不能直接使用。
+  if (
+    url.pathname === "/api/internal/email/verification" &&
+    request.method === "POST"
+  ) {
+    return handleVerificationEmail(request, env);
   }
   // HEAD 也要走这里：CDN 与浏览器用它做缓存校验，
   // 漏掉的话会落到 SPA 资源处理器，返回 text/html 的假响应。
@@ -109,7 +110,6 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   headers.set("x-forwarded-host", incomingUrl.host);
   headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
   headers.set("x-koinote-worker", "cloudflare");
-
   const clientIP = request.headers.get("cf-connecting-ip");
   if (clientIP) {
     headers.set("x-forwarded-for", clientIP);

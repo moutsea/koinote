@@ -10,12 +10,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config 保存后端运行所需的环境配置。MVP 只需数据库、会话密钥、内部令牌与环境标识。
+// Config 保存后端运行所需的环境配置。
 type Config struct {
 	Port           string
 	DatabaseURL    string
-	InternalToken  string // Worker → 后端的内部鉴权令牌，同时用作 session 签名密钥
-	SessionSecret  string // session HMAC 签名密钥（缺省回退到 InternalToken）
+	InternalToken  string // Worker 与后端双向调用使用的内部鉴权令牌
+	SessionSecret  string // session HMAC 签名密钥，不允许回退到其他凭据
 	NodeEnv        string // "production" | "development"
 	AutoMigrate    bool
 	MigrationsDir  string
@@ -24,8 +24,8 @@ type Config struct {
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
 
-	// WorkerURL 是 Cloudflare Worker 的基址，后端的图片回收任务调它删 R2 对象。
-	// 空表示不启动回收 —— 待删记录仍会入队，配好后重启即可补上。
+	// WorkerURL 是 Cloudflare Worker 的基址。后端调它删除 R2 对象，并通过
+	// Email binding 发送注册验证码。空表示图片回收不启动、验证码发信返回 503。
 	WorkerURL string
 
 	// ImageQuotaBytes 是每用户的图床上限，来自 IMAGE_QUOTA_MB。
@@ -40,6 +40,11 @@ type Config struct {
 	GoogleOAuthSecret string
 	GitHubOAuthID     string
 	GitHubOAuthSecret string
+
+	// 邮箱验证码由后端生成并写入 Postgres，再调用 Worker 的 Email binding 发出。
+	// 开发环境可回退复用 SessionSecret；生产环境由 main.go 强制要求独立配置。
+	EmailVerificationSecret string
+	EnableMockEmail         bool
 }
 
 // dotenvCandidates 是相对工作目录向上查找 .env 的顺序。
@@ -70,13 +75,14 @@ func loadDotEnv() string {
 func Load() Config {
 	dotEnvPath := loadDotEnv()
 
+	nodeEnv := getenv("NODE_ENV", "development")
 	cfg := Config{
 		DotEnvPath:    dotEnvPath,
 		Port:          getenv("PORT", "8080"),
 		DatabaseURL:   getenv("DATABASE_URL", "postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable"),
 		InternalToken: os.Getenv("BACKEND_INTERNAL_TOKEN"),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
-		NodeEnv:       getenv("NODE_ENV", "development"),
+		NodeEnv:       nodeEnv,
 		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
 		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
 		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
@@ -92,6 +98,9 @@ func Load() Config {
 		GoogleOAuthSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GitHubOAuthID:     os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubOAuthSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+
+		EmailVerificationSecret: os.Getenv("EMAIL_VERIFICATION_SECRET"),
+		EnableMockEmail:         nodeEnv != "production" && getenv("ENABLE_MOCK_EMAIL", "false") == "true",
 	}
 
 	// 同上：5273 与 vite 的默认端口对齐

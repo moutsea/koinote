@@ -11,13 +11,14 @@ function withRetryQuery(src: string, attempt: number): string {
 }
 
 /**
- * Koinote 自有 CDN 加载失败时，改走同源 Worker 的 R2 读取路径。
+ * 把 Koinote 自有 CDN 地址映射为网页端使用的同源 Worker R2 读取路径。
  *
  * 某些本地代理会把 img.koinote.app 解析到 fake-IP/ULA 地址。Chrome 会把这种跨域
  * 子资源判为 local address space 并拦截，但同源的 /images/... 不受这条检查影响。
+ * 这里只返回显示地址，不修改 TipTap 节点里的 src；正文与导出仍保留 CDN 地址。
  * 只接受生产图床域名和合法对象 key，避免把任意外站图片误映射到站内路径。
  */
-export function sameOriginImageFallback(src: string): string | null {
+export function sameOriginImageURL(src: string): string | null {
   let url: URL;
   try {
     url = new URL(src);
@@ -30,10 +31,11 @@ export function sameOriginImageFallback(src: string): string | null {
 }
 
 /**
- * 首次使用文档原地址；失败后的自有 CDN 图片走同源代理，其他图片只绕过失败缓存。
- * 这里只改实际显示地址，不修改文档里的 src。
+ * 自有 CDN 图片从首次加载起就走同源代理；其他图片保持原地址，失败重试时绕过缓存。
+ * 这里只改实际显示地址，不修改文档里的 src，因此导出仍使用 CDN。
  */
 export function imageURLForAttempt(src: string, attempt: number): string {
-  if (attempt <= 0) return src;
-  return withRetryQuery(sameOriginImageFallback(src) ?? src, attempt);
+  const displayURL = sameOriginImageURL(src) ?? src;
+  if (attempt <= 0) return displayURL;
+  return withRetryQuery(displayURL, attempt);
 }

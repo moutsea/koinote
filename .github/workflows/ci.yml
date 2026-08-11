@@ -1,7 +1,7 @@
 name: CI
 
 # 开源之后 CI 从"锦上添花"变成必需品：收到外部 PR 时，没有 CI 就等于每个 PR
-# 都要手动 clone 下来跑 25 个套件 + go test，那个负担会直接变成"懒得看 PR"。
+# 都要手动 clone 下来跑 26 个套件 + go test，那个负担会直接变成"懒得看 PR"。
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
       # 装出来的依赖树和本地一致，否则 CI 绿了本地红也说明不了问题
       - run: npm ci
 
-      # 这一步内含 typecheck:spa + typecheck:worker + 25 个套件。
+      # 这一步内含 typecheck:spa + typecheck:worker + 全部断言套件。
       # 串成一条是有意的：失败即停，第一个红的就是要看的那个。
       - run: npm test
 
@@ -142,7 +142,7 @@ jobs:
           # 曾经在 .env.example 里给了 koinote-internal-dev-token 作为示例值 ——
           # 开源之后那就是一把公开的万能钥匙，而 README 第一步就是 cp 成 .env。
           # backend 侧另有 TestExampleEnvHasNoUsableInternalToken。
-          bad=$(grep -E '^(BACKEND_INTERNAL_TOKEN|SESSION_SECRET)=.+' .env.example || true)
+          bad=$(grep -E '^(BACKEND_INTERNAL_TOKEN|SESSION_SECRET|EMAIL_VERIFICATION_SECRET)=.+' .env.example || true)
           if [ -n "$bad" ]; then
             echo "以下凭据在 .env.example 里有值，必须留空：$bad"; exit 1
           fi

@@ -61,14 +61,17 @@ docker-compose.yml  postgres + redis + backend
 
 ## Local development
 
-You need Node 20+, Go 1.23+, and Docker.
+You need Node 20.19+ (or 22.12+), Go 1.23+, and Docker Compose.
 
 ### 1. Database
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
+
+The Redis service in Compose is reserved for future shared rate limiting; the backend
+does not use it when run directly.
 
 > ⚠️ **Port conflicts**: if a native PostgreSQL already holds 5432, the container
 > can't bind. Set `POSTGRES_PORT=5433` (or any free port) in `.env` and change the
@@ -127,13 +130,16 @@ npm run docker:up   # postgres + redis + backend all containerized
 
 ## Auth
 
-- Register / login / logout / session: `POST /api/auth/{register,login,logout}`, `GET /api/auth/session`
+- Email registration: call `POST /api/auth/verification-code`, then submit the code to
+  `POST /api/auth/register`; legacy unverified accounts use `POST /api/auth/verify-email`
+- Login / logout / session: `POST /api/auth/{login,logout}`, `GET /api/auth/session`
 - OAuth: `GET /api/auth/oauth/{google,github}/{start,callback}`
 - Sessions are stateless HMAC-SHA256 signed `koinote_session` cookies
   (HttpOnly / SameSite=Lax / Secure in production) — **never stored in the database**
 - Passwords hashed with bcrypt (cost 10); login accepts username or email, case-insensitive
-- MVP simplification: registration sets `is_verified=true` so users can log in
-  immediately. Email verification and billing come later.
+- Verification codes are stored only as HMACs and expire after 10 minutes; consuming
+  the code, creating the user, and deleting the code happen in one transaction
+- OAuth accounts are trusted as provider-verified; subscription billing still comes later
 
 ### Session key SESSION_SECRET
 
@@ -150,7 +156,7 @@ constant. Both are gone:
 - The hardcoded fallback in an open-source repository means **publishing the signing
   key** — anyone holding that string can mint a session for any user, no password
   needed. A "must be set in production" check existed, but it hung on
-  `NODE_ENV=production`, while `.env.example` shipped `development`. Following the
+  `NODE_ENV=production`, while `.env.example` at the time shipped `development`. Following the
   README verbatim bypassed it. Three individually reasonable decisions combined into
   a deployment that was insecure by default.
 - The `BACKEND_INTERNAL_TOKEN` fallback is gone too: that's a lateral Worker →
@@ -179,17 +185,17 @@ It is effectively a site-wide admin credential, so don't share a value with
 and the README's first step is `cp .env.example .env`, so anyone following the docs
 would deploy holding it. Verified empirically: that value plus any known
 `authUserId`, sent directly to the backend, returns that user's documents (HTTP 200).
-Blank is safe: the backend ignores both headers entirely when the token is empty,
-and the only consequence is that image usage isn't recorded.
+An empty token does not create that impersonation path, but Worker ↔ backend calls for
+image accounting, image cleanup, and verification-email delivery all stop working.
 
-Three places must match. When they don't, **image accounting fails silently**
-(usage isn't tracked and the quota becomes meaningless):
+Three places must match. A mismatch breaks image accounting/cleanup and makes
+verification-email delivery return 503:
 
 | Location | Purpose |
 | --- | --- |
 | `.env` | read by the backend, also feeds docker-compose |
 | `.dev.vars` | local `wrangler dev` |
-| `wrangler secret put BACKEND_INTERNAL_TOKEN` | production Worker |
+| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | production Worker |
 
 ### Rate limiting
 
@@ -198,6 +204,9 @@ Three places must match. When they don't, **image accounting fails silently**
 | Login | IP | 10 / 15 min |
 | Login | Account | 100 / 15 min |
 | Register | IP | 5 / hour |
+| Verification-code send | Email | 5 / hour, at least 1 min apart |
+| Verification-code send | IP | 20 / hour |
+| Verification-code check | Email / code | 5 failed attempts |
 | Share password check | IP | 20 / 15 min |
 | Share password check | Link | 10 / 15 min |
 
@@ -221,9 +230,10 @@ signup form five times (password too short, missing `@`) gets locked out for an 
 without having registered anything. Anti-abuse is unaffected: bulk registration must
 send valid requests, and all valid requests are counted.
 
-The limiter is **per-process** (`ratelimit.go`). Across multiple instances each
-process counts separately and effective thresholds multiply by N — move it to Redis
-before scaling out.
+Login, registration, and sharing use a **per-process** limiter (`ratelimit.go`), while
+verification-send counters are also persisted in the database across restarts. Across
+multiple instances the in-process buckets still multiply by N, so move them to shared
+storage before scaling out. The Redis service in Compose is reserved but unused.
 
 ### Security response headers
 
@@ -231,7 +241,7 @@ Added by the Worker at its single exit point (`worker/securityHeaders.ts`): CSP,
 HSTS, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`,
 `Cross-Origin-Opener-Policy`, `X-Content-Type-Options`.
 
-Wrapped at the entry rather than added per branch: the Worker has 7 return paths,
+Wrapped at the entry rather than added per branch: the Worker has many return paths,
 and adding them one by one will eventually miss one — with no error to show it,
 just an endpoint that quietly lost its protection.
 
@@ -582,37 +592,52 @@ On startup the script reads `image_keys.go` and compares regexes, exiting if the
 differ. Both sides carry a copy, and drift would mean silently missing one file
 extension — and missing part is harder to notice than not running at all.
 
-### Upload can't be tested by `npm run dev` alone
+### Local uploads require Wrangler
 
-`npm run dev` wires Vite straight to the Go backend, so **the Worker isn't in the
-path** and `/api/images` 404s — regardless of whether the frontend code is correct.
+Vite proxies `/api/images` and `/images` to `http://localhost:8788`. Uploads fail to
+connect when the Worker is not running; the Go backend has no R2 endpoint.
 
-To test uploads, run wrangler (it ships a local R2 emulation that never touches
-production data):
+First create an ignored `.dev.vars` file at the repository root:
+
+```dotenv
+BACKEND_INTERNAL_TOKEN=<the same value used in .env>
+```
+
+Then run Wrangler (its local R2 emulation never touches production data):
 
 ```bash
-npx wrangler dev --port 8788 --var BACKEND_URL:http://localhost:8090
+npx wrangler dev --port 8788
 ```
+
+The Worker sends backend requests to `http://localhost:8080` by default. Override a
+custom backend port with `--var BACKEND_URL:http://localhost:<port>`.
 
 Local objects live in `.wrangler/state/v3/r2` (gitignored).
 
 ### Production configuration
 
 ```bash
-wrangler secret put BACKEND_URL          # public address of the Go backend
-wrangler secret put BACKEND_INTERNAL_TOKEN   # same value as the backend
-wrangler secret put CLOUDFLARE_ZONE_ID --env production
-wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
+npx wrangler secret put BACKEND_URL --env production          # HTTPS backend origin
+npx wrangler secret put BACKEND_INTERNAL_TOKEN --env production   # same as the backend
+npx wrangler secret put CLOUDFLARE_ZONE_ID --env production
+npx wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
 # the R2 binding is in wrangler.jsonc; no secret needed
 ```
 
-### Serving images over a CDN
+### Split image URLs: same-origin web, CDN exports
 
 Controlled by `IMAGE_PUBLIC_BASE`.
 
-Left empty, images are read through the Worker proxy, **costing one Worker request
-per load**. With an R2 custom domain configured, `publicURL` returns an absolute
-address that goes through the CDN and no longer counts against Worker requests.
+With an R2 custom domain configured, `publicURL` returns an absolute CDN URL and
+stores it in the document as the canonical image address. For web rendering,
+`ImageNodeView` changes only the actual `<img src>`, mapping owned CDN URLs to the
+same-origin `/images/<key>` route. This avoids browser CORS / Local Network Access
+failures while leaving the TipTap node untouched, so Markdown, HTML, and WeChat
+exports still use the CDN and existing documents need no migration.
+
+The stability trade-off is explicit: the first web load of an image costs one
+Worker request. The response carries a one-year immutable browser cache, while
+exported content and direct CDN access still bypass the Worker.
 
 Leaving it empty does **not** break WeChat export: `auditWechatImages`
 (`spa/src/components/editor/wechatImages.ts`) resolves `/images/<key>` against the
@@ -679,7 +704,7 @@ One command covers the frontend and Worker (typecheck on both sides plus 25
 assertion suites):
 
 ```bash
-npm test          # typecheck ×2 + 25 suites, stops at the first failure
+npm test          # typecheck ×2 + 26 suites, stops at the first failure
 npm run go:test   # go vet + go test
 ```
 
@@ -749,8 +774,16 @@ behind.
 
 ```bash
 npm run build     # vite build → spa/dist
-npm run deploy    # build and wrangler deploy (configure wrangler and secrets first)
+npm run deploy    # build and deploy the production Worker + SPA (not the backend)
 ```
 
-Backend: `cd backend && docker build -t koinote-backend .`, deploy to a VPS, and
-point the Worker's `BACKEND_URL` secret at its public address.
+For the first backend deployment, configure `.env` and `deploy/Caddyfile` on the VPS,
+then run from the repository root:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+The hosted deployment subsequently uses `.github/workflows/deploy.yml` to sync,
+rebuild, and health-check the backend before publishing the Worker and SPA. The
+`BACKEND_URL` secret points at the HTTPS backend origin.

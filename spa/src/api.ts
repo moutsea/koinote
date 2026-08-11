@@ -18,12 +18,14 @@ export type User = {
 // 带后端错误码的错误对象：code 供前端 i18n 翻译，message 为英文兜底。
 export class ApiError extends Error {
   code?: string;
+  email?: string;
   status: number;
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, email?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.email = email;
   }
 }
 
@@ -61,11 +63,13 @@ export type ImageQuotaDetail = {
 async function toApiError(response: Response): Promise<ApiError> {
   let message = `Request failed (${response.status})`;
   let code: string | undefined;
+  let email: string | undefined;
   let quota: ImageQuotaDetail | null = null;
   try {
     const data = await response.json();
     if (data && typeof data.error === "string") message = data.error;
     if (data && typeof data.code === "string") code = data.code;
+    if (data && typeof data.email === "string") email = data.email;
     // 后端在 409 里回了当前用量，弹窗要用它显示"已用多少 / 共多少"
     if (
       data &&
@@ -97,7 +101,7 @@ async function toApiError(response: Response): Promise<ApiError> {
     );
   }
 
-  return new ApiError(response.status, message, code);
+  return new ApiError(response.status, message, code, email);
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -119,8 +123,32 @@ export function register(params: {
   username: string;
   email: string;
   password: string;
+  verificationCode: string;
 }) {
   return apiJson<{ user: User }>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function sendVerificationCode(email: string, locale: string) {
+  return apiJson<{
+    ok: boolean;
+    expiresInSeconds: number;
+    retryAfterSeconds: number;
+    devCode?: string;
+  }>("/api/auth/verification-code", {
+    method: "POST",
+    body: JSON.stringify({ email, locale }),
+  });
+}
+
+export function verifyEmail(params: {
+  email: string;
+  password: string;
+  verificationCode: string;
+}) {
+  return apiJson<{ user: User }>("/api/auth/verify-email", {
     method: "POST",
     body: JSON.stringify(params),
   });

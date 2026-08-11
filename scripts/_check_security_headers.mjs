@@ -114,6 +114,12 @@ function parseCSP(header) {
     !(csp["script-src"] ?? []).includes("'unsafe-eval'"),
     String(csp["script-src"]),
   );
+  ok(
+    "script-src 只额外放行 Cloudflare Web Analytics 脚本域",
+    (csp["script-src"] ?? []).includes("https://static.cloudflareinsights.com") &&
+      !(csp["script-src"] ?? []).includes("https:"),
+    String(csp["script-src"]),
+  );
 
   // style-src 必须含 unsafe-inline，否则主题和公式当场坏掉。
   // 这条断言方向和上面相反 —— 它防的是"有人顺手收紧 CSP 把功能弄坏"。
@@ -133,7 +139,13 @@ function parseCSP(header) {
     String(csp["img-src"]),
   );
 
-  ok("connect-src 是 self（API 全同源）", (csp["connect-src"] ?? []).includes("'self'"), String(csp["connect-src"]));
+  ok("connect-src 保留 self（API 全同源）", (csp["connect-src"] ?? []).includes("'self'"), String(csp["connect-src"]));
+  ok(
+    "connect-src 放行 Cloudflare Web Analytics 上报域",
+    (csp["connect-src"] ?? []).includes("https://cloudflareinsights.com") &&
+      !(csp["connect-src"] ?? []).includes("https:"),
+    String(csp["connect-src"]),
+  );
   ok("object-src 关掉", (csp["object-src"] ?? []).includes("'none'"), String(csp["object-src"]));
   ok(
     "base-uri 限制为 self（防注入 <base> 劫持相对路径）",
