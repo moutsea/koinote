@@ -117,6 +117,7 @@ export interface Messages {
     newDocument: string;
     deleteDocument: string;
     deleteConfirm: string; // 用 {title} 占位
+    deleteSaveFailed: string;
     emptyDocuments: string;
     emptyOutline: string;
     collapsePanel: string;

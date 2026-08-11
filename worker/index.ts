@@ -27,6 +27,8 @@ export interface Env {
   BACKEND_INTERNAL_TOKEN?: string;
   IMAGES: R2Bucket;
   IMAGE_PUBLIC_BASE?: string;
+  CLOUDFLARE_ZONE_ID?: string;
+  CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
 }
 
 const API_PREFIXES = ["/api/", "/health"];

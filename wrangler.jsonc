@@ -28,6 +28,10 @@
   // 生产环境的 secret（不入库，用命令设）：
   //   wrangler secret put BACKEND_URL --env production
   //   wrangler secret put BACKEND_INTERNAL_TOKEN --env production
+  //   wrangler secret put CLOUDFLARE_ZONE_ID --env production
+  //   wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
+  // 后两项用于删除 R2 对象后全局 purge 自定义域名缓存；token 只授予
+  // Zone / Cache Purge 权限。CDN 模式缺任一项时删除端点会返回 503。
 
   // ⚠ Cloudflare 的命名环境**不继承**顶层的绑定与变量。
   //

@@ -33,10 +33,8 @@ type Entry = {
   titleDirty: boolean;
   /** 有改动尚未落库 */
   dirty: boolean;
-  /** 正在请求中。此时来的新改动要等这次回来再发第二趟 */
-  inFlight: boolean;
-  /** in-flight 期间又有改动 */
-  resaveNeeded: boolean;
+  /** 当前完整保存链。显式 flush 必须等待它，而不是只标记后立即返回 */
+  inFlight: Promise<boolean> | null;
 };
 
 export type DocumentSaver = {
@@ -44,8 +42,8 @@ export type DocumentSaver = {
   seed: (docId: string, snapshot: Snapshot) => void;
   /** 记下改动并排入防抖队列 */
   queue: (docId: string, patch: DocPatch) => void;
-  /** 立刻存。换主题、关标签、淘汰实例时用 */
-  flush: (docId: string) => Promise<void>;
+  /** 立刻存并返回是否落库成功。换主题、删除、淘汰实例时用 */
+  flush: (docId: string) => Promise<boolean>;
   /** 读当前待存内容，不触发渲染。用于把未存改动合进传给编辑器的 document */
   peek: (docId: string) => Snapshot | null;
   status: (docId: string) => SaveStatus;
@@ -82,49 +80,60 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   }, []);
 
   const doSave = useCallback(
-    async (docId: string): Promise<void> => {
+    (docId: string): Promise<boolean> => {
       const entry = entries.current.get(docId);
-      if (!entry || !entry.dirty) return;
+      if (!entry || !entry.dirty) return Promise.resolve(true);
 
       if (entry.inFlight) {
-        // 正在发的那趟带的是旧内容，回来后要再发一趟
-        entry.resaveNeeded = true;
-        return;
+        // 这不是「已有请求就立即返回」：flush 的调用方拿到同一个 Promise，
+        // 会一直等到 in-flight 期间积累的新正文也保存完。
+        return entry.inFlight;
       }
 
-      entry.inFlight = true;
-      const sent = { ...entry.pending };
-      const sentTitleDirty = entry.titleDirty;
-      setStatus(docId, "saving");
+      const run = (async (): Promise<boolean> => {
+        let titleCommittedNeeded = false;
+        for (;;) {
+          const current = entries.current.get(docId);
+          if (!current || !current.dirty) return true;
 
-      try {
-        await mutate.current({ docId, ...sent });
-        // 比对发出去的与现在的：期间又改过就不能标记为已保存
-        const now = entries.current.get(docId);
-        if (now) {
-          now.inFlight = false;
+          const sent = { ...current.pending };
+          titleCommittedNeeded ||= current.titleDirty;
+          setStatus(docId, "saving");
+
+          try {
+            await mutate.current({ docId, ...sent });
+          } catch {
+            // dirty 保持 true：待存内容留着，下次 flush 会重试。
+            if (entries.current.has(docId)) setStatus(docId, "failed");
+            return false;
+          }
+
+          const now = entries.current.get(docId);
+          if (!now) return true;
           const changedDuringFlight =
             now.pending.title !== sent.title ||
             now.pending.content !== sent.content ||
             now.pending.theme !== sent.theme;
-          if (changedDuringFlight || now.resaveNeeded) {
-            now.resaveNeeded = false;
-            await doSave(docId);
-            return;
+          if (changedDuringFlight) {
+            // 继续同一条 Promise 保存最新快照。flush 因此是屏障，不会在第二趟
+            // 请求发出前就提前 resolve。
+            continue;
           }
+
           now.dirty = false;
           now.titleDirty = false;
+          setStatus(docId, "saved");
+          if (titleCommittedNeeded) titleCommitted.current?.();
+          return true;
         }
-        setStatus(docId, "saved");
-        if (sentTitleDirty) titleCommitted.current?.();
-      } catch {
-        const now = entries.current.get(docId);
-        if (now) {
-          now.inFlight = false;
-          // dirty 保持 true：待存内容留着，下次 flush 会重试
-        }
-        setStatus(docId, "failed");
-      }
+      })();
+
+      entry.inFlight = run;
+      void run.finally(() => {
+        const current = entries.current.get(docId);
+        if (current?.inFlight === run) current.inFlight = null;
+      });
+      return run;
     },
     [setStatus],
   );
@@ -136,8 +145,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       timer: null,
       titleDirty: false,
       dirty: false,
-      inFlight: false,
-      resaveNeeded: false,
+      inFlight: null,
     });
   }, []);
 
@@ -160,19 +168,20 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   const flush = useCallback(
     async (docId: string) => {
       const entry = entries.current.get(docId);
-      if (!entry) return;
+      if (!entry) return true;
       if (entry.timer) {
         clearTimeout(entry.timer);
         entry.timer = null;
       }
-      await doSave(docId);
+      return doSave(docId);
     },
     [doSave],
   );
 
   const forget = useCallback(
     async (docId: string) => {
-      await flush(docId);
+      const saved = await flush(docId);
+      if (!saved) return;
       const entry = entries.current.get(docId);
       // 存失败就留着记录：下次打开这篇还能接着重试，不静默丢弃
       if (entry && entry.dirty) return;

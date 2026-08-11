@@ -344,12 +344,13 @@ export function EditorPage() {
       // 那一版。而防抖窗口是 800ms —— 刚粘进去的图很可能还没保存，此时先删就等于
       // 让后端看不见那些图，它们会成为没人回收的孤儿，永久占着用户的配额。
       //
-      // flush 失败也继续删：那说明这篇存不进去（可能已被别处删掉），
-      // 卡住删除操作只会让用户困在一篇删不掉的文档上。孤儿图后果轻得多。
-      try {
-        await saver.flush(docId);
-      } catch {
-        // 交给下面的删除继续走，不打断
+      // 保存失败时不能继续删：刚上传的图片只存在本地待存正文里，后端删文档时
+      // 看不到它们，也就不会入回收队列，最终永久占着配额。保留文档与草稿，
+      // 让用户重试，比静默制造无法自救的孤儿对象安全。
+      const saved = await saver.flush(docId);
+      if (!saved) {
+        window.alert(t.editor.deleteSaveFailed);
+        return;
       }
 
       remove.mutate(docId, {
@@ -376,7 +377,7 @@ export function EditorPage() {
         },
       });
     },
-    [confirmDelete, remove, activeDocId, documents, navigate, saver],
+    [confirmDelete, remove, activeDocId, documents, navigate, saver, t],
   );
 
   // ---------- 文件夹 ----------
@@ -710,4 +711,3 @@ function Centered({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-

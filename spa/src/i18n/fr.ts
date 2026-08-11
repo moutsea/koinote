@@ -128,6 +128,8 @@ export const fr: Messages = {
     newDocument: "Nouveau document",
     deleteDocument: "Supprimer le document",
     deleteConfirm: "Supprimer « {title} » ? Cette action est irréversible.",
+    deleteSaveFailed:
+      "Les dernières modifications n’ont pas pu être enregistrées. Le document n’a pas été supprimé. Vérifiez votre connexion et réessayez.",
     emptyDocuments: "Aucun document — créez-en un ci-dessus",
     emptyOutline: "Tapez « # » pour ajouter un titre ; le plan apparaîtra ici",
     collapsePanel: "Replier le panneau",

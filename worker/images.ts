@@ -14,6 +14,10 @@ export type ImagesEnv = {
   IMAGE_PUBLIC_BASE?: string;
   /** 后端调删除端点时用的共享令牌。缺省时删除端点一律 503 */
   BACKEND_INTERNAL_TOKEN?: string;
+  /** R2 自定义域名所在 zone。CDN 模式删除对象时用于全局 purge */
+  CLOUDFLARE_ZONE_ID?: string;
+  /** 仅授予 Zone / Cache Purge 权限的 API token */
+  CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
 };
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
@@ -452,6 +456,85 @@ export function normalizeImageBase(raw: string | undefined): string | null {
   return `${url.origin}${path}`;
 }
 
+export function isCachePurgeConfigured(env: ImagesEnv): boolean {
+  return Boolean(
+    env.CLOUDFLARE_ZONE_ID?.trim() &&
+      env.CLOUDFLARE_CACHE_PURGE_TOKEN?.trim(),
+  );
+}
+
+type CachePurgeResponse = {
+  success?: boolean;
+  errors?: Array<{ code?: number; message?: string }>;
+};
+
+const CACHE_PURGE_TIMEOUT_MS = 10_000;
+const CACHE_PURGE_MAX_URLS = 100;
+// 与 ImageNodeView 的 MAX_IMAGE_RETRIES 对齐。重试 URL 也可能缓存到 CDN，删除时
+// 必须一起 purge，不能只清没有查询串的原始 URL。
+const IMAGE_RETRY_CACHE_VARIANTS = 3;
+
+function imageCacheURLs(base: string, key: string): string[] {
+  const canonical = `${base}/${key}`;
+  const urls = [canonical];
+  for (let attempt = 1; attempt <= IMAGE_RETRY_CACHE_VARIANTS; attempt += 1) {
+    urls.push(`${canonical}?__koinote_retry=${attempt}`);
+  }
+  return urls;
+}
+
+/** R2 自定义域名的 CDN 缓存不会随对象删除自动失效，必须按公开 URL 全局 purge。 */
+async function purgeImageCache(keys: string[], env: ImagesEnv): Promise<boolean> {
+  const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
+  if (!base || keys.length === 0) return true;
+
+  const zoneId = env.CLOUDFLARE_ZONE_ID?.trim();
+  const token = env.CLOUDFLARE_CACHE_PURGE_TOKEN?.trim();
+  if (!zoneId || !token) return false;
+
+  try {
+    const urls = keys.flatMap((key) => imageCacheURLs(base, key));
+    for (let offset = 0; offset < urls.length; offset += CACHE_PURGE_MAX_URLS) {
+      const files = urls.slice(offset, offset + CACHE_PURGE_MAX_URLS);
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${encodeURIComponent(zoneId)}/purge_cache`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ files }),
+          signal: AbortSignal.timeout(CACHE_PURGE_TIMEOUT_MS),
+        },
+      );
+      const result = (await response.json()) as CachePurgeResponse;
+      if (response.ok && result.success === true) continue;
+
+      console.error(
+        JSON.stringify({
+          message: "images: CDN cache purge failed",
+          status: response.status,
+          errors: result.errors ?? [],
+          keyCount: keys.length,
+          urlCount: urls.length,
+        }),
+      );
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "images: CDN cache purge request failed",
+        error: error instanceof Error ? error.message : String(error),
+        keyCount: keys.length,
+      }),
+    );
+    return false;
+  }
+}
+
 /** 图片对外 URL：配了自定义域名走 CDN，否则回落到 Worker 代理 */
 function publicURL(key: string, env: ImagesEnv): string {
   const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
@@ -474,14 +557,21 @@ function publicURL(key: string, env: ImagesEnv): string {
 export function handleImageConfig(env: ImagesEnv): Response {
   const raw = (env.IMAGE_PUBLIC_BASE ?? "").trim();
   const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
-  return json(200, {
+  const purgeRequired = base !== null;
+  const purgeConfigured = !purgeRequired || isCachePurgeConfigured(env);
+  const warning =
+    raw && !base
+      ? "IMAGE_PUBLIC_BASE 已设置但无效（需形如 https://img.example.com），已回落到 Worker 代理"
+      : purgeRequired && !purgeConfigured
+        ? "CDN 模式缺少 CLOUDFLARE_ZONE_ID 或 CLOUDFLARE_CACHE_PURGE_TOKEN，图片删除已暂停"
+        : null;
+  return json(purgeConfigured ? 200 : 503, {
     mode: base ? "cdn" : "worker-proxy",
     base,
     valid: base !== null,
-    warning:
-      raw && !base
-        ? "IMAGE_PUBLIC_BASE 已设置但无效（需形如 https://img.example.com），已回落到 Worker 代理"
-        : null,
+    purgeRequired,
+    purgeConfigured,
+    warning,
   });
 }
 
@@ -532,11 +622,26 @@ export async function handleImageDelete(
   }
 
   if (deleted.length > 0) {
+    const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
+    if (base && !isCachePurgeConfigured(env)) {
+      console.warn("CDN purge 未配置，拒绝删除 R2 对象以免公开地址继续返回陈旧缓存");
+      return errorCode(
+        503,
+        "cache_purge_not_configured",
+        "CDN cache purge is not configured",
+      );
+    }
+
     // R2 的 delete 对不存在的 key 也算成功，正好符合回收语义（重试要幂等）
     await env.IMAGES.delete(deleted);
+    if (!(await purgeImageCache(deleted, env))) {
+      // R2 已删但 CDN 清理失败。返回错误让后端保留队列与用量账本；下轮重试
+      // R2 delete 与 purge 都是幂等的，恢复后会把这一步补齐。
+      return errorCode(502, "cache_purge_failed", "Could not purge CDN cache");
+    }
   }
 
-  return json(200, { deleted: deleted.length, rejected });
+  return json(200, { deleted, rejected });
 }
 
 /** key 必须形如 u/<id>/<hex>.<ext>，不含路径穿越 */

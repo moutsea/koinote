@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -60,6 +61,25 @@ func (a *App) enqueueImageDeletions(ctx context.Context, userID int, keys []stri
 		ON CONFLICT (object_key) DO NOTHING
 	`, safe, userID)
 	return err
+}
+
+// cancelPendingImageDeletions 撤销正文里仍在引用的待删对象。
+//
+// GC 真正执行前还会复查一次；这里额外主动撤销，是为了把「撤销删除 / 重新粘贴」到
+// 下一轮 GC 之间的窗口尽量缩短，也避免复活记录一直占着队列。只按 user_id 撤销，
+// 别人把这个 URL 当外链写进正文不能替所有者续命。
+func (a *App) cancelPendingImageDeletions(ctx context.Context, user userRef, content string) {
+	keys := extractOwnedImageKeys(content, user.AuthUserID)
+	if len(keys) == 0 {
+		return
+	}
+	if _, err := a.db.Exec(ctx, `
+		DELETE FROM pending_image_deletions
+		WHERE user_id = $1 AND object_key = ANY($2)
+	`, user.ID, keys); err != nil {
+		// 取消失败不该让正文保存失败；GC 的删除前复查仍是最后一道安全网。
+		log.Printf("image gc: 撤销仍被引用的待删记录失败: %v", err)
+	}
 }
 
 // enqueueOrphanedImages 找出 content 里属于该用户、且没有被他其它文档引用的图片，
@@ -139,7 +159,7 @@ func (a *App) StartImageGC(ctx context.Context) {
 // runImageGCOnce 处理一批到期的待删记录。
 func (a *App) runImageGCOnce(ctx context.Context) error {
 	rows, err := a.db.Query(ctx, `
-		SELECT id, object_key, attempts
+		SELECT id, object_key, user_id, attempts
 		FROM pending_image_deletions
 		WHERE next_try_at <= now() AND attempts < $1
 		ORDER BY next_try_at
@@ -152,12 +172,13 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	type pending struct {
 		id       int
 		key      string
+		userID   sql.NullInt64
 		attempts int
 	}
 	var batch []pending
 	for rows.Next() {
 		var p pending
-		if err := rows.Scan(&p.id, &p.key, &p.attempts); err != nil {
+		if err := rows.Scan(&p.id, &p.key, &p.userID, &p.attempts); err != nil {
 			rows.Close()
 			return fmt.Errorf("扫描待删记录: %w", err)
 		}
@@ -177,7 +198,7 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	// 这中间图可能重新回到正文里：
 	//   · 用户删了图又按 Ctrl+Z 撤销
 	//   · 把同一张图重新粘贴/复制到别处
-	//   · 多标签编辑，另一篇文档引用了它
+	//   · 多标签编辑，自己的另一篇文档引用了它
 	// 少了这道复查，上面任一情形都会在 30 秒后把一张正在显示的图删掉 —— 用户看到
 	// 的是"图片加载失败"，而正文里的地址看着完全正常。实测在生产上发生过。
 	//
@@ -188,16 +209,21 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	var revived []int
 	for _, p := range batch {
 		var referenced bool
-		err := a.db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM documents WHERE position($1 in content) > 0
-			)
-		`, p.key).Scan(&referenced)
-		if err != nil {
-			// 查不动就跳过这一个，留到下轮 —— 宁可晚点回收，也不能删掉可能还在用的图
-			log.Printf("image gc: 删除前复查引用失败，跳过 %s: %v", p.key, err)
-			continue
+		if p.userID.Valid {
+			err := a.db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM documents
+					WHERE user_id = $2 AND position($1 in content) > 0
+				)
+			`, p.key, p.userID.Int64).Scan(&referenced)
+			if err != nil {
+				// 查不动就跳过这一个，留到下轮 —— 宁可晚点回收，也不能删掉可能还在用的图
+				log.Printf("image gc: 删除前复查引用失败，跳过 %s: %v", p.key, err)
+				continue
+			}
 		}
+		// user_id 为 NULL 说明账号已经删除。此时已没有「所有者自己的文档」，
+		// 别人正文里的同 URL 只是外链，不能让这个对象永久占着存储。
 		if referenced {
 			// 重新被引用了，撤销这条删除令
 			revived = append(revived, p.id)
@@ -223,10 +249,14 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		return nil
 	}
 
-	if err := a.deleteImagesViaWorker(ctx, keys); err != nil {
-		// 整批退避。逐个重试的话一个坏 key 会让整批一直卡着，而分不清是哪个坏
-		// 也没关系 —— attempts 到上限后这批会各自停下，last_error 里有原因
-		backoff := gcBackoff(batch[0].attempts)
+	pendingByKey := make(map[string]pending, len(batch))
+	for _, p := range batch {
+		pendingByKey[p.key] = p
+	}
+
+	result, err := a.deleteImagesViaWorker(ctx, keys)
+	if err != nil {
+		backoff := gcBackoff(pendingByKey[keys[0]].attempts)
 		if _, uerr := a.db.Exec(ctx, `
 			UPDATE pending_image_deletions
 			SET attempts = attempts + 1, last_error = $2, next_try_at = now() + $3::interval
@@ -235,6 +265,34 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 			log.Printf("image gc: 记录失败状态时又出错: %v", uerr)
 		}
 		return fmt.Errorf("调 Worker 删除: %w", err)
+	}
+
+	if len(result.Rejected) > 0 {
+		rejectedIDs := make([]int, 0, len(result.Rejected))
+		for _, key := range result.Rejected {
+			rejectedIDs = append(rejectedIDs, pendingByKey[key].id)
+		}
+		backoff := gcBackoff(pendingByKey[result.Rejected[0]].attempts)
+		message := fmt.Sprintf("worker 拒绝 key（两端 isSafeImageKey 不一致）: %v", result.Rejected)
+		if _, uerr := a.db.Exec(ctx, `
+			UPDATE pending_image_deletions
+			SET attempts = attempts + 1, last_error = $2, next_try_at = now() + $3::interval
+			WHERE id = ANY($1)
+		`, rejectedIDs, message, backoff.String()); uerr != nil {
+			log.Printf("image gc: 记录 Worker 拒绝状态失败: %v", uerr)
+		}
+		log.Printf("image gc: Worker 拒绝了 %d 个 key，已与成功项分开退避", len(result.Rejected))
+	}
+
+	// Worker 逐项返回结果。成功项继续清账本，拒绝项只退避自己，不能让一个
+	// 毒丸 key 拖着同批已经从 R2 删除的对象重复到 attempts 上限。
+	keys = result.Deleted
+	ids = ids[:0]
+	for _, key := range keys {
+		ids = append(ids, pendingByKey[key].id)
+	}
+	if len(keys) == 0 {
+		return nil
 	}
 
 	// 对象已从 R2 删掉，把它们从用量账本里移除 —— 用户的已用空间到这一步才真正下降。
@@ -250,7 +308,7 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	// 重试是安全的：R2 的 delete 幂等，重复删不报错；forgetImageObjects 是按 key
 	// 删行，重复执行也是幂等的。
 	if err := a.forgetImageObjects(ctx, keys); err != nil {
-		backoff := gcBackoff(batch[0].attempts)
+		backoff := gcBackoff(pendingByKey[keys[0]].attempts)
 		if _, uerr := a.db.Exec(ctx, `
 			UPDATE pending_image_deletions
 			SET attempts = attempts + 1, last_error = $2, next_try_at = now() + $3::interval
@@ -287,10 +345,16 @@ func gcBackoff(attempts int) time.Duration {
 // 为什么经 Worker 而不是后端直连 R2：R2 的凭证只在 Worker 那边（它有 bucket 绑定，
 // 不需要密钥）。让后端直连要在 VPS 上再放一份 S3 凭证，并引一个 S3 SDK —— 多一份
 // 要轮转的密钥、多一处泄露面。
-func (a *App) deleteImagesViaWorker(ctx context.Context, keys []string) error {
+type imageDeleteResult struct {
+	Deleted  []string `json:"deleted"`
+	Rejected []string `json:"rejected"`
+}
+
+func (a *App) deleteImagesViaWorker(ctx context.Context, keys []string) (imageDeleteResult, error) {
+	var result imageDeleteResult
 	payload, err := json.Marshal(map[string]any{"keys": keys})
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	endpoint := a.cfg.WorkerURL + "/api/images/delete"
@@ -299,38 +363,42 @@ func (a *App) deleteImagesViaWorker(ctx context.Context, keys []string) error {
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return err
+		return result, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-koinote-internal-token", a.cfg.InternalToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return result, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("worker 返回 %d", resp.StatusCode)
+		return result, fmt.Errorf("worker 返回 %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Deleted  int      `json:"deleted"`
-		Rejected []string `json:"rejected"`
-	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("解析响应: %w", err)
+		return result, fmt.Errorf("解析响应: %w", err)
 	}
-	if len(result.Rejected) > 0 {
-		// Worker 拒了某些 key，说明两边的 isSafeImageKey 漂开了。
-		//
-		// 必须返回错误而不是只记日志：调用方把"没返回错误"理解成整批都删掉了，
-		// 于是这些 key 会被清出队列，而对象还在 R2 里 —— 成了没人再回收的孤儿，
-		// 且账本也跟着被减掉，用量比实际占用少，配额从此算不准。
-		// 报错会让整批退避重试，attempts 到上限后 last_error 里留着这条线索。
-		log.Printf("image gc: Worker 拒绝了 %d 个 key: %v", len(result.Rejected), result.Rejected)
-		return fmt.Errorf("worker 拒绝了 %d 个 key（两端 isSafeImageKey 不一致）: %v",
-			len(result.Rejected), result.Rejected)
+
+	requested := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		requested[key] = struct{}{}
 	}
-	return nil
+	seen := make(map[string]struct{}, len(keys))
+	allResults := append(append([]string(nil), result.Deleted...), result.Rejected...)
+	for _, key := range allResults {
+		if _, ok := requested[key]; !ok {
+			return imageDeleteResult{}, fmt.Errorf("worker 返回了未请求的 key %q", key)
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return imageDeleteResult{}, fmt.Errorf("worker 重复返回 key %q", key)
+		}
+		seen[key] = struct{}{}
+	}
+	if len(seen) != len(requested) {
+		return imageDeleteResult{}, fmt.Errorf("worker 响应不完整：请求 %d，返回 %d", len(requested), len(seen))
+	}
+	return result, nil
 }

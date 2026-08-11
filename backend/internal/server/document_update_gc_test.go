@@ -2,12 +2,18 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"koinote/backend/internal/config"
 	"koinote/backend/internal/migrations"
 )
 
@@ -46,6 +52,8 @@ func newGCTestPool(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 		t.Fatalf("跑迁移失败: %v", err)
 	}
+	// 先注册关连接，后续 seed 注册的数据清理会按 LIFO 在它之前执行。
+	t.Cleanup(pool.Close)
 	return pool
 }
 
@@ -126,13 +134,104 @@ func pendingKeys(t *testing.T, pool *pgxpool.Pool, authUserID string) []string {
 	return out
 }
 
+func newGCWorker(
+	t *testing.T,
+	respond func([]string) imageDeleteResult,
+) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.URL.Path != "/api/images/delete" || r.Method != http.MethodPost {
+			t.Errorf("Worker 收到意外请求: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("x-koinote-internal-token") != "gc-test-token" {
+			t.Error("GC 没带正确的内部令牌")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var body struct {
+			Keys []string `json:"keys"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("解析 GC 请求失败: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(respond(body.Keys)); err != nil {
+			t.Errorf("写 Worker 响应失败: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &calls
+}
+
+func gcTestApp(pool *pgxpool.Pool, workerURL string) *App {
+	return &App{
+		db: pool,
+		cfg: config.Config{
+			WorkerURL:     workerURL,
+			InternalToken: "gc-test-token",
+		},
+	}
+}
+
+func isolateGCQueue(t *testing.T, pool *pgxpool.Pool, keys []string) func() {
+	t.Helper()
+	type schedule struct {
+		id   int
+		next time.Time
+	}
+	rows, err := pool.Query(context.Background(), `
+		SELECT id, next_try_at
+		FROM pending_image_deletions
+		WHERE next_try_at <= now() AND NOT (object_key = ANY($1))
+	`, keys)
+	if err != nil {
+		t.Fatalf("读取其它 GC 任务失败: %v", err)
+	}
+	var schedules []schedule
+	for rows.Next() {
+		var item schedule
+		if err := rows.Scan(&item.id, &item.next); err != nil {
+			rows.Close()
+			t.Fatalf("扫描其它 GC 任务失败: %v", err)
+		}
+		schedules = append(schedules, item)
+	}
+	rows.Close()
+	if len(schedules) == 0 {
+		return func() {}
+	}
+	ids := make([]int, 0, len(schedules))
+	for _, item := range schedules {
+		ids = append(ids, item.id)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE pending_image_deletions
+		SET next_try_at = now() + interval '1 hour'
+		WHERE id = ANY($1)
+	`, ids); err != nil {
+		t.Fatalf("暂挂其它 GC 任务失败: %v", err)
+	}
+	return func() {
+		for _, item := range schedules {
+			_, _ = pool.Exec(context.Background(), `
+				UPDATE pending_image_deletions SET next_try_at = $2 WHERE id = $1
+			`, item.id, item.next)
+		}
+	}
+}
+
 // 从正文里删掉一张图之后，那张图应该进回收队列。
 //
 // 这条是这个 bug 的直接回归测试。修复前 enqueueOrphanedImages 根本不会被
 // documentUpdate 调到，队列是空的。
 func TestUpdateEnqueuesRemovedImage(t *testing.T) {
 	pool := newGCTestPool(t)
-	defer pool.Close()
 
 	removed := gcKey("gcuser", gcHexA)
 	before := "![](https://img.koinote.app/" + removed + ")\n\n正文"
@@ -175,7 +274,6 @@ func TestUpdateEnqueuesRemovedImage(t *testing.T) {
 // 留在新正文里的图也会被判成孤儿，用户会看到裂图。
 func TestUpdateKeepsStillReferencedImage(t *testing.T) {
 	pool := newGCTestPool(t)
-	defer pool.Close()
 
 	base := "https://img.koinote.app/"
 	removed := gcKey("gcuser2", gcHexA)
@@ -219,7 +317,6 @@ func TestUpdateKeepsStillReferencedImage(t *testing.T) {
 // 这条测试钉住那个判断在回收路径上真的生效。
 func TestUpdateWontRecycleOtherUsersImage(t *testing.T) {
 	pool := newGCTestPool(t)
-	defer pool.Close()
 
 	victim := "u/someoneelse/cccccccc33333333.png"
 	before := "![](https://img.koinote.app/" + victim + ")"
@@ -245,31 +342,121 @@ func TestUpdateWontRecycleOtherUsersImage(t *testing.T) {
 // 所以 runImageGCOnce 必须在真正删之前复查引用。
 func TestGCSkipsRevivedImage(t *testing.T) {
 	pool := newGCTestPool(t)
-	defer pool.Close()
 
 	revived := gcKey("gcuser4", gcHexA)
 	// 文档正文里有这张图 —— 模拟"删了又撤销回来"的最终状态
 	content := "![](https://img.koinote.app/" + revived + ")"
 	user, _ := seedGCUser(t, pool, "gcuser4", content)
 
+	worker, calls := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: keys}
+	})
 	ctx := context.Background()
 	// 直接入队，模拟先前那次"图被删掉"的编辑已经把它排进了回收队列
-	if err := (&App{db: pool}).enqueueImageDeletions(ctx, user.ID, []string{revived}); err != nil {
+	app := gcTestApp(pool, worker.URL)
+	if err := app.enqueueImageDeletions(ctx, user.ID, []string{revived}); err != nil {
 		t.Fatalf("入队失败: %v", err)
 	}
+	defer isolateGCQueue(t, pool, []string{revived})()
 	if got := pendingKeys(t, pool, user.AuthUserID); len(got) != 1 {
 		t.Fatalf("前置条件不成立，队列里应该有 1 条，实际 %v", got)
 	}
 
-	// 复查逻辑：runImageGCOnce 在删之前跑的就是这条查询。
-	// 断言它能看出这张图仍被引用 —— 看不出就会删掉一张正在显示的图。
-	var referenced bool
-	if err := pool.QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM documents WHERE position($1 in content) > 0)
-	`, revived).Scan(&referenced); err != nil {
-		t.Fatalf("复查引用失败: %v", err)
+	if err := app.runImageGCOnce(ctx); err != nil {
+		t.Fatalf("执行 GC 失败: %v", err)
 	}
-	if !referenced {
-		t.Fatal("这张图仍在正文里，复查却认为没有引用 —— GC 会删掉一张正在显示的图")
+	if calls.Load() != 0 {
+		t.Fatal("同一用户仍在引用图片，GC 却调用了 Worker 删除")
+	}
+	if got := pendingKeys(t, pool, user.AuthUserID); len(got) != 0 {
+		t.Fatalf("复活图片的删除令没有撤销: %v", got)
+	}
+}
+
+func TestGCIgnoresOtherUsersReference(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	key := gcKey("gc-owner", gcHexA)
+	owner, _ := seedGCUser(t, pool, "gc-owner", "正文无图")
+	_, _ = seedGCUser(t, pool, "gc-viewer", "![](https://img.koinote.app/"+key+")")
+
+	worker, calls := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: keys}
+	})
+	app := gcTestApp(pool, worker.URL)
+	if err := app.enqueueImageDeletions(context.Background(), owner.ID, []string{key}); err != nil {
+		t.Fatalf("入队失败: %v", err)
+	}
+	defer isolateGCQueue(t, pool, []string{key})()
+	if err := app.runImageGCOnce(context.Background()); err != nil {
+		t.Fatalf("执行 GC 失败: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("别人的外链引用不该阻止所有者回收，Worker 调用次数 = %d", calls.Load())
+	}
+	if got := pendingKeys(t, pool, owner.AuthUserID); len(got) != 0 {
+		t.Fatalf("已删除对象仍留在队列: %v", got)
+	}
+}
+
+func TestGCDeletesOrphanAfterOwnerAccountIsGone(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	key := gcKey("gc-deleted-owner", gcHexA)
+	owner, _ := seedGCUser(t, pool, "gc-deleted-owner", "正文无图")
+	appWorker, calls := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: keys}
+	})
+	app := gcTestApp(pool, appWorker.URL)
+	ctx := context.Background()
+	if err := app.enqueueImageDeletions(ctx, owner.ID, []string{key}); err != nil {
+		t.Fatalf("入队失败: %v", err)
+	}
+	defer isolateGCQueue(t, pool, []string{key})()
+	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, owner.ID); err != nil {
+		t.Fatalf("删除所有者失败: %v", err)
+	}
+	if err := app.runImageGCOnce(ctx); err != nil {
+		t.Fatalf("执行 GC 失败: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("user_id 已置 NULL 的孤儿对象仍应回收，Worker 调用次数 = %d", calls.Load())
+	}
+	if got := pendingKeys(t, pool, owner.AuthUserID); len(got) != 0 {
+		t.Fatalf("账号删除后的对象仍留在队列: %v", got)
+	}
+}
+
+func TestGCSettlesDeletedKeysWhenWorkerRejectsAnother(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	first := gcKey("gc-partial", gcHexA)
+	second := gcKey("gc-partial", gcHexB)
+	user, _ := seedGCUser(t, pool, "gc-partial", "正文无图")
+	worker, _ := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: []string{keys[0]}, Rejected: []string{keys[1]}}
+	})
+	app := gcTestApp(pool, worker.URL)
+	if err := app.enqueueImageDeletions(context.Background(), user.ID, []string{first, second}); err != nil {
+		t.Fatalf("入队失败: %v", err)
+	}
+	defer isolateGCQueue(t, pool, []string{first, second})()
+	if err := app.runImageGCOnce(context.Background()); err != nil {
+		t.Fatalf("部分拒绝不该让成功项回滚: %v", err)
+	}
+
+	got := pendingKeys(t, pool, user.AuthUserID)
+	if len(got) != 1 || got[0] != second {
+		t.Fatalf("只该留下 Worker 拒绝的 key，实际 %v", got)
+	}
+	var attempts int
+	var lastError string
+	if err := pool.QueryRow(context.Background(), `
+		SELECT attempts, last_error FROM pending_image_deletions WHERE object_key = $1
+	`, second).Scan(&attempts, &lastError); err != nil {
+		t.Fatalf("读取拒绝状态失败: %v", err)
+	}
+	if attempts != 1 || !strings.Contains(lastError, "Worker") && !strings.Contains(lastError, "worker") {
+		t.Fatalf("拒绝项没有正确退避: attempts=%d last_error=%q", attempts, lastError)
 	}
 }

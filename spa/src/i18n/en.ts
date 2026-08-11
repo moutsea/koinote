@@ -127,6 +127,8 @@ export const en: Messages = {
     newDocument: "New document",
     deleteDocument: "Delete document",
     deleteConfirm: "Delete “{title}”? This cannot be undone.",
+    deleteSaveFailed:
+      "The latest changes could not be saved, so the document was not deleted. Check your connection and try again.",
     emptyDocuments: "No documents yet — create one above",
     emptyOutline: "Type “# ” to add a heading; the outline appears here",
     collapsePanel: "Collapse panel",

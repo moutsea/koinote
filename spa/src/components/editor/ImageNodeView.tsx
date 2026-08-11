@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { useI18n } from "../../i18n";
+import { imageURLForAttempt } from "./imageLoading";
 
 /**
  * Typora 式图片节点：平时渲染图片，点击后浮出 Markdown 源码可编辑。
@@ -40,8 +41,7 @@ export function ImageNodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
-  // 重试轮次。既驱动退避定时器，也拼进 <img> 的 key 强制重新发请求 ——
-  // 光改 state 不会让浏览器重发一个 src 没变的请求
+  // 重试轮次。既驱动退避定时器，也改变实际请求 URL 与 <img> 的 key。
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   // 删除进行中的标记：deleteNode() 会卸载 input 触发 blur → commit，
@@ -66,9 +66,9 @@ export function ImageNodeView({
   // broken」那条救不了它 —— onError 一触发就永久显示"加载失败"，而图在服务端
   // 是好的（实测：R2 里有对象、账本有记录、CDN 与 Worker 代理都返回 200）。
   //
-  // 失败的原因是时序：上传响应一回来就把 <img> 插进文档，而 Cloudflare 边缘
-  // 此刻可能还没有这个对象（实测过 cf-cache-status: MISS）。这种失败会自愈，
-  // 只要再问一次。
+  // 失败可能来自两类瞬时问题：Cloudflare 边缘尚未回源，或本地代理把图床域名
+  // 解析到了 fake-IP，触发 Chrome 的 local address space 拦截。后者会在重试时
+  // 改走同源 /images/...，前者则由同源 R2 读取一并绕过。
   //
   // 退避而不是立刻重试：立刻重试大概率撞上同一个还没就绪的边缘节点，
   // 白费一次请求还是失败。600ms / 1.2s / 2.4s 三次，累计约 4 秒 —— 覆盖边缘
@@ -245,15 +245,10 @@ export function ImageNodeView({
             </span>
           ) : (
             <img
-              // key 里带 attempt：不换 key 的话 React 会复用同一个 <img> DOM
-              // 节点，而 src 没变的节点浏览器不会重新发请求 —— 重试就成了空转。
-              // 换 key 让它重新挂载，才会真的再问一次。
-              //
-              // 用 key 而不是给 src 拼 ?retry=n：那样会绕开 CDN 缓存、也让
-              // 已缓存的正常图片白下载一遍，而且真正需要重试的恰好是还没进
-              // 缓存的那些 —— 拼参数解决不了它们的问题。
+              // key 强制重挂 DOM；自有 CDN 失败后改走同源 /images/...，其他图片
+              // 则用轮次查询串绕过失败缓存。正文里的原始 src 始终不变。
               key={attempt}
-              src={src}
+              src={imageURLForAttempt(src, attempt)}
               alt={alt}
               title={title || undefined}
               onError={() => setBroken(true)}

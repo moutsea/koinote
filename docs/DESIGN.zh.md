@@ -525,6 +525,9 @@ npx wrangler dev --port 8788 --var BACKEND_URL:http://localhost:8090
 
 ```bash
 wrangler secret put BACKEND_URL          # 指向 Go 后端公网地址
+wrangler secret put BACKEND_INTERNAL_TOKEN   # 与后端使用同一个值
+wrangler secret put CLOUDFLARE_ZONE_ID --env production
+wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
 # R2 绑定已写在 wrangler.jsonc，无需 secret
 ```
 
@@ -550,17 +553,30 @@ Worker 请求。
 2. 填一个已托管在 Cloudflare 的子域名，如 `img.你的域名`
 3. 等 DNS 与证书就绪
 4. 把它写进 `wrangler.jsonc` 的 `IMAGE_PUBLIC_BASE`，形如 `https://img.你的域名`
+5. 创建一个只带 `Zone / Cache Purge` 权限的 API token，再把
+   `CLOUDFLARE_ZONE_ID` 与 `CLOUDFLARE_CACHE_PURGE_TOKEN` 设成 Worker secret
+6. 给图片域名加 Cache Rule，把 404 的 Edge TTL 设为 0。Cloudflare 默认会缓存
+   R2 自定义域名的 404；编辑器重试时也会加只用于显示的查询参数绕开负缓存
 
 **配完必须用自查端点确认，不要只看图片能不能显示：**
 
 ```bash
 curl https://你的域名/api/images/config
-# {"mode":"cdn","base":"https://img.你的域名","valid":true,"warning":null}
+# {"mode":"cdn","base":"https://img.你的域名","valid":true,
+#  "purgeRequired":true,"purgeConfigured":true,"warning":null}
 ```
 
 自查端点存在的理由：配错时系统**回落到 Worker 代理，图片照样显示**，所以
 「图片能看」证明不了 CDN 生效了。没有这个端点，只能等月底看账单上多出的请求数。
-`mode` 不是 `cdn` 就说明没生效，`warning` 会说明原因。
+健康配置会返回 HTTP 200、`mode: "cdn"` 和 `purgeConfigured: true`；
+`warning` 会说明失败原因。
+
+删除 R2 对象不会自动清掉 Cloudflare CDN 已缓存的内容。图片删除端点因此先删 R2，
+再按完整公开 URL 调 single-file purge API。缺 purge 配置时会在碰 R2 前拒绝；R2 已删
+但 purge 失败时会返回错误，让后端保留 GC 队列与配额账本，下一轮幂等重试。3 个固定
+重试查询参数的变体也会与原 URL 一起清理，并按 Cloudflare 单次最多 100 个 URL 分批。
+这里必须调用 REST API，因为 R2 binding 没有全局 CDN purge；
+`caches.default.delete()` 也只清当前数据中心。
 
 `normalizeImageBase`（`worker/images.ts`）的校验：必须带 scheme、只收 http(s)、
 拒绝带查询串或 fragment、去掉末尾斜杠、保留子路径（R2 自定义域名允许挂子路径）。

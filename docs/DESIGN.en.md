@@ -601,6 +601,8 @@ Local objects live in `.wrangler/state/v3/r2` (gitignored).
 ```bash
 wrangler secret put BACKEND_URL          # public address of the Go backend
 wrangler secret put BACKEND_INTERNAL_TOKEN   # same value as the backend
+wrangler secret put CLOUDFLARE_ZONE_ID --env production
+wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
 # the R2 binding is in wrangler.jsonc; no secret needed
 ```
 
@@ -629,18 +631,35 @@ Setup (manual, in the Cloudflare dashboard):
 2. Enter a subdomain already hosted on Cloudflare, e.g. `img.yourdomain`
 3. Wait for DNS and the certificate
 4. Put it in `IMAGE_PUBLIC_BASE` in `wrangler.jsonc`, as `https://img.yourdomain`
+5. Create an API token with only `Zone / Cache Purge` permission, then set
+   `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_CACHE_PURGE_TOKEN` as Worker secrets.
+6. Add a Cache Rule for the image hostname with Edge TTL `0` for `404` responses.
+   Cloudflare otherwise negative-caches missing R2 keys; the editor also adds a
+   display-only query parameter on retries so a cached 404 cannot make a successful
+   upload look permanently broken.
 
 **Confirm with the self-check endpoint afterwards — don't just check that images load:**
 
 ```bash
 curl https://yourdomain/api/images/config
-# {"mode":"cdn","base":"https://img.yourdomain","valid":true,"warning":null}
+# {"mode":"cdn","base":"https://img.yourdomain","valid":true,
+#  "purgeRequired":true,"purgeConfigured":true,"warning":null}
 ```
 
 That endpoint exists because a misconfiguration **falls back to the Worker proxy and
 images still display** — so "images work" proves nothing about the CDN. Without it
-you'd find out from next month's request count. Anything other than `mode: "cdn"`
-means it isn't active, and `warning` explains why.
+you'd find out from next month's request count. A healthy CDN setup returns HTTP 200
+with `mode: "cdn"` and `purgeConfigured: true`; `warning` explains any failure.
+
+Deleting an R2 object does not invalidate an object already stored in Cloudflare's
+CDN. The image deletion endpoint therefore deletes R2 first and then calls the
+single-file purge API for the exact public URLs. If purge credentials are missing,
+it refuses before touching R2; if the purge request fails after deletion, it returns
+an error so the backend keeps the GC queue row and quota ledger for an idempotent
+retry. The three deterministic retry-query variants are purged alongside the
+canonical URL, in chunks of at most 100 URLs (Cloudflare's per-request limit). This
+intentionally uses the REST API because R2 bindings have no global CDN
+purge operation (`caches.default.delete()` only affects the current data center).
 
 `normalizeImageBase` (`worker/images.ts`) validates: scheme required, http(s) only,
 query strings and fragments rejected, trailing slash removed, sub-paths preserved

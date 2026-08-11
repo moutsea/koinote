@@ -123,6 +123,7 @@ export const zh: Messages = {
     newDocument: "新建文档",
     deleteDocument: "删除文档",
     deleteConfirm: "确定删除《{title}》？此操作无法撤销。",
+    deleteSaveFailed: "最新内容保存失败，文档尚未删除。请检查网络后重试。",
     emptyDocuments: "还没有文档，点上方新建一篇",
     emptyOutline: "输入 “# ” 添加标题，大纲会自动出现",
     collapsePanel: "收起面板",

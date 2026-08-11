@@ -158,6 +158,11 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	a.cancelPendingImageDeletions(
+		r.Context(),
+		userRef{ID: user.ID, AuthUserID: user.AuthUserID},
+		content,
+	)
 
 	httpx.JSON(w, http.StatusOK, map[string]any{"document": doc})
 }
@@ -333,6 +338,11 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	if prev != content {
 		gcCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
 		defer cancel()
+		a.cancelPendingImageDeletions(
+			gcCtx,
+			userRef{ID: user.ID, AuthUserID: user.AuthUserID},
+			content,
+		)
 		a.enqueueOrphanedImages(gcCtx, userRef{ID: user.ID, AuthUserID: user.AuthUserID}, prev)
 	}
 

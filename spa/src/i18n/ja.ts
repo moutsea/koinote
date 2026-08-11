@@ -128,6 +128,8 @@ export const ja: Messages = {
     newDocument: "新規ドキュメント",
     deleteDocument: "ドキュメントを削除",
     deleteConfirm: "「{title}」を削除しますか？この操作は取り消せません。",
+    deleteSaveFailed:
+      "最新の変更を保存できなかったため、ドキュメントは削除されませんでした。接続を確認して再試行してください。",
     emptyDocuments: "ドキュメントがありません。上から作成してください",
     emptyOutline: "「# 」と入力して見出しを追加すると、ここに表示されます",
     collapsePanel: "パネルを折りたたむ",
