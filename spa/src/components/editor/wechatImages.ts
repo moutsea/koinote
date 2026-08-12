@@ -86,6 +86,47 @@ export type ImageAudit = {
   unreachableHosts: string[];
 };
 
+/** 公式图片只用 alt 保存 LaTeX，不应把它显示成正文图注。 */
+export const WECHAT_SKIP_CAPTION_ATTR = "data-wechat-skip-caption";
+
+const WECHAT_CAPTION_ATTR = "data-wechat-image-caption";
+const WECHAT_KEEP_STYLE_ATTR = "data-wechat-keep-style";
+const WECHAT_CAPTION_STYLE =
+  "margin:-8px 0 20px;text-align:center;font-size:13px;line-height:1.6;color:#888;";
+
+/**
+ * 把 Markdown 图片的 alt 文本转换成公众号可见的图片说明。
+ *
+ * 浏览器会把 `![说明](url)` 渲染成 `<img alt="说明">`，但公众号不会显示 alt，
+ * 所以导出时补一段真实文字。只处理独占段落的图片（包括 p > a > img）：行内图片
+ * 自带上下文，不需要额外图注；更重要的是，不能把 p 插进现有 p 或 li 里制造非法结构。
+ */
+export function addWechatImageCaptions(root: HTMLElement): number {
+  let added = 0;
+
+  for (const img of Array.from(root.querySelectorAll<HTMLElement>("img"))) {
+    const captionText = (img.getAttribute("alt") ?? "").trim();
+    if (!captionText || img.hasAttribute(WECHAT_SKIP_CAPTION_ATTR)) continue;
+
+    const paragraph = img.closest("p");
+    const imageOnlyParagraph =
+      paragraph &&
+      paragraph.textContent?.trim() === "" &&
+      paragraph.querySelectorAll("img").length === 1;
+    if (!imageOnlyParagraph) continue;
+    if (paragraph.nextElementSibling?.hasAttribute(WECHAT_CAPTION_ATTR)) continue;
+
+    const caption = root.ownerDocument.createElement("p");
+    caption.textContent = captionText;
+    caption.setAttribute(WECHAT_CAPTION_ATTR, "true");
+    caption.setAttribute(WECHAT_KEEP_STYLE_ATTR, WECHAT_CAPTION_STYLE);
+    paragraph.insertAdjacentElement("afterend", caption);
+    added++;
+  }
+
+  return added;
+}
+
 /**
  * 就地改写 root 里所有 img 的 src，并统计可达性。
  *

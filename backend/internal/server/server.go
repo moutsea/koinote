@@ -17,23 +17,25 @@ import (
 )
 
 type App struct {
-	cfg            config.Config
-	db             *pgxpool.Pool
-	emailSender    verificationEmailSender
-	limiter        *rateLimiter
-	limiterOnce    sync.Once
-	stripeCheckout stripeCheckoutSessionClient
-	siteAnalytics  siteAnalyticsClient
-	adminOverview  adminOverviewCache
+	cfg             config.Config
+	db              *pgxpool.Pool
+	emailSender     verificationEmailSender
+	limiter         *rateLimiter
+	limiterOnce     sync.Once
+	stripeCheckout  stripeCheckoutSessionClient
+	paymentNotifier paymentNotifier
+	siteAnalytics   siteAnalyticsClient
+	adminOverview   adminOverviewCache
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
 	app := &App{
-		cfg:           cfg,
-		db:            db,
-		emailSender:   newWorkerVerificationEmailSender(cfg),
-		limiter:       newRateLimiter(),
-		siteAnalytics: newCloudflareAnalyticsClient(cfg),
+		cfg:             cfg,
+		db:              db,
+		emailSender:     newWorkerVerificationEmailSender(cfg),
+		limiter:         newRateLimiter(),
+		paymentNotifier: newPaymentNotifier(cfg),
+		siteAnalytics:   newCloudflareAnalyticsClient(cfg),
 	}
 	if cfg.StripeEnabled() {
 		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions

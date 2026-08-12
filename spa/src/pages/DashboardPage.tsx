@@ -1,13 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { FileText, Plus, Clock, User as UserIcon } from "lucide-react";
 import { useSession } from "../auth";
-import { useDocumentList } from "../documents";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { PaperCard } from "../components/Ink";
 import { StorageCard } from "../components/StorageCard";
 import { MembershipCard } from "../components/MembershipCard";
-import { InvitationCard } from "../components/InvitationCard";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -19,9 +17,6 @@ const DATE_LOCALE: Record<Locale, string> = {
 export function DashboardPage() {
   const session = useSession();
   const { t, locale } = useI18n();
-  // 必须在下面的提前 return 之前调用，否则违反 hooks 规则；
-  // enabled 兜住未登录时不发请求。
-  const docs = useDocumentList(Boolean(session.data?.user));
 
   if (session.isLoading) {
     return (
@@ -117,97 +112,8 @@ export function DashboardPage() {
         <StorageCard />
       </div>
 
-      <div id="invitations" className="mt-4 scroll-mt-20">
-        <InvitationCard />
-      </div>
-
       <div id="membership" className="mt-4 scroll-mt-20">
         <MembershipCard user={user} />
-      </div>
-
-      {/* 文档列表 */}
-      <div className="mt-10">
-        <h2
-          className="kn-heading-cn text-sm font-semibold"
-          style={{ color: "var(--ink-strong)" }}
-        >
-          {t.dashboard.myDocs}
-        </h2>
-
-        {docs.isLoading ? (
-          <p className="mt-4 text-sm" style={{ color: "var(--ink-faint)" }}>
-            {t.editor.loading}
-          </p>
-        ) : docs.data && docs.data.length > 0 ? (
-          <ul
-            className="mt-4 overflow-hidden rounded-xl border"
-            style={{
-              borderColor: "var(--ink-line)",
-              background: "var(--ink-paper-soft)",
-            }}
-          >
-            {docs.data.map((d, i) => (
-              <li
-                key={d.docId}
-                // 分隔线画在 li 上而不是用 divide-y：divide 的颜色只吃 Tailwind 的
-                // 调色板，写不进 var(--ink-line)
-                style={
-                  i > 0
-                    ? { borderTop: "1px solid var(--ink-line)" }
-                    : undefined
-                }
-              >
-                <Link
-                  to="/editor/$docId"
-                  params={{ docId: d.docId }}
-                  className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-[var(--ink-wash-strong)]"
-                >
-                  <FileText
-                    className="h-4 w-4 shrink-0"
-                    style={{ color: "var(--ink-faint)" }}
-                  />
-                  <span
-                    className="min-w-0 flex-1 truncate text-sm font-medium"
-                    style={{ color: "var(--ink-black)" }}
-                  >
-                    {d.title.trim() || t.editor.untitled}
-                  </span>
-                  {d.updatedAt && (
-                    <span
-                      className="shrink-0 text-xs"
-                      style={{ color: "var(--ink-faint)" }}
-                    >
-                      {new Date(d.updatedAt).toLocaleDateString(DATE_LOCALE[locale])}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div
-            className="mt-4 rounded-xl border border-dashed px-6 py-16 text-center"
-            style={{
-              borderColor: "var(--ink-line)",
-              background: "var(--ink-wash)",
-            }}
-          >
-            <FileText
-              className="mx-auto h-10 w-10"
-              style={{ color: "var(--ink-faint)" }}
-            />
-            <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
-              {t.dashboard.emptyHint}
-              <Link
-                to="/editor"
-                className="font-medium hover:underline"
-                style={{ color: "var(--cinnabar)" }}
-              >
-                {t.dashboard.emptyLinkText}
-              </Link>
-            </p>
-          </div>
-        )}
       </div>
     </PageContainer>
   );

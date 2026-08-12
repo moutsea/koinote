@@ -31,8 +31,10 @@ export const EDGE_PADDING = "px-3";
 export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   // 编辑器：两列版面，铺满才好用
   { prefix: "/editor", width: "full" },
-  // 控制台：信息卡 + 文档列表，需要收窄兜住行内的左右间距
+  // 账户页：信息卡与列表都需要收窄，避免超宽屏上的行内元素离得太远
   { prefix: "/dashboard", width: "5xl" },
+  { prefix: "/documents", width: "5xl" },
+  { prefix: "/invitations", width: "5xl" },
   // 管理后台包含宽表格和 30 天趋势，比个人控制台多留一档宽度
   { prefix: "/admin", width: "6xl" },
   // 分享页给外人读长文，3xl 是为了行长

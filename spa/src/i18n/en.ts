@@ -4,6 +4,8 @@ export const en: Messages = {
   nav: {
     editor: "Editor",
     dashboard: "Dashboard",
+    documents: "My documents",
+    invitations: "Invite friends",
     admin: "Admin",
     login: "Log in",
     logout: "Log out",
@@ -154,13 +156,20 @@ export const en: Messages = {
     username: "Username",
     notSet: "Not set",
     joinedAt: "Joined",
-    myDocs: "My documents",
-    emptyHint: "No cloud documents yet. Document management is coming soon — ",
-    emptyLinkText: "head to the editor",
     loading: "Loading…",
     loginRequired: "Please log in",
-    loginRequiredHint: "You need to log in to access the dashboard.",
+    loginRequiredHint: "You need to log in to access your account pages.",
     goLogin: "Go to login",
+  },
+  documentsPage: {
+    title: "My documents",
+    subtitle: "View and continue editing documents saved in the cloud.",
+    emptyHint: "No cloud documents yet. ",
+    emptyLinkText: "Create your first document",
+  },
+  invitationsPage: {
+    title: "Invite friends",
+    subtitle: "Share your personal invitation link and track rewards.",
   },
   admin: {
     title: "Admin",
@@ -531,6 +540,8 @@ function hello(name) {
           items: [
             "Cloudflare: CDN, Workers, and R2 object storage",
             "Google and GitHub: identity verification, only if you choose to sign in with them",
+            "Stripe: membership payment processing, receiving the email, amount, currency, and payment identifiers needed for checkout",
+            "Feishu: optional internal payment notifications containing only the Koinote user ID, amount, currency, and order identifiers — never email addresses or document content",
           ],
         },
         {

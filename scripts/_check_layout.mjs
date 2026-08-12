@@ -42,6 +42,8 @@ eq("空路径按首页算", contentWidthFor(""), "6xl");
 ok("首页不通栏", contentWidthFor("/") !== "full", contentWidthFor("/"));
 // 控制台不通栏：信息卡和文档列表拉到 2560px 会变成两头各一个字、中间一片空白
 eq("控制台收到 5xl", contentWidthFor("/dashboard"), "5xl");
+eq("文档页收到 5xl", contentWidthFor("/documents"), "5xl");
+eq("邀请页收到 5xl", contentWidthFor("/invitations"), "5xl");
 eq("分享页收到 3xl", contentWidthFor("/share/tok3n"), "3xl");
 // 表里没列的路由走兜底
 eq("登录页走兜底", contentWidthFor("/login"), "6xl");
@@ -79,10 +81,16 @@ eq("注册页走兜底", contentWidthFor("/register"), "6xl");
 
   // 完全反转表序，再全量比一遍
   const before = new Map(
-    ["/", "/editor", "/editor/x", "/dashboard", "/share/x", "/login"].map((p) => [
-      p,
-      contentWidthFor(p),
-    ]),
+    [
+      "/",
+      "/editor",
+      "/editor/x",
+      "/dashboard",
+      "/documents",
+      "/invitations",
+      "/share/x",
+      "/login",
+    ].map((p) => [p, contentWidthFor(p)]),
   );
   ROUTE_WIDTHS.reverse();
   try {
@@ -130,6 +138,8 @@ eq("/editors 不算编辑器", contentWidthFor("/editors"), "6xl");
 eq("/editorial 不算编辑器", contentWidthFor("/editorial"), "6xl");
 eq("/dashboards 不算控制台", contentWidthFor("/dashboards"), "6xl");
 eq("/dashboard-old 不算控制台", contentWidthFor("/dashboard-old"), "6xl");
+eq("/documents-old 不算文档页", contentWidthFor("/documents-old"), "6xl");
+eq("/invitations-old 不算邀请页", contentWidthFor("/invitations-old"), "6xl");
 eq("/shared 不算分享页", contentWidthFor("/shared"), "6xl");
 eq("/docs/editor 不算编辑器", contentWidthFor("/docs/editor"), "6xl");
 
@@ -139,6 +149,8 @@ for (const path of [
   "/editor",
   "/editor/abc",
   "/dashboard",
+  "/documents",
+  "/invitations",
   "/share/tok3n",
   "/login",
   "/editor-guide",
@@ -167,6 +179,8 @@ for (const path of [
   "/editor",
   "/editor/abc-123",
   "/dashboard",
+  "/documents",
+  "/invitations",
   "/share/tok3n",
   "/login",
   "/editor-guide",
@@ -225,6 +239,8 @@ for (const path of [
 for (const path of [
   "/",
   "/dashboard",
+  "/documents",
+  "/invitations",
   "/login",
   "/register",
   "/privacy",

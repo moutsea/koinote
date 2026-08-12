@@ -7,6 +7,8 @@ import {
   Check,
   ChevronDown,
   Crown,
+  FileText,
+  Gift,
   HardDrive,
   LayoutDashboard,
   LogOut,
@@ -110,6 +112,8 @@ export function AppShell() {
                 membershipTier={user.membershipTier}
                 isAdmin={user.isAdmin}
                 dashboardActive={isUnder(pathname, "/dashboard")}
+                documentsActive={isUnder(pathname, "/documents")}
+                invitationsActive={isUnder(pathname, "/invitations")}
                 adminActive={isUnder(pathname, "/admin")}
                 onLogout={handleLogout}
               />
@@ -153,6 +157,8 @@ function UserMenu({
   membershipTier,
   isAdmin,
   dashboardActive,
+  documentsActive,
+  invitationsActive,
   adminActive,
   onLogout,
 }: {
@@ -163,6 +169,8 @@ function UserMenu({
   membershipTier: "free" | "lifetime";
   isAdmin: boolean;
   dashboardActive: boolean;
+  documentsActive: boolean;
+  invitationsActive: boolean;
   adminActive: boolean;
   onLogout: () => void | Promise<void>;
 }) {
@@ -312,6 +320,34 @@ function UserMenu({
           >
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             {t.nav.dashboard}
+          </Link>
+
+          <Link
+            to="/documents"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: documentsActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: documentsActive ? 500 : undefined,
+            }}
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            {t.nav.documents}
+          </Link>
+
+          <Link
+            to="/invitations"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: invitationsActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: invitationsActive ? 500 : undefined,
+            }}
+          >
+            <Gift className="h-4 w-4 shrink-0" />
+            {t.nav.invitations}
           </Link>
 
           {isAdmin && (

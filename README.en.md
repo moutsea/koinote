@@ -94,6 +94,8 @@ rasterized and uploaded as images.
   when a new account is created, capped at 5 GB of invitation bonuses per account
 - Multi-currency lifetime membership via one-time Stripe payment in USD / CNY / EUR / JPY,
   with card, Alipay, and WeChat Pay support
+- Optional Feishu bot notifications after the first successful payment record, deduplicated
+  across success-page confirmation and Stripe webhook delivery
 - Administrator dashboard for user/member totals, per-currency revenue, orders,
   site storage, 30-day growth, and recent accounts and payments
 - Optional Cloudflare Analytics metrics for today's edge UV, PV, requests, and bandwidth
@@ -106,7 +108,7 @@ Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
                                 ├─ /api/internal/email/* ──▶ Email Sending
                                 └─ other /api/* ──▶ Go backend ──▶ PostgreSQL
 Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
-Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend
+Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend ──▶ Feishu bot
 ```
 
 - **Frontend** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
@@ -296,6 +298,13 @@ the Checkout Session again and validates paid status, the selected currency's ex
 amount, the configured Product ID, and Koinote user ownership. Success-page confirmation
 and the webhook share one idempotent database transaction.
 
+Payment notifications can reuse Kimiseek's Feishu bot settings: configure the same
+`BOT_WEBHOOK` and `BOT_WEBHOOK_SECRET` values in production. Messages contain only the
+internal user ID, amount, currency, and order identifiers — never the email address or
+document content. The payment row persists notification state across success-page,
+webhook, and Stripe retries; temporary Feishu failures are retried with backoff without
+rolling back an already committed membership entitlement.
+
 Checkout does not hardcode payment methods. Stripe dynamically selects from the methods
 enabled in Dashboard according to account country, customer location, and currency. Enable
 Alipay and WeChat Pay in Stripe Dashboard to offer them; Stripe can still show card only
@@ -334,6 +343,8 @@ Required repository secrets:
 | `STRIPE_SECRET_KEY` | Stripe server key; start with `sk_test_...`, switch to live mode before real charges |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `/api/billing/webhook` (`whsec_...`) |
 | `STRIPE_LIFETIME_PRODUCT_ID` | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist |
+| `BOT_WEBHOOK` | Optional Feishu group-bot webhook; uses the same variable name as Kimiseek |
+| `BOT_WEBHOOK_SECRET` | Optional Feishu bot signing secret; must be configured together with `BOT_WEBHOOK` |
 | `VPS_HOST` | Backend server address |
 | `VPS_SSH_KEY` | Deploy-only private key (generate a dedicated one, don't reuse your personal key) |
 | `VPS_HOST_KEY` | The server's known_hosts entry, used to pin the host key |
@@ -348,6 +359,9 @@ gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 Set the Stripe values interactively with `gh secret set STRIPE_SECRET_KEY`,
 `gh secret set STRIPE_WEBHOOK_SECRET`, and `gh secret set STRIPE_LIFETIME_PRODUCT_ID`
 so credentials do not enter shell history.
+Set Feishu notifications with `gh secret set BOT_WEBHOOK` and
+`gh secret set BOT_WEBHOOK_SECRET`. If both are absent, deployment preserves any existing
+Feishu settings in the VPS `.env`.
 
 The second command shows only the secret name and update time; it cannot read the
 secret value. Before deploying, the workflow checks that every required secret exists.

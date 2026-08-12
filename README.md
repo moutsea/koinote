@@ -82,6 +82,7 @@
 - 邮箱验证码注册与密码登录 + Google / GitHub OAuth
 - 邀请奖励：专属链接自动带入邀请码，新用户注册成功后双方各得 500 MB，每个账号累计最多 5 GB
 - Stripe 多币种一次性付款终生会员：支持 USD / CNY / EUR / JPY，以及银行卡、支付宝和微信支付
+- 支付首次落账后可向飞书群机器人发送收款通知，成功页与 webhook 不会重复通知
 - 管理员后台：用户与会员规模、按币种收入、订单、全站存储、30 天趋势、最近用户与付款
 - 可选接入 Cloudflare Analytics，在管理后台查看当天边缘 UV / PV、请求数和流量
 
@@ -93,7 +94,7 @@
                                ├─ /api/internal/email/* ──▶ Email Sending
                                └─ 其余 /api/* ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
-浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端
+浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端 ──▶ 飞书机器人
 ```
 
 - **前端** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
@@ -269,6 +270,11 @@ event: checkout.session.async_payment_succeeded
 发放权益前会重新校验付款状态、所选币种对应金额、Product ID 和用户归属。成功页确认与 webhook
 共用同一个数据库幂等事务。
 
+支付通知可复用 Kimiseek 的飞书群机器人配置：将同一组 `BOT_WEBHOOK` 和
+`BOT_WEBHOOK_SECRET` 配到生产环境。通知正文只含站内用户 ID、金额、币种和订单标识，不发送
+邮箱或文档内容。支付记录会持久化通知状态，成功页、webhook 与 Stripe 重试共享同一条记录；
+飞书暂时失败会按退避计划重试，不影响已经提交的会员权益。
+
 Checkout 不在代码里固定支付方式，而是读取 Stripe Dashboard 的 Payment methods 配置，
 再按账号地区、用户位置和所选币种展示可用选项。要显示支付宝和微信支付，需在 Stripe
 Dashboard 中启用 Alipay 与 WeChat Pay；不满足 Stripe 资格或币种规则时仍可能只显示银行卡。
@@ -302,6 +308,8 @@ Worker 与 SPA，最后验活站点 `/api/images/config`。
 | `STRIPE_SECRET_KEY` | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode |
 | `STRIPE_WEBHOOK_SECRET` | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`） |
 | `STRIPE_LIFETIME_PRODUCT_ID` | 终生会员 Product ID（`prod_...`），价格由后端白名单生成 |
+| `BOT_WEBHOOK` | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置 |
+| `BOT_WEBHOOK_SECRET` | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置 |
 | `VPS_HOST` | 后端服务器地址 |
 | `VPS_SSH_KEY` | 部署专用私钥（建议单独生成一把，不要复用个人密钥） |
 | `VPS_HOST_KEY` | 服务器的 known_hosts 条目，用于固定 host key |
@@ -315,6 +323,8 @@ gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 
 Stripe 三项可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
 和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史。
+飞书通知同理使用 `gh secret set BOT_WEBHOOK` 和 `gh secret set BOT_WEBHOOK_SECRET`；两项
+都未设置时，部署会保留 VPS `.env` 里已有的飞书配置。
 
 第二条命令只显示 secret 名称和更新时间，不会读取密钥值。部署 workflow 会在开始部署前
 检查所有必填 secrets；检查通过后，它会在重启后端之前通过 stdin 和临时文件原子更新

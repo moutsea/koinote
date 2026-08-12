@@ -41,6 +41,9 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_LIFETIME_PRODUCT_ID: ${STRIPE_LIFETIME_PRODUCT_ID:-}
+      # 飞书付款通知与 Kimiseek 复用同名配置；两项齐全且为 production 时启用。
+      BOT_WEBHOOK: ${BOT_WEBHOOK:-}
+      BOT_WEBHOOK_SECRET: ${BOT_WEBHOOK_SECRET:-}
       # Admin 的 Cloudflare UV/PV。Token 缺失时只隐藏流量卡片，不影响业务统计。
       CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
       CLOUDFLARE_ANALYTICS_TOKEN: ${CLOUDFLARE_ANALYTICS_TOKEN:-}

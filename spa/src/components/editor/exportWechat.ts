@@ -1,7 +1,11 @@
 import type { Editor } from "@tiptap/react";
 import { highlightCodeBlocks } from "./highlightCode";
 import { addMacWindows } from "./macWindow";
-import { auditWechatImages, type ImageAudit } from "./wechatImages";
+import {
+  addWechatImageCaptions,
+  auditWechatImages,
+  type ImageAudit,
+} from "./wechatImages";
 import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInline";
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
@@ -57,6 +61,9 @@ export async function buildWechatHTML(
     // 顺序要紧：先把公式换成 img，再内联样式。
     // 反过来的话新插入的 img 拿不到主题的 img 规则。
     const math = await replaceMathWithImages(stage);
+    // Markdown 图片的 alt 在公众号里不可见，转成紧跟图片的真实文字。
+    // 必须放在公式转换之后，公式图会带跳过标记，避免把 LaTeX 当成图注。
+    addWechatImageCaptions(stage);
     // 高亮必须在内联之前：getHTML() 的产物里没有 hljs span（高亮在编辑器里是
     // ProseMirror 装饰，不进文档），得先补出来，内联器才有 class 可读。
     // 详见 highlightCode.ts 的头注。

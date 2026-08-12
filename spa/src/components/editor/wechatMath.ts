@@ -4,6 +4,7 @@ import {
   TEMPORARY_IMAGE_QUOTA_CODE,
   uploadImage,
 } from "../../api";
+import { WECHAT_SKIP_CAPTION_ATTR } from "./wechatImages";
 
 /**
  * 把公式换成图片。
@@ -148,6 +149,7 @@ function buildMathImg(
   const img = document.createElement("img");
   img.setAttribute("src", url);
   img.setAttribute("alt", latex);
+  img.setAttribute(WECHAT_SKIP_CAPTION_ATTR, "true");
   if (isBlock) {
     img.setAttribute(
       "data-wechat-keep-style",

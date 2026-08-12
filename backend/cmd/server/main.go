@@ -39,6 +39,9 @@ func main() {
 	if err := cfg.ValidateStripeConfig(); err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.ValidateFeishuConfig(); err != nil {
+		log.Fatal(err)
+	}
 
 	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
 	// 启动日志里有这一行，一眼就能对上。
@@ -47,6 +50,11 @@ func main() {
 		log.Printf("Stripe 终生会员购买已启用")
 	} else {
 		log.Printf("Stripe 未配置，会员购买功能关闭")
+	}
+	if cfg.FeishuEnabled() {
+		log.Printf("飞书付款通知已启用")
+	} else {
+		log.Printf("飞书付款通知未配置或当前不是生产环境")
 	}
 	if cfg.CloudflareZoneID != "" && cfg.CloudflareAnalyticsToken != "" && cfg.CloudflareAnalyticsHost != "" {
 		log.Printf("Admin Cloudflare 流量统计已启用（host=%s）", cfg.CloudflareAnalyticsHost)
@@ -69,11 +77,11 @@ func main() {
 
 	app := server.New(cfg, pool)
 
-	// 图片回收：删文档后排队删 R2 对象，由这个循环消费队列。
-	// gcCtx 在收到退出信号时取消，让循环跟着 HTTP 服务一起收摊
-	gcCtx, stopGC := context.WithCancel(ctx)
-	defer stopGC()
-	app.StartImageGC(gcCtx)
+	// 图片回收与付款通知重试都跟随 HTTP 服务的生命周期一起收摊。
+	backgroundCtx, stopBackground := context.WithCancel(ctx)
+	defer stopBackground()
+	app.StartImageGC(backgroundCtx)
+	app.StartPaymentNotificationRetry(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),
@@ -93,7 +101,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("正在关闭服务…")
-	stopGC()
+	stopBackground()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

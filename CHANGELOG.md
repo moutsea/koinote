@@ -7,6 +7,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Optional signed Feishu bot notifications now report successful lifetime-membership
+  payments with internal user ID, amount, currency, Checkout Session, and PaymentIntent
+  details, without sending email addresses or document content. Notification state is
+  persisted and transient failures retry with backoff without making entitlement depend
+  on Feishu.
+- My Documents and Invite Friends now have dedicated account pages instead of sharing the
+  dashboard, with direct entries in the account menu.
+
+### Fixed
+
+- WeChat export now renders the Markdown image alt text beneath standalone images and
+  skips inline, multi-image, list, and formula cases that cannot safely form a caption.
+
 ## [0.3.0] - 2026-08-12
 
 ### Added

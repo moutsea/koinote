@@ -70,6 +70,22 @@ const dashboardRoute = createRoute({
     "DashboardPage",
   ),
 });
+const documentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/documents",
+  component: lazyRouteComponent(
+    () => import("./pages/DocumentsPage"),
+    "DocumentsPage",
+  ),
+});
+const invitationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invitations",
+  component: lazyRouteComponent(
+    () => import("./pages/InvitationsPage"),
+    "InvitationsPage",
+  ),
+});
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin",
@@ -101,6 +117,8 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   dashboardRoute,
+  documentsRoute,
+  invitationsRoute,
   adminRoute,
   shareRoute,
   privacyRoute,

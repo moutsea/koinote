@@ -243,6 +243,46 @@ func TestLoadPopulatesStripeConfiguration(t *testing.T) {
 	}
 }
 
+func TestFeishuConfiguration(t *testing.T) {
+	complete := Config{
+		NodeEnv:          "production",
+		BotWebhook:       "https://open.feishu.cn/open-apis/bot/v2/hook/example",
+		BotWebhookSecret: "secret",
+	}
+	if err := complete.ValidateFeishuConfig(); err != nil || !complete.FeishuEnabled() {
+		t.Fatalf("完整飞书配置未启用: err=%v cfg=%+v", err, complete)
+	}
+	for _, cfg := range []Config{
+		{NodeEnv: "production", BotWebhook: complete.BotWebhook},
+		{NodeEnv: "production", BotWebhookSecret: "secret"},
+		{NodeEnv: "production", BotWebhook: "http://example.com/hook", BotWebhookSecret: "secret"},
+		{NodeEnv: "production", BotWebhook: "not-a-url", BotWebhookSecret: "secret"},
+	} {
+		if err := cfg.ValidateFeishuConfig(); err == nil {
+			t.Fatalf("不安全或不完整的生产飞书配置应报错: %+v", cfg)
+		}
+		if cfg.FeishuEnabled() {
+			t.Fatalf("非法飞书配置不应启用: %+v", cfg)
+		}
+	}
+	local := Config{NodeEnv: "development", BotWebhook: "partial"}
+	if err := local.ValidateFeishuConfig(); err != nil || local.FeishuEnabled() {
+		t.Fatalf("开发环境不发送飞书通知: err=%v cfg=%+v", err, local)
+	}
+}
+
+func TestLoadPopulatesFeishuConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("NODE_ENV", "production")
+	t.Setenv("BOT_WEBHOOK", " https://open.feishu.cn/open-apis/bot/v2/hook/example ")
+	t.Setenv("BOT_WEBHOOK_SECRET", " secret ")
+	cfg := Load()
+	if cfg.BotWebhook != "https://open.feishu.cn/open-apis/bot/v2/hook/example" ||
+		cfg.BotWebhookSecret != "secret" || !cfg.FeishuEnabled() {
+		t.Fatalf("飞书配置未完整加载: %+v", cfg)
+	}
+}
+
 func TestLoadPopulatesCloudflareAnalyticsConfiguration(t *testing.T) {
 	chdir(t, t.TempDir())
 	t.Setenv("APP_URL", "https://notes.example.com:8443/app")

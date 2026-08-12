@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stripe/stripe-go/v82"
@@ -23,6 +24,16 @@ type fakeStripeCheckoutClient struct {
 	createdParams  *stripe.CheckoutSessionCreateParams
 	createResponse *stripe.CheckoutSession
 	retrieveResult *stripe.CheckoutSession
+}
+
+type fakePaymentNotifier struct {
+	notifications []paymentNotification
+	err           error
+}
+
+func (f *fakePaymentNotifier) NotifyPayment(_ context.Context, notification paymentNotification) error {
+	f.notifications = append(f.notifications, notification)
+	return f.err
 }
 
 func (f *fakeStripeCheckoutClient) Create(_ context.Context, params *stripe.CheckoutSessionCreateParams) (*stripe.CheckoutSession, error) {
@@ -356,7 +367,12 @@ func TestGrantLifetimeMembershipIsIdempotent(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
 	})
 
-	app := &App{db: pool, cfg: config.Config{ImageQuotaBytes: 500 * 1024 * 1024}}
+	notifier := &fakePaymentNotifier{err: errors.New("temporary Feishu failure")}
+	app := &App{
+		db:              pool,
+		cfg:             config.Config{ImageQuotaBytes: 500 * 1024 * 1024},
+		paymentNotifier: notifier,
+	}
 	checkout := validatedLifetimeCheckout{
 		SessionID:       "cs_test_" + suffix,
 		PaymentIntentID: "pi_" + suffix,
@@ -366,14 +382,26 @@ func TestGrantLifetimeMembershipIsIdempotent(t *testing.T) {
 		Amount:          600,
 		Currency:        stripe.CurrencyJPY,
 	}
-	for _, eventID := range []string{"", "evt_" + suffix} {
-		user, err := app.grantLifetimeMembership(ctx, checkout, eventID, nil)
+	for index, eventID := range []string{"", "evt_" + suffix} {
+		grant, err := app.grantLifetimeMembershipAndNotify(ctx, checkout, eventID, nil)
 		if err != nil {
 			t.Fatalf("幂等发放失败: %v", err)
 		}
-		if user.MembershipTier != membershipTierLifetime {
-			t.Fatalf("会员等级 = %q", user.MembershipTier)
+		if grant.User.MembershipTier != membershipTierLifetime {
+			t.Fatalf("会员等级 = %q", grant.User.MembershipTier)
 		}
+		if grant.Applied != (index == 0) {
+			t.Fatalf("第 %d 次发放 Applied=%v", index+1, grant.Applied)
+		}
+	}
+	if len(notifier.notifications) != 1 {
+		t.Fatalf("飞书通知次数 = %d，期望首次落账后恰好 1 次", len(notifier.notifications))
+	}
+	gotNotification := notifier.notifications[0]
+	if gotNotification.UserID != userID || gotNotification.Amount != checkout.Amount ||
+		gotNotification.Currency != string(checkout.Currency) ||
+		gotNotification.CheckoutID != checkout.SessionID || gotNotification.PaymentIntentID != checkout.PaymentIntentID {
+		t.Fatalf("飞书通知内容错误: %+v", gotNotification)
 	}
 
 	var paymentCount int
@@ -392,5 +420,58 @@ func TestGrantLifetimeMembershipIsIdempotent(t *testing.T) {
 	}
 	if storedAmount != checkout.Amount || storedCurrency != string(checkout.Currency) {
 		t.Fatalf("支付记录 = %d %s", storedAmount, storedCurrency)
+	}
+
+	var attempts int
+	var notifiedAt *time.Time
+	var nextTryAt *time.Time
+	if err := pool.QueryRow(ctx, `
+		SELECT notification_attempts, notified_at, notification_next_try_at
+		FROM stripe_payments WHERE checkout_session_id = $1
+	`, checkout.SessionID).Scan(&attempts, &notifiedAt, &nextTryAt); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || notifiedAt != nil || nextTryAt == nil {
+		t.Fatalf("通知失败状态不完整: attempts=%d notifiedAt=%v nextTryAt=%v", attempts, notifiedAt, nextTryAt)
+	}
+
+	notifier.err = nil
+	if _, err := pool.Exec(ctx, `
+		UPDATE stripe_payments
+		SET notification_next_try_at = now(), notification_locked_until = NULL
+		WHERE checkout_session_id = $1
+	`, checkout.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.retryPaymentNotifications(ctx); err != nil {
+		t.Fatalf("重试付款通知: %v", err)
+	}
+	if len(notifier.notifications) != 2 {
+		t.Fatalf("重试后飞书通知次数 = %d，期望 2", len(notifier.notifications))
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT notification_attempts, notified_at, notification_next_try_at
+		FROM stripe_payments WHERE checkout_session_id = $1
+	`, checkout.SessionID).Scan(&attempts, &notifiedAt, &nextTryAt); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || notifiedAt == nil || nextTryAt != nil {
+		t.Fatalf("通知成功状态不完整: attempts=%d notifiedAt=%v nextTryAt=%v", attempts, notifiedAt, nextTryAt)
+	}
+}
+
+func TestPaymentNotificationBackoff(t *testing.T) {
+	for _, tc := range []struct {
+		attempts int
+		want     time.Duration
+	}{
+		{attempts: 1, want: time.Minute},
+		{attempts: 2, want: 2 * time.Minute},
+		{attempts: 8, want: 24 * time.Hour},
+		{attempts: 100, want: 24 * time.Hour},
+	} {
+		if got := paymentNotificationBackoff(tc.attempts); got != tc.want {
+			t.Fatalf("attempts=%d backoff=%s，期望 %s", tc.attempts, got, tc.want)
+		}
 	}
 }

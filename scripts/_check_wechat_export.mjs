@@ -11,7 +11,10 @@ import { inlineWechatStyles, wrapWechatBody } from "./_wechat_inline_bundle.mjs"
 import { WECHAT_THEMES, resolveThemeRules } from "./_wechat_themes_bundle.mjs";
 import { structuralizeCodeWhitespace } from "./_wechat_whitespace_bundle.mjs";
 import { addMacWindows } from "./_mac_window_bundle.mjs";
-import { auditWechatImages } from "./_wechat_images_bundle.mjs";
+import {
+  addWechatImageCaptions,
+  auditWechatImages,
+} from "./_wechat_images_bundle.mjs";
 
 const NBSP = " ";
 
@@ -50,6 +53,7 @@ function escapeHTML(value) {
 function exportPipeline(bodyHTML, rules, origin = "https://koinote.app") {
   const { document } = parseHTML(`<div id="stage">${bodyHTML}</div>`);
   const stage = document.getElementById("stage");
+  addWechatImageCaptions(stage);
   const highlighted = highlightCodeBlocks(stage);
   structuralizeCodeWhitespace(stage);
   addMacWindows(stage, rules.pre ?? "");
@@ -373,6 +377,48 @@ for (const theme of WECHAT_THEMES) {
   // 关键：内联器跑完之后 src 仍然是绝对的。它会遍历所有属性删掉非白名单项，
   // src 在白名单里，但这条断言钉住「顺序没搞反、src 没被覆盖」
   ok("产物里不再有相对 src", !/src="\/images\//.test(html), html.slice(0, 400));
+}
+
+// ---------- 图片说明：Markdown alt 要变成图片下方的可见文字 ----------
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { html } = exportPipeline(
+    '<p><img src="https://img.koinote.app/photo.png" alt="山谷里的清晨"></p>',
+    rules,
+  );
+  const { document } = parseHTML(`<div id="result">${html}</div>`);
+  const imageParagraph = document.querySelector("img").closest("p");
+  const caption = imageParagraph.nextElementSibling;
+
+  eq("图注紧跟在图片段落后", caption?.textContent, "山谷里的清晨");
+  ok("图注使用居中小字", caption?.getAttribute("style")?.includes("text-align:center"));
+  ok("图注字号已内联", caption?.getAttribute("style")?.includes("font-size:13px"));
+  ok("图片 alt 仍保留", html.includes('alt="山谷里的清晨"'), html.slice(0, 500));
+  ok("导出产物不残留图注标记", !html.includes("data-wechat-image-caption"), html);
+}
+
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { html } = exportPipeline(
+    '<p><img src="https://img.koinote.app/formula.png" alt="x^2" data-wechat-skip-caption="true"></p>',
+    rules,
+  );
+  const { document } = parseHTML(`<div id="result">${html}</div>`);
+  eq("公式图片不生成图注", document.querySelectorAll("p").length, 1);
+  ok("公式跳过标记在最终产物中被清理", !html.includes("data-wechat-skip-caption"), html);
+}
+
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { html } = exportPipeline(
+    '<p>看这张 <img src="https://img.koinote.app/photo.png" alt="图注"> 很好</p>',
+    rules,
+  );
+  const { document } = parseHTML(`<div id="result">${html}</div>`);
+  const result = document.getElementById("result");
+  eq("行内图片导出后仍只有一个正文段落", result.querySelectorAll("p").length, 1);
+  eq("行内图片后半句仍在原段落", result.querySelector("p").textContent, "看这张  很好");
+  ok("行内图片不生成额外图注文字", !html.includes(">图注</p>"), html);
 }
 
 {

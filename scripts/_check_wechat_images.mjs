@@ -5,10 +5,12 @@
 // 用户发一篇文章出去。
 import { parseHTML } from "linkedom";
 import {
+  addWechatImageCaptions,
   absolutizeSrc,
   auditWechatImages,
   isLocalHost,
   isReachableByWechat,
+  WECHAT_SKIP_CAPTION_ATTR,
 } from "./_wechat_images_bundle.mjs";
 
 let pass = 0;
@@ -129,6 +131,80 @@ function audit(html, origin = ORIGIN) {
   const { document } = parseHTML(`<div id="stage">${html}</div>`);
   const stage = document.getElementById("stage");
   return { result: auditWechatImages(stage, origin), stage };
+}
+
+function captions(html) {
+  const { document } = parseHTML(`<div id="stage">${html}</div>`);
+  const stage = document.getElementById("stage");
+  return { added: addWechatImageCaptions(stage), stage };
+}
+
+// ---------- Markdown 图片 alt 转可见图注 ----------
+
+{
+  const { added, stage } = captions(
+    '<p><img src="/images/a.png" alt="  海边 &amp; 日落  "></p>',
+  );
+  eq("普通图片新增一个图注", added, 1);
+  eq("图注使用解码后的纯文本", stage.querySelectorAll("p")[1].textContent, "海边 & 日落");
+  eq("图注放在图片段落之后", stage.children[1].textContent, "海边 & 日落");
+  ok(
+    "图注携带可内联的样式",
+    stage.children[1].getAttribute("data-wechat-keep-style")?.includes("text-align:center"),
+  );
+}
+
+{
+  const { added, stage } = captions(
+    '<p><a href="https://example.com"><img src="/images/a.png" alt="可点击图片"></a></p>',
+  );
+  eq("链接图片新增一个图注", added, 1);
+  eq("链接图片的图注在整个段落之后", stage.children[1].textContent, "可点击图片");
+}
+
+{
+  const { added, stage } = captions(
+    `<p><img src="/images/formula.png" alt="x^2" ${WECHAT_SKIP_CAPTION_ATTR}="true"></p>`,
+  );
+  eq("公式图片不新增图注", added, 0);
+  eq("公式图片仍只有原段落", stage.children.length, 1);
+}
+
+{
+  const { added } = captions('<p><img src="/images/a.png" alt=""></p>');
+  eq("空 alt 不新增图注", added, 0);
+}
+
+{
+  const source = '<p>看这张 <img src="/images/a.png" alt="图注"> 很好</p>';
+  const { added, stage } = captions(source);
+  const serialized = stage.innerHTML;
+  const { document } = parseHTML(`<div id="reparsed">${serialized}</div>`);
+  const reparsed = document.getElementById("reparsed");
+  eq("行内图片不新增图注", added, 0);
+  eq("行内图片重解析后仍只有一个段落", reparsed.querySelectorAll("p").length, 1);
+  eq("行内图片重解析后文字不掉出段落", reparsed.querySelector("p").textContent, "看这张  很好");
+  eq("行内图片最终 HTML 保持原结构", serialized, source);
+}
+
+{
+  const source = '<p><img src="/images/a.png" alt="甲"><img src="/images/b.png" alt="乙"></p>';
+  const { added, stage } = captions(source);
+  const { document } = parseHTML(`<div id="reparsed">${stage.innerHTML}</div>`);
+  const reparsed = document.getElementById("reparsed");
+  eq("同段多图不新增图注", added, 0);
+  eq("同段多图重解析后仍只有一个段落", reparsed.querySelectorAll("p").length, 1);
+  eq("同段多图重解析后仍有两张图", reparsed.querySelectorAll("img").length, 2);
+}
+
+{
+  const source = '<ul><li><img src="/images/a.png" alt="列表图"></li></ul>';
+  const { added, stage } = captions(source);
+  const { document } = parseHTML(`<div id="reparsed">${stage.innerHTML}</div>`);
+  const reparsed = document.getElementById("reparsed");
+  eq("列表图片不新增图注", added, 0);
+  eq("列表图片重解析后仍只有一个列表项", reparsed.querySelectorAll("li").length, 1);
+  eq("列表图片重解析后没有额外段落", reparsed.querySelectorAll("p").length, 0);
 }
 
 {

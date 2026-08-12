@@ -4,6 +4,8 @@ export const fr: Messages = {
   nav: {
     editor: "Éditeur",
     dashboard: "Tableau de bord",
+    documents: "Mes documents",
+    invitations: "Inviter des amis",
     admin: "Administration",
     login: "Se connecter",
     logout: "Se déconnecter",
@@ -154,14 +156,20 @@ export const fr: Messages = {
     username: "Nom d'utilisateur",
     notSet: "Non défini",
     joinedAt: "Inscrit le",
-    myDocs: "Mes documents",
-    emptyHint:
-      "Aucun document cloud pour l'instant. La gestion des documents arrive bientôt — ",
-    emptyLinkText: "aller à l'éditeur",
     loading: "Chargement…",
     loginRequired: "Veuillez vous connecter",
-    loginRequiredHint: "Vous devez vous connecter pour accéder au tableau de bord.",
+    loginRequiredHint: "Vous devez vous connecter pour accéder aux pages de votre compte.",
     goLogin: "Aller à la connexion",
+  },
+  documentsPage: {
+    title: "Mes documents",
+    subtitle: "Consultez et poursuivez l’édition des documents enregistrés dans le cloud.",
+    emptyHint: "Aucun document cloud pour l’instant. ",
+    emptyLinkText: "Créer votre premier document",
+  },
+  invitationsPage: {
+    title: "Inviter des amis",
+    subtitle: "Partagez votre lien personnel et suivez vos invitations et récompenses.",
   },
   admin: {
     title: "Administration",
@@ -540,6 +548,8 @@ function hello(name) {
           items: [
             "Cloudflare : CDN, Workers et stockage objet R2",
             "Google et GitHub : vérification d’identité, uniquement si vous choisissez de vous connecter avec eux",
+            "Stripe : traitement du paiement de l’abonnement, avec l’adresse e-mail, le montant, la devise et les identifiants de paiement nécessaires au règlement",
+            "Feishu : canal facultatif de notification interne des paiements ; seuls l’identifiant utilisateur Koinote, le montant, la devise et les identifiants de commande sont transmis, jamais l’e-mail ni le contenu des documents",
           ],
         },
         {

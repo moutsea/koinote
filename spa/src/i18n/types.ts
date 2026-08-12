@@ -14,6 +14,8 @@ export interface Messages {
   nav: {
     editor: string;
     dashboard: string;
+    documents: string;
+    invitations: string;
     admin: string;
     login: string;
     logout: string;
@@ -143,13 +145,20 @@ export interface Messages {
     username: string;
     notSet: string;
     joinedAt: string;
-    myDocs: string;
-    emptyHint: string; // 含「去编辑器」链接文案前后段
-    emptyLinkText: string;
     loading: string;
     loginRequired: string;
     loginRequiredHint: string;
     goLogin: string;
+  };
+  documentsPage: {
+    title: string;
+    subtitle: string;
+    emptyHint: string;
+    emptyLinkText: string;
+  };
+  invitationsPage: {
+    title: string;
+    subtitle: string;
   };
   admin: {
     title: string;

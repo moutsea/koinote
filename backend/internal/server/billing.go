@@ -46,6 +46,20 @@ var lifetimePriceOptions = []lifetimePriceOption{
 	{Currency: stripe.CurrencyJPY, Amount: 600},
 }
 
+// Stripe 的零位小数币种。价目表增加币种时，金额格式化仍按 Stripe 的最小单位解释。
+var zeroDecimalCurrencies = map[stripe.Currency]struct{}{
+	"bif": {}, "clp": {}, "djf": {}, "gnf": {}, "jpy": {}, "kmf": {}, "krw": {},
+	"mga": {}, "pyg": {}, "rwf": {}, "ugx": {}, "vnd": {}, "vuv": {}, "xaf": {},
+	"xof": {}, "xpf": {},
+}
+
+func currencyMinorUnitDigits(currency stripe.Currency) int {
+	if _, zeroDecimal := zeroDecimalCurrencies[currency]; zeroDecimal {
+		return 0
+	}
+	return 2
+}
+
 var (
 	errCheckoutPending = errors.New("checkout payment is pending")
 	errCheckoutInvalid = errors.New("invalid checkout session")
@@ -65,6 +79,11 @@ type validatedLifetimeCheckout struct {
 	UserID          int
 	Amount          int64
 	Currency        stripe.Currency
+}
+
+type membershipGrantResult struct {
+	User    model.User
+	Applied bool
 }
 
 type billingPricePayload struct {
@@ -339,14 +358,14 @@ func (a *App) grantLifetimeMembership(
 	checkout validatedLifetimeCheckout,
 	sourceEventID string,
 	expectedUser *model.User,
-) (model.User, error) {
+) (membershipGrantResult, error) {
 	if expectedUser != nil && (expectedUser.ID != checkout.UserID || expectedUser.AuthUserID != checkout.AuthUserID) {
-		return model.User{}, errCheckoutOwner
+		return membershipGrantResult{}, errCheckoutOwner
 	}
 
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
-		return model.User{}, err
+		return membershipGrantResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -360,27 +379,31 @@ func (a *App) grantLifetimeMembership(
 		FOR UPDATE
 	`, checkout.UserID, checkout.AuthUserID).Scan(&userID, &authUserID, &membershipTier, &stripeCustomerID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.User{}, errCheckoutOwner
+		return membershipGrantResult{}, errCheckoutOwner
 	}
 	if err != nil {
-		return model.User{}, err
+		return membershipGrantResult{}, err
 	}
 	if stripeCustomerID != nil && *stripeCustomerID != checkout.CustomerID {
-		return model.User{}, fmt.Errorf("%w: Stripe customer mismatch", errCheckoutOwner)
+		return membershipGrantResult{}, fmt.Errorf("%w: Stripe customer mismatch", errCheckoutOwner)
 	}
 
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO stripe_payments (
 			checkout_session_id, payment_intent_id, customer_id, user_id,
-			plan_code, amount, currency, status, source_event_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'paid', NULLIF($8, ''))
+			plan_code, amount, currency, status, source_event_id,
+			notification_next_try_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'paid', NULLIF($8, ''),
+		          CASE WHEN $9 THEN now() ELSE NULL END)
 		ON CONFLICT (checkout_session_id) DO NOTHING
 	`, checkout.SessionID, checkout.PaymentIntentID, checkout.CustomerID, userID,
-		lifetimePlanCode, checkout.Amount, string(checkout.Currency), sourceEventID)
+		lifetimePlanCode, checkout.Amount, string(checkout.Currency), sourceEventID,
+		a.paymentNotifier != nil)
 	if err != nil {
-		return model.User{}, err
+		return membershipGrantResult{}, err
 	}
-	if tag.RowsAffected() == 0 {
+	applied := tag.RowsAffected() == 1
+	if !applied {
 		var existingUserID int
 		var existingIntentID, existingCustomerID, existingPlan, existingCurrency string
 		var existingAmount int64
@@ -391,12 +414,12 @@ func (a *App) grantLifetimeMembership(
 			&existingUserID, &existingIntentID, &existingCustomerID, &existingPlan, &existingAmount, &existingCurrency,
 		)
 		if err != nil {
-			return model.User{}, err
+			return membershipGrantResult{}, err
 		}
 		if existingUserID != userID || existingIntentID != checkout.PaymentIntentID ||
 			existingCustomerID != checkout.CustomerID || existingPlan != lifetimePlanCode ||
 			existingAmount != checkout.Amount || existingCurrency != string(checkout.Currency) {
-			return model.User{}, fmt.Errorf("%w: conflicting payment record", errCheckoutInvalid)
+			return membershipGrantResult{}, fmt.Errorf("%w: conflicting payment record", errCheckoutInvalid)
 		}
 		if sourceEventID != "" {
 			if _, err = tx.Exec(ctx, `
@@ -404,7 +427,7 @@ func (a *App) grantLifetimeMembership(
 				SET source_event_id = COALESCE(source_event_id, $2), updated_at = now()
 				WHERE checkout_session_id = $1
 			`, checkout.SessionID, sourceEventID); err != nil {
-				return model.User{}, err
+				return membershipGrantResult{}, err
 			}
 		}
 	}
@@ -421,12 +444,26 @@ func (a *App) grantLifetimeMembership(
 		          bonus_storage_bytes, stripe_customer_id, created_at, updated_at
 	`, userID, checkout.CustomerID))
 	if err != nil {
-		return model.User{}, err
+		return membershipGrantResult{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return model.User{}, err
+		return membershipGrantResult{}, err
 	}
-	return user, nil
+	return membershipGrantResult{User: user, Applied: applied}, nil
+}
+
+func (a *App) grantLifetimeMembershipAndNotify(
+	ctx context.Context,
+	checkout validatedLifetimeCheckout,
+	sourceEventID string,
+	expectedUser *model.User,
+) (membershipGrantResult, error) {
+	result, err := a.grantLifetimeMembership(ctx, checkout, sourceEventID, expectedUser)
+	if err != nil || !result.Applied || a.paymentNotifier == nil {
+		return result, err
+	}
+	a.deliverPaymentNotification(checkout.SessionID)
+	return result, nil
 }
 
 func (a *App) billingCheckoutConfirm(w http.ResponseWriter, r *http.Request) {
@@ -464,7 +501,7 @@ func (a *App) billingCheckoutConfirm(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "checkout_invalid", "Checkout could not be validated")
 		return
 	}
-	updatedUser, err := a.grantLifetimeMembership(ctx, checkout, "", &user)
+	grant, err := a.grantLifetimeMembershipAndNotify(ctx, checkout, "", &user)
 	if errors.Is(err, errCheckoutOwner) {
 		httpx.ErrorCode(w, http.StatusForbidden, "checkout_forbidden", "Checkout belongs to another user")
 		return
@@ -476,8 +513,8 @@ func (a *App) billingCheckoutConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"status":     "active",
-		"membership": a.billingStatusPayload(updatedUser),
-		"user":       updatedUser,
+		"membership": a.billingStatusPayload(grant.User),
+		"user":       grant.User,
 	})
 }
 
@@ -531,7 +568,7 @@ func (a *App) billingWebhook(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "checkout_invalid", "Checkout could not be validated")
 		return
 	}
-	if _, err := a.grantLifetimeMembership(ctx, checkout, event.ID, nil); err != nil {
+	if _, err := a.grantLifetimeMembershipAndNotify(ctx, checkout, event.ID, nil); err != nil {
 		log.Printf("stripe webhook grant membership: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Could not activate membership")
 		return

@@ -4,6 +4,8 @@ export const zh: Messages = {
   nav: {
     editor: "编辑器",
     dashboard: "控制台",
+    documents: "我的文档",
+    invitations: "邀请好友",
     admin: "管理后台",
     login: "登录",
     logout: "登出",
@@ -151,13 +153,20 @@ export const zh: Messages = {
     username: "用户名",
     notSet: "未设置",
     joinedAt: "加入时间",
-    myDocs: "我的文档",
-    emptyHint: "还没有云端文档。文档管理功能即将上线，",
-    emptyLinkText: "先去编辑器",
     loading: "加载中…",
     loginRequired: "请先登录",
-    loginRequiredHint: "登录后才能访问控制台。",
+    loginRequiredHint: "登录后才能访问你的账号页面。",
     goLogin: "去登录",
+  },
+  documentsPage: {
+    title: "我的文档",
+    subtitle: "查看并继续编辑保存在云端的文档。",
+    emptyHint: "还没有云端文档，",
+    emptyLinkText: "新建第一篇文档",
+  },
+  invitationsPage: {
+    title: "邀请好友",
+    subtitle: "分享专属邀请链接，查看邀请记录与奖励空间。",
   },
   admin: {
     title: "管理后台",
@@ -518,6 +527,8 @@ function hello(name) {
           items: [
             "Cloudflare：CDN、Workers 与 R2 对象存储",
             "Google、GitHub：仅在你选择用它们登录时，用于验证身份",
+            "Stripe：处理会员付款；会接收结算所需的邮箱、订单金额、币种与支付标识",
+            "飞书：可选的内部收款通知渠道；仅接收站内用户 ID、金额、币种与订单标识，不发送邮箱或文档内容",
           ],
         },
         {

@@ -53,6 +53,11 @@ type Config struct {
 	StripeWebhookSecret     string
 	StripeLifetimeProductID string
 
+	// 飞书付款通知沿用 Kimiseek 的机器人配置名。两项同时配置才启用；
+	// 生产环境只配置一项时拒绝启动，避免付款后静默漏通知。
+	BotWebhook       string
+	BotWebhookSecret string
+
 	// Admin 流量面板通过 Cloudflare GraphQL Analytics API 读取边缘 UV/PV。
 	// Token 应只授予目标 Zone 的 Analytics Read 权限；缺失时业务统计仍可用。
 	CloudflareZoneID         string
@@ -120,6 +125,9 @@ func Load() Config {
 		StripeWebhookSecret:     strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeLifetimeProductID: strings.TrimSpace(os.Getenv("STRIPE_LIFETIME_PRODUCT_ID")),
 
+		BotWebhook:       strings.TrimSpace(os.Getenv("BOT_WEBHOOK")),
+		BotWebhookSecret: strings.TrimSpace(os.Getenv("BOT_WEBHOOK_SECRET")),
+
 		CloudflareZoneID:         strings.TrimSpace(os.Getenv("CLOUDFLARE_ZONE_ID")),
 		CloudflareAnalyticsToken: strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_TOKEN")),
 		CloudflareAnalyticsHost:  strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_HOST")),
@@ -161,6 +169,18 @@ func (c Config) StripeWebhookEnabled() bool {
 	return c.StripeEnabled() && c.StripeWebhookSecret != ""
 }
 
+func (c Config) FeishuEnabled() bool {
+	if !c.IsProduction() || c.BotWebhook == "" || c.BotWebhookSecret == "" {
+		return false
+	}
+	return validBotWebhook(c.BotWebhook)
+}
+
+func validBotWebhook(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
+}
+
 // ValidateStripeConfig 在生产环境拒绝只配置一部分的状态。开发环境允许暂缺 webhook
 // secret，靠成功页确认即可本地走通；生产必须有 webhook 兜住用户未回跳的情况。
 func (c Config) ValidateStripeConfig() error {
@@ -174,6 +194,21 @@ func (c Config) ValidateStripeConfig() error {
 		return nil
 	}
 	return fmt.Errorf("STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_LIFETIME_PRODUCT_ID 必须同时配置或同时留空")
+}
+
+// ValidateFeishuConfig 与 Kimiseek 一样只在生产环境发送通知。自部署可以把两项
+// 都留空来关闭；若要启用，必须成对配置且只能请求 HTTPS webhook。
+func (c Config) ValidateFeishuConfig() error {
+	if !c.IsProduction() || (c.BotWebhook == "" && c.BotWebhookSecret == "") {
+		return nil
+	}
+	if c.BotWebhook == "" || c.BotWebhookSecret == "" {
+		return fmt.Errorf("BOT_WEBHOOK、BOT_WEBHOOK_SECRET 必须同时配置或同时留空")
+	}
+	if !validBotWebhook(c.BotWebhook) {
+		return fmt.Errorf("BOT_WEBHOOK 必须是合法的 HTTPS URL")
+	}
+	return nil
 }
 
 func getenv(key, fallback string) string {

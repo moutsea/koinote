@@ -4,6 +4,8 @@ export const ja: Messages = {
   nav: {
     editor: "エディタ",
     dashboard: "ダッシュボード",
+    documents: "マイドキュメント",
+    invitations: "友達を招待",
     admin: "管理",
     login: "ログイン",
     logout: "ログアウト",
@@ -154,14 +156,20 @@ export const ja: Messages = {
     username: "ユーザー名",
     notSet: "未設定",
     joinedAt: "登録日",
-    myDocs: "マイドキュメント",
-    emptyHint:
-      "クラウドドキュメントはまだありません。ドキュメント管理は近日公開 — ",
-    emptyLinkText: "エディタへ",
     loading: "読み込み中…",
     loginRequired: "ログインしてください",
-    loginRequiredHint: "ダッシュボードにアクセスするにはログインが必要です。",
+    loginRequiredHint: "アカウントページにアクセスするにはログインが必要です。",
     goLogin: "ログインへ",
+  },
+  documentsPage: {
+    title: "マイドキュメント",
+    subtitle: "クラウドに保存したドキュメントを確認し、編集を続けられます。",
+    emptyHint: "クラウドドキュメントはまだありません。",
+    emptyLinkText: "最初のドキュメントを作成",
+  },
+  invitationsPage: {
+    title: "友達を招待",
+    subtitle: "専用の招待リンクを共有し、招待実績と特典容量を確認できます。",
   },
   admin: {
     title: "管理画面",
@@ -532,6 +540,8 @@ function hello(name) {
           items: [
             "Cloudflare：CDN、Workers、R2 オブジェクトストレージ",
             "Google、GitHub：それらでログインを選んだ場合の本人確認のみ",
+            "Stripe：会員決済の処理。決済に必要なメールアドレス、金額、通貨、支払い識別子を受け取ります",
+            "Feishu：任意の社内決済通知。Koinote のユーザー ID、金額、通貨、注文識別子のみを送り、メールアドレスや文書内容は送りません",
           ],
         },
         {
