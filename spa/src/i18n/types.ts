@@ -14,6 +14,7 @@ export interface Messages {
   nav: {
     editor: string;
     dashboard: string;
+    admin: string;
     login: string;
     logout: string;
     /** 账户菜单触发器的无障碍名。按钮上显示的是用户名，读屏需要知道它是个菜单 */
@@ -67,6 +68,13 @@ export interface Messages {
     orDivider: string;
     continueWithGoogle: string;
     continueWithGitHub: string;
+    emailRegistration: string;
+    collapseEmailRegistration: string;
+    invitationCode: string;
+    invitationCodePlaceholder: string;
+    invitationRewardTitle: string;
+    invitationBonusHint: string;
+    haveInvitationCode: string;
   };
   storage: {
     /** 控制台卡片标题 */
@@ -92,6 +100,41 @@ export interface Messages {
     quotaDialogDismiss: string;
     quotaDialogManage: string;
   };
+  membership: {
+    title: string;
+    lifetimeBadge: string;
+    activeBadge: string;
+    description: string;
+    oneTimePayment: string;
+    currencyLabel: string;
+    currencyHint: string;
+    storageBenefit: string;
+    aiBenefit: string;
+    aiComingSoon: string;
+    purchase: string;
+    redirecting: string;
+    activeTitle: string;
+    activeDescription: string;
+    unavailable: string;
+    loadFailed: string;
+    checkoutSuccess: string;
+    checkoutPending: string;
+    checkoutCancelled: string;
+    checkoutFailed: string;
+  };
+  invitations: {
+    title: string;
+    headline: string;
+    description: string;
+    copyLink: string;
+    copied: string;
+    successful: string;
+    earned: string;
+    totalBonus: string;
+    note: string;
+    loading: string;
+    loadFailed: string;
+  };
   dashboard: {
     greeting: string; // 用 {name} 占位
     subtitle: string;
@@ -107,6 +150,57 @@ export interface Messages {
     loginRequired: string;
     loginRequiredHint: string;
     goLogin: string;
+  };
+  admin: {
+    title: string;
+    subtitle: string;
+    refresh: string;
+    loading: string;
+    loginRequired: string;
+    goLogin: string;
+    forbidden: string;
+    loadFailed: string;
+    today: string;
+    trafficUnavailable: string;
+    trafficNotConfigured: string;
+    trafficUpstreamError: string;
+    trafficNote: string;
+    pageViews: string;
+    uniqueVisitors: string;
+    requests: string;
+    bandwidth: string;
+    newUsers: string;
+    newMembers: string;
+    orders: string;
+    overview: string;
+    totalUsers: string;
+    verifiedUsers: string;
+    lifetimeMembers: string;
+    conversionRate: string;
+    documents: string;
+    images: string;
+    storageUsed: string;
+    totalOrders: string;
+    revenue: string;
+    noRevenue: string;
+    todayRevenue: string;
+    orderCount: string;
+    trend: string;
+    trendHint: string;
+    recentUsers: string;
+    recentPayments: string;
+    noUsers: string;
+    noPayments: string;
+    user: string;
+    status: string;
+    joinedAt: string;
+    verified: string;
+    unverified: string;
+    free: string;
+    lifetime: string;
+    amount: string;
+    paidAt: string;
+    generatedAt: string;
   };
   editor: {
     placeholder: string;
@@ -203,6 +297,7 @@ export interface Messages {
     wechatCodeNote: string;
     wechatMathConverted: string;
     wechatMathFailed: string;
+    wechatMathTemporaryQuotaExceeded: string;
     wechatImagesUnreachable: string; // 用 {n} 和 {hosts} 占位
     exportFailed: string;
     exporting: string;

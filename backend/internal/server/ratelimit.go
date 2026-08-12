@@ -10,9 +10,8 @@ import (
 
 // rateLimiter 是进程内的固定窗口限流器。
 //
-// 为什么不用 Redis：go.mod 里还没有 Redis 客户端（compose 里那个是 MVP 占位）。
 // 代价说清楚：多实例部署时各进程独立计数，实际阈值被放大 N 倍。
-// 单机部署够用，上多实例前必须换成 Redis。
+// 单机部署够用，上多实例前必须接入共享限流存储。
 type rateLimiter struct {
 	mu      sync.Mutex
 	entries map[string]*rateEntry

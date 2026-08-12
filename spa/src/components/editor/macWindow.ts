@@ -6,12 +6,11 @@ import { backgroundFrom, isDarkColor } from "./wechatHljs";
  * 为什么用真实元素而不是伪元素：微信剥掉 <style>，伪元素没有内联等价写法 ——
  * wechatThemes.ts 开头那条「伪元素一律不能用」就是这个原因。
  *
- * ── 关于尺寸类声明能不能用 ──────────────────────────────────────
- * 上一版这里用的是 ● 字符，理由是「width/height/border-radius 是否存活没有证据，
- * 而 color 有（语法高亮靠它活下来）」。那个判断已被推翻：mdnice 导出到微信的
- * 产物里明确带着 height / width / border-radius / box-shadow / background-color /
- * background-position，且实际能正常显示。所以这些声明是可用的，用真实圆形而不是
- * 字符 —— 字符的尺寸受字体摆布，三个 ● 在不同设备上胖瘦不一，这正是它难看的原因。
+ * ── 为什么圆点必须有文字内容 ────────────────────────────────────
+ * 空 span 即使靠 width / height / background 能在浏览器里画出圆形，粘贴进公众号后
+ * 也会被富文本清洗器当作空装饰节点删掉。三个点一删，外层标题栏也变成空节点，最终
+ * 整套 Mac 窗口外观都不见了。这里用有颜色的 ● 字符承载圆点：color 已被代码高亮
+ * 链路验证能存活，而且节点不再是空的。字体差异只会让圆点略有胖瘦，不影响可见性。
  *
  * ── 借鉴 mdnice 的几处关键做法 ────────────────────────────────
  *   · 标题栏与代码区同底色，连成一块完整面板（而不是浮在页面底色上的三个点）
@@ -20,7 +19,7 @@ import { backgroundFrom, isDarkColor } from "./wechatHljs";
  *   · 圆角 + 投影。投影是「看起来精致」里权重最大的一条
  * 唯一没照搬的是三点的画法：mdnice 用的是托管在 files.mdnice.com 上的 SVG 背景图。
  * 那是别人家的图床资源，热链不合适，而且多一个外部依赖（图挂了点就没了）。
- * 这里用三个 inline-block 圆形，纯声明，不依赖任何外部资源。
+ * 这里用三个带文字内容的 inline-block，不依赖外部资源，也不会被当成空节点清掉。
  */
 
 /** macOS 交通灯的标准色 */
@@ -34,8 +33,10 @@ const DOTS = ["#ff5f56", "#ffbd2e", "#27c93f"];
  */
 const DOTS_DARK = ["#e0443e", "#dea123", "#1aab29"];
 
-/** 圆点直径。12px 是 macOS 交通灯的真实尺寸 */
-const DOT = 12;
+/** ● 的实际墨迹小于字号；17px 在常见公众号字体下约呈现为 12px 圆点 */
+const EXPORT_DOT_FONT_SIZE = 17;
+/** 网页预览用渐变画圆，不存在字形留白，直接使用 12px 直径 */
+const PREVIEW_DOT_SIZE = 12;
 /** 点间距。8px 同样取自 macOS */
 const GAP = 8;
 /** 标题栏高度。mdnice 用 30px，与 macOS 的 28px 标题栏接近 */
@@ -59,6 +60,7 @@ const FALLBACK_BG = "#f6f8fa";
 
 /** 标记属性名，与 wechatInline 的保留机制对应 */
 const KEEP_ATTR = "data-wechat-keep-style";
+const DOT_CHAR = "●";
 
 /** 代码块底色是深色吗。取不到底色时当浅色 —— 微信文章绝大多数是白底 */
 function isDarkPre(preDeclarations: string): boolean {
@@ -83,7 +85,7 @@ export function dotsFor(preDeclarations: string): string[] {
  * div 在 pre 里语义更怪。span 走 display:block 是 mdnice 验证过的写法。
  *
  * font-size:0 是为了让标题栏的高度只由 height 决定 —— 里面万一混进空白文本节点，
- * 它的行高会把标题栏顶高。三个点自己有明确尺寸，不受影响。
+ * 它的行高会把标题栏顶高。三个点会在自己的样式里恢复字号与行高。
  */
 export function buildMacBar(doc: Document, preDeclarations: string): HTMLElement {
   const bar = doc.createElement("span");
@@ -99,11 +101,12 @@ export function buildMacBar(doc: Document, preDeclarations: string): HTMLElement
     const dot = doc.createElement("span");
     dot.setAttribute(
       KEEP_ATTR,
-      `display:inline-block;width:${DOT}px;height:${DOT}px;` +
-        `border-radius:50%;background:${color};vertical-align:middle;` +
+      `display:inline-block;color:${color};font-family:Arial,sans-serif;` +
+        `font-size:${EXPORT_DOT_FONT_SIZE}px;line-height:${BAR_H}px;vertical-align:middle;` +
         // 最后一个不留右间距，否则三点整体偏左看着不居中
         (index < 2 ? `margin-right:${GAP}px;` : ""),
     );
+    dot.textContent = DOT_CHAR;
     bar.appendChild(dot);
   });
 
@@ -178,9 +181,10 @@ export function macWindowCSS(scope: string, dark: boolean): string {
   const colors = dark ? DOTS_DARK : DOTS;
   const layers = colors
     .map((color, index) => {
-      const cx = INSET + DOT / 2 + index * (DOT + GAP);
+      const cx =
+        INSET + PREVIEW_DOT_SIZE / 2 + index * (PREVIEW_DOT_SIZE + GAP);
       // 半径处收一点点做抗锯齿，直接 transparent 会有硬边
-      return `radial-gradient(circle at ${cx}px ${BAR_H / 2}px,${color} ${DOT / 2}px,transparent ${DOT / 2 + 0.5}px)`;
+      return `radial-gradient(circle at ${cx}px ${BAR_H / 2}px,${color} ${PREVIEW_DOT_SIZE / 2}px,transparent ${PREVIEW_DOT_SIZE / 2 + 0.5}px)`;
     })
     .join(",");
 

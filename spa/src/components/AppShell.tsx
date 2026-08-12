@@ -6,18 +6,23 @@ import {
   Globe,
   Check,
   ChevronDown,
+  Crown,
+  HardDrive,
   LayoutDashboard,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
-import { useI18n, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
+import { useI18n, interpolate, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
 import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
+import { formatBytes, usageLevel, usageRatio } from "../storage";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
 import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
+import { useStorageUsage } from "./StorageCard";
 
 export function AppShell() {
   const session = useSession();
@@ -102,7 +107,10 @@ export function AppShell() {
                 name={user.nickname || user.username || user.email}
                 email={user.email}
                 avatarUrl={user.avatarUrl}
+                membershipTier={user.membershipTier}
+                isAdmin={user.isAdmin}
                 dashboardActive={isUnder(pathname, "/dashboard")}
+                adminActive={isUnder(pathname, "/admin")}
                 onLogout={handleLogout}
               />
             ) : (
@@ -142,18 +150,26 @@ function UserMenu({
   name,
   email,
   avatarUrl,
+  membershipTier,
+  isAdmin,
   dashboardActive,
+  adminActive,
   onLogout,
 }: {
   name: string;
   email: string;
   /** OAuth 登录（Google / GitHub）时后端会存下来；邮箱注册的用户为空 */
   avatarUrl?: string | null;
+  membershipTier: "free" | "lifetime";
+  isAdmin: boolean;
   dashboardActive: boolean;
+  adminActive: boolean;
   onLogout: () => void | Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
+  const storage = useStorageUsage(open);
+  const membershipActive = membershipTier === "lifetime";
 
   useEffect(() => {
     if (!open) return;
@@ -199,7 +215,7 @@ function UserMenu({
         <div
           role="menu"
           aria-label={t.nav.userMenu}
-          className="absolute right-0 top-11 z-50 min-w-52 overflow-hidden rounded-xl border py-1 shadow-lg"
+          className="absolute right-0 top-11 z-50 w-72 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border py-1 shadow-lg"
           style={{
             borderColor: "var(--ink-line)",
             background: "var(--ink-paper-soft)",
@@ -229,6 +245,61 @@ function UserMenu({
             </div>
           </div>
 
+          <div
+            className="border-b px-3 py-3"
+            style={{ borderColor: "var(--ink-line)" }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className="flex items-center gap-2 text-xs font-medium"
+                style={{ color: "var(--ink-mid)" }}
+              >
+                <HardDrive className="h-4 w-4 shrink-0" />
+                {t.storage.title}
+              </div>
+              {membershipActive && (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+                >
+                  {t.membership.activeBadge}
+                </span>
+              )}
+            </div>
+
+            {storage.isPending ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--ink-faint)" }}>
+                {t.storage.loading}
+              </p>
+            ) : storage.isError || !storage.data ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--ink-faint)" }}>
+                {t.storage.loadFailed}
+              </p>
+            ) : (
+              <UserMenuStorageUsage
+                usedBytes={storage.data.usedBytes}
+                quotaBytes={storage.data.quotaBytes}
+                locale={locale}
+                label={t.storage.title}
+                usedOf={t.storage.usedOf}
+              />
+            )}
+          </div>
+
+          {!membershipActive && (
+            <Link
+              to="/dashboard"
+              hash="membership"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="mx-2 my-1.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition hover:opacity-80"
+              style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+            >
+              <Crown className="h-4 w-4 shrink-0" />
+              {t.membership.purchase}
+            </Link>
+          )}
+
           <Link
             to="/dashboard"
             role="menuitem"
@@ -242,6 +313,22 @@ function UserMenu({
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             {t.nav.dashboard}
           </Link>
+
+          {isAdmin && (
+            <Link
+              to="/admin"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{
+                color: adminActive ? "var(--cinnabar)" : "var(--ink-strong)",
+                fontWeight: adminActive ? 500 : undefined,
+              }}
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              {t.nav.admin}
+            </Link>
+          )}
 
           <button
             type="button"
@@ -258,6 +345,49 @@ function UserMenu({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function UserMenuStorageUsage({
+  usedBytes,
+  quotaBytes,
+  locale,
+  label,
+  usedOf,
+}: {
+  usedBytes: number;
+  quotaBytes: number;
+  locale: string;
+  label: string;
+  usedOf: string;
+}) {
+  const ratio = usageRatio(usedBytes, quotaBytes);
+  const level = usageLevel(usedBytes, quotaBytes);
+  const color = level === "normal" ? "var(--ink-mid)" : "var(--cinnabar)";
+
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium" style={{ color: "var(--ink-strong)" }}>
+        {interpolate(usedOf, {
+          used: formatBytes(usedBytes, locale),
+          quota: formatBytes(quotaBytes, locale),
+        })}
+      </p>
+      <div
+        role="progressbar"
+        aria-valuenow={Math.round(ratio * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+        className="mt-2 h-1.5 overflow-hidden rounded-full"
+        style={{ background: "var(--ink-wash-strong)" }}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${ratio * 100}%`, background: color }}
+        />
+      </div>
     </div>
   );
 }

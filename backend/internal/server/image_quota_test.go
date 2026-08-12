@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"koinote/backend/internal/config"
+	"koinote/backend/internal/model"
 )
 
 // imageKeyOwner 是记账时的归属边界：Worker 报上来的 key 前缀必须是报账者自己。
@@ -180,6 +181,34 @@ func TestImageQuotaAlwaysPositive(t *testing.T) {
 				t.Fatalf("配额必须为正，实际 %d", got)
 			}
 		})
+	}
+}
+
+func TestStorageQuotaForMembership(t *testing.T) {
+	const freeQuota = int64(200 * 1024 * 1024)
+	const bonus = int64(500 * 1024 * 1024)
+	app := newTestApp(config.Config{ImageQuotaBytes: freeQuota})
+
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierFree}); got != freeQuota {
+		t.Fatalf("免费用户配额 = %d，期望 %d", got, freeQuota)
+	}
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierLifetime}); got != lifetimeStorageQuotaBytes {
+		t.Fatalf("终生会员配额 = %d，期望 %d", got, lifetimeStorageQuotaBytes)
+	}
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierFree, BonusStorageBytes: bonus}); got != freeQuota+bonus {
+		t.Fatalf("免费用户邀请奖励后配额 = %d，期望 %d", got, freeQuota+bonus)
+	}
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierLifetime, BonusStorageBytes: bonus}); got != lifetimeStorageQuotaBytes+bonus {
+		t.Fatalf("终生会员邀请奖励后配额 = %d，期望 %d", got, lifetimeStorageQuotaBytes+bonus)
+	}
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierFree, BonusStorageBytes: maxInvitationBonusBytes + bonus}); got != freeQuota+maxInvitationBonusBytes {
+		t.Fatalf("超上限奖励必须被截断：%d", got)
+	}
+	if got := app.storageQuotaFor(model.User{MembershipTier: membershipTierFree, BonusStorageBytes: -1}); got != freeQuota {
+		t.Fatalf("负数奖励不得降低基础配额：%d", got)
+	}
+	if lifetimeStorageQuotaBytes != 10*1024*1024*1024 {
+		t.Fatalf("终生会员配额必须是 10 GiB，实际 %d", lifetimeStorageQuotaBytes)
 	}
 }
 

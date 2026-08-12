@@ -1,11 +1,10 @@
 // 代码块的 Mac 窗口外观：标题栏 + 三点 + 圆角 + 投影。
 //
-// 上一版这里断言的是「不得出现 width/height/border-radius」，理由是那些声明
-// 是否在微信里存活没有证据，只有 color 有（语法高亮靠它活下来）。
-// 那个前提已被推翻 —— mdnice 导出到微信的产物里明确带着这些声明且能正常显示，
-// 所以现在用真实圆形。字符方案的问题正是尺寸受字体摆布，三个 ● 胖瘦不一。
+// 空 span 圆形在浏览器里能显示，但粘贴进公众号后会被清洗器当成空装饰节点删除，
+// 连带让标题栏也消失。圆点因此必须有真实文字内容；color 是已经由语法高亮链路
+// 验证过能在公众号里存活的声明。
 //
-// 断言重点相应改成：三点是真实圆形（有尺寸、有 border-radius:50%、有背景色）、
+// 断言重点相应改成：三点都有 ● 文本与颜色、空节点清洗后仍然存在、
 // 标题栏与代码区同底色连成一块面板、pre 的 padding 被归零（否则标题栏齐不了边）、
 // 以及不能破坏前两次修好的高亮与缩进。
 //
@@ -92,20 +91,14 @@ const BLOCK = `<pre><code class="language-python">${escapeHTML(CODE)}</code></pr
   for (const [i, dot] of dots.entries()) {
     const style = dot.getAttribute("style") ?? "";
     const n = i + 1;
-    // 圆形三要素：尺寸、50% 圆角、背景色。缺任何一条就不是圆点
-    ok(`第 ${n} 点有 width`, /width:\d+px/.test(style), style);
-    ok(`第 ${n} 点有 height`, /(?:^|;)height:\d+px/.test(style), style);
-    ok(`第 ${n} 点是圆的`, style.includes("border-radius:50%"), style);
-    ok(`第 ${n} 点有背景色`, /background:#[0-9a-f]{6}/i.test(style), style);
-    // inline-block 才能让 width/height 生效 —— 纯 inline 元素两者都不起作用
+    eq(`第 ${n} 点有文字内容`, dot.textContent, "●");
+    ok(`第 ${n} 点有颜色`, /color:#[0-9a-f]{6}/i.test(style), style);
+    ok(`第 ${n} 点有明确字号`, /font-size:\d+px/.test(style), style);
+    ok(`第 ${n} 点压住行高`, /line-height:\d+px/.test(style), style);
     ok(`第 ${n} 点是 inline-block`, style.includes("display:inline-block"), style);
-    // 宽高必须相等，否则是椭圆
-    const w = Number(/width:(\d+)px/.exec(style)?.[1]);
-    const h = Number(/(?:^|;)height:(\d+)px/.exec(style)?.[1]);
-    eq(`第 ${n} 点宽高相等`, w, h);
-    // 不能有字符内容 —— 圆形靠尺寸撑出来，混进字符会把它顶高
-    eq(`第 ${n} 点无文字内容`, dot.textContent, "");
   }
+
+  eq("标题栏有三个可见圆点", bar.textContent, "●●●");
 
   // 前两个点要有右间距，最后一个不要（否则三点整体偏左，看着不居中）
   eq(
@@ -190,12 +183,31 @@ for (const theme of WECHAT_THEMES) {
   eq(`${theme.id}: 插了 1 条`, added, 1);
   const dots = [...root.querySelectorAll("pre > span > span")];
   eq(`${theme.id}: 有 3 个点`, dots.length, 3);
-  // 点色现在走 background（真实圆形），不是 color（字符方案）
+  // 点色走 color：公众号会保留高亮颜色，也不会把有文字的 span 当空节点删除
   const colors = dots.map((d) =>
-    ((d.getAttribute("style") ?? "").match(/background:(#[0-9a-f]{6})/i) ?? [])[1],
+    ((d.getAttribute("style") ?? "").match(/color:(#[0-9a-f]{6})/i) ?? [])[1],
   );
   eq(`${theme.id}: 三点颜色齐全`, colors.filter(Boolean).length, 3);
   eq(`${theme.id}: 三点颜色互不相同`, new Set(colors).size, 3);
+}
+
+// ---------- 模拟公众号删除空装饰节点 ----------
+//
+// 这是本次实际回归的条件。旧实现的三个 dot 都是 textContent=""，从叶子向上
+// 删除空 span 后，三个点和整条标题栏会一起消失。现在圆点有真实字符，清洗后仍在。
+{
+  const rules = WECHAT_THEMES[0].rules;
+  const { html } = pipeline(BLOCK, rules);
+  const { document } = parseHTML(`<div id="cleaned">${html}</div>`);
+  const cleaned = document.getElementById("cleaned");
+  const spans = [...cleaned.querySelectorAll("span")].reverse();
+  for (const span of spans) {
+    if (span.textContent === "" && span.children.length === 0) span.remove();
+  }
+  const bar = cleaned.querySelector("pre > span");
+  ok("空节点清洗后标题栏仍在", !!bar);
+  eq("空节点清洗后三个圆点仍在", bar?.textContent, "●●●");
+  eq("空节点清洗后仍有三个圆点节点", bar?.querySelectorAll("span").length, 3);
 }
 
 // ---------- 不能破坏前两次的修复 ----------
@@ -263,6 +275,7 @@ for (const theme of WECHAT_THEMES) {
   const bar = buildMacBar(document, "background:#111;");
   eq("是 span", bar.tagName.toLowerCase(), "span");
   eq("三个子 span", bar.querySelectorAll("span").length, 3);
+  eq("三个子 span 都有文本", bar.textContent, "●●●");
   // 深底走暗色那套
   const first = bar.querySelector("span").getAttribute("data-wechat-keep-style");
   ok("深底用暗色点", first.includes("#e0443e"), first);

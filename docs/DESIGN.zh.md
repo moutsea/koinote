@@ -14,6 +14,9 @@
 - [架构](#架构)
 - [本地开发](#本地开发)
 - [认证与安全](#认证)
+- [邀请奖励](#邀请奖励)
+- [会员与支付](#会员与支付)
+- [管理后台](#管理后台)
 - [分享](#分享)
 - [导出](#导出)
 - [代码高亮与 LaTeX](#代码高亮与-latex)
@@ -27,16 +30,16 @@
               ├─ 托管 Vite 打的 SPA 静态资源 (spa/dist)
               └─ /api/*、/health ──▶ 反向代理到 Go 后端
                                           │
-                                    ┌─────▼──────────────────────┐
-                                    │ docker-compose:            │
-                                    │  Go 后端 + Postgres + Redis │
-                                    └────────────────────────────┘
+                                    ┌─────▼────────────────┐
+                                    │ docker-compose:      │
+                                    │  Go 后端 + Postgres  │
+                                    └──────────────────────┘
 ```
 
 - **前端**：Vite + React 19 + TypeScript + TanStack Router + react-query + Tailwind v4
 - **编辑器内核**：TipTap v3（ProseMirror 系）+ tiptap-markdown（Markdown 往返保真）
 - **后端**：Go（stdlib net/http）+ pgx，无状态 HMAC-SHA256 会话 cookie
-- **数据库**：PostgreSQL 16；缓存 Redis 7（MVP 占位，登录闭环暂不使用）
+- **数据库**：PostgreSQL 16
 - **部署**：Cloudflare Worker（前端）+ VPS/docker-compose（后端）
 
 ## 目录结构
@@ -44,7 +47,7 @@
 ```
 spa/          前端 SPA 源码（Vite root）
   src/
-    pages/          主页 / 登录 / Dashboard / 编辑器页
+    pages/          主页 / 登录 / Dashboard / Admin / 编辑器页
     components/     AppShell、editor（TipTap）
     api.ts          后端 API 封装（credentials: include）
     auth.ts         会话状态 hook（react-query）
@@ -53,7 +56,7 @@ backend/      Go 后端
   cmd/server/       入口
   internal/         config / db / migrations / server(auth,session) / model
   migrations/       SQL 迁移
-docker-compose.yml  postgres + redis + backend
+docker-compose.yml  postgres + backend
 ```
 
 ## 本地开发
@@ -66,8 +69,6 @@ docker-compose.yml  postgres + redis + backend
 cp .env.example .env
 docker compose up -d postgres
 ```
-
-Compose 里的 Redis 目前只是为将来的共享限流预留，本地裸跑后端不会使用它。
 
 > ⚠️ **端口冲突提醒**：若本机已跑着原生 PostgreSQL 占用 5432，容器会连不上。
 > 在 `.env` 里改 `POSTGRES_PORT=5433`（或其他空闲端口），并同步把
@@ -111,7 +112,7 @@ npx vite preview        # 默认 :5274，代理配置与 dev 一致
 ### 全容器一键起
 
 ```bash
-npm run docker:up   # postgres + redis + backend 全部进容器
+npm run docker:up   # postgres + backend 全部进容器
 ```
 
 > **改了后端代码要重新构建镜像。** `docker compose up -d` 只重启容器、不重新构建，
@@ -127,7 +128,7 @@ npm run docker:up   # postgres + redis + backend 全部进容器
 - 会话是无状态 HMAC-SHA256 签名的 `koinote_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），**不落库**
 - 密码 bcrypt（cost 10）哈希；登录支持用户名或邮箱，大小写不敏感
 - 验证码只存 HMAC，10 分钟过期；消费验证码、建用户和删除验证码在同一事务中
-- OAuth 账号由 provider 视为已验证；订阅计费仍留待后续阶段
+- OAuth 账号由 provider 视为已验证；只有真正新建账号时才会处理邀请奖励
 
 ### 会话密钥 SESSION_SECRET
 
@@ -202,7 +203,7 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 
 登录、注册与分享限流器是**进程内**的（`ratelimit.go`）；验证码发送次数同时落库，
 可跨重启保留。多实例下进程内桶仍各自计数，实际阈值被放大 N 倍 —— 上多实例前要
-换成共享存储。Compose 里的 Redis 目前只是预留服务，后端尚未使用它。
+接入共享限流存储。
 
 ### 安全响应头
 
@@ -238,6 +239,101 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 
 `state` 用签名 cookie + nonce 双校验，回跳路径经 `sanitizeRedirectPath` 过滤，只允许站内相对路径。
 同邮箱的既有账号（如密码注册用户）在 OAuth 登录时会自动合并，不会重复建号。
+
+## 邀请奖励
+
+每个用户有一个 16 位专属邀请码，控制台把它组成 `/register?invite=CODE` 链接。邮箱注册
+直接在请求体提交邀请码；OAuth 则把邀请码放进已有的 HMAC 签名 state cookie，第三方平台
+只看到随机 nonce，无法读取或篡改邀请码。
+
+奖励只在创建全新账号时生效：邀请人与被邀请人各增加 500 MiB 永久空间，但每个账号的
+`bonus_storage_bytes` 累计最多 5 GiB：
+
+- `users.invitation_code` 唯一且不可由用户修改
+- `users.invited_by` 记录直接邀请关系
+- `users.bonus_storage_bytes` 保存累计永久奖励，数据库约束与应用读取层都强制 5 GiB 上限
+- `invitations.invited_user_id` 唯一，是同一个新账号不能重复发奖的数据库边界
+
+创建新用户、写邀请账本、给双方增加空间在同一个 PostgreSQL 事务中完成。邀请码无效时整笔
+注册回滚，邮箱验证码不会被消费；任一步失败也不会出现一方拿到空间、另一方没拿到的半状态。
+并发邀请会锁定邀请人行，最后一笔只发剩余额度；达到上限后的邀请仍记录关系，实际奖励记为 0。
+既有账号再次走 OAuth 登录时忽略 URL 中的邀请码，不能在注册后补领。`GET /api/invitations`
+只返回当前用户自己的邀请码、成功邀请数与奖励汇总。
+
+OAuth state 用独立的 `invitationCodeInvalid` 布尔字段表达无效邀请码，签名载荷中不会放入
+与合法邀请码共享命名空间的哨兵字符串。
+
+## 会员与支付
+
+首个付费权益是多币种一次性付款的终生会员，不做订阅：
+
+- 免费用户使用 `IMAGE_QUOTA_MB`（默认 500 MB）的基础云存储配额
+- 终生会员基础配额固定为 10 GiB，并取得后续 AI 功能的使用资格
+- 两种等级都会在基础配额之上叠加最多 5 GiB 的 `bonus_storage_bytes` 邀请奖励
+- `users.membership_tier` 是权益真值，当前只允许 `free | lifetime`
+- `stripe_payments.checkout_session_id` 是幂等键，成功页主动确认与 Stripe webhook
+  即使同时到达，也只会记录一笔付款并发放一次权益
+
+支付流程：
+
+```
+POST /api/billing/checkout
+  └─ 浏览器只提交币种，后端从白名单选金额并为固定 Product 创建 Checkout
+       ├─ 浏览器跳转 Stripe
+       ├─ 成功回跳 POST /api/billing/checkout/confirm
+       └─ Stripe POST /api/billing/webhook（checkout.session.completed）
+              └─ 两条确认路径都重新向 Stripe Retrieve Session
+                   └─ 数据库事务记录付款 + 把会员等级改为 lifetime
+```
+
+币种白名单为 USD 3.99、CNY 29、EUR 3.99、JPY 600。Stripe 侧只配置一个
+`STRIPE_LIFETIME_PRODUCT_ID`，每次 Checkout 由后端用 `price_data` 创建该币种的内联价格。
+这样既能让用户明确选择结算币种，也不会把金额控制权交给浏览器。
+
+不信任浏览器回传的金额、Price 或会员等级。发放前必须同时验证：`payment` 模式、
+`paid` 状态、metadata 中的币种属于白名单、Session 与 line item 的金额/币种完全匹配、
+唯一 line item 的 Product ID 与数量，以及
+`client_reference_id` / metadata 中的用户归属。Webhook 原始请求先用 endpoint secret
+验证 `Stripe-Signature`，但即使签名正确仍重新拉取 Session，避免把事件快照当权益真值。
+
+Stripe 账号由多个服务共用，因此 Checkout Session 与 PaymentIntent 都写入
+`metadata.service=koinote`。Webhook 只路由该服务的事件，其他服务的签名事件返回 200 忽略；
+成功页确认和 Webhook 的最终 Session 校验都强制要求相同服务标记。
+
+Checkout 不传 `payment_method_types`，由 Stripe 从 Dashboard 已启用方式中按地区、
+用户位置和币种动态选择；当前测试账号已启用银行卡、Alipay 与 WeChat Pay。Webhook 同时处理
+`checkout.session.completed` 与 `checkout.session.async_payment_succeeded`，后者保证异步
+付款在用户关闭成功页后仍能发放权益。生产环境的
+`STRIPE_SECRET_KEY`、`STRIPE_WEBHOOK_SECRET`、`STRIPE_LIFETIME_PRODUCT_ID` 必须三项齐全；
+开发环境可暂缺 webhook secret，靠成功页确认走通 test mode。
+
+每次点击购买都会生成新的随机 attempt ID，幂等键再把它与参数版本、回跳地址、用户、
+Product、金额、币种和 Customer 参数一起生成指纹。Stripe 对同一次 API 调用的网络重试仍保持
+幂等，但用户取消、Session 超时或主动重试时会得到新的 Session，不会被带回已失效页面。
+改变支付方式等请求结构时仍需同步更新参数版本。创建 Session 另按用户限制为 10 分钟 5 次，
+避免重复请求持续消耗 Stripe API；不同用户的计数互不影响。
+
+配额不是前端显示值：图片记账、文档创建、文档更新、存储用量四条路径都调用
+`storageQuotaFor(user)`。这样数据库刚发放会员后，下一次写入就直接获得 10 GiB 加受限邀请奖励，
+未来 AI 鉴权也可复用同一个会员等级，而不必再查 Stripe。
+
+## 管理后台
+
+`GET /api/admin/stats` 先从服务端 session 读取用户，再检查数据库中的 `is_admin`；前端
+是否显示菜单只改善体验，不参与授权。未登录返回 401，普通用户返回 403。响应不包含密码哈希、
+Stripe Customer ID、Checkout Session ID 或内部鉴权标识。
+
+业务统计以 PostgreSQL 为真值：用户、已验证用户、终生会员、文档、图片账本、全站存储、
+订单、按币种收入、30 天增长和最近记录。不同币种不做无汇率来源的相加；前端分别用
+`Intl.NumberFormat` 展示。包含文档与图片全表聚合的总览缓存一分钟，缓存锁同时合并并发加载，
+避免多个管理员刷新时重复扫描大表。
+
+今日 UV / PV 通过 Cloudflare GraphQL Analytics API 的 `httpRequests1mGroups` 查询。
+查询不带时间维度，因此 `uniq.uniques` 是整段时间的去重结果，不能把分钟桶的 UV 相加。
+它使用独立的最小权限 `CLOUDFLARE_ANALYTICS_TOKEN`，并按 hostname 过滤同一 Zone 下的流量。
+结果缓存一分钟。Token 缺失、权限错误或 Cloudflare 超时时只让 `traffic.available=false`，
+PostgreSQL 业务统计仍返回 200。这个 UV / PV 是边缘 HTTP 口径，可能包含合法爬虫与已放行
+的自动流量，不等同于客户端埋点的真实用户会话。
 
 ## 分享
 
@@ -303,12 +399,12 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 限流 key 用 token 的 sha256 而非明文。响应头 `Cache-Control: private, no-store`
 —— 口令档正文若被 CDN 缓存，拿到缓存就等于绕过口令。另加 `X-Robots-Tag: noindex`。
 
-> ⚠ **限流器是进程内存实现**（`go.mod` 尚无 Redis 客户端）。
-> 多实例部署时各进程独立计数，实际阈值被放大 N 倍。上多实例前必须换成 Redis。
+> ⚠ **限流器是进程内存实现**。
+> 多实例部署时各进程独立计数，实际阈值被放大 N 倍。上多实例前必须接入共享限流存储。
 
 ## 导出
 
-四种格式，全部在浏览器端完成，不占后端资源：
+六条路径，全部在浏览器端完成，不占后端资源：
 
 | 格式 | 实现 |
 |---|---|
@@ -422,10 +518,12 @@ KaTeX → html2canvas（3 倍，公式字号小，低于 3 倍在手机上发虚
 2. **公式图的宽高排在主题规则之后。** 主题的 `img` 规则里有 `height:auto`，
    顺序反了会把公式压扁。这条靠 `data-wechat-keep-style` 传递，有专门的断言守着。
 
-**公式图会按 LaTeX 源码缓存。** 不缓存的话每次导出都重新栅格化并重新上传 ——
-实测切几次主题就能在 R2 里堆出 22 份同样的图，而且现在没有 images 表，这些对象
-无法列举也无法清理。缓存只在当前页面存活期内有效；跨会话去重要等 images 表落地后
-由服务端按内容哈希查重。
+**公式图是临时、内容寻址对象。** 同一次导出里按 LaTeX 源码复用渲染结果；上传后
+Worker 再按 PNG 字节的 SHA-256 生成稳定 key，因此跨刷新、跨会话重复导出也不会在
+R2 堆副本。每次导出会把对象的保留期续到 7 天，之后进入图片 GC；若用户把该 URL
+写回自己的正文，GC 的引用复查会保留它，直到正文真正移除引用。账本用 `purpose`
+区分这类临时对象：它们不占正文云存储额度，而是受独立的每用户 100 MiB 临时额度约束，
+所以导出不会顶满普通上传，客户端伪造 purpose 也不能无限绕过存储限制。
 
 **已知降级**：代码块的语法高亮无法保留（class 被剥），只剩等宽字体与底色。
 对话框里明写了这条，不让用户以为是 bug。公式转换失败时降级成 LaTeX 源码并提示
@@ -562,6 +660,11 @@ npx wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
 响应带一年 immutable 缓存，重复打开不会每次都请求。外部导出内容和直接访问 CDN
 仍不经过 Worker。
 
+本地开发的模拟 R2 不含生产对象。`IMAGE_READ_FALLBACK_BASE` 默认留空，避免开源仓库在
+本地 R2 缺图时意外访问维护者的生产域名。确实需要查看自己生产环境的存量图片时，可在
+`.dev.vars` 中显式设置自己的 CDN 基址；回源仍要求合法的自有图片 key，不能充当任意
+URL 代理，`env.production` 也不启用这条路径。
+
 留空**不影响**微信导出的正确性：导出时 `auditWechatImages`
 （`spa/src/components/editor/wechatImages.ts`）会把 `/images/<key>` 按当前源补成
 绝对地址，所以线上部署后即使走 Worker 代理，微信也抓得到，只是每次加载多花一个
@@ -613,10 +716,10 @@ curl https://你的域名/api/images/config
 
 ## 验证
 
-一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 26 个断言套件）：
+一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 27 个断言套件）：
 
 ```bash
-npm test          # typecheck × 2 + 26 个套件，失败即停
+npm test          # typecheck × 2 + 27 个套件，失败即停
 npm run go:test   # go vet + go test（后端）
 ```
 
@@ -666,7 +769,7 @@ PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
 所以不能只看 `page.images`）、各页位图指纹是否互不相同、分页填充率、单页体积，
 以及导出时按需加载了哪些 chunk。
 
-`verify_export_formats.py` 覆盖四种格式，重点是公式在每种格式里是否真的落地。
+`verify_export_formats.py` 覆盖四种下载格式，重点是公式在每种格式里是否真的落地。
 
 两个脚本都需要后端与数据库在跑，且会在数据库里留下一个 `pdfprobe` 测试账号。
 

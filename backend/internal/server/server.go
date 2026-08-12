@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stripe/stripe-go/v82"
 
 	"koinote/backend/internal/config"
 	"koinote/backend/internal/httpx"
@@ -16,20 +17,28 @@ import (
 )
 
 type App struct {
-	cfg         config.Config
-	db          *pgxpool.Pool
-	emailSender verificationEmailSender
-	limiter     *rateLimiter
-	limiterOnce sync.Once
+	cfg            config.Config
+	db             *pgxpool.Pool
+	emailSender    verificationEmailSender
+	limiter        *rateLimiter
+	limiterOnce    sync.Once
+	stripeCheckout stripeCheckoutSessionClient
+	siteAnalytics  siteAnalyticsClient
+	adminOverview  adminOverviewCache
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
-	return &App{
-		cfg:         cfg,
-		db:          db,
-		emailSender: newWorkerVerificationEmailSender(cfg),
-		limiter:     newRateLimiter(),
+	app := &App{
+		cfg:           cfg,
+		db:            db,
+		emailSender:   newWorkerVerificationEmailSender(cfg),
+		limiter:       newRateLimiter(),
+		siteAnalytics: newCloudflareAnalyticsClient(cfg),
 	}
+	if cfg.StripeEnabled() {
+		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions
+	}
+	return app
 }
 
 // rateLimit 惰性取限流器。测试里直接构造 App{} 时 limiter 为 nil，
@@ -56,6 +65,13 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/session", a.authSession)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/start", a.oauthStart)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.oauthCallback)
+
+	mux.HandleFunc("GET /api/billing/status", a.billingStatus)
+	mux.HandleFunc("POST /api/billing/checkout", a.billingCheckout)
+	mux.HandleFunc("POST /api/billing/checkout/confirm", a.billingCheckoutConfirm)
+	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
+	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
+	mux.HandleFunc("GET /api/invitations", a.invitationsOverview)
 
 	mux.HandleFunc("GET /api/folders", a.foldersList)
 	mux.HandleFunc("POST /api/folders", a.folderCreate)
@@ -123,11 +139,13 @@ func (a *App) getUserByAuthUserID(ctx context.Context, authUserID string) (model
 	var u model.User
 	err := a.db.QueryRow(ctx, `
 		SELECT id, auth_user_id, email, username, nickname, avatar_url,
-		       is_verified, is_admin, created_at, updated_at
+		       is_verified, is_admin, membership_tier, membership_granted_at,
+		       bonus_storage_bytes, stripe_customer_id, created_at, updated_at
 		FROM users WHERE auth_user_id = $1 LIMIT 1
 	`, authUserID).Scan(
 		&u.ID, &u.AuthUserID, &u.Email, &u.Username, &u.Nickname, &u.AvatarURL,
-		&u.IsVerified, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt,
+		&u.IsVerified, &u.IsAdmin, &u.MembershipTier, &u.MembershipGrantedAt,
+		&u.BonusStorageBytes, &u.StripeCustomerID, &u.CreatedAt, &u.UpdatedAt,
 	)
 	return u, err
 }
@@ -171,15 +189,16 @@ func (a *App) emailOrUsernameExists(ctx context.Context, email, username string)
 type authUserRecord struct {
 	ID         int
 	AuthUserID string
+	IsVerified bool
 }
 
 // authUserByEmail 按邮箱（大小写不敏感）查用户，供 OAuth 账号合并使用。
 func (a *App) authUserByEmail(ctx context.Context, email string) (authUserRecord, bool, error) {
 	var rec authUserRecord
 	err := a.db.QueryRow(ctx, `
-		SELECT id, auth_user_id FROM users
+		SELECT id, auth_user_id, is_verified FROM users
 		WHERE lower(email) = lower($1) LIMIT 1
-	`, email).Scan(&rec.ID, &rec.AuthUserID)
+	`, email).Scan(&rec.ID, &rec.AuthUserID, &rec.IsVerified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return authUserRecord{}, false, nil
 	}

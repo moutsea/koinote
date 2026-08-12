@@ -16,7 +16,7 @@ exports and shares in one click.
 
 **[koinote.app](https://koinote.app)** — try it without deploying anything
 
-[中文](README.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
+[中文](README.md) · [Changelog](CHANGELOG.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
@@ -36,7 +36,8 @@ form the WeChat editor accepts), and **documents live in the cloud** (multi-devi
 shareable).
 
 > The current open-source scope covers editing, image hosting, export, sharing,
-> and the account flow; AI assistance and subscription billing are not implemented yet.
+> and the account flow. AI features are still planned; a one-time lifetime membership
+> is available through Stripe Checkout.
 
 ## Features
 
@@ -54,7 +55,8 @@ shareable).
 - Remote images pasted from the web are re-hosted automatically, so they don't
   break when the original site deletes them
 - Real file type sniffed from magic bytes; SVG is rejected outright (it can embed scripts)
-- Per-user quota (500 MB by default, covering document text and images)
+- Per-user quota (500 MB for free accounts by default, 10 GB for lifetime members,
+  plus up to 5 GB of invitation bonuses; all quotas cover document text and images)
 - First-party images use the same-origin `/images/...` path in the web UI while
   exports keep CDN URLs, avoiding false CORS / Local Network Access blocks
 - Images no longer referenced by documents are reclaimed asynchronously; references
@@ -88,6 +90,13 @@ rasterized and uploaded as images.
 - UI in Chinese, English, Japanese, and French
 - Light and dark themes, ink-wash visual style
 - Verified email registration and password login, plus Google and GitHub OAuth
+- Personal invitation links that grant both users 500 MB of permanent cloud storage
+  when a new account is created, capped at 5 GB of invitation bonuses per account
+- Multi-currency lifetime membership via one-time Stripe payment in USD / CNY / EUR / JPY,
+  with card, Alipay, and WeChat Pay support
+- Administrator dashboard for user/member totals, per-currency revenue, orders,
+  site storage, 30-day growth, and recent accounts and payments
+- Optional Cloudflare Analytics metrics for today's edge UV, PV, requests, and bandwidth
 
 ## Stack
 
@@ -97,11 +106,12 @@ Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
                                 ├─ /api/internal/email/* ──▶ Email Sending
                                 └─ other /api/* ──▶ Go backend ──▶ PostgreSQL
 Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
+Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend
 ```
 
 - **Frontend** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
 - **Editor** TipTap v3 (ProseMirror) · tiptap-markdown · KaTeX · lowlight
-- **Backend** Go (stdlib `net/http`) · pgx · PostgreSQL 16
+- **Backend** Go (stdlib `net/http`) · pgx · Stripe Go SDK · PostgreSQL 16
 - **Edge** Cloudflare Worker · R2 · Email Sending
 
 Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the database.
@@ -134,7 +144,7 @@ Then:
 
 ```bash
 npm ci
-docker compose up -d postgres         # database; Redis is currently reserved
+docker compose up -d postgres         # database
 npm run backend:dev                   # backend (runs migrations automatically)
 npm run dev                           # frontend → http://localhost:5273
 ```
@@ -158,6 +168,18 @@ The local Worker proxies to `http://localhost:8080` by default. If the backend u
 another port, override it with `--var BACKEND_URL:http://localhost:<port>`; changing
 `.env` alone does not pass the value to Wrangler.
 
+To test membership locally, put a Stripe test-mode `STRIPE_SECRET_KEY` and
+`STRIPE_LIFETIME_PRODUCT_ID` in `.env`. The backend creates an inline allowlisted
+price for that Product: USD 3.99, CNY 29, EUR 3.99, or JPY 600. The success return
+confirms and grants the entitlement directly. To test webhooks too, install Stripe CLI:
+
+```bash
+stripe listen --forward-to localhost:8080/api/billing/webhook
+```
+
+Copy its `whsec_...` value into `STRIPE_WEBHOOK_SECRET`, restart the backend, and use
+Stripe's test card `4242 4242 4242 4242` with any future expiry and CVC.
+
 For the full walkthrough, port conflicts, and all-in-Docker startup, see the
 [design notes](docs/DESIGN.en.md#local-development).
 
@@ -178,6 +200,11 @@ credential. `.env.example` deliberately leaves it blank.
 to reuse `SESSION_SECRET` in production, so rotating verification keys does not log
 everyone out and an email-path secret leak cannot become session forgery.
 
+**Production Stripe configuration must be complete.** If any of `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, or `STRIPE_LIFETIME_PRODUCT_ID` is set, all three are required.
+The database membership tier is the entitlement source of truth; no frontend response
+can grant the 10 GB quota directly.
+
 **`NODE_ENV` controls the cookie's `Secure` flag.** It must be `production` in production.
 
 **Images are readable by anyone who has the URL.** Keys are random and
@@ -187,8 +214,8 @@ users generally assume images in a private document are private too. If that
 doesn't work for your case, switch to signed URLs.
 
 **Rate limiting is per-process.** Across multiple instances each process counts
-separately, so effective thresholds multiply by N. Move it to shared storage before
-scaling out. The Redis service in Compose is only reserved; the backend does not use it yet.
+separately, so effective thresholds multiply by N. Move it to shared rate-limit
+storage before scaling out.
 
 **Rebuild the image after changing backend code.** `docker compose up -d` does not
 rebuild; use `docker compose up -d --build backend`. Otherwise the code changes
@@ -241,6 +268,44 @@ token is needed. Set `WORKER_URL=https://koinote.app` in the VPS `.env`, with th
 `EMAIL_VERIFICATION_SECRET`. Verification codes are stored only as HMACs in Postgres
 and expire after 10 minutes.
 
+The Admin link is shown only to users whose database row has `is_admin=true`. Grant the
+first administrator by email after deployment:
+
+```bash
+docker compose exec postgres psql -U koinote -d koinote \
+  -c "UPDATE users SET is_admin = true WHERE lower(email) = lower('you@example.com');"
+```
+
+User, membership, revenue, order, and storage metrics on `/admin` come from PostgreSQL.
+Today's UV and PV are optional Cloudflare edge HTTP Analytics. Create a dedicated token
+with `Zone / Analytics / Read`, restricting Zone Resources to the Koinote
+zone, and store it as `CLOUDFLARE_ANALYTICS_TOKEN`. Do not reuse the cache-purge-only
+`CLOUDFLARE_CACHE_PURGE_TOKEN`. If the token is absent or Cloudflare is temporarily
+unavailable, only the traffic cards degrade; the business metrics remain available.
+
+Create this endpoint in Stripe Dashboard and subscribe it to
+`checkout.session.completed` and `checkout.session.async_payment_succeeded`:
+
+```text
+https://koinote.app/api/billing/webhook
+```
+
+Store the endpoint signing secret as `STRIPE_WEBHOOK_SECRET`. Users can choose
+USD 3.99, CNY 29, EUR 3.99, or JPY 600. Before granting access, the backend retrieves
+the Checkout Session again and validates paid status, the selected currency's exact
+amount, the configured Product ID, and Koinote user ownership. Success-page confirmation
+and the webhook share one idempotent database transaction.
+
+Checkout does not hardcode payment methods. Stripe dynamically selects from the methods
+enabled in Dashboard according to account country, customer location, and currency. Enable
+Alipay and WeChat Pay in Stripe Dashboard to offer them; Stripe can still show card only
+when its eligibility or currency rules exclude a method.
+
+When the Stripe account is shared, Koinote tags both Checkout Sessions and PaymentIntents
+with `metadata.service=koinote`. The webhook acknowledges and ignores events for other
+services, then validates the service tag again together with Product, amount, currency,
+and ownership before granting membership.
+
 Verify onboarding with `npx wrangler email sending list` and
 `npx wrangler email sending dns get "$KOINOTE_DOMAIN"`. Email Sending intentionally
 places its bounce MX and SPF records on `cf-bounce.<domain>` and DKIM on
@@ -264,7 +329,11 @@ Required repository secrets:
 | `CLOUDFLARE_ACCOUNT_ID` | Shown by `wrangler whoami` |
 | `CLOUDFLARE_ZONE_ID` | Zone hosting the image CDN, used for cache purge after deletion |
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge |
+| `CLOUDFLARE_ANALYTICS_TOKEN` | Optional; Analytics Read limited to the target zone, used for Admin UV/PV |
 | `EMAIL_VERIFICATION_SECRET` | Independent verification-code HMAC key, written safely to the VPS `.env` |
+| `STRIPE_SECRET_KEY` | Stripe server key; start with `sk_test_...`, switch to live mode before real charges |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for `/api/billing/webhook` (`whsec_...`) |
+| `STRIPE_LIFETIME_PRODUCT_ID` | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist |
 | `VPS_HOST` | Backend server address |
 | `VPS_SSH_KEY` | Deploy-only private key (generate a dedicated one, don't reuse your personal key) |
 | `VPS_HOST_KEY` | The server's known_hosts entry, used to pin the host key |
@@ -276,11 +345,16 @@ openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 ```
 
+Set the Stripe values interactively with `gh secret set STRIPE_SECRET_KEY`,
+`gh secret set STRIPE_WEBHOOK_SECRET`, and `gh secret set STRIPE_LIFETIME_PRODUCT_ID`
+so credentials do not enter shell history.
+
 The second command shows only the secret name and update time; it cannot read the
 secret value. Before deploying, the workflow checks that every required secret exists.
 It then updates `/opt/koinote/.env` atomically over stdin before restarting the backend,
-so the verification secret does not need to be copied into the production `.env`
-manually. The repository secret must still be set before the first deployment.
+so verification and Stripe secrets do not need to be copied into the production `.env`
+manually. The repository secrets must still be set before the first deployment.
+The optional Analytics token is written through the same path when configured.
 
 ## Tests
 
@@ -298,6 +372,7 @@ Export and sharing also have Playwright end-to-end scripts — see the
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md) — notable additions, changes, fixes, and security updates
 - [Design notes](docs/DESIGN.en.md) — why things are built this way, which traps
   we hit, and which degradations are deliberate
 - [设计文档（中文）](docs/DESIGN.zh.md)

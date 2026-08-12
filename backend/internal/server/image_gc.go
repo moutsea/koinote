@@ -17,7 +17,7 @@ import (
 // 毫秒拖到几百毫秒，失败时要么让删文档也失败（更坏），要么静默漏掉对象 —— 而漏掉
 // 是不可观测的，只会表现为账单上慢慢长出来的存储费。
 //
-// 队列表 + 轮询 goroutine 而不是引 Redis 队列或作业框架：作业量就是「删文档的频率」，
+// 队列表 + 轮询 goroutine 而不是引外部队列或作业框架：作业量就是「删文档的频率」，
 // 一张表足够，且不增加运维面。表结构见 migrations/0007_image_gc.sql。
 
 const (
@@ -25,8 +25,9 @@ const (
 	gcPollInterval = 30 * time.Second
 	// 每轮最多处理多少个 key。Worker 的删除端点一次最多收 100 个
 	gcBatchSize = 50
-	// 放弃前最多重试几次。超过就留在表里并停止重试，last_error 里有原因
-	gcMaxAttempts = 8
+	// 前 8 次指数退避，之后每天慢速重试，不让任务永久停摆
+	gcFastRetryAttempts = 8
+	gcSlowRetryInterval = 24 * time.Hour
 	// 调 Worker 的超时
 	gcRequestTimeout = 15 * time.Second
 )
@@ -53,12 +54,16 @@ func (a *App) enqueueImageDeletions(ctx context.Context, userID int, keys []stri
 		return nil
 	}
 
-	// ON CONFLICT DO NOTHING：同一个 key 可能被多次入队（同一张图曾被两篇文档引用，
-	// 两篇先后被删）。重复入队不是错误，忽略即可
+	// 重新入队时恢复尝试次数。旧任务可能因长期故障累计了很多 attempts；既然对象再次
+	// 被确认成孤儿，就应立即给它一次新的回收机会。
 	_, err := a.db.Exec(ctx, `
 		INSERT INTO pending_image_deletions (object_key, user_id)
 		SELECT unnest($1::text[]), $2
-		ON CONFLICT (object_key) DO NOTHING
+		ON CONFLICT (object_key) DO UPDATE SET
+			user_id = EXCLUDED.user_id,
+			attempts = 0,
+			last_error = NULL,
+			next_try_at = now()
 	`, safe, userID)
 	return err
 }
@@ -161,10 +166,10 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	rows, err := a.db.Query(ctx, `
 		SELECT id, object_key, user_id, attempts
 		FROM pending_image_deletions
-		WHERE next_try_at <= now() AND attempts < $1
+		WHERE next_try_at <= now()
 		ORDER BY next_try_at
-		LIMIT $2
-	`, gcMaxAttempts, gcBatchSize)
+		LIMIT $1
+	`, gcBatchSize)
 	if err != nil {
 		return fmt.Errorf("取待删记录: %w", err)
 	}
@@ -332,10 +337,13 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	return nil
 }
 
-// gcBackoff 按尝试次数算退避时长：1、2、4…最多 64 分钟。
+// gcBackoff 前 8 次按 1、2、4…分钟退避，之后每天慢速重试。
 func gcBackoff(attempts int) time.Duration {
 	if attempts < 0 {
 		attempts = 0
+	}
+	if attempts >= gcFastRetryAttempts {
+		return gcSlowRetryInterval
 	}
 	return time.Duration(1<<min(attempts, 6)) * time.Minute
 }

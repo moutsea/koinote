@@ -20,27 +20,6 @@ services:
     networks:
       - koinote-network
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: >
-      sh -c 'redis-server --save 60 1 --appendonly yes --appendfsync everysec
-      ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}'
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDISCLI_AUTH: ${REDIS_PASSWORD:-}
-      TZ: ${TZ:-Asia/Shanghai}
-    volumes:
-      - koinote-redis-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    networks:
-      - koinote-network
-
   backend:
     build:
       context: ./backend
@@ -49,21 +28,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       PORT: "8080"
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgres://${POSTGRES_USER:-koinote}:${POSTGRES_PASSWORD:-koinote}@postgres:5432/${POSTGRES_DB:-koinote}?sslmode=disable
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       AUTO_MIGRATE: "true"
       MIGRATIONS_DIR: /app/migrations
       SESSION_SECRET: ${SESSION_SECRET:-}
       BACKEND_INTERNAL_TOKEN: ${BACKEND_INTERNAL_TOKEN:-}
       EMAIL_VERIFICATION_SECRET: ${EMAIL_VERIFICATION_SECRET:-}
       ENABLE_MOCK_EMAIL: ${ENABLE_MOCK_EMAIL:-false}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_LIFETIME_PRODUCT_ID: ${STRIPE_LIFETIME_PRODUCT_ID:-}
+      # Admin 的 Cloudflare UV/PV。Token 缺失时只隐藏流量卡片，不影响业务统计。
+      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+      CLOUDFLARE_ANALYTICS_TOKEN: ${CLOUDFLARE_ANALYTICS_TOKEN:-}
+      CLOUDFLARE_ANALYTICS_HOST: ${CLOUDFLARE_ANALYTICS_HOST:-}
       # 图片回收和邮箱验证码发信都由后端回调 Worker。生产环境必须配置；
       # 留空时图片待删记录仍会排队，但邮箱注册无法发送验证码。
       WORKER_URL: ${WORKER_URL:-}
@@ -86,7 +67,6 @@ services:
 
 volumes:
   koinote-postgres-data:
-  koinote-redis-data:
 
 networks:
   koinote-network:

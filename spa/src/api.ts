@@ -11,6 +11,9 @@ export type User = {
   avatarUrl?: string | null;
   isVerified: boolean;
   isAdmin: boolean;
+  membershipTier: "free" | "lifetime";
+  membershipGrantedAt?: string | null;
+  bonusStorageBytes: number;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -49,6 +52,7 @@ export const IMAGE_QUOTA_EVENT = "koinote:image-quota-exceeded";
  */
 export const IMAGE_QUOTA_CODE = "image_quota_exceeded";
 export const STORAGE_QUOTA_CODE = "storage_quota_exceeded";
+export const TEMPORARY_IMAGE_QUOTA_CODE = "temporary_image_quota_exceeded";
 
 const QUOTA_CODES = new Set<string>([IMAGE_QUOTA_CODE, STORAGE_QUOTA_CODE]);
 
@@ -124,6 +128,7 @@ export function register(params: {
   email: string;
   password: string;
   verificationCode: string;
+  invitationCode?: string;
 }) {
   return apiJson<{ user: User }>("/api/auth/register", {
     method: "POST",
@@ -167,6 +172,125 @@ export function logout() {
 
 export function getSession() {
   return apiJson<{ user: User }>("/api/auth/session");
+}
+
+// ---------- 会员与支付 ----------
+
+export type MembershipStatus = {
+  tier: "free" | "lifetime";
+  active: boolean;
+  storageQuotaBytes: number;
+  /** 代表已取得未来 AI 功能权益；具体 AI 功能尚未上线 */
+  aiEnabled: boolean;
+  billingEnabled: boolean;
+  /** Stripe 最小货币单位，例如 USD cents */
+  priceAmount: number;
+  priceCurrency: string;
+  prices: Array<{
+    /** Stripe 最小货币单位；JPY 等零小数货币直接使用整数金额 */
+    amount: number;
+    currency: string;
+  }>;
+};
+
+export function getMembershipStatus() {
+  return apiJson<{ membership: MembershipStatus }>("/api/billing/status");
+}
+
+// ---------- 邀请奖励 ----------
+
+export type InvitationOverview = {
+  invitationCode: string;
+  successfulInvites: number;
+  rewardPerInviteBytes: number;
+  maxBonusStorageBytes: number;
+  earnedStorageBytes: number;
+  /** 包含自己受邀注册所得与邀请他人所得的全部永久奖励空间 */
+  bonusStorageBytes: number;
+};
+
+export function getInvitationOverview() {
+  return apiJson<InvitationOverview>("/api/invitations");
+}
+
+export function createMembershipCheckout(currency: string) {
+  return apiJson<{ sessionId: string; url: string }>("/api/billing/checkout", {
+    method: "POST",
+    body: JSON.stringify({ currency }),
+  });
+}
+
+export function confirmMembershipCheckout(sessionId: string) {
+  return apiJson<{
+    status: "active" | "pending";
+    membership?: MembershipStatus;
+    user?: User;
+  }>("/api/billing/checkout/confirm", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
+  });
+}
+
+// ---------- 管理后台 ----------
+
+export type AdminStats = {
+  generatedAt: string;
+  timeZone: string;
+  overview: {
+    users: number;
+    verifiedUsers: number;
+    members: number;
+    documents: number;
+    images: number;
+    documentBytes: number;
+    imageBytes: number;
+    orders: number;
+    todayNewUsers: number;
+    todayNewMembers: number;
+    todayOrders: number;
+  };
+  revenue: Array<{
+    currency: string;
+    totalAmount: number;
+    totalOrders: number;
+    todayAmount: number;
+    todayOrders: number;
+  }>;
+  trend: Array<{
+    date: string;
+    newUsers: number;
+    newMembers: number;
+    orders: number;
+  }>;
+  recentUsers: Array<{
+    id: number;
+    name: string;
+    email: string;
+    isVerified: boolean;
+    membershipTier: "free" | "lifetime";
+    createdAt: string;
+  }>;
+  recentPayments: Array<{
+    userName: string;
+    userEmail: string;
+    amount: number;
+    currency: string;
+    createdAt: string;
+  }>;
+  traffic: {
+    available: boolean;
+    reason?: "not_configured" | "upstream_error";
+    pageViews: number;
+    uniqueVisitors: number;
+    requests: number;
+    bytes: number;
+    from: string;
+    to: string;
+  };
+};
+
+export function getAdminStats() {
+  return apiJson<AdminStats>("/api/admin/stats");
 }
 
 // ---------- 文档 ----------
@@ -377,7 +501,12 @@ export function isUploadableImage(file: File): boolean {
  * 也因此不能复用 apiJson —— 它会强制 Content-Type: application/json，
  * 而 Worker 要拿这个头与真实文件头比对。
  */
-export async function uploadImage(file: File): Promise<UploadedImage> {
+export type ImageUploadPurpose = "persistent" | "wechat-export";
+
+export async function uploadImage(
+  file: File,
+  purpose: ImageUploadPurpose = "persistent",
+): Promise<UploadedImage> {
   if (!isUploadableImage(file)) {
     // 前端先挡一道：服务端也会拒，但等一趟往返才报错体验更差
     throw new ApiError(415, "Unsupported image type", "image_type_unsupported");
@@ -386,7 +515,10 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
   const response = await fetch("/api/images", {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": file.type },
+    headers: {
+      "Content-Type": file.type,
+      "X-Koinote-Image-Purpose": purpose,
+    },
     body: file,
   });
   if (!response.ok) {

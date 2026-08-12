@@ -33,6 +33,8 @@ func TestSanitizeRedirectPath(t *testing.T) {
 		{"javascript 伪协议", "javascript:alert(1)", "/dashboard"},
 		{"data 伪协议", "data:text/html,<script>", "/dashboard"},
 		{"反斜杠变体", "\\\\evil.com", "/dashboard"},
+		{"斜杠反斜杠 WHATWG 绕过", "/\\evil.com", "/dashboard"},
+		{"站内路径混入反斜杠", "/safe\\evil.com", "/dashboard"},
 	}
 
 	for _, tc := range cases {
@@ -41,6 +43,26 @@ func TestSanitizeRedirectPath(t *testing.T) {
 				t.Fatalf("输入 %q，期望 %q，实际 %q", tc.input, tc.expected, got)
 			}
 		})
+	}
+}
+
+func TestSelectGitHubVerifiedEmail(t *testing.T) {
+	emails := []githubEmail{
+		{Email: "public@example.com", Verified: false},
+		{Email: "primary@example.com", Primary: true, Verified: true},
+		{Email: "other@example.com", Verified: true},
+	}
+
+	got, err := selectGitHubVerifiedEmail(emails, "PUBLIC@example.com")
+	if err != nil || got != "primary@example.com" {
+		t.Fatalf("未验证的公开邮箱必须回退到 verified primary，got=%q err=%v", got, err)
+	}
+	got, err = selectGitHubVerifiedEmail(emails, "OTHER@example.com")
+	if err != nil || got != "other@example.com" {
+		t.Fatalf("verified 的公开邮箱应保持一致，got=%q err=%v", got, err)
+	}
+	if _, err := selectGitHubVerifiedEmail([]githubEmail{{Email: "no@example.com"}}, "no@example.com"); err == nil {
+		t.Fatal("没有 verified 邮箱时必须拒绝")
 	}
 }
 
@@ -54,10 +76,11 @@ func encodeStatePayload(raw []byte) string {
 func TestOAuthStateRoundTrip(t *testing.T) {
 	app := appWithSecret("state-secret")
 	payload := oauthStatePayload{
-		Provider:   "google",
-		RedirectTo: "/dashboard",
-		Nonce:      "abc123",
-		ExpiresAt:  time.Now().Add(oauthStateTTL).Unix(),
+		Provider:       "google",
+		RedirectTo:     "/dashboard",
+		InvitationCode: "ABCDEFGH23456789",
+		Nonce:          "abc123",
+		ExpiresAt:      time.Now().Add(oauthStateTTL).Unix(),
 	}
 
 	token, err := app.signOAuthState(payload)
@@ -74,6 +97,9 @@ func TestOAuthStateRoundTrip(t *testing.T) {
 	}
 	if got.Provider != "google" || got.Nonce != "abc123" || got.RedirectTo != "/dashboard" {
 		t.Fatalf("state 载荷往返不一致: %+v", got)
+	}
+	if got.InvitationCode != payload.InvitationCode {
+		t.Fatalf("邀请码未随签名 state 往返: %+v", got)
 	}
 }
 
@@ -220,7 +246,7 @@ func TestOAuthStartRedirectsWithSignedState(t *testing.T) {
 		GoogleOAuthID:     "gid",
 		GoogleOAuthSecret: "gsecret",
 	})
-	rec := doRequest(app, http.MethodGet, "/api/auth/oauth/google/start?redirectTo=/editor")
+	rec := doRequest(app, http.MethodGet, "/api/auth/oauth/google/start?redirectTo=/editor&invite=abcdefgh23456789")
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("期望 302，实际 %d", rec.Code)
@@ -235,6 +261,9 @@ func TestOAuthStartRedirectsWithSignedState(t *testing.T) {
 	}
 	if strings.Contains(location, "/editor") {
 		t.Fatal("redirectTo 不应泄露到 provider URL，应留在签名 cookie 内")
+	}
+	if strings.Contains(strings.ToLower(location), "abcdefgh23456789") {
+		t.Fatal("邀请码不应泄露到 provider URL，应留在签名 cookie 内")
 	}
 
 	stateCookie := readSetCookie(t, rec, oauthStateCookieName)
@@ -255,8 +284,37 @@ func TestOAuthStartRedirectsWithSignedState(t *testing.T) {
 	if payload.RedirectTo != "/editor" {
 		t.Errorf("期望 cookie 内 redirectTo=/editor，实际 %q", payload.RedirectTo)
 	}
+	if payload.InvitationCode != "ABCDEFGH23456789" {
+		t.Errorf("期望签名 state 保存归一化邀请码，实际 %q", payload.InvitationCode)
+	}
 	if !strings.Contains(location, "state="+payload.Nonce) {
 		t.Error("URL 上的 state 应等于 cookie 内的 nonce")
+	}
+}
+
+func TestOAuthStartMarksMalformedInvitationCode(t *testing.T) {
+	app := newTestApp(config.Config{
+		AppURL:            "http://localhost:5173",
+		SessionSecret:     "sess",
+		GoogleOAuthID:     "gid",
+		GoogleOAuthSecret: "gsecret",
+	})
+	rec := doRequest(app, http.MethodGet, "/api/auth/oauth/google/start?invite=not-a-valid-code")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("期望 302，实际 %d", rec.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(readSetCookie(t, rec, oauthStateCookieName))
+	payload, ok := app.oauthStateFromCookie(req)
+	if !ok {
+		t.Fatal("state cookie 应当可校验")
+	}
+	if !payload.InvitationCodeInvalid {
+		t.Fatal("无效邀请码必须由独立布尔字段标记")
+	}
+	if payload.InvitationCode != "" {
+		t.Fatalf("无效邀请码不应作为哨兵字符串保存，实际 %q", payload.InvitationCode)
 	}
 }
 

@@ -6,14 +6,14 @@
 --      —— 漏掉是不可观测的，账单上才看得见
 --   3. 重试需要状态，状态得有地方放
 --
--- 没有引 Redis 队列或 river 之类的作业框架：这里的作业量是「删文档的频率」，
+-- 没有引外部队列或 river 之类的作业框架：这里的作业量是「删文档的频率」，
 -- 一张表加一个轮询 goroutine 足够，且不增加运维面。
 CREATE TABLE IF NOT EXISTS pending_image_deletions (
     id          integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     -- R2 对象 key，形如 u/<authUserId>/<hex>.<ext>
     --
     -- UNIQUE：同一个 key 可能被多次入队（同一张图被两篇文档引用，两篇先后被删）。
-    -- 入队时 ON CONFLICT DO NOTHING，避免堆积重复行。
+    -- 入队时发生冲突会复用这行并重置失败状态，避免堆积重复行。
     object_key  text NOT NULL UNIQUE,
     -- 入队时归属的用户。ON DELETE CASCADE 会让「删用户」连带删掉队列行，
     -- 那时这些对象就没人回收了 —— 所以用 SET NULL 保住待删记录。

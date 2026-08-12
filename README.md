@@ -15,7 +15,7 @@
 
 **[koinote.app](https://koinote.app)** —— 打开即用，不必自己部署
 
-[English](README.en.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
+[English](README.en.md) · [更新日志](CHANGELOG.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
@@ -31,7 +31,8 @@
 链接而不是一坨 base64）、**导出到微信公众号**（15 套排版主题，样式内联成公众号
 编辑器认得的形式）、**文档在云端**（多设备、可分享）。
 
-> 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 辅助与订阅计费尚未落地。
+> 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
+> 已通过 Stripe Checkout 支持一次性付款。
 
 ## 功能
 
@@ -48,7 +49,7 @@
 - 粘贴或拖入即上传到 Cloudflare R2
 - 从网页粘贴的外链图片自动转存，避免对方删图后裂图
 - 按 magic byte 校验真实类型，拒收 SVG（能内嵌脚本）
-- 每用户配额（默认 500 MB，含正文与图片）
+- 每用户配额（免费用户默认 500 MB，终生会员 10 GB，邀请奖励最多叠加 5 GB；均包含正文与图片）
 - 网页显示自有图片时走同源 `/images/...`，导出保留 CDN 地址，避开浏览器
   CORS / Local Network Access 误拦截
 - 文档删图后异步回收不再引用的 R2 对象；删除前会复查引用，CDN 模式同时清缓存
@@ -79,6 +80,10 @@
 - 界面四语：中文 / English / 日本語 / Français
 - 深浅色主题，水墨风格视觉
 - 邮箱验证码注册与密码登录 + Google / GitHub OAuth
+- 邀请奖励：专属链接自动带入邀请码，新用户注册成功后双方各得 500 MB，每个账号累计最多 5 GB
+- Stripe 多币种一次性付款终生会员：支持 USD / CNY / EUR / JPY，以及银行卡、支付宝和微信支付
+- 管理员后台：用户与会员规模、按币种收入、订单、全站存储、30 天趋势、最近用户与付款
+- 可选接入 Cloudflare Analytics，在管理后台查看当天边缘 UV / PV、请求数和流量
 
 ## 技术栈
 
@@ -88,11 +93,12 @@
                                ├─ /api/internal/email/* ──▶ Email Sending
                                └─ 其余 /api/* ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
+浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端
 ```
 
 - **前端** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
 - **编辑器** TipTap v3（ProseMirror）· tiptap-markdown · KaTeX · lowlight
-- **后端** Go（stdlib `net/http`）· pgx · PostgreSQL 16
+- **后端** Go（stdlib `net/http`）· pgx · Stripe Go SDK · PostgreSQL 16
 - **边缘** Cloudflare Worker · R2 · Email Sending
 
 会话是无状态的 HMAC-SHA256 签名 cookie，不落库。
@@ -125,7 +131,7 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 
 ```bash
 npm ci
-docker compose up -d postgres         # 起数据库；Redis 目前只是预留服务
+docker compose up -d postgres         # 起数据库
 npm run backend:dev                   # 起后端（自动跑迁移）
 npm run dev                           # 起前端 → http://localhost:5273
 ```
@@ -147,6 +153,18 @@ npx wrangler dev --port 8788
 本地 Worker 默认代理 `http://localhost:8080`。后端改了端口时，再用
 `--var BACKEND_URL:http://localhost:<端口>` 覆盖；只改 `.env` 不会自动传给 Wrangler。
 
+本地测试会员支付时，在 `.env` 填 Stripe test mode 的 `STRIPE_SECRET_KEY` 和
+`STRIPE_LIFETIME_PRODUCT_ID`。后端会按白名单为这个 Product 创建 USD 3.99、CNY 29、
+EUR 3.99 或 JPY 600 的内联价格。成功回跳会主动确认并发放权益；要同时测试 webhook，
+再安装 Stripe CLI 并运行：
+
+```bash
+stripe listen --forward-to localhost:8080/api/billing/webhook
+```
+
+把 CLI 输出的 `whsec_...` 填入 `STRIPE_WEBHOOK_SECRET` 后重启后端，支付可使用 Stripe
+测试卡 `4242 4242 4242 4242`（任意未来日期与 CVC）。
+
 详细步骤、端口冲突、全容器启动见[设计文档](docs/DESIGN.zh.md#本地开发)。
 
 ## 自建须知
@@ -164,6 +182,10 @@ npx wrangler dev --port 8788
 复用 `SESSION_SECRET`，这样轮换验证码密钥不会让所有会话失效，邮件链路泄露也不会
 扩大成会话伪造。
 
+**Stripe 生产配置必须完整。** `STRIPE_SECRET_KEY`、`STRIPE_WEBHOOK_SECRET`、
+`STRIPE_LIFETIME_PRODUCT_ID` 三项只要配置了一项，生产环境就要求全部齐全。支付成功后
+本站数据库里的会员等级才是权益真值；前端返回值不会直接授予 10 GB 配额。
+
 **`NODE_ENV` 决定 cookie 的 `Secure` 标志。** 生产必须是 `production`。
 
 **图片是「知道 URL 即可读」的。** key 随机不可枚举，但没有鉴权 —— 私有文档里的
@@ -171,7 +193,7 @@ npx wrangler dev --port 8788
 图也是私有的」。你的场景不能接受的话，得改成签名 URL。
 
 **限流是进程内的。** 多实例部署时各进程独立计数，实际阈值被放大 N 倍。
-上多实例前要换成共享存储。Compose 里的 Redis 目前只是预留服务，后端尚未使用它。
+上多实例前要接入共享限流存储。
 
 **改了后端代码要重新构建镜像。** `docker compose up -d` 不重新构建，
 要用 `docker compose up -d --build backend` —— 否则代码改了行为没变，且没有任何报错。
@@ -220,6 +242,41 @@ VPS 的 `.env` 需要把 `WORKER_URL` 设为 `https://koinote.app`，并与 Work
 `BACKEND_INTERNAL_TOKEN`。生产还必须设置独立的 `EMAIL_VERIFICATION_SECRET`；验证码
 仅以 HMAC 形式保存在 Postgres，10 分钟失效。
 
+管理员入口只对数据库中 `is_admin=true` 的用户显示。首次部署可按邮箱授予管理员：
+
+```bash
+docker compose exec postgres psql -U koinote -d koinote \
+  -c "UPDATE users SET is_admin = true WHERE lower(email) = lower('you@example.com');"
+```
+
+`/admin` 的用户、会员、收入、订单与存储来自 PostgreSQL。今日 UV / PV 是可选的
+Cloudflare 边缘 HTTP Analytics：创建一个独立 Token，权限设为
+`Zone / Analytics / Read`，Zone Resources 只包含 Koinote 的 Zone，然后将
+它保存为 `CLOUDFLARE_ANALYTICS_TOKEN`。不要复用只有 Cache Purge 权限的
+`CLOUDFLARE_CACHE_PURGE_TOKEN`。未配置或 Cloudflare 暂时失败时，只有流量卡片显示不可用，
+其余管理数据仍正常展示。
+
+Stripe Dashboard 还需创建 webhook endpoint：
+
+```text
+https://koinote.app/api/billing/webhook
+event: checkout.session.completed
+event: checkout.session.async_payment_succeeded
+```
+
+将 endpoint 的 signing secret 配为 `STRIPE_WEBHOOK_SECRET`。站点使用固定 Product ID
+和服务端价格白名单创建 Checkout，用户可选择 USD 3.99、CNY 29、EUR 3.99 或 JPY 600；
+发放权益前会重新校验付款状态、所选币种对应金额、Product ID 和用户归属。成功页确认与 webhook
+共用同一个数据库幂等事务。
+
+Checkout 不在代码里固定支付方式，而是读取 Stripe Dashboard 的 Payment methods 配置，
+再按账号地区、用户位置和所选币种展示可用选项。要显示支付宝和微信支付，需在 Stripe
+Dashboard 中启用 Alipay 与 WeChat Pay；不满足 Stripe 资格或币种规则时仍可能只显示银行卡。
+
+共享 Stripe 账号时，Koinote 创建的 Checkout Session 与 PaymentIntent 都带
+`metadata.service=koinote`。Webhook 对其他服务的事件直接返回 200 忽略，并在真正发放会员前
+再次校验该字段、Product、金额、币种和用户归属。
+
 检查是否开通请用 `npx wrangler email sending list` 和
 `npx wrangler email sending dns get "$KOINOTE_DOMAIN"`。Email Sending 会把退信 MX 与
 SPF 放在 `cf-bounce.<域名>`，DKIM 放在 `cf-bounce._domainkey.<域名>`；根域没有 MX
@@ -240,7 +297,11 @@ Worker 与 SPA，最后验活站点 `/api/images/config`。
 | `CLOUDFLARE_ACCOUNT_ID` | `wrangler whoami` 能看到 |
 | `CLOUDFLARE_ZONE_ID` | 图片 CDN 所在 Zone，用于删除后的缓存清理 |
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限 |
+| `CLOUDFLARE_ANALYTICS_TOKEN` | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用 |
 | `EMAIL_VERIFICATION_SECRET` | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env` |
+| `STRIPE_SECRET_KEY` | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode |
+| `STRIPE_WEBHOOK_SECRET` | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`） |
+| `STRIPE_LIFETIME_PRODUCT_ID` | 终生会员 Product ID（`prod_...`），价格由后端白名单生成 |
 | `VPS_HOST` | 后端服务器地址 |
 | `VPS_SSH_KEY` | 部署专用私钥（建议单独生成一把，不要复用个人密钥） |
 | `VPS_HOST_KEY` | 服务器的 known_hosts 条目，用于固定 host key |
@@ -252,10 +313,13 @@ openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 ```
 
+Stripe 三项可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
+和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史。
+
 第二条命令只显示 secret 名称和更新时间，不会读取密钥值。部署 workflow 会在开始部署前
 检查所有必填 secrets；检查通过后，它会在重启后端之前通过 stdin 和临时文件原子更新
-VPS 的 `/opt/koinote/.env`。因此不需要手动把验证码密钥写进生产 `.env`，但首次部署必须
-先在 GitHub 配好这个 repository secret。
+VPS 的 `/opt/koinote/.env`。可选的 Analytics Token 配置后也会以同样方式写入；因此不需要手动把验证码或 Stripe 密钥写进生产 `.env`，
+但首次部署必须先在 GitHub 配好这些 repository secrets。
 
 ## 测试
 
@@ -271,6 +335,7 @@ GitHub Actions 在每次 push 与 PR 上额外构建前后端，并用真实 Pos
 
 ## 文档
 
+- [更新日志](CHANGELOG.md) —— 每个版本新增、变更、修复与安全更新
 - [设计文档](docs/DESIGN.zh.md) —— 为什么这么实现、踩过哪些坑、哪些是有意的降级
 - [Design Notes (English)](docs/DESIGN.en.md)
 

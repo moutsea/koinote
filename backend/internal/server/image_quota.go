@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"koinote/backend/internal/config"
 	"koinote/backend/internal/httpx"
+	"koinote/backend/internal/model"
 )
 
 // 图片存储配额。
@@ -17,10 +22,13 @@ import (
 // 放配置而不是代码常量：这是运营旋钮，改它不该要重新编译，dev、自部署、生产也本该
 // 能给不同的值。
 //
-// 还没做订阅，所以是全局一个值，不按用户区分 —— 那才需要数据库里加一列。
+// 这里是免费用户的基础值；会员基础配额和邀请奖励由 storageQuotaFor 叠加。
 //
 // errQuotaExceeded 由 recordImageObject 在超额时返回。
-var errQuotaExceeded = errors.New("image quota exceeded")
+var (
+	errQuotaExceeded             = errors.New("image quota exceeded")
+	errWechatExportQuotaExceeded = errors.New("wechat export image quota exceeded")
+)
 
 // imageQuota 返回当前生效的配额上限。
 //
@@ -32,6 +40,28 @@ func (a *App) imageQuota() int64 {
 		return a.cfg.ImageQuotaBytes
 	}
 	return config.DefaultImageQuotaMB * 1024 * 1024
+}
+
+const lifetimeStorageQuotaBytes int64 = 10 * 1024 * 1024 * 1024
+
+const (
+	imagePurposePersistent   = "persistent"
+	imagePurposeWechatExport = "wechat-export"
+	wechatExportImageTTL     = 7 * 24 * time.Hour
+	// purpose 由浏览器请求头传入，不能把它当成可信的“不计费”标记。公式图走独立的小额度：
+	// 不挤占正文云存储，同时也不能被伪造 purpose 用来无限上传任意图片。
+	wechatExportQuotaBytes int64 = 100 * 1024 * 1024
+)
+
+// storageQuotaFor 把会员等级映射为基础配额，再叠加有硬上限的永久邀请奖励。
+// 数据库也有同样的约束；这里再次截断，避免迁移前旧数据或手工构造的模型绕过配额。
+// 未来 AI 权益也读取同一个 membership_tier，避免支付状态在各功能里各自实现一遍。
+func (a *App) storageQuotaFor(user model.User) int64 {
+	baseQuota := a.imageQuota()
+	if user.MembershipTier == membershipTierLifetime {
+		baseQuota = lifetimeStorageQuotaBytes
+	}
+	return baseQuota + boundedInvitationBonus(user.BonusStorageBytes)
 }
 
 // storageBreakdown 是用户占用的云端存储，按来源分开。
@@ -60,16 +90,29 @@ func (s storageBreakdown) Total() int64 {
 // 每次都 SUM 而不是维护计数器：见 migrations/0008_image_quota.sql 里的说明。
 // 文档那一项无法维护计数器 —— 自动保存每几秒就改一次正文长度。
 func (a *App) storageUsageFor(ctx context.Context, userID int) (storageBreakdown, error) {
+	return storageUsageForQuerier(ctx, a.db, userID)
+}
+
+type imageUsageQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func storageUsageForQuerier(
+	ctx context.Context,
+	querier imageUsageQuerier,
+	userID int,
+) (storageBreakdown, error) {
 	var out storageBreakdown
 	// COALESCE：没有任何行时 SUM 返回 NULL，直接 Scan 进 int64 会报错
-	err := a.db.QueryRow(ctx, `
+	err := querier.QueryRow(ctx, `
 		SELECT
 			COALESCE((
 				SELECT SUM(octet_length(content) + octet_length(title))
 				FROM documents WHERE user_id = $1
 			), 0),
 			COALESCE((
-				SELECT SUM(bytes) FROM image_objects WHERE user_id = $1
+				SELECT SUM(bytes) FROM image_objects
+				WHERE user_id = $1 AND purpose = 'persistent'
 			), 0)
 	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes)
 	return out, err
@@ -93,7 +136,13 @@ func (a *App) recordImageObject(
 	userID int,
 	key string,
 	bytes int64,
+	quotaBytes int64,
+	purpose string,
+	deleteAt *time.Time,
 ) (storageBreakdown, error) {
+	if purpose != imagePurposePersistent && purpose != imagePurposeWechatExport {
+		return storageBreakdown{}, fmt.Errorf("invalid image purpose %q", purpose)
+	}
 	// ON CONFLICT DO NOTHING：Worker 重试报账时同一个 key 可能报两次，不能重复计费。
 	// key 是主键，冲突即说明已经记过了。
 	//
@@ -114,22 +163,38 @@ func (a *App) recordImageObject(
 	//
 	// 与 documents.go 里新建文档那条是同一类错误（同一天发现的两处），
 	// 都由 TestDocumentSQLPrepares 之外的 TestImageQuotaSQLPrepares 兜住。
-	tag, err := a.db.Exec(ctx, `
-		INSERT INTO image_objects (object_key, user_id, bytes)
-		SELECT $1, $2, $3::bigint
-		WHERE COALESCE(
-			(SELECT SUM(bytes) FROM image_objects WHERE user_id = $2), 0
-		) + COALESCE(
-			(SELECT SUM(octet_length(content) + octet_length(title))
-			 FROM documents WHERE user_id = $2), 0
-		) + $3::bigint <= $4
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return storageBreakdown{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO image_objects (object_key, user_id, bytes, purpose)
+		SELECT $1, $2, $3::bigint, $5::text
+		WHERE (
+			$5::text = 'persistent'
+			AND COALESCE(
+				(SELECT SUM(bytes) FROM image_objects
+				 WHERE user_id = $2 AND purpose = 'persistent'), 0)
+			+ COALESCE(
+				(SELECT SUM(octet_length(content) + octet_length(title))
+				 FROM documents WHERE user_id = $2), 0)
+			+ $3::bigint <= $4
+		) OR (
+			$5::text = 'wechat-export'
+			AND COALESCE(
+				(SELECT SUM(bytes) FROM image_objects
+				 WHERE user_id = $2 AND purpose = 'wechat-export'), 0)
+			+ $3::bigint <= $6
+		)
 		ON CONFLICT (object_key) DO NOTHING
-	`, key, userID, bytes, a.imageQuota())
+	`, key, userID, bytes, quotaBytes, purpose, wechatExportQuotaBytes)
 	if err != nil {
 		return storageBreakdown{}, err
 	}
 
-	used, uerr := a.storageUsageFor(ctx, userID)
+	used, uerr := storageUsageForQuerier(ctx, tx, userID)
 	if uerr != nil {
 		return storageBreakdown{}, uerr
 	}
@@ -137,15 +202,46 @@ func (a *App) recordImageObject(
 	if tag.RowsAffected() == 0 {
 		// 没插进去有两种原因：超额，或 key 已存在（重试）。
 		// 用 key 在不在账本里区分 —— 已存在就是重试，不算失败
-		var exists bool
-		if err := a.db.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM image_objects WHERE object_key = $1)`, key,
-		).Scan(&exists); err != nil {
-			return storageBreakdown{}, err
-		}
-		if !exists {
+		var existingUserID int
+		var existingBytes int64
+		var existingPurpose string
+		err := tx.QueryRow(ctx,
+			`SELECT user_id, bytes, purpose FROM image_objects WHERE object_key = $1`, key,
+		).Scan(&existingUserID, &existingBytes, &existingPurpose)
+		if errors.Is(err, pgx.ErrNoRows) {
+			if purpose == imagePurposeWechatExport {
+				return used, errWechatExportQuotaExceeded
+			}
 			return used, errQuotaExceeded
 		}
+		if err != nil {
+			return storageBreakdown{}, err
+		}
+		if existingUserID != userID || existingBytes != bytes || existingPurpose != purpose {
+			return storageBreakdown{}, fmt.Errorf("image object metadata mismatch for %q", key)
+		}
+	}
+
+	if deleteAt != nil {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO pending_image_deletions (
+				object_key, user_id, attempts, last_error, next_try_at
+			) VALUES ($1, $2, 0, NULL, $3)
+			ON CONFLICT (object_key) DO UPDATE SET
+				user_id = EXCLUDED.user_id,
+				attempts = 0,
+				last_error = NULL,
+				next_try_at = GREATEST(
+					pending_image_deletions.next_try_at,
+					EXCLUDED.next_try_at
+				)
+		`, key, userID, *deleteAt); err != nil {
+			return storageBreakdown{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return storageBreakdown{}, err
 	}
 
 	return used, nil
@@ -189,7 +285,7 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 		"usedBytes":     used.Total(),
 		"documentBytes": used.DocumentBytes,
 		"imageBytes":    used.ImageBytes,
-		"quotaBytes":    a.imageQuota(),
+		"quotaBytes":    a.storageQuotaFor(user),
 	})
 }
 
@@ -217,8 +313,9 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Key   string `json:"key"`
-		Bytes int64  `json:"bytes"`
+		Key     string `json:"key"`
+		Bytes   int64  `json:"bytes"`
+		Purpose string `json:"purpose"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
@@ -237,7 +334,24 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	used, err := a.recordImageObject(r.Context(), user.ID, body.Key, body.Bytes)
+	purpose := body.Purpose
+	var deleteAt *time.Time
+	switch body.Purpose {
+	case "":
+		purpose = imagePurposePersistent
+	case imagePurposePersistent:
+	case imagePurposeWechatExport:
+		expires := time.Now().Add(wechatExportImageTTL)
+		deleteAt = &expires
+	default:
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid image purpose")
+		return
+	}
+
+	quotaBytes := a.storageQuotaFor(user)
+	used, err := a.recordImageObject(
+		r.Context(), user.ID, body.Key, body.Bytes, quotaBytes, purpose, deleteAt,
+	)
 	if errors.Is(err, errQuotaExceeded) {
 		// 409 而不是 413：413 是"这一张太大"，这里是"总量满了"。
 		// Worker 要据此区分回给前端哪个错误码
@@ -246,7 +360,14 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 			"usedBytes":     used.Total(),
 			"documentBytes": used.DocumentBytes,
 			"imageBytes":    used.ImageBytes,
-			"quotaBytes":    a.imageQuota(),
+			"quotaBytes":    quotaBytes,
+		})
+		return
+	}
+	if errors.Is(err, errWechatExportQuotaExceeded) {
+		httpx.JSON(w, http.StatusConflict, map[string]any{
+			"code":       "temporary_image_quota_exceeded",
+			"quotaBytes": wechatExportQuotaBytes,
 		})
 		return
 	}
@@ -260,6 +381,6 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		"usedBytes":     used.Total(),
 		"documentBytes": used.DocumentBytes,
 		"imageBytes":    used.ImageBytes,
-		"quotaBytes":    a.imageQuota(),
+		"quotaBytes":    quotaBytes,
 	})
 }

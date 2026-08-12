@@ -36,10 +36,23 @@ func main() {
 	if cfg.IsProduction() && cfg.EmailVerificationSecret == "" {
 		log.Fatal("生产环境必须设置独立的 EMAIL_VERIFICATION_SECRET。生成一个：openssl rand -base64 48")
 	}
+	if err := cfg.ValidateStripeConfig(); err != nil {
+		log.Fatal(err)
+	}
 
 	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
 	// 启动日志里有这一行，一眼就能对上。
 	log.Printf("云端存储配额: 每用户 %d MB（文档正文 + 图片）", cfg.ImageQuotaBytes/(1024*1024))
+	if cfg.StripeEnabled() {
+		log.Printf("Stripe 终生会员购买已启用")
+	} else {
+		log.Printf("Stripe 未配置，会员购买功能关闭")
+	}
+	if cfg.CloudflareZoneID != "" && cfg.CloudflareAnalyticsToken != "" && cfg.CloudflareAnalyticsHost != "" {
+		log.Printf("Admin Cloudflare 流量统计已启用（host=%s）", cfg.CloudflareAnalyticsHost)
+	} else {
+		log.Printf("Admin Cloudflare 流量统计未配置，业务统计仍可用")
+	}
 
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)

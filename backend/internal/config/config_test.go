@@ -185,3 +185,85 @@ func TestMockEmailCanOnlyBeEnabledOutsideProduction(t *testing.T) {
 		})
 	}
 }
+
+func TestStripeConfigurationMustBeComplete(t *testing.T) {
+	complete := Config{
+		StripeSecretKey:         "sk_test_example",
+		StripeWebhookSecret:     "whsec_example",
+		StripeLifetimeProductID: "prod_example",
+	}
+	if err := complete.ValidateStripeConfig(); err != nil {
+		t.Fatalf("完整 Stripe 配置不应报错: %v", err)
+	}
+	if !complete.StripeEnabled() {
+		t.Fatal("三项齐全时应启用 Stripe")
+	}
+
+	disabled := Config{}
+	if err := disabled.ValidateStripeConfig(); err != nil {
+		t.Fatalf("全部留空应视为关闭，不应报错: %v", err)
+	}
+	if disabled.StripeEnabled() {
+		t.Fatal("全部留空时不应启用 Stripe")
+	}
+
+	for _, cfg := range []Config{
+		{NodeEnv: "production", StripeSecretKey: "sk_test_example"},
+		{NodeEnv: "production", StripeSecretKey: "sk_test_example", StripeLifetimeProductID: "prod_example"},
+		{NodeEnv: "production", StripeWebhookSecret: "whsec_example", StripeLifetimeProductID: "prod_example"},
+	} {
+		if err := cfg.ValidateStripeConfig(); err == nil {
+			t.Fatalf("部分 Stripe 配置应报错: %+v", cfg)
+		}
+		if cfg.StripeWebhookEnabled() {
+			t.Fatalf("部分 Stripe 配置不应启用: %+v", cfg)
+		}
+	}
+
+	localCheckout := Config{
+		NodeEnv:                 "development",
+		StripeSecretKey:         "sk_test_example",
+		StripeLifetimeProductID: "prod_example",
+	}
+	if err := localCheckout.ValidateStripeConfig(); err != nil || !localCheckout.StripeEnabled() || localCheckout.StripeWebhookEnabled() {
+		t.Fatalf("开发环境应允许仅启用 Checkout: err=%v cfg=%+v", err, localCheckout)
+	}
+}
+
+func TestLoadPopulatesStripeConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_example")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_example")
+	t.Setenv("STRIPE_LIFETIME_PRODUCT_ID", "prod_example")
+
+	cfg := Load()
+	if cfg.StripeSecretKey != "sk_test_example" || cfg.StripeWebhookSecret != "whsec_example" ||
+		cfg.StripeLifetimeProductID != "prod_example" {
+		t.Fatalf("Stripe 配置未完整加载: %+v", cfg)
+	}
+}
+
+func TestLoadPopulatesCloudflareAnalyticsConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("APP_URL", "https://notes.example.com:8443/app")
+	t.Setenv("CLOUDFLARE_ZONE_ID", "zone_example")
+	t.Setenv("CLOUDFLARE_ANALYTICS_TOKEN", "analytics_example")
+	t.Setenv("CLOUDFLARE_ANALYTICS_HOST", "")
+	t.Setenv("TZ", "Asia/Tokyo")
+
+	cfg := Load()
+	if cfg.CloudflareZoneID != "zone_example" || cfg.CloudflareAnalyticsToken != "analytics_example" {
+		t.Fatalf("Cloudflare Analytics 配置未完整加载: %+v", cfg)
+	}
+	if cfg.CloudflareAnalyticsHost != "notes.example.com" {
+		t.Fatalf("应从 APP_URL 推导 hostname，实际 %q", cfg.CloudflareAnalyticsHost)
+	}
+	if cfg.TimeZone != "Asia/Tokyo" {
+		t.Fatalf("时区未加载，实际 %q", cfg.TimeZone)
+	}
+
+	t.Setenv("CLOUDFLARE_ANALYTICS_HOST", "www.example.com")
+	if got := Load().CloudflareAnalyticsHost; got != "www.example.com" {
+		t.Fatalf("显式 hostname 应优先，实际 %q", got)
+	}
+}

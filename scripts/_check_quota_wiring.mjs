@@ -37,6 +37,41 @@ ok(`后端用 ${CODE}`, backend.includes(`"${CODE}"`), "backend/image_quota.go �
 ok(`Worker 用 ${CODE}`, worker.includes(`"${CODE}"`), "worker/images.ts 里找不到");
 ok(`SPA 用 ${CODE}`, api.includes(`"${CODE}"`), "spa/src/api.ts 里找不到");
 
+const TEMPORARY_CODE = "temporary_image_quota_exceeded";
+ok(
+  `后端用 ${TEMPORARY_CODE}`,
+  backend.includes(`"${TEMPORARY_CODE}"`),
+  "backend/image_quota.go 里找不到",
+);
+ok(
+  `Worker 透传 ${TEMPORARY_CODE}`,
+  worker.includes(`"${TEMPORARY_CODE}"`),
+  "worker/images.ts 里找不到",
+);
+ok(
+  `SPA 识别 ${TEMPORARY_CODE}`,
+  api.includes(`"${TEMPORARY_CODE}"`),
+  "spa/src/api.ts 里找不到",
+);
+ok(
+  "临时配额不触发主配额弹窗",
+  !/QUOTA_CODES\s*=\s*new Set<string>\(\[[^\]]*TEMPORARY_IMAGE_QUOTA_CODE/.test(api),
+  "临时导出配额应由公众号导出提示处理",
+);
+const wechatMath = read("spa/src/components/editor/wechatMath.ts");
+const wechatDialog = read("spa/src/components/editor/WechatDialog.tsx");
+ok(
+  "公式转换单独统计临时配额失败",
+  wechatMath.includes("temporaryQuotaFailed") &&
+    wechatMath.includes("TEMPORARY_IMAGE_QUOTA_CODE"),
+  "spa/src/components/editor/wechatMath.ts",
+);
+ok(
+  "公众号导出显示临时配额专属提示",
+  wechatDialog.includes("wechatMathTemporaryQuotaExceeded"),
+  "spa/src/components/editor/WechatDialog.tsx",
+);
+
 const DOC_CODE = "storage_quota_exceeded";
 const documentsGo = read("backend/internal/server/documents.go");
 ok(`后端文档路径用 ${DOC_CODE}`, documentsGo.includes(`"${DOC_CODE}"`), "documents.go");
@@ -253,7 +288,7 @@ ok("有 user_id 索引", migration.includes("image_objects_user_idx"));
 //
 // Worker 写完 R2 才报账，所以超额路径必须把刚写的对象删掉，否则留下不计入账本的孤儿
 {
-  const quotaIdx = worker.indexOf('recorded === "quota"');
+  const quotaIdx = worker.indexOf('recorded.outcome === "quota"');
   ok("Worker 处理了 quota 分支", quotaIdx >= 0);
   if (quotaIdx >= 0) {
     const branch = worker.slice(quotaIdx, quotaIdx + 600);

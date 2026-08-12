@@ -114,6 +114,7 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		Email            string `json:"email"`
 		Password         string `json:"password"`
 		VerificationCode string `json:"verificationCode"`
+		InvitationCode   string `json:"invitationCode"`
 	}
 	if !decodeAuthBody(w, r, &body) {
 		return
@@ -136,6 +137,11 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.VerificationCode == "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "verification_code_required", "Email verification code is required")
+		return
+	}
+	body.InvitationCode = normalizeInvitationCode(body.InvitationCode)
+	if body.InvitationCode != "" && !validInvitationCode(body.InvitationCode) {
+		invitationError(w)
 		return
 	}
 
@@ -173,6 +179,11 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	invitationCode, err := newInvitationCode()
+	if err != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
 
 	tx, err := a.db.Begin(r.Context())
 	if err != nil {
@@ -195,16 +206,28 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var newUserID int
 	var newAuthUserID string
 	err = tx.QueryRow(r.Context(), `
-		INSERT INTO users (auth_user_id, email, username, password_hash, is_verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, true, now(), now())
-		RETURNING auth_user_id
-	`, authUserID, body.Email, body.Username, string(passwordHash)).Scan(&newAuthUserID)
+		INSERT INTO users (
+			auth_user_id, email, username, password_hash, is_verified,
+			invitation_code, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, true, $5, now(), now())
+		RETURNING id, auth_user_id
+	`, authUserID, body.Email, body.Username, string(passwordHash), invitationCode).Scan(&newUserID, &newAuthUserID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			httpx.ErrorCode(w, http.StatusConflict, "conflict", "Email or username is already taken")
+			return
+		}
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	if err = applyInvitationReward(r.Context(), tx, newUserID, body.InvitationCode); err != nil {
+		if errors.Is(err, errInvalidInvitationCode) {
+			invitationError(w)
 			return
 		}
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")

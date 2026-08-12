@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,6 +47,18 @@ type Config struct {
 	// 开发环境可回退复用 SessionSecret；生产环境由 main.go 强制要求独立配置。
 	EmailVerificationSecret string
 	EnableMockEmail         bool
+
+	// Stripe Checkout：三项必须同时配置；全部留空时关闭会员购买，方便自部署。
+	StripeSecretKey         string
+	StripeWebhookSecret     string
+	StripeLifetimeProductID string
+
+	// Admin 流量面板通过 Cloudflare GraphQL Analytics API 读取边缘 UV/PV。
+	// Token 应只授予目标 Zone 的 Analytics Read 权限；缺失时业务统计仍可用。
+	CloudflareZoneID         string
+	CloudflareAnalyticsToken string
+	CloudflareAnalyticsHost  string
+	TimeZone                 string
 }
 
 // dotenvCandidates 是相对工作目录向上查找 .env 的顺序。
@@ -101,6 +115,21 @@ func Load() Config {
 
 		EmailVerificationSecret: os.Getenv("EMAIL_VERIFICATION_SECRET"),
 		EnableMockEmail:         nodeEnv != "production" && getenv("ENABLE_MOCK_EMAIL", "false") == "true",
+
+		StripeSecretKey:         strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
+		StripeWebhookSecret:     strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
+		StripeLifetimeProductID: strings.TrimSpace(os.Getenv("STRIPE_LIFETIME_PRODUCT_ID")),
+
+		CloudflareZoneID:         strings.TrimSpace(os.Getenv("CLOUDFLARE_ZONE_ID")),
+		CloudflareAnalyticsToken: strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_TOKEN")),
+		CloudflareAnalyticsHost:  strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_HOST")),
+		TimeZone:                 getenv("TZ", "Asia/Shanghai"),
+	}
+
+	if cfg.CloudflareAnalyticsHost == "" {
+		if parsed, err := url.Parse(cfg.AppURL); err == nil {
+			cfg.CloudflareAnalyticsHost = parsed.Hostname()
+		}
 	}
 
 	// 同上：5273 与 vite 的默认端口对齐
@@ -120,6 +149,31 @@ func (c Config) Addr() string {
 
 func (c Config) IsProduction() bool {
 	return c.NodeEnv == "production"
+}
+
+// StripeEnabled 表示 Checkout 与成功页确认所需的密钥和 Price 已就绪。
+// Webhook secret 只在接收 webhook 时需要；本地可先不跑 Stripe CLI。
+func (c Config) StripeEnabled() bool {
+	return c.StripeSecretKey != "" && c.StripeLifetimeProductID != ""
+}
+
+func (c Config) StripeWebhookEnabled() bool {
+	return c.StripeEnabled() && c.StripeWebhookSecret != ""
+}
+
+// ValidateStripeConfig 在生产环境拒绝只配置一部分的状态。开发环境允许暂缺 webhook
+// secret，靠成功页确认即可本地走通；生产必须有 webhook 兜住用户未回跳的情况。
+func (c Config) ValidateStripeConfig() error {
+	configured := 0
+	for _, value := range []string{c.StripeSecretKey, c.StripeWebhookSecret, c.StripeLifetimeProductID} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 || configured == 3 || !c.IsProduction() {
+		return nil
+	}
+	return fmt.Errorf("STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_LIFETIME_PRODUCT_ID 必须同时配置或同时留空")
 }
 
 func getenv(key, fallback string) string {

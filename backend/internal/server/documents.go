@@ -140,10 +140,11 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 			SELECT SUM(octet_length(content) + octet_length(title))
 			FROM documents WHERE user_id = $2
 		), 0) + COALESCE((
-			SELECT SUM(bytes) FROM image_objects WHERE user_id = $2
+				SELECT SUM(bytes) FROM image_objects
+				WHERE user_id = $2 AND purpose = 'persistent'
 		), 0) + octet_length($4::text) + octet_length($3::text) <= $6
 		RETURNING doc_id, title, theme, content, created_at, updated_at
-	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID), a.imageQuota()).Scan(
+	`, docID, user.ID, title, content, derefOrEmpty(body.FolderID), a.storageQuotaFor(user)).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -285,7 +286,8 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		      FROM documents d WHERE d.user_id = $2 AND d.doc_id <> $1
 		    ), 0)
 		    + COALESCE((
-		      SELECT SUM(bytes) FROM image_objects WHERE user_id = $2
+			      SELECT SUM(bytes) FROM image_objects
+			      WHERE user_id = $2 AND purpose = 'persistent'
 		    ), 0)
 		    + octet_length($5) + octet_length($3) <= $6
 		    OR octet_length($5) + octet_length($3)
@@ -294,7 +296,7 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		RETURNING documents.doc_id, documents.title, documents.theme,
 		          documents.content, documents.created_at, documents.updated_at,
 		          old.prev_content
-	`, docID, user.ID, title, theme, content, a.imageQuota()).Scan(
+	`, docID, user.ID, title, theme, content, a.storageQuotaFor(user)).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 		&prev,
 	)

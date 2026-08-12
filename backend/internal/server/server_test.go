@@ -205,6 +205,7 @@ func TestAuthRoutesRejectWrongMethod(t *testing.T) {
 		{http.MethodGet, "/api/auth/verify-email"},
 		{http.MethodGet, "/api/auth/logout"},
 		{http.MethodPost, "/api/auth/session"},
+		{http.MethodPost, "/api/invitations"},
 	}
 
 	for _, tc := range cases {
@@ -214,5 +215,33 @@ func TestAuthRoutesRejectWrongMethod(t *testing.T) {
 				t.Fatalf("%s %s 不应被接受", tc.method, tc.path)
 			}
 		})
+	}
+}
+
+func TestBillingRoutesRejectWrongMethod(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "s"})
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/billing/status"},
+		{http.MethodGet, "/api/billing/checkout"},
+		{http.MethodGet, "/api/billing/checkout/confirm"},
+		{http.MethodGet, "/api/billing/webhook"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			rec := doRequest(app, tc.method, tc.path)
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s %s 期望 405，实际 %d", tc.method, tc.path, rec.Code)
+			}
+		})
+	}
+}
+
+func TestAdminRouteRejectsWrongMethod(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "s"})
+	rec := doRequest(app, http.MethodPost, "/api/admin/stats")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /api/admin/stats 期望 405，实际 %d", rec.Code)
 	}
 }

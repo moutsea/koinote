@@ -1,5 +1,9 @@
 import katex from "katex";
-import { uploadImage } from "../../api";
+import {
+  ApiError,
+  TEMPORARY_IMAGE_QUOTA_CODE,
+  uploadImage,
+} from "../../api";
 
 /**
  * 把公式换成图片。
@@ -15,22 +19,13 @@ import { uploadImage } from "../../api";
 /** 栅格倍率。公式字号本就小，低于 3 倍在手机上发虚。 */
 const MATH_SCALE = 3;
 
-/**
- * 已上传公式的缓存，键是 LaTeX 源码。
- *
- * 没有它的话，每次导出都会把同样的公式重新栅格化并重新上传 —— 光是切主题
- * 试排版就能在 R2 里堆出十几份同样的图。而且现在没有 images 表，这些对象
- * 无法列举也无法清理，只能一直躺在那里。
- *
- * 只在当前页面存活期内有效。跨会话去重需要服务端按内容哈希查重，那要等
- * images 表落地。
- */
-const uploadCache = new Map<string, { url: string; width: number; height: number }>();
+type UploadedMathImage = { url: string; width: number; height: number };
 
 export type MathConversion = {
   total: number;
   converted: number;
   failed: number;
+  temporaryQuotaFailed: number;
 };
 
 /**
@@ -47,10 +42,16 @@ export async function replaceMathWithImages(
       '[data-type="inline-math"],[data-type="block-math"]',
     ),
   );
-  const result: MathConversion = { total: nodes.length, converted: 0, failed: 0 };
+  const result: MathConversion = {
+    total: nodes.length,
+    converted: 0,
+    failed: 0,
+    temporaryQuotaFailed: 0,
+  };
   if (nodes.length === 0) return result;
 
   const { default: html2canvas } = await import("html2canvas-pro");
+  const uploadCache = new Map<string, UploadedMathImage>();
 
   for (const node of nodes) {
     const latex = node.getAttribute("data-latex") ?? "";
@@ -61,11 +62,17 @@ export async function replaceMathWithImages(
     }
 
     try {
-      const img = await renderMathImage(html2canvas, latex, isBlock);
+      const img = await renderMathImage(html2canvas, latex, isBlock, uploadCache);
       node.replaceWith(img);
       result.converted++;
-    } catch {
+    } catch (error) {
       result.failed++;
+      if (
+        error instanceof ApiError &&
+        error.code === TEMPORARY_IMAGE_QUOTA_CODE
+      ) {
+        result.temporaryQuotaFailed++;
+      }
       node.replaceWith(latexFallback(latex, isBlock));
     }
   }
@@ -77,6 +84,7 @@ async function renderMathImage(
   html2canvas: (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement>,
   latex: string,
   isBlock: boolean,
+  uploadCache: Map<string, UploadedMathImage>,
 ): Promise<HTMLElement> {
   // 缓存键要带 displayMode：同一段 LaTeX 行内与块级的排版不同，不能混用
   const cacheKey = `${isBlock ? "block" : "inline"}::${latex}`;
@@ -111,6 +119,7 @@ async function renderMathImage(
     const blob = await canvasToBlob(canvas);
     const uploaded = await uploadImage(
       new File([blob], `formula-${Date.now()}.png`, { type: "image/png" }),
+      "wechat-export",
     );
 
     const w = Math.max(1, Math.round(rect.width));

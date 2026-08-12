@@ -106,8 +106,7 @@ func (a *App) hasInternalToken(r *http.Request) bool {
 //  1. Worker → 后端：内部令牌 + X-Auth-User-Id 头
 //  2. 浏览器：koinote_session cookie
 func (a *App) authUserIDFromRequest(r *http.Request) string {
-	if a.cfg.InternalToken != "" &&
-		r.Header.Get("X-Koinote-Internal-Token") == a.cfg.InternalToken {
+	if a.hasInternalToken(r) {
 		if id := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); id != "" {
 			return id
 		}

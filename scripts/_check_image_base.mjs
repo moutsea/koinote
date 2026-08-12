@@ -2,6 +2,8 @@
 import {
   handleImageConfig,
   handleImageDelete,
+  handleImageGet,
+  handleImageUpload,
   isCachePurgeConfigured,
   normalizeImageBase,
 } from "./_image_base_bundle.mjs";
@@ -84,6 +86,220 @@ const deleteRequest = () =>
   });
 
 {
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+  ]);
+  const stored = new Map();
+  const recorded = [];
+  let puts = 0;
+  const bucket = {
+    head: async (key) => stored.get(key) ?? null,
+    put: async (key, value) => {
+      puts += 1;
+      stored.set(key, { size: value.byteLength });
+    },
+    delete: async (key) => stored.delete(key),
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/auth/session") {
+      return Response.json({ user: { authUserId: "alice" } });
+    }
+    if (path === "/api/images/record") {
+      recorded.push(JSON.parse(String(init?.body)));
+      return Response.json({});
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const upload = () =>
+    handleImageUpload(
+      new Request("https://app.example.com/api/images", {
+        method: "POST",
+        headers: {
+          cookie: "session=test",
+          "content-type": "image/png",
+          "x-koinote-image-purpose": "wechat-export",
+        },
+        body: png,
+      }),
+      {
+        BACKEND_URL: "https://backend.example.com",
+        BACKEND_INTERNAL_TOKEN: "internal",
+        IMAGES: bucket,
+      },
+    );
+  try {
+    const first = await upload();
+    const firstBody = await first.json();
+    const second = await upload();
+    const secondBody = await second.json();
+    check("公式图首次上传成功", first.status, 200);
+    check("相同公式图再次上传成功", second.status, 200);
+    check("相同公式图只写一次 R2", puts, 1);
+    check("相同字节跨请求使用同一 key", firstBody.image.key, secondBody.image.key);
+    check(
+      "内容寻址 key 使用 SHA-256",
+      firstBody.image.key.split("/").pop().split(".")[0].length,
+      64,
+    );
+    check("公式图两次都续期", recorded.length, 2);
+    check("公式图记账带临时用途", recorded[0].purpose, "wechat-export");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+  ]);
+  let deleted = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({ user: { authUserId: "alice" } });
+  try {
+    const response = await handleImageUpload(
+      new Request("https://app.example.com/api/images", {
+        method: "POST",
+        headers: {
+          cookie: "session=test",
+          "content-type": "image/png",
+          "x-koinote-image-purpose": "wechat-export",
+        },
+        body: png,
+      }),
+      {
+        BACKEND_URL: "https://backend.example.com",
+        IMAGES: {
+          head: async () => null,
+          put: async () => {},
+          delete: async () => {
+            deleted += 1;
+          },
+        },
+      },
+    );
+    check("公式图缺记账令牌时拒绝", response.status, 503);
+    check("公式图缺记账令牌时回滚 R2", deleted, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+for (const quotaCase of [
+  {
+    name: "主配额",
+    backend: {
+      code: "image_quota_exceeded",
+      usedBytes: 500,
+      documentBytes: 200,
+      imageBytes: 300,
+      quotaBytes: 500,
+    },
+  },
+  {
+    name: "临时导出配额",
+    backend: {
+      code: "temporary_image_quota_exceeded",
+      quotaBytes: 100,
+    },
+  },
+]) {
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+  ]);
+  let deleted = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/auth/session") {
+      return Response.json({ user: { authUserId: "alice" } });
+    }
+    if (path === "/api/images/record") {
+      return Response.json(quotaCase.backend, { status: 409 });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    const response = await handleImageUpload(
+      new Request("https://app.example.com/api/images", {
+        method: "POST",
+        headers: {
+          cookie: "session=test",
+          "content-type": "image/png",
+          "x-koinote-image-purpose":
+            quotaCase.backend.code === "temporary_image_quota_exceeded"
+              ? "wechat-export"
+              : "persistent",
+        },
+        body: png,
+      }),
+      {
+        BACKEND_URL: "https://backend.example.com",
+        BACKEND_INTERNAL_TOKEN: "internal",
+        IMAGES: {
+          head: async () => null,
+          put: async () => {},
+          delete: async () => {
+            deleted += 1;
+          },
+        },
+      },
+    );
+    const body = await response.json();
+    check(`${quotaCase.name}上传返回 413`, response.status, 413);
+    check(`${quotaCase.name}错误码不被折叠`, body.code, quotaCase.backend.code);
+    check(`${quotaCase.name}保留 quotaBytes`, body.quotaBytes, quotaCase.backend.quotaBytes);
+    check(`${quotaCase.name}回滚新写入对象`, deleted, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+  ]);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/auth/session") {
+      return Response.json({ user: { authUserId: "alice" } });
+    }
+    if (path === "/api/images/record") {
+      return new Response("broken response", { status: 409 });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    const response = await handleImageUpload(
+      new Request("https://app.example.com/api/images", {
+        method: "POST",
+        headers: {
+          cookie: "session=test",
+          "content-type": "image/png",
+        },
+        body: png,
+      }),
+      {
+        BACKEND_URL: "https://backend.example.com",
+        BACKEND_INTERNAL_TOKEN: "internal",
+        IMAGES: {
+          put: async () => {},
+          delete: async () => {},
+        },
+      },
+    );
+    const body = await response.json();
+    check("损坏的 409 仍拒绝上传", response.status, 413);
+    check("损坏的持久配额响应安全回落", body.code, "image_quota_exceeded");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
   let r2Deletes = 0;
   const response = await handleImageDelete(deleteRequest(), {
     BACKEND_INTERNAL_TOKEN: "internal",
@@ -92,6 +308,53 @@ const deleteRequest = () =>
   });
   check("缺 purge 配置时删除返回 503", response.status, 503);
   check("缺 purge 配置时不会先删 R2", r2Deletes, 0);
+}
+
+{
+  const imageKey = "u/alice/aaaaaaaa11111111.png";
+  const originalFetch = globalThis.fetch;
+  let fetchedURL = "";
+  let fetchedMethod = "";
+  globalThis.fetch = async (url, init) => {
+    fetchedURL = String(url);
+    fetchedMethod = init?.method ?? "GET";
+    return new Response(new Uint8Array([137, 80, 78, 71]), {
+      headers: {
+        "content-type": "image/png",
+        "cache-control": "public, max-age=31536000, immutable",
+      },
+    });
+  };
+  try {
+    const response = await handleImageGet(
+      new Request(`http://localhost:8788/images/${imageKey}?__koinote_retry=1`),
+      {
+        IMAGE_READ_FALLBACK_BASE: "https://img.koinote.app",
+        IMAGES: { get: async () => null },
+      },
+    );
+    check("本地 R2 缺图时回源成功", response.status, 200);
+    check("回源保留图片类型", response.headers.get("content-type"), "image/png");
+    check(
+      "回源地址保留重试参数",
+      fetchedURL,
+      `https://img.koinote.app/${imageKey}?__koinote_retry=1`,
+    );
+    check("回源沿用原请求方法", fetchedMethod, "GET");
+
+    fetchedURL = "";
+    const rejected = await handleImageGet(
+      new Request("http://localhost:8788/images/not-an-owned-image.png"),
+      {
+        IMAGE_READ_FALLBACK_BASE: "https://img.koinote.app",
+        IMAGES: { get: async () => null },
+      },
+    );
+    check("非法 key 不会触发回源", rejected.status, 404);
+    check("非法 key 没有外部请求", fetchedURL, "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 {

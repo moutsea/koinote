@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
+	github.com/stripe/stripe-go/v82 v82.5.0
 	golang.org/x/crypto v0.37.0
 )
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -458,5 +459,161 @@ func TestGCSettlesDeletedKeysWhenWorkerRejectsAnother(t *testing.T) {
 	}
 	if attempts != 1 || !strings.Contains(lastError, "Worker") && !strings.Contains(lastError, "worker") {
 		t.Fatalf("拒绝项没有正确退避: attempts=%d last_error=%q", attempts, lastError)
+	}
+}
+
+func TestGCContinuesAfterFastRetryLimit(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	key := gcKey("gc-slow-retry", gcHexA)
+	user, _ := seedGCUser(t, pool, "gc-slow-retry", "正文无图")
+	worker, calls := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: keys}
+	})
+	app := gcTestApp(pool, worker.URL)
+	if err := app.enqueueImageDeletions(context.Background(), user.ID, []string{key}); err != nil {
+		t.Fatalf("入队失败: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE pending_image_deletions
+		SET attempts = $2, next_try_at = now()
+		WHERE object_key = $1
+	`, key, gcFastRetryAttempts); err != nil {
+		t.Fatalf("设置慢速重试状态失败: %v", err)
+	}
+
+	if err := app.runImageGCOnce(context.Background()); err != nil {
+		t.Fatalf("执行 GC 失败: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("超过快速重试次数后仍应处理，Worker 调用次数 = %d", calls.Load())
+	}
+}
+
+func TestReenqueueResetsFailedGCState(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	key := gcKey("gc-reenqueue", gcHexA)
+	user, _ := seedGCUser(t, pool, "gc-reenqueue", "正文无图")
+	app := &App{db: pool}
+	if err := app.enqueueImageDeletions(context.Background(), user.ID, []string{key}); err != nil {
+		t.Fatalf("首次入队失败: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE pending_image_deletions
+		SET attempts = 99, last_error = 'old failure', next_try_at = now() + interval '1 day'
+		WHERE object_key = $1
+	`, key); err != nil {
+		t.Fatalf("设置失败状态失败: %v", err)
+	}
+	if err := app.enqueueImageDeletions(context.Background(), user.ID, []string{key}); err != nil {
+		t.Fatalf("重新入队失败: %v", err)
+	}
+
+	var attempts int
+	var lastError string
+	var due bool
+	if err := pool.QueryRow(context.Background(), `
+		SELECT attempts, COALESCE(last_error, ''), next_try_at <= now()
+		FROM pending_image_deletions WHERE object_key = $1
+	`, key).Scan(&attempts, &lastError, &due); err != nil {
+		t.Fatalf("读取重新入队状态失败: %v", err)
+	}
+	if attempts != 0 || lastError != "" || !due {
+		t.Fatalf("重新入队未恢复任务: attempts=%d last_error=%q due=%v", attempts, lastError, due)
+	}
+}
+
+func TestWechatExportImageSchedulesAndRenewsCleanup(t *testing.T) {
+	pool := newGCTestPool(t)
+
+	key := gcKey("gc-wechat-export", gcHexA)
+	user, _ := seedGCUser(t, pool, "gc-wechat-export", "正文无图")
+	app := &App{db: pool}
+	firstExpiry := time.Now().Add(wechatExportImageTTL)
+	if _, err := app.recordImageObject(
+		context.Background(), user.ID, key, 1024, 100*1024*1024,
+		imagePurposeWechatExport, &firstExpiry,
+	); err != nil {
+		t.Fatalf("公式图首次记账失败: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE pending_image_deletions SET attempts = 12, last_error = 'temporary failure'
+		WHERE object_key = $1
+	`, key); err != nil {
+		t.Fatalf("设置公式图失败状态失败: %v", err)
+	}
+
+	secondExpiry := firstExpiry.Add(24 * time.Hour)
+	if _, err := app.recordImageObject(
+		context.Background(), user.ID, key, 1024, 100*1024*1024,
+		imagePurposeWechatExport, &secondExpiry,
+	); err != nil {
+		t.Fatalf("公式图续期失败: %v", err)
+	}
+
+	var objects int
+	if err := pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM image_objects WHERE object_key = $1
+	`, key).Scan(&objects); err != nil {
+		t.Fatalf("读取公式图账本失败: %v", err)
+	}
+	var attempts int
+	var lastError string
+	var nextTry time.Time
+	if err := pool.QueryRow(context.Background(), `
+		SELECT attempts, COALESCE(last_error, ''), next_try_at
+		FROM pending_image_deletions WHERE object_key = $1
+	`, key).Scan(&attempts, &lastError, &nextTry); err != nil {
+		t.Fatalf("读取公式图回收任务失败: %v", err)
+	}
+	if objects != 1 {
+		t.Fatalf("相同公式图不应重复计费，账本行数 = %d", objects)
+	}
+	usage, err := app.storageUsageFor(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("读取用户配额用量失败: %v", err)
+	}
+	if usage.ImageBytes != 0 {
+		t.Fatalf("临时公式图不应挤占正文云存储配额，imageBytes=%d", usage.ImageBytes)
+	}
+	if attempts != 0 || lastError != "" {
+		t.Fatalf("续期应恢复回收任务: attempts=%d last_error=%q", attempts, lastError)
+	}
+	if nextTry.Before(secondExpiry.Add(-time.Second)) {
+		t.Fatalf("续期没有延后回收时间: got=%s want>=%s", nextTry, secondExpiry)
+	}
+}
+
+func TestWechatExportQuotaIsSeparateFromPersistentStorage(t *testing.T) {
+	pool := newGCTestPool(t)
+	user, _ := seedGCUser(t, pool, "gc-wechat-quota", "正文无图")
+	app := &App{db: pool}
+	expiry := time.Now().Add(wechatExportImageTTL)
+
+	_, err := app.recordImageObject(
+		context.Background(), user.ID, gcKey(user.AuthUserID, gcHexA),
+		wechatExportQuotaBytes+1, 100*1024*1024, imagePurposeWechatExport, &expiry,
+	)
+	if !errors.Is(err, errWechatExportQuotaExceeded) {
+		t.Fatalf("临时公式图必须受独立额度约束，实际错误 %v", err)
+	}
+	if _, err := app.recordImageObject(
+		context.Background(), user.ID, gcKey(user.AuthUserID, gcHexB),
+		1024, 100*1024*1024, imagePurposePersistent, nil,
+	); err != nil {
+		t.Fatalf("临时额度耗尽不应阻止正文图片记账: %v", err)
+	}
+}
+
+func TestGCBackoffFallsBackToDailyRetries(t *testing.T) {
+	if got := gcBackoff(gcFastRetryAttempts - 1); got != 64*time.Minute {
+		t.Fatalf("最后一次快速退避 = %s，期望 64m", got)
+	}
+	if got := gcBackoff(gcFastRetryAttempts); got != gcSlowRetryInterval {
+		t.Fatalf("慢速退避 = %s，期望 %s", got, gcSlowRetryInterval)
+	}
+	if got := gcBackoff(1000); got != gcSlowRetryInterval {
+		t.Fatalf("高 attempts 仍应每日重试，实际 %s", got)
 	}
 }

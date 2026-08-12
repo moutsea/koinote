@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"koinote/backend/internal/model"
 )
@@ -162,14 +163,11 @@ func fetchGitHubProfile(ctx context.Context, accessToken string) (oauthProfile, 
 	if err := getOAuthJSON(ctx, "https://api.github.com/user", accessToken, &u); err != nil {
 		return oauthProfile{}, err
 	}
-	email := strings.ToLower(strings.TrimSpace(u.Email))
-	if email == "" {
-		// GitHub 的 /user 常不返回 email，补拉 /user/emails
-		resolved, err := fetchGitHubPrimaryEmail(ctx, accessToken)
-		if err != nil {
-			return oauthProfile{}, err
-		}
-		email = resolved
+	// /user.email 是公开资料字段，响应本身不携带 verified 标记。即使它非空，也必须
+	// 用 /user/emails 再确认，不能让未验证的公开邮箱参与本站按邮箱合并账号。
+	email, err := fetchGitHubVerifiedEmail(ctx, accessToken, u.Email)
+	if err != nil {
+		return oauthProfile{}, err
 	}
 	if u.ID == 0 || email == "" {
 		return oauthProfile{}, errors.New("github profile is missing id or verified email")
@@ -183,23 +181,37 @@ func fetchGitHubProfile(ctx context.Context, accessToken string) (oauthProfile, 
 	}, nil
 }
 
-func fetchGitHubPrimaryEmail(ctx context.Context, accessToken string) (string, error) {
-	var emails []struct {
-		Email    string `json:"email"`
-		Primary  bool   `json:"primary"`
-		Verified bool   `json:"verified"`
-	}
+type githubEmail struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
+}
+
+func fetchGitHubVerifiedEmail(ctx context.Context, accessToken, preferred string) (string, error) {
+	var emails []githubEmail
 	if err := getOAuthJSON(ctx, "https://api.github.com/user/emails", accessToken, &emails); err != nil {
 		return "", err
 	}
+	return selectGitHubVerifiedEmail(emails, preferred)
+}
+
+func selectGitHubVerifiedEmail(emails []githubEmail, preferred string) (string, error) {
+	preferred = normalizeEmail(preferred)
+	if preferred != "" {
+		for _, email := range emails {
+			if email.Verified && normalizeEmail(email.Email) == preferred {
+				return preferred, nil
+			}
+		}
+	}
 	for _, e := range emails {
 		if e.Primary && e.Verified && e.Email != "" {
-			return strings.ToLower(strings.TrimSpace(e.Email)), nil
+			return normalizeEmail(e.Email), nil
 		}
 	}
 	for _, e := range emails {
 		if e.Verified && e.Email != "" {
-			return strings.ToLower(strings.TrimSpace(e.Email)), nil
+			return normalizeEmail(e.Email), nil
 		}
 	}
 	return "", errors.New("github profile has no verified email")
@@ -231,7 +243,12 @@ func getOAuthJSON(ctx context.Context, endpoint, accessToken string, target any)
 
 // getOrCreateOAuthUser 依次按 auth_user_id、email 查找，都没有才新建。
 // auth_user_id 约定为 "{provider}_{providerUserID}"，复用现有唯一约束，无需新表。
-func (a *App) getOrCreateOAuthUser(ctx context.Context, profile oauthProfile) (model.User, error) {
+func (a *App) getOrCreateOAuthUser(
+	ctx context.Context,
+	profile oauthProfile,
+	rawInvitationCode string,
+	invalidInvitationCode bool,
+) (model.User, error) {
 	authUserID := profile.Provider + "_" + profile.ProviderUserID
 
 	// 1) 已用该 provider 身份登录过
@@ -257,6 +274,9 @@ func (a *App) getOrCreateOAuthUser(ctx context.Context, profile oauthProfile) (m
 	if existing, found, err := a.authUserByEmail(ctx, profile.Email); err != nil {
 		return model.User{}, err
 	} else if found {
+		if !existing.IsVerified {
+			return model.User{}, errors.New("existing email account is not verified")
+		}
 		_, uerr := a.db.Exec(ctx, `
 			UPDATE users
 			SET nickname = COALESCE(NULLIF($2, ''), nickname),
@@ -271,14 +291,66 @@ func (a *App) getOrCreateOAuthUser(ctx context.Context, profile oauthProfile) (m
 		return a.getUserByAuthUserID(ctx, existing.AuthUserID)
 	}
 
-	// 3) 全新用户
-	if _, err := a.db.Exec(ctx, `
-		INSERT INTO users (auth_user_id, email, nickname, avatar_url, is_verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, true, now(), now())
-	`, authUserID, profile.Email, nullableString(profile.Name), nullableString(profile.AvatarURL)); err != nil {
+	// 3) 全新用户。创建账号与双方邀请奖励同一事务提交，任一步失败都不会留下半套权益。
+	if invalidInvitationCode {
+		return model.User{}, errInvalidInvitationCode
+	}
+	invitationCode, err := newInvitationCode()
+	if err != nil {
+		return model.User{}, err
+	}
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return model.User{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	var newUserID int
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO users (
+			auth_user_id, email, nickname, avatar_url, is_verified,
+			invitation_code, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, true, $5, now(), now())
+		RETURNING id
+	`, authUserID, profile.Email, nullableString(profile.Name), nullableString(profile.AvatarURL), invitationCode).Scan(&newUserID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// 同一 OAuth 身份（或同邮箱的两个 provider）并发首次登录时，另一个事务
+			// 可能已经创建成功。结束失败事务后回查，把唯一约束当作幂等边界。
+			_ = tx.Rollback(ctx)
+			return a.oauthUserAfterUniqueConflict(ctx, authUserID, profile, err)
+		}
+		return model.User{}, err
+	}
+	if err := applyInvitationReward(ctx, tx, newUserID, rawInvitationCode); err != nil {
+		return model.User{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return model.User{}, err
 	}
 	return a.getUserByAuthUserID(ctx, authUserID)
+}
+
+func (a *App) oauthUserAfterUniqueConflict(
+	ctx context.Context,
+	authUserID string,
+	profile oauthProfile,
+	conflictErr error,
+) (model.User, error) {
+	if user, err := a.getUserByAuthUserID(ctx, authUserID); err == nil {
+		return user, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return model.User{}, err
+	}
+	existing, found, err := a.authUserByEmail(ctx, profile.Email)
+	if err != nil {
+		return model.User{}, err
+	}
+	if found && existing.IsVerified {
+		return a.getUserByAuthUserID(ctx, existing.AuthUserID)
+	}
+	return model.User{}, conflictErr
 }
 
 // ---------- 小工具 ----------
@@ -310,7 +382,7 @@ func nullableString(s string) any {
 // sanitizeRedirectPath 只允许站内单斜杠开头的相对路径，防开放重定向。
 func sanitizeRedirectPath(p string) string {
 	p = strings.TrimSpace(p)
-	if p == "" || !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+	if p == "" || !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsRune(p, '\\') {
 		return "/dashboard"
 	}
 	return p

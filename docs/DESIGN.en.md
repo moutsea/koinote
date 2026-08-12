@@ -17,6 +17,9 @@ into the same hole.
 - [Architecture](#architecture)
 - [Local development](#local-development)
 - [Auth and security](#auth)
+- [Invitation rewards](#invitation-rewards)
+- [Membership and billing](#membership-and-billing)
+- [Admin dashboard](#admin-dashboard)
 - [Sharing](#sharing)
 - [Export](#export)
 - [Syntax highlighting and LaTeX](#syntax-highlighting-and-latex)
@@ -30,16 +33,16 @@ Browser ──▶ Cloudflare Worker (worker/index.ts)
               ├─ serves the Vite-built SPA (spa/dist)
               └─ /api/*, /health ──▶ reverse proxy to the Go backend
                                           │
-                                    ┌─────▼──────────────────────┐
-                                    │ docker-compose:            │
-                                    │  Go backend + Postgres + Redis │
-                                    └────────────────────────────┘
+                                    ┌─────▼────────────────────┐
+                                    │ docker-compose:          │
+                                    │  Go backend + Postgres   │
+                                    └──────────────────────────┘
 ```
 
 - **Frontend** Vite + React 19 + TypeScript + TanStack Router + react-query + Tailwind v4
 - **Editor core** TipTap v3 (ProseMirror family) + tiptap-markdown (lossless Markdown round-trip)
 - **Backend** Go (stdlib `net/http`) + pgx, stateless HMAC-SHA256 session cookie
-- **Database** PostgreSQL 16; Redis 7 is a placeholder, unused by the auth flow
+- **Database** PostgreSQL 16
 - **Deployment** Cloudflare Worker (frontend) + VPS/docker-compose (backend)
 
 ## Directory layout
@@ -47,7 +50,7 @@ Browser ──▶ Cloudflare Worker (worker/index.ts)
 ```
 spa/          frontend SPA (Vite root)
   src/
-    pages/          home / login / dashboard / editor
+    pages/          home / login / dashboard / admin / editor
     components/     AppShell, editor (TipTap)
     api.ts          backend API wrapper (credentials: include)
     auth.ts         session state hook (react-query)
@@ -56,7 +59,7 @@ backend/      Go backend
   cmd/server/       entry point
   internal/         config / db / migrations / server(auth,session) / model
   migrations/       SQL migrations
-docker-compose.yml  postgres + redis + backend
+docker-compose.yml  postgres + backend
 ```
 
 ## Local development
@@ -69,9 +72,6 @@ You need Node 20.19+ (or 22.12+), Go 1.23+, and Docker Compose.
 cp .env.example .env
 docker compose up -d postgres
 ```
-
-The Redis service in Compose is reserved for future shared rate limiting; the backend
-does not use it when run directly.
 
 > ⚠️ **Port conflicts**: if a native PostgreSQL already holds 5432, the container
 > can't bind. Set `POSTGRES_PORT=5433` (or any free port) in `.env` and change the
@@ -120,7 +120,7 @@ production build can then only be verified by deploying it.
 ### Everything in Docker
 
 ```bash
-npm run docker:up   # postgres + redis + backend all containerized
+npm run docker:up   # postgres + backend all containerized
 ```
 
 > **Rebuild after changing backend code.** `docker compose up -d` restarts the
@@ -139,7 +139,8 @@ npm run docker:up   # postgres + redis + backend all containerized
 - Passwords hashed with bcrypt (cost 10); login accepts username or email, case-insensitive
 - Verification codes are stored only as HMACs and expire after 10 minutes; consuming
   the code, creating the user, and deleting the code happen in one transaction
-- OAuth accounts are trusted as provider-verified; subscription billing still comes later
+- OAuth accounts are trusted as provider-verified; invitation rewards apply only when a
+  genuinely new account is created
 
 ### Session key SESSION_SECRET
 
@@ -233,7 +234,7 @@ send valid requests, and all valid requests are counted.
 Login, registration, and sharing use a **per-process** limiter (`ratelimit.go`), while
 verification-send counters are also persisted in the database across restarts. Across
 multiple instances the in-process buckets still multiply by N, so move them to shared
-storage before scaling out. The Redis service in Compose is reserved but unused.
+rate-limit storage before scaling out.
 
 ### Security response headers
 
@@ -276,6 +277,124 @@ Callback URLs are derived from `APP_URL` and must be registered with each provid
 filtered through `sanitizeRedirectPath`, which only permits in-site relative paths.
 An existing account with the same email (for example a password signup) is merged
 on OAuth login rather than duplicated.
+
+## Invitation rewards
+
+Every user has a unique 16-character invitation code. The dashboard turns it into a
+`/register?invite=CODE` link. Email registration submits the code in its request body;
+OAuth carries it inside the existing HMAC-signed state cookie, so the provider sees only
+the random nonce and cannot read or alter the code.
+
+Rewards apply only to a genuinely new account. The inviter and invited user each receive
+500 MiB of permanent storage, while each account's cumulative `bonus_storage_bytes` is
+capped at 5 GiB:
+
+- `users.invitation_code` is unique and cannot be changed by the user
+- `users.invited_by` records the direct relationship
+- `users.bonus_storage_bytes` stores cumulative permanent bonuses, with the 5 GiB cap
+  enforced both by a database constraint and when application code reads the quota
+- unique `invitations.invited_user_id` is the database boundary against duplicate rewards
+
+Creating the user, inserting the invitation ledger entry, and incrementing both bonuses
+happen in one PostgreSQL transaction. An invalid code rolls the registration back without
+consuming the email verification code, and a partial one-sided reward cannot commit.
+Concurrent invitations lock the inviter row; the final grant can use only the remaining
+allowance, and later relationships are recorded with a zero actual inviter reward.
+Existing accounts ignore invite parameters on later OAuth logins and cannot claim a reward
+after registration. `GET /api/invitations` returns only the current user's code, invite count,
+and reward totals.
+
+OAuth state represents malformed invitation input with a dedicated signed
+`invitationCodeInvalid` boolean instead of a sentinel string in the legal code namespace.
+
+## Membership and billing
+
+The first paid entitlement is a multi-currency one-time lifetime membership, not a
+subscription:
+
+- Free users use the `IMAGE_QUOTA_MB` base storage quota (500 MB by default)
+- Lifetime members receive a 10 GiB base quota and entitlement to future AI features
+- Both tiers add up to 5 GiB of `bonus_storage_bytes` earned through invitations on top of the base quota
+- `users.membership_tier` is the entitlement source of truth and currently accepts
+  only `free | lifetime`
+- `stripe_payments.checkout_session_id` is the idempotency key, so success-page
+  confirmation and the Stripe webhook can arrive together without double fulfillment
+
+Payment flow:
+
+```
+POST /api/billing/checkout
+  └─ browser submits only a currency; backend chooses an allowlisted amount and fixed Price
+       ├─ browser redirects to Stripe
+       ├─ success return calls POST /api/billing/checkout/confirm
+       └─ Stripe calls POST /api/billing/webhook (checkout.session.completed)
+              └─ both confirmation paths retrieve the Session from Stripe again
+                   └─ one DB transaction records payment + sets lifetime membership
+```
+
+The allowlist is USD 3.99, CNY 29, EUR 3.99, and JPY 600. Stripe uses one
+`STRIPE_LIFETIME_PRODUCT_ID`; each Checkout creates an inline price for that Product
+with server-owned `price_data`. This lets the user choose the settlement currency
+without giving the browser control over the amount.
+
+Amounts, Product IDs, and tiers returned by the browser are never trusted. Fulfillment
+requires payment mode, paid status, an allowlisted metadata currency, exact matching
+Session and line-item amount/currency, exactly one configured Product with quantity one,
+and matching `client_reference_id` / ownership metadata. The webhook
+first verifies `Stripe-Signature` with the endpoint secret, then still retrieves the
+Session instead of treating an event snapshot as the entitlement source.
+
+The Stripe account is shared by multiple services, so both Checkout Sessions and
+PaymentIntents carry `metadata.service=koinote`. The webhook routes only that service's
+events and acknowledges other signed events with HTTP 200; both success-page confirmation
+and webhook fulfillment require the same service marker during final Session validation.
+
+Checkout omits `payment_method_types`, allowing Stripe to select among Dashboard-enabled
+methods according to account country, customer location, and currency. The current test
+account enables card, Alipay, and WeChat Pay. The webhook handles both
+`checkout.session.completed` and `checkout.session.async_payment_succeeded`, so delayed
+methods still fulfill after the customer closes the success page. Production requires
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+`STRIPE_LIFETIME_PRODUCT_ID` together. Development may omit the webhook secret and use
+the success return while testing Checkout.
+
+Every purchase click generates a random attempt ID. The idempotency key fingerprints it
+with the request-parameter version, return URL, user, Product, amount, currency, and
+Customer parameters. Network retries for one Stripe API call remain idempotent, while a
+cancelled, expired, or explicitly retried purchase receives a fresh Session. Changing the
+request shape, such as payment-method configuration, must still bump the version. Session
+creation is also limited to five attempts per user per ten minutes, without coupling one
+user's limit to another user's traffic.
+
+Quota is not a frontend display value: image accounting, document create, document
+update, and storage usage all call `storageQuotaFor(user)`. A newly fulfilled member
+therefore receives 10 GiB plus bounded invitation bonuses on the next write, and future AI authorization can read the
+same database tier without querying Stripe.
+
+## Admin dashboard
+
+`GET /api/admin/stats` resolves the user from the server-side session and then checks
+the database `is_admin` flag. Hiding the menu item on the client is only a UX detail,
+not authorization. Unauthenticated requests receive 401 and non-admin users receive
+403. Responses omit password hashes, Stripe Customer IDs, Checkout Session IDs, and
+internal authentication identifiers.
+
+PostgreSQL is the source of truth for user, verified-user, lifetime-member, document,
+image-ledger, site-storage, order, per-currency revenue, 30-day growth, and recent
+activity metrics. Revenue in different currencies is never added together without an
+exchange-rate source; the frontend formats each currency independently. The overview's
+full-table document and image aggregates use a one-minute cache that also coalesces
+concurrent loads.
+
+Today's UV and PV come from Cloudflare GraphQL Analytics API
+`httpRequests1mGroups`. The query deliberately has no time dimension, so
+`uniq.uniques` is deduplicated over the whole requested interval rather than incorrectly
+adding minute-bucket uniques. It uses a dedicated least-privilege
+`CLOUDFLARE_ANALYTICS_TOKEN`, filters by hostname, and caches results for one minute.
+Missing configuration, permission errors, or Cloudflare timeouts set
+`traffic.available=false` while PostgreSQL business metrics still return successfully.
+These are edge HTTP metrics and may include legitimate crawlers and allowed automation;
+they are not equivalent to client-instrumented user sessions.
 
 ## Sharing
 
@@ -355,9 +474,9 @@ plaintext. Responses carry `Cache-Control: private, no-store` — if password-ga
 content were cached by a CDN, holding the cache would bypass the password. Plus
 `X-Robots-Tag: noindex`.
 
-> ⚠ **The limiter is in-process** (no Redis client in `go.mod` yet). Across multiple
-> instances each process counts separately and thresholds multiply by N. Move it to
-> Redis before scaling out.
+> ⚠ **The limiter is in-process**. Across multiple instances each process counts
+> separately and thresholds multiply by N. Move it to shared rate-limit storage before
+> scaling out.
 
 ## Export
 
@@ -480,11 +599,15 @@ Two deliberate orderings that break if reversed:
    includes `height:auto`; reversed, formulas get squashed. This is carried via
    `data-wechat-keep-style`, with assertions guarding it.
 
-**Formula images are cached by LaTeX source.** Without the cache every export
-re-rasterizes and re-uploads — measured: switching themes a few times piled up 22
-copies of the same image in R2, and with no images table those objects can neither be
-listed nor cleaned up. The cache lives only for the current page session;
-cross-session dedup needs server-side content hashing once the images table exists.
+**Formula images are temporary, content-addressed objects.** A single export reuses
+rendered results by LaTeX source, while the Worker derives a stable key from the PNG's
+SHA-256 bytes. Re-exporting across reloads or sessions therefore does not accumulate R2
+copies. Each export extends retention to seven days, after which image GC handles it;
+if the URL is stored in one of the user's documents, GC's reference check keeps it until
+the document actually removes the reference. The ledger marks these objects by `purpose`:
+they do not consume the normal document-storage quota and instead share a separate
+100 MiB temporary quota per user. Export therefore cannot block ordinary uploads, while
+forging the client-supplied purpose cannot create an unlimited storage bypass.
 
 **Known degradation**: syntax highlighting colors survive (they're inlined), but
 nothing can preserve `class`-based styling. Formula conversion failures degrade to
@@ -639,6 +762,13 @@ The stability trade-off is explicit: the first web load of an image costs one
 Worker request. The response carries a one-year immutable browser cache, while
 exported content and direct CDN access still bypass the Worker.
 
+The simulated R2 used in local development does not contain production objects.
+`IMAGE_READ_FALLBACK_BASE` is empty by default so an open-source clone never reaches
+the maintainer's production domain on a local R2 miss. To inspect your own production
+images locally, opt in through `.dev.vars` with your CDN base. The key must still match
+the owned-image shape, so this is not an arbitrary URL proxy; production does not enable
+this fallback.
+
 Leaving it empty does **not** break WeChat export: `auditWechatImages`
 (`spa/src/components/editor/wechatImages.ts`) resolves `/images/<key>` against the
 current origin, so once deployed WeChat can fetch it even through the Worker proxy —
@@ -700,11 +830,11 @@ throwing would fail uploads outright, which is worse.
 
 ## Verification
 
-One command covers the frontend and Worker (typecheck on both sides plus 25
+One command covers the frontend and Worker (typecheck on both sides plus 27
 assertion suites):
 
 ```bash
-npm test          # typecheck ×2 + 26 suites, stops at the first failure
+npm test          # typecheck ×2 + 27 suites, stops at the first failure
 npm run go:test   # go vet + go test
 ```
 
@@ -764,7 +894,7 @@ jsPDF puts every bitmap in one shared resource dictionary, so `page.images` alon
 isn't enough), whether per-page bitmap fingerprints differ, fill ratio, per-page
 size, and which chunks were lazily loaded during export.
 
-`verify_export_formats.py` covers four formats, focusing on whether formulas
+`verify_export_formats.py` covers four downloadable formats, focusing on whether formulas
 actually survive in each.
 
 Both need the backend and database running, and leave a `pdfprobe` test account

@@ -70,6 +70,11 @@ const dashboardRoute = createRoute({
     "DashboardPage",
   ),
 });
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin",
+  component: lazyRouteComponent(() => import("./pages/AdminPage"), "AdminPage"),
+});
 
 // 条款页：三条路由共用一个 LegalPage，内容按 kind 从 i18n 取。
 // 懒加载同一个 chunk —— 三页的代码完全相同，读者也常常连着看两页
@@ -96,6 +101,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   dashboardRoute,
+  adminRoute,
   shareRoute,
   privacyRoute,
   termsRoute,

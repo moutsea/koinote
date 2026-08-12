@@ -43,14 +43,20 @@ type DocumentSummary struct {
 
 // User 是对外暴露的用户模型，JSON 字段与前端 spa/src/api.ts 的 User 类型对齐。
 type User struct {
-	ID         int        `json:"id"`
-	AuthUserID string     `json:"authUserId"`
-	Email      string     `json:"email"`
-	Username   *string    `json:"username"`
-	Nickname   *string    `json:"nickname"`
-	AvatarURL  *string    `json:"avatarUrl"`
-	IsVerified bool       `json:"isVerified"`
-	IsAdmin    bool       `json:"isAdmin"`
-	CreatedAt  *time.Time `json:"createdAt"`
-	UpdatedAt  *time.Time `json:"updatedAt"`
+	ID         int     `json:"id"`
+	AuthUserID string  `json:"authUserId"`
+	Email      string  `json:"email"`
+	Username   *string `json:"username"`
+	Nickname   *string `json:"nickname"`
+	AvatarURL  *string `json:"avatarUrl"`
+	IsVerified bool    `json:"isVerified"`
+	IsAdmin    bool    `json:"isAdmin"`
+	// MembershipTier 是站内权益真值。支付完成后写为 lifetime，终生有效。
+	MembershipTier      string     `json:"membershipTier"`
+	MembershipGrantedAt *time.Time `json:"membershipGrantedAt"`
+	// BonusStorageBytes 来自邀请奖励，在免费或会员基础配额之上永久叠加。
+	BonusStorageBytes int64      `json:"bonusStorageBytes"`
+	StripeCustomerID  *string    `json:"-"`
+	CreatedAt         *time.Time `json:"createdAt"`
+	UpdatedAt         *time.Time `json:"updatedAt"`
 }

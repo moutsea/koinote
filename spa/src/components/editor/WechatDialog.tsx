@@ -67,7 +67,22 @@ export function WechatDialog({
       }
 
       // 公式失败要说出来。静默降级成 LaTeX 源码，用户会以为公式本来就长那样
-      if (result.math.failed > 0) {
+      if (result.math.temporaryQuotaFailed > 0) {
+        const quotaNote = t.editor.wechatMathTemporaryQuotaExceeded.replace(
+          "{n}",
+          String(result.math.temporaryQuotaFailed),
+        );
+        const otherFailures =
+          result.math.failed - result.math.temporaryQuotaFailed;
+        setNote(
+          otherFailures > 0
+            ? `${quotaNote} ${t.editor.wechatMathFailed.replace(
+                "{n}",
+                String(otherFailures),
+              )}`
+            : quotaNote,
+        );
+      } else if (result.math.failed > 0) {
         setNote(
           t.editor.wechatMathFailed.replace("{n}", String(result.math.failed)),
         );

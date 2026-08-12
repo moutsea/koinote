@@ -29,6 +29,9 @@
     // 图片对外基址。留空时回落到 /images/<key> 由 Worker 代理，
     // 配上 R2 自定义域名后走 CDN，不再消耗 Worker 请求数。
     "IMAGE_PUBLIC_BASE": "",
+    // 可选的本地只读回源。开源默认留空，避免本地 R2 miss 时意外请求项目维护者域名；
+    // 确实需要查看自己生产环境的存量图片时，在 .dev.vars 里显式设置。
+    "IMAGE_READ_FALLBACK_BASE": "",
     "EMAIL_FROM_ADDRESS": "verify@koinote.app",
     "EMAIL_FROM_NAME": "Koinote"
   },

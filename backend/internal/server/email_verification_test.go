@@ -119,9 +119,24 @@ func TestEmailVerificationRegistrationFlow(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	email := "verify-" + itoa64(suffix) + "@example.test"
 	username := "verify-" + itoa64(suffix)
+	inviterEmail := "inviter-" + itoa64(suffix) + "@example.test"
+	inviterAuthUserID := "inviter-" + itoa64(suffix)
+	inviterCode, err := newInvitationCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inviterUserID int
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO users (auth_user_id, email, is_verified, invitation_code)
+		VALUES ($1, $2, true, $3)
+		RETURNING id
+	`, inviterAuthUserID, inviterEmail, inviterCode).Scan(&inviterUserID); err != nil {
+		t.Fatalf("创建邀请人: %v", err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE email = $1`, email)
+		_, _ = pool.Exec(ctx, `DELETE FROM invitations WHERE inviter_user_id = $1`, inviterUserID)
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE email = ANY($1)`, []string{email, inviterEmail})
 		_, _ = pool.Exec(ctx, `DELETE FROM email_verification_codes WHERE email = $1`, email)
 		_, _ = pool.Exec(ctx, `DELETE FROM email_verification_sends WHERE email = $1`, email)
 	})
@@ -162,7 +177,20 @@ func TestEmailVerificationRegistrationFlow(t *testing.T) {
 		t.Fatalf("错误次数应持久化为 1，实际 %d（err=%v）", attempts, err)
 	}
 
-	registered := postJSON(app.authRegister, `{"username":"`+username+`","email":"`+email+`","password":"secret123","verificationCode":"`+issueBody.DevCode+`"}`)
+	invalidInvite := "ZZZZZZZZZZZZZZZZ"
+	if invalidInvite == inviterCode {
+		invalidInvite = "YYYYYYYYYYYYYYYY"
+	}
+	rejectedInvite := postJSON(app.authRegister, `{"username":"`+username+`","email":"`+email+`","password":"secret123","verificationCode":"`+issueBody.DevCode+`","invitationCode":"`+invalidInvite+`"}`)
+	if rejectedInvite.Code != http.StatusBadRequest || decodeErrorCode(t, rejectedInvite) != "invalid_invitation_code" {
+		t.Fatalf("无效邀请码应拒绝整笔注册，实际 %d（%s）", rejectedInvite.Code, rejectedInvite.Body.String())
+	}
+	var codeStillAvailable int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM email_verification_codes WHERE email = $1`, email).Scan(&codeStillAvailable); err != nil || codeStillAvailable != 1 {
+		t.Fatalf("邀请失败不应消费验证码（remaining=%d err=%v）", codeStillAvailable, err)
+	}
+
+	registered := postJSON(app.authRegister, `{"username":"`+username+`","email":"`+email+`","password":"secret123","verificationCode":"`+issueBody.DevCode+`","invitationCode":"`+strings.ToLower(inviterCode)+`"}`)
 	if registered.Code != http.StatusOK {
 		t.Fatalf("正确验证码注册期望 200，实际 %d（%s）", registered.Code, registered.Body.String())
 	}
@@ -172,6 +200,16 @@ func TestEmailVerificationRegistrationFlow(t *testing.T) {
 	var verified bool
 	if err := pool.QueryRow(ctx, `SELECT is_verified FROM users WHERE email = $1`, email).Scan(&verified); err != nil || !verified {
 		t.Fatalf("新用户应标记为已验证（verified=%v err=%v）", verified, err)
+	}
+	var invitedBonus, inviterBonus int64
+	if err := pool.QueryRow(ctx, `SELECT bonus_storage_bytes FROM users WHERE email = $1`, email).Scan(&invitedBonus); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT bonus_storage_bytes FROM users WHERE id = $1`, inviterUserID).Scan(&inviterBonus); err != nil {
+		t.Fatal(err)
+	}
+	if invitedBonus != invitationRewardBytes || inviterBonus != invitationRewardBytes {
+		t.Fatalf("邮箱邀请奖励错误：邀请人=%d，被邀请人=%d", inviterBonus, invitedBonus)
 	}
 	var remaining int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM email_verification_codes WHERE email = $1`, email).Scan(&remaining); err != nil || remaining != 0 {

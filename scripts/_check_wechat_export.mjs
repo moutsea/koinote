@@ -265,6 +265,7 @@ for (const theme of WECHAT_THEMES) {
   const code = stage.querySelector("pre > code");
   const bar = stage.querySelector("pre > span");
   ok(`${theme.id}: 有窗口栏`, !!bar);
+  eq(`${theme.id}: 窗口栏有三个可见圆点`, bar.textContent, "●●●");
   ok(`${theme.id}: code 内不含 ●`, !code.textContent.includes("●"), code.textContent.slice(0, 30));
   eq(`${theme.id}: 窗口栏在 code 之外`, bar.querySelector("code"), null);
   // 复制出来的代码应当只有代码。

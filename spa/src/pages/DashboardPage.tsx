@@ -6,6 +6,8 @@ import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { PaperCard } from "../components/Ink";
 import { StorageCard } from "../components/StorageCard";
+import { MembershipCard } from "../components/MembershipCard";
+import { InvitationCard } from "../components/InvitationCard";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -113,6 +115,14 @@ export function DashboardPage() {
           高度和那三张不一致，并排会让整行参差 */}
       <div className="mt-4">
         <StorageCard />
+      </div>
+
+      <div id="invitations" className="mt-4 scroll-mt-20">
+        <InvitationCard />
+      </div>
+
+      <div id="membership" className="mt-4 scroll-mt-20">
+        <MembershipCard user={user} />
       </div>
 
       {/* 文档列表 */}

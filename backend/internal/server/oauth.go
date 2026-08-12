@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -25,10 +26,12 @@ type oauthProviderConfig struct {
 
 // state 载荷：签名后放进 koinote_oauth_state cookie，callback 时校验。
 type oauthStatePayload struct {
-	Provider   string `json:"provider"`
-	RedirectTo string `json:"redirectTo"`
-	Nonce      string `json:"nonce"`
-	ExpiresAt  int64  `json:"expiresAt"`
+	Provider              string `json:"provider"`
+	RedirectTo            string `json:"redirectTo"`
+	InvitationCode        string `json:"invitationCode,omitempty"`
+	InvitationCodeInvalid bool   `json:"invitationCodeInvalid,omitempty"`
+	Nonce                 string `json:"nonce"`
+	ExpiresAt             int64  `json:"expiresAt"`
 }
 
 type oauthTokenResponse struct {
@@ -95,11 +98,20 @@ func (a *App) oauthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	invitationCode := normalizeInvitationCode(r.URL.Query().Get("invite"))
+	invitationCodeInvalid := invitationCode != "" && !validInvitationCode(invitationCode)
+	if invitationCodeInvalid {
+		// 无效状态用独立字段表达，不让任何字符串兼任哨兵值；同时避免把任意长度
+		// 的查询参数塞进 cookie。既有账号仍会忽略它，只有新账号注册会报错。
+		invitationCode = ""
+	}
 	statePayload := oauthStatePayload{
-		Provider:   provider.Name,
-		RedirectTo: sanitizeRedirectPath(r.URL.Query().Get("redirectTo")),
-		Nonce:      nonce,
-		ExpiresAt:  time.Now().Add(oauthStateTTL).Unix(),
+		Provider:              provider.Name,
+		RedirectTo:            sanitizeRedirectPath(r.URL.Query().Get("redirectTo")),
+		InvitationCode:        invitationCode,
+		InvitationCodeInvalid: invitationCodeInvalid,
+		Nonce:                 nonce,
+		ExpiresAt:             time.Now().Add(oauthStateTTL).Unix(),
 	}
 	stateToken, err := a.signOAuthState(statePayload)
 	if err != nil {
@@ -169,8 +181,17 @@ func (a *App) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.getOrCreateOAuthUser(r.Context(), profile)
+	user, err := a.getOrCreateOAuthUser(
+		r.Context(),
+		profile,
+		statePayload.InvitationCode,
+		statePayload.InvitationCodeInvalid,
+	)
 	if err != nil {
+		if errors.Is(err, errInvalidInvitationCode) {
+			http.Redirect(w, r, a.oauthRegistrationFailureRedirect("invalid_invitation_code"), http.StatusFound)
+			return
+		}
 		log.Printf("oauth user sync: %v", err)
 		http.Redirect(w, r, a.oauthFailureRedirect("oauth_sync_failed"), http.StatusFound)
 		return
@@ -178,6 +199,10 @@ func (a *App) oauthCallback(w http.ResponseWriter, r *http.Request) {
 
 	a.setSessionCookie(w, user.AuthUserID)
 	http.Redirect(w, r, sanitizeRedirectPath(statePayload.RedirectTo), http.StatusFound)
+}
+
+func (a *App) oauthRegistrationFailureRedirect(code string) string {
+	return "/register?error=" + url.QueryEscape(code)
 }
 
 // oauthFailureRedirect 拼一个带 error code 的前端登录页地址，前端读 query 翻译展示。

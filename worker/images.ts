@@ -12,6 +12,8 @@ export type ImagesEnv = {
   IMAGES: R2Bucket;
   BACKEND_URL: string;
   IMAGE_PUBLIC_BASE?: string;
+  /** 本地模拟 R2 缺图时使用的只读回源；生产环境不配置 */
+  IMAGE_READ_FALLBACK_BASE?: string;
   /** 后端调删除端点时用的共享令牌。缺省时删除端点一律 503 */
   BACKEND_INTERNAL_TOKEN?: string;
   /** R2 自定义域名所在 zone。CDN 模式删除对象时用于全局 purge */
@@ -21,6 +23,23 @@ export type ImagesEnv = {
 };
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
+const IMAGE_PURPOSE_HEADER = "x-koinote-image-purpose";
+type ImagePurpose = "persistent" | "wechat-export";
+type QuotaErrorCode =
+  | "image_quota_exceeded"
+  | "temporary_image_quota_exceeded";
+
+type RecordUsageResult =
+  | { outcome: "ok" }
+  | { outcome: "error" }
+  | {
+      outcome: "quota";
+      code: QuotaErrorCode;
+      usedBytes?: number;
+      documentBytes?: number;
+      imageBytes?: number;
+      quotaBytes?: number;
+    };
 
 // 只放行这几种，且必须与实际文件头一致（见 sniffImageType）
 const ALLOWED = new Map<string, string>([
@@ -48,7 +67,8 @@ const RECORD_TIMEOUT_MS = 5_000;
 /**
  * 向后端报账：这个对象归谁、多少字节。
  *
- * 返回 "ok"、"quota"（超额，调用方要把对象删掉）或 "error"（报账本身失败）。
+ * 返回结构化结果。超额时必须保留后端错误码，否则主配额与临时导出配额会被折叠，
+ * 前端无法给出正确的处理建议。
  *
  * 为什么在写 R2 之后才报账、而不是先问"还够不够"：
  *   先问后写的话，两次调用之间有窗口，并发上传各自都会得到"够"的答复。把判定放在
@@ -59,13 +79,18 @@ async function recordUsage(
   key: string,
   bytes: number,
   authUserId: string,
+  purpose: ImagePurpose,
   env: ImagesEnv,
-): Promise<"ok" | "quota" | "error"> {
+): Promise<RecordUsageResult> {
   if (!env.BACKEND_INTERNAL_TOKEN) {
-    // 没配令牌就没法报账。此时放行而不是拒绝上传：配额是运营诉求，
-    // 而"配置缺失导致所有人不能贴图"是更坏的故障
+    if (purpose === "wechat-export") {
+      console.warn("images: BACKEND_INTERNAL_TOKEN 未配置，无法安排临时图片回收");
+      return { outcome: "error" };
+    }
+    // 普通正文图片仍优先可用性：配额是运营诉求，而配置缺失导致所有人不能贴图
+    // 是更坏的故障。公式图不能走这条降级，因为没有回收任务就会永久泄漏。
     console.warn("images: BACKEND_INTERNAL_TOKEN 未配置，跳过用量记账");
-    return "ok";
+    return { outcome: "ok" };
   }
 
   const url = new URL("/api/images/record", env.BACKEND_URL);
@@ -80,18 +105,53 @@ async function recordUsage(
         "X-Koinote-Internal-Token": env.BACKEND_INTERNAL_TOKEN,
         "X-Auth-User-Id": authUserId,
       },
-      body: JSON.stringify({ key, bytes }),
+      body: JSON.stringify({ key, bytes, purpose }),
       signal: controller.signal,
     });
-    if (resp.status === 409) return "quota";
+    if (resp.status === 409) {
+      const fallbackCode: QuotaErrorCode =
+        purpose === "wechat-export"
+          ? "temporary_image_quota_exceeded"
+          : "image_quota_exceeded";
+      let body: Record<string, unknown>;
+      try {
+        body = (await resp.json()) as Record<string, unknown>;
+      } catch {
+        console.error("images: 记账配额响应不是合法 JSON");
+        return { outcome: "quota", code: fallbackCode };
+      }
+      if (
+        body.code !== "image_quota_exceeded" &&
+        body.code !== "temporary_image_quota_exceeded"
+      ) {
+        console.error("images: 记账返回未知配额错误码", body.code);
+        return { outcome: "quota", code: fallbackCode };
+      }
+      const result: RecordUsageResult = {
+        outcome: "quota",
+        code: body.code,
+      };
+      for (const field of [
+        "usedBytes",
+        "documentBytes",
+        "imageBytes",
+        "quotaBytes",
+      ] as const) {
+        const value = body[field];
+        if (typeof value === "number" && Number.isFinite(value)) {
+          result[field] = value;
+        }
+      }
+      return result;
+    }
     if (!resp.ok) {
       console.error(`images: 记账失败 ${resp.status}`);
-      return "error";
+      return { outcome: "error" };
     }
-    return "ok";
+    return { outcome: "ok" };
   } catch (err) {
     console.error("images: 记账请求异常", err);
-    return "error";
+    return { outcome: "error" };
   } finally {
     clearTimeout(timer);
   }
@@ -145,6 +205,13 @@ function randomKey(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function contentHash(buffer: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 /**
  * 校验字节并写入 R2。上传与代抓共用。
  *
@@ -156,6 +223,7 @@ async function storeImage(
   declared: string,
   authUserId: string,
   env: ImagesEnv,
+  purpose: ImagePurpose = "persistent",
 ): Promise<Response> {
   if (buffer.byteLength === 0) {
     return errorCode(400, "image_empty", "Empty image");
@@ -185,21 +253,30 @@ async function storeImage(
 
   const extension = ALLOWED.get(sniffed)!;
   // key 里带 authUserId 前缀：便于按用户列举与配额统计，也天然隔离
-  const key = `u/${authUserId}/${randomKey()}.${extension}`;
+  const stem = purpose === "wechat-export" ? await contentHash(buffer) : randomKey();
+  const key = `u/${authUserId}/${stem}.${extension}`;
+  const existing = purpose === "wechat-export" ? await env.IMAGES.head(key) : null;
 
-  await env.IMAGES.put(key, buffer, {
-    httpMetadata: {
-      contentType: sniffed,
-      // 内容不可变（key 随机且永不复用），放心长缓存
-      cacheControl: "public, max-age=31536000, immutable",
-    },
-    customMetadata: { authUserId },
-  });
+  if (!existing) {
+    await env.IMAGES.put(key, buffer, {
+      httpMetadata: {
+        contentType: sniffed,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+      customMetadata: { authUserId, purpose },
+    });
+  }
 
   // 报账。配额判定在后端（那条 INSERT ... WHERE 是原子的），这里只按结果行事
-  const recorded = await recordUsage(key, buffer.byteLength, authUserId, env);
+  const recorded = await recordUsage(
+    key,
+    buffer.byteLength,
+    authUserId,
+    purpose,
+    env,
+  );
 
-  if (recorded === "quota") {
+  if (recorded.outcome === "quota") {
     // 超额：把刚写的对象删掉，别留下不计入账本的孤儿。
     // 删失败也只能记日志 —— 此时回收队列里没有它（那张表是删文档时才入队的），
     // 所以这是唯一的清理时机，失败就成了真正的孤儿对象
@@ -208,14 +285,42 @@ async function storeImage(
     } catch (err) {
       console.error(`images: 超额回滚删除失败，${key} 成为孤儿对象`, err);
     }
-    return errorCode(
-      413,
-      "image_quota_exceeded",
-      "Storage quota exceeded",
-    );
+    return json(413, {
+      code: recorded.code,
+      error:
+        recorded.code === "temporary_image_quota_exceeded"
+          ? "Temporary image quota exceeded"
+          : "Storage quota exceeded",
+      ...(recorded.usedBytes !== undefined
+        ? { usedBytes: recorded.usedBytes }
+        : {}),
+      ...(recorded.documentBytes !== undefined
+        ? { documentBytes: recorded.documentBytes }
+        : {}),
+      ...(recorded.imageBytes !== undefined
+        ? { imageBytes: recorded.imageBytes }
+        : {}),
+      ...(recorded.quotaBytes !== undefined
+        ? { quotaBytes: recorded.quotaBytes }
+        : {}),
+    });
   }
 
-  if (recorded === "error") {
+  if (recorded.outcome === "error") {
+    if (purpose === "wechat-export") {
+      if (!existing) {
+        try {
+          await env.IMAGES.delete(key);
+        } catch (err) {
+          console.error(`images: 临时对象记账失败且回滚失败，${key} 成为孤儿对象`, err);
+        }
+      }
+      return errorCode(
+        503,
+        "image_record_failed",
+        "Could not schedule temporary image cleanup",
+      );
+    }
     // 报账失败但对象已经写进去了。放行 —— 此时用量会少算这一张。
     // 反过来（删掉并报错）会让后端抖一下就贴不了图，那更糟。
     // 少算的后果是配额略微宽松，且可以靠对账补回来
@@ -259,7 +364,11 @@ export async function handleImageUpload(
 
   // 真实长度由 storeImage 再挡一道：Content-Length 可以撒谎
   const buffer = await request.arrayBuffer();
-  return storeImage(buffer, declared, authUserId, env);
+  const purposeHeader = request.headers.get(IMAGE_PURPOSE_HEADER) ?? "persistent";
+  if (purposeHeader !== "persistent" && purposeHeader !== "wechat-export") {
+    return errorCode(400, "bad_request", "Invalid image purpose");
+  }
+  return storeImage(buffer, declared, authUserId, env, purposeHeader);
 }
 
 /** 代抓时最多跟几跳重定向。图床类地址正常一两跳就到 */
@@ -651,6 +760,37 @@ export function isSafeImageKey(key: string): boolean {
   return /^u\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8,64}\.(png|jpg|gif|webp)$/.test(key);
 }
 
+async function readImageFallback(
+  request: Request,
+  key: string,
+  env: ImagesEnv,
+): Promise<Response | null> {
+  const base = normalizeImageBase(env.IMAGE_READ_FALLBACK_BASE);
+  if (!base || !isSafeImageKey(key)) return null;
+
+  const requestURL = new URL(request.url);
+  const sourceURL = `${base}/${key}${requestURL.search}`;
+  let source: Response;
+  try {
+    source = await fetch(sourceURL, { method: request.method });
+  } catch {
+    return null;
+  }
+  const contentType = source.headers.get("content-type") ?? "";
+  if (!source.ok || !contentType.toLowerCase().startsWith("image/")) {
+    await source.body?.cancel();
+    return null;
+  }
+
+  const headers = new Headers();
+  for (const name of ["content-type", "cache-control", "etag", "last-modified"]) {
+    const value = source.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(request.method === "HEAD" ? null : source.body, { headers });
+}
+
 /** 常量时间比较，避免令牌被逐字符试出来 */
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -678,7 +818,12 @@ export async function handleImageGet(
   // HEAD 只需要元数据，不必把对象体拉出来
   if (request.method === "HEAD") {
     const head = await env.IMAGES.head(key);
-    if (!head) return new Response(null, { status: 404 });
+    if (!head) {
+      return (
+        (await readImageFallback(request, key, env)) ??
+        new Response(null, { status: 404 })
+      );
+    }
     const headers = new Headers();
     head.writeHttpMetadata(headers);
     headers.set("etag", head.httpEtag);
@@ -692,7 +837,10 @@ export async function handleImageGet(
 
   const object = await env.IMAGES.get(key);
   if (!object) {
-    return new Response("Not found", { status: 404 });
+    return (
+      (await readImageFallback(request, key, env)) ??
+      new Response("Not found", { status: 404 })
+    );
   }
 
   const headers = new Headers();

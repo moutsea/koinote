@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, Gift, Mail } from "lucide-react";
 import {
   login,
   register,
@@ -10,14 +11,15 @@ import {
 } from "../api";
 import { useI18n } from "../i18n";
 import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
-import { InkClouds } from "../components/Ink";
+import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 
 type Mode = "login" | "register";
 
 // OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
-function startOAuth(provider: "google" | "github") {
+function startOAuth(provider: "google" | "github", invitationCode: string) {
   const search = new URLSearchParams({ redirectTo: "/dashboard" });
+  if (invitationCode.trim()) search.set("invite", invitationCode.trim());
   window.location.assign(`/api/auth/oauth/${provider}/start?${search.toString()}`);
 }
 
@@ -33,6 +35,19 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
+  const [invitationCode, setInvitationCode] = useState(
+    () =>
+      new URLSearchParams(window.location.search)
+        .get("invite")
+        ?.trim()
+        .toUpperCase() ?? "",
+  );
+  const [showInvitationInput, setShowInvitationInput] = useState(
+    invitationCode !== "",
+  );
+  const [showEmailRegistration, setShowEmailRegistration] = useState(
+    initialMode === "login",
+  );
   const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
   const [sendingCode, setSendingCode] = useState(false);
   const [codeCooldown, setCodeCooldown] = useState(0);
@@ -111,7 +126,13 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           setLoading(false);
           return;
         }
-        await register({ username, email, password, verificationCode });
+        await register({
+          username,
+          email,
+          password,
+          verificationCode,
+          invitationCode,
+        });
       }
       await queryClient.invalidateQueries({ queryKey: ["session"] });
       void navigate({ to: "/dashboard" });
@@ -136,12 +157,12 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
 
   return (
     <div
-      className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-16"
+      className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-12 sm:py-16"
       style={{ background: "var(--ink-paper)" }}
     >
       <InkClouds />
       <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
+        <div className="mb-7 flex flex-col items-center text-center">
           {/* 不再套朱砂色块：logo 自己已经有朱砂，底色会和它打架。
               直接放大摆着，登录页本就该让品牌大方一点 */}
           <Logo className="h-14 w-14" />
@@ -156,46 +177,82 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           </p>
         </div>
 
-        {/* 错误提示放在最上方，同时覆盖 OAuth 回调失败与表单提交失败两种来源 */}
-        {error && (
-          <p
-            role="alert"
-            className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40 dark:text-red-400"
+        <PaperCard className="p-5 shadow-sm sm:p-6">
+          {/* 错误提示放在面板顶部，同时覆盖 OAuth 回调失败与表单提交失败两种来源 */}
+          {error && (
+            <p
+              role="alert"
+              className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40 dark:text-red-400"
+            >
+              {error}
+            </p>
+          )}
+
+          {/* 第三方登录：置顶作为首选入口，一步完成注册与登录 */}
+          <div className="space-y-3">
+            <OAuthButton
+              onClick={() =>
+                startOAuth("google", mode === "register" ? invitationCode : "")
+              }
+            >
+              <GoogleIcon className="h-4 w-4" />
+              {t.auth.continueWithGoogle}
+            </OAuthButton>
+            <OAuthButton
+              onClick={() =>
+                startOAuth("github", mode === "register" ? invitationCode : "")
+              }
+            >
+              <GitHubIcon className="h-4 w-4" />
+              {t.auth.continueWithGitHub}
+            </OAuthButton>
+          </div>
+
+          {/* 分隔线 */}
+          <div
+            className="my-6 flex items-center gap-3 text-xs"
+            style={{ color: "var(--ink-faint)" }}
           >
-            {error}
-          </p>
-        )}
+            <span
+              className="h-px flex-1"
+              style={{ background: "var(--ink-line)" }}
+            />
+            <span className="uppercase tracking-wide">{t.auth.orDivider}</span>
+            <span
+              className="h-px flex-1"
+              style={{ background: "var(--ink-line)" }}
+            />
+          </div>
 
-        {/* 第三方登录：置顶作为首选入口，一步完成注册与登录 */}
-        <div className="space-y-3">
-          <OAuthButton onClick={() => startOAuth("google")}>
-            <GoogleIcon className="h-4 w-4" />
-            {t.auth.continueWithGoogle}
-          </OAuthButton>
-          <OAuthButton onClick={() => startOAuth("github")}>
-            <GitHubIcon className="h-4 w-4" />
-            {t.auth.continueWithGitHub}
-          </OAuthButton>
-        </div>
+          {mode === "register" && (
+            <button
+              type="button"
+              aria-expanded={showEmailRegistration}
+              aria-controls="email-registration-form"
+              onClick={() => setShowEmailRegistration((visible) => !visible)}
+              className="flex w-full items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+              style={{
+                borderColor: "var(--ink-line)",
+                background: "var(--ink-paper-soft)",
+                color: "var(--ink-strong)",
+              }}
+            >
+              <Mail className="h-4 w-4" />
+              {showEmailRegistration
+                ? t.auth.collapseEmailRegistration
+                : t.auth.emailRegistration}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showEmailRegistration ? "rotate-180" : ""}`}
+              />
+            </button>
+          )}
 
-        {/* 分隔线 */}
-        <div
-          className="my-6 flex items-center gap-3 text-xs"
-          style={{ color: "var(--ink-faint)" }}
-        >
-          <span className="h-px flex-1" style={{ background: "var(--ink-line)" }} />
-          <span className="uppercase tracking-wide">{t.auth.orDivider}</span>
-          <span className="h-px flex-1" style={{ background: "var(--ink-line)" }} />
-        </div>
-
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-xl border p-6"
-          style={{
-            borderColor: "var(--ink-line)",
-            background: "var(--ink-paper-soft)",
-          }}
-        >
+          {(mode === "login" || showEmailRegistration) && (
+          <form
+            id={mode === "register" ? "email-registration-form" : undefined}
+            onSubmit={submit}
+            className={mode === "register" ? "mt-5 space-y-4" : "space-y-4"}
+          >
           {isEmailRecovery && (
             <div
               role="status"
@@ -349,7 +406,84 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                 ? t.auth.submitLogin
                 : t.auth.submitRegister}
           </button>
-        </form>
+          </form>
+          )}
+
+          {/* 邀请码对三种注册方式都有效，因此固定放在面板最底部。 */}
+          {mode === "register" && (
+            <div
+              className="mt-5 border-t pt-5"
+              style={{ borderColor: "var(--ink-line)" }}
+            >
+              {showInvitationInput ? (
+                <div
+                  className="rounded-xl border px-4 py-3.5"
+                  style={{
+                    borderColor: "var(--cinnabar-soft)",
+                    background: "var(--cinnabar-soft)",
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                      style={{
+                        background: "var(--ink-paper-soft)",
+                        color: "var(--cinnabar)",
+                      }}
+                    >
+                      <Gift className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--ink-black)" }}
+                      >
+                        {t.auth.invitationRewardTitle}
+                      </p>
+                      <p
+                        className="mt-0.5 text-xs leading-relaxed"
+                        style={{ color: "var(--ink-mid)" }}
+                      >
+                        {t.auth.invitationBonusHint}
+                      </p>
+                    </div>
+                  </div>
+                  <label className="mt-3 block">
+                    <span className="sr-only">{t.auth.invitationCode}</span>
+                    <input
+                      type="text"
+                      value={invitationCode}
+                      onChange={(event) =>
+                        setInvitationCode(
+                          event.target.value.toUpperCase().slice(0, 16),
+                        )
+                      }
+                      autoComplete="off"
+                      maxLength={16}
+                      placeholder={t.auth.invitationCodePlaceholder}
+                      className="w-full rounded-lg border px-3 py-2 font-mono text-sm tracking-wider outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+                      style={{
+                        borderColor: "var(--ink-line)",
+                        background: "var(--ink-paper-soft)",
+                        color: "var(--ink-black)",
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowInvitationInput(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition hover:bg-[var(--ink-wash)]"
+                  style={{ color: "var(--ink-mid)" }}
+                >
+                  <Gift className="h-3.5 w-3.5" />
+                  {t.auth.haveInvitationCode}
+                </button>
+              )}
+            </div>
+          )}
+        </PaperCard>
 
         <p className="mt-6 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
           {isEmailRecovery
@@ -366,7 +500,9 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                 setCodeCooldown(0);
                 setNotice(null);
               } else {
-                setMode(mode === "login" ? "register" : "login");
+                const nextMode = mode === "login" ? "register" : "login";
+                setMode(nextMode);
+                setShowEmailRegistration(nextMode === "login");
               }
               setError(null);
             }}
@@ -415,7 +551,9 @@ function Field({
   type = "text",
   autoComplete,
   placeholder,
+  hint,
   readOnly = false,
+  required = true,
 }: {
   label: string;
   value: string;
@@ -423,7 +561,9 @@ function Field({
   type?: string;
   autoComplete?: string;
   placeholder?: string;
+  hint?: string;
   readOnly?: boolean;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -440,7 +580,7 @@ function Field({
         autoComplete={autoComplete}
         placeholder={placeholder}
         readOnly={readOnly}
-        required
+        required={required}
         // 焦点环用朱砂：全站的强调色只有这一个
         className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
         style={{
@@ -449,6 +589,11 @@ function Field({
           color: "var(--ink-black)",
         }}
       />
+      {hint && (
+        <span className="mt-1.5 block text-xs leading-relaxed" style={{ color: "var(--ink-faint)" }}>
+          {hint}
+        </span>
+      )}
     </label>
   );
 }

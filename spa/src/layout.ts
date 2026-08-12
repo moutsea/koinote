@@ -33,6 +33,8 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/editor", width: "full" },
   // 控制台：信息卡 + 文档列表，需要收窄兜住行内的左右间距
   { prefix: "/dashboard", width: "5xl" },
+  // 管理后台包含宽表格和 30 天趋势，比个人控制台多留一档宽度
+  { prefix: "/admin", width: "6xl" },
   // 分享页给外人读长文，3xl 是为了行长
   { prefix: "/share", width: "3xl" },
   // 条款页同理：整页都是段落，宽了没法读。卷轴的纸面宽度在页面内另有 max-w-3xl，
