@@ -265,23 +265,14 @@ event: checkout.session.completed
 event: checkout.session.async_payment_succeeded
 ```
 
-将 endpoint 的 signing secret 配为 `STRIPE_WEBHOOK_SECRET`。站点使用固定 Product ID
-和服务端价格白名单创建 Checkout，用户可选择 USD 3.99、CNY 29、EUR 3.99 或 JPY 600；
-发放权益前会重新校验付款状态、所选币种对应金额、Product ID 和用户归属。成功页确认与 webhook
-共用同一个数据库幂等事务。
+将 endpoint 的 signing secret 配为 `STRIPE_WEBHOOK_SECRET`。要显示支付宝和微信支付，
+需在 Dashboard 里启用 Alipay 与 WeChat Pay —— 代码不固定支付方式，由 Stripe 按账号地区、
+用户位置和币种动态决定，条件不满足时只显示银行卡。金额校验、幂等与多服务共用同一 Stripe
+账号的处理见[设计文档](docs/DESIGN.zh.md#会员与支付)。
 
-支付通知可复用 Kimiseek 的飞书群机器人配置：将同一组 `BOT_WEBHOOK` 和
-`BOT_WEBHOOK_SECRET` 配到生产环境。通知正文只含站内用户 ID、金额、币种和订单标识，不发送
-邮箱或文档内容。支付记录会持久化通知状态，成功页、webhook 与 Stripe 重试共享同一条记录；
-飞书暂时失败会按退避计划重试，不影响已经提交的会员权益。
-
-Checkout 不在代码里固定支付方式，而是读取 Stripe Dashboard 的 Payment methods 配置，
-再按账号地区、用户位置和所选币种展示可用选项。要显示支付宝和微信支付，需在 Stripe
-Dashboard 中启用 Alipay 与 WeChat Pay；不满足 Stripe 资格或币种规则时仍可能只显示银行卡。
-
-共享 Stripe 账号时，Koinote 创建的 Checkout Session 与 PaymentIntent 都带
-`metadata.service=koinote`。Webhook 对其他服务的事件直接返回 200 忽略，并在真正发放会员前
-再次校验该字段、Product、金额、币种和用户归属。
+想在收款时收到飞书通知，配上成对的 `BOT_WEBHOOK` 与 `BOT_WEBHOOK_SECRET`（只配一项
+生产环境会拒绝启动）。通知只含站内用户 ID、金额、币种和订单号，失败按退避重试，
+不影响已发放的权益。
 
 检查是否开通请用 `npx wrangler email sending list` 和
 `npx wrangler email sending dns get "$KOINOTE_DOMAIN"`。Email Sending 会把退信 MX 与

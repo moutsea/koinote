@@ -366,6 +366,35 @@ request shape, such as payment-method configuration, must still bump the version
 creation is also limited to five attempts per user per ten minutes, without coupling one
 user's limit to another user's traffic.
 
+### Payment notifications
+
+With `BOT_WEBHOOK` and `BOT_WEBHOOK_SECRET` set (reusing Kimiseek's bot variable names),
+the first successful settlement posts a message to a Feishu group. Two constraints shape
+the implementation:
+
+**Notification must never affect entitlement.** Membership is granted even when Feishu is
+down, so notification state lives in columns on `stripe_payments` rather than inside the
+grant transaction. The pending marker is written within that transaction —
+`notification_next_try_at` shares the same idempotency lock as `ON CONFLICT DO NOTHING` —
+so "granted but never enqueued" cannot happen, and conversely a failed send only leaves
+retry state behind.
+
+**Exactly one notification.** Success-page confirmation, the webhook, and Stripe's webhook
+retries are three racing paths. The discriminator is `RowsAffected() == 1`: only the call
+that actually inserted the payment row sends, deduplicated by the `checkout_session_id`
+primary key without extra locking.
+
+Retries run from a one-minute poll, with `notification_locked_until` giving a 30-second
+lease so multiple instances do not double-deliver. Backoff is `1 << (attempts-1)` minutes,
+settling at 24 hours after eight attempts — unlike image GC's `gcMaxAttempts`, this never
+gives up entirely, because missing a payment costs more than keeping a pending row around.
+
+Message bodies carry only the internal user ID, amount, currency, and order identifiers.
+The `paymentNotification` struct has no email field at all rather than filtering one out at
+send time, so it cannot be casually reintroduced. Amounts are interpreted in Stripe's minor
+units; the sixteen zero-decimal currencies live in `zeroDecimalCurrencies`, next to the
+price allowlist.
+
 Quota is not a frontend display value: image accounting, document create, document
 update, and storage usage all call `storageQuotaFor(user)`. A newly fulfilled member
 therefore receives 10 GiB plus bounded invitation bonuses on the next write, and future AI authorization can read the

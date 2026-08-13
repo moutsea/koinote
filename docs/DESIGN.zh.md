@@ -313,6 +313,29 @@ Product、金额、币种和 Customer 参数一起生成指纹。Stripe 对同�
 改变支付方式等请求结构时仍需同步更新参数版本。创建 Session 另按用户限制为 10 分钟 5 次，
 避免重复请求持续消耗 Stripe API；不同用户的计数互不影响。
 
+### 收款通知
+
+配置了 `BOT_WEBHOOK` 与 `BOT_WEBHOOK_SECRET` 时（沿用 Kimiseek 的机器人变量名），
+首次落账会向飞书群推一条消息。两个约束决定了实现形状：
+
+**通知不能影响权益。** 飞书挂掉时会员必须照常发放，所以通知状态是 `stripe_payments`
+上的几个列，而不是发放事务的一部分。待通知标记在发放事务内写入（`notification_next_try_at`
+与 `ON CONFLICT DO NOTHING` 共享同一把幂等锁），因此「落了账但没入队」不可能发生，
+反过来通知失败也只是留下重试状态。
+
+**恰好通知一次。** 成功页确认、webhook、以及 Stripe 的 webhook 重试是三条会撞在一起的
+路径。判据是 `RowsAffected() == 1` —— 只有真正插入了付款行的那一次才推送，靠
+`checkout_session_id` 主键去重，不额外加锁。
+
+重试由一分钟一次的轮询驱动，`notification_locked_until` 提供 30 秒租约让多实例不重复投递。
+退避是 `1 << (attempts-1)` 分钟，8 次之后固定为 24 小时 —— 与图片 GC 的
+`gcMaxAttempts` 不同，这里不会彻底放弃，因为漏掉一笔收款的代价比多留一行待重试记录高。
+
+消息正文只有站内用户 ID、金额、币种和订单标识。`paymentNotification` 结构体里没有
+邮箱字段，不是发送时过滤掉的 —— 这样后来的人也没法顺手把它加回去。金额按 Stripe 的
+最小单位解释，零位小数币种（JPY 等 16 种）列在 `zeroDecimalCurrencies` 里，
+和价格白名单放在一起维护。
+
 配额不是前端显示值：图片记账、文档创建、文档更新、存储用量四条路径都调用
 `storageQuotaFor(user)`。这样数据库刚发放会员后，下一次写入就直接获得 10 GiB 加受限邀请奖励，
 未来 AI 鉴权也可复用同一个会员等级，而不必再查 Stripe。

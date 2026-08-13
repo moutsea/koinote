@@ -13,6 +13,7 @@ const SIBLING_SITES = [
   { href: "https://www.cs61bbeyond.com/", label: "CS61B Beyond" },
   { href: "https://www.claudeide.net", label: "Claude IDE" },
   { href: "https://codebyai.net", label: "CodeByAi" },
+  { href: "https://kimiseek.app", label: "kimi/glm/deepseek" },
 ];
 
 const CONTACT_EMAIL = "cfjwlchangji@gmail.com";

@@ -292,28 +292,17 @@ Create this endpoint in Stripe Dashboard and subscribe it to
 https://koinote.app/api/billing/webhook
 ```
 
-Store the endpoint signing secret as `STRIPE_WEBHOOK_SECRET`. Users can choose
-USD 3.99, CNY 29, EUR 3.99, or JPY 600. Before granting access, the backend retrieves
-the Checkout Session again and validates paid status, the selected currency's exact
-amount, the configured Product ID, and Koinote user ownership. Success-page confirmation
-and the webhook share one idempotent database transaction.
+Store the endpoint signing secret as `STRIPE_WEBHOOK_SECRET`. To offer Alipay and WeChat
+Pay, enable them in Stripe Dashboard — payment methods are not hardcoded, so Stripe picks
+from the enabled set by account country, customer location, and currency, falling back to
+card only when its rules exclude a method. Amount validation, idempotency, and sharing one
+Stripe account across services are covered in the
+[design notes](docs/DESIGN.en.md#membership-and-billing).
 
-Payment notifications can reuse Kimiseek's Feishu bot settings: configure the same
-`BOT_WEBHOOK` and `BOT_WEBHOOK_SECRET` values in production. Messages contain only the
-internal user ID, amount, currency, and order identifiers — never the email address or
-document content. The payment row persists notification state across success-page,
-webhook, and Stripe retries; temporary Feishu failures are retried with backoff without
-rolling back an already committed membership entitlement.
-
-Checkout does not hardcode payment methods. Stripe dynamically selects from the methods
-enabled in Dashboard according to account country, customer location, and currency. Enable
-Alipay and WeChat Pay in Stripe Dashboard to offer them; Stripe can still show card only
-when its eligibility or currency rules exclude a method.
-
-When the Stripe account is shared, Koinote tags both Checkout Sessions and PaymentIntents
-with `metadata.service=koinote`. The webhook acknowledges and ignores events for other
-services, then validates the service tag again together with Product, amount, currency,
-and ownership before granting membership.
+To get a Feishu message on each payment, set `BOT_WEBHOOK` and `BOT_WEBHOOK_SECRET`
+together (configuring only one makes production refuse to start). Messages carry just the
+internal user ID, amount, currency, and order identifiers; failures retry with backoff and
+never affect an already granted entitlement.
 
 Verify onboarding with `npx wrangler email sending list` and
 `npx wrangler email sending dns get "$KOINOTE_DOMAIN"`. Email Sending intentionally
