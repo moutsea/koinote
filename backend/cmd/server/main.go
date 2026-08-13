@@ -56,8 +56,8 @@ func main() {
 	} else {
 		log.Printf("飞书付款通知未配置或当前不是生产环境")
 	}
-	if cfg.CloudflareZoneID != "" && cfg.CloudflareAnalyticsToken != "" && cfg.CloudflareAnalyticsHost != "" {
-		log.Printf("Admin Cloudflare 流量统计已启用（host=%s）", cfg.CloudflareAnalyticsHost)
+	if cfg.CloudflareZoneID != "" && cfg.CloudflareAnalyticsToken != "" {
+		log.Printf("Admin Cloudflare 流量统计已启用")
 	} else {
 		log.Printf("Admin Cloudflare 流量统计未配置，业务统计仍可用")
 	}

@@ -21,6 +21,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 - WeChat export now renders the Markdown image alt text beneath standalone images and
   skips inline, multi-image, list, and formula cases that cannot safely form a caption.
+- Admin traffic statistics now use Cloudflare's Free-plan-compatible hourly Analytics
+  dataset instead of the unavailable minute dataset and unsupported hostname filter.
 
 ## [0.3.0] - 2026-08-12
 

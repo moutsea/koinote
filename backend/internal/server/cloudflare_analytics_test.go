@@ -21,8 +21,8 @@ func TestCloudflareAnalyticsRequiresCompleteConfiguration(t *testing.T) {
 	if got := newCloudflareAnalyticsClient(config.Config{
 		CloudflareZoneID:         "zone",
 		CloudflareAnalyticsToken: "token",
-	}); got != nil {
-		t.Fatal("缺 hostname 时不应启用 Cloudflare Analytics")
+	}); got == nil {
+		t.Fatal("Zone 和 Token 齐全时应启用 Cloudflare Analytics")
 	}
 }
 
@@ -40,16 +40,20 @@ func TestCloudflareAnalyticsQueriesTotalsAndCaches(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("解析请求: %v", err)
 		}
-		if !strings.Contains(body.Query, "httpRequests1mGroups") ||
+		if !strings.Contains(body.Query, "httpRequests1hGroups") ||
+			strings.Contains(body.Query, "clientRequestHTTPHost") ||
 			strings.Contains(body.Query, "dimensions") {
 			t.Fatalf("应查询无分桶总计，实际 query: %s", body.Query)
 		}
-		if body.Variables["zoneTag"] != "zone-id" || body.Variables["hostname"] != "koinote.app" {
+		if body.Variables["zoneTag"] != "zone-id" {
 			t.Fatalf("GraphQL variables 不符: %+v", body.Variables)
+		}
+		if _, ok := body.Variables["hostname"]; ok {
+			t.Fatalf("Zone 已限定站点，不应发送 Free 计划不支持的 hostname 变量: %+v", body.Variables)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"data":{"viewer":{"zones":[{"httpRequests1mGroups":[{
+			"data":{"viewer":{"zones":[{"httpRequests1hGroups":[{
 				"sum":{"pageViews":123,"requests":456,"bytes":789},
 				"uniq":{"uniques":42}
 			}]}]}}
@@ -60,7 +64,6 @@ func TestCloudflareAnalyticsQueriesTotalsAndCaches(t *testing.T) {
 	client := &cloudflareAnalyticsClient{
 		zoneID:   "zone-id",
 		token:    "analytics-token",
-		hostname: "koinote.app",
 		endpoint: server.URL,
 		http:     server.Client(),
 	}
@@ -87,7 +90,7 @@ func TestCloudflareAnalyticsRejectsGraphQLErrors(t *testing.T) {
 	defer server.Close()
 
 	client := &cloudflareAnalyticsClient{
-		zoneID: "zone", token: "token", hostname: "koinote.app",
+		zoneID: "zone", token: "token",
 		endpoint: server.URL, http: server.Client(),
 	}
 	_, err := client.Traffic(context.Background(), time.Now().Add(-time.Hour), time.Now())
@@ -103,12 +106,12 @@ func TestCloudflareAnalyticsCoalescesConcurrentQueries(t *testing.T) {
 		calls.Add(1)
 		<-release
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"viewer":{"zones":[{"httpRequests1mGroups":[]}]}}}`))
+		_, _ = w.Write([]byte(`{"data":{"viewer":{"zones":[{"httpRequests1hGroups":[]}]}}}`))
 	}))
 	defer server.Close()
 
 	client := &cloudflareAnalyticsClient{
-		zoneID: "zone", token: "token", hostname: "koinote.app",
+		zoneID: "zone", token: "token",
 		endpoint: server.URL, http: server.Client(),
 	}
 	start := time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)

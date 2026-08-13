@@ -46,7 +46,6 @@ type trafficFlight struct {
 type cloudflareAnalyticsClient struct {
 	zoneID   string
 	token    string
-	hostname string
 	endpoint string
 	http     httpDoer
 	cacheMu  sync.Mutex
@@ -55,13 +54,12 @@ type cloudflareAnalyticsClient struct {
 }
 
 func newCloudflareAnalyticsClient(cfg config.Config) siteAnalyticsClient {
-	if cfg.CloudflareZoneID == "" || cfg.CloudflareAnalyticsToken == "" || cfg.CloudflareAnalyticsHost == "" {
+	if cfg.CloudflareZoneID == "" || cfg.CloudflareAnalyticsToken == "" {
 		return nil
 	}
 	return &cloudflareAnalyticsClient{
 		zoneID:   cfg.CloudflareZoneID,
 		token:    cfg.CloudflareAnalyticsToken,
-		hostname: cfg.CloudflareAnalyticsHost,
 		endpoint: cloudflareGraphQLEndpoint,
 		http:     &http.Client{Timeout: 5 * time.Second},
 	}
@@ -119,16 +117,14 @@ func (c *cloudflareAnalyticsClient) query(
 			$zoneTag: string!
 			$start: Time!
 			$end: Time!
-			$hostname: string!
 		) {
 			viewer {
 				zones(filter: { zoneTag: $zoneTag }) {
-					httpRequests1mGroups(
+					httpRequests1hGroups(
 						limit: 1
 						filter: {
 							datetime_geq: $start
 							datetime_lt: $end
-							clientRequestHTTPHost: $hostname
 						}
 					) {
 						sum { pageViews requests bytes }
@@ -141,10 +137,9 @@ func (c *cloudflareAnalyticsClient) query(
 	payload, err := json.Marshal(map[string]any{
 		"query": query,
 		"variables": map[string]string{
-			"zoneTag":  c.zoneID,
-			"start":    start.UTC().Format(time.RFC3339),
-			"end":      end.UTC().Format(time.RFC3339),
-			"hostname": c.hostname,
+			"zoneTag": c.zoneID,
+			"start":   start.UTC().Format(time.RFC3339),
+			"end":     end.UTC().Format(time.RFC3339),
 		},
 	})
 	if err != nil {
@@ -180,7 +175,7 @@ func (c *cloudflareAnalyticsClient) query(
 						Uniq struct {
 							Uniques int64 `json:"uniques"`
 						} `json:"uniq"`
-					} `json:"httpRequests1mGroups"`
+					} `json:"httpRequests1hGroups"`
 				} `json:"zones"`
 			} `json:"viewer"`
 		} `json:"data"`
