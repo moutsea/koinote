@@ -74,6 +74,7 @@ ok(
 
 const DOC_CODE = "storage_quota_exceeded";
 const documentsGo = read("backend/internal/server/documents.go");
+const documentService = read("backend/internal/server/document_service.go");
 ok(`后端文档路径用 ${DOC_CODE}`, documentsGo.includes(`"${DOC_CODE}"`), "documents.go");
 ok(`SPA 认 ${DOC_CODE}`, api.includes(`"${DOC_CODE}"`), "spa/src/api.ts");
 
@@ -109,8 +110,7 @@ ok(
 // 三处判定都要按总量算
 for (const [name, src, anchor] of [
   ["图片记账", backend, "INSERT INTO image_objects"],
-  ["新建文档", documentsGo, "INSERT INTO documents"],
-  ["更新文档", documentsGo, "UPDATE documents"],
+  ["新建文档", documentService, "INSERT INTO documents"],
 ]) {
   const idx = src.indexOf(anchor);
   ok(`找到${name}的语句`, idx >= 0, anchor);
@@ -121,27 +121,39 @@ for (const [name, src, anchor] of [
   }
 }
 
+const updateStart = documentService.indexOf("func (a *App) updateDocument");
+const updateEnd = documentService.indexOf("type documentVersionMode", updateStart);
+const updateBody =
+  updateStart >= 0 && updateEnd > updateStart
+    ? documentService.slice(updateStart, updateEnd)
+    : "";
+ok("找到更新文档实现", updateBody.length > 0, "document_service.go");
+ok(
+  "更新文档的扩容判定含 image_objects",
+  /if\s+newBytes\s*>\s*oldBytes[\s\S]*?FROM image_objects/.test(updateBody),
+  "扩容时要按文档+图片总量算",
+);
+ok(
+  "更新文档的扩容判定含 octet_length",
+  /if\s+newBytes\s*>\s*oldBytes[\s\S]*?octet_length\(content\)/.test(updateBody),
+  "扩容时要按文档+图片总量算",
+);
+
 // 更新文档必须留"缩小则放行"的例外，否则超额用户连删正文都做不到。
 //
-// 判据是"存在一条把新长度和旧长度相比的 OR 分支"，而不是按字符距离开窗口。
-// 原来写的是 /UPDATE documents[\s\S]{0,700}OR octet_length/ —— 那条在给
-// UPDATE 加了自连接（取被覆盖的旧正文用于回收图片）之后就红了，因为新增的
-// 子查询和注释把 OR 推出了 700 字符的窗口。语义完全没变，只是窗口太窄。
-//
-// 距离窗口这种写法本身就会随无关改动漂移，所以换成锚定实际比较式。
-// 表限定前缀可选：自连接之后裸 content 会歧义，必须写成 documents.content。
-{
-  const idx = documentsGo.indexOf("UPDATE documents");
-  const stmt = idx >= 0 ? documentsGo.slice(idx, documentsGo.indexOf("`", idx)) : "";
-  ok(
-    "更新文档允许缩小",
-    /OR\s+octet_length/.test(stmt) &&
-      /<=\s*octet_length\((?:documents\.)?content\)\s*\+\s*octet_length\((?:documents\.)?title\)/.test(
-        stmt,
-      ),
-    "缺少例外会让超额用户被锁死，没有自救途径",
-  );
-}
+// 当前实现先算字节数，只在 newBytes > oldBytes 时跑配额查询。缩小直接跳过判定，
+// 比把例外塞进一条巨大 UPDATE 的 OR 分支更容易审计。
+ok(
+  "更新文档允许缩小",
+  /oldBytes\s*:=\s*len\(previous\.Doc\.Title\)\s*\+\s*len\(previous\.Doc\.Content\)/.test(
+    updateBody,
+  ) &&
+    /newBytes\s*:=\s*len\(params\.Title\)\s*\+\s*len\(params\.Content\)/.test(
+      updateBody,
+    ) &&
+    /if\s+newBytes\s*>\s*oldBytes\s*\{/.test(updateBody),
+  "缺少例外会让超额用户被锁死，没有自救途径",
+);
 
 // SPA 要用后端给的分项。写死成只显示总数就失去了"该删什么"的信息
 const storageCardSrc = read("spa/src/components/StorageCard.tsx");

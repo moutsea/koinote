@@ -27,9 +27,10 @@
 
 一个 Typora 式的在线 Markdown 编辑器：不分左右分栏，写下的语法立刻变成排版后的样子。
 
-和本地编辑器的区别在于三件事：**图片粘贴即上传**（自己的 R2 图床，正文里是干净的
+和本地编辑器的区别在于四件事：**图片粘贴即上传**（自己的 R2 图床，正文里是干净的
 链接而不是一坨 base64）、**导出到微信公众号**（15 套排版主题，样式内联成公众号
-编辑器认得的形式）、**文档在云端**（多设备、可分享）。
+编辑器认得的形式）、**文档在云端**（多设备、可分享），以及让 **Codex、Claude Code、
+OpenCode 等 Agent 通过 MCP 安全操作自己的文档**。
 
 > 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
 > 已通过 Stripe Checkout 支持一次性付款。
@@ -43,6 +44,14 @@
 - LaTeX 公式，行内 `$…$` 与块级 `$$…$$`，点击可回到源码
 - 多标签同时开多篇、大纲导航、文件夹树、拖拽移动
 - 自动保存（防抖），失败会明确告知而不是静默丢内容
+- revision 乐观锁检测网页与 Agent 的并发修改；冲突时保留本地草稿并提供合并界面
+- 终生会员可查看和恢复文档历史，并设置是否启用、每篇保留 1–100 版，以及 MCP 写入是否保留完整历史（即使关闭，Agent 写入仍保留最近 1 个安全快照；账号总计最多 100 版）
+
+**MCP 与会员**
+
+- 首页展示 MCP 的授权、并发保护与恢复机制，支持 Codex、Claude Code、OpenCode 等 Streamable HTTP MCP 客户端
+- 独立 `/pricing` 页面公开对比免费版与终生会员权益，并从后端读取当前多币种 Stripe 价目表
+- 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史和后续 AI 功能使用资格
 
 **图床**
 
@@ -85,6 +94,7 @@
 - 支付首次落账后可向飞书群机器人发送收款通知，成功页与 webhook 不会重复通知
 - 管理员后台：用户与会员规模、按币种收入、订单、全站存储、30 天趋势、最近用户与付款
 - 可选接入 Cloudflare Analytics，在管理后台查看当天边缘 UV / PV、请求数和流量
+- 终生会员可通过 Streamable HTTP MCP 让 Codex、Claude Code 等 Agent 读写自己的文档
 
 ## 技术栈
 
@@ -92,7 +102,7 @@
 浏览器 ──▶ Cloudflare Worker ──┬─ 托管 SPA 静态资源
                                ├─ /api/images/* 与 /images/* ──▶ R2
                                ├─ /api/internal/email/* ──▶ Email Sending
-                               └─ 其余 /api/* ──▶ Go 后端 ──▶ PostgreSQL
+                               └─ 其余 /api/*、/mcp ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
 浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端 ──▶ 飞书机器人
 ```
@@ -103,6 +113,65 @@ Go 后端 ──内部回调────────────▶ Worker（验
 - **边缘** Cloudflare Worker · R2 · Email Sending
 
 会话是无状态的 HMAC-SHA256 签名 cookie，不落库。
+
+## Agent 文档访问（MCP）
+
+终生会员可以在 Dashboard 的「Agent 文档访问（MCP）」区域创建个人访问令牌（PAT），
+然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。Koinote
+本身只负责鉴权、文档读写、版本控制与审计，**不会调用 LLM，也不需要 OpenAI、Anthropic
+或其他模型 API Key**；理解指令和选择工具的是 Codex、Claude Code 等客户端自身。
+
+PAT 支持只读或读写 scope、1–365 天有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
+AES-GCM 加密保存可恢复副本；账号本人可按需再次查看，列表不会直接返回完整令牌。每次 MCP
+请求都会重新检查会员状态、有效期与撤销状态。建议先创建只读令牌，需要写入时再单独创建
+读写令牌。
+
+Codex 配置（把令牌放进环境变量，不要写进仓库）：
+
+```bash
+export KOINOTE_MCP_TOKEN='knt_mcp_...'
+```
+
+```toml
+# ~/.codex/config.toml
+[mcp_servers.koinote]
+url = "https://koinote.app/mcp"
+bearer_token_env_var = "KOINOTE_MCP_TOKEN"
+```
+
+Claude Code：
+
+```bash
+claude mcp add --transport http koinote https://koinote.app/mcp \
+  --header "Authorization: Bearer knt_mcp_..."
+```
+
+OpenCode（写入全局或项目级 `opencode.json`；配置格式见其
+[MCP 官方文档](https://opencode.ai/docs/mcp-servers/)）：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "koinote": {
+      "type": "remote",
+      "url": "https://koinote.app/mcp",
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+其他客户端无需 Koinote 专用适配：只要支持远程 Streamable HTTP MCP，并允许给请求设置
+`Authorization: Bearer <PAT>`，即可使用相同端点和令牌接入。
+
+只读工具包括分页列出文档、按标题搜索、分段读取正文、查看历史版本和列出回收站；读写令牌额外获得
+新建、追加、整篇更新、恢复版本、移入回收站与恢复文档。Agent 不能永久删除文档，永久删除只在
+网页回收站提供标题确认；普通删除保留 30 天。整篇更新、追加、移入回收站和恢复都要求最新 revision；网页端使用同一套乐观锁并在冲突时提供
+本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
 
 ## 快速开始
 
@@ -296,6 +365,7 @@ Worker 与 SPA，最后验活站点 `/api/images/config`。
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限 |
 | `CLOUDFLARE_ANALYTICS_TOKEN` | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用 |
 | `EMAIL_VERIFICATION_SECRET` | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env` |
+| `MCP_TOKEN_ENCRYPTION_KEY` | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看 |
 | `STRIPE_SECRET_KEY` | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode |
 | `STRIPE_WEBHOOK_SECRET` | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`） |
 | `STRIPE_LIFETIME_PRODUCT_ID` | 终生会员 Product ID（`prod_...`），价格由后端白名单生成 |
@@ -310,6 +380,7 @@ Worker 与 SPA，最后验活站点 `/api/images/config`。
 ```bash
 openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
+openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
 ```
 
 Stripe 三项可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
@@ -319,13 +390,13 @@ Stripe 三项可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WE
 
 第二条命令只显示 secret 名称和更新时间，不会读取密钥值。部署 workflow 会在开始部署前
 检查所有必填 secrets；检查通过后，它会在重启后端之前通过 stdin 和临时文件原子更新
-VPS 的 `/opt/koinote/.env`。可选的 Analytics Token 配置后也会以同样方式写入；因此不需要手动把验证码或 Stripe 密钥写进生产 `.env`，
+VPS 的 `/opt/koinote/.env`。可选的 Analytics Token 配置后也会以同样方式写入；因此不需要手动把验证码、MCP 令牌加密或 Stripe 密钥写进生产 `.env`，
 但首次部署必须先在 GitHub 配好这些 repository secrets。
 
 ## 测试
 
 ```bash
-npm test          # 两端 typecheck + 全部前端/Worker 断言套件
+npm test          # 两端 typecheck + 29 个前端/Worker 断言套件
 npm run go:test   # go vet + go test；未设 TEST_DATABASE_URL 时数据库集成测试会跳过
 ```
 

@@ -3,8 +3,10 @@ import type { Messages } from "./types";
 export const fr: Messages = {
   nav: {
     editor: "Éditeur",
+    pricing: "Tarifs",
     dashboard: "Tableau de bord",
     documents: "Mes documents",
+    trash: "Corbeille",
     invitations: "Inviter des amis",
     admin: "Administration",
     login: "Se connecter",
@@ -12,10 +14,10 @@ export const fr: Messages = {
     userMenu: "Menu du compte",
   },
   home: {
-    badge: "Markdown × IA, conçu pour l'écriture",
+    badge: "Markdown × Agents, conçu pour l'écriture",
     title: "L'écriture, sous sa forme la plus pure",
     subtitle:
-      "Koinote est un éditeur Markdown en ligne façon Typora. Rendu en temps réel, images intégrées et IA à vos côtés — pour vous concentrer sur le contenu.",
+      "Koinote est un éditeur Markdown en ligne façon Typora. Rendu en temps réel, images intégrées et agents autorisés à travailler avec vos documents en toute sécurité.",
     ctaStart: "Commencer à écrire",
     ctaRegister: "Créer un compte",
     features: [
@@ -32,8 +34,8 @@ export const fr: Messages = {
         desc: "Glisser-déposer pour téléverser. Utilisez votre propre hébergeur ; liens propres dans le corps.",
       },
       {
-        title: "L'IA pour les créateurs",
-        desc: "Continuer, peaufiner, traduire, illustrer — l'assistant latéral est toujours disponible.",
+        title: "Collaboration avec les agents",
+        desc: "Connectez Codex, Claude Code, OpenCode et d'autres agents via MCP avec des accès limités.",
       },
       {
         title: "Export et partage faciles",
@@ -41,8 +43,61 @@ export const fr: Messages = {
       },
       {
         title: "Sauvegarde automatique",
-        desc: "Sauvegardé au fil de la frappe, jamais de perte. Synchro cloud multi-appareils (abonnement).",
+        desc: "Sauvegarde au fil de la frappe et contrôle des révisions pour éviter les écrasements silencieux entre navigateur et Agent.",
       },
+    ],
+    mcp: {
+      eyebrow: "Accès MCP ouvert",
+      title: "Intégrez les agents à votre écriture",
+      description:
+        "Aucune extension requise. Créez un jeton personnel révocable et à durée limitée pour permettre à Codex, Claude Code, OpenCode et aux autres clients MCP compatibles de rechercher, lire et modifier vos documents selon les droits accordés.",
+      agents: "Compatible avec les clients MCP Streamable HTTP",
+      steps: [
+        { title: "Limiter les droits", desc: "Créez des jetons en lecture seule ou lecture-écriture, consultables et révocables à tout moment." },
+        { title: "Écrire sans écraser", desc: "Chaque modification vérifie la révision du document et signale les conflits." },
+        { title: "Garder un point de secours", desc: "Les membres règlent l'historique complet et conservent toujours le dernier instantané de sécurité." },
+      ],
+      cta: "Voir les avantages membre",
+    },
+  },
+  pricing: {
+    eyebrow: "Des tarifs simples et transparents",
+    title: "Une mise à niveau, une écriture sereine",
+    subtitle: "L'offre gratuite couvre l'écriture quotidienne. L'accès à vie ajoute stockage, MCP et historique en un seul paiement.",
+    freeName: "Gratuit",
+    freeDescription: "Tout ce qu'il faut pour commencer à écrire et découvrir l'éditeur.",
+    freePrice: "Gratuit",
+    freePeriod: "Utilisable sans limite de durée",
+    lifetimeName: "À vie",
+    lifetimeDescription: "Pour l'écriture au long cours et la collaboration avec les agents.",
+    lifetimePeriod: "Un paiement, accès à vie",
+    recommended: "Recommandé",
+    included: "Inclus",
+    freeFeatures: [
+      "{storage} de stockage cloud pour documents et images",
+      "Édition Markdown complète, sauvegarde automatique et synchronisation",
+      "Hébergement d'images, exports et partage en lecture seule",
+      "Stockage supplémentaire grâce aux invitations",
+    ],
+    lifetimeFeatures: [
+      "{storage} de stockage cloud pour documents et images",
+      "Accès MCP pour Codex, Claude Code, OpenCode et d'autres agents",
+      "Historique configurable et restauration par instantané de sécurité",
+      "Accès aux futures fonctions d'IA",
+      "Toutes les fonctions de l'offre gratuite",
+    ],
+    loginToUpgrade: "Se connecter pour passer membre",
+    manageMembership: "Gérer l'abonnement et MCP",
+    active: "Votre accès à vie est actif",
+    loading: "Chargement des tarifs actuels…",
+    loadFailed: "Impossible de charger les tarifs. Réessayez.",
+    unavailable: "Le paiement en ligne n'est pas configuré sur ce déploiement.",
+    faqTitle: "Questions fréquentes",
+    faqs: [
+      { question: "Est-ce un abonnement ?", answer: "Non. L'accès à vie est un paiement unique sans renouvellement automatique." },
+      { question: "Que permet MCP ?", answer: "Les agents autorisés peuvent rechercher, lire, créer, compléter, modifier, restaurer et mettre des documents à la corbeille. La suppression définitive reste réservée au Web." },
+      { question: "Puis-je restaurer après avoir désactivé l'historique MCP complet ?", answer: "Oui. Les écritures Agent des membres conservent toujours au moins le dernier instantané de sécurité." },
+      { question: "Les fonctions d'IA sont-elles déjà disponibles ?", answer: "Pas encore. L'accès à vie inclut l'éligibilité aux futures fonctions d'IA lors de leur lancement." },
     ],
   },
   auth: {
@@ -67,10 +122,13 @@ export const fr: Messages = {
     resendVerificationCode: "Renvoyer",
     sendingVerificationCode: "Envoi…",
     verificationSent: "Code envoyé. Consultez votre boîte de réception.",
-    verificationMockFilled: "Le code de test local a été saisi automatiquement.",
-    emailVerificationRequired: "Votre mot de passe est correct. Vérifiez votre e-mail pour continuer.",
+    verificationMockFilled:
+      "Le code de test local a été saisi automatiquement.",
+    emailVerificationRequired:
+      "Votre mot de passe est correct. Vérifiez votre e-mail pour continuer.",
     verifyEmailTitle: "Adresse e-mail non vérifiée",
-    verifyEmailDescription: "Envoyez un code à l’adresse ci-dessous. Vous serez connecté après la vérification.",
+    verifyEmailDescription:
+      "Envoyez un code à l’adresse ci-dessous. Vous serez connecté après la vérification.",
     verifyAndLogin: "Vérifier et se connecter",
     backToLogin: "Retour à la connexion",
     submitLogin: "Se connecter",
@@ -90,7 +148,8 @@ export const fr: Messages = {
     invitationCode: "Code d’invitation (facultatif)",
     invitationCodePlaceholder: "Saisissez un code de 16 caractères",
     invitationRewardTitle: "Un ami vous offre 500 Mo de stockage",
-    invitationBonusHint: "Valable avec Google, GitHub ou l’e-mail. Votre ami recevra également 500 Mo après votre inscription.",
+    invitationBonusHint:
+      "Valable avec Google, GitHub ou l’e-mail. Votre ami recevra également 500 Mo après votre inscription.",
     haveInvitationCode: "Vous avez un code d’invitation ?",
   },
   storage: {
@@ -100,16 +159,16 @@ export const fr: Messages = {
     usedOf: "{used} sur {quota} utilisés",
     remaining: "{remaining} restants",
     nearLimitHint:
-      "Il vous reste peu d'espace cloud. Supprimer les documents dont vous n'avez plus besoin en libérera.",
+      "Il vous reste peu d'espace cloud. Supprimez définitivement les documents inutiles depuis la corbeille pour en libérer.",
     fullHint:
-      "Le stockage cloud est plein : impossible d'enregistrer de nouveaux documents ou images. Supprimez les documents inutiles pour libérer de l'espace.",
+      "Le stockage cloud est plein : impossible d'enregistrer de nouveaux documents ou images. Supprimez définitivement les documents inutiles depuis la corbeille.",
     loading: "Chargement…",
     loadFailed: "Impossible de charger l'utilisation du stockage",
     quotaDialogTitle: "Stockage cloud plein",
     quotaDialogBody:
       "Vous avez utilisé {used} sur {quota} de stockage cloud, l'opération n'a donc pas abouti.",
     quotaDialogHint:
-      "Supprimer les documents dont vous n'avez plus besoin libérera de l'espace — leurs images sont nettoyées par une tâche de fond, généralement en quelques minutes.",
+      "Les documents dans la corbeille occupent encore de l’espace. Après suppression définitive, les images non référencées sont nettoyées en arrière-plan.",
     quotaDialogDismiss: "J'ai compris",
     quotaDialogManage: "Voir l'utilisation",
   },
@@ -117,7 +176,8 @@ export const fr: Messages = {
     title: "Koinote à vie",
     lifetimeBadge: "À vie",
     activeBadge: "Actif",
-    description: "Une mise à niveau unique pour plus d'espace d'écriture et l'accès aux futures fonctions d'IA.",
+    description:
+      "Une mise à niveau unique pour plus d'espace d'écriture et l'accès aux futures fonctions d'IA.",
     oneTimePayment: "Paiement unique, valable à vie",
     currencyLabel: "Devise de paiement",
     currencyHint: "Stripe Checkout vous facturera dans la devise sélectionnée.",
@@ -127,18 +187,71 @@ export const fr: Messages = {
     purchase: "Obtenir l'accès à vie",
     redirecting: "Ouverture du paiement sécurisé…",
     activeTitle: "Abonnement à vie débloqué",
-    activeDescription: "Votre compte bénéficie de 10 Go de stockage cloud et de l'accès futur à l'IA.",
-    unavailable: "Le paiement des abonnements n'est pas configuré sur ce déploiement.",
+    activeDescription:
+      "Votre compte bénéficie de 10 Go de stockage cloud et de l'accès futur à l'IA.",
+    unavailable:
+      "Le paiement des abonnements n'est pas configuré sur ce déploiement.",
     loadFailed: "Impossible de charger le statut de l'abonnement.",
     checkoutSuccess: "Paiement confirmé. Votre abonnement à vie est actif.",
-    checkoutPending: "Le paiement est encore en cours de confirmation. Vos droits seront mis à jour automatiquement.",
+    checkoutPending:
+      "Le paiement est encore en cours de confirmation. Vos droits seront mis à jour automatiquement.",
     checkoutCancelled: "Le paiement a été annulé. Vous n'avez pas été débité.",
     checkoutFailed: "Le paiement n'a pas abouti. Veuillez réessayer.",
+  },
+  mcp: {
+    title: "Accès Agent aux documents (MCP)",
+    description:
+      "Autorisez Codex, Claude Code, OpenCode et d'autres agents MCP standard à lire ou modifier vos documents Koinote selon la portée choisie.",
+    membersOnly:
+      "L'accès MCP est réservé aux membres payants. Passez membre pour créer des jetons révocables et temporaires.",
+    upgrade: "Devenir membre à vie",
+    tokenName: "Nom du jeton",
+    scope: "Portée",
+    readOnly: "Lecture seule",
+    readWrite: "Lecture et écriture",
+    expiry: "Expiration",
+    days: "{n} jours",
+    create: "Créer le jeton",
+    createFailed: "Impossible de créer le jeton. Réessayez.",
+    secretStored:
+      "Le jeton est stocké chiffré et peut être consulté ou copié à nouveau ci-dessous.",
+    activeTokens: "Jetons actifs",
+    loading: "Chargement…",
+    loadFailed: "Impossible de charger les jetons",
+    empty: "Aucun jeton actif.",
+    expires: "Expire le",
+    lastUsed: "Dernière utilisation",
+    reveal: "Afficher",
+    hide: "Masquer",
+    revealFailed: "Impossible d’afficher le jeton. Réessayez.",
+    legacyNotRevealable:
+      "Cet ancien jeton ne peut pas être récupéré. Il reste utilisable, ou vous pouvez le révoquer et le recréer.",
+    revoke: "Révoquer",
+    revokeConfirm:
+      "Les agents connectés perdront immédiatement l'accès. Révoquer ce jeton ?",
+  },
+  documentHistorySettings: {
+    title: "Historique des versions",
+    description: "Choisissez si les documents conservent des versions et comment les écritures Web et Agent sont enregistrées.",
+    membersOnly: "L’historique est réservé aux membres à vie. Passez membre pour configurer la conservation.",
+    enabled: "Activer l’historique",
+    enabledHint: "La désactivation arrête les instantanés Web sans supprimer les versions conservées ; l’Agent garde toujours le dernier instantané de sécurité.",
+    perDocumentMax: "Versions par document",
+    limitHint: "Cette limite s’applique à chaque document ; tous les documents partagent le plafond de {accountMax} versions du compte. La réduire supprime immédiatement les plus anciennes versions.",
+    mcpEnabled: "Conserver l’historique MCP complet",
+    mcpEnabledHint:
+      "Si cette option est désactivée, les écritures de l’Agent conservent quand même le dernier instantané de sécurité. Il compte dans les limites de versions.",
+    loading: "Chargement des paramètres d’historique…",
+    loadFailed: "Impossible de charger les paramètres d’historique",
+    save: "Enregistrer",
+    saved: "Paramètres enregistrés",
+    saveFailed: "Impossible d’enregistrer. Réessayez.",
   },
   invitations: {
     title: "Récompenses d’invitation",
     headline: "Invitez un ami : chacun reçoit {reward}",
-    description: "Lorsqu’un ami s’inscrit avec votre lien personnel, vos deux comptes gagnent définitivement {reward} de stockage cloud.",
+    description:
+      "Lorsqu’un ami s’inscrit avec votre lien personnel, vos deux comptes gagnent définitivement {reward} de stockage cloud.",
     copyLink: "Copier le lien d’invitation",
     copied: "Copié",
     successful: "Invitations réussies",
@@ -158,22 +271,43 @@ export const fr: Messages = {
     joinedAt: "Inscrit le",
     loading: "Chargement…",
     loginRequired: "Veuillez vous connecter",
-    loginRequiredHint: "Vous devez vous connecter pour accéder aux pages de votre compte.",
+    loginRequiredHint:
+      "Vous devez vous connecter pour accéder aux pages de votre compte.",
     goLogin: "Aller à la connexion",
   },
   documentsPage: {
     title: "Mes documents",
-    subtitle: "Consultez et poursuivez l’édition des documents enregistrés dans le cloud.",
+    subtitle:
+      "Consultez et poursuivez l’édition des documents enregistrés dans le cloud.",
     emptyHint: "Aucun document cloud pour l’instant. ",
     emptyLinkText: "Créer votre premier document",
   },
+  trashPage: {
+    title: "Corbeille",
+    subtitle:
+      "Les documents sont conservés 30 jours et continuent d’occuper l’espace cloud.",
+    backToDocuments: "Retour aux documents",
+    empty: "La corbeille est vide.",
+    deletesOn: "Suppression définitive le {date}",
+    restore: "Restaurer",
+    deletePermanently: "Supprimer définitivement",
+    permanentWarning:
+      "La suppression définitive efface aussi l’historique et ne peut pas être annulée. Continuer ?",
+    typeToConfirm:
+      "Saisissez « {title} » pour confirmer la suppression définitive :",
+    loadFailed: "Impossible de charger la corbeille. Réessayez.",
+    actionFailed:
+      "L’action a échoué. Vérifiez le texte de confirmation ou réessayez.",
+  },
   invitationsPage: {
     title: "Inviter des amis",
-    subtitle: "Partagez votre lien personnel et suivez vos invitations et récompenses.",
+    subtitle:
+      "Partagez votre lien personnel et suivez vos invitations et récompenses.",
   },
   admin: {
     title: "Administration",
-    subtitle: "Suivez la croissance, les membres, les revenus et l’activité du site.",
+    subtitle:
+      "Suivez la croissance, les membres, les revenus et l’activité du site.",
     refresh: "Actualiser",
     loading: "Chargement des indicateurs…",
     loginRequired: "Connectez-vous d’abord avec un compte administrateur.",
@@ -228,11 +362,38 @@ export const fr: Messages = {
   },
   editor: {
     placeholder:
-      'Commencez à écrire… tapez « # » pour un titre, « - » pour une liste, « ``` » pour un bloc de code',
+      "Commencez à écrire… tapez « # » pour un titre, « - » pour une liste, « ``` » pour un bloc de code",
     saving: "Enregistrement…",
     saved: "Enregistré",
     charCount: "{n} caractères",
     saveFailed: "Échec de l'enregistrement",
+    resolveConflict: "Résoudre le conflit",
+    conflictTitle: "Ce document a été modifié ailleurs",
+    conflictDescription:
+      "Votre brouillon local est à gauche et la dernière version cloud à droite. Modifiez la fusion à gauche ou acceptez la version cloud.",
+    localDraft: "Brouillon local (modifiable)",
+    remoteVersion: "Dernière version cloud",
+    useRemote: "Utiliser la version cloud",
+    saveMerged: "Enregistrer la fusion",
+    conflictLoadFailed:
+      "Impossible de charger la version cloud. Votre brouillon local reste enregistré dans ce navigateur.",
+    conflictSaveFailed:
+      "Le document a encore changé pendant l'enregistrement. Rechargez et fusionnez à nouveau.",
+    history: "Historique",
+    historyTitle: "Historique des versions",
+    historyDescription: "Consultez et restaurez les versions actuellement conservées pour ce document.",
+    historyEmpty: "Aucune version à restaurer.",
+    historyLoadFailed: "Impossible de charger l'historique",
+    historyRestoreFailed: "Impossible de restaurer cette version",
+    historyConflict:
+      "Le document a encore changé. Fermez puis rouvrez l'historique.",
+    restoreVersion: "Restaurer cette version",
+    historySource: {
+      web: "Éditeur web",
+      mcp: "Agent MCP",
+      restore: "Restauration",
+    },
+    historySafetySnapshot: "Instantané de sécurité",
     untitled: "Sans titre",
     titlePlaceholder: "Titre du document",
     loginRequired: "Veuillez vous connecter",
@@ -244,8 +405,9 @@ export const fr: Messages = {
     documentsPanel: "Documents",
     outlinePanel: "Plan",
     newDocument: "Nouveau document",
-    deleteDocument: "Supprimer le document",
-    deleteConfirm: "Supprimer « {title} » ? Cette action est irréversible.",
+    deleteDocument: "Mettre à la corbeille",
+    deleteConfirm:
+      "Mettre « {title} » à la corbeille ? Vous pourrez le restaurer pendant 30 jours.",
     deleteSaveFailed:
       "Les dernières modifications n’ont pas pu être enregistrées. Le document n’a pas été supprimé. Vérifiez votre connexion et réessayez.",
     emptyDocuments: "Aucun document — créez-en un ci-dessus",
@@ -258,18 +420,21 @@ export const fr: Messages = {
     uploadingImages: "Téléversement de {n}…",
     rehostFailed:
       "Certaines images n'ont pas pu être copiées dans votre stockage et pointent toujours vers le site d'origine",
-    imageClickToEdit: "Cliquez pour modifier le Markdown de l'image (légende et URL)",
+    imageClickToEdit:
+      "Cliquez pour modifier le Markdown de l'image (légende et URL)",
     imageMarkdownLabel: "Source Markdown de l'image",
     imageBroken: "Échec du chargement — cliquez pour modifier l'URL",
     imageRetrying: "Chargement de l'image, nouvelle tentative…",
     share: "Partager",
     shareTitle: "Partager ce document",
     shareAccessLink: "Toute personne ayant le lien",
-    shareAccessLinkHint: "Le lien est aléatoire et indevinable, mais fonctionne pour quiconque l'obtient",
+    shareAccessLinkHint:
+      "Le lien est aléatoire et indevinable, mais fonctionne pour quiconque l'obtient",
     shareTokenRotated:
       "Un nouveau lien a été généré : la suppression du mot de passe a invalidé immédiatement l'ancien lien. Si vous l'avez déjà envoyé, partagez à nouveau.",
     shareAccessPassword: "Mot de passe requis",
-    shareAccessPasswordHint: "Les visiteurs doivent saisir un mot de passe, au moins 6 caractères",
+    shareAccessPasswordHint:
+      "Les visiteurs doivent saisir un mot de passe, au moins 6 caractères",
     sharePasswordPlaceholder: "Définir un mot de passe d'accès",
     shareEnable: "Activer le partage",
     shareUpdate: "Mettre à jour",
@@ -294,7 +459,8 @@ export const fr: Messages = {
     exportDOCX: "Word (.docx)",
     exportPDFHint: "Téléchargement direct ; le texte devient une image",
     exportPrint: "Imprimer / Enregistrer en PDF",
-    exportPrintHint: "Texte sélectionnable et recherchable — choisissez « Enregistrer au format PDF »",
+    exportPrintHint:
+      "Texte sélectionnable et recherchable — choisissez « Enregistrer au format PDF »",
     wechatExport: "WeChat (compte officiel)",
     wechatExportHint: "Choisissez un thème, puis collez dans l'éditeur WeChat",
     wechatTitle: "Exporter vers WeChat",
@@ -312,7 +478,8 @@ export const fr: Messages = {
     untitledFolder: "Dossier sans titre",
     folderNamePlaceholder: "Nom du dossier",
     dropToRoot: "Déposer ici pour sortir du dossier",
-    cannotDropIntoSelf: "Impossible de déplacer un dossier dans son sous-dossier",
+    cannotDropIntoSelf:
+      "Impossible de déplacer un dossier dans son sous-dossier",
     newSubfolder: "Nouveau sous-dossier",
     newDocumentHere: "Nouveau document ici",
     treeMenu: "Actions sur l'arborescence",
@@ -386,6 +553,7 @@ function hello(name) {
     brandCn: "锦鲤笔记",
     product: "Produit",
     editor: "Éditeur",
+    pricing: "Tarifs",
     dashboard: "Tableau de bord",
     home: "Accueil",
     built: "Nous avons aussi créé",
@@ -475,7 +643,7 @@ function hello(name) {
           title: "Résiliation",
           body: [
             "Nous pouvons suspendre ou résilier l’accès en cas d’abus, de fraude, de risque de sécurité ou de violation de ces conditions. Vous pouvez cesser d’utiliser le service à tout moment.",
-            "Lorsqu’un compte ou un document est supprimé, les images associées sont retirées de l’hébergement par une tâche de fond asynchrone, généralement en quelques minutes.",
+            "Les documents passent d’abord par une corbeille de 30 jours. Les images associées ne sont supprimées en arrière-plan qu’après suppression définitive ou expiration, si aucun autre document ne les référence.",
           ],
         },
         {
@@ -555,7 +723,7 @@ function hello(name) {
         {
           title: "Conservation et suppression",
           body: [
-            "Les documents sont retirés de la base dès que vous les supprimez. Les images qu’ils référençaient — et qu’aucun de vos autres documents ne référence — sont mises en file d’attente de suppression par une tâche de fond.",
+            "Les documents passent d’abord par une corbeille de 30 jours ; contenu, versions, images et utilisation du stockage restent conservés. Après suppression définitive ou expiration, les images non référencées ailleurs sont mises en file d’attente de suppression.",
             "Pour supprimer l’intégralité de votre compte et de ses données, écrivez-nous.",
           ],
         },
@@ -636,18 +804,24 @@ function hello(name) {
   },
   errors: {
     bad_request: "Requête invalide",
-    missing_fields: "Le nom d'utilisateur, l'e-mail et le mot de passe sont tous requis",
+    missing_fields:
+      "Le nom d'utilisateur, l'e-mail et le mot de passe sont tous requis",
     invalid_email: "Format d’e-mail invalide",
-    invalid_invitation_code: "Ce code d’invitation est invalide. Vérifiez-le puis réessayez",
+    invalid_invitation_code:
+      "Ce code d’invitation est invalide. Vérifiez-le puis réessayez",
     email_already_registered: "Cette adresse e-mail est déjà inscrite",
-    verification_code_required: "Saisissez le code de vérification reçu par e-mail",
+    verification_code_required:
+      "Saisissez le code de vérification reçu par e-mail",
     invalid_verification_code: "Le code de vérification est incorrect",
     verification_code_expired: "Le code a expiré. Demandez-en un nouveau",
-    verification_attempts_exceeded: "Trop de tentatives incorrectes. Demandez un nouveau code",
+    verification_attempts_exceeded:
+      "Trop de tentatives incorrectes. Demandez un nouveau code",
     verification_rate_limited: "Trop de demandes de code. Réessayez plus tard",
-    email_send_failed: "Impossible d’envoyer l’e-mail de vérification. Réessayez",
+    email_send_failed:
+      "Impossible d’envoyer l’e-mail de vérification. Réessayez",
     email_not_verified: "Cette adresse e-mail n’a pas été vérifiée",
-    email_already_verified: "Cette adresse e-mail est déjà vérifiée. Revenez à la connexion normale",
+    email_already_verified:
+      "Cette adresse e-mail est déjà vérifiée. Revenez à la connexion normale",
     password_too_short: "Le mot de passe doit comporter au moins 6 caractères",
     conflict: "L'e-mail ou le nom d'utilisateur est déjà pris",
     invalid_credentials: "Compte ou mot de passe incorrect",
@@ -655,31 +829,40 @@ function hello(name) {
     session_expired: "Session expirée",
     server_error: "Erreur serveur, veuillez réessayer plus tard",
     oauth_unsupported: "Fournisseur de connexion non pris en charge",
-    oauth_not_configured: "Cette méthode de connexion n'est pas encore configurée",
+    oauth_not_configured:
+      "Cette méthode de connexion n'est pas encore configurée",
     oauth_denied: "Autorisation annulée",
     oauth_missing_params: "Paramètres de rappel OAuth manquants",
     oauth_invalid_state: "Session de connexion expirée, veuillez réessayer",
     oauth_exchange_failed: "Échec de la connexion, veuillez réessayer",
-    oauth_profile_failed: "Impossible de lire votre profil auprès du fournisseur",
-    oauth_sync_failed: "Échec de la synchronisation du compte, veuillez réessayer",
+    oauth_profile_failed:
+      "Impossible de lire votre profil auprès du fournisseur",
+    oauth_sync_failed:
+      "Échec de la synchronisation du compte, veuillez réessayer",
     title_too_long: "Le titre est trop long",
     content_too_large: "Document trop volumineux pour être enregistré",
     image_fetch_rejected: "Cette adresse d'image n'est pas autorisée",
-    image_fetch_failed: "Impossible de récupérer cette image depuis son site d'origine",
-    too_deep: "Les dossiers sont trop imbriqués pour en créer un autre à l'intérieur",
+    image_fetch_failed:
+      "Impossible de récupérer cette image depuis son site d'origine",
+    too_deep:
+      "Les dossiers sont trop imbriqués pour en créer un autre à l'intérieur",
     name_too_long: "Nom de dossier trop long",
     invalid_move: "Impossible de déplacer ce dossier ici",
     not_found: "Cet élément n'existe pas ou a été supprimé",
     image_type_unsupported: "Seuls PNG, JPEG, GIF et WebP sont pris en charge",
     image_type_mismatch: "Le contenu du fichier ne correspond pas à son format",
-    image_svg_rejected: "Les images SVG ne sont pas prises en charge, pour raisons de sécurité",
+    image_svg_rejected:
+      "Les images SVG ne sont pas prises en charge, pour raisons de sécurité",
     image_too_large: "L'image dépasse la limite de 10 Mo",
-    image_quota_exceeded: "Stockage d'images plein — supprimez les documents inutiles pour libérer de l'espace",
-    storage_quota_exceeded: "Stockage cloud plein — supprimez les documents inutiles pour libérer de l'espace",
+    image_quota_exceeded:
+      "Stockage d'images plein — supprimez définitivement les documents inutiles depuis la corbeille",
+    storage_quota_exceeded:
+      "Stockage cloud plein — supprimez définitivement les documents inutiles depuis la corbeille",
     image_empty: "L'image est vide",
     share_not_found: "Ce lien est invalide ou a été révoqué",
     share_access_invalid: "Niveau de partage invalide",
-    share_password_too_short: "Le mot de passe doit comporter au moins 6 caractères",
+    share_password_too_short:
+      "Le mot de passe doit comporter au moins 6 caractères",
     share_password_invalid: "Mot de passe incorrect",
     too_many_requests: "Trop de tentatives — veuillez réessayer plus tard",
   },

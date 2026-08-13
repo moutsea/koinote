@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Gift, Mail } from "lucide-react";
 import {
@@ -16,17 +15,25 @@ import { Logo } from "../components/Logo";
 
 type Mode = "login" | "register";
 
+function loginRedirectPath() {
+  const candidate = new URLSearchParams(window.location.search).get("redirectTo")?.trim() ?? "";
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+    return "/dashboard";
+  }
+  return candidate;
+}
+
 // OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
-function startOAuth(provider: "google" | "github", invitationCode: string) {
-  const search = new URLSearchParams({ redirectTo: "/dashboard" });
+function startOAuth(provider: "google" | "github", invitationCode: string, redirectTo: string) {
+  const search = new URLSearchParams({ redirectTo });
   if (invitationCode.trim()) search.set("invite", invitationCode.trim());
   window.location.assign(`/api/auth/oauth/${provider}/start?${search.toString()}`);
 }
 
 export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
+  const redirectTo = loginRedirectPath();
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [identifier, setIdentifier] = useState(""); // 登录用：用户名或邮箱
@@ -135,7 +142,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
         });
       }
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      void navigate({ to: "/dashboard" });
+      window.location.assign(redirectTo);
     } catch (err) {
       if (err instanceof ApiError && err.code === "email_not_verified") {
         const accountEmail = err.email ?? (/^\S+@\S+\.\S+$/.test(identifier) ? identifier : "");
@@ -192,7 +199,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           <div className="space-y-3">
             <OAuthButton
               onClick={() =>
-                startOAuth("google", mode === "register" ? invitationCode : "")
+                startOAuth("google", mode === "register" ? invitationCode : "", redirectTo)
               }
             >
               <GoogleIcon className="h-4 w-4" />
@@ -200,7 +207,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             </OAuthButton>
             <OAuthButton
               onClick={() =>
-                startOAuth("github", mode === "register" ? invitationCode : "")
+                startOAuth("github", mode === "register" ? invitationCode : "", redirectTo)
               }
             >
               <GitHubIcon className="h-4 w-4" />

@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { History } from "lucide-react";
 import MarkdownEditor from "./MarkdownEditor";
 import { useDocument } from "../../documents";
 import type { DocPatch, DocumentSaver } from "./useDocumentSaver";
+import { ConflictDialog } from "./ConflictDialog";
+import { VersionHistoryDialog } from "./VersionHistoryDialog";
+import { useI18n } from "../../i18n";
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -17,6 +22,7 @@ import type { DocPatch, DocumentSaver } from "./useDocumentSaver";
 export function LiveEditor({
   docId,
   visible,
+  historyAvailable,
   saver,
   onEditorReady,
   onTitleChange,
@@ -26,6 +32,7 @@ export function LiveEditor({
 }: {
   docId: string;
   visible: boolean;
+  historyAvailable: boolean;
   saver: DocumentSaver;
   /** 只有当前实例上报，否则大纲会跟到后台的某篇上 */
   onEditorReady?: (editor: Editor | null) => void;
@@ -35,8 +42,14 @@ export function LiveEditor({
   outlineSlot?: React.ReactNode;
 }) {
   const doc = useDocument(docId);
+  const queryClient = useQueryClient();
+  const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTop = useRef(0);
+  const [editorGeneration, setEditorGeneration] = useState(0);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [seededDocId, setSeededDocId] = useState<string | null>(null);
 
   // 文档到手后铺一份基线。seed 内部对已有待存内容不覆盖 ——
   // 被淘汰又点回来时，本地未落库的改动比服务端那份新
@@ -46,7 +59,9 @@ export function LiveEditor({
       title: doc.data.title,
       content: doc.data.content,
       theme: doc.data.theme ?? "",
+      revision: doc.data.revision,
     });
+    setSeededDocId(docId);
   }, [doc.data, docId, saver]);
 
   // 隐藏前记住滚动位置，显示后还原
@@ -62,21 +77,48 @@ export function LiveEditor({
 
   // 传给编辑器的 document 要合并未落库的改动，否则重新挂载会退回服务端那份，
   // 用户看到自己刚写的字消失
-  const merged = useMemo(() => {
-    if (!doc.data) return null;
-    const pending = saver.peek(docId);
-    return pending ? { ...doc.data, ...pending } : doc.data;
-    // peek 读的是 ref，不进依赖 —— 它变化时不需要重算，重算时机由 doc.data 决定
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.data, docId]);
+  // 不能只按 doc.data 做 memo：刷新后 seed 从 localStorage 恢复冲突草稿时，
+  // 远端 query 不会变化，memo 会把草稿一直挡在编辑器外面。
+  const pending = saver.peek(docId);
+  const merged =
+    doc.data && seededDocId === docId
+      ? pending
+        ? { ...doc.data, ...pending }
+        : doc.data
+      : null;
 
   if (!merged) return null;
+
+  const status = saver.status(docId);
+
+  async function openHistory() {
+    const saved = await saver.flush(docId);
+    if (!saved) {
+      if (saver.status(docId) === "conflict") setConflictOpen(true);
+      return;
+    }
+    setHistoryOpen(true);
+  }
+
+  function acceptDocument(next: NonNullable<typeof merged>) {
+    queryClient.setQueryData(["document", docId], next);
+    onTitleChange?.(docId, next.title);
+    void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    saver.acceptRemote(docId, {
+      title: next.title,
+      content: next.content,
+      theme: next.theme ?? "",
+      revision: next.revision,
+    });
+    setEditorGeneration((value) => value + 1);
+  }
 
   return (
     <div className={visible ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
       <MarkdownEditor
+        key={`${docId}:${editorGeneration}`}
         document={merged}
-        status={saver.status(docId)}
+        status={status}
         onChange={(patch: DocPatch) => {
           saver.queue(docId, patch);
           if (patch.title !== undefined) onTitleChange?.(docId, patch.title);
@@ -85,9 +127,65 @@ export function LiveEditor({
         onEditorReady={visible ? onEditorReady : undefined}
         scrollContainerRef={scrollRef}
         leadingControls={leadingControls}
-        trailingControls={trailingControls}
+        trailingControls={
+          <>
+            {status === "conflict" && (
+              <button
+                type="button"
+                onClick={() => setConflictOpen(true)}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                {t.editor.resolveConflict}
+              </button>
+            )}
+            {historyAvailable && (
+              <button
+                type="button"
+                onClick={() => void openHistory()}
+                title={t.editor.history}
+                aria-label={t.editor.history}
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+              >
+                <History className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.editor.history}</span>
+              </button>
+            )}
+            {trailingControls}
+          </>
+        }
         outlineSlot={outlineSlot}
       />
+      {visible && conflictOpen && (
+        <ConflictDialog
+          docId={docId}
+          local={saver.peek(docId)!}
+          onAcceptRemote={(remote) => {
+            acceptDocument(remote);
+            setConflictOpen(false);
+          }}
+          onOverwrite={async (remoteRevision, patch) => {
+            const saved = await saver.overwrite(docId, remoteRevision, patch);
+            if (saved) {
+              onTitleChange?.(docId, patch.title);
+              void queryClient.invalidateQueries({ queryKey: ["documents"] });
+              setConflictOpen(false);
+              setEditorGeneration((value) => value + 1);
+            }
+            return saved;
+          }}
+          onClose={() => setConflictOpen(false)}
+        />
+      )}
+      {visible && historyAvailable && historyOpen && (
+        <VersionHistoryDialog
+          document={merged}
+          onRestore={(restored) => {
+            acceptDocument(restored);
+            setHistoryOpen(false);
+          }}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }

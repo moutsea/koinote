@@ -13,7 +13,7 @@ import { scrollToHeading, useOutline } from "../components/editor/useOutline";
 import {
   useCreateDocument,
   useCreateFolder,
-  useDeleteDocument,
+  useTrashDocument,
   useDeleteFolder,
   useDocument,
   useDocumentList,
@@ -54,7 +54,7 @@ export function EditorPage() {
   const loggedIn = Boolean(session.data?.user);
   const list = useDocumentList(loggedIn);
   const create = useCreateDocument();
-  const remove = useDeleteDocument();
+  const remove = useTrashDocument();
   const folderList = useFolderList(loggedIn);
   const createFolder = useCreateFolder();
   const renameFolderMut = useRenameFolder();
@@ -93,7 +93,10 @@ export function EditorPage() {
 
     if (documents.length > 0) {
       bootstrapped.current = true;
-      void navigate({ to: "/editor/$docId", params: { docId: documents[0].docId } });
+      void navigate({
+        to: "/editor/$docId",
+        params: { docId: documents[0].docId },
+      });
       return;
     }
 
@@ -124,7 +127,14 @@ export function EditorPage() {
         },
       },
     );
-  }, [loggedIn, activeDocId, documents, create, navigate, t.editor.importedLocalDraft]);
+  }, [
+    loggedIn,
+    activeDocId,
+    documents,
+    create,
+    navigate,
+    t.editor.importedLocalDraft,
+  ]);
 
   const doc = useDocument(activeDocId);
 
@@ -171,7 +181,10 @@ export function EditorPage() {
     if (!activeDocId) return;
     if (justClosed.current === activeDocId) return; // 地址还没跟上，别把它拉回来
     setTabState((prev) => {
-      if (prev.activeDocId === activeDocId && prev.openTabs.includes(activeDocId)) {
+      if (
+        prev.activeDocId === activeDocId &&
+        prev.openTabs.includes(activeDocId)
+      ) {
         return prev;
       }
       const { next, evicted } = activate(prev, activeDocId);
@@ -249,7 +262,9 @@ export function EditorPage() {
   const [liveTitles, setLiveTitles] = useState<Record<string, string>>({});
 
   const handleTitleChange = useCallback((docId: string, title: string) => {
-    setLiveTitles((prev) => (prev[docId] === title ? prev : { ...prev, [docId]: title }));
+    setLiveTitles((prev) =>
+      prev[docId] === title ? prev : { ...prev, [docId]: title },
+    );
   }, []);
 
   const titleOf = useCallback(
@@ -406,7 +421,8 @@ export function EditorPage() {
   const handleDeleteFolder = useCallback(
     (folderId: string, name: string) => {
       // 说清楚「里面的东西不会被删」—— 否则用户不敢删，或者删了以为丢了正文
-      if (!window.confirm(interpolate(t.editor.deleteFolderConfirm, { name }))) return;
+      if (!window.confirm(interpolate(t.editor.deleteFolderConfirm, { name })))
+        return;
       deleteFolderMut.mutate(folderId);
     },
     [deleteFolderMut, t.editor.deleteFolderConfirm],
@@ -578,7 +594,10 @@ export function EditorPage() {
           <LiveEditor
             key={liveId}
             docId={liveId}
-            visible={liveId === tabState.activeDocId && !doc.isLoading && !doc.isError}
+            historyAvailable={session.data?.user?.membershipTier === "lifetime"}
+            visible={
+              liveId === tabState.activeDocId && !doc.isLoading && !doc.isError
+            }
             saver={saver}
             onEditorReady={setEditor}
             onTitleChange={handleTitleChange}
@@ -647,7 +666,6 @@ export function EditorPage() {
           onClose={() => setShareOpen(false)}
         />
       )}
-
     </div>
   );
 }

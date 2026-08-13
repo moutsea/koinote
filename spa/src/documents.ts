@@ -8,7 +8,8 @@ import {
   createDocument,
   createFolder,
   createShare,
-  deleteDocument,
+  listTrashedDocuments,
+  permanentlyDeleteDocument,
   deleteFolder,
   getDocument,
   getEditorTabs,
@@ -19,6 +20,8 @@ import {
   putEditorTabs,
   renameFolder,
   revokeShare,
+  restoreTrashedDocument,
+  trashDocument,
   updateDocument,
   type Document,
   type DocumentShare,
@@ -72,13 +75,53 @@ export function useCreateDocument() {
   });
 }
 
-export function useDeleteDocument() {
+export function useTrashDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (docId: string) => deleteDocument(docId),
+    mutationFn: (docId: string) => trashDocument(docId),
     onSuccess: (_result, docId) => {
       queryClient.removeQueries({ queryKey: docKey(docId) });
       void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+    },
+  });
+}
+
+const TRASH_KEY = ["documents-trash"] as const;
+
+export function useTrashedDocumentList(enabled: boolean) {
+  return useQuery({
+    queryKey: TRASH_KEY,
+    queryFn: async () => (await listTrashedDocuments()).documents,
+    enabled,
+    retry: false,
+  });
+}
+
+export function useRestoreTrashedDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (docId: string) => restoreTrashedDocument(docId),
+    onSuccess: ({ document }) => {
+      queryClient.setQueryData(docKey(document.docId), document);
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      void queryClient.invalidateQueries({ queryKey: TRASH_KEY });
+    },
+  });
+}
+
+export function usePermanentlyDeleteDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      confirmation,
+    }: {
+      docId: string;
+      confirmation: string;
+    }) => permanentlyDeleteDocument(docId, confirmation),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRASH_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["storage-usage"] });
     },
   });
 }
@@ -93,12 +136,23 @@ export function useSaveDocument() {
       title,
       content,
       theme,
+      expectedRevision,
+      forceVersion,
     }: {
       docId: string;
       title: string;
       content: string;
       theme?: string;
-    }) => updateDocument(docId, { title, content, theme }),
+      expectedRevision: number;
+      forceVersion?: boolean;
+    }) =>
+      updateDocument(docId, {
+        title,
+        content,
+        theme,
+        expectedRevision,
+        forceVersion,
+      }),
     onSuccess: ({ document }) => {
       queryClient.setQueryData(docKey(document.docId), document);
     },
@@ -124,7 +178,9 @@ export function useFolderList(enabled: boolean) {
  * 移动、删除都会改到文档的归属（删文件夹时子项提到父级），所以文档列表也要失效 ——
  * 只失效 folders 的话侧栏里文档会留在原位，直到下次别的原因触发重取。
  */
-function useFolderMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+function useFolderMutation<TArgs, TResult>(
+  fn: (args: TArgs) => Promise<TResult>,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -136,8 +192,9 @@ function useFolderMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>
 }
 
 export function useCreateFolder() {
-  return useFolderMutation((args: { name: string; parentFolderId: string | null }) =>
-    createFolder(args),
+  return useFolderMutation(
+    (args: { name: string; parentFolderId: string | null }) =>
+      createFolder(args),
   );
 }
 

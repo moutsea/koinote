@@ -10,6 +10,7 @@ type Document struct {
 	// Theme 是微信排版主题 id，空串表示不套主题。取值由 server 侧白名单约束。
 	Theme     string     `json:"theme"`
 	Content   string     `json:"content"`
+	Revision  int64      `json:"revision"`
 	CreatedAt *time.Time `json:"createdAt"`
 	UpdatedAt *time.Time `json:"updatedAt"`
 	// Share 为空表示未分享。仅在文档主人自己读取时下发。
@@ -38,7 +39,26 @@ type DocumentSummary struct {
 	Title string `json:"title"`
 	// nil 表示在根下
 	FolderID  *string    `json:"folderId"`
+	Revision  int64      `json:"revision"`
 	UpdatedAt *time.Time `json:"updatedAt"`
+}
+
+type TrashedDocumentSummary struct {
+	DocID     string     `json:"docId"`
+	Title     string     `json:"title"`
+	Revision  int64      `json:"revision"`
+	TrashedAt *time.Time `json:"trashedAt"`
+	DeletesAt *time.Time `json:"deletesAt"`
+}
+
+type DocumentVersion struct {
+	Revision       int64      `json:"revision"`
+	Title          string     `json:"title"`
+	Theme          string     `json:"theme"`
+	Content        string     `json:"content,omitempty"`
+	Source         string     `json:"source"`
+	SafetySnapshot bool       `json:"safetySnapshot"`
+	CreatedAt      *time.Time `json:"createdAt"`
 }
 
 // User 是对外暴露的用户模型，JSON 字段与前端 spa/src/api.ts 的 User 类型对齐。

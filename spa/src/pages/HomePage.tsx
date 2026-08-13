@@ -1,10 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import {
+  Bot,
+  Clock3,
   Eye,
   ImageIcon,
+  KeyRound,
   Sparkles,
   Download,
   FileText,
+  ShieldCheck,
   Zap,
 } from "lucide-react";
 import { useCurrentUser } from "../auth";
@@ -14,6 +18,7 @@ import { InkSeal, InkClouds, ScrollRod, PaperCard } from "../components/Ink";
 
 // 图标与文案一一对应，文案按语言从 t.home.features 取。
 const FEATURE_ICONS = [Eye, FileText, ImageIcon, Sparkles, Download, Zap];
+const MCP_STEP_ICONS = [KeyRound, ShieldCheck, Clock3];
 
 export function HomePage() {
   const user = useCurrentUser();
@@ -130,6 +135,98 @@ export function HomePage() {
                 </PaperCard>
               );
             })}
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="border-y" style={{ borderColor: "var(--ink-line)" }}>
+        <PageContainer className="py-20 sm:py-24">
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+            <div>
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.2em]"
+                style={{ color: "var(--cinnabar)" }}
+              >
+                {t.home.mcp.eyebrow}
+              </p>
+              <h2
+                className="kn-heading-cn mt-3 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl"
+                style={{ color: "var(--ink-black)" }}
+              >
+                {t.home.mcp.title}
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--ink-mid)" }}>
+                {t.home.mcp.description}
+              </p>
+
+              <div className="mt-7 space-y-4">
+                {t.home.mcp.steps.map((step, index) => {
+                  const Icon = MCP_STEP_ICONS[index] ?? ShieldCheck;
+                  return (
+                    <div key={step.title} className="flex items-start gap-3">
+                      <span
+                        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"
+                        style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <h3 className="text-sm font-semibold" style={{ color: "var(--ink-black)" }}>
+                          {step.title}
+                        </h3>
+                        <p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+                          {step.desc}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <Link
+                to="/pricing"
+                className="mt-8 inline-flex rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
+                style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+              >
+                {t.home.mcp.cta}
+              </Link>
+            </div>
+
+            <PaperCard className="overflow-hidden">
+              <div className="border-b p-5" style={{ borderColor: "var(--ink-line)" }}>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-11 w-11 items-center justify-center rounded-xl"
+                    style={{ background: "var(--ink-wash)", color: "var(--ink-strong)" }}
+                  >
+                    <Bot className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--ink-black)" }}>Koinote MCP</p>
+                    <p className="mt-0.5 text-xs" style={{ color: "var(--ink-faint)" }}>
+                      {t.home.mcp.agents}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3 p-5 sm:p-6">
+                {["Codex", "Claude Code", "OpenCode", "WorkBuddy"].map((agent) => (
+                  <div
+                    key={agent}
+                    className="flex items-center justify-between rounded-lg border px-4 py-3"
+                    style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
+                  >
+                    <span className="text-sm font-medium" style={{ color: "var(--ink-strong)" }}>
+                      {agent}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--ink-mid)" }}>
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--ink-mid)" }} />
+                      MCP
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </PaperCard>
           </div>
         </PageContainer>
       </section>

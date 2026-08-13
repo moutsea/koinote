@@ -25,6 +25,9 @@ func TestDocumentEndpointsRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/documents/some-doc-id"},
 		{http.MethodPut, "/api/documents/some-doc-id"},
 		{http.MethodDelete, "/api/documents/some-doc-id"},
+		{http.MethodGet, "/api/documents/trash"},
+		{http.MethodPost, "/api/documents/some-doc-id/restore"},
+		{http.MethodDelete, "/api/documents/some-doc-id/permanent"},
 	}
 
 	for _, tc := range cases {

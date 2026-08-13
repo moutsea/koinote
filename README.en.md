@@ -29,11 +29,11 @@ exports and shares in one click.
 A Typora-style Markdown editor in the browser: no split pane, no preview toggle —
 what you type turns into typeset text as you go.
 
-Three things set it apart from a local editor: **paste an image and it uploads**
+Four things set it apart from a local editor: **paste an image and it uploads**
 (to your own R2 bucket, so the document holds a clean URL rather than a wall of
 base64), **export for WeChat** (15 typographic themes, styles inlined into the
 form the WeChat editor accepts), and **documents live in the cloud** (multi-device,
-shareable).
+shareable), plus **safe MCP access for Codex, Claude Code, OpenCode, and other agents**.
 
 > The current open-source scope covers editing, image hosting, export, sharing,
 > and the account flow. AI features are still planned; a one-time lifetime membership
@@ -48,6 +48,21 @@ shareable).
 - LaTeX via KaTeX — inline `$…$` and block `$$…$$`, click a formula to edit its source
 - Tabs for several open documents, outline navigation, folder tree, drag to move
 - Debounced autosave that reports failures instead of silently dropping content
+- Revision-based optimistic locking detects concurrent browser and agent edits; conflicts
+  keep the local draft and open an explicit merge UI
+- Lifetime members can inspect and restore history, enable or disable regular snapshots,
+  keep 1–100 versions per document, and choose whether MCP writes keep full history.
+  Agent writes still retain the latest safety snapshot when full history is off
+  (100 versions per account in total)
+
+**MCP and membership**
+
+- The home page explains MCP authorization, conflict protection, and recovery for
+  Streamable HTTP clients such as Codex, Claude Code, and OpenCode
+- A public `/pricing` page compares Free and Lifetime benefits and reads the current
+  multi-currency Stripe price allowlist from the backend
+- Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
+  history, and eligibility for future AI capabilities
 
 **Image hosting**
 
@@ -99,6 +114,8 @@ rasterized and uploaded as images.
 - Administrator dashboard for user/member totals, per-currency revenue, orders,
   site storage, 30-day growth, and recent accounts and payments
 - Optional Cloudflare Analytics metrics for today's edge UV, PV, requests, and bandwidth
+- Streamable HTTP MCP access for lifetime members to let Codex, Claude Code, and other
+  agents work with their own documents
 
 ## Stack
 
@@ -106,7 +123,7 @@ rasterized and uploaded as images.
 Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
                                 ├─ /api/images/* and /images/* ──▶ R2
                                 ├─ /api/internal/email/* ──▶ Email Sending
-                                └─ other /api/* ──▶ Go backend ──▶ PostgreSQL
+                                └─ other /api/* and /mcp ──▶ Go backend ──▶ PostgreSQL
 Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
 Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend ──▶ Feishu bot
 ```
@@ -117,6 +134,73 @@ Browser ── Stripe Checkout ────────▶ Stripe ── signed 
 - **Edge** Cloudflare Worker · R2 · Email Sending
 
 Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the database.
+
+## Agent document access (MCP)
+
+Lifetime members can create a personal access token (PAT) in the Dashboard's
+“Agent document access (MCP)” card and connect any Streamable HTTP MCP client to
+`https://koinote.app/mcp`. Koinote itself only handles authorization, document I/O,
+versioning, and audit metadata. It **does not call an LLM and needs no OpenAI,
+Anthropic, or other model API key**; Codex or Claude Code supplies the model capability.
+
+PATs have read or write scope, a 1–365 day lifetime, and individual revocation.
+PostgreSQL authenticates with a SHA-256 hash and keeps a separate AES-GCM-encrypted
+recovery copy. The account owner can reveal it on demand, while list responses never
+include complete tokens. Every MCP request rechecks membership, expiry, and revocation.
+Prefer a read-only token unless the client actually needs to modify documents.
+
+Configure Codex without committing the token:
+
+```bash
+export KOINOTE_MCP_TOKEN='knt_mcp_...'
+```
+
+```toml
+# ~/.codex/config.toml
+[mcp_servers.koinote]
+url = "https://koinote.app/mcp"
+bearer_token_env_var = "KOINOTE_MCP_TOKEN"
+```
+
+Claude Code:
+
+```bash
+claude mcp add --transport http koinote https://koinote.app/mcp \
+  --header "Authorization: Bearer knt_mcp_..."
+```
+
+OpenCode (put this in a global or project-level `opencode.json`; see the
+[official MCP documentation](https://opencode.ai/docs/mcp-servers/)):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "koinote": {
+      "type": "remote",
+      "url": "https://koinote.app/mcp",
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Other clients need no Koinote-specific integration. They can connect with the same endpoint and
+token when they support remote Streamable HTTP MCP plus an
+`Authorization: Bearer <PAT>` request header.
+
+Read tools page through documents, search titles, read Unicode-safe content chunks, inspect
+retained versions, and list the trash. Write tokens additionally expose create, append,
+full replace, version restore, move to trash, and restore from trash. Agents cannot
+permanently delete documents: that action remains in the browser trash page behind a typed-title
+confirmation, while normal deletion retains documents for 30 days. Replace, append, trash,
+and restore require the latest
+revision; the browser editor uses the same optimistic lock and offers a local/remote merge
+UI on conflict. See the [design notes](docs/DESIGN.en.md#mcp-document-access) for the
+trade-offs.
 
 ## Quick start
 
@@ -329,6 +413,7 @@ Required repository secrets:
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge |
 | `CLOUDFLARE_ANALYTICS_TOKEN` | Optional; Analytics Read limited to the target zone, used for Admin UV/PV |
 | `EMAIL_VERIFICATION_SECRET` | Independent verification-code HMAC key, written safely to the VPS `.env` |
+| `MCP_TOKEN_ENCRYPTION_KEY` | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed |
 | `STRIPE_SECRET_KEY` | Stripe server key; start with `sk_test_...`, switch to live mode before real charges |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `/api/billing/webhook` (`whsec_...`) |
 | `STRIPE_LIFETIME_PRODUCT_ID` | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist |
@@ -343,6 +428,7 @@ To create or rotate the verification-code secret, run this from the repository:
 ```bash
 openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
+openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
 ```
 
 Set the Stripe values interactively with `gh secret set STRIPE_SECRET_KEY`,
@@ -355,14 +441,14 @@ Feishu settings in the VPS `.env`.
 The second command shows only the secret name and update time; it cannot read the
 secret value. Before deploying, the workflow checks that every required secret exists.
 It then updates `/opt/koinote/.env` atomically over stdin before restarting the backend,
-so verification and Stripe secrets do not need to be copied into the production `.env`
+so verification, MCP token-encryption, and Stripe secrets do not need to be copied into the production `.env`
 manually. The repository secrets must still be set before the first deployment.
 The optional Analytics token is written through the same path when configured.
 
 ## Tests
 
 ```bash
-npm test          # typecheck (both sides) + all frontend/Worker assertion suites
+npm test          # typecheck (both sides) + 29 frontend/Worker assertion suites
 npm run go:test   # go vet + go test; DB integration tests skip without TEST_DATABASE_URL
 ```
 

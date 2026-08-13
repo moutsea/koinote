@@ -35,6 +35,7 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/dashboard", width: "5xl" },
   { prefix: "/documents", width: "5xl" },
   { prefix: "/invitations", width: "5xl" },
+  { prefix: "/pricing", width: "6xl" },
   // 管理后台包含宽表格和 30 天趋势，比个人控制台多留一档宽度
   { prefix: "/admin", width: "6xl" },
   // 分享页给外人读长文，3xl 是为了行长

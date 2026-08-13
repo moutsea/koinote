@@ -146,7 +146,7 @@ func (a *App) documentMove(w http.ResponseWriter, r *http.Request) {
 			WHEN $3 = '' THEN NULL
 			ELSE (SELECT id FROM folders WHERE folder_id = $3 AND user_id = $2)
 		END
-		WHERE doc_id = $1 AND user_id = $2
+		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID, target)
 	if err != nil {
 		log.Printf("document move: %v", err)

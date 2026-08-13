@@ -15,7 +15,7 @@ export const MEMBERSHIP_STATUS_KEY = ["membership-status"] as const;
 
 type CheckoutNotice = "none" | "success" | "pending" | "cancelled" | "failed";
 
-const DEFAULT_CURRENCY_BY_LOCALE: Record<string, string> = {
+export const DEFAULT_CURRENCY_BY_LOCALE: Record<string, string> = {
   zh: "cny",
   ja: "jpy",
   fr: "eur",
@@ -31,7 +31,7 @@ function clearCheckoutQuery() {
   window.history.replaceState(null, "", url);
 }
 
-function formatPrice(amount: number, currency: string, locale: string) {
+export function formatMembershipPrice(amount: number, currency: string, locale: string) {
   const normalizedCurrency = currency.toLowerCase();
   const divisor = ZERO_DECIMAL_CURRENCIES.has(normalizedCurrency) ? 1 : 100;
   try {
@@ -132,7 +132,7 @@ export function MembershipCard({ user }: { user: User }) {
     : [{ amount: membership?.priceAmount ?? 399, currency: membership?.priceCurrency ?? "usd" }];
   const selectedPrice =
     prices.find((option) => option.currency.toLowerCase() === selectedCurrency) ?? prices[0];
-  const price = formatPrice(selectedPrice.amount, selectedPrice.currency, locale);
+  const price = formatMembershipPrice(selectedPrice.amount, selectedPrice.currency, locale);
 
   const noticeText =
     notice === "success"
@@ -146,22 +146,14 @@ export function MembershipCard({ user }: { user: User }) {
             : "";
 
   return (
-    <PaperCard className="overflow-hidden">
-      <div
-        className="h-1"
-        style={{
-          background: active
-            ? "linear-gradient(90deg, var(--cinnabar), #d6a84b)"
-            : "linear-gradient(90deg, var(--ink-line), var(--cinnabar-soft))",
-        }}
-      />
+    <PaperCard>
       <div className="p-6 sm:p-7">
         {noticeText && (
           <div
             className="mb-5 rounded-lg border px-4 py-3 text-sm"
             style={{
-              borderColor: notice === "failed" ? "var(--cinnabar)" : "var(--ink-line)",
-              background: notice === "success" ? "var(--cinnabar-soft)" : "var(--ink-wash)",
+              borderColor: "var(--ink-line)",
+              background: "var(--ink-wash)",
               color: "var(--ink-strong)",
             }}
             role="status"
@@ -173,7 +165,12 @@ export function MembershipCard({ user }: { user: User }) {
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <Crown className="h-5 w-5" style={{ color: "var(--cinnabar)" }} />
+              <span
+                className="rounded-lg p-2"
+                style={{ background: "var(--ink-wash)", color: "var(--ink-strong)" }}
+              >
+                <Crown className="h-5 w-5" />
+              </span>
               <h2
                 className="kn-heading-cn text-lg font-bold"
                 style={{ color: "var(--ink-black)" }}
@@ -181,8 +178,12 @@ export function MembershipCard({ user }: { user: User }) {
                 {t.membership.title}
               </h2>
               <span
-                className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+                className="rounded-full border px-2.5 py-1 text-xs font-medium"
+                style={{
+                  borderColor: "var(--ink-line)",
+                  background: "var(--ink-wash)",
+                  color: "var(--ink-mid)",
+                }}
               >
                 {active ? t.membership.activeBadge : t.membership.lifetimeBadge}
               </span>
@@ -204,12 +205,12 @@ export function MembershipCard({ user }: { user: User }) {
 
           <div className="min-w-52 shrink-0 sm:text-right">
             {active ? (
-              <div className="inline-flex items-center gap-2 font-semibold" style={{ color: "var(--cinnabar)" }}>
+              <div className="inline-flex items-center gap-2 font-semibold" style={{ color: "var(--ink-strong)" }}>
                 <Check className="h-5 w-5" />
                 {t.membership.activeTitle}
               </div>
             ) : status.isError ? (
-              <p className="text-sm" style={{ color: "var(--cinnabar)" }}>
+              <p className="text-sm" style={{ color: "var(--ink-mid)" }}>
                 {t.membership.loadFailed}
               </p>
             ) : (
@@ -232,7 +233,7 @@ export function MembershipCard({ user }: { user: User }) {
                     >
                       {prices.map((option) => (
                         <option key={option.currency} value={option.currency.toLowerCase()}>
-                          {option.currency.toUpperCase()} · {formatPrice(option.amount, option.currency, locale)}
+                          {option.currency.toUpperCase()} · {formatMembershipPrice(option.amount, option.currency, locale)}
                         </option>
                       ))}
                     </select>
@@ -250,8 +251,8 @@ export function MembershipCard({ user }: { user: User }) {
                     type="button"
                     onClick={() => checkout.mutate(selectedPrice.currency)}
                     disabled={checkout.isPending || status.isLoading}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{ background: "var(--cinnabar)" }}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                   >
                     {checkout.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                     {checkout.isPending ? t.membership.redirecting : t.membership.purchase}
@@ -277,7 +278,7 @@ function Benefit({
 }) {
   return (
     <div className="flex items-start gap-2.5 text-sm" style={{ color: "var(--ink-strong)" }}>
-      <span className="mt-0.5" style={{ color: "var(--cinnabar)" }}>
+      <span className="mt-0.5" style={{ color: "var(--ink-mid)" }}>
         {icon}
       </span>
       <span>

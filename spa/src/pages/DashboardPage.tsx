@@ -1,11 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { FileText, Plus, Clock, User as UserIcon } from "lucide-react";
+import { Plus, Clock, User as UserIcon } from "lucide-react";
 import { useSession } from "../auth";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { PaperCard } from "../components/Ink";
 import { StorageCard } from "../components/StorageCard";
 import { MembershipCard } from "../components/MembershipCard";
+import { MCPAccessCard } from "../components/MCPAccessCard";
+import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -88,16 +90,11 @@ export function DashboardPage() {
       </div>
 
       {/* 账户信息卡 */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2">
         <InfoCard
           icon={<UserIcon className="h-5 w-5" />}
           label={t.dashboard.account}
           value={user.email}
-        />
-        <InfoCard
-          icon={<FileText className="h-5 w-5" />}
-          label={t.dashboard.username}
-          value={user.username || t.dashboard.notSet}
         />
         <InfoCard
           icon={<Clock className="h-5 w-5" />}
@@ -114,6 +111,14 @@ export function DashboardPage() {
 
       <div id="membership" className="mt-4 scroll-mt-20">
         <MembershipCard user={user} />
+      </div>
+
+      <div id="history-settings" className="mt-4 scroll-mt-20">
+        <DocumentHistorySettingsCard user={user} />
+      </div>
+
+      <div id="mcp" className="mt-4 scroll-mt-20">
+        <MCPAccessCard user={user} />
       </div>
     </PageContainer>
   );

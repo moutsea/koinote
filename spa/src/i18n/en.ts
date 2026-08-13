@@ -3,8 +3,10 @@ import type { Messages } from "./types";
 export const en: Messages = {
   nav: {
     editor: "Editor",
+    pricing: "Pricing",
     dashboard: "Dashboard",
     documents: "My documents",
+    trash: "Trash",
     invitations: "Invite friends",
     admin: "Admin",
     login: "Log in",
@@ -12,10 +14,10 @@ export const en: Messages = {
     userMenu: "Account menu",
   },
   home: {
-    badge: "Markdown × AI, built for writing",
+    badge: "Markdown × Agents, built for writing",
     title: "Writing, back to its purest form",
     subtitle:
-      "Koinote is a Typora-style online Markdown editor. Render as you type, upload images inline, and write side by side with AI — so you can focus on the content itself.",
+      "Koinote is a Typora-style online Markdown editor. Render as you type, upload images inline, and let your agents work safely with your documents.",
     ctaStart: "Start writing",
     ctaRegister: "Create account",
     features: [
@@ -32,8 +34,8 @@ export const en: Messages = {
         desc: "Drag & paste to upload. Bring your own image host; keep clean links in the body.",
       },
       {
-        title: "AI for creators",
-        desc: "Continue, polish, translate, illustrate — the sidebar assistant is always on call.",
+        title: "Agent collaboration",
+        desc: "Connect Codex, Claude Code, OpenCode, and other agents through MCP with scoped document access.",
       },
       {
         title: "Easy export & share",
@@ -41,8 +43,61 @@ export const en: Messages = {
       },
       {
         title: "Auto save",
-        desc: "Saved as you type, never lose a draft. Cloud sync across devices (subscription).",
+        desc: "Saved as you type, with revision conflicts preventing browser and agent edits from silently overwriting each other.",
       },
+    ],
+    mcp: {
+      eyebrow: "Open MCP access",
+      title: "Bring agents into your writing workflow",
+      description:
+        "No browser extension required. Create a revocable, expiring personal token and let standard MCP clients such as Codex, Claude Code, and OpenCode search, read, and edit Koinote documents within the scope you grant.",
+      agents: "Works with Streamable HTTP MCP clients",
+      steps: [
+        { title: "Scope access", desc: "Issue read-only or read-write tokens, then reveal, copy, or revoke them anytime." },
+        { title: "Write safely", desc: "Every mutation checks the document revision, so conflicts never overwrite silently." },
+        { title: "Keep recovery points", desc: "Members can tune full history, with a latest safety snapshot even when it is off." },
+      ],
+      cta: "See membership benefits",
+    },
+  },
+  pricing: {
+    eyebrow: "Simple, transparent pricing",
+    title: "Upgrade once, write with confidence",
+    subtitle: "Free covers everyday writing. Lifetime adds more storage, MCP access, and version history with one payment.",
+    freeName: "Free",
+    freeDescription: "Everything needed to start writing and try the complete editor workflow.",
+    freePrice: "Free",
+    freePeriod: "Use it for as long as you like",
+    lifetimeName: "Lifetime",
+    lifetimeDescription: "Built for long-term writing and agent collaboration.",
+    lifetimePeriod: "One payment, lifetime access",
+    recommended: "Recommended",
+    included: "What's included",
+    freeFeatures: [
+      "{storage} cloud storage for documents and images",
+      "Full Markdown editing, autosave, and cross-device sync",
+      "Image hosting, exports, and read-only sharing",
+      "Earn extra cloud storage by inviting friends",
+    ],
+    lifetimeFeatures: [
+      "{storage} cloud storage for documents and images",
+      "MCP access for Codex, Claude Code, OpenCode, and other agents",
+      "Configurable version history and safety-snapshot recovery",
+      "Access to future AI capabilities",
+      "Everything in Free",
+    ],
+    loginToUpgrade: "Log in to upgrade",
+    manageMembership: "Manage membership and MCP",
+    active: "Your lifetime membership is active",
+    loading: "Loading current prices…",
+    loadFailed: "Could not load pricing. Please try again.",
+    unavailable: "Online checkout is not configured for this deployment.",
+    faqTitle: "Frequently asked questions",
+    faqs: [
+      { question: "Is this a subscription?", answer: "No. Lifetime membership is a one-time payment with no automatic renewal." },
+      { question: "What can MCP do?", answer: "It lets authorized agents search, read, create, append, update, restore, and move documents to trash. Permanent deletion remains a web-only action." },
+      { question: "Can I recover after disabling full MCP history?", answer: "Yes. Member Agent writes always maintain at least the latest safety snapshot, sharing the normal version limits." },
+      { question: "Are the AI features available now?", answer: "Not yet. Lifetime membership includes eligibility for future AI capabilities as they are released." },
     ],
   },
   auth: {
@@ -68,9 +123,11 @@ export const en: Messages = {
     sendingVerificationCode: "Sending…",
     verificationSent: "Verification code sent. Check your inbox.",
     verificationMockFilled: "The local test code was filled in automatically.",
-    emailVerificationRequired: "Your password is correct. Please verify your email to continue.",
+    emailVerificationRequired:
+      "Your password is correct. Please verify your email to continue.",
     verifyEmailTitle: "Email not verified",
-    verifyEmailDescription: "Send a code to the email below. You will be logged in after verification.",
+    verifyEmailDescription:
+      "Send a code to the email below. You will be logged in after verification.",
     verifyAndLogin: "Verify and log in",
     backToLogin: "Back to login",
     submitLogin: "Log in",
@@ -90,7 +147,8 @@ export const en: Messages = {
     invitationCode: "Invitation code (optional)",
     invitationCodePlaceholder: "Enter a 16-character code",
     invitationRewardTitle: "A friend sent you 500 MB of storage",
-    invitationBonusHint: "Finish with Google, GitHub, or email. Your friend also receives 500 MB when you join.",
+    invitationBonusHint:
+      "Finish with Google, GitHub, or email. Your friend also receives 500 MB when you join.",
     haveInvitationCode: "Have an invitation code?",
   },
   storage: {
@@ -100,16 +158,16 @@ export const en: Messages = {
     usedOf: "{used} of {quota} used",
     remaining: "{remaining} left",
     nearLimitHint:
-      "You're running low on cloud storage. Deleting documents you no longer need will free some up.",
+      "You're running low on cloud storage. Permanently delete documents from Trash to free space.",
     fullHint:
-      "Cloud storage is full, so new documents and images can't be saved. Delete documents you no longer need to free up space.",
+      "Cloud storage is full, so new documents and images can't be saved. Permanently delete unneeded documents from Trash to free space.",
     loading: "Loading…",
     loadFailed: "Couldn't load storage usage",
     quotaDialogTitle: "Cloud storage is full",
     quotaDialogBody:
       "You've used {used} of your {quota} cloud storage, so that didn't go through.",
     quotaDialogHint:
-      "Deleting documents you no longer need will free up space — their images are cleaned up by a background job, usually within a few minutes.",
+      "Documents in Trash still use storage. After permanent deletion, unreferenced images are cleaned up by a background job.",
     quotaDialogDismiss: "Got it",
     quotaDialogManage: "View usage",
   },
@@ -117,7 +175,8 @@ export const en: Messages = {
     title: "Koinote Lifetime",
     lifetimeBadge: "Lifetime",
     activeBadge: "Active",
-    description: "A one-time upgrade for more room to write, plus access to future AI features.",
+    description:
+      "A one-time upgrade for more room to write, plus access to future AI features.",
     oneTimePayment: "One-time payment, yours for life",
     currencyLabel: "Payment currency",
     currencyHint: "Stripe Checkout will charge you in the selected currency.",
@@ -127,18 +186,70 @@ export const en: Messages = {
     purchase: "Get lifetime access",
     redirecting: "Opening secure checkout…",
     activeTitle: "Lifetime membership unlocked",
-    activeDescription: "Your account includes 10 GB of cloud storage and future AI access.",
+    activeDescription:
+      "Your account includes 10 GB of cloud storage and future AI access.",
     unavailable: "Membership checkout is not configured on this deployment.",
     loadFailed: "Couldn't load membership status.",
     checkoutSuccess: "Payment confirmed. Your lifetime membership is active.",
-    checkoutPending: "Payment is still being confirmed. Your access will update automatically.",
+    checkoutPending:
+      "Payment is still being confirmed. Your access will update automatically.",
     checkoutCancelled: "Checkout was cancelled. You were not charged.",
     checkoutFailed: "Checkout couldn't be completed. Please try again.",
+  },
+  mcp: {
+    title: "Agent document access (MCP)",
+    description:
+      "Let Codex, Claude Code, OpenCode, and other standard MCP agents read or edit your Koinote documents within the scope you grant.",
+    membersOnly:
+      "MCP access is a paid-member benefit. Upgrade to create revocable, expiring access tokens.",
+    upgrade: "Upgrade to lifetime",
+    tokenName: "Token name",
+    scope: "Scope",
+    readOnly: "Read only",
+    readWrite: "Read and write",
+    expiry: "Expires in",
+    days: "{n} days",
+    create: "Create token",
+    createFailed: "Could not create the token. Please try again.",
+    secretStored:
+      "The token is stored encrypted and can be viewed or copied again below.",
+    activeTokens: "Active tokens",
+    loading: "Loading…",
+    loadFailed: "Could not load tokens",
+    empty: "No active tokens yet.",
+    expires: "Expires",
+    lastUsed: "Last used",
+    reveal: "View",
+    hide: "Hide",
+    revealFailed: "Could not reveal the token. Please try again.",
+    legacyNotRevealable:
+      "This legacy token cannot be recovered. It still works, or you can revoke and recreate it.",
+    revoke: "Revoke",
+    revokeConfirm:
+      "Connected agents will lose access immediately. Revoke this token?",
+  },
+  documentHistorySettings: {
+    title: "Version history",
+    description: "Choose whether documents keep recovery versions and how web and Agent writes are retained.",
+    membersOnly: "Version history is a lifetime membership benefit. Upgrade to configure retention.",
+    enabled: "Enable version history",
+    enabledHint: "Turning this off stops new browser snapshots without deleting retained versions; Agent writes still keep the latest safety snapshot.",
+    perDocumentMax: "Versions per document",
+    limitHint: "This is a per-document limit; all documents share the account-wide cap of {accountMax} versions. Lowering it prunes older snapshots immediately.",
+    mcpEnabled: "Keep full history for MCP writes",
+    mcpEnabledHint:
+      "When off, Agent writes still keep the latest safety snapshot so a full replacement remains recoverable. It counts toward the version limits.",
+    loading: "Loading version history settings…",
+    loadFailed: "Could not load version history settings",
+    save: "Save settings",
+    saved: "Settings saved",
+    saveFailed: "Could not save settings. Please try again.",
   },
   invitations: {
     title: "Invitation rewards",
     headline: "Invite a friend — you both get {reward}",
-    description: "When a friend registers through your personal link, both accounts permanently gain {reward} of cloud storage.",
+    description:
+      "When a friend registers through your personal link, both accounts permanently gain {reward} of cloud storage.",
     copyLink: "Copy invitation link",
     copied: "Copied",
     successful: "Successful invites",
@@ -166,6 +277,22 @@ export const en: Messages = {
     subtitle: "View and continue editing documents saved in the cloud.",
     emptyHint: "No cloud documents yet. ",
     emptyLinkText: "Create your first document",
+  },
+  trashPage: {
+    title: "Trash",
+    subtitle:
+      "Documents are kept for 30 days and continue to use cloud storage during that time.",
+    backToDocuments: "Back to documents",
+    empty: "Trash is empty.",
+    deletesOn: "Permanently deleted on {date}",
+    restore: "Restore",
+    deletePermanently: "Delete permanently",
+    permanentWarning:
+      "Permanent deletion also removes version history and cannot be undone. Continue?",
+    typeToConfirm: "Type “{title}” to confirm permanent deletion:",
+    loadFailed: "Could not load trash. Please try again.",
+    actionFailed:
+      "The action failed. Check the confirmation text or try again.",
   },
   invitationsPage: {
     title: "Invite friends",
@@ -232,6 +359,29 @@ export const en: Messages = {
     saved: "Saved",
     charCount: "{n} chars",
     saveFailed: "Save failed",
+    resolveConflict: "Resolve conflict",
+    conflictTitle: "This document changed elsewhere",
+    conflictDescription:
+      "Your local draft is on the left and the latest cloud version is on the right. Edit the merged draft on the left, or accept the cloud version.",
+    localDraft: "Local draft (editable)",
+    remoteVersion: "Latest cloud version",
+    useRemote: "Use cloud version",
+    saveMerged: "Save merged draft",
+    conflictLoadFailed:
+      "Could not load the cloud version. Your local draft remains saved in this browser.",
+    conflictSaveFailed:
+      "The document changed again while saving. Reload and merge again.",
+    history: "History",
+    historyTitle: "Version history",
+    historyDescription: "Inspect and restore the versions currently retained for this document.",
+    historyEmpty: "No recovery versions yet.",
+    historyLoadFailed: "Could not load version history",
+    historyRestoreFailed: "Could not restore this version",
+    historyConflict:
+      "The document changed again. Close and reopen version history.",
+    restoreVersion: "Restore this version",
+    historySource: { web: "Web editor", mcp: "MCP Agent", restore: "Restore" },
+    historySafetySnapshot: "Safety snapshot",
     untitled: "Untitled",
     titlePlaceholder: "Document title",
     loginRequired: "Please sign in first",
@@ -243,8 +393,9 @@ export const en: Messages = {
     documentsPanel: "Documents",
     outlinePanel: "Outline",
     newDocument: "New document",
-    deleteDocument: "Delete document",
-    deleteConfirm: "Delete “{title}”? This cannot be undone.",
+    deleteDocument: "Move to trash",
+    deleteConfirm:
+      "Move “{title}” to trash? You can restore it within 30 days.",
     deleteSaveFailed:
       "The latest changes could not be saved, so the document was not deleted. Check your connection and try again.",
     emptyDocuments: "No documents yet — create one above",
@@ -255,7 +406,8 @@ export const en: Messages = {
     resizeOutline: "Resize outline panel",
     uploadFailed: "Image upload failed",
     uploadingImages: "Uploading {n}…",
-    rehostFailed: "Some images could not be copied to your image store and still point at the original site",
+    rehostFailed:
+      "Some images could not be copied to your image store and still point at the original site",
     imageClickToEdit: "Click to edit image Markdown (caption and URL)",
     imageMarkdownLabel: "Image Markdown source",
     imageBroken: "Image failed to load — click to edit the URL",
@@ -263,11 +415,13 @@ export const en: Messages = {
     share: "Share",
     shareTitle: "Share this document",
     shareAccessLink: "Anyone with the link",
-    shareAccessLinkHint: "The link is random and unguessable, but works for anyone who has it",
+    shareAccessLinkHint:
+      "The link is random and unguessable, but works for anyone who has it",
     shareTokenRotated:
       "A new link was generated: removing the password invalidated the old link immediately. If you already sent the old one, share again.",
     shareAccessPassword: "Password required",
-    shareAccessPasswordHint: "Visitors must enter a password, at least 6 characters",
+    shareAccessPasswordHint:
+      "Visitors must enter a password, at least 6 characters",
     sharePasswordPlaceholder: "Set an access password",
     shareEnable: "Enable sharing",
     shareUpdate: "Update settings",
@@ -292,9 +446,11 @@ export const en: Messages = {
     exportDOCX: "Word (.docx)",
     exportPDFHint: "Downloads directly; text becomes an image",
     exportPrint: "Print / Save as PDF",
-    exportPrintHint: "Selectable, searchable text — choose “Save as PDF” in the dialog",
+    exportPrintHint:
+      "Selectable, searchable text — choose “Save as PDF” in the dialog",
     wechatExport: "WeChat Official Account",
-    wechatExportHint: "Pick a theme, then paste straight into the WeChat editor",
+    wechatExportHint:
+      "Pick a theme, then paste straight into the WeChat editor",
     wechatTitle: "Export for WeChat",
     wechatSubtitle:
       "Styles are inlined per element so formatting survives the paste. Formulas become uploaded images.",
@@ -384,6 +540,7 @@ function hello(name) {
     brandCn: "锦鲤笔记",
     product: "Product",
     editor: "Editor",
+    pricing: "Pricing",
     dashboard: "Dashboard",
     home: "Home",
     built: "We also built",
@@ -471,7 +628,7 @@ function hello(name) {
           title: "Termination",
           body: [
             "We may suspend or terminate access in cases of abuse, fraud, security risk, or breach of these terms. You may stop using the service at any time.",
-            "When an account or document is deleted, the associated images are removed from the image store by an asynchronous background job, usually within minutes.",
+            "Documents first enter a 30-day trash. Related images are removed asynchronously only after permanent deletion or expiry, and only when no other document references them.",
           ],
         },
         {
@@ -547,7 +704,7 @@ function hello(name) {
         {
           title: "Retention and Deletion",
           body: [
-            "Documents are removed from the database as soon as you delete them. Images they referenced — and that none of your other documents reference — are queued for deletion by a background job.",
+            "Documents first enter a 30-day trash, where content, versions, images, and storage usage remain. After permanent deletion or expiry, images not referenced by another document are queued for background deletion.",
             "To delete your entire account and all its data, email us.",
           ],
         },
@@ -628,16 +785,21 @@ function hello(name) {
     bad_request: "Invalid request",
     missing_fields: "Username, email and password are all required",
     invalid_email: "Invalid email format",
-    invalid_invitation_code: "That invitation code is invalid. Check it and try again",
+    invalid_invitation_code:
+      "That invitation code is invalid. Check it and try again",
     email_already_registered: "This email is already registered",
     verification_code_required: "Enter the email verification code",
     invalid_verification_code: "The verification code is incorrect",
     verification_code_expired: "The verification code expired. Send a new one",
-    verification_attempts_exceeded: "Too many incorrect attempts. Send a new code",
-    verification_rate_limited: "Too many verification requests. Please try again later",
-    email_send_failed: "The verification email could not be sent. Please try again",
+    verification_attempts_exceeded:
+      "Too many incorrect attempts. Send a new code",
+    verification_rate_limited:
+      "Too many verification requests. Please try again later",
+    email_send_failed:
+      "The verification email could not be sent. Please try again",
     email_not_verified: "This email address has not been verified",
-    email_already_verified: "This email is already verified. Return to the regular login",
+    email_already_verified:
+      "This email is already verified. Return to the regular login",
     password_too_short: "Password must be at least 6 characters",
     conflict: "Email or username is already taken",
     invalid_credentials: "Incorrect account or password",
@@ -664,8 +826,10 @@ function hello(name) {
     image_type_mismatch: "File contents don't match the declared format",
     image_svg_rejected: "SVG images aren't supported, for security reasons",
     image_too_large: "Image exceeds the 10 MB limit",
-    image_quota_exceeded: "Image storage is full — delete documents you no longer need to free up space",
-    storage_quota_exceeded: "Cloud storage is full — delete documents you no longer need to free up space",
+    image_quota_exceeded:
+      "Image storage is full — permanently delete unneeded documents from Trash",
+    storage_quota_exceeded:
+      "Cloud storage is full — permanently delete unneeded documents from Trash",
     image_empty: "The image is empty",
     share_not_found: "This link is invalid or has been revoked",
     share_access_invalid: "Invalid share access level",

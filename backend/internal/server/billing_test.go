@@ -186,6 +186,32 @@ func TestLifetimePriceForUsesAllowlistedCurrencies(t *testing.T) {
 	}
 }
 
+func TestBillingPricingIsPublicAndUsesConfiguredQuota(t *testing.T) {
+	app := newTestApp(config.Config{
+		ImageQuotaBytes:         768 * 1024 * 1024,
+		StripeSecretKey:         "sk_test_example",
+		StripeLifetimeProductID: "prod_lifetime",
+	})
+	recorder := httptest.NewRecorder()
+	app.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/billing/pricing", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("公开价目表状态码 = %d，响应 %s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=300, s-maxage=300, stale-while-revalidate=60" {
+		t.Fatalf("公开价目表 Cache-Control = %q", got)
+	}
+	var response struct {
+		Pricing billingPricingPayload `json:"pricing"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("解析公开价目表: %v", err)
+	}
+	if !response.Pricing.BillingEnabled || response.Pricing.FreeStorageQuotaBytes != 768*1024*1024 ||
+		response.Pricing.LifetimeStorageQuotaBytes != lifetimeStorageQuotaBytes || len(response.Pricing.Prices) != 4 {
+		t.Fatalf("公开价目表内容不正确: %+v", response.Pricing)
+	}
+}
+
 func TestBillingCheckoutRateLimitIsPerUser(t *testing.T) {
 	app := newTestApp(config.Config{})
 	for range checkoutUserAttempts {

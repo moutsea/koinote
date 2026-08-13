@@ -50,7 +50,7 @@ export function TabBar({
     >
       {tabs.map((docId) => {
         const active = docId === activeDocId;
-        const failed = statusOf(docId) === "failed";
+        const failed = ["failed", "conflict"].includes(statusOf(docId));
         return (
           <div
             key={docId}
@@ -79,7 +79,13 @@ export function TabBar({
           >
             <span
               className={`min-w-0 truncate ${failed ? "text-red-600 dark:text-red-400" : ""}`}
-              title={failed ? t.editor.saveFailed : titleOf(docId)}
+              title={
+                statusOf(docId) === "conflict"
+                  ? t.editor.resolveConflict
+                  : failed
+                    ? t.editor.saveFailed
+                    : titleOf(docId)
+              }
             >
               {titleOf(docId) || t.editor.untitled}
             </span>

@@ -13,8 +13,10 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 export interface Messages {
   nav: {
     editor: string;
+    pricing: string;
     dashboard: string;
     documents: string;
+    trash: string;
     invitations: string;
     admin: string;
     login: string;
@@ -29,6 +31,38 @@ export interface Messages {
     ctaStart: string;
     ctaRegister: string;
     features: Array<{ title: string; desc: string }>;
+    mcp: {
+      eyebrow: string;
+      title: string;
+      description: string;
+      agents: string;
+      steps: Array<{ title: string; desc: string }>;
+      cta: string;
+    };
+  };
+  pricing: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    freeName: string;
+    freeDescription: string;
+    freePrice: string;
+    freePeriod: string;
+    lifetimeName: string;
+    lifetimeDescription: string;
+    lifetimePeriod: string;
+    recommended: string;
+    included: string;
+    freeFeatures: string[];
+    lifetimeFeatures: string[];
+    loginToUpgrade: string;
+    manageMembership: string;
+    active: string;
+    loading: string;
+    loadFailed: string;
+    unavailable: string;
+    faqTitle: string;
+    faqs: Array<{ question: string; answer: string }>;
   };
   auth: {
     loginTitle: string;
@@ -124,6 +158,49 @@ export interface Messages {
     checkoutCancelled: string;
     checkoutFailed: string;
   };
+  mcp: {
+    title: string;
+    description: string;
+    membersOnly: string;
+    upgrade: string;
+    tokenName: string;
+    scope: string;
+    readOnly: string;
+    readWrite: string;
+    expiry: string;
+    days: string;
+    create: string;
+    createFailed: string;
+    secretStored: string;
+    activeTokens: string;
+    loading: string;
+    loadFailed: string;
+    empty: string;
+    expires: string;
+    lastUsed: string;
+    reveal: string;
+    hide: string;
+    revealFailed: string;
+    legacyNotRevealable: string;
+    revoke: string;
+    revokeConfirm: string;
+  };
+  documentHistorySettings: {
+    title: string;
+    description: string;
+    membersOnly: string;
+    enabled: string;
+    enabledHint: string;
+    perDocumentMax: string;
+    limitHint: string;
+    mcpEnabled: string;
+    mcpEnabledHint: string;
+    loading: string;
+    loadFailed: string;
+    save: string;
+    saved: string;
+    saveFailed: string;
+  };
   invitations: {
     title: string;
     headline: string;
@@ -155,6 +232,19 @@ export interface Messages {
     subtitle: string;
     emptyHint: string;
     emptyLinkText: string;
+  };
+  trashPage: {
+    title: string;
+    subtitle: string;
+    backToDocuments: string;
+    empty: string;
+    deletesOn: string;
+    restore: string;
+    deletePermanently: string;
+    permanentWarning: string;
+    typeToConfirm: string;
+    loadFailed: string;
+    actionFailed: string;
   };
   invitationsPage: {
     title: string;
@@ -216,6 +306,25 @@ export interface Messages {
     saving: string;
     saved: string;
     saveFailed: string;
+    resolveConflict: string;
+    conflictTitle: string;
+    conflictDescription: string;
+    localDraft: string;
+    remoteVersion: string;
+    useRemote: string;
+    saveMerged: string;
+    conflictLoadFailed: string;
+    conflictSaveFailed: string;
+    history: string;
+    historyTitle: string;
+    historyDescription: string;
+    historyEmpty: string;
+    historyLoadFailed: string;
+    historyRestoreFailed: string;
+    historyConflict: string;
+    restoreVersion: string;
+    historySource: Record<"web" | "mcp" | "restore", string>;
+    historySafetySnapshot: string;
     charCount: string; // 用 {n} 占位
     sample: string;
     untitled: string;
@@ -339,6 +448,7 @@ export interface Messages {
     brandCn: string;
     product: string;
     editor: string;
+    pricing: string;
     dashboard: string;
     home: string;
     built: string;

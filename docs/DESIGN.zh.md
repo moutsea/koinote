@@ -16,6 +16,7 @@
 - [认证与安全](#认证)
 - [邀请奖励](#邀请奖励)
 - [会员与支付](#会员与支付)
+- [MCP 文档访问](#mcp-文档访问)
 - [管理后台](#管理后台)
 - [分享](#分享)
 - [导出](#导出)
@@ -28,7 +29,7 @@
 ```
 浏览器 ──▶ Cloudflare Worker (worker/index.ts)
               ├─ 托管 Vite 打的 SPA 静态资源 (spa/dist)
-              └─ /api/*、/health ──▶ 反向代理到 Go 后端
+              └─ /api/*、/health、/mcp ──▶ 反向代理到 Go 后端
                                           │
                                     ┌─────▼────────────────┐
                                     │ docker-compose:      │
@@ -339,6 +340,91 @@ Product、金额、币种和 Customer 参数一起生成指纹。Stripe 对同�
 配额不是前端显示值：图片记账、文档创建、文档更新、存储用量四条路径都调用
 `storageQuotaFor(user)`。这样数据库刚发放会员后，下一次写入就直接获得 10 GiB 加受限邀请奖励，
 未来 AI 鉴权也可复用同一个会员等级，而不必再查 Stripe。
+
+## MCP 文档访问
+
+MCP 是 Koinote 暴露给 Codex、Claude Code 等 Agent 客户端的文档操作协议。模型推理发生在
+客户端；Koinote 只提供工具与数据，因此服务端不调用 LLM，也不需要 OpenAI、Anthropic
+等模型 API Key。当前入口是 Streamable HTTP `POST /mcp`，使用官方 Go MCP SDK 的无状态
+JSON 响应模式。Worker 只精确代理 `/mcp`，保持请求 body stream，不解析或重编码协议内容。
+
+### 为什么协议层在 Go，而不是 Worker / Durable Object
+
+MCP 的身份、会员等级、文档授权、版本和审计真值都在 PostgreSQL 与 Go 后端。若把协议层
+放进 Worker，它仍要先回后端认证，再把每个工具调用转回后端，多一跳却没有新增决策能力。
+文档 CRUD 也是无状态请求，不需要 Durable Object 的会话状态、迁移与额外计费。Worker
+因此只承担和 `/api/*` 相同的边缘反向代理职责，所有权限判断都留在 Go。
+
+### 为什么第一版使用 PAT，而不是 OAuth
+
+第一版只面向终生会员，并采用账户页创建的个人访问令牌：`read` 或 `write` scope、1–365 天
+有效期、逐个撤销，最多 20 个有效令牌。明文带 `knt_mcp_` 前缀；数据库用 SHA-256 摘要鉴权，
+同时以独立密钥做 AES-GCM 加密，账号本人可通过带限流的专用接口按需再次查看。列表接口只
+返回尾号提示，不批量下发明文。令牌本身有 256 位随机熵，哈希不需要承担低熵密码的抗暴力
+破解职责。
+
+每次请求都会重新查询 token 与用户，检查撤销、过期和 `membership_tier=lifetime`，所以
+已建立的无状态客户端不会绕过后续撤销或会员降级。认证查询故障返回 500，不伪装成 401。
+每 token 每分钟最多 120 个请求，请求体最多 2 MiB；PAT 管理响应带 `Cache-Control: no-store`。
+限流目前与站内其他限流一样是进程内的，多实例前应迁到共享存储。
+
+PAT 对 CLI 客户端是一等公民，也避免为了首版引入 OAuth 2.1 的授权服务器元数据、受保护
+资源元数据、动态客户端注册和授权 UI。等有大量第三方用户需要浏览器授权时，再评估 OAuth；
+现在先把较小、可撤销且容易审计的信任边界做扎实。
+
+### 工具与授权边界
+
+只读令牌暴露：
+
+- `list_documents`：按最近修改分页列出摘要，不返回正文
+- `search_documents`：只搜标题，避免对 1 MiB 正文做无索引全表扫描
+- `get_document`：按 Unicode 字符 offset/limit 分段读取，并返回总长度与 `hasMore`
+- `list_document_versions` / `get_document_version`：查看保留的恢复点
+- `list_trashed_documents`：列出 30 天回收站中的摘要和自动删除时间
+
+读写令牌额外暴露 `create_document`、`append_to_document`、`update_document` 与
+`restore_document_version`，以及带 `expectedRevision` 的 `trash_document`、
+`restore_trashed_document`。MCP 不暴露永久删除；永久删除只允许网页回收站在再次确认并输入
+标题后调用。普通删除只是设置 `trashed_at`，30 天内仍计入配额、保留版本并保护图片引用；
+后台每小时清理到期行，届时才删除版本并把真正孤儿的图片交给 R2 GC。所有查询都同时按 `user_id` 和
+`doc_id` 过滤，也不读取公开分享，因此提示注入最多影响持有该 token 的客户端上下文，不能
+跨账号扩大数据范围。真正的写入隔离来自 scope，而不是一条“内容不可信”的提示词。
+
+审计日志只保存 user、token、工具名、文档 ID、成功/失败和耗时，不记录正文或明文 token，
+并由后端每日清理超过 180 天的记录，避免高频工具调用让运维元数据无界增长。
+协议工具的业务错误给 Agent 返回可行动的信息（如重新读取最新 revision），数据库内部错误
+则统一对外为 `internal server error`。
+
+### 版本历史先于 Agent 写入
+
+整篇覆盖的破坏力不低于删除，所以开放 `update_document` 前先建立了版本历史和网页/MCP
+共用的 revision compare-and-swap：每次真实修改 revision 加一，相同内容的 no-op 不增加；
+客户端收到成功响应前断线后，用旧 revision 重试同一内容会幂等返回当前文档，旧 revision
+配不同内容才冲突。追加与恢复也要求 `expectedRevision`，不是用“追加天然安全”掩盖并发覆盖。
+
+网页自动保存同样发送 revision。若 Agent 在网页标签打开期间修改文档，下一次网页保存收到
+409，不会把 Agent 内容静默覆盖；本地草稿写入 localStorage，刷新后仍能进入合并界面。用户
+可采用远端，也可编辑本地标题与正文后用最新 revision 保存；远端再次变化会再次冲突。明确
+覆盖时强制保存被覆盖状态，历史恢复本身也走 CAS，并把恢复前的当前状态再留一版。
+
+只有终生会员保存历史。默认开启历史、每篇保留 20 版并为 MCP 写入保存完整旧状态；用户可在
+账户页或通过读写 MCP token 调整为每篇 1–100 版，也可关闭网页等常规新快照，或关闭 MCP
+完整历史。关闭 MCP 完整历史不会让 Agent 的整篇覆盖变得不可恢复：每篇仍维护最近 1 个
+MCP 安全快照，下一次 Agent 写入会替换旧安全快照；后续产生完整版本时也会移除重复的安全
+快照。安全快照与普通版本共享每篇上限和账号总计 100 版的上限，不形成隐藏额度。关闭设置
+不会删除已有版本，降低单篇上限会立即裁剪。频繁网页自动保存最多每五分钟保存一次，避免每
+800 ms 防抖写入制造一版。
+
+读写 scope 的 token 可以修改这套账户级保留策略，不只可以改文档内容。这项权限是刻意开放的，
+但不能绕过恢复安全边界：设置变更无法关闭 revision CAS、会员校验、每篇/账号上限，也无法关闭
+强制保留的最近 1 个 MCP 安全快照。即使 Agent 在整篇覆盖前同时关闭常规历史和 MCP 完整历史，
+被覆盖状态仍能从安全快照恢复。若未来要移除强制安全快照，必须先把设置工具拆到独立 scope，或
+不再向读写 token 暴露。
+
+历史正文不计入用户的云存储字节配额，但其中引用的图片继续阻止 R2 GC；版本淘汰或文档删除后
+重新检查引用，再异步回收真正孤儿的对象。当前引用复查会在最坏情况下顺序扫描该用户的全部
+历史正文，数据规模增长后应改为独立的版本图片引用表或等价索引结构。文档与图片配额变更共用
+用户级 advisory transaction lock，防止并发请求都基于旧用量通过检查。
 
 ## 管理后台
 
@@ -739,10 +825,10 @@ curl https://你的域名/api/images/config
 
 ## 验证
 
-一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 27 个断言套件）：
+一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 29 个断言套件）：
 
 ```bash
-npm test          # typecheck × 2 + 27 个套件，失败即停
+npm test          # typecheck × 2 + 29 个套件，失败即停
 npm run go:test   # go vet + go test（后端）
 ```
 
@@ -755,6 +841,11 @@ npm run go:test   # go vet + go test（后端）
 > `npm run` 的退出码仍是 0。
 
 后端：`cd backend && go test ./...`（CI 里带 `-race`）。
+
+MCP：`npm run test:mcp` 检查 Worker/Vite/后端路由、会员入口，以及只开放可恢复删除而不开放永久删除；Go 测试使用
+官方 SDK 完成 Streamable HTTP 握手，并在真实 PostgreSQL 下覆盖 PAT 哈希与即时撤销、
+read/write 工具集、文档读写、revision 冲突与幂等重试、版本保留、并发 CAS、审计以及
+历史图片的 GC 保护。
 
 Worker：`npm run test:worker` —— `normalizeImageBase` 的 21 条纯函数断言。
 `npm run test:security-headers` —— 安全响应头的 35 条断言。

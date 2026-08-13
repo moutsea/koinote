@@ -69,11 +69,19 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.oauthCallback)
 
 	mux.HandleFunc("GET /api/billing/status", a.billingStatus)
+	mux.HandleFunc("GET /api/billing/pricing", a.billingPricing)
 	mux.HandleFunc("POST /api/billing/checkout", a.billingCheckout)
 	mux.HandleFunc("POST /api/billing/checkout/confirm", a.billingCheckoutConfirm)
 	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
 	mux.HandleFunc("GET /api/invitations", a.invitationsOverview)
+	mux.HandleFunc("GET /api/mcp/tokens", a.mcpTokensList)
+	mux.HandleFunc("POST /api/mcp/tokens", a.mcpTokenCreate)
+	mux.HandleFunc("POST /api/mcp/tokens/{tokenId}/reveal", a.mcpTokenReveal)
+	mux.HandleFunc("DELETE /api/mcp/tokens/{tokenId}", a.mcpTokenRevoke)
+	mux.HandleFunc("GET /api/settings/document-history", a.documentHistorySettingsGet)
+	mux.HandleFunc("PUT /api/settings/document-history", a.documentHistorySettingsPut)
+	mux.Handle("/mcp", a.mcpHandler())
 
 	mux.HandleFunc("GET /api/folders", a.foldersList)
 	mux.HandleFunc("POST /api/folders", a.folderCreate)
@@ -95,9 +103,15 @@ func (a *App) Routes() http.Handler {
 
 	mux.HandleFunc("GET /api/documents", a.documentsList)
 	mux.HandleFunc("POST /api/documents", a.documentCreate)
+	mux.HandleFunc("GET /api/documents/trash", a.documentsTrashList)
+	mux.HandleFunc("POST /api/documents/{docId}/restore", a.documentRestore)
+	mux.HandleFunc("DELETE /api/documents/{docId}/permanent", a.documentPurge)
 	mux.HandleFunc("GET /api/documents/{docId}", a.documentGet)
 	mux.HandleFunc("PUT /api/documents/{docId}", a.documentUpdate)
 	mux.HandleFunc("DELETE /api/documents/{docId}", a.documentDelete)
+	mux.HandleFunc("GET /api/documents/{docId}/versions", a.documentVersionsList)
+	mux.HandleFunc("GET /api/documents/{docId}/versions/{revision}", a.documentVersionGet)
+	mux.HandleFunc("POST /api/documents/{docId}/versions/{revision}/restore", a.documentVersionRestore)
 
 	// 分享：前两条需登录且限本人文档，后两条公开（token 即凭证）
 	mux.HandleFunc("POST /api/documents/{docId}/share", a.shareCreate)

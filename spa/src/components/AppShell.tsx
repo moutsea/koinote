@@ -1,4 +1,9 @@
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Moon,
@@ -13,10 +18,17 @@ import {
   LayoutDashboard,
   LogOut,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
-import { useI18n, interpolate, LOCALES, LOCALE_LABELS, type Locale } from "../i18n";
+import {
+  useI18n,
+  interpolate,
+  LOCALES,
+  LOCALE_LABELS,
+  type Locale,
+} from "../i18n";
 import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
 import { formatBytes, usageLevel, usageRatio } from "../storage";
 import { AppFooter } from "./AppFooter";
@@ -65,7 +77,10 @@ export function AppShell() {
             内边距取 EDGE_PADDING，与通栏正文同源：编辑器页侧栏的左边缘要和 logo
             对齐，两边各写一个 px-3 的话改了一处就差几个像素。 */}
         <div className={`flex h-14 w-full items-center gap-3 ${EDGE_PADDING}`}>
-          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
+          <Link
+            to="/"
+            className="flex items-center gap-2 font-semibold tracking-tight"
+          >
             {/* 9（36px）而不是 5（20px）：这是水墨笔触，笔丝在小尺寸下会被
                 重采样平均掉 —— 20px 时整条尾巴淡成一道钩，认不出是鱼尾 */}
             <Logo className="h-9 w-9" />
@@ -84,6 +99,9 @@ export function AppShell() {
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
+            <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
+              {t.nav.pricing}
+            </HeaderLink>
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
@@ -97,11 +115,17 @@ export function AppShell() {
               type="button"
               aria-label={t.common.theme}
               title={t.common.theme}
-              onClick={() => setTheme((cur) => (cur === "dark" ? "light" : "dark"))}
+              onClick={() =>
+                setTheme((cur) => (cur === "dark" ? "light" : "dark"))
+              }
               className="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--ink-wash-strong)]"
               style={{ color: "var(--ink-mid)" }}
             >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
             </button>
 
             {session.isLoading ? null : user ? (
@@ -113,6 +137,7 @@ export function AppShell() {
                 isAdmin={user.isAdmin}
                 dashboardActive={isUnder(pathname, "/dashboard")}
                 documentsActive={isUnder(pathname, "/documents")}
+                trashActive={isUnder(pathname, "/trash")}
                 invitationsActive={isUnder(pathname, "/invitations")}
                 adminActive={isUnder(pathname, "/admin")}
                 onLogout={handleLogout}
@@ -158,6 +183,7 @@ function UserMenu({
   isAdmin,
   dashboardActive,
   documentsActive,
+  trashActive,
   invitationsActive,
   adminActive,
   onLogout,
@@ -170,6 +196,7 @@ function UserMenu({
   isAdmin: boolean;
   dashboardActive: boolean;
   documentsActive: boolean;
+  trashActive: boolean;
   invitationsActive: boolean;
   adminActive: boolean;
   onLogout: () => void | Promise<void>;
@@ -246,7 +273,10 @@ function UserMenu({
               </p>
               {/* 昵称存在时 name 就不是邮箱，这时补一行邮箱；相等则不重复显示 */}
               {email && email !== name && (
-                <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }}>
+                <p
+                  className="truncate text-xs"
+                  style={{ color: "var(--ink-faint)" }}
+                >
                   {email}
                 </p>
               )}
@@ -268,7 +298,10 @@ function UserMenu({
               {membershipActive && (
                 <span
                   className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                  style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+                  style={{
+                    background: "var(--cinnabar-soft)",
+                    color: "var(--cinnabar)",
+                  }}
                 >
                   {t.membership.activeBadge}
                 </span>
@@ -296,12 +329,14 @@ function UserMenu({
 
           {!membershipActive && (
             <Link
-              to="/dashboard"
-              hash="membership"
+              to="/pricing"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="mx-2 my-1.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition hover:opacity-80"
-              style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+              style={{
+                background: "var(--cinnabar-soft)",
+                color: "var(--cinnabar)",
+              }}
             >
               <Crown className="h-4 w-4 shrink-0" />
               {t.membership.purchase}
@@ -337,12 +372,28 @@ function UserMenu({
           </Link>
 
           <Link
+            to="/trash"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: trashActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: trashActive ? 500 : undefined,
+            }}
+          >
+            <Trash2 className="h-4 w-4 shrink-0" />
+            {t.nav.trash}
+          </Link>
+
+          <Link
             to="/invitations"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
             style={{
-              color: invitationsActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              color: invitationsActive
+                ? "var(--cinnabar)"
+                : "var(--ink-strong)",
               fontWeight: invitationsActive ? 500 : undefined,
             }}
           >
@@ -483,7 +534,10 @@ function LocaleSwitcher({
             >
               <span>{LOCALE_LABELS[l]}</span>
               {l === locale && (
-                <Check className="h-4 w-4" style={{ color: "var(--cinnabar)" }} />
+                <Check
+                  className="h-4 w-4"
+                  style={{ color: "var(--cinnabar)" }}
+                />
               )}
             </button>
           ))}
@@ -498,7 +552,7 @@ function HeaderLink({
   active,
   children,
 }: {
-  to: string;
+  to: "/editor" | "/pricing";
   active: boolean;
   children: React.ReactNode;
 }) {

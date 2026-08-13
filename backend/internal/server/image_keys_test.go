@@ -1,16 +1,102 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
 	hexA = "0123456789abcdef"
 	hexB = "fedcba9876543210"
 )
+
+func TestImageKeyPatternCaptureContract(t *testing.T) {
+	if got := imageKeyPattern.NumSubexp(); got != 3 {
+		t.Fatalf("imageKeyPattern 捕获组数 = %d，期望 3；SQL 依赖 matches[1..3] 分别是 owner、hex、ext", got)
+	}
+
+	match := imageKeyPattern.FindStringSubmatch("/images/u/alice/01234567.webp?v=2")
+	want := []string{"u/alice/01234567.webp", "alice", "01234567", "webp"}
+	if !reflect.DeepEqual(match, want) {
+		t.Fatalf("imageKeyPattern 捕获结果 = %v，期望 %v", match, want)
+	}
+}
+
+func TestImageKeyPatternMatchesPostgres(t *testing.T) {
+	dsn := strings.TrimSpace(os.Getenv("TEST_DATABASE_URL"))
+	if dsn == "" {
+		t.Skip("未设 TEST_DATABASE_URL，跳过 Go/PostgreSQL 正则等价测试（CI 里会跑）")
+	}
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("连库失败: %v", err)
+	}
+	defer pool.Close()
+
+	maxOwner := strings.Repeat("a", 128)
+	tooLongOwner := strings.Repeat("b", 129)
+	maxHex := strings.Repeat("c", 64)
+	tooLongHex := strings.Repeat("d", 65)
+	content := strings.Join([]string{
+		"min https://img.koinote.app/u/a/01234567.png",
+		"max /images/u/" + maxOwner + "/" + maxHex + ".webp?download=1",
+		"nested https://example.com/archive/u/outer/u/inner/89abcdef.jpg",
+		"uppercase-extension /images/u/alice/01234567.PNG",
+		"uppercase-hex /images/u/alice/0123456A.png",
+		"short-hex /images/u/alice/0123456.png",
+		"long-hex /images/u/alice/" + tooLongHex + ".png",
+		"long-owner /images/u/" + tooLongOwner + "/01234567.gif",
+		"unsupported /images/u/alice/01234567.svg",
+		"duplicate /images/u/a/01234567.png",
+	}, "\n")
+
+	goMatches := make([][]string, 0)
+	for _, match := range imageKeyPattern.FindAllStringSubmatch(content, -1) {
+		goMatches = append(goMatches, append([]string(nil), match[1:]...))
+	}
+	wantMatches := [][]string{
+		{"a", "01234567", "png"},
+		{maxOwner, maxHex, "webp"},
+		{"inner", "89abcdef", "jpg"},
+		{"a", "01234567", "png"},
+	}
+	if !reflect.DeepEqual(goMatches, wantMatches) {
+		t.Fatalf("边界样本的 Go 捕获结果 = %v，期望 %v", goMatches, wantMatches)
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT matches[1], matches[2], matches[3]
+		FROM regexp_matches($1, $2, 'g') AS matches
+	`, content, imageKeyPattern.String())
+	if err != nil {
+		t.Fatalf("PostgreSQL regexp_matches 失败: %v", err)
+	}
+	defer rows.Close()
+
+	postgresMatches := make([][]string, 0)
+	for rows.Next() {
+		var owner, hex, ext string
+		if err := rows.Scan(&owner, &hex, &ext); err != nil {
+			t.Fatalf("读取 PostgreSQL 捕获结果失败: %v", err)
+		}
+		postgresMatches = append(postgresMatches, []string{owner, hex, ext})
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("遍历 PostgreSQL 捕获结果失败: %v", err)
+	}
+
+	if !reflect.DeepEqual(postgresMatches, goMatches) {
+		t.Fatalf("Go 与 PostgreSQL 正则捕获不一致\nGo:         %v\nPostgreSQL: %v", goMatches, postgresMatches)
+	}
+}
 
 func TestExtractOwnedImageKeys(t *testing.T) {
 	tests := []struct {

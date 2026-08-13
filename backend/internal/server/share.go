@@ -152,7 +152,7 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 	var existingHash sql.NullString
 	err := a.db.QueryRow(r.Context(), `
 		SELECT share_token, share_password_hash
-		FROM documents WHERE doc_id = $1 AND user_id = $2
+		FROM documents WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID).Scan(&existing, &existingHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
@@ -187,7 +187,7 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 		UPDATE documents
 		SET share_token = $3, share_access = $4, share_password_hash = $5,
 		    shared_at = COALESCE(shared_at, now())
-		WHERE doc_id = $1 AND user_id = $2
+		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID, token, access, hashArg); err != nil {
 		log.Printf("share create: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
@@ -224,7 +224,7 @@ func (a *App) shareRevoke(w http.ResponseWriter, r *http.Request) {
 		UPDATE documents
 		SET share_token = NULL, share_access = NULL,
 		    share_password_hash = NULL, shared_at = NULL
-		WHERE doc_id = $1 AND user_id = $2
+		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID)
 	if err != nil {
 		log.Printf("share revoke: %v", err)
@@ -259,7 +259,7 @@ func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDo
 		       d.updated_at, COALESCE(u.nickname, u.username)
 		FROM documents d
 		JOIN users u ON u.id = d.user_id
-		WHERE d.share_token = $1
+		WHERE d.share_token = $1 AND d.trashed_at IS NULL
 		LIMIT 1
 	`, token).Scan(
 		&doc.Title, &doc.Theme, &doc.Content, &access, &doc.PasswordHash,

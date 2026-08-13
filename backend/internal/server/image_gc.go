@@ -87,7 +87,8 @@ func (a *App) cancelPendingImageDeletions(ctx context.Context, user userRef, con
 	}
 }
 
-// enqueueOrphanedImages 找出 content 里属于该用户、且没有被他其它文档引用的图片，
+// enqueueOrphanedImages 找出 content 里属于该用户、且没有被他的当前文档或保留的
+// 历史版本引用的图片，
 // 排进回收队列。
 //
 // 「没被别的文档引用」这一步是必须的：同一张图可以被复制到多篇文档里（用户自己复制
@@ -96,29 +97,75 @@ func (a *App) cancelPendingImageDeletions(ctx context.Context, user userRef, con
 // 调用时机是文档已经从表里删掉之后 —— 所以下面那条查询天然不会把自己算进引用方。
 func (a *App) enqueueOrphanedImages(ctx context.Context, user userRef, content string) {
 	keys := extractOwnedImageKeys(content, user.AuthUserID)
+	a.enqueueOrphanedImageKeys(ctx, user, keys)
+}
+
+// enqueueOrphanedImageKeys 批量确认候选 key 是否仍被引用。
+//
+// 先从该用户的当前文档和历史版本中一次性抽出全部图片 key，再与候选集合做差集。
+// 这样删除一篇含多张图片的文档时只扫描一次正文，而不是每个 key 都全表扫描一遍。
+func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys []string) {
 	if len(keys) == 0 {
 		return
 	}
 
-	orphans := make([]string, 0, len(keys))
+	candidates := make([]string, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
-		var referenced bool
-		// 只在该用户自己的文档里找引用。别人的文档里即便出现同一个 key，那也是对方
-		// 写在正文里的一个外链地址，不构成「这张图还有人用」—— 图的归属看 key 前缀
-		err := a.db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM documents
-				WHERE user_id = $1 AND position($2 in content) > 0
-			)
-		`, user.ID, key).Scan(&referenced)
-		if err != nil {
-			// 查不动就别删 —— 宁可留着孤儿对象，也不能删掉还在用的图
-			log.Printf("image gc: 检查引用失败，跳过 %s: %v", key, err)
+		owner, ok := imageKeyOwner(key)
+		if !ok || owner != user.AuthUserID {
 			continue
 		}
-		if !referenced {
-			orphans = append(orphans, key)
+		if _, duplicate := seen[key]; duplicate {
+			continue
 		}
+		seen[key] = struct{}{}
+		candidates = append(candidates, key)
+	}
+	if len(candidates) == 0 {
+		return
+	}
+
+	rows, err := a.db.Query(ctx, `
+		WITH owned_contents AS (
+			SELECT content
+			FROM documents
+			WHERE user_id = $1
+			UNION ALL
+			SELECT v.content
+			FROM document_versions v
+			JOIN documents d ON d.id = v.document_id
+			WHERE d.user_id = $1
+		), referenced_keys AS (
+			SELECT DISTINCT 'u/' || matches[1] || '/' || matches[2] || '.' || matches[3] AS object_key
+			FROM owned_contents
+			CROSS JOIN LATERAL regexp_matches(content, $2, 'g') AS matches
+			WHERE matches[1] = $3
+		)
+		SELECT candidate
+		FROM unnest($4::text[]) AS candidate
+		WHERE NOT EXISTS (
+			SELECT 1 FROM referenced_keys WHERE object_key = candidate
+		)
+	`, user.ID, imageKeyPattern.String(), user.AuthUserID, candidates)
+	if err != nil {
+		// 查不动就别删 —— 宁可留着孤儿对象，也不能删掉还在用的图。
+		log.Printf("image gc: 批量检查引用失败，跳过 %d 个 key: %v", len(candidates), err)
+		return
+	}
+	defer rows.Close()
+	orphans := make([]string, 0, len(candidates))
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			log.Printf("image gc: 扫描孤儿 key 失败: %v", err)
+			return
+		}
+		orphans = append(orphans, key)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("image gc: 遍历孤儿 key 失败: %v", err)
+		return
 	}
 
 	if err := a.enqueueImageDeletions(ctx, user.ID, orphans); err != nil {
@@ -212,24 +259,27 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	keys := make([]string, 0, len(batch))
 	ids := make([]int, 0, len(batch))
 	var revived []int
+	userIDs := make([]int64, 0, len(batch))
+	ownedKeys := make([]string, 0, len(batch))
+	for _, pendingImage := range batch {
+		if pendingImage.userID.Valid {
+			userIDs = append(userIDs, pendingImage.userID.Int64)
+			ownedKeys = append(ownedKeys, pendingImage.key)
+		}
+	}
+	referencedKeys, referenceErr := a.referencedImageKeys(ctx, userIDs, ownedKeys)
+	if referenceErr != nil {
+		// 用户仍存在的对象全部留到下轮。user_id 已为 NULL 的账号删除遗留对象不需要
+		// 查引用，仍可继续回收。
+		log.Printf("image gc: 删除前批量复查引用失败: %v", referenceErr)
+	}
 	for _, p := range batch {
-		var referenced bool
-		if p.userID.Valid {
-			err := a.db.QueryRow(ctx, `
-				SELECT EXISTS (
-					SELECT 1 FROM documents
-					WHERE user_id = $2 AND position($1 in content) > 0
-				)
-			`, p.key, p.userID.Int64).Scan(&referenced)
-			if err != nil {
-				// 查不动就跳过这一个，留到下轮 —— 宁可晚点回收，也不能删掉可能还在用的图
-				log.Printf("image gc: 删除前复查引用失败，跳过 %s: %v", p.key, err)
-				continue
-			}
+		if p.userID.Valid && referenceErr != nil {
+			continue
 		}
 		// user_id 为 NULL 说明账号已经删除。此时已没有「所有者自己的文档」，
 		// 别人正文里的同 URL 只是外链，不能让这个对象永久占着存储。
-		if referenced {
+		if _, referenced := referencedKeys[p.key]; referenced {
 			// 重新被引用了，撤销这条删除令
 			revived = append(revived, p.id)
 			continue
@@ -335,6 +385,53 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 
 	log.Printf("image gc: 已回收 %d 个对象", len(keys))
 	return nil
+}
+
+func (a *App) referencedImageKeys(ctx context.Context, userIDs []int64, keys []string) (map[string]struct{}, error) {
+	referenced := make(map[string]struct{})
+	if len(keys) == 0 {
+		return referenced, nil
+	}
+	rows, err := a.db.Query(ctx, `
+		WITH candidates AS (
+			SELECT user_id, object_key
+			FROM unnest($1::bigint[], $2::text[]) AS candidate(user_id, object_key)
+		), owned_contents AS (
+			SELECT document.user_id, document.content
+			FROM documents AS document
+			WHERE document.user_id IN (SELECT DISTINCT user_id FROM candidates)
+			UNION ALL
+			SELECT document.user_id, version.content
+			FROM document_versions AS version
+			JOIN documents AS document ON document.id = version.document_id
+			WHERE document.user_id IN (SELECT DISTINCT user_id FROM candidates)
+		), extracted_keys AS (
+			SELECT DISTINCT content.user_id,
+				'u/' || matches[1] || '/' || matches[2] || '.' || matches[3] AS object_key
+			FROM owned_contents AS content
+			CROSS JOIN LATERAL regexp_matches(content.content, $3, 'g') AS matches
+		)
+		SELECT DISTINCT candidate.object_key
+		FROM candidates AS candidate
+		JOIN extracted_keys AS extracted
+		  ON extracted.user_id = candidate.user_id
+		 AND extracted.object_key = candidate.object_key
+	`, userIDs, keys, imageKeyPattern.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		referenced[key] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return referenced, nil
 }
 
 // gcBackoff 前 8 次按 1、2、4…分钟退避，之后每天慢速重试。

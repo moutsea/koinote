@@ -349,6 +349,8 @@ export default function MarkdownEditor({
         ? t.editor.saved
         : status === "failed"
           ? t.editor.saveFailed
+          : status === "conflict"
+            ? t.editor.resolveConflict
           : "";
 
   return (
@@ -379,7 +381,9 @@ export default function MarkdownEditor({
         {statusText && (
           <span
             className={`shrink-0 text-xs ${
-              status === "failed" ? "text-red-600 dark:text-red-400" : "text-neutral-400"
+              status === "failed" || status === "conflict"
+                ? "text-red-600 dark:text-red-400"
+                : "text-neutral-400"
             }`}
           >
             {statusText}

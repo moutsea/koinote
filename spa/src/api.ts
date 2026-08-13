@@ -95,7 +95,11 @@ async function toApiError(response: Response): Promise<ApiError> {
     // 忽略解析失败，落到状态码兜底
   }
 
-  if (code !== undefined && QUOTA_CODES.has(code) && typeof window !== "undefined") {
+  if (
+    code !== undefined &&
+    QUOTA_CODES.has(code) &&
+    typeof window !== "undefined"
+  ) {
     // 用量缺失时给 0/0：storage.ts 的 usageRatio 把 quota<=0 当作"满"，
     // 弹窗仍然能正确表达"没空间了"，只是数字显示为 0
     window.dispatchEvent(
@@ -174,6 +178,30 @@ export function getSession() {
   return apiJson<{ user: User }>("/api/auth/session");
 }
 
+export type DocumentHistorySettings = {
+  enabled: boolean;
+  perDocumentMax: number;
+  mcpEnabled: boolean;
+  available: boolean;
+  accountMax: number;
+};
+
+export function getDocumentHistorySettings() {
+  return apiJson<{ settings: DocumentHistorySettings }>(
+    "/api/settings/document-history",
+  );
+}
+
+export function updateDocumentHistorySettings(settings: Pick<
+  DocumentHistorySettings,
+  "enabled" | "perDocumentMax" | "mcpEnabled"
+>) {
+  return apiJson<{ settings: DocumentHistorySettings }>(
+    "/api/settings/document-history",
+    { method: "PUT", body: JSON.stringify(settings) },
+  );
+}
+
 // ---------- 会员与支付 ----------
 
 export type MembershipStatus = {
@@ -192,6 +220,17 @@ export type MembershipStatus = {
     currency: string;
   }>;
 };
+
+export type BillingPricing = {
+  billingEnabled: boolean;
+  freeStorageQuotaBytes: number;
+  lifetimeStorageQuotaBytes: number;
+  prices: MembershipStatus["prices"];
+};
+
+export function getBillingPricing() {
+  return apiJson<{ pricing: BillingPricing }>("/api/billing/pricing");
+}
 
 export function getMembershipStatus() {
   return apiJson<{ membership: MembershipStatus }>("/api/billing/status");
@@ -313,6 +352,7 @@ export type Document = {
   /** 微信排版主题 id，空串表示不套主题 */
   theme: string;
   content: string;
+  revision: number;
   createdAt?: string | null;
   updatedAt?: string | null;
   /** null 表示未分享 */
@@ -334,7 +374,16 @@ export type DocumentSummary = {
   title: string;
   /** null 表示在根下 */
   folderId: string | null;
+  revision: number;
   updatedAt?: string | null;
+};
+
+export type TrashedDocumentSummary = {
+  docId: string;
+  title: string;
+  revision: number;
+  trashedAt: string;
+  deletesAt: string;
 };
 
 export function listDocuments() {
@@ -361,11 +410,90 @@ export function getDocument(docId: string) {
 
 export function updateDocument(
   docId: string,
-  params: { title: string; content: string; theme?: string },
+  params: {
+    title: string;
+    content: string;
+    theme?: string;
+    expectedRevision: number;
+    forceVersion?: boolean;
+  },
 ) {
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "PUT", body: JSON.stringify(params) },
+  );
+}
+
+export type DocumentVersion = {
+  revision: number;
+  title: string;
+  theme: string;
+  content?: string;
+  source: "web" | "mcp" | "restore";
+  safetySnapshot: boolean;
+  createdAt?: string | null;
+};
+
+export function listDocumentVersions(docId: string) {
+  return apiJson<{ versions: DocumentVersion[] }>(
+    `/api/documents/${encodeURIComponent(docId)}/versions`,
+  );
+}
+
+export function getDocumentVersion(docId: string, revision: number) {
+  return apiJson<{ version: DocumentVersion }>(
+    `/api/documents/${encodeURIComponent(docId)}/versions/${revision}`,
+  );
+}
+
+export function restoreDocumentVersion(
+  docId: string,
+  revision: number,
+  expectedRevision: number,
+) {
+  return apiJson<{ document: Document }>(
+    `/api/documents/${encodeURIComponent(docId)}/versions/${revision}/restore`,
+    { method: "POST", body: JSON.stringify({ expectedRevision }) },
+  );
+}
+
+export type MCPToken = {
+  tokenId: string;
+  name: string;
+  hint: string;
+  scope: "read" | "write";
+  expiresAt?: string | null;
+  lastUsedAt?: string | null;
+  createdAt?: string | null;
+  revealable: boolean;
+};
+
+export function listMCPTokens() {
+  return apiJson<{ tokens: MCPToken[] }>("/api/mcp/tokens");
+}
+
+export function createMCPToken(params: {
+  name: string;
+  scope: "read" | "write";
+  expiresInDays: number;
+}) {
+  return apiJson<{ token: MCPToken; secret: string }>("/api/mcp/tokens", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function revealMCPToken(tokenId: string) {
+  return apiJson<{ secret: string }>(
+    `/api/mcp/tokens/${encodeURIComponent(tokenId)}/reveal`,
+    { method: "POST" },
+  );
+}
+
+export function revokeMCPToken(tokenId: string) {
+  return apiJson<{ success: boolean }>(
+    `/api/mcp/tokens/${encodeURIComponent(tokenId)}`,
+    { method: "DELETE" },
   );
 }
 
@@ -569,9 +697,29 @@ export function getStorageUsage() {
   return apiJson<StorageUsage>("/api/storage/usage");
 }
 
-export function deleteDocument(docId: string) {
+export function trashDocument(docId: string) {
   return apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "DELETE" },
+  );
+}
+
+export function listTrashedDocuments() {
+  return apiJson<{ documents: TrashedDocumentSummary[] }>(
+    "/api/documents/trash",
+  );
+}
+
+export function restoreTrashedDocument(docId: string) {
+  return apiJson<{ document: Document }>(
+    `/api/documents/${encodeURIComponent(docId)}/restore`,
+    { method: "POST" },
+  );
+}
+
+export function permanentlyDeleteDocument(docId: string, confirmation: string) {
+  return apiJson<{ success: boolean }>(
+    `/api/documents/${encodeURIComponent(docId)}/permanent`,
+    { method: "DELETE", body: JSON.stringify({ confirmation }) },
   );
 }

@@ -184,6 +184,19 @@ func TestImageQuotaAlwaysPositive(t *testing.T) {
 	}
 }
 
+func TestAllStorageMutationsUseSameUserLock(t *testing.T) {
+	quotaSrc := readQuotaSource(t)
+	docsSrc := readSourceFile(t, "document_service.go")
+	for name, src := range map[string]string{
+		"图片记账": quotaSrc,
+		"文档写入": docsSrc,
+	} {
+		if !strings.Contains(src, "pg_advisory_xact_lock($1)") {
+			t.Errorf("%s 没有使用统一的用户级配额锁", name)
+		}
+	}
+}
+
 func TestStorageQuotaForMembership(t *testing.T) {
 	const freeQuota = int64(200 * 1024 * 1024)
 	const bonus = int64(500 * 1024 * 1024)
@@ -370,7 +383,7 @@ func TestStorageUsageCountsDocuments(t *testing.T) {
 //   - documentUpdate 漏了 → 能把单篇写到无限大（受单篇 1 MiB 限制，但篇数无限）
 func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 	quotaSrc := readQuotaSource(t)
-	docsSrc := readSourceFile(t, "documents.go")
+	docsSrc := readSourceFile(t, "document_service.go")
 
 	cases := []struct {
 		name   string
@@ -384,6 +397,14 @@ func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "更新文档" {
+				for _, want := range []string{"pg_advisory_xact_lock", "FROM image_objects", "octet_length", "if newBytes > oldBytes"} {
+					if !strings.Contains(tc.src, want) {
+						t.Errorf("共享更新服务缺 %q", want)
+					}
+				}
+				return
+			}
 			idx := strings.Index(tc.src, tc.anchor)
 			if idx < 0 {
 				t.Fatalf("找不到 %q", tc.anchor)
@@ -400,9 +421,9 @@ func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 						want, stmt)
 				}
 			}
-			// 判定必须在同一句里（WHERE 子句），不能拆成先查后改
-			if !strings.Contains(stmt, "WHERE") {
-				t.Errorf("语句里没有 WHERE，判定可能被拆成了两句\n语句:\n%s", stmt)
+			// 创建判定必须与 INSERT 同一句。
+			if tc.name == "新建文档" && !strings.Contains(stmt, "WHERE") {
+				t.Errorf("创建语句里没有 WHERE，判定可能被拆成了两句\n语句:\n%s", stmt)
 			}
 		})
 	}
@@ -413,29 +434,9 @@ func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 // 没有它会有两个后果，都比超一点点存储更糟：正在写的内容保存不了可能丢稿；
 // 以及超额后连删正文都做不到（删也是一次 UPDATE），用户被锁死没有自救途径。
 func TestDocumentUpdateAllowsShrinking(t *testing.T) {
-	src := readSourceFile(t, "documents.go")
-
-	idx := strings.Index(src, "UPDATE documents")
-	if idx < 0 {
-		t.Fatal("找不到 UPDATE documents")
-	}
-	end := strings.Index(src[idx:], "`")
-	stmt := src[idx : idx+end]
-
-	if !strings.Contains(stmt, "OR") {
-		t.Fatal("UPDATE 的配额判定里没有 OR 分支 —— 缺少「缩小则放行」的例外，" +
-			"超额用户会连删正文都做不到")
-	}
-	// 例外的实质：新内容不大于旧内容时放行。
-	//
-	// 表限定前缀是可选的：那条 UPDATE 自连接了一份旧行来取被覆盖的正文
-	// （用于回收删掉的图），于是裸 content 会歧义，必须写成 documents.content。
-	// 断言只钉住"拿旧的长度作比较"这件事，不钉写法 —— 否则加个限定名就红，
-	// 而语义完全没变（UPDATE 的 WHERE 里读到的 documents.content 就是更新前的值）。
-	shrink := regexp.MustCompile(
-		`<=\s*octet_length\((?:documents\.)?content\)\s*\+\s*octet_length\((?:documents\.)?title\)`)
-	if !shrink.MatchString(stmt) {
-		t.Error("找不到「新内容 <= 旧内容」的比较，「缩小则放行」可能没写对")
+	src := readSourceFile(t, "document_service.go")
+	if !regexp.MustCompile(`if\s+newBytes\s*>\s*oldBytes`).MatchString(src) {
+		t.Fatal("只有文档变大时才应执行配额判定；缩小或不变必须直接放行")
 	}
 }
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ApiError } from "../../api";
+import { conflictDraftKey } from "../../conflictDrafts";
 import { useSaveDocument } from "../../documents";
 
 /**
@@ -15,7 +17,7 @@ import { useSaveDocument } from "../../documents";
 
 export const SAVE_DEBOUNCE_MS = 800;
 
-export type SaveStatus = "idle" | "saving" | "saved" | "failed";
+export type SaveStatus = "idle" | "saving" | "saved" | "failed" | "conflict";
 
 export type DocPatch = Partial<{
   title: string;
@@ -24,10 +26,15 @@ export type DocPatch = Partial<{
 }>;
 
 /** PUT 要求 title/content/theme 一起给，所以待存内容始终是完整三元组 */
-type Snapshot = { title: string; content: string; theme: string };
+export type DocumentSnapshot = {
+  title: string;
+  content: string;
+  theme: string;
+  revision: number;
+};
 
 type Entry = {
-  pending: Snapshot;
+  pending: DocumentSnapshot;
   timer: ReturnType<typeof setTimeout> | null;
   /** 只有标题变过才需要刷侧栏列表，正文变化不用 */
   titleDirty: boolean;
@@ -35,17 +42,19 @@ type Entry = {
   dirty: boolean;
   /** 当前完整保存链。显式 flush 必须等待它，而不是只标记后立即返回 */
   inFlight: Promise<boolean> | null;
+  /** 冲突后用户明确选择覆盖远端时，强制为被覆盖的远端状态留一版历史 */
+  forceVersion: boolean;
 };
 
 export type DocumentSaver = {
   /** 文档首次载入时铺一份基线。已有待存内容时不覆盖 —— 那可能比服务端的新 */
-  seed: (docId: string, snapshot: Snapshot) => void;
+  seed: (docId: string, snapshot: DocumentSnapshot) => void;
   /** 记下改动并排入防抖队列 */
   queue: (docId: string, patch: DocPatch) => void;
   /** 立刻存并返回是否落库成功。换主题、删除、淘汰实例时用 */
   flush: (docId: string) => Promise<boolean>;
   /** 读当前待存内容，不触发渲染。用于把未存改动合进传给编辑器的 document */
-  peek: (docId: string) => Snapshot | null;
+  peek: (docId: string) => DocumentSnapshot | null;
   status: (docId: string) => SaveStatus;
   isDirty: (docId: string) => boolean;
   /** 关标签时调用：先存，再丢掉记录 */
@@ -57,7 +66,33 @@ export type DocumentSaver = {
    * 请求要么 404 要么把刚删的内容又写回去。
    */
   drop: (docId: string) => void;
+  /** 用最新远端 revision 保存本地/合并稿。仍走 CAS，远端再次变化会继续冲突。 */
+  overwrite: (
+    docId: string,
+    remoteRevision: number,
+    patch?: DocPatch,
+  ) => Promise<boolean>;
+  /** 用户明确采用远端版本时，替换本地待存快照。 */
+  acceptRemote: (docId: string, snapshot: DocumentSnapshot) => void;
 };
+
+function storeConflictDraft(docId: string, snapshot: DocumentSnapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(conflictDraftKey(docId), JSON.stringify(snapshot));
+  } catch {
+    // localStorage 可能被禁用或已满；保存请求的错误语义不能因此被改写成异常。
+  }
+}
+
+function clearConflictDraft(docId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(conflictDraftKey(docId));
+  } catch {
+    // 与写入同理：清理本地兜底失败不应破坏已经完成的服务端操作。
+  }
+}
 
 export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   const entries = useRef<Map<string, Entry>>(new Map());
@@ -101,10 +136,32 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
           setStatus(docId, "saving");
 
           try {
-            await mutate.current({ docId, ...sent });
-          } catch {
+            const response = await mutate.current({
+              docId,
+              title: sent.title,
+              content: sent.content,
+              theme: sent.theme,
+              expectedRevision: sent.revision,
+              forceVersion: current.forceVersion,
+            });
+            const now = entries.current.get(docId);
+            if (now) {
+              now.pending.revision = response.document.revision;
+              now.forceVersion = false;
+            }
+          } catch (error) {
             // dirty 保持 true：待存内容留着，下次 flush 会重试。
-            if (entries.current.has(docId)) setStatus(docId, "failed");
+            if (entries.current.has(docId)) {
+              setStatus(
+                docId,
+                error instanceof ApiError && error.code === "document_revision_conflict"
+                  ? "conflict"
+                  : "failed",
+              );
+              if (error instanceof ApiError && error.code === "document_revision_conflict") {
+                storeConflictDraft(docId, current.pending);
+              }
+            }
             return false;
           }
 
@@ -122,6 +179,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
 
           now.dirty = false;
           now.titleDirty = false;
+          clearConflictDraft(docId);
           setStatus(docId, "saved");
           if (titleCommittedNeeded) titleCommitted.current?.();
           return true;
@@ -138,16 +196,39 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [setStatus],
   );
 
-  const seed = useCallback((docId: string, snapshot: Snapshot) => {
+  const seed = useCallback((docId: string, snapshot: DocumentSnapshot) => {
     if (entries.current.has(docId)) return;
+    let pending = snapshot;
+    let conflicted = false;
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(conflictDraftKey(docId));
+        if (stored) {
+          const parsed = JSON.parse(stored) as Partial<DocumentSnapshot>;
+          if (
+            typeof parsed.title === "string" &&
+            typeof parsed.content === "string" &&
+            typeof parsed.theme === "string" &&
+            typeof parsed.revision === "number"
+          ) {
+            pending = parsed as DocumentSnapshot;
+            conflicted = true;
+          }
+        }
+      } catch {
+        clearConflictDraft(docId);
+      }
+    }
     entries.current.set(docId, {
-      pending: { ...snapshot },
+      pending: { ...pending },
       timer: null,
       titleDirty: false,
-      dirty: false,
+      dirty: conflicted,
       inFlight: null,
+      forceVersion: false,
     });
-  }, []);
+    if (conflicted) setStatus(docId, "conflict");
+  }, [setStatus]);
 
   const queue = useCallback(
     (docId: string, patch: DocPatch) => {
@@ -200,6 +281,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     const entry = entries.current.get(docId);
     if (entry?.timer) clearTimeout(entry.timer);
     entries.current.delete(docId);
+    clearConflictDraft(docId);
     setStatuses((prev) => {
       if (!(docId in prev)) return prev;
       const next = { ...prev };
@@ -207,6 +289,46 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       return next;
     });
   }, []);
+
+  const overwrite = useCallback(
+    (docId: string, remoteRevision: number, patch?: DocPatch) => {
+      const entry = entries.current.get(docId);
+      if (!entry || remoteRevision <= 0) return Promise.resolve(false);
+      entry.pending = {
+        ...entry.pending,
+        ...patch,
+        revision: remoteRevision,
+      };
+      entry.dirty = true;
+      entry.titleDirty ||= patch?.title !== undefined;
+      entry.forceVersion = true;
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+        entry.timer = null;
+      }
+      setStatus(docId, "saving");
+      return doSave(docId);
+    },
+    [doSave, setStatus],
+  );
+
+  const acceptRemote = useCallback(
+    (docId: string, snapshot: DocumentSnapshot) => {
+      const entry = entries.current.get(docId);
+      if (entry?.timer) clearTimeout(entry.timer);
+      entries.current.set(docId, {
+        pending: { ...snapshot },
+        timer: null,
+        titleDirty: false,
+        dirty: false,
+        inFlight: null,
+        forceVersion: false,
+      });
+      clearConflictDraft(docId);
+      setStatus(docId, "saved");
+    },
+    [setStatus],
+  );
 
   const peek = useCallback(
     (docId: string) => entries.current.get(docId)?.pending ?? null,
@@ -239,7 +361,29 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   // 这么用的 —— 曾导致关标签后、路由还没更新的那几帧里又把它 activate 回来，
   // 表现为要点两次才关得掉。
   return useMemo(
-    () => ({ seed, queue, flush, peek, status, isDirty, forget, drop }),
-    [seed, queue, flush, peek, status, isDirty, forget, drop],
+    () => ({
+      seed,
+      queue,
+      flush,
+      peek,
+      status,
+      isDirty,
+      forget,
+      drop,
+      overwrite,
+      acceptRemote,
+    }),
+    [
+      seed,
+      queue,
+      flush,
+      peek,
+      status,
+      isDirty,
+      forget,
+      drop,
+      overwrite,
+      acceptRemote,
+    ],
   );
 }

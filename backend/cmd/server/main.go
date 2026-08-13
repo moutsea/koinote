@@ -36,6 +36,9 @@ func main() {
 	if cfg.IsProduction() && cfg.EmailVerificationSecret == "" {
 		log.Fatal("生产环境必须设置独立的 EMAIL_VERIFICATION_SECRET。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.MCPTokenEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 MCP_TOKEN_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
 	if err := cfg.ValidateStripeConfig(); err != nil {
 		log.Fatal(err)
 	}
@@ -77,11 +80,13 @@ func main() {
 
 	app := server.New(cfg, pool)
 
-	// 图片回收与付款通知重试都跟随 HTTP 服务的生命周期一起收摊。
+	// 后台维护任务都跟随 HTTP 服务的生命周期一起收摊。
 	backgroundCtx, stopBackground := context.WithCancel(ctx)
 	defer stopBackground()
 	app.StartImageGC(backgroundCtx)
+	app.StartDocumentTrashCleanup(backgroundCtx)
 	app.StartPaymentNotificationRetry(backgroundCtx)
+	app.StartMCPAuditCleanup(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),

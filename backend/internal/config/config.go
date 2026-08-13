@@ -14,14 +14,17 @@ import (
 
 // Config 保存后端运行所需的环境配置。
 type Config struct {
-	Port           string
-	DatabaseURL    string
-	InternalToken  string // Worker 与后端双向调用使用的内部鉴权令牌
-	SessionSecret  string // session HMAC 签名密钥，不允许回退到其他凭据
-	NodeEnv        string // "production" | "development"
-	AutoMigrate    bool
-	MigrationsDir  string
-	AllowedOrigins []string
+	Port          string
+	DatabaseURL   string
+	InternalToken string // Worker 与后端双向调用使用的内部鉴权令牌
+	SessionSecret string // session HMAC 签名密钥，不允许回退到其他凭据
+	// MCPTokenEncryptionKey 用于加密需要再次展示的 MCP 个人访问令牌。
+	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地启动。
+	MCPTokenEncryptionKey string
+	NodeEnv               string // "production" | "development"
+	AutoMigrate           bool
+	MigrationsDir         string
+	AllowedOrigins        []string
 
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
@@ -96,15 +99,16 @@ func Load() Config {
 
 	nodeEnv := getenv("NODE_ENV", "development")
 	cfg := Config{
-		DotEnvPath:    dotEnvPath,
-		Port:          getenv("PORT", "8080"),
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable"),
-		InternalToken: os.Getenv("BACKEND_INTERNAL_TOKEN"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		NodeEnv:       nodeEnv,
-		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
-		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
-		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
+		DotEnvPath:            dotEnvPath,
+		Port:                  getenv("PORT", "8080"),
+		DatabaseURL:           getenv("DATABASE_URL", "postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable"),
+		InternalToken:         os.Getenv("BACKEND_INTERNAL_TOKEN"),
+		SessionSecret:         os.Getenv("SESSION_SECRET"),
+		MCPTokenEncryptionKey: strings.TrimSpace(os.Getenv("MCP_TOKEN_ENCRYPTION_KEY")),
+		NodeEnv:               nodeEnv,
+		AutoMigrate:           getenv("AUTO_MIGRATE", "true") == "true",
+		MigrationsDir:         getenv("MIGRATIONS_DIR", "migrations"),
+		WorkerURL:             strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 

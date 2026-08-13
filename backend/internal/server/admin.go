@@ -230,7 +230,7 @@ func (a *App) queryAdminOverview(
 			(SELECT COUNT(*) FROM users),
 			(SELECT COUNT(*) FROM users WHERE is_verified),
 			(SELECT COUNT(*) FROM users WHERE membership_tier = 'lifetime'),
-			(SELECT COUNT(*) FROM documents),
+			(SELECT COUNT(*) FROM documents WHERE trashed_at IS NULL),
 			(SELECT COUNT(*) FROM image_objects),
 			COALESCE((SELECT SUM(octet_length(content) + octet_length(title)) FROM documents), 0)::bigint,
 			COALESCE((SELECT SUM(bytes) FROM image_objects), 0)::bigint,

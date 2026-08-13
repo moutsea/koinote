@@ -19,6 +19,7 @@ into the same hole.
 - [Auth and security](#auth)
 - [Invitation rewards](#invitation-rewards)
 - [Membership and billing](#membership-and-billing)
+- [MCP document access](#mcp-document-access)
 - [Admin dashboard](#admin-dashboard)
 - [Sharing](#sharing)
 - [Export](#export)
@@ -31,7 +32,7 @@ into the same hole.
 ```
 Browser ──▶ Cloudflare Worker (worker/index.ts)
               ├─ serves the Vite-built SPA (spa/dist)
-              └─ /api/*, /health ──▶ reverse proxy to the Go backend
+              └─ /api/*, /health, /mcp ──▶ reverse proxy to the Go backend
                                           │
                                     ┌─────▼────────────────────┐
                                     │ docker-compose:          │
@@ -399,6 +400,116 @@ Quota is not a frontend display value: image accounting, document create, docume
 update, and storage usage all call `storageQuotaFor(user)`. A newly fulfilled member
 therefore receives 10 GiB plus bounded invitation bonuses on the next write, and future AI authorization can read the
 same database tier without querying Stripe.
+
+## MCP document access
+
+MCP lets Codex, Claude Code, and other agent clients operate on Koinote documents. Model
+inference stays in the client: Koinote exposes tools and data but never calls an LLM, so
+the server needs no OpenAI, Anthropic, or other model API key. The endpoint is Streamable
+HTTP `POST /mcp`, using the official Go MCP SDK in stateless JSON-response mode. The Worker
+only proxies the exact `/mcp` path and preserves the request body stream without parsing or
+re-encoding protocol messages.
+
+### Why the protocol lives in Go, not a Worker or Durable Object
+
+MCP identity, membership, document authorization, versions, and audit truth already live
+in PostgreSQL and the Go backend. A Worker protocol layer would still call the backend to
+authenticate and again for every tool, adding a hop without making a decision. Document
+CRUD is stateless and needs none of Durable Objects' session state, migrations, or billing.
+The Worker therefore remains a thin edge proxy while all authorization stays in Go.
+
+### Why the first release uses PATs instead of OAuth
+
+The initial audience is lifetime members, using personal access tokens created on the
+account page. Tokens have `read` or `write` scope, a 1–365 day lifetime, individual
+revocation, and a maximum of 20 active tokens. Plaintext starts with `knt_mcp_`; PostgreSQL
+authenticates with SHA-256 and stores a separate AES-GCM-encrypted recovery copy under a
+dedicated key. The owner can explicitly reveal it through a rate-limited endpoint, while
+list responses return only the hint. The token has 256 bits of random entropy, so its hash
+does not need password-style resistance to low-entropy guessing.
+
+Every request reloads the token and user, checking revocation, expiry, and
+`membership_tier=lifetime`; an already connected stateless client cannot outlive a later
+revocation or membership downgrade. Database failures during authentication return 500
+rather than masquerading as 401. Limits are 120 requests per token per minute and a 2 MiB
+request body; PAT management responses carry `Cache-Control: no-store`. Like the rest of
+the site's rate limiting, the counter is currently per-process and must move to shared
+storage before horizontal scaling.
+
+PATs are first-class credentials for CLI clients and avoid prematurely implementing OAuth
+2.1 authorization-server metadata, protected-resource metadata, dynamic client
+registration, and consent UI. OAuth can be revisited when substantial third-party demand
+exists; the first release keeps the trust boundary smaller, revocable, and auditable.
+
+### Tools and authorization boundary
+
+Read tokens expose:
+
+- `list_documents`: recent-first paginated summaries without content
+- `search_documents`: title-only search, avoiding unindexed scans over 1 MiB bodies
+- `get_document`: Unicode character offset/limit chunks with total length and `hasMore`
+- `list_document_versions` / `get_document_version`: retained recovery points
+- `list_trashed_documents`: summaries waiting in the 30-day trash
+
+Write tokens additionally expose `create_document`, `append_to_document`,
+`update_document`, and `restore_document_version`, plus revision-checked `trash_document`
+and `restore_trashed_document`. MCP never exposes permanent deletion; only the browser trash
+page can call it after a second warning and typed-title confirmation. Normal deletion only
+sets `trashed_at`: versions, quota usage, and image references remain for 30 days. An hourly
+backend cleanup permanently removes expired rows and then hands truly orphaned images to R2
+GC. Every query constrains both `user_id` and `doc_id`,
+and public shares are excluded, so prompt injection cannot broaden data access across
+accounts. Scope isolation—not an “untrusted content” sentence—is the effective write
+boundary.
+
+Audit rows contain only user, token, tool name, document ID, success/error, and duration;
+they never contain document text or plaintext tokens. The backend removes rows older than
+180 days once per day so operational metadata cannot grow without bound. Business errors give the agent an
+actionable response such as re-reading the latest revision, while internal database errors
+collapse to `internal server error`.
+
+### Version history before agent writes
+
+A full-document replacement can be as destructive as deletion, so version history and a
+shared browser/MCP revision compare-and-swap landed before `update_document`. Every real
+mutation increments revision, while an identical no-op does not. If a successful response
+is lost, retrying identical content with the old revision idempotently returns the current
+document; an old revision with different content conflicts. Append and restore also require
+`expectedRevision` rather than assuming append is inherently race-free.
+
+Browser autosave sends the same revision. If an agent changes a document while a browser
+tab is open, the next browser save receives 409 instead of silently overwriting the agent.
+The local draft is persisted to localStorage so refresh still reaches the merge UI. The user
+can accept remote or edit the local title/body and save against the latest revision; a
+second remote change conflicts again. Explicit overwrite forces a snapshot of the state
+being replaced. Restore itself also uses CAS and snapshots the current state first.
+
+Only lifetime members retain versions. History defaults to enabled, 20 versions per
+document, and full snapshots for MCP writes. Members can change the per-document limit from
+1–100 and independently disable regular snapshots or full MCP history through the dashboard
+or a write-scoped MCP token. Disabling full MCP history never makes an Agent's whole-document
+replacement irreversible: each document still maintains its latest MCP safety snapshot. A
+later Agent write replaces the prior safety snapshot, while a later full snapshot removes the
+now-redundant safety copy. Safety and regular snapshots share both the per-document limit and
+the account-wide limit of 100, so this does not create hidden retention capacity. Disabling a
+setting does not erase retained history; lowering the limit prunes immediately. High-frequency
+browser autosave creates at most one snapshot every five minutes.
+
+A write-scoped token can change this account-level retention policy, not just document content.
+That authority is intentional but does not bypass the recovery boundary: settings changes cannot
+disable revision CAS, membership checks, the per-document/account caps, or the mandatory latest
+MCP safety snapshot. Even if an Agent disables regular and full MCP history immediately before a
+whole-document replacement, the replaced state remains recoverable in that safety snapshot. If
+the mandatory snapshot rule is ever removed, this settings tool must first move to a separate
+scope or stop being exposed to write-scoped tokens.
+
+Version text does not count toward the user's cloud-storage byte quota, but images referenced
+by retained versions continue to block R2 garbage collection. Pruning a version or deleting a
+document rechecks references before asynchronously reclaiming true orphans. In the worst case,
+the current reference check scans all retained version bodies for that user; if history volume
+grows materially, this should move to a dedicated version-image reference table or equivalent
+index. Document and image quota changes share a per-user advisory transaction lock so concurrent
+requests cannot both approve against stale usage.
 
 ## Admin dashboard
 
@@ -859,11 +970,11 @@ throwing would fail uploads outright, which is worse.
 
 ## Verification
 
-One command covers the frontend and Worker (typecheck on both sides plus 27
+One command covers the frontend and Worker (typecheck on both sides plus 29
 assertion suites):
 
 ```bash
-npm test          # typecheck ×2 + 27 suites, stops at the first failure
+npm test          # typecheck ×2 + 29 suites, stops at the first failure
 npm run go:test   # go vet + go test
 ```
 
@@ -878,6 +989,12 @@ hardcoded keys exist in the source.
 > break one source file, the suite prints "1 failed", and `npm run` still exits 0.
 
 Backend: `cd backend && go test ./...` (CI adds `-race`).
+
+MCP: `npm run test:mcp` checks Worker/Vite/backend routing, the membership UI, and that
+recoverable trash tools are exposed without permanent deletion. Go tests use the official SDK for a Streamable HTTP handshake and
+exercise PAT hashing and immediate revocation, read/write tool sets, document mutations,
+revision conflict and idempotent retry, retention, concurrent CAS, audit rows, and versioned
+image GC protection against real PostgreSQL.
 
 Worker: `npm run test:worker` — 21 pure-function assertions on `normalizeImageBase`.
 `npm run test:security-headers` — 35 assertions on the security headers.

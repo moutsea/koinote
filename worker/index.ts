@@ -77,6 +77,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (
+    url.pathname === "/mcp" ||
     API_PREFIXES.some(
       (prefix) => url.pathname === prefix || url.pathname.startsWith(prefix),
     )

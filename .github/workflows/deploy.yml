@@ -54,6 +54,7 @@ jobs:
           CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CF_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
+          MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -64,7 +65,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -136,6 +137,7 @@ jobs:
         env:
           HOST: ${{ secrets.VPS_HOST }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
+          MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -144,8 +146,9 @@ jobs:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
         run: |
-          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$EMAIL_VERIFICATION_SECRET" \
+            "$MCP_TOKEN_ENCRYPTION_KEY" \
             "$STRIPE_SECRET_KEY" \
             "$STRIPE_WEBHOOK_SECRET" \
             "$STRIPE_LIFETIME_PRODUCT_ID" \
@@ -157,6 +160,7 @@ jobs:
               "root@$HOST" '
                 set -eu
                 IFS= read -r email_verification_secret
+                IFS= read -r mcp_token_encryption_key
                 IFS= read -r stripe_secret_key
                 IFS= read -r stripe_webhook_secret
                 IFS= read -r stripe_lifetime_product_id
@@ -165,6 +169,7 @@ jobs:
                 IFS= read -r cloudflare_zone_id
                 IFS= read -r cloudflare_analytics_token
                 test -n "$email_verification_secret"
+                test -n "$mcp_token_encryption_key"
                 test -n "$stripe_secret_key"
                 test -n "$stripe_webhook_secret"
                 test -n "$stripe_lifetime_product_id"
@@ -185,12 +190,13 @@ jobs:
                 # Analytics 和飞书都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
                 awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" "
-                  /^(EMAIL_VERIFICATION_SECRET|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_analytics == 1 && /^CLOUDFLARE_ANALYTICS_TOKEN=/ { next }
                   replace_bot == 1 && /^(BOT_WEBHOOK|BOT_WEBHOOK_SECRET)=/ { next }
                   { print }
                 " "$env_file" > "$temp_file"
                 printf "EMAIL_VERIFICATION_SECRET=%s\n" "$email_verification_secret" >> "$temp_file"
+                printf "MCP_TOKEN_ENCRYPTION_KEY=%s\n" "$mcp_token_encryption_key" >> "$temp_file"
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"
                 printf "STRIPE_LIFETIME_PRODUCT_ID=%s\n" "$stripe_lifetime_product_id" >> "$temp_file"

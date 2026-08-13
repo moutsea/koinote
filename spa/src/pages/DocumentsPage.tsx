@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { useSession } from "../auth";
 import { useDocumentList } from "../documents";
 import { useI18n, type Locale } from "../i18n";
@@ -69,14 +69,24 @@ export function DocumentsPage() {
             {t.documentsPage.subtitle}
           </p>
         </div>
-        <Link
-          to="/editor"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "var(--cinnabar)" }}
-        >
-          <Plus className="h-4 w-4" />
-          {t.dashboard.newDoc}
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/trash"
+            className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+          >
+            <Trash2 className="h-4 w-4" />
+            {t.nav.trash}
+          </Link>
+          <Link
+            to="/editor"
+            className="inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ background: "var(--cinnabar)" }}
+          >
+            <Plus className="h-4 w-4" />
+            {t.dashboard.newDoc}
+          </Link>
+        </div>
       </div>
 
       {documents.isLoading ? (

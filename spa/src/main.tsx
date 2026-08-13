@@ -28,17 +28,31 @@ const indexRoute = createRoute({
   path: "/",
   component: HomePage,
 });
+const pricingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pricing",
+  component: lazyRouteComponent(
+    () => import("./pages/PricingPage"),
+    "PricingPage",
+  ),
+});
 // /editor 不带 id：跳最近编辑的一篇，没有则新建
 // /editor/$docId：打开指定文档
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor",
-  component: lazyRouteComponent(() => import("./pages/EditorPage"), "EditorPage"),
+  component: lazyRouteComponent(
+    () => import("./pages/EditorPage"),
+    "EditorPage",
+  ),
 });
 const editorDocRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor/$docId",
-  component: lazyRouteComponent(() => import("./pages/EditorPage"), "EditorPage"),
+  component: lazyRouteComponent(
+    () => import("./pages/EditorPage"),
+    "EditorPage",
+  ),
 });
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -78,6 +92,11 @@ const documentsRoute = createRoute({
     "DocumentsPage",
   ),
 });
+const trashRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/trash",
+  component: lazyRouteComponent(() => import("./pages/TrashPage"), "TrashPage"),
+});
 const invitationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/invitations",
@@ -97,7 +116,10 @@ const adminRoute = createRoute({
 const privacyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/privacy",
-  component: lazyRouteComponent(() => import("./pages/LegalPage"), "PrivacyPage"),
+  component: lazyRouteComponent(
+    () => import("./pages/LegalPage"),
+    "PrivacyPage",
+  ),
 });
 const termsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -107,17 +129,22 @@ const termsRoute = createRoute({
 const cookiesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cookies",
-  component: lazyRouteComponent(() => import("./pages/LegalPage"), "CookiesPage"),
+  component: lazyRouteComponent(
+    () => import("./pages/LegalPage"),
+    "CookiesPage",
+  ),
 });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  pricingRoute,
   editorRoute,
   editorDocRoute,
   loginRoute,
   registerRoute,
   dashboardRoute,
   documentsRoute,
+  trashRoute,
   invitationsRoute,
   adminRoute,
   shareRoute,

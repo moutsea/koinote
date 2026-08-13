@@ -126,9 +126,9 @@ func storageUsageForQuerier(
 //	"还差一点才满"，然后都插进去 —— 配额被突破的幅度取决于并发数。把判断写进
 //	INSERT ... SELECT ... WHERE 里，这一句本身是原子的。
 //
-// 这仍不是完美串行化：默认的 READ COMMITTED 下，并发事务的子查询看不到对方未提交的行，
-// 所以极端并发仍可能略微超出，上界是「并发数 × 单图上限」。单图上限 10 MiB、配额
-// 500 MiB，这个误差不值得上 SERIALIZABLE 或表锁 —— 那要让每次正常上传都付锁竞争的代价。
+// 与文档创建/更新共用用户级 advisory transaction lock。这样同一用户的图片记账和
+// 文档扩容会串行读取配额，不会各自看见对方尚未提交前的旧用量。不同用户使用不同
+// 锁键，彼此不阻塞。
 //
 // 返回记账后的用量。超额时返回 errQuotaExceeded，调用方据此让 Worker 把对象删掉。
 func (a *App) recordImageObject(
@@ -168,6 +168,9 @@ func (a *App) recordImageObject(
 		return storageBreakdown{}, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
+		return storageBreakdown{}, err
+	}
 
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO image_objects (object_key, user_id, bytes, purpose)

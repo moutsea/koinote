@@ -102,6 +102,13 @@ type billingStatusPayload struct {
 	Prices            []billingPricePayload `json:"prices"`
 }
 
+type billingPricingPayload struct {
+	BillingEnabled            bool                  `json:"billingEnabled"`
+	FreeStorageQuotaBytes     int64                 `json:"freeStorageQuotaBytes"`
+	LifetimeStorageQuotaBytes int64                 `json:"lifetimeStorageQuotaBytes"`
+	Prices                    []billingPricePayload `json:"prices"`
+}
+
 func lifetimePriceFor(rawCurrency string) (lifetimePriceOption, bool) {
 	currency := stripe.Currency(strings.ToLower(strings.TrimSpace(rawCurrency)))
 	if currency == "" {
@@ -169,6 +176,18 @@ func (a *App) billingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"membership": a.billingStatusPayload(user)})
+}
+
+func (a *App) billingPricing(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60")
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"pricing": billingPricingPayload{
+			BillingEnabled:            a.cfg.StripeEnabled(),
+			FreeStorageQuotaBytes:     a.imageQuota(),
+			LifetimeStorageQuotaBytes: lifetimeStorageQuotaBytes,
+			Prices:                    billingPricesPayload(),
+		},
+	})
 }
 
 func (a *App) takeBillingCheckoutAttempt(w http.ResponseWriter, userID int) bool {

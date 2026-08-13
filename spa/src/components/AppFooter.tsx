@@ -94,6 +94,7 @@ export function AppFooter() {
               <FooterColumn title={t.footer.product}>
                 <FooterRoute to="/">{t.footer.home}</FooterRoute>
                 <FooterRoute to="/editor">{t.footer.editor}</FooterRoute>
+                <FooterRoute to="/pricing">{t.footer.pricing}</FooterRoute>
                 <FooterRoute to="/dashboard">{t.footer.dashboard}</FooterRoute>
               </FooterColumn>
 

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSession, logout as apiLogout, type User } from "./api";
+import { clearAllConflictDrafts } from "./conflictDrafts";
 
 // 会话状态集中放在 react-query 缓存的 ["session"] key 下，全站共享。
 export function useSession() {
@@ -20,6 +21,7 @@ export function useLogout() {
   const queryClient = useQueryClient();
   return async () => {
     await apiLogout();
+    clearAllConflictDrafts();
     queryClient.setQueryData(["session"], undefined);
     queryClient.removeQueries({ queryKey: ["session"] });
   };

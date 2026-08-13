@@ -19,8 +19,21 @@ const page = readFileSync(
   new URL("../spa/src/pages/EditorPage.tsx", import.meta.url),
   "utf8",
 );
+const liveEditor = readFileSync(
+  new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),
+  "utf8",
+);
+const auth = readFileSync(
+  new URL("../spa/src/auth.ts", import.meta.url),
+  "utf8",
+);
+const conflictDrafts = readFileSync(
+  new URL("../spa/src/conflictDrafts.ts", import.meta.url),
+  "utf8",
+);
 const bareSaver = saver.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 const barePage = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+const bareLiveEditor = liveEditor.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 
 ok(
   "保存层跟踪当前 Promise",
@@ -34,7 +47,7 @@ ok(
 );
 ok(
   "保存链会处理请求期间的新快照",
-  /for\s*\(;;\)[\s\S]{0,1600}changedDuringFlight[\s\S]{0,200}continue/.test(bareSaver),
+  /for\s*\(;;\)[\s\S]{0,2600}changedDuringFlight[\s\S]{0,300}continue/.test(bareSaver),
   "只等待第一趟请求仍会漏掉 in-flight 期间的新改动",
 );
 ok(
@@ -44,8 +57,44 @@ ok(
 );
 ok(
   "保存失败返回 false 且保留 dirty",
-  /catch\s*\{[\s\S]{0,260}setStatus\(docId,\s*"failed"\)[\s\S]{0,100}return false/.test(bareSaver),
+  /catch\s*\([^)]*\)\s*\{[\s\S]{0,900}["']failed["'][\s\S]{0,500}return false/.test(bareSaver),
   "失败不能被吞成成功",
+);
+ok(
+  "revision 冲突会保留本地草稿",
+  /document_revision_conflict[\s\S]{0,700}storeConflictDraft\(docId,\s*current\.pending\)/.test(bareSaver) &&
+    /function storeConflictDraft[\s\S]{0,350}localStorage\.setItem[\s\S]{0,180}JSON\.stringify\(snapshot\)/.test(bareSaver),
+  "刷新页面后不能静默丢掉发生冲突的本地内容",
+);
+ok(
+  "采用远端版本会清除冲突草稿",
+  /const acceptRemote[\s\S]{0,1000}clearConflictDraft\(docId\)/.test(bareSaver),
+  "用户解决冲突后不应在下次刷新重新进入冲突状态",
+);
+ok(
+  "登出会清除所有冲突草稿",
+  /await apiLogout\(\)[\s\S]{0,120}clearAllConflictDrafts\(\)/.test(auth) &&
+    /CONFLICT_DRAFT_PREFIX\s*=\s*["']koinote:conflict-draft:["']/.test(conflictDrafts) &&
+    /localStorage\.removeItem\(key\)/.test(conflictDrafts),
+  "完整正文不应在账号退出后继续留在共用设备上",
+);
+ok(
+  "编辑器等待冲突草稿恢复后再挂载",
+  /seededDocId\s*===\s*docId/.test(bareLiveEditor) &&
+    /saver\.seed[\s\S]{0,400}setSeededDocId\(docId\)/.test(bareLiveEditor),
+  "先挂载远端正文会让 MarkdownEditor 错过 effect 中恢复的本地草稿",
+);
+ok(
+  "采用远端或合并稿会同步标题缓存",
+  /function acceptDocument[\s\S]{0,500}onTitleChange\?\.\(docId,\s*next\.title\)/.test(bareLiveEditor) &&
+    /onOverwrite[\s\S]{0,700}onTitleChange\?\.\(docId,\s*patch\.title\)/.test(bareLiveEditor),
+  "正文已切换但标签仍显示旧标题会让用户误判当前文档",
+);
+ok(
+  "免费用户不显示版本历史入口",
+  /historyAvailable\s*&&\s*\([\s\S]{0,650}openHistory/.test(bareLiveEditor) &&
+    /historyAvailable=\{session\.data\?\.user\?\.membershipTier\s*===\s*["']lifetime["']\}/.test(barePage),
+  "版本历史是会员权益，前端入口必须跟随会员状态",
 );
 
 const deleteBody =

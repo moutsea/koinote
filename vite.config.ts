@@ -122,6 +122,7 @@ export default defineConfig(({ mode }) => {
         "/images": workerProxy,
         "/api": backendProxy,
         "/health": backendProxy,
+        "/mcp": backendProxy,
       },
     },
     // preview 用来在本地跑生产构建物。没有这段代理，preview 下所有 /api 请求
@@ -134,6 +135,7 @@ export default defineConfig(({ mode }) => {
         "/images": workerProxy,
         "/api": backendProxy,
         "/health": backendProxy,
+        "/mcp": backendProxy,
       },
     },
   };

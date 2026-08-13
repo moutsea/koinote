@@ -35,7 +35,7 @@ func (a *App) editorTabsGet(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.db.Query(r.Context(), `
 		SELECT t.doc_id, t.is_active
 		FROM editor_tabs t
-		JOIN documents d ON d.doc_id = t.doc_id AND d.user_id = t.user_id
+		JOIN documents d ON d.doc_id = t.doc_id AND d.user_id = t.user_id AND d.trashed_at IS NULL
 		WHERE t.user_id = $1
 		ORDER BY t.position
 	`, user.ID)
@@ -110,7 +110,7 @@ func (a *App) editorTabsPut(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO editor_tabs (user_id, doc_id, position, is_active)
 			SELECT $1, d.doc_id, $3, $4
 			FROM documents d
-			WHERE d.doc_id = $2 AND d.user_id = $1
+			WHERE d.doc_id = $2 AND d.user_id = $1 AND d.trashed_at IS NULL
 		`, user.ID, docID, i, active != nil && *active == docID)
 		if err != nil {
 			log.Printf("editor tabs insert: %v", err)

@@ -9,6 +9,56 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The home page now explains how scoped MCP tokens, revision checks, and safety snapshots
+  let Codex, Claude Code, OpenCode, and other compatible agents work with Koinote documents.
+- A public, localized Pricing page compares Free and Lifetime benefits. It reads storage
+  quotas and the allowlisted multi-currency prices from the backend, lets signed-in users
+  start Stripe Checkout directly, and returns signed-out users to Pricing after login.
+
+### Changed
+
+- Public pricing responses now carry a short shared-cache policy, and version-history settings
+  explicitly distinguish the per-document limit from the 100-version account-wide shared cap.
+- Image object-key rules now have a shared boundary corpus across the Worker and browser helpers,
+  plus a real PostgreSQL integration test that compares every regex capture with Go. This pins
+  the three capture groups used by image garbage collection against future regex drift.
+- The MCP access card and documentation now include a ready-to-copy OpenCode remote-server
+  configuration plus generic Streamable HTTP connection details for other compatible agents.
+- Version history is now consistently restricted to lifetime members across snapshot creation,
+  history browsing, restoration, dashboard settings, and the editor entry point. Members can
+  configure it from the dashboard or MCP: enable or disable regular snapshots, retain 1–100
+  versions per document, and choose whether MCP writes retain full history. When full MCP history
+  is off, each changed document still keeps its latest Agent safety snapshot so whole-document
+  replacement remains recoverable. Safety snapshots share the configured per-document limit and
+  the account-wide cap of 100 versions.
+- The dashboard account summary no longer shows the low-value username card.
+- Document deletion now uses a 30-day trash. The browser can restore documents or permanently
+  delete them after a second warning and typed-title confirmation; an hourly backend cleanup
+  purges expired entries and only then schedules orphaned images for deletion.
+- MCP write tokens now expose revision-checked `trash_document` and
+  `restore_trashed_document`, while all tokens can list trashed summaries. Permanent deletion
+  remains unavailable to agents.
+- Newly created MCP personal access tokens are stored as an authentication hash plus an
+  AES-GCM-encrypted recovery copy, so their owner can reveal and copy them again. Existing
+  one-time-display tokens remain valid but cannot be recovered retroactively.
+
+## [0.4.0] - 2026-08-13
+
+### Added
+
+- Lifetime members can connect Codex, Claude Code, and other Streamable HTTP MCP
+  clients to their own Koinote documents. Personal access tokens support read or
+  write scope, expiration, individual revocation, hashed authentication, per-token rate
+  limits, and metadata-only audit logs.
+- MCP tools can page through document lists, search titles, read Unicode-safe content
+  chunks, inspect retained versions, create and append documents, replace documents
+  with compare-and-swap protection, and restore an earlier version. No document-delete
+  tool is exposed.
+- Paid accounts now retain recovery snapshots for document writes. MCP mutations keep
+  every previous state; browser autosave snapshots are throttled to one per five minutes,
+  with limits of 20 versions per document and 100 per account.
+- The web editor now detects concurrent edits, keeps conflicting drafts in local storage,
+  provides an explicit merge dialog, and offers version-history viewing and restoration.
 - Optional signed Feishu bot notifications now report successful lifetime-membership
   payments with internal user ID, amount, currency, Checkout Session, and PaymentIntent
   details, without sending email addresses or document content. Notification state is
@@ -19,6 +69,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Document and image quota mutations now share a user-level transaction lock, preventing
+  concurrent MCP/web writes and image uploads from each approving against stale usage.
+- Retained document versions protect referenced images from garbage collection; pruning
+  a version or deleting a document re-evaluates those images for asynchronous cleanup.
 - WeChat export now renders the Markdown image alt text beneath standalone images and
   skips inline, multi-image, list, and formula cases that cannot safely form a caption.
 - Admin traffic statistics now use Cloudflare's Free-plan-compatible hourly Analytics

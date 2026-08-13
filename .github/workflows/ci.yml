@@ -1,7 +1,7 @@
 name: CI
 
 # 开源之后 CI 从"锦上添花"变成必需品：收到外部 PR 时，没有 CI 就等于每个 PR
-# 都要手动 clone 下来跑 27 个套件 + go test，那个负担会直接变成"懒得看 PR"。
+# 都要手动 clone 下来跑全部前端断言 + go test，那个负担会直接变成"懒得看 PR"。
 on:
   push:
     branches: [main]
@@ -92,29 +92,34 @@ jobs:
         # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，
         # 而 rateLimiter 正是最该验竞态的地方）
         #
-        # TEST_DATABASE_URL 让 TestAllSQLPrepares 真正跑起来 —— 不设的话
-        # 它会 skip，而那条正是唯一能发现 SQL 类型推导错误的断言。
+        # TEST_DATABASE_URL 让真实 PostgreSQL 校验真正跑起来 —— 不设的话
+        # 它们会 skip，包括 SQL 类型推导和跨引擎正则捕获语义断言。
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: go test -race ./...
 
       # 确认上一步没有静默 skip 掉数据库校验。
       #
-      # 必要性：没有 TEST_DATABASE_URL 时那条测试会 skip，而 go test 对 skip
+      # 必要性：没有 TEST_DATABASE_URL 时这些测试会 skip，而 go test 对 skip
       # 报的是 ok —— 于是「连不上库」和「SQL 都没问题」在退出码上无法区分，
       # 这道防线可以在无人察觉的情况下失效。
-      - name: 确认 SQL PREPARE 校验真的跑了
+      - name: 确认 PostgreSQL 校验真的跑了
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: |
-          out=$(go test ./internal/server/ -run TestAllSQLPrepares -v 2>&1)
+          out=$(go test ./internal/server/ -run '^(TestAllSQLPrepares|TestImageKeyPatternMatchesPostgres)$' -v 2>&1)
           echo "$out"
           if echo "$out" | grep -q "SKIP"; then
-            echo "::error::SQL PREPARE 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"
+            echo "::error::PostgreSQL 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"
             exit 1
           fi
-          echo "$out" | grep -qE "^--- PASS|^ok" || { echo "::error::未见通过标记"; exit 1; }
+          for test_name in TestAllSQLPrepares TestImageKeyPatternMatchesPostgres; do
+            echo "$out" | grep -q -- "--- PASS: $test_name" || {
+              echo "::error::$test_name 未见通过标记"
+              exit 1
+            }
+          done
 
       # 编译通得过才算完。test 只编译被测包，main 包不在其中
       - name: 构建
@@ -142,7 +147,7 @@ jobs:
           # 曾经在 .env.example 里给了 koinote-internal-dev-token 作为示例值 ——
           # 开源之后那就是一把公开的万能钥匙，而 README 第一步就是 cp 成 .env。
           # backend 侧另有 TestExampleEnvHasNoUsableInternalToken。
-          bad=$(grep -E '^(BACKEND_INTERNAL_TOKEN|SESSION_SECRET|EMAIL_VERIFICATION_SECRET|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|BOT_WEBHOOK|BOT_WEBHOOK_SECRET|CLOUDFLARE_ANALYTICS_TOKEN)=.+' .env.example || true)
+          bad=$(grep -E '^(BACKEND_INTERNAL_TOKEN|SESSION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|EMAIL_VERIFICATION_SECRET|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|BOT_WEBHOOK|BOT_WEBHOOK_SECRET|CLOUDFLARE_ANALYTICS_TOKEN)=.+' .env.example || true)
           if [ -n "$bad" ]; then
             echo "以下凭据在 .env.example 里有值，必须留空：$bad"; exit 1
           fi
