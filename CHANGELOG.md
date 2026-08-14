@@ -6,6 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens,
+  local-first SQLite documents, background synchronization, and explicit conflict recovery.
+- Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel,
+  and Windows x64 installers.
+
 ## [0.5.0] - 2026-08-15
 
 ### Added

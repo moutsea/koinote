@@ -17,6 +17,7 @@ into the same hole.
 - [Architecture](#architecture)
 - [Local development](#local-development)
 - [Auth and security](#auth)
+- [Desktop client](#desktop-client)
 - [Invitation rewards](#invitation-rewards)
 - [Membership and billing](#membership-and-billing)
 - [MCP document access](#mcp-document-access)
@@ -39,11 +40,12 @@ Browser ──▶ Cloudflare Worker (worker/index.ts)
                                     │ docker-compose:          │
                                     │  Go backend + Postgres   │
                                     └──────────────────────────┘
+Desktop client ── local SQLite / OS keychain ──▶ Worker / Go backend (Bearer sync)
 ```
 
 - **Frontend** Vite + React 19 + TypeScript + TanStack Router + react-query + Tailwind v4
 - **Editor core** TipTap v3 (ProseMirror family) + tiptap-markdown (lossless Markdown round-trip)
-- **Backend** Go (stdlib `net/http`) + pgx, stateless HMAC-SHA256 session cookie
+- **Backend** Go (stdlib `net/http`) + pgx; HMAC-SHA256 browser cookies and revocable opaque desktop tokens
 - **Database** PostgreSQL 16
 - **Deployment** Cloudflare Worker (frontend) + VPS/docker-compose (backend)
 
@@ -56,6 +58,8 @@ spa/          frontend SPA (Vite root)
     components/     AppShell, editor (TipTap)
     api.ts          backend API wrapper (credentials: include)
     auth.ts         session state hook (react-query)
+    desktop/        Tauri runtime, PKCE, keychain requests, and SQLite offline sync
+src-tauri/    macOS / Windows shell, capabilities, SQLite migration, and app icons
 worker/       Cloudflare Worker (API proxy + SPA hosting)
 backend/      Go backend
   cmd/server/       entry point
@@ -293,6 +297,57 @@ Callback URLs are derived from `APP_URL` and must be registered with each provid
 filtered through `sanitizeRedirectPath`, which only permits in-site relative paths.
 An existing account with the same email (for example a password signup) is merged
 on OAuth login rather than duplicated.
+
+## Desktop client
+
+The desktop app uses Tauri 2 rather than Electron. The React / TipTap UI remains shared with the
+web app; Rust only owns capabilities that a browser cannot or should not provide: the native
+window, `koinote://` deep links, SQLite, the OS keychain, and single-instance coordination. This
+keeps the bundle and idle memory smaller without creating a second editor implementation.
+
+### System-browser sign-in and PKCE
+
+The desktop WebView never collects a password or duplicates Google / GitHub OAuth callbacks:
+
+1. The client generates `state` and a PKCE verifier and temporarily stores them in macOS Keychain or Windows Credential Manager.
+2. The system browser opens `/desktop/authorize`; the user signs in with the normal web cookie and explicitly approves access.
+3. The backend creates a five-minute, single-use authorization code and stores only its SHA-256 hash plus the code challenge.
+4. The browser opens `koinote://auth?code=…&state=…`; the client verifies state before exchanging the verifier for tokens.
+5. Access tokens last 15 minutes. Refresh tokens last 30 days and rotate on every use. PostgreSQL stores only token hashes; plaintext stays in the OS keychain. Revocation, password changes, and “sign out other devices” all take effect through `session_version`.
+
+The backend applies an explicit allowlist to desktop bearer tokens. They can reach only the editing,
+organization, sharing, storage-usage, and read-only membership endpoints needed by the app; Checkout,
+MCP-token management, admin, password/session-security operations, and permanent deletion remain forbidden.
+
+Deep links are untrusted input, so both sides validate the code, state, client ID, and PKCE alphabet.
+Windows launches another process for a deep link; the single-instance plugin forwards that URL to
+the existing window.
+
+### Local-first synchronization
+
+SQLite stores per-account documents, folders, tabs, pending state, and conflict snapshots, but no
+tokens. New documents and folders receive UUID v4 IDs locally. The backend lets an authenticated
+desktop client submit those IDs and treats a content-identical retry as success, so losing a response
+after the server commits does not create a duplicate document.
+
+Document sync keeps three counters: `local_revision` for editor-side local CAS, `base_revision` for
+the last confirmed server revision, and `change_seq` to reject delayed network responses. A server
+acknowledgement cannot move the local revision backwards. A pull may update SQLite only while base,
+state, and change sequence still match the snapshot taken before the request; typing while it is in
+flight therefore survives. If both bodies changed, the complete local and cloud copies are retained
+for an explicit choice. Folders have no server revision yet, so a conflicting local folder mutation
+remains pending and is replayed on the next pass.
+
+The alpha's offline boundary is Markdown content, folders, search, and tabs. It does not yet cache
+the bytes of remote images that have never been loaded, and history, sharing, billing, and admin
+operations still require a connection. Signing out erases that account's local SQLite cache to avoid
+leaving document content on a shared machine. Before logout, the editor flushes its debounce window into
+SQLite. If unsynced changes or conflicts remain, the user must explicitly confirm their deletion; offline
+content is never discarded silently.
+
+CI compiles the Rust / Tauri app on both macOS and Windows. Public distribution still needs Apple
+Developer ID signing and notarization, a Windows code-signing certificate, and signed auto-updates;
+those are release infrastructure rather than blockers for the local alpha.
 
 ## Invitation rewards
 
@@ -1032,11 +1087,11 @@ throwing would fail uploads outright, which is worse.
 
 ## Verification
 
-One command covers the frontend and Worker (typecheck on both sides plus 29
-assertion suites):
+One command covers the frontend and Worker (typecheck on both sides plus every
+assertion suite):
 
 ```bash
-npm test          # typecheck ×2 + 29 suites, stops at the first failure
+npm test          # typecheck ×2 + every suite, stops at the first failure
 npm run go:test   # go vet + go test
 ```
 

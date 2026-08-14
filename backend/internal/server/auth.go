@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -349,4 +350,10 @@ func randomUUID() (string, error) {
 		hex.EncodeToString(b[6:8]) + "-" +
 		hex.EncodeToString(b[8:10]) + "-" +
 		hex.EncodeToString(b[10:16]), nil
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func validUUID(value string) bool {
+	return uuidPattern.MatchString(strings.TrimSpace(value))
 }

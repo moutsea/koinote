@@ -124,6 +124,11 @@ def main() -> None:
     ink = (31, 35, 40, 255)
     plate(rev, 192, ink, 0.5).save(out / "favicon.png", optimize=True)
     plate(rev, 180, ink, 0.5).save(out / "apple-touch-icon.png", optimize=True)
+
+    desktop_icons = Path("src-tauri/icons")
+    if desktop_icons.is_dir():
+        plate(rev, 1024, ink, 0.5).save(desktop_icons / "app-icon.png", optimize=True)
+        print("wrote src-tauri/icons/app-icon.png; run `npx tauri icon src-tauri/icons/app-icon.png`")
     print("wrote logo.png logo-dark.png favicon.png apple-touch-icon.png")
 
 

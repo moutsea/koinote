@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Koinote desktop network, deep-link, and offline database permissions",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "deep-link:default",
+    "dialog:default",
+    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://koinote.app/**" },
+        { "url": "https://img.koinote.app/**" },
+        { "url": "http://localhost:5273/**" }
+      ]
+    },
+    "opener:default",
+    "sql:default",
+    "sql:allow-execute"
+  ]
+}

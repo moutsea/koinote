@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -169,6 +170,24 @@ func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, b
 			httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
 			return model.User{}, false
 		}
+	}
+	if token := bearerToken(r); token != "" {
+		user, ok, err := a.desktopUserFromBearer(r.Context(), token)
+		if err != nil {
+			log.Printf("desktop bearer authentication: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
+			return model.User{}, false
+		}
+		if ok {
+			if !desktopRequestAllowed(r) {
+				httpx.ErrorCode(w, http.StatusForbidden, "desktop_scope_forbidden", "Desktop app is not allowed to access this endpoint")
+				return model.User{}, false
+			}
+			a.noteUserActivity(user.ID)
+			return user, true
+		}
+		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
+		return model.User{}, false
 	}
 
 	payload, ok := a.sessionPayloadFromCookie(r)

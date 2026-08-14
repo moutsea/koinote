@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/react";
+import { fetchAppResource } from "../../api";
 import { safeFilename } from "./exportDocument";
 import { EXPORT_BASE_CSS, EXPORT_PDF_CSS } from "./exportStyles";
 import { highlightCodeBlocks } from "./highlightCode";
@@ -203,7 +204,7 @@ async function toDataURL(src: string): Promise<string | null> {
     IMAGE_FETCH_TIMEOUT_MS,
   );
   try {
-    const response = await fetch(src, {
+    const response = await fetchAppResource(src, {
       credentials: "include",
       signal: controller.signal,
     });

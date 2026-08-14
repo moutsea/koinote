@@ -1,0 +1,121 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS Apple Silicon
+            os: macos-14
+            target: aarch64-apple-darwin
+            assets: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          - label: macOS Intel
+            os: macos-14
+            target: x86_64-apple-darwin
+            assets: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          - label: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            assets: |
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: ${{ matrix.target }}
+
+      - run: npm ci
+      - run: npm run desktop:build -- --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: ${{ matrix.assets }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验标签与客户端版本一致
+        shell: bash
+        run: |
+          app_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "desktop-v$app_version" != "$GITHUB_REF_NAME" ]; then
+            echo "标签 $GITHUB_REF_NAME 与客户端版本 $app_version 不一致"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: 生成校验值与发布说明
+        shell: bash
+        run: |
+          (
+            cd release-artifacts
+            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum
+          ) > release-artifacts/SHA256SUMS.txt
+          version=${GITHUB_REF_NAME#desktop-v}
+          cat > release-notes.md <<EOF
+          # Koinote Desktop $version (Alpha)
+
+          Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
+
+          - **macOS Apple 芯片**：文件名包含 \`aarch64\`
+          - **macOS Intel 芯片**：文件名包含 \`x64\`
+          - **Windows 64 位**：可选择 NSIS \`.exe\` 或 MSI \`.msi\`
+
+          当前 Alpha 安装包尚未购买代码签名证书。macOS 首次运行请右键应用并选择“打开”；Windows 出现 SmartScreen 时请核对本页的 SHA-256 后选择“更多信息 → 仍要运行”。
+
+          ---
+
+          Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
+
+          These Alpha installers are currently unsigned. On macOS, right-click the app and choose **Open** the first time. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
+          EOF
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mapfile -d '' assets < <(find release-artifacts -type f -print0 | sort -z)
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --title "Koinote Desktop ${GITHUB_REF_NAME#desktop-v} (Alpha)" \
+            --notes-file release-notes.md

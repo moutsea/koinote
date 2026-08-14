@@ -124,7 +124,7 @@ export function ChangelogPage() {
                   >
                     {isUnreleased && (
                       <InkSeal
-                        label="新"
+                        label={t.changelog.newLabel}
                         className="absolute right-5 top-5 hidden h-10 px-1 text-xs sm:inline-flex"
                       />
                     )}

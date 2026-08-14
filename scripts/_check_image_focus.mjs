@@ -225,7 +225,7 @@ ok(
   );
   ok(
     "重试 URL 带 cache-busting 轮次",
-    /src=\{imageURLForAttempt\(src,\s*attempt\)\}/.test(bare),
+    /src=\{imageURLForAttempt\(src,\s*attempt,\s*imageProxyOrigin\)\}/.test(bare),
     "只重挂相同 URL 会继续命中 CDN 负缓存，必须只改显示 URL 的查询参数",
   );
   ok(
@@ -288,6 +288,12 @@ ok(
     imageURLForAttempt(`${cdn}?v=2#preview`, 2) ===
       `/images/${key}?v=2&__koinote_retry=2#preview`,
     imageURLForAttempt(`${cdn}?v=2#preview`, 2),
+  );
+  ok(
+    "桌面端使用远端站内代理而不是 tauri 相对路径",
+    imageURLForAttempt(cdn, 0, "https://koinote.app/") ===
+      `https://koinote.app/images/${key}`,
+    imageURLForAttempt(cdn, 0, "https://koinote.app/"),
   );
 
   const lookalike = `https://example.com/${key}`;

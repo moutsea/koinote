@@ -18,7 +18,10 @@ function withRetryQuery(src: string, attempt: number): string {
  * 这里只返回显示地址，不修改 TipTap 节点里的 src；正文与导出仍保留 CDN 地址。
  * 只接受生产图床域名和合法对象 key，避免把任意外站图片误映射到站内路径。
  */
-export function sameOriginImageURL(src: string): string | null {
+export function sameOriginImageURL(
+  src: string,
+  proxyOrigin?: string,
+): string | null {
   let url: URL;
   try {
     url = new URL(src);
@@ -27,15 +30,21 @@ export function sameOriginImageURL(src: string): string | null {
   }
   if (url.origin !== KOINOTE_IMAGE_ORIGIN) return null;
   if (!KOINOTE_IMAGE_PATH.test(url.pathname)) return null;
-  return `/images${url.pathname}${url.search}${url.hash}`;
+  const path = `/images${url.pathname}${url.search}${url.hash}`;
+  const origin = proxyOrigin?.replace(/\/+$/, "");
+  return origin ? `${origin}${path}` : path;
 }
 
 /**
  * 自有 CDN 图片从首次加载起就走同源代理；其他图片保持原地址，失败重试时绕过缓存。
  * 这里只改实际显示地址，不修改文档里的 src，因此导出仍使用 CDN。
  */
-export function imageURLForAttempt(src: string, attempt: number): string {
-  const displayURL = sameOriginImageURL(src) ?? src;
+export function imageURLForAttempt(
+  src: string,
+  attempt: number,
+  proxyOrigin?: string,
+): string {
+  const displayURL = sameOriginImageURL(src, proxyOrigin) ?? src;
   if (attempt <= 0) return displayURL;
   return withRetryQuery(displayURL, attempt);
 }

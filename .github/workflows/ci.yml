@@ -108,13 +108,13 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: |
-          out=$(go test ./internal/server/ -run '^(TestAllSQLPrepares|TestImageKeyPatternMatchesPostgres)$' -v 2>&1)
+          out=$(go test ./internal/server/ -run '^(TestAllSQLPrepares|TestImageKeyPatternMatchesPostgres|TestDesktopAuthorizationEndToEnd)$' -v 2>&1)
           echo "$out"
           if echo "$out" | grep -q "SKIP"; then
             echo "::error::PostgreSQL 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"
             exit 1
           fi
-          for test_name in TestAllSQLPrepares TestImageKeyPatternMatchesPostgres; do
+          for test_name in TestAllSQLPrepares TestImageKeyPatternMatchesPostgres TestDesktopAuthorizationEndToEnd; do
             echo "$out" | grep -q -- "--- PASS: $test_name" || {
               echo "::error::$test_name 未见通过标记"
               exit 1
@@ -125,6 +125,31 @@ jobs:
       - name: 构建
         working-directory: backend
         run: go build ./...
+
+  # 桌面客户端必须在两个目标系统上都编译。macOS 的 Keychain 和 Windows 的
+  # Credential Manager 走不同后端，只在 Linux 上 cargo check 会漏掉平台问题。
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run desktop:check
 
   # 密钥卫生：防止 .env / 硬编码密钥被提交进来
   secrets:

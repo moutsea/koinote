@@ -5,6 +5,7 @@ import {
   activate,
   close,
   hydrate,
+  removeUnavailable,
 } from "./_tab_pool_bundle.mjs";
 
 let pass = 0,
@@ -136,6 +137,24 @@ eq("没有活动标签时取第一篇", hydrate(["a", "b"], null), {
   activeDocId: "a",
 });
 eq("空列表", hydrate([], null), { openTabs: [], liveIds: [], activeDocId: null });
+
+// ---------- 与最新文档列表对齐 ----------
+
+r = removeUnavailable(
+  { openTabs: ["a", "b", "c"], liveIds: ["b", "c"], activeDocId: "b" },
+  ["a", "c"],
+);
+eq("云端删除当前文档后回收标签", r.next.openTabs, ["a", "c"]);
+eq("云端删除当前文档后激活相邻标签", r.next.activeDocId, "c");
+eq("返回被删除的标签", r.removed, ["b"]);
+
+r = removeUnavailable(
+  { openTabs: ["a", "b"], liveIds: ["b", "a"], activeDocId: "b" },
+  ["a"],
+  ["b"],
+);
+eq("编辑器内仍有待存内容时保留标签", r.next.openTabs, ["a", "b"]);
+eq("受保护标签不会被报告为已删除", r.removed, []);
 
 // 不变量：任何 hydrate 结果里 activeDocId 都在 openTabs 内（或为 null）
 for (const [tabs, active] of [

@@ -13,6 +13,7 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 export interface Messages {
   nav: {
     editor: string;
+    download: string;
     pricing: string;
     docs: string;
     mcpGuide: string;
@@ -32,6 +33,7 @@ export interface Messages {
     title: string;
     subtitle: string;
     ctaStart: string;
+    ctaDownload: string;
     ctaRegister: string;
     features: Array<{ title: string; desc: string }>;
     mcp: {
@@ -573,15 +575,46 @@ export interface Messages {
     title: string;
     subtitle: string;
     unreleased: string;
+    newLabel: string;
     sourceLink: string;
     sourceNote: string;
     categories: Record<string, string>;
+  };
+  desktopAuth: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    permissionsTitle: string;
+    permissionDocuments: string;
+    permissionOffline: string;
+    permissionIdentity: string;
+    approve: string;
+    cancel: string;
+    signIn: string;
+    invalid: string;
+    failed: string;
+  };
+  desktopSync: {
+    synced: string;
+    syncing: string;
+    offline: string;
+    pending: string;
+    error: string;
+    conflicts: string;
+    conflictsTitle: string;
+    conflictsDescription: string;
+    keepLocal: string;
+    useCloud: string;
+    close: string;
+    logoutWarning: string;
+    logoutSaveFailed: string;
   };
   footer: {
     tagline: string;
     brandCn: string;
     product: string;
     editor: string;
+    download: string;
     pricing: string;
     dashboard: string;
     mcpGuide: string;

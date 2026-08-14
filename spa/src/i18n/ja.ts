@@ -3,6 +3,7 @@ import type { Messages } from "./types";
 export const ja: Messages = {
   nav: {
     editor: "エディタ",
+    download: "ダウンロード",
     pricing: "料金",
     docs: "ドキュメント",
     mcpGuide: "MCP 接続",
@@ -22,6 +23,7 @@ export const ja: Messages = {
     subtitle:
       "Koinote は Typora ライクなオンライン Markdown エディタです。書きながらレンダリングし、画像を直接アップロードし、許可した Agent が文書を安全に操作できます。",
     ctaStart: "今すぐ書き始める",
+    ctaDownload: "デスクトップ版をダウンロード",
     ctaRegister: "アカウント登録",
     features: [
       {
@@ -768,6 +770,7 @@ function hello(name) {
     subtitle:
       "Koinote の各リリースで追加・改善・修正された内容を確認できます。",
     unreleased: "次回リリース",
+    newLabel: "新着",
     sourceLink: "GitHub で原文を見る",
     sourceNote:
       "このページはオープンソースリポジトリの日本語更新履歴と同期しています。",
@@ -780,12 +783,42 @@ function hello(name) {
       Removed: "削除",
     },
   },
+  desktopAuth: {
+    eyebrow: "デスクトップアプリ",
+    title: "Koinote アプリを承認",
+    description: "この端末にオフラインコピーを保存し、接続が戻ったときに変更を同期します。",
+    permissionsTitle: "承認すると、アプリは次の操作を行えます：",
+    permissionDocuments: "文書とフォルダーの閲覧・作成・整理・共有・ゴミ箱への移動",
+    permissionOffline: "この端末への文書のオフラインコピー保存",
+    permissionIdentity: "ログイン中のアカウントを表示するための基本情報の取得",
+    approve: "許可してアプリに戻る",
+    cancel: "キャンセル",
+    signIn: "ログインして続行",
+    invalid: "承認リンクが無効です。アプリに戻ってもう一度お試しください。",
+    failed: "承認を完了できませんでした。もう一度お試しください。",
+  },
+  desktopSync: {
+    synced: "同期済み",
+    syncing: "同期中",
+    offline: "オフラインで編集中",
+    pending: "件の変更が同期待ち",
+    error: "同期に失敗しました。クリックして再試行",
+    conflicts: "件の競合を確認してください",
+    conflictsTitle: "同期競合を解決",
+    conflictsDescription: "ローカルとクラウドの両方で変更されています。残す版を選んでください。自動で上書きはしません。",
+    keepLocal: "ローカル版を残す",
+    useCloud: "クラウド版を使う",
+    close: "後で解決",
+    logoutWarning: "この端末には未同期の変更が {pending} 件あり、そのうち {conflicts} 件は競合しています。続行するとローカル内容は完全に削除されます。それでもログアウトしますか？",
+    logoutSaveFailed: "現在の編集内容をローカルに保存できなかったため、ログアウトを中止しました。再試行するか、本文をコピーしてからログアウトしてください。",
+  },
   footer: {
     tagline:
       "Koinote は WYSIWYG のオンライン Markdown エディタです。入力しながら描画、画像はそのまま画像ストレージへ、ワンクリックで書き出しと共有ができます。",
     brandCn: "锦鲤笔记",
     product: "プロダクト",
     editor: "エディタ",
+    download: "デスクトップ版",
     pricing: "料金",
     dashboard: "ダッシュボード",
     mcpGuide: "MCP 接続ガイド",

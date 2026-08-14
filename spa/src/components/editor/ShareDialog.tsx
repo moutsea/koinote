@@ -8,6 +8,7 @@ import {
   type ShareAccess,
 } from "../../documents";
 import { useI18n } from "../../i18n";
+import { confirmAction } from "../../confirmAction";
 
 export function ShareDialog({
   docId,
@@ -71,7 +72,7 @@ export function ShareDialog({
   }
 
   async function handleRevoke() {
-    if (!window.confirm(t.editor.shareRevokeConfirm)) return;
+    if (!(await confirmAction(t.editor.shareRevokeConfirm))) return;
     setError(null);
     try {
       await revoke.mutateAsync(docId);

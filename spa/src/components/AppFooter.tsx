@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { InkSeal } from "./Ink";
 import { Logo } from "./Logo";
 import { EDGE_PADDING } from "../layout";
+import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 
 /** 兄弟站点。与 KeepAsk 的页脚同源，改一处这里也要跟着改 */
 const SIBLING_SITES = [
@@ -110,6 +111,9 @@ export function AppFooter() {
               <FooterColumn title={t.footer.product}>
                 <FooterRoute to="/">{t.footer.home}</FooterRoute>
                 <FooterRoute to="/editor">{t.footer.editor}</FooterRoute>
+                <FooterExternal href={DESKTOP_DOWNLOAD_URL}>
+                  {t.footer.download}
+                </FooterExternal>
                 <FooterRoute to="/pricing">{t.footer.pricing}</FooterRoute>
                 <FooterRoute to="/docs/mcp">{t.footer.mcpGuide}</FooterRoute>
                 <FooterRoute to="/docs/version-history">

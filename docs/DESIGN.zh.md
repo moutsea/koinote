@@ -14,6 +14,7 @@
 - [架构](#架构)
 - [本地开发](#本地开发)
 - [认证与安全](#认证)
+- [桌面客户端](#桌面客户端)
 - [邀请奖励](#邀请奖励)
 - [会员与支付](#会员与支付)
 - [MCP 文档访问](#mcp-文档访问)
@@ -36,11 +37,12 @@
                                     │ docker-compose:      │
                                     │  Go 后端 + Postgres  │
                                     └──────────────────────┘
+桌面客户端 ──本地 SQLite / 系统钥匙串──▶ Worker / Go 后端（Bearer token 同步）
 ```
 
 - **前端**：Vite + React 19 + TypeScript + TanStack Router + react-query + Tailwind v4
 - **编辑器内核**：TipTap v3（ProseMirror 系）+ tiptap-markdown（Markdown 往返保真）
-- **后端**：Go（stdlib net/http）+ pgx，无状态 HMAC-SHA256 会话 cookie
+- **后端**：Go（stdlib net/http）+ pgx；浏览器用 HMAC-SHA256 cookie，桌面端用可撤销的不透明 token
 - **数据库**：PostgreSQL 16
 - **部署**：Cloudflare Worker（前端）+ VPS/docker-compose（后端）
 
@@ -53,6 +55,8 @@ spa/          前端 SPA 源码（Vite root）
     components/     AppShell、editor（TipTap）
     api.ts          后端 API 封装（credentials: include）
     auth.ts         会话状态 hook（react-query）
+    desktop/        Tauri 运行时、PKCE、系统钥匙串请求与 SQLite 离线同步
+src-tauri/    macOS / Windows 原生壳、权限、SQLite 迁移与应用图标
 worker/       Cloudflare Worker（API 代理 + SPA 托管）
 backend/      Go 后端
   cmd/server/       入口
@@ -254,6 +258,49 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 
 `state` 用签名 cookie + nonce 双校验，回跳路径经 `sanitizeRedirectPath` 过滤，只允许站内相对路径。
 同邮箱的既有账号（如密码注册用户）在 OAuth 登录时会自动合并，不会重复建号。
+
+## 桌面客户端
+
+桌面端使用 Tauri 2，而不是 Electron。React / TipTap 界面继续复用网页代码，Rust 层只负责
+浏览器做不到或不该做的能力：原生窗口、`koinote://` 深链、SQLite、系统钥匙串和单实例。
+这样安装包和常驻内存更小，也不用维护第二套编辑器。
+
+### 系统浏览器登录与 PKCE
+
+桌面 WebView 不直接收密码，也不复制 Google / GitHub OAuth 回调。登录流程是：
+
+1. 客户端生成 `state` 与 PKCE verifier，只把它们暂存在 macOS Keychain / Windows Credential Manager。
+2. 系统浏览器打开 `/desktop/authorize`；用户沿用网页 cookie 登录并明确批准客户端访问。
+3. 后端生成 5 分钟、单次有效的授权码，数据库只存 SHA-256 摘要与 code challenge。
+4. 浏览器跳到 `koinote://auth?code=…&state=…`；客户端先比较 state，再用 verifier 换 token。
+5. 访问令牌 15 分钟有效，刷新令牌 30 天有效且每次使用都轮换。数据库只存 token 摘要，
+   原文只留在系统钥匙串；撤销、修改密码和“退出其他设备”都通过 `session_version` 立即生效。
+
+Bearer token 通过后端显式 allowlist 只能访问桌面编辑、整理、分享、存储用量与只读会员状态所需接口，
+不能调用支付 Checkout、MCP 令牌、管理后台、密码与会话安全操作，也不能永久删除文档。
+
+深链本身是不可信输入，所以 code、state、client ID 和 PKCE 字符集在前后端都会校验。Windows
+收到深链时会启动第二个进程，single-instance 插件负责把 URL 转给已有窗口。
+
+### 本地优先同步
+
+SQLite 按账号保存文档、文件夹、标签页、待同步状态与冲突副本，但不保存任何令牌。新建文档和
+文件夹先生成 UUID v4；后端允许已鉴权桌面客户端提交这个 ID，并把内容相同的重试视作幂等成功，
+所以请求在服务端落库后丢失响应也不会复制出第二篇文档。
+
+文档同步同时维护三个数字：`local_revision` 给已打开的编辑器做本机 CAS，`base_revision` 是
+最后确认的服务端 revision，`change_seq` 用来拒绝过期网络响应。云端确认不能让本地 revision
+回退；拉取响应写 SQLite 时必须仍匹配发请求前的 base、状态和 change sequence，否则说明用户
+等待期间又输入了内容，该响应只能留给下一轮处理。正文两端都变化时保存本地与云端完整副本，
+由用户选择；文件夹目前没有服务端 revision，因此冲突时保留本地待同步状态并在下一轮重放。
+
+当前 alpha 的离线边界是“Markdown 正文、目录、搜索和标签页可用”。尚未访问过的远端图片不做
+二进制缓存，版本历史、分享、支付和管理功能也仍需联网。退出登录会清除该账号的本机 SQLite
+缓存，避免共用电脑残留正文。登出前编辑器先把防抖窗口中的内容写入 SQLite；若仍有待同步修改或
+冲突，必须由用户明确确认丢弃后才会清理，不能把离线正文静默删除。
+
+CI 分别在 macOS 与 Windows 运行 Rust / Tauri 编译检查。正式分发前还需要配置 Apple
+Developer ID、公证、Windows 代码签名证书和自动更新签名；这些属于发布基础设施，不影响本地 alpha。
 
 ## 邀请奖励
 
@@ -874,10 +921,10 @@ curl https://你的域名/api/images/config
 
 ## 验证
 
-一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 29 个断言套件）：
+一条命令跑完前端与 Worker 的全部检查（两端 typecheck + 全部断言套件）：
 
 ```bash
-npm test          # typecheck × 2 + 29 个套件，失败即停
+npm test          # typecheck × 2 + 全部套件，失败即停
 npm run go:test   # go vet + go test（后端）
 ```
 

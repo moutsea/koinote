@@ -18,6 +18,7 @@ const (
 
 var (
 	errDocumentNotFound          = errors.New("document not found")
+	errDocumentIDConflict        = errors.New("document id conflict")
 	errDocumentQuotaExceeded     = errors.New("document storage quota exceeded")
 	errDocumentRevisionConflict  = errors.New("document revision conflict")
 	errDocumentVersionNotFound   = errors.New("document version not found")
@@ -35,7 +36,9 @@ const (
 
 type createDocumentParams struct {
 	User     model.User
+	DocID    string
 	Title    string
+	Theme    *string
 	Content  string
 	FolderID *string
 }
@@ -59,9 +62,17 @@ type storedDocument struct {
 }
 
 func (a *App) createDocument(ctx context.Context, params createDocumentParams) (model.Document, error) {
-	docID, err := randomUUID()
-	if err != nil {
-		return model.Document{}, fmt.Errorf("document id: %w", err)
+	docID := strings.TrimSpace(params.DocID)
+	if docID == "" {
+		var err error
+		docID, err = randomUUID()
+		if err != nil {
+			return model.Document{}, fmt.Errorf("document id: %w", err)
+		}
+	}
+	theme := defaultDocumentTheme
+	if params.Theme != nil {
+		theme = normalizeDocumentTheme(*params.Theme)
 	}
 
 	tx, err := a.db.Begin(ctx)
@@ -77,13 +88,13 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 	var doc model.Document
 	err = tx.QueryRow(ctx, `
 		INSERT INTO documents (
-			doc_id, user_id, title, content, folder_id, revision, created_at, updated_at
+			doc_id, user_id, title, theme, content, folder_id, revision, created_at, updated_at
 		)
 		SELECT
-			$1, $2, $3::text, $4::text,
+			$1, $2, $3::text, $4::text, $5::text,
 			CASE
-				WHEN $5 = '' THEN NULL
-				ELSE (SELECT id FROM folders WHERE folder_id = $5 AND user_id = $2)
+				WHEN $6 = '' THEN NULL
+				ELSE (SELECT id FROM folders WHERE folder_id = $6 AND user_id = $2)
 			END,
 			1, now(), now()
 		WHERE COALESCE((
@@ -92,12 +103,38 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM image_objects
 			WHERE user_id = $2 AND purpose = 'persistent'
-		), 0) + octet_length($4::text) + octet_length($3::text) <= $6
+		), 0) + octet_length($5::text) + octet_length($3::text) <= $7
+		ON CONFLICT (doc_id) DO NOTHING
 		RETURNING doc_id, title, theme, content, revision, created_at, updated_at
-	`, docID, params.User.ID, params.Title, params.Content, derefOrEmpty(params.FolderID), a.storageQuotaFor(params.User)).Scan(
+	`, docID, params.User.ID, params.Title, theme, params.Content, derefOrEmpty(params.FolderID), a.storageQuotaFor(params.User)).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if params.DocID != "" {
+			var existing model.Document
+			var folderID string
+			lookupErr := tx.QueryRow(ctx, `
+				SELECT d.doc_id, d.title, d.theme, d.content, d.revision,
+				       d.created_at, d.updated_at, COALESCE(f.folder_id, '')
+				FROM documents d
+				LEFT JOIN folders f ON f.id = d.folder_id
+				WHERE d.doc_id = $1 AND d.user_id = $2 AND d.trashed_at IS NULL
+			`, docID, params.User.ID).Scan(
+				&existing.DocID, &existing.Title, &existing.Theme, &existing.Content,
+				&existing.Revision, &existing.CreatedAt, &existing.UpdatedAt, &folderID,
+			)
+			if lookupErr == nil && existing.Title == params.Title && existing.Theme == theme &&
+				existing.Content == params.Content && folderID == derefOrEmpty(params.FolderID) {
+				return existing, nil
+			}
+			if lookupErr == nil || errors.Is(lookupErr, pgx.ErrNoRows) {
+				if lookupErr == nil {
+					return model.Document{}, errDocumentIDConflict
+				}
+				return model.Document{}, errDocumentQuotaExceeded
+			}
+			return model.Document{}, lookupErr
+		}
 		return model.Document{}, errDocumentQuotaExceeded
 	}
 	if err != nil {

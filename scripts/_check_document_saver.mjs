@@ -56,6 +56,11 @@ ok(
   "删除流程必须能区分保存成功和失败",
 );
 ok(
+  "桌面登出可一次落库所有编辑器内容",
+  /const flushAll[\s\S]{0,500}Promise\.all\(\[\.\.\.entries\.current\.keys\(\)\]\.map\(flush\)\)[\s\S]{0,200}every\(Boolean\)/.test(bareSaver),
+  "只检查 SQLite 待同步数会漏掉仍在 800ms 防抖窗口内的内容",
+);
+ok(
   "保存失败返回 false 且保留 dirty",
   /catch\s*\([^)]*\)\s*\{[\s\S]{0,900}["']failed["'][\s\S]{0,500}return false/.test(bareSaver),
   "失败不能被吞成成功",
@@ -73,7 +78,9 @@ ok(
 );
 ok(
   "登出会清除所有冲突草稿",
-  /await apiLogout\(\)[\s\S]{0,120}clearAllConflictDrafts\(\)/.test(auth) &&
+  /const clearClientSession[\s\S]{0,240}clearAllConflictDrafts\(\)/.test(auth) &&
+    /if \(isDesktopRuntime\(\)\)[\s\S]{0,300}await apiLogout\(\)[\s\S]{0,300}finally[\s\S]{0,180}clearClientSession\(\)/.test(auth) &&
+    /await apiLogout\(\);[\s\S]{0,100}clearClientSession\(\)/.test(auth) &&
     /CONFLICT_DRAFT_PREFIX\s*=\s*["']koinote:conflict-draft:["']/.test(conflictDrafts) &&
     /localStorage\.removeItem\(key\)/.test(conflictDrafts),
   "完整正文不应在账号退出后继续留在共用设备上",

@@ -13,8 +13,15 @@ import "./globals.css";
 import { I18nProvider } from "./i18n";
 import { AppShell } from "./components/AppShell";
 import { HomePage } from "./pages/HomePage";
+import { isDesktopRuntime } from "./desktop/runtime";
 
 const queryClient = new QueryClient();
+
+if (isDesktopRuntime()) {
+  void import("./desktop/auth").then(({ initializeDesktopAuth }) =>
+    initializeDesktopAuth(),
+  );
+}
 
 // 主页与 AppShell 静态导入，保证首屏最快。
 // 编辑器（TipTap 最胖）、Dashboard、登录页按路由懒加载，用到才下载对应 chunk。
@@ -84,6 +91,14 @@ const loginRoute = createRoute({
   component: lazyRouteComponent(
     () => import("./pages/LoginPage"),
     "LoginRoute",
+  ),
+});
+const desktopAuthorizeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/desktop/authorize",
+  component: lazyRouteComponent(
+    () => import("./pages/DesktopAuthorizePage"),
+    "DesktopAuthorizePage",
   ),
 });
 const registerRoute = createRoute({
@@ -168,6 +183,7 @@ const routeTree = rootRoute.addChildren([
   editorRoute,
   editorDocRoute,
   loginRoute,
+  desktopAuthorizeRoute,
   registerRoute,
   dashboardRoute,
   documentsRoute,

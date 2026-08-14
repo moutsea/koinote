@@ -4,6 +4,13 @@ Koinote の利用者に関係する主な変更を記録します。
 
 ## [Unreleased]
 
+### Added
+
+- Tauri 2 ベースの macOS / Windows alpha を追加。システムブラウザの PKCE 認証、OS キーチェーン、
+  SQLite のローカル優先ドキュメント、バックグラウンド同期、明示的な競合復旧に対応しました。
+- Web サイトから GitHub Releases へ移動でき、macOS Apple Silicon／Intel と Windows x64 の
+  インストーラをダウンロードできます。
+
 ## [0.5.0] - 2026-08-15
 
 ### Added

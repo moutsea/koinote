@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { History } from "lucide-react";
+import { getDocument } from "../../api";
+import { DESKTOP_SYNC_EVENT, isDesktopRuntime } from "../../desktop/runtime";
+import type { DesktopSyncSummary } from "../../desktop/offlineStore";
 import MarkdownEditor from "./MarkdownEditor";
 import { useDocument } from "../../documents";
 import type { DocPatch, DocumentSaver } from "./useDocumentSaver";
@@ -63,6 +66,41 @@ export function LiveEditor({
     });
     setSeededDocId(docId);
   }, [doc.data, docId, saver]);
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let disposed = false;
+    const onDesktopSync = (event: Event) => {
+      const summary = (event as CustomEvent<DesktopSyncSummary>).detail;
+      if (summary.state !== "idle" || saver.isDirty(docId)) return;
+      void getDocument(docId).then(({ document }) => {
+        if (disposed || saver.isDirty(docId)) return;
+        const current = saver.peek(docId);
+        if (
+          current?.revision === document.revision &&
+          current.title === document.title &&
+          current.theme === document.theme &&
+          current.content === document.content
+        ) {
+          return;
+        }
+        saver.acceptRemote(docId, {
+          title: document.title,
+          content: document.content,
+          theme: document.theme ?? "",
+          revision: document.revision,
+        });
+        queryClient.setQueryData(["document", docId], document);
+        onTitleChange?.(docId, document.title);
+        setEditorGeneration((value) => value + 1);
+      }).catch(() => undefined);
+    };
+    window.addEventListener(DESKTOP_SYNC_EVENT, onDesktopSync);
+    return () => {
+      disposed = true;
+      window.removeEventListener(DESKTOP_SYNC_EVENT, onDesktopSync);
+    };
+  }, [docId, onTitleChange, queryClient, saver]);
 
   // 隐藏前记住滚动位置，显示后还原
   useEffect(() => {

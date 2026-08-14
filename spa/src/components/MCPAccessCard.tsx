@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
+import { confirmAction } from "../confirmAction";
 
 const MCP_TOKENS_KEY = ["mcp-tokens"] as const;
 type ExpiryChoice = 30 | 90 | 180 | 365 | "never";
@@ -281,8 +282,8 @@ export function MCPAccessCard({ user }: { user: User }) {
                       <button
                         type="button"
                         disabled={revoke.isPending}
-                        onClick={() => {
-                          if (window.confirm(t.mcp.revokeConfirm)) revoke.mutate(token.tokenId);
+                        onClick={async () => {
+                          if (await confirmAction(t.mcp.revokeConfirm)) revoke.mutate(token.tokenId);
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
                         style={{ color: "var(--ink-mid)" }}

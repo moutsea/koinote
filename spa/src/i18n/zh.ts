@@ -3,6 +3,7 @@ import type { Messages } from "./types";
 export const zh: Messages = {
   nav: {
     editor: "编辑器",
+    download: "下载客户端",
     pricing: "价格",
     docs: "文档",
     mcpGuide: "MCP 接入",
@@ -22,6 +23,7 @@ export const zh: Messages = {
     subtitle:
       "Koinote 是一个 Typora 式的在线 Markdown 编辑器。边写边渲染、图床直连，还能让你的 Agent 安全地读写文档。",
     ctaStart: "立即开始写作",
+    ctaDownload: "下载桌面客户端",
     ctaRegister: "注册账号",
     features: [
       {
@@ -737,6 +739,7 @@ function hello(name) {
     subtitle:
       "查看 Koinote 每个版本新增了什么、改进了什么，以及修复了哪些问题。",
     unreleased: "即将发布",
+    newLabel: "新",
     sourceLink: "在 GitHub 查看原始记录",
     sourceNote: "页面与开源仓库中的中文更新日志保持同步。",
     categories: {
@@ -748,12 +751,42 @@ function hello(name) {
       Removed: "移除",
     },
   },
+  desktopAuth: {
+    eyebrow: "桌面客户端",
+    title: "授权 Koinote 客户端",
+    description: "客户端将在这台设备上保存离线副本，并在恢复网络后同步你的修改。",
+    permissionsTitle: "授权后，客户端可以：",
+    permissionDocuments: "读取、创建、整理、分享以及移入回收站中的文档与文件夹",
+    permissionOffline: "在这台设备上保存文档的离线副本",
+    permissionIdentity: "读取基本账户信息以显示当前登录账号",
+    approve: "允许并返回客户端",
+    cancel: "取消",
+    signIn: "登录后继续",
+    invalid: "授权链接无效或已经损坏，请返回客户端重试。",
+    failed: "授权未能完成，请稍后重试。",
+  },
+  desktopSync: {
+    synced: "已同步",
+    syncing: "正在同步",
+    offline: "离线编辑中",
+    pending: "项修改待同步",
+    error: "同步失败，点击重试",
+    conflicts: "项冲突需要处理",
+    conflictsTitle: "处理同步冲突",
+    conflictsDescription: "云端和本机都修改了这些文档。请选择要保留的版本，另一份不会被静默覆盖。",
+    keepLocal: "保留本机版本",
+    useCloud: "使用云端版本",
+    close: "稍后处理",
+    logoutWarning: "这台设备还有 {pending} 项修改未同步，其中 {conflicts} 项存在冲突。继续登出会永久删除这些本地内容，确定继续吗？",
+    logoutSaveFailed: "无法先保存当前编辑内容，已取消登出。请重试，或复制正文备份后再退出。",
+  },
   footer: {
     tagline:
       "Koinote 是一个所见即所得的在线 Markdown 编辑器：边写边渲染、图片直传图床、一键导出与分享。",
     brandCn: "锦鲤笔记",
     product: "产品",
     editor: "编辑器",
+    download: "下载客户端",
     pricing: "价格",
     dashboard: "控制台",
     mcpGuide: "MCP 接入指南",

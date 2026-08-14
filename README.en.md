@@ -35,6 +35,15 @@ base64), **export to publishing platforms** (rich text for WeChat and Zhihu, Mar
 for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
 **safe MCP access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**.
 
+The repository also contains an alpha macOS / Windows client built with Tauri 2. It writes to
+local SQLite first and syncs when the network returns. Sign-in stays in the system browser and
+returns a short-lived desktop session through `koinote://auth` with PKCE.
+
+Download the desktop client through the [Koinote download link](https://koinote.app/download),
+which redirects to the latest GitHub Release. Releases include macOS Apple Silicon, macOS Intel,
+and Windows x64 installers plus SHA-256 checksums. Alpha installers are currently unsigned, so the
+operating system will show a security warning on first launch.
+
 > The current open-source scope covers editing, image hosting, export, sharing,
 > and the account flow. AI features are still planned; a one-time lifetime membership
 > is available through Stripe Checkout.
@@ -73,6 +82,14 @@ for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
   users can also explicitly sign out other devices
 - Recovery requests return the same result for unknown and OAuth-only accounts, while codes
   are stored only as HMAC values
+
+**Desktop client (alpha)**
+
+- macOS and Windows share the React / TipTap UI; Tauri supplies the native window, SQLite, deep links, and OS keychain
+- Documents, folders, and tabs are local-first, including offline create, edit, search, and organization
+- Revision conflicts retain both local and cloud copies for an explicit choice instead of silently applying last-write-wins
+- OAuth and password sign-in stay in the system browser; PKCE codes are single-use, access tokens last 15 minutes, and rotating refresh tokens last 30 days
+- Access tokens, refresh tokens, and pending PKCE verifiers stay in macOS Keychain or Windows Credential Manager, never SQLite
 
 **Image hosting**
 
@@ -144,14 +161,18 @@ Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
                                 └─ other /api/* and /mcp ──▶ Go backend ──▶ PostgreSQL
 Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
 Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend ──▶ Feishu bot
+Desktop ── local SQLite ───────────▶ offline writes ── sync / Bearer token ──▶ Worker / Go backend
 ```
 
 - **Frontend** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
 - **Editor** TipTap v3 (ProseMirror) · tiptap-markdown · KaTeX · lowlight
 - **Backend** Go (stdlib `net/http`) · pgx · Stripe Go SDK · PostgreSQL 16
 - **Edge** Cloudflare Worker · R2 · Email Sending
+- **Desktop** Tauri 2 · Rust · SQLite · macOS Keychain / Windows Credential Manager
 
-Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the database.
+Browser sessions use stateless HMAC-SHA256 signed cookies. Desktop sessions use opaque access and
+refresh tokens whose SHA-256 hashes are stored in PostgreSQL so rotation, revocation, and password-change
+invalidation remain authoritative.
 
 ## Agent document access (MCP)
 
@@ -300,6 +321,21 @@ Stripe's test card `4242 4242 4242 4242` with any future expiry and CVC.
 
 For the full walkthrough, port conflicts, and all-in-Docker startup, see the
 [design notes](docs/DESIGN.en.md#local-development).
+
+### Desktop development
+
+Install stable Rust as well. macOS needs Xcode Command Line Tools; Windows needs the Microsoft C++
+Build Tools and WebView2. Start PostgreSQL, the Go backend, and Vite as described above, then run:
+
+```bash
+npm run desktop:dev       # Tauri window; the browser returns through koinote://auth
+npm run desktop:check     # Rust / Tauri compile check
+npm run desktop:build     # installer for the current platform
+```
+
+Production builds sync with `https://koinote.app`; development defaults to
+`http://localhost:5273`. SQLite never stores tokens, and signing out clears that account's
+offline document cache from the machine.
 
 ## Before you self-host
 

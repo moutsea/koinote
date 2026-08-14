@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"koinote/backend/internal/httpx"
 	"koinote/backend/internal/model"
 )
@@ -76,11 +77,17 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
+		FolderID       string  `json:"folderId"`
 		Name           string  `json:"name"`
 		ParentFolderID *string `json:"parentFolderId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
+		return
+	}
+	body.FolderID = strings.TrimSpace(body.FolderID)
+	if body.FolderID != "" && (!strings.HasPrefix(bearerToken(r), desktopAccessTokenPrefix) || !validUUID(body.FolderID)) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_folder_id", "Invalid folder id")
 		return
 	}
 
@@ -90,11 +97,15 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	folderID, err := randomUUID()
-	if err != nil {
-		log.Printf("folder id: %v", err)
-		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
-		return
+	folderID := body.FolderID
+	if folderID == "" {
+		var err error
+		folderID, err = randomUUID()
+		if err != nil {
+			log.Printf("folder id: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
 	}
 
 	// 深度上限。folderMove 一直有这个检查，create 之前没有 —— 只要一层层往里建就能
@@ -147,6 +158,27 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	`, folderID, user.ID, derefOrEmpty(body.ParentFolderID), name).
 		Scan(&created.FolderID, &created.Name, &parent)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if body.FolderID != "" && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			var existing model.Folder
+			var existingParent string
+			lookupErr := a.db.QueryRow(r.Context(), `
+				SELECT f.folder_id, f.name, COALESCE(p.folder_id, '')
+				FROM folders f LEFT JOIN folders p ON p.id = f.parent_id
+				WHERE f.folder_id = $1 AND f.user_id = $2
+			`, folderID, user.ID).Scan(&existing.FolderID, &existing.Name, &existingParent)
+			if lookupErr == nil && existing.Name == name && existingParent == derefOrEmpty(body.ParentFolderID) {
+				if existingParent != "" {
+					existing.ParentFolderID = &existingParent
+				}
+				httpx.JSON(w, http.StatusOK, map[string]any{"folder": existing})
+				return
+			}
+			if lookupErr == nil || errors.Is(lookupErr, pgx.ErrNoRows) {
+				httpx.ErrorCode(w, http.StatusConflict, "conflict", "Folder already exists")
+				return
+			}
+		}
 		log.Printf("folder create: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return

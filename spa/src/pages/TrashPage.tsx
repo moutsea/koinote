@@ -8,6 +8,7 @@ import {
 } from "../documents";
 import { interpolate, useI18n, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
+import { confirmAction } from "../confirmAction";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -47,8 +48,8 @@ export function TrashPage() {
     );
   }
 
-  function permanentlyDelete(docId: string, title: string) {
-    if (!window.confirm(t.trashPage.permanentWarning)) return;
+  async function permanentlyDelete(docId: string, title: string) {
+    if (!(await confirmAction(t.trashPage.permanentWarning))) return;
     const expected = title || "DELETE";
     const confirmation = window.prompt(
       interpolate(t.trashPage.typeToConfirm, { title: expected }),
@@ -134,7 +135,7 @@ export function TrashPage() {
               <button
                 type="button"
                 onClick={() =>
-                  permanentlyDelete(document.docId, document.title)
+                  void permanentlyDelete(document.docId, document.title)
                 }
                 disabled={purge.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition hover:bg-red-50"

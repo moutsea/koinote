@@ -3,6 +3,7 @@ import type { Messages } from "./types";
 export const en: Messages = {
   nav: {
     editor: "Editor",
+    download: "Download",
     pricing: "Pricing",
     docs: "Docs",
     mcpGuide: "MCP integration",
@@ -22,6 +23,7 @@ export const en: Messages = {
     subtitle:
       "Koinote is a Typora-style online Markdown editor. Render as you type, upload images inline, and let your agents work safely with your documents.",
     ctaStart: "Start writing",
+    ctaDownload: "Download desktop app",
     ctaRegister: "Create account",
     features: [
       {
@@ -773,6 +775,7 @@ function hello(name) {
     title: "Changelog",
     subtitle: "See what Koinote adds, improves, and fixes in every release.",
     unreleased: "Coming next",
+    newLabel: "New",
     sourceLink: "View the source on GitHub",
     sourceNote:
       "This page stays in sync with the English changelog in the open-source repository.",
@@ -785,12 +788,42 @@ function hello(name) {
       Removed: "Removed",
     },
   },
+  desktopAuth: {
+    eyebrow: "Desktop app",
+    title: "Authorize the Koinote app",
+    description: "The app keeps offline copies on this device and syncs your changes when connectivity returns.",
+    permissionsTitle: "After approval, the app can:",
+    permissionDocuments: "Read, create, organize, share, and move your documents and folders to trash",
+    permissionOffline: "Keep offline copies of documents on this device",
+    permissionIdentity: "Read basic account details to show the signed-in account",
+    approve: "Allow and return to the app",
+    cancel: "Cancel",
+    signIn: "Sign in to continue",
+    invalid: "This authorization link is invalid. Return to the app and try again.",
+    failed: "Authorization could not be completed. Please try again.",
+  },
+  desktopSync: {
+    synced: "Synced",
+    syncing: "Syncing",
+    offline: "Editing offline",
+    pending: "changes waiting to sync",
+    error: "Sync failed; click to retry",
+    conflicts: "conflicts need attention",
+    conflictsTitle: "Resolve sync conflicts",
+    conflictsDescription: "These documents changed both locally and in the cloud. Choose which copy to keep; neither is silently overwritten.",
+    keepLocal: "Keep local copy",
+    useCloud: "Use cloud copy",
+    close: "Resolve later",
+    logoutWarning: "This device has {pending} unsynced changes, including {conflicts} conflicts. Continuing will permanently delete this local content. Log out anyway?",
+    logoutSaveFailed: "The current edits could not be saved locally, so logout was cancelled. Try again or copy the content before signing out.",
+  },
   footer: {
     tagline:
       "Koinote is a WYSIWYG online Markdown editor: render as you type, upload images straight to your image store, export and share in one click.",
     brandCn: "锦鲤笔记",
     product: "Product",
     editor: "Editor",
+    download: "Download app",
     pricing: "Pricing",
     dashboard: "Dashboard",
     mcpGuide: "MCP integration guide",

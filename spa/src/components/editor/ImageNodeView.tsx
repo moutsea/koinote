@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { desktopAPIOrigin, isDesktopRuntime } from "../../desktop/runtime";
 import { useI18n } from "../../i18n";
 import { imageURLForAttempt } from "./imageLoading";
 
@@ -41,6 +42,7 @@ export function ImageNodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
+  const imageProxyOrigin = isDesktopRuntime() ? desktopAPIOrigin() : undefined;
   // 重试轮次。既驱动退避定时器，也改变实际请求 URL 与 <img> 的 key。
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -247,7 +249,7 @@ export function ImageNodeView({
               // key 强制重挂 DOM；自有 CDN 从首次显示起就映射到同源 /images/...，
               // 其他图片重试时用轮次查询串绕过失败缓存。正文 src 始终不变。
               key={attempt}
-              src={imageURLForAttempt(src, attempt)}
+              src={imageURLForAttempt(src, attempt, imageProxyOrigin)}
               alt={alt}
               title={title || undefined}
               onError={() => setBroken(true)}

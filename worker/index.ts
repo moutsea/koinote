@@ -27,6 +27,8 @@ export interface Env extends Cloudflare.Env {
 }
 
 const API_PREFIXES = ["/api/", "/health"];
+const DESKTOP_RELEASES_URL =
+  "https://github.com/moutsea/koinote/releases/latest";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -41,6 +43,13 @@ export default {
 /** 路由分发。安全头由上面的 fetch 统一包，这里只管选处理器。 */
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+
+  if (
+    url.pathname === "/download" &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
+    return Response.redirect(DESKTOP_RELEASES_URL, 302);
+  }
 
   // 图片上传由 Worker 直接落 R2，不转发给后端——
   // 字节走边缘，不占 VPS 带宽。鉴权仍回调后端校验会话。

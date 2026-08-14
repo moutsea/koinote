@@ -19,6 +19,16 @@ function env() {
 }
 
 try {
+  const downloadResponse = await worker.fetch(
+    new Request("https://koinote.app/download"),
+    env(),
+  );
+  assert.equal(downloadResponse.status, 302);
+  assert.equal(
+    downloadResponse.headers.get("location"),
+    "https://github.com/moutsea/koinote/releases/latest",
+  );
+
   globalThis.fetch = async (request) => {
     assert.equal(
       new URL(request.url ?? request).pathname,

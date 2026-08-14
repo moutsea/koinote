@@ -2,6 +2,9 @@
 // 所有请求走同源 /api/*，dev 由 Vite 代理转发到 Go 后端，prod 由 Worker 代理。
 // credentials:"include" 让浏览器带上 koinote_session cookie，实现基于 cookie 的会话。
 
+import { isDesktopRuntime } from "./desktop/runtime";
+import { isDesktopAuthenticationRejection } from "./desktop/networkPolicy";
+
 export type User = {
   id: number;
   authUserId: string;
@@ -114,7 +117,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetchAppResource(path, {
     credentials: "include",
     ...init,
     headers: {
@@ -126,6 +129,17 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw await toApiError(response);
   }
   return response.json() as Promise<T>;
+}
+
+export async function fetchAppResource(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  if (isDesktopRuntime()) {
+    const { desktopFetch } = await import("./desktop/network");
+    return desktopFetch(path, init);
+  }
+  return fetch(path, init);
 }
 
 export function register(params: {
@@ -207,12 +221,71 @@ export function login(identifier: string, password: string) {
   });
 }
 
-export function logout() {
-  return apiJson<{ success: boolean }>("/api/auth/logout", { method: "POST" });
+export async function logout() {
+  if (!isDesktopRuntime()) {
+    return apiJson<{ success: boolean }>("/api/auth/logout", { method: "POST" });
+  }
+  const { clearDesktopSession, getStoredDesktopSession } = await import("./desktop/auth");
+  const session = await getStoredDesktopSession();
+  try {
+    try {
+      await apiJson<{ success: boolean }>("/api/auth/desktop/revoke", {
+        method: "POST",
+      });
+    } catch {
+      // 离线登出仍须立即清掉本机令牌和文档；服务端访问令牌最多 15 分钟失效，
+      // 刷新令牌也已从系统钥匙串删除，恢复网络后不会再被客户端使用。
+    }
+    return { success: true };
+  } finally {
+    try {
+      if (session?.accountId) {
+        const { clearDesktopOfflineAccount } = await import("./desktop/offlineStore");
+        await clearDesktopOfflineAccount(session.accountId);
+      }
+    } finally {
+      // 清理 SQLite 失败也不能阻止钥匙串令牌删除。否则用户看到登出失败后，
+      // 访问令牌和 30 天刷新令牌仍会留在设备上。
+      await clearDesktopSession();
+    }
+  }
 }
 
-export function getSession() {
-  return apiJson<{ user: User }>("/api/auth/session");
+export async function getSession() {
+  if (!isDesktopRuntime()) {
+    return apiJson<{ user: User }>("/api/auth/session");
+  }
+  try {
+    const result = await apiJson<{ user: User }>("/api/auth/session");
+    const { updateCachedDesktopUser } = await import("./desktop/auth");
+    await updateCachedDesktopUser(result.user);
+    return result;
+  } catch (error) {
+    // 只有 401/403 明确证明凭证无效；Worker 或后端返回 5xx 时仍应使用
+    // 钥匙串里的最后一次身份打开本地文档，否则“服务端故障”会把离线客户端
+    // 错误地送回登录页。受保护 API 的同步仍会失败，不会因此越权。
+    if (
+      error instanceof ApiError &&
+      isDesktopAuthenticationRejection(error.status)
+    ) {
+      throw error;
+    }
+    const { getCachedDesktopUser } = await import("./desktop/auth");
+    const user = await getCachedDesktopUser();
+    if (!user) throw error;
+    return { user };
+  }
+}
+
+export function authorizeDesktop(params: {
+  clientId: string;
+  codeChallenge: string;
+  state: string;
+}) {
+  return apiJson<{ redirectUri: string }>("/api/auth/desktop/authorize", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
 }
 
 export type DocumentHistorySettings = {
@@ -450,6 +523,11 @@ export type TrashedDocumentSummary = {
 };
 
 export function listDocuments() {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopListDocuments }) =>
+      desktopListDocuments(),
+    );
+  }
   return apiJson<{ documents: DocumentSummary[] }>("/api/documents");
 }
 
@@ -464,6 +542,11 @@ export type DocumentSearchResult = {
 };
 
 export function searchDocuments(query: string, limit = 20) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopSearchDocuments }) =>
+      desktopSearchDocuments(query, limit),
+    );
+  }
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   return apiJson<{ results: DocumentSearchResult[] }>(
     `/api/documents/search?${params.toString()}`,
@@ -476,6 +559,11 @@ export function createDocument(params?: {
   /** 直接建在这个文件夹里。省掉「建到根下再移动」那一步的闪烁 */
   folderId?: string | null;
 }) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopCreateDocument }) =>
+      desktopCreateDocument(params),
+    );
+  }
   return apiJson<{ document: Document }>("/api/documents", {
     method: "POST",
     body: JSON.stringify(params ?? {}),
@@ -483,6 +571,11 @@ export function createDocument(params?: {
 }
 
 export function getDocument(docId: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopGetDocument }) =>
+      desktopGetDocument(docId),
+    );
+  }
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
   );
@@ -498,6 +591,11 @@ export function updateDocument(
     forceVersion?: boolean;
   },
 ) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopUpdateDocument }) =>
+      desktopUpdateDocument(docId, params),
+    );
+  }
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "PUT", body: JSON.stringify(params) },
@@ -598,6 +696,11 @@ export type Folder = {
 };
 
 export function listFolders() {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopListFolders }) =>
+      desktopListFolders(),
+    );
+  }
   return apiJson<{ folders: Folder[] }>("/api/folders");
 }
 
@@ -605,6 +708,11 @@ export function createFolder(params: {
   name: string;
   parentFolderId: string | null;
 }) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopCreateFolder }) =>
+      desktopCreateFolder(params),
+    );
+  }
   return apiJson<{ folder: Folder }>("/api/folders", {
     method: "POST",
     body: JSON.stringify(params),
@@ -612,6 +720,11 @@ export function createFolder(params: {
 }
 
 export function renameFolder(folderId: string, name: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopRenameFolder }) =>
+      desktopRenameFolder(folderId, name),
+    );
+  }
   return apiJson<{ folder: Folder }>(
     `/api/folders/${encodeURIComponent(folderId)}`,
     { method: "PUT", body: JSON.stringify({ name }) },
@@ -619,6 +732,11 @@ export function renameFolder(folderId: string, name: string) {
 }
 
 export function deleteFolder(folderId: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopDeleteFolder }) =>
+      desktopDeleteFolder(folderId),
+    );
+  }
   return apiJson<{ ok: boolean }>(
     `/api/folders/${encodeURIComponent(folderId)}`,
     { method: "DELETE" },
@@ -626,6 +744,11 @@ export function deleteFolder(folderId: string) {
 }
 
 export function moveFolder(folderId: string, parentFolderId: string | null) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopMoveFolder }) =>
+      desktopMoveFolder(folderId, parentFolderId),
+    );
+  }
   return apiJson<{ ok: boolean }>(
     `/api/folders/${encodeURIComponent(folderId)}/parent`,
     { method: "PUT", body: JSON.stringify({ parentFolderId }) },
@@ -633,6 +756,11 @@ export function moveFolder(folderId: string, parentFolderId: string | null) {
 }
 
 export function moveDocument(docId: string, folderId: string | null) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopMoveDocument }) =>
+      desktopMoveDocument(docId, folderId),
+    );
+  }
   return apiJson<{ ok: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}/folder`,
     { method: "PUT", body: JSON.stringify({ folderId }) },
@@ -648,10 +776,20 @@ export type EditorTabs = {
 };
 
 export function getEditorTabs() {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopGetEditorTabs }) =>
+      desktopGetEditorTabs(),
+    );
+  }
   return apiJson<EditorTabs>("/api/editor/tabs");
 }
 
 export function putEditorTabs(params: EditorTabs) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopPutEditorTabs }) =>
+      desktopPutEditorTabs(params),
+    );
+  }
   return apiJson<EditorTabs>("/api/editor/tabs", {
     method: "PUT",
     body: JSON.stringify(params),
@@ -731,7 +869,7 @@ export async function uploadImage(
     throw new ApiError(415, "Unsupported image type", "image_type_unsupported");
   }
 
-  const response = await fetch("/api/images", {
+  const response = await fetchAppResource("/api/images", {
     method: "POST",
     credentials: "include",
     headers: {
@@ -789,6 +927,11 @@ export function getStorageUsage() {
 }
 
 export function trashDocument(docId: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopTrashDocument }) =>
+      desktopTrashDocument(docId),
+    );
+  }
   return apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}`,
     { method: "DELETE" },

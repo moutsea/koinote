@@ -15,6 +15,7 @@ import { useCurrentUser } from "../auth";
 import { useI18n } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { InkSeal, InkClouds, ScrollRod, PaperCard } from "../components/Ink";
+import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 
 // 图标与文案一一对应，文案按语言从 t.home.features 取。
 const FEATURE_ICONS = [Eye, FileText, ImageIcon, Sparkles, Download, Zap];
@@ -85,6 +86,17 @@ export function HomePage() {
             >
               {t.home.ctaStart}
             </Link>
+            <a
+              href={DESKTOP_DOWNLOAD_URL}
+              className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-[var(--ink-wash-strong)]"
+              style={{
+                borderColor: "var(--ink-line)",
+                color: "var(--ink-strong)",
+              }}
+            >
+              <Download className="h-4 w-4" />
+              {t.home.ctaDownload}
+            </a>
             {!user && (
               <Link
                 to="/register"

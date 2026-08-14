@@ -32,6 +32,13 @@
 Markdown）、**文档在云端**（多设备、可分享），以及让 **Codex、Claude Code、OpenCode、
 OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 
+仓库还包含基于 Tauri 2 的 macOS / Windows 客户端 alpha：本地 SQLite 优先读写，恢复网络后
+自动同步；登录在系统浏览器完成，通过 `koinote://auth` + PKCE 把短期访问令牌交回客户端。
+
+桌面客户端可从 [Koinote 官网下载入口](https://koinote.app/download) 获取。该地址会跳转到
+最新 GitHub Release，提供 macOS Apple 芯片、macOS Intel 和 Windows x64 安装包及 SHA-256
+校验文件。Alpha 安装包目前尚未代码签名，首次运行时系统会显示安全提醒。
+
 > 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
 > 已通过 Stripe Checkout 支持一次性付款。
 
@@ -60,6 +67,14 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 - 邮箱密码账号支持验证码找回与登录后修改密码
 - 修改或重置密码会立即失效其他设备上的旧会话；也可单独执行“退出其他设备”
 - 找回密码请求对未知邮箱和 OAuth-only 账号使用统一响应，验证码只保存 HMAC
+
+**桌面客户端（alpha）**
+
+- macOS 与 Windows 共用 React / TipTap 界面，Tauri 只承载原生窗口、SQLite、深链和系统钥匙串
+- 文档、目录和标签页本地优先；离线可创建、编辑、搜索和整理，联网后后台推送与拉取
+- revision 冲突会同时保留本地稿与云端稿，由用户明确选择，不用“最后写入者”静默覆盖正文
+- OAuth / 密码登录仍在系统浏览器完成；PKCE 授权码单次有效，访问令牌 15 分钟，刷新令牌 30 天轮换
+- 访问令牌、刷新令牌和未完成的 PKCE verifier 只存 macOS Keychain / Windows Credential Manager，不进 SQLite
 
 **图床**
 
@@ -119,14 +134,17 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
                                └─ 其余 /api/*、/mcp ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
 浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端 ──▶ 飞书机器人
+桌面端 ──本地 SQLite──────────▶ 离线读写 ──联网同步 / Bearer token──▶ Worker / Go 后端
 ```
 
 - **前端** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
 - **编辑器** TipTap v3（ProseMirror）· tiptap-markdown · KaTeX · lowlight
 - **后端** Go（stdlib `net/http`）· pgx · Stripe Go SDK · PostgreSQL 16
 - **边缘** Cloudflare Worker · R2 · Email Sending
+- **桌面端** Tauri 2 · Rust · SQLite · macOS Keychain / Windows Credential Manager
 
-会话是无状态的 HMAC-SHA256 签名 cookie，不落库。
+浏览器会话使用无状态 HMAC-SHA256 签名 cookie；桌面端使用只在数据库保存 SHA-256 摘要的
+不透明访问 / 刷新令牌，以支持轮换、撤销和修改密码后的统一失效。
 
 ## Agent 文档访问（MCP）
 
@@ -263,6 +281,20 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 测试卡 `4242 4242 4242 4242`（任意未来日期与 CVC）。
 
 详细步骤、端口冲突、全容器启动见[设计文档](docs/DESIGN.zh.md#本地开发)。
+
+### 桌面客户端开发
+
+额外安装 Rust stable；macOS 需要 Xcode Command Line Tools，Windows 需要 Microsoft C++
+Build Tools 与 WebView2。先按上文启动本地 PostgreSQL、后端与 Vite，再运行：
+
+```bash
+npm run desktop:dev       # Tauri 开发窗口，系统浏览器回调 koinote://auth
+npm run desktop:check     # Rust / Tauri 编译检查
+npm run desktop:build     # 生成当前平台安装包
+```
+
+生产构建默认同步 `https://koinote.app`；本地开发默认同步 `http://localhost:5273`。桌面端
+SQLite 不保存令牌，退出账号会清除该账号在本机的离线文档缓存。
 
 ## 自建须知
 

@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 Tauri 2 macOS / Windows 客户端 alpha：系统浏览器 PKCE 登录、系统钥匙串令牌、
+  SQLite 本地优先文档、后台同步与显式冲突恢复。
+- 官网新增桌面客户端下载入口，GitHub Release 同时提供 macOS Apple 芯片、Intel 与 Windows x64 安装包。
+
 ## [0.5.0] - 2026-08-15
 
 ### Added

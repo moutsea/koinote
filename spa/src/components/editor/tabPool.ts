@@ -84,6 +84,25 @@ export function close(
 export const removeDeleted = close;
 
 /**
+ * 用最新文档列表回收已经不存在的标签。
+ *
+ * preserveIds 用于保护仍有编辑器内待存内容的文档：即使云端已经删除，也不能在
+ * 内容落到本地库之前把标签和正文实例一起卸载。
+ */
+export function removeUnavailable(
+  state: TabState,
+  availableIds: Iterable<string>,
+  preserveIds: Iterable<string> = [],
+): { next: TabState; removed: string[] } {
+  const available = new Set(availableIds);
+  for (const id of preserveIds) available.add(id);
+  const removed = state.openTabs.filter((id) => !available.has(id));
+  let next = state;
+  for (const id of removed) next = close(next, id).next;
+  return { next, removed };
+}
+
+/**
  * 用服务端返回的标签组初始化。
  *
  * liveIds 只放 activeDocId：其余标签的实例等真的被点开再挂 —— 恢复会话时一次挂

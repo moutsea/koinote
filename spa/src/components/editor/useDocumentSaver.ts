@@ -53,6 +53,8 @@ export type DocumentSaver = {
   queue: (docId: string, patch: DocPatch) => void;
   /** 立刻存并返回是否落库成功。换主题、删除、淘汰实例时用 */
   flush: (docId: string) => Promise<boolean>;
+  /** 把页面内所有待存内容落库。桌面端登出前用作数据安全屏障。 */
+  flushAll: () => Promise<boolean>;
   /** 读当前待存内容，不触发渲染。用于把未存改动合进传给编辑器的 document */
   peek: (docId: string) => DocumentSnapshot | null;
   status: (docId: string) => SaveStatus;
@@ -259,6 +261,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [doSave],
   );
 
+  const flushAll = useCallback(async () => {
+    const results = await Promise.all([...entries.current.keys()].map(flush));
+    return results.every(Boolean);
+  }, [flush]);
+
   const forget = useCallback(
     async (docId: string) => {
       const saved = await flush(docId);
@@ -365,6 +372,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       seed,
       queue,
       flush,
+      flushAll,
       peek,
       status,
       isDirty,
@@ -377,6 +385,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       seed,
       queue,
       flush,
+      flushAll,
       peek,
       status,
       isDirty,

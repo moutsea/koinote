@@ -42,8 +42,10 @@ assert.deepEqual(parseChangelog(fixture), [
 ]);
 
 const current = parseChangelog(readFileSync("CHANGELOG.md", "utf8"));
-assert.equal(current[0]?.version, "0.5.0");
-assert.equal(current[0]?.date, "2026-08-15");
+assert.equal(current[0]?.version, "Unreleased");
+assert.equal(current[0]?.date, undefined);
+assert.equal(current[1]?.version, "0.5.0");
+assert.equal(current[1]?.date, "2026-08-15");
 assert.ok(current.some((release) => release.version === "0.4.0"));
 assert.ok(current.every((release) => release.sections.length > 0));
 assert.ok(
@@ -93,6 +95,8 @@ for (const filename of [
   assert.ok(page.includes(`${filename}?raw`), `${filename} must be bundled`);
 }
 assert.match(page, /CHANGELOGS\[locale\]/);
+assert.match(page, /label=\{t\.changelog\.newLabel\}/);
+assert.doesNotMatch(page, /label="新"/);
 assert.doesNotMatch(page, /dangerouslySetInnerHTML/);
 
 console.log("changelog checks passed");

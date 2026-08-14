@@ -83,12 +83,19 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	// FolderID 让「在这个文件夹里新建文档」一次请求完成。先建到根下再调移动接口也能
 	// 做到，但那样新文档会先在根下闪一下，且移动失败时它就留在根下了。
 	var body struct {
+		DocID    string  `json:"docId"`
 		Title    string  `json:"title"`
+		Theme    *string `json:"theme"`
 		Content  string  `json:"content"`
 		FolderID *string `json:"folderId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
+		return
+	}
+	body.DocID = strings.TrimSpace(body.DocID)
+	if body.DocID != "" && (!strings.HasPrefix(bearerToken(r), desktopAccessTokenPrefix) || !validUUID(body.DocID)) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_document_id", "Invalid document id")
 		return
 	}
 
@@ -97,12 +104,21 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var theme *string
+	if body.Theme != nil {
+		normalized := normalizeDocumentTheme(*body.Theme)
+		theme = &normalized
+	}
 	doc, err := a.createDocument(r.Context(), createDocumentParams{
-		User: user, Title: title, Content: content, FolderID: body.FolderID,
+		User: user, DocID: body.DocID, Title: title, Theme: theme, Content: content, FolderID: body.FolderID,
 	})
 	if errors.Is(err, errDocumentQuotaExceeded) {
 		httpx.ErrorCode(w, http.StatusConflict, "storage_quota_exceeded",
 			"Cloud storage quota exceeded")
+		return
+	}
+	if errors.Is(err, errDocumentIDConflict) {
+		httpx.ErrorCode(w, http.StatusConflict, "conflict", "Document already exists")
 		return
 	}
 	if err != nil {

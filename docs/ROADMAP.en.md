@@ -6,6 +6,7 @@ This roadmap records the product and engineering directions currently worth the 
 
 - [x] Account security: password recovery, password changes, and invalidating sessions on other devices.
 - [x] Mobile editor: replace the desktop document tree with a mobile document drawer.
+- [x] Desktop alpha: local-first macOS / Windows editing, system-browser PKCE, keychain storage, and retained conflicts.
 - [ ] Backup and recovery: create a verifiable, downloadable, and restorable site backup workflow.
 - [x] Data portability: bulk-import `.md`, folders, and ZIP archives, and export every document, folder, and image at once.
 - [ ] Account deletion: provide a self-service way to remove the account and all associated data.
@@ -24,7 +25,7 @@ This roadmap records the product and engineering directions currently worth the 
 
 - [ ] Controlled native AI that is explicitly invoked and exposes model, cost, and data boundaries.
 - [ ] Publishing workflows for destination status, update history, and exports.
-- [ ] Offline and PWA support for weak networks and draft synchronization.
+- [ ] Complete offline and PWA support: cache desktop images and improve weak-network web drafts and installation.
 - [ ] Readable line- or block-level diffs for document history.
 
 ## Principles

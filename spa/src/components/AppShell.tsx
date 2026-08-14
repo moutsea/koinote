@@ -4,7 +4,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   Moon,
   Sun,
@@ -43,8 +43,17 @@ import { InkSeal } from "./Ink";
 import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
+import { confirmAction } from "../confirmAction";
+import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useStorageUsage } from "./StorageCard";
 import { GlobalSearch } from "./GlobalSearch";
+import { isDesktopRuntime } from "../desktop/runtime";
+
+const DesktopSyncStatus = lazy(() =>
+  import("./DesktopSyncStatus").then((module) => ({
+    default: module.DesktopSyncStatus,
+  })),
+);
 
 export function AppShell() {
   const session = useSession();
@@ -60,6 +69,35 @@ export function AppShell() {
   }, [theme]);
 
   async function handleLogout() {
+    if (isDesktopRuntime()) {
+      const [{ prepareDesktopLogout }, { desktopSyncSummary }] =
+        await Promise.all([
+          import("../desktop/logoutGuard"),
+          import("../desktop/offlineStore"),
+        ]);
+      if (!(await prepareDesktopLogout())) {
+        window.alert(t.desktopSync.logoutSaveFailed);
+        return;
+      }
+      let summary;
+      try {
+        summary = await desktopSyncSummary();
+      } catch {
+        window.alert(t.desktopSync.logoutSaveFailed);
+        return;
+      }
+      if (
+        (summary.pending > 0 || summary.conflicts > 0) &&
+        !(await confirmAction(
+          interpolate(t.desktopSync.logoutWarning, {
+            pending: summary.pending,
+            conflicts: summary.conflicts,
+          }),
+        ))
+      ) {
+        return;
+      }
+    }
     await logout();
     void navigate({ to: "/" });
   }
@@ -107,6 +145,9 @@ export function AppShell() {
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
+            <a href={DESKTOP_DOWNLOAD_URL} className="kn-ink-link transition">
+              {t.nav.download}
+            </a>
             <HeaderDocsMenu
               active={isUnder(pathname, "/docs")}
               label={t.nav.docs}
@@ -119,6 +160,11 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {user && isDesktopRuntime() && (
+              <Suspense fallback={null}>
+                <DesktopSyncStatus />
+              </Suspense>
+            )}
             {user && <GlobalSearch />}
             <LocaleSwitcher
               locale={locale}

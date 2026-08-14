@@ -157,17 +157,21 @@ async function recordUsage(
   }
 }
 
-/** 回调后端校验会话，返回 authUserId；未登录返回 null。 */
+/** 回调后端校验浏览器 cookie 或桌面 Bearer token，返回 authUserId。 */
 async function resolveUser(
   request: Request,
   env: ImagesEnv,
 ): Promise<string | null> {
   const cookie = request.headers.get("cookie");
-  if (!cookie) return null;
+  const authorization = request.headers.get("authorization");
+  if (!cookie && !authorization) return null;
 
   const sessionURL = new URL("/api/auth/session", env.BACKEND_URL);
+  const headers = new Headers({ accept: "application/json" });
+  if (cookie) headers.set("cookie", cookie);
+  if (authorization) headers.set("authorization", authorization);
   const resp = await fetch(sessionURL, {
-    headers: { cookie, accept: "application/json" },
+    headers,
   });
   if (!resp.ok) return null;
 

@@ -1,4 +1,5 @@
 import { interpolate, useI18n } from "../../i18n";
+import { confirmAction } from "../../confirmAction";
 
 /**
  * 移入回收站前的确认对话框。
@@ -9,5 +10,5 @@ import { interpolate, useI18n } from "../../i18n";
 export function useDeleteConfirm() {
   const { t } = useI18n();
   return (title: string) =>
-    window.confirm(interpolate(t.editor.deleteConfirm, { title }));
+    confirmAction(interpolate(t.editor.deleteConfirm, { title }));
 }

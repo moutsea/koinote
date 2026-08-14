@@ -34,11 +34,15 @@ import {
   close,
   hydrate,
   removeDeleted,
+  removeUnavailable,
   type TabState,
 } from "../components/editor/tabPool";
 import { useSession } from "../auth";
 import { ApiError } from "../api";
 import { interpolate, useI18n } from "../i18n";
+import { isDesktopRuntime } from "../desktop/runtime";
+import { registerDesktopLogoutPreparation } from "../desktop/logoutGuard";
+import { confirmAction } from "../confirmAction";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -81,6 +85,11 @@ export function EditorPage() {
     true,
   );
   const outline = useOutline(editor);
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    return registerDesktopLogoutPreparation(() => saver.flushAll());
+  }, [saver]);
 
   useEffect(() => {
     if (!mobileDocsOpen) return;
@@ -190,6 +199,45 @@ export function EditorPage() {
    * 后者是用户的数据，不能因为关个标签就没了。
    */
   const createdHere = useRef<Set<string>>(new Set());
+
+  // 桌面同步可能发现某篇文档已经在另一端删除。列表会刷新，但单篇 query 和标签池
+  // 都有独立缓存，若不主动对齐就会留下“未命名文档”假标签和旧正文。
+  useEffect(() => {
+    if (!isDesktopRuntime() || !documents || !hydrated.current) return;
+    const current = tabStateRef.current;
+    const preserved = current.openTabs.filter((id) => saverRef.current.isDirty(id));
+    const { next, removed } = removeUnavailable(
+      current,
+      documents.map((document) => document.docId),
+      preserved,
+    );
+    if (removed.length === 0) return;
+
+    if (current.activeDocId && removed.includes(current.activeDocId)) {
+      justClosed.current = current.activeDocId;
+    }
+    for (const id of removed) {
+      saverRef.current.drop(id);
+      createdHere.current.delete(id);
+    }
+    setTabState(next);
+
+    if (next.activeDocId === current.activeDocId) return;
+    if (next.activeDocId) {
+      void navigate({
+        to: "/editor/$docId",
+        params: { docId: next.activeDocId },
+      });
+      return;
+    }
+    bootstrapped.current = false;
+    const fallback = documents[0]?.docId;
+    if (fallback) {
+      void navigate({ to: "/editor/$docId", params: { docId: fallback } });
+    } else {
+      void navigate({ to: "/editor" });
+    }
+  }, [documents, navigate]);
 
   // URL 是当前标签的唯一真相。地址栏变化（含前进后退、深链）都要落进标签状态
   useEffect(() => {
@@ -366,7 +414,7 @@ export function EditorPage() {
 
   const handleDelete = useCallback(
     async (docId: string, title: string) => {
-      if (!confirmDelete(title)) return;
+      if (!(await confirmDelete(title))) return;
 
       // 先把未存的改动落库，再删。
       //
@@ -434,9 +482,13 @@ export function EditorPage() {
   );
 
   const handleDeleteFolder = useCallback(
-    (folderId: string, name: string) => {
+    async (folderId: string, name: string) => {
       // 说清楚「里面的东西不会被删」—— 否则用户不敢删，或者删了以为丢了正文
-      if (!window.confirm(interpolate(t.editor.deleteFolderConfirm, { name })))
+      if (
+        !(await confirmAction(
+          interpolate(t.editor.deleteFolderConfirm, { name }),
+        ))
+      )
         return;
       deleteFolderMut.mutate(folderId);
     },

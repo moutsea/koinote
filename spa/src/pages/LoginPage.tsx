@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Gift, Mail } from "lucide-react";
 import {
@@ -14,6 +14,13 @@ import { useI18n } from "../i18n";
 import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
 import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
+import { isDesktopRuntime } from "../desktop/runtime";
+
+const DesktopLoginPage = lazy(() =>
+  import("./DesktopLoginPage").then((module) => ({
+    default: module.DesktopLoginPage,
+  })),
+);
 
 type Mode = "login" | "register";
 
@@ -44,6 +51,17 @@ function startOAuth(
 }
 
 export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
+  if (isDesktopRuntime()) {
+    return (
+      <Suspense fallback={null}>
+        <DesktopLoginPage />
+      </Suspense>
+    );
+  }
+  return <WebLoginPage initialMode={initialMode} />;
+}
+
+function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const redirectTo = loginRedirectPath();

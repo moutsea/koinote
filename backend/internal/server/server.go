@@ -72,6 +72,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/session", a.authSession)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/start", a.oauthStart)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.oauthCallback)
+	mux.HandleFunc("POST /api/auth/desktop/authorize", a.desktopAuthorize)
+	mux.HandleFunc("POST /api/auth/desktop/token", a.desktopToken)
+	mux.HandleFunc("POST /api/auth/desktop/revoke", a.desktopRevoke)
 
 	mux.HandleFunc("GET /api/billing/status", a.billingStatus)
 	mux.HandleFunc("GET /api/billing/pricing", a.billingPricing)
@@ -148,7 +151,7 @@ func (a *App) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -8,6 +8,8 @@ const search = read("spa/src/components/GlobalSearch.tsx");
 const documents = read("spa/src/pages/DocumentsPage.tsx");
 const share = read("spa/src/pages/SharePage.tsx");
 const admin = read("spa/src/pages/AdminPage.tsx");
+const home = read("spa/src/pages/HomePage.tsx");
+const worker = read("worker/index.ts");
 
 assert.match(shell, /<GlobalSearch\s*\/>/);
 assert.match(search, /event\.metaKey \|\| event\.ctrlKey/);
@@ -20,5 +22,10 @@ assert.match(share, /copySharedDocument/);
 assert.match(share, /sharedViews/);
 assert.match(admin, /stats\.funnel/);
 assert.match(admin, /stats\.retention/);
+assert.match(home, /DESKTOP_DOWNLOAD_URL/);
+assert.match(
+  worker,
+  /pathname === "\/download"[\s\S]*?Response\.redirect\(DESKTOP_RELEASES_URL, 302\)/,
+);
 
 console.log("growth UI wiring checks passed");

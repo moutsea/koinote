@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zip } from "fflate";
 import {
   createDocument,
   createFolder,
+  fetchAppResource,
   getDocument,
   trackProductEvent,
   uploadImage,
@@ -194,7 +195,9 @@ function imageKeyFromReference(reference: string): string | null {
 }
 
 async function readImageObject(key: string): Promise<Uint8Array> {
-  const response = await fetch(`/images/${key}`, { credentials: "include" });
+  const response = await fetchAppResource(`/images/${key}`, {
+    credentials: "include",
+  });
   if (!response.ok) throw new Error(`image_fetch_${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 }

@@ -3,6 +3,7 @@ import type { Messages } from "./types";
 export const fr: Messages = {
   nav: {
     editor: "Éditeur",
+    download: "Télécharger",
     pricing: "Tarifs",
     docs: "Documentation",
     mcpGuide: "Intégration MCP",
@@ -22,6 +23,7 @@ export const fr: Messages = {
     subtitle:
       "Koinote est un éditeur Markdown en ligne façon Typora. Rendu en temps réel, images intégrées et agents autorisés à travailler avec vos documents en toute sécurité.",
     ctaStart: "Commencer à écrire",
+    ctaDownload: "Télécharger l’application",
     ctaRegister: "Créer un compte",
     features: [
       {
@@ -792,6 +794,7 @@ function hello(name) {
     subtitle:
       "Découvrez les nouveautés, améliorations et corrections de chaque version de Koinote.",
     unreleased: "À venir",
+    newLabel: "Nouveau",
     sourceLink: "Voir la source sur GitHub",
     sourceNote:
       "Cette page reste synchronisée avec le journal français du dépôt open source.",
@@ -804,12 +807,42 @@ function hello(name) {
       Removed: "Suppressions",
     },
   },
+  desktopAuth: {
+    eyebrow: "Application de bureau",
+    title: "Autoriser l’application Koinote",
+    description: "L’application conserve des copies hors ligne sur cet appareil et synchronise les modifications au retour du réseau.",
+    permissionsTitle: "Après autorisation, l’application peut :",
+    permissionDocuments: "Lire, créer, organiser, partager et placer vos documents et dossiers dans la corbeille",
+    permissionOffline: "Conserver des copies hors ligne de vos documents sur cet appareil",
+    permissionIdentity: "Lire les informations de base du compte actuellement connecté",
+    approve: "Autoriser et revenir à l’application",
+    cancel: "Annuler",
+    signIn: "Se connecter pour continuer",
+    invalid: "Ce lien d’autorisation est invalide. Revenez dans l’application et réessayez.",
+    failed: "L’autorisation n’a pas pu aboutir. Veuillez réessayer.",
+  },
+  desktopSync: {
+    synced: "Synchronisé",
+    syncing: "Synchronisation",
+    offline: "Modification hors ligne",
+    pending: "modifications en attente",
+    error: "Échec de la synchronisation ; cliquez pour réessayer",
+    conflicts: "conflits à résoudre",
+    conflictsTitle: "Résoudre les conflits",
+    conflictsDescription: "Ces documents ont changé localement et dans le cloud. Choisissez la copie à conserver ; aucune ne sera écrasée silencieusement.",
+    keepLocal: "Garder la copie locale",
+    useCloud: "Utiliser la copie cloud",
+    close: "Résoudre plus tard",
+    logoutWarning: "Cet appareil contient {pending} modifications non synchronisées, dont {conflicts} conflits. Continuer supprimera définitivement ce contenu local. Se déconnecter quand même ?",
+    logoutSaveFailed: "Les modifications actuelles n’ont pas pu être enregistrées localement ; la déconnexion a été annulée. Réessayez ou copiez le contenu avant de vous déconnecter.",
+  },
   footer: {
     tagline:
       "Koinote est un éditeur Markdown en ligne WYSIWYG : rendu au fil de la frappe, images envoyées directement vers votre hébergeur, export et partage en un clic.",
     brandCn: "锦鲤笔记",
     product: "Produit",
     editor: "Éditeur",
+    download: "Télécharger l’application",
     pricing: "Tarifs",
     dashboard: "Tableau de bord",
     mcpGuide: "Guide MCP",

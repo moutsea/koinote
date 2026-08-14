@@ -4,6 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Added
+
+- Ajout d’une version alpha macOS / Windows avec Tauri 2 : connexion PKCE dans le navigateur système,
+  jetons dans le trousseau du système, documents SQLite local-first, synchronisation et résolution explicite des conflits.
+- Ajout d’un lien de téléchargement vers les GitHub Releases pour macOS Apple Silicon, macOS Intel
+  et Windows x64.
+
 ## [0.5.0] - 2026-08-15
 
 ### Added
