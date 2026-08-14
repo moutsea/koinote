@@ -31,7 +31,12 @@ import {
   LOCALE_LABELS,
   type Locale,
 } from "../i18n";
-import { EDGE_PADDING, hasFooter, isUnder } from "../layout";
+import {
+  EDGE_PADDING,
+  hasFooter,
+  isUnder,
+  shellViewportClass,
+} from "../layout";
 import { formatBytes, usageLevel, usageRatio } from "../storage";
 import { AppFooter } from "./AppFooter";
 import { InkSeal } from "./Ink";
@@ -60,11 +65,11 @@ export function AppShell() {
 
   return (
     <div
-      className="flex min-h-[100dvh] flex-col"
+      className={`flex flex-col ${shellViewportClass(pathname)}`}
       style={{ background: "var(--ink-paper)", color: "var(--ink-black)" }}
     >
       <header
-        className="sticky top-0 z-50 border-b backdrop-blur"
+        className="sticky top-0 z-50 shrink-0 border-b backdrop-blur"
         style={{
           borderColor: "var(--ink-line)",
           // 半透明纸底：滚动时下方内容透出来一点，但仍能压住文字。
@@ -164,7 +169,7 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col">
         <Outlet />
       </main>
 

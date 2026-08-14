@@ -115,6 +115,19 @@ export function isUnder(pathname: string, prefix: string): boolean {
 }
 
 /**
+ * 应用外壳的视口高度策略。
+ *
+ * 这个 class 挂在包含页头的整个 AppShell 上。桌面编辑器把外壳锁在视口内，再由 flex
+ * 给 main 分配页头以下的剩余高度，让正文、文件树和大纲各自滚动。移动端保留页面自然
+ * 滚动，避开 iOS Safari 地址栏变化时 100dvh 与内层滚动容器互相拉扯。
+ */
+export function shellViewportClass(pathname: string): string {
+  return isUnder(pathname, "/editor")
+    ? "min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden"
+    : "min-h-[100dvh]";
+}
+
+/**
  * 不挂全站页脚的路由前缀。
  *
  * 编辑器是撑满视口高度的两列工作区，自己管滚动；底下接一段页脚的话，要么被挤出视口

@@ -8,6 +8,7 @@ import {
   contentWidthFor,
   hasFooter,
   isUnder,
+  shellViewportClass,
   widthClass,
 } from "./_layout_bundle.mjs";
 
@@ -254,6 +255,25 @@ for (const path of [
 // 分段比对，不是裸 startsWith：/editor-guide 不是编辑器
 ok("/editor-guide 挂页脚", hasFooter("/editor-guide"), hasFooter("/editor-guide"));
 ok("/shared-notes 挂页脚", hasFooter("/shared-notes"), hasFooter("/shared-notes"));
+
+// ---------- 编辑器视口 ----------
+//
+// 桌面编辑器必须锁在一屏内，正文现有的 overflow-y-auto 才会成为滚动容器；移动端
+// 则保留自然页面滚动，避开 iOS Safari 的动态地址栏与 100dvh 内层滚动抖动。
+for (const path of ["/editor", "/editor/", "/editor/abc123"]) {
+  eq(
+    `${path} 仅在桌面锁定视口`,
+    shellViewportClass(path),
+    "min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden",
+  );
+}
+for (const path of ["/", "/dashboard", "/documents", "/editor-guide"]) {
+  eq(
+    `${path} 保持自然页面高度`,
+    shellViewportClass(path),
+    "min-h-[100dvh]",
+  );
+}
 
 // 页脚里排着三条条款链接，宽度表里也得有对应条目，否则那三页会掉到兜底档
 for (const path of ["/privacy", "/terms", "/cookies"]) {

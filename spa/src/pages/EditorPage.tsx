@@ -518,8 +518,10 @@ export function EditorPage() {
     </>
   );
 
+  // 桌面外壳已经锁住页面滚动，这里的 overflow 是工作区自己的第二道边界，避免子面板
+  // 溢出相邻列；移动端没有侧栏，刻意不锁这一层，让 Safari 使用页面自然滚动。
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 lg:overflow-hidden">
       {/* 第一列：文件树。它是文档间的导航，与正文分属两个层级，保留分隔线。 */}
       {docsOpen ? (
         <ResizablePanel
