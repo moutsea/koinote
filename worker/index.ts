@@ -5,7 +5,7 @@
  *   1. /api/* 和 /health → 反向代理到 Go 后端（BACKEND_URL）
  *   2. 其余请求 → 托管 Vite 打的 SPA 静态资源（ASSETS 绑定，SPA fallback）
  *
- * SEO 元数据注入、sitemap 等留到后续阶段，先保证代理与托管跑通。
+ * 分享页会在边缘注入动态 title / OpenGraph 元数据，普通 SPA 路由仍直接走静态资源。
  */
 
 import {
@@ -23,6 +23,7 @@ export interface Env extends Cloudflare.Env {
   BACKEND_INTERNAL_TOKEN?: string;
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
+  IMAGE_PUBLIC_BASE: string;
 }
 
 const API_PREFIXES = ["/api/", "/health"];
@@ -85,8 +86,113 @@ async function route(request: Request, env: Env): Promise<Response> {
     return proxyToBackend(request, env);
   }
 
+  if (
+    request.method === "GET" &&
+    /^\/share\/[0-9a-f]{32}$/.test(url.pathname)
+  ) {
+    return handleSharePage(request, env);
+  }
+
   // 静态资源（SPA），404 交给 not_found_handling: single-page-application
   return env.ASSETS.fetch(request);
+}
+
+type ShareMeta = {
+  title?: string;
+  description?: string;
+  imageKey?: string;
+  protected?: boolean;
+};
+
+function escapeHTML(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function handleSharePage(request: Request, env: Env): Promise<Response> {
+  const assetResponse = await env.ASSETS.fetch(request);
+  if (!assetResponse.ok || !env.BACKEND_URL) return assetResponse;
+
+  const requestURL = new URL(request.url);
+  const token = requestURL.pathname.slice("/share/".length);
+  const metaURL = new URL(
+    `/api/share/${encodeURIComponent(token)}/meta`,
+    env.BACKEND_URL,
+  );
+  let meta: ShareMeta | null = null;
+  try {
+    const response = await fetch(metaURL, {
+      headers: env.BACKEND_INTERNAL_TOKEN
+        ? { "x-koinote-internal-token": env.BACKEND_INTERNAL_TOKEN }
+        : undefined,
+    });
+    if (response.ok) meta = (await response.json()) as ShareMeta;
+  } catch {
+    return assetResponse;
+  }
+  if (!meta) return assetResponse;
+
+  const protectedShare = meta.protected === true;
+  const rawTitle = protectedShare
+    ? "受保护的 Koinote 文档"
+    : meta.title?.trim() || "Koinote 分享文档";
+  const rawDescription = protectedShare
+    ? "这是一篇需要访问口令的 Koinote 分享文档。"
+    : meta.description?.trim() || "在 Koinote 阅读这篇分享文档。";
+  const canonicalURL = `${requestURL.origin}${requestURL.pathname}`;
+  const imageBase = (env.IMAGE_PUBLIC_BASE ?? "").trim().replace(/\/+$/, "");
+  const imageURL =
+    meta.imageKey &&
+    /^u\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8,64}\.(png|jpg|gif|webp)$/.test(
+      meta.imageKey,
+    )
+      ? imageBase
+        ? `${imageBase}/${meta.imageKey}`
+        : `${requestURL.origin}/images/${meta.imageKey}`
+      : `${requestURL.origin}/apple-touch-icon.png`;
+  const title = escapeHTML(`${rawTitle} — Koinote`);
+  const description = escapeHTML(rawDescription);
+  const canonical = escapeHTML(canonicalURL);
+  const image = escapeHTML(imageURL);
+  const tags = [
+    `<link rel="canonical" href="${canonical}">`,
+    `<meta property="og:type" content="article">`,
+    `<meta property="og:site_name" content="Koinote">`,
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:description" content="${description}">`,
+    `<meta property="og:url" content="${canonical}">`,
+    `<meta property="og:image" content="${image}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${title}">`,
+    `<meta name="twitter:description" content="${description}">`,
+    `<meta name="twitter:image" content="${image}">`,
+  ].join("\n    ");
+
+  let html = await assetResponse.text();
+  html = html.replace(
+    /<title>[\s\S]*?<\/title>/i,
+    () => `<title>${title}</title>`,
+  );
+  html = html.replace(
+    /<meta\s+name="description"[\s\S]*?>/i,
+    () => `<meta name="description" content="${description}">`,
+  );
+  html = html.replace("</head>", () => `    ${tags}\n  </head>`);
+
+  const headers = new Headers(assetResponse.headers);
+  headers.set("content-type", "text/html; charset=UTF-8");
+  headers.set("cache-control", "private, no-store");
+  headers.set("x-robots-tag", "noindex, nofollow");
+  headers.delete("content-length");
+  return new Response(html, {
+    status: assetResponse.status,
+    statusText: assetResponse.statusText,
+    headers,
+  });
 }
 
 async function proxyToBackend(request: Request, env: Env): Promise<Response> {

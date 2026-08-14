@@ -4,6 +4,8 @@ import { ChevronDown, Gift, Mail } from "lucide-react";
 import {
   login,
   register,
+  resetPassword,
+  sendPasswordResetCode,
   sendVerificationCode,
   verifyEmail,
   ApiError,
@@ -16,18 +18,29 @@ import { Logo } from "../components/Logo";
 type Mode = "login" | "register";
 
 function loginRedirectPath() {
-  const candidate = new URLSearchParams(window.location.search).get("redirectTo")?.trim() ?? "";
-  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+  const candidate =
+    new URLSearchParams(window.location.search).get("redirectTo")?.trim() ?? "";
+  if (
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\")
+  ) {
     return "/dashboard";
   }
   return candidate;
 }
 
 // OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
-function startOAuth(provider: "google" | "github", invitationCode: string, redirectTo: string) {
+function startOAuth(
+  provider: "google" | "github",
+  invitationCode: string,
+  redirectTo: string,
+) {
   const search = new URLSearchParams({ redirectTo });
   if (invitationCode.trim()) search.set("invite", invitationCode.trim());
-  window.location.assign(`/api/auth/oauth/${provider}/start?${search.toString()}`);
+  window.location.assign(
+    `/api/auth/oauth/${provider}/start?${search.toString()}`,
+  );
 }
 
 export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
@@ -56,12 +69,15 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     initialMode === "login",
   );
   const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
+  const [passwordResetEmail, setPasswordResetEmail] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [codeCooldown, setCodeCooldown] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isEmailRecovery = mode === "login" && recoveryEmail !== null;
+  const isPasswordReset = mode === "login" && passwordResetOpen;
 
   // 把后端错误码翻译成当前语言；未知码回退到后端英文 message 或通用提示。
   function translateError(err: unknown): string {
@@ -89,25 +105,36 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
 
   useEffect(() => {
     if (codeCooldown <= 0) return;
-    const timer = window.setTimeout(() => setCodeCooldown((value) => value - 1), 1000);
+    const timer = window.setTimeout(
+      () => setCodeCooldown((value) => value - 1),
+      1000,
+    );
     return () => window.clearTimeout(timer);
   }, [codeCooldown]);
 
   async function requestCode() {
     setError(null);
     setNotice(null);
-    const targetEmail = recoveryEmail ?? email;
+    const targetEmail = isPasswordReset
+      ? passwordResetEmail
+      : (recoveryEmail ?? email);
     if (!/^\S+@\S+\.\S+$/.test(targetEmail)) {
       setError(t.errors.invalid_email ?? t.auth.requestFailed);
       return;
     }
     setSendingCode(true);
     try {
-      const result = await sendVerificationCode(targetEmail, locale);
+      const result = isPasswordReset
+        ? await sendPasswordResetCode(targetEmail, locale)
+        : await sendVerificationCode(targetEmail, locale);
       if (result.devCode) setVerificationCode(result.devCode);
       setCodeCooldown(result.retryAfterSeconds || 60);
       setNotice(
-        result.devCode ? t.auth.verificationMockFilled : t.auth.verificationSent,
+        result.devCode
+          ? t.auth.verificationMockFilled
+          : isPasswordReset
+            ? t.auth.resetCodeSent
+            : t.auth.verificationSent,
       );
     } catch (err) {
       setError(translateError(err));
@@ -122,8 +149,30 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     setLoading(true);
     try {
       if (mode === "login") {
-        if (recoveryEmail) {
-          await verifyEmail({ email: recoveryEmail, password, verificationCode });
+        if (isPasswordReset) {
+          if (password !== confirmPassword) {
+            setError(t.auth.passwordMismatch);
+            return;
+          }
+          await resetPassword({
+            email: passwordResetEmail,
+            verificationCode,
+            newPassword: password,
+          });
+          setPasswordResetOpen(false);
+          setIdentifier(passwordResetEmail);
+          setPassword("");
+          setConfirmPassword("");
+          setVerificationCode("");
+          setCodeCooldown(0);
+          setNotice(t.auth.resetPasswordSuccess);
+          return;
+        } else if (recoveryEmail) {
+          await verifyEmail({
+            email: recoveryEmail,
+            password,
+            verificationCode,
+          });
         } else {
           await login(identifier, password);
         }
@@ -145,7 +194,8 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
       window.location.assign(redirectTo);
     } catch (err) {
       if (err instanceof ApiError && err.code === "email_not_verified") {
-        const accountEmail = err.email ?? (/^\S+@\S+\.\S+$/.test(identifier) ? identifier : "");
+        const accountEmail =
+          err.email ?? (/^\S+@\S+\.\S+$/.test(identifier) ? identifier : "");
         if (accountEmail) {
           setRecoveryEmail(accountEmail);
           setVerificationCode("");
@@ -177,10 +227,18 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             className="kn-heading-cn mt-4 text-2xl font-bold tracking-tight"
             style={{ color: "var(--ink-black)" }}
           >
-            {mode === "login" ? t.auth.loginTitle : t.auth.registerTitle}
+            {isPasswordReset
+              ? t.auth.resetPasswordTitle
+              : mode === "login"
+                ? t.auth.loginTitle
+                : t.auth.registerTitle}
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--ink-mid)" }}>
-            {mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}
+            {isPasswordReset
+              ? t.auth.resetPasswordDescription
+              : mode === "login"
+                ? t.auth.loginSubtitle
+                : t.auth.registerSubtitle}
           </p>
         </div>
 
@@ -195,41 +253,55 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
             </p>
           )}
 
-          {/* 第三方登录：置顶作为首选入口，一步完成注册与登录 */}
-          <div className="space-y-3">
-            <OAuthButton
-              onClick={() =>
-                startOAuth("google", mode === "register" ? invitationCode : "", redirectTo)
-              }
-            >
-              <GoogleIcon className="h-4 w-4" />
-              {t.auth.continueWithGoogle}
-            </OAuthButton>
-            <OAuthButton
-              onClick={() =>
-                startOAuth("github", mode === "register" ? invitationCode : "", redirectTo)
-              }
-            >
-              <GitHubIcon className="h-4 w-4" />
-              {t.auth.continueWithGitHub}
-            </OAuthButton>
-          </div>
+          {/* 找回密码是独立凭证流程，不混入 OAuth 入口。 */}
+          {!isPasswordReset && (
+            <div className="space-y-3">
+              <OAuthButton
+                onClick={() =>
+                  startOAuth(
+                    "google",
+                    mode === "register" ? invitationCode : "",
+                    redirectTo,
+                  )
+                }
+              >
+                <GoogleIcon className="h-4 w-4" />
+                {t.auth.continueWithGoogle}
+              </OAuthButton>
+              <OAuthButton
+                onClick={() =>
+                  startOAuth(
+                    "github",
+                    mode === "register" ? invitationCode : "",
+                    redirectTo,
+                  )
+                }
+              >
+                <GitHubIcon className="h-4 w-4" />
+                {t.auth.continueWithGitHub}
+              </OAuthButton>
+            </div>
+          )}
 
           {/* 分隔线 */}
-          <div
-            className="my-6 flex items-center gap-3 text-xs"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            <span
-              className="h-px flex-1"
-              style={{ background: "var(--ink-line)" }}
-            />
-            <span className="uppercase tracking-wide">{t.auth.orDivider}</span>
-            <span
-              className="h-px flex-1"
-              style={{ background: "var(--ink-line)" }}
-            />
-          </div>
+          {!isPasswordReset && (
+            <div
+              className="my-6 flex items-center gap-3 text-xs"
+              style={{ color: "var(--ink-faint)" }}
+            >
+              <span
+                className="h-px flex-1"
+                style={{ background: "var(--ink-line)" }}
+              />
+              <span className="uppercase tracking-wide">
+                {t.auth.orDivider}
+              </span>
+              <span
+                className="h-px flex-1"
+                style={{ background: "var(--ink-line)" }}
+              />
+            </div>
+          )}
 
           {mode === "register" && (
             <button
@@ -255,169 +327,230 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           )}
 
           {(mode === "login" || showEmailRegistration) && (
-          <form
-            id={mode === "register" ? "email-registration-form" : undefined}
-            onSubmit={submit}
-            className={mode === "register" ? "mt-5 space-y-4" : "space-y-4"}
-          >
-          {isEmailRecovery && (
-            <div
-              role="status"
-              className="rounded-lg border px-3 py-3 text-sm"
-              style={{
-                borderColor: "var(--ink-line)",
-                background: "var(--ink-wash)",
-                color: "var(--ink-mid)",
-              }}
+            <form
+              id={mode === "register" ? "email-registration-form" : undefined}
+              onSubmit={submit}
+              className={mode === "register" ? "mt-5 space-y-4" : "space-y-4"}
             >
-              <p className="font-semibold" style={{ color: "var(--ink-strong)" }}>
-                {t.auth.verifyEmailTitle}
-              </p>
-              <p className="mt-1 text-xs">{t.auth.verifyEmailDescription}</p>
-            </div>
-          )}
-
-          {mode === "register" && (
-            <Field
-              label={t.auth.username}
-              value={username}
-              onChange={setUsername}
-              autoComplete="username"
-              placeholder={t.auth.usernamePlaceholder}
-            />
-          )}
-
-          {mode === "register" ? (
-            <Field
-              label={t.auth.email}
-              type="email"
-              value={email}
-              onChange={(value) => {
-                setEmail(value);
-                setVerificationCode("");
-                setCodeCooldown(0);
-                setNotice(null);
-              }}
-              autoComplete="email"
-              placeholder={t.auth.emailPlaceholder}
-            />
-          ) : isEmailRecovery ? (
-            <Field
-              label={t.auth.email}
-              type="email"
-              value={recoveryEmail}
-              onChange={() => {}}
-              autoComplete="email"
-              readOnly
-            />
-          ) : (
-            <Field
-              label={t.auth.identifier}
-              value={identifier}
-              onChange={setIdentifier}
-              autoComplete="username"
-              placeholder={t.auth.identifierPlaceholder}
-            />
-          )}
-
-          <Field
-            label={t.auth.password}
-            type="password"
-            value={password}
-            onChange={setPassword}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            placeholder={
-              mode === "register"
-                ? t.auth.passwordPlaceholderRegister
-                : t.auth.passwordPlaceholderLogin
-            }
-          />
-
-          {mode === "register" && (
-            <Field
-              label={t.auth.confirmPassword}
-              type="password"
-              value={confirmPassword}
-              onChange={setConfirmPassword}
-              autoComplete="new-password"
-              placeholder={t.auth.confirmPasswordPlaceholder}
-            />
-          )}
-
-          {(mode === "register" || isEmailRecovery) && (
-            <label className="block">
-              <span
-                className="mb-1.5 block text-sm font-medium"
-                style={{ color: "var(--ink-strong)" }}
-              >
-                {t.auth.verificationCode}
-              </span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={verificationCode}
-                  onChange={(event) =>
-                    setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  placeholder={t.auth.verificationCodePlaceholder}
-                  required
-                  className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+              {(isEmailRecovery || isPasswordReset) && (
+                <div
+                  role="status"
+                  className="rounded-lg border px-3 py-3 text-sm"
                   style={{
                     borderColor: "var(--ink-line)",
-                    background: "var(--ink-paper)",
-                    color: "var(--ink-black)",
+                    background: "var(--ink-wash)",
+                    color: "var(--ink-mid)",
                   }}
-                />
-                <button
-                  type="button"
-                  onClick={requestCode}
-                  disabled={sendingCode || codeCooldown > 0}
-                  className="shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-[var(--ink-wash-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ borderColor: "var(--ink-line)", color: "var(--cinnabar)" }}
                 >
-                  {sendingCode
-                    ? t.auth.sendingVerificationCode
-                    : codeCooldown > 0
-                      ? `${t.auth.resendVerificationCode} ${codeCooldown}s`
-                      : t.auth.sendVerificationCode}
-                </button>
-              </div>
-            </label>
-          )}
+                  <p
+                    className="font-semibold"
+                    style={{ color: "var(--ink-strong)" }}
+                  >
+                    {isPasswordReset
+                      ? t.auth.resetPasswordTitle
+                      : t.auth.verifyEmailTitle}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    {isPasswordReset
+                      ? t.auth.resetPasswordDescription
+                      : t.auth.verifyEmailDescription}
+                  </p>
+                </div>
+              )}
 
-          {notice && (
-            <p
-              role="status"
-              className="rounded-lg px-3 py-2 text-xs"
-              style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}
-            >
-              {notice}
-            </p>
-          )}
+              {mode === "register" && (
+                <Field
+                  label={t.auth.username}
+                  value={username}
+                  onChange={setUsername}
+                  autoComplete="username"
+                  placeholder={t.auth.usernamePlaceholder}
+                />
+              )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-            style={{ background: "var(--cinnabar)" }}
-          >
-            {loading
-              ? t.auth.processing
-              : isEmailRecovery
-                ? t.auth.verifyAndLogin
-                : mode === "login"
-                ? t.auth.submitLogin
-                : t.auth.submitRegister}
-          </button>
-          </form>
+              {mode === "register" ? (
+                <Field
+                  label={t.auth.email}
+                  type="email"
+                  value={email}
+                  onChange={(value) => {
+                    setEmail(value);
+                    setVerificationCode("");
+                    setCodeCooldown(0);
+                    setNotice(null);
+                  }}
+                  autoComplete="email"
+                  placeholder={t.auth.emailPlaceholder}
+                />
+              ) : isPasswordReset ? (
+                <Field
+                  label={t.auth.email}
+                  type="email"
+                  value={passwordResetEmail}
+                  onChange={(value) => {
+                    setPasswordResetEmail(value);
+                    setVerificationCode("");
+                    setCodeCooldown(0);
+                    setNotice(null);
+                  }}
+                  autoComplete="email"
+                  placeholder={t.auth.emailPlaceholder}
+                />
+              ) : isEmailRecovery ? (
+                <Field
+                  label={t.auth.email}
+                  type="email"
+                  value={recoveryEmail}
+                  onChange={() => {}}
+                  autoComplete="email"
+                  readOnly
+                />
+              ) : (
+                <Field
+                  label={t.auth.identifier}
+                  value={identifier}
+                  onChange={setIdentifier}
+                  autoComplete="username"
+                  placeholder={t.auth.identifierPlaceholder}
+                />
+              )}
+
+              <Field
+                label={isPasswordReset ? t.auth.newPassword : t.auth.password}
+                type="password"
+                value={password}
+                onChange={setPassword}
+                autoComplete={
+                  mode === "login" && !isPasswordReset
+                    ? "current-password"
+                    : "new-password"
+                }
+                placeholder={
+                  mode === "register" || isPasswordReset
+                    ? t.auth.passwordPlaceholderRegister
+                    : t.auth.passwordPlaceholderLogin
+                }
+              />
+
+              {(mode === "register" || isPasswordReset) && (
+                <Field
+                  label={t.auth.confirmPassword}
+                  type="password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                  placeholder={t.auth.confirmPasswordPlaceholder}
+                />
+              )}
+
+              {mode === "login" && !isEmailRecovery && !isPasswordReset && (
+                <div className="-mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasswordResetOpen(true);
+                      setPasswordResetEmail(
+                        /^\S+@\S+\.\S+$/.test(identifier) ? identifier : "",
+                      );
+                      setPassword("");
+                      setConfirmPassword("");
+                      setVerificationCode("");
+                      setCodeCooldown(0);
+                      setNotice(null);
+                      setError(null);
+                    }}
+                    className="text-xs font-medium hover:underline"
+                    style={{ color: "var(--cinnabar)" }}
+                  >
+                    {t.auth.forgotPassword}
+                  </button>
+                </div>
+              )}
+
+              {(mode === "register" || isEmailRecovery || isPasswordReset) && (
+                <label className="block">
+                  <span
+                    className="mb-1.5 block text-sm font-medium"
+                    style={{ color: "var(--ink-strong)" }}
+                  >
+                    {t.auth.verificationCode}
+                  </span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={verificationCode}
+                      onChange={(event) =>
+                        setVerificationCode(
+                          event.target.value.replace(/\D/g, "").slice(0, 6),
+                        )
+                      }
+                      placeholder={t.auth.verificationCodePlaceholder}
+                      required
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-[var(--cinnabar)] focus:ring-2 focus:ring-[var(--cinnabar-soft)]"
+                      style={{
+                        borderColor: "var(--ink-line)",
+                        background: "var(--ink-paper)",
+                        color: "var(--ink-black)",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={requestCode}
+                      disabled={sendingCode || codeCooldown > 0}
+                      className="shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-[var(--ink-wash-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        borderColor: "var(--ink-line)",
+                        color: "var(--cinnabar)",
+                      }}
+                    >
+                      {sendingCode
+                        ? t.auth.sendingVerificationCode
+                        : codeCooldown > 0
+                          ? `${t.auth.resendVerificationCode} ${codeCooldown}s`
+                          : t.auth.sendVerificationCode}
+                    </button>
+                  </div>
+                </label>
+              )}
+
+              {notice && (
+                <p
+                  role="status"
+                  className="rounded-lg px-3 py-2 text-xs"
+                  style={{
+                    background: "var(--ink-wash)",
+                    color: "var(--ink-mid)",
+                  }}
+                >
+                  {notice}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                style={{ background: "var(--cinnabar)" }}
+              >
+                {loading
+                  ? t.auth.processing
+                  : isPasswordReset
+                    ? t.auth.resetPasswordSubmit
+                    : isEmailRecovery
+                      ? t.auth.verifyAndLogin
+                      : mode === "login"
+                        ? t.auth.submitLogin
+                        : t.auth.submitRegister}
+              </button>
+            </form>
           )}
 
           {/* 邀请码对三种注册方式都有效，因此固定放在面板最底部。 */}
-          {mode === "register" && (
+          {mode === "register" && !isPasswordReset && (
             <div
               className="mt-5 border-t pt-5"
               style={{ borderColor: "var(--ink-line)" }}
@@ -492,8 +625,11 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           )}
         </PaperCard>
 
-        <p className="mt-6 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
-          {isEmailRecovery
+        <p
+          className="mt-6 text-center text-sm"
+          style={{ color: "var(--ink-mid)" }}
+        >
+          {isEmailRecovery || isPasswordReset
             ? ""
             : mode === "login"
               ? t.auth.noAccount
@@ -501,8 +637,12 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           <button
             type="button"
             onClick={() => {
-              if (isEmailRecovery) {
+              if (isEmailRecovery || isPasswordReset) {
                 setRecoveryEmail(null);
+                setPasswordResetOpen(false);
+                setPasswordResetEmail("");
+                setPassword("");
+                setConfirmPassword("");
                 setVerificationCode("");
                 setCodeCooldown(0);
                 setNotice(null);
@@ -513,10 +653,14 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
               }
               setError(null);
             }}
-            className={isEmailRecovery ? "font-medium hover:underline" : "ml-1 font-medium hover:underline"}
+            className={
+              isEmailRecovery || isPasswordReset
+                ? "font-medium hover:underline"
+                : "ml-1 font-medium hover:underline"
+            }
             style={{ color: "var(--cinnabar)" }}
           >
-            {isEmailRecovery
+            {isEmailRecovery || isPasswordReset
               ? t.auth.backToLogin
               : mode === "login"
                 ? t.auth.toRegister
@@ -597,7 +741,10 @@ function Field({
         }}
       />
       {hint && (
-        <span className="mt-1.5 block text-xs leading-relaxed" style={{ color: "var(--ink-faint)" }}>
+        <span
+          className="mt-1.5 block text-xs leading-relaxed"
+          style={{ color: "var(--ink-faint)" }}
+        >
           {hint}
         </span>
       )}

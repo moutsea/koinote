@@ -107,6 +107,7 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 		return model.Document{}, err
 	}
 
+	a.recordProductMilestone(ctx, params.User.ID, milestoneFirstDocument)
 	a.cancelPendingImageDeletions(ctx, userRef{ID: params.User.ID, AuthUserID: params.User.AuthUserID}, params.Content)
 	return doc, nil
 }

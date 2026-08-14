@@ -11,6 +11,7 @@ export type User = {
   avatarUrl?: string | null;
   isVerified: boolean;
   isAdmin: boolean;
+  hasPassword: boolean;
   membershipTier: "free" | "lifetime";
   membershipGrantedAt?: string | null;
   bonusStorageBytes: number;
@@ -163,6 +164,42 @@ export function verifyEmail(params: {
   });
 }
 
+export function sendPasswordResetCode(email: string, locale: string) {
+  return apiJson<{
+    ok: boolean;
+    expiresInSeconds: number;
+    retryAfterSeconds: number;
+    devCode?: string;
+  }>("/api/auth/password-reset-code", {
+    method: "POST",
+    body: JSON.stringify({ email, locale }),
+  });
+}
+
+export function resetPassword(params: {
+  email: string;
+  verificationCode: string;
+  newPassword: string;
+}) {
+  return apiJson<{ success: boolean }>("/api/auth/password-reset", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return apiJson<{ success: boolean }>("/api/auth/password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function invalidateOtherSessions() {
+  return apiJson<{ success: boolean }>("/api/auth/sessions/invalidate", {
+    method: "POST",
+  });
+}
+
 export function login(identifier: string, password: string) {
   return apiJson<{ user: User }>("/api/auth/login", {
     method: "POST",
@@ -192,10 +229,12 @@ export function getDocumentHistorySettings() {
   );
 }
 
-export function updateDocumentHistorySettings(settings: Pick<
-  DocumentHistorySettings,
-  "enabled" | "perDocumentMax" | "mcpEnabled"
->) {
+export function updateDocumentHistorySettings(
+  settings: Pick<
+    DocumentHistorySettings,
+    "enabled" | "perDocumentMax" | "mcpEnabled"
+  >,
+) {
   return apiJson<{ settings: DocumentHistorySettings }>(
     "/api/settings/document-history",
     { method: "PUT", body: JSON.stringify(settings) },
@@ -326,10 +365,32 @@ export type AdminStats = {
     from: string;
     to: string;
   };
+  funnel: {
+    registered: number;
+    firstDocument: number;
+    firstUpload: number;
+    firstExport: number;
+    mcpConnected: number;
+    checkoutStarted: number;
+    checkoutCompleted: number;
+  };
+  retention: {
+    trackingStartedAt: string;
+    day1: { eligible: number; returned: number };
+    day7: { eligible: number; returned: number };
+    day30: { eligible: number; returned: number };
+  };
 };
 
 export function getAdminStats() {
   return apiJson<AdminStats>("/api/admin/stats");
+}
+
+export function trackProductEvent(event: "first_export") {
+  return apiJson<{ success: boolean }>("/api/analytics/events", {
+    method: "POST",
+    body: JSON.stringify({ event }),
+  });
 }
 
 // ---------- 文档 ----------
@@ -344,6 +405,7 @@ export type DocumentShare = {
   requiresPassword: boolean;
   /** 后端因放宽权限换了新 token，老链接已失效 —— 需要提示用户重新分享 */
   tokenRotated?: boolean;
+  viewCount: number;
 };
 
 export type Document = {
@@ -366,6 +428,7 @@ export type SharedDocument = {
   content: string;
   updatedAt?: string | null;
   ownerName?: string;
+  viewCount: number;
 };
 
 // 列表接口不返回 content，只够侧边栏渲染
@@ -388,6 +451,23 @@ export type TrashedDocumentSummary = {
 
 export function listDocuments() {
   return apiJson<{ documents: DocumentSummary[] }>("/api/documents");
+}
+
+export type DocumentSearchResult = {
+  docId: string;
+  title: string;
+  snippet: string;
+  titleMatched: boolean;
+  contentMatched: boolean;
+  revision: number;
+  updatedAt?: string | null;
+};
+
+export function searchDocuments(query: string, limit = 20) {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  return apiJson<{ results: DocumentSearchResult[] }>(
+    `/api/documents/search?${params.toString()}`,
+  );
 }
 
 export function createDocument(params?: {

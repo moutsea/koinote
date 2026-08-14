@@ -31,6 +31,7 @@ type DocumentShare struct {
 	Token            string `json:"token"`
 	Access           string `json:"access"`
 	RequiresPassword bool   `json:"requiresPassword"`
+	ViewCount        int64  `json:"viewCount"`
 }
 
 // DocumentSummary 用于列表接口：不含 content，侧边栏渲染够用且省流量。
@@ -63,14 +64,17 @@ type DocumentVersion struct {
 
 // User 是对外暴露的用户模型，JSON 字段与前端 spa/src/api.ts 的 User 类型对齐。
 type User struct {
-	ID         int     `json:"id"`
-	AuthUserID string  `json:"authUserId"`
-	Email      string  `json:"email"`
-	Username   *string `json:"username"`
-	Nickname   *string `json:"nickname"`
-	AvatarURL  *string `json:"avatarUrl"`
-	IsVerified bool    `json:"isVerified"`
-	IsAdmin    bool    `json:"isAdmin"`
+	ID          int     `json:"id"`
+	AuthUserID  string  `json:"authUserId"`
+	Email       string  `json:"email"`
+	Username    *string `json:"username"`
+	Nickname    *string `json:"nickname"`
+	AvatarURL   *string `json:"avatarUrl"`
+	IsVerified  bool    `json:"isVerified"`
+	IsAdmin     bool    `json:"isAdmin"`
+	HasPassword bool    `json:"hasPassword"`
+	// SessionVersion 只参与服务端会话校验，不下发给浏览器。
+	SessionVersion int64 `json:"-"`
 	// MembershipTier 是站内权益真值。支付完成后写为 lifetime，终生有效。
 	MembershipTier      string     `json:"membershipTier"`
 	MembershipGrantedAt *time.Time `json:"membershipGrantedAt"`

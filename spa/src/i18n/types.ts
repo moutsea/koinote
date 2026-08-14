@@ -156,6 +156,29 @@ export interface Messages {
     invitationRewardTitle: string;
     invitationBonusHint: string;
     haveInvitationCode: string;
+    forgotPassword: string;
+    resetPasswordTitle: string;
+    resetPasswordDescription: string;
+    newPassword: string;
+    resetPasswordSubmit: string;
+    resetPasswordSuccess: string;
+    resetCodeSent: string;
+  };
+  security: {
+    title: string;
+    description: string;
+    oauthOnly: string;
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+    changePassword: string;
+    changingPassword: string;
+    passwordChanged: string;
+    sessionsTitle: string;
+    sessionsDescription: string;
+    invalidateSessions: string;
+    invalidatingSessions: string;
+    sessionsInvalidated: string;
   };
   storage: {
     /** 控制台卡片标题 */
@@ -283,6 +306,29 @@ export interface Messages {
     emptyHint: string;
     emptyLinkText: string;
   };
+  search: {
+    button: string;
+    title: string;
+    placeholder: string;
+    hint: string;
+    startTyping: string;
+    noResults: string;
+    loadFailed: string;
+    titleMatch: string;
+    contentMatch: string;
+  };
+  transfer: {
+    importButton: string;
+    importFolderButton: string;
+    exportButton: string;
+    importing: string;
+    exporting: string;
+    importSuccess: string;
+    exportSuccess: string;
+    importFailed: string;
+    exportFailed: string;
+    importHint: string;
+  };
   trashPage: {
     title: string;
     subtitle: string;
@@ -350,6 +396,21 @@ export interface Messages {
     amount: string;
     paidAt: string;
     generatedAt: string;
+    funnel: string;
+    funnelHint: string;
+    registered: string;
+    firstDocument: string;
+    firstUpload: string;
+    firstExport: string;
+    mcpConnected: string;
+    checkoutStarted: string;
+    checkoutCompleted: string;
+    retention: string;
+    retentionHint: string;
+    day1Retention: string;
+    day7Retention: string;
+    day30Retention: string;
+    retentionSample: string;
   };
   editor: {
     placeholder: string;
@@ -431,6 +492,12 @@ export interface Messages {
     sharedPasswordPrompt: string;
     sharedPasswordSubmit: string;
     sharedOpenApp: string;
+    sharedViews: string;
+    copyToMine: string;
+    copyingToMine: string;
+    copiedToMine: string;
+    copyToMineFailed: string;
+    loginToCopy: string;
     // 导出
     exportLabel: string;
     exportMarkdown: string;
@@ -501,6 +568,15 @@ export interface Messages {
     theme: string;
     language: string;
   };
+  changelog: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    unreleased: string;
+    sourceLink: string;
+    sourceNote: string;
+    categories: Record<string, string>;
+  };
   footer: {
     tagline: string;
     brandCn: string;
@@ -521,6 +597,7 @@ export interface Messages {
     copyright: string;
     allRightsReserved: string;
     contact: string;
+    changelog: string;
   };
   legal: {
     /** 「更新于 / 生效于」两个标签，日期由代码按 locale 格式化 */

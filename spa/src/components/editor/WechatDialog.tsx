@@ -2,8 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { exportToMedia, mediaExportFormat, type MediaPlatform } from "./exportMedia";
+import {
+  exportToMedia,
+  mediaExportFormat,
+  type MediaPlatform,
+} from "./exportMedia";
 import { findWechatTheme } from "./wechatThemes";
+import { trackProductEvent } from "../../api";
 
 /**
  * 导出到自媒体平台。
@@ -51,6 +56,7 @@ export function MediaExportDialog({
     setBusy(true);
     try {
       const result = await exportToMedia(platform, editor, title, themeId);
+      void trackProductEvent("first_export").catch(() => undefined);
       setDone(true);
       setBytes(result?.bytes ?? null);
 
@@ -134,12 +140,18 @@ export function MediaExportDialog({
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t.editor.mediaPlatformLabel}>
-          {([
-            ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
-            ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
-            ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
-          ] as const).map(([value, label, hint]) => {
+        <div
+          className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
+          role="radiogroup"
+          aria-label={t.editor.mediaPlatformLabel}
+        >
+          {(
+            [
+              ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
+              ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
+              ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
+            ] as const
+          ).map(([value, label, hint]) => {
             const selected = platform === value;
             return (
               <button
@@ -157,12 +169,24 @@ export function MediaExportDialog({
                 }}
                 className="rounded-xl border px-3 py-3 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/5"
                 style={{
-                  borderColor: selected ? "var(--ink-strong)" : "var(--ink-line)",
+                  borderColor: selected
+                    ? "var(--ink-strong)"
+                    : "var(--ink-line)",
                   background: selected ? "var(--ink-wash)" : "transparent",
                 }}
               >
-                <span className="block text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{label}</span>
-                <span className="mt-1 block text-[11px] leading-4" style={{ color: "var(--ink-faint)" }}>{hint}</span>
+                <span
+                  className="block text-sm font-semibold"
+                  style={{ color: "var(--ink-strong)" }}
+                >
+                  {label}
+                </span>
+                <span
+                  className="mt-1 block text-[11px] leading-4"
+                  style={{ color: "var(--ink-faint)" }}
+                >
+                  {hint}
+                </span>
               </button>
             );
           })}
@@ -173,7 +197,9 @@ export function MediaExportDialog({
         {mediaExportFormat(platform) === "rich-text" && (
           <p className="mt-4 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-neutral-500 dark:bg-white/5 dark:text-neutral-400">
             {t.editor.wechatThemeLabel}
-            <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
+            <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">
+              ·
+            </span>
             <span className="font-medium text-neutral-700 dark:text-neutral-200">
               {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
             </span>
@@ -220,7 +246,10 @@ export function MediaExportDialog({
             onClick={run}
             disabled={busy}
             className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
-            style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+            style={{
+              background: "var(--ink-strong)",
+              color: "var(--ink-paper)",
+            }}
           >
             {busy ? (
               <>

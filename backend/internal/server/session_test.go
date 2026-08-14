@@ -93,7 +93,7 @@ func TestNoHardcodedSessionSecretInSource(t *testing.T) {
 
 func TestSignSessionRoundTrip(t *testing.T) {
 	app := appWithSecret("test-secret-abc")
-	token, expiresAt := app.signSession("user-123")
+	token, expiresAt := app.signSession("user-123", 1)
 
 	if !strings.Contains(token, ".") {
 		t.Fatalf("token 应为 payload.signature 两段式，实际 %q", token)
@@ -117,7 +117,7 @@ func TestSignSessionRoundTrip(t *testing.T) {
 // 换密钥后旧 token 必须失效，这是轮换密钥的安全前提。
 func TestSessionRejectedAfterSecretRotation(t *testing.T) {
 	oldApp := appWithSecret("old-secret")
-	token, _ := oldApp.signSession("user-123")
+	token, _ := oldApp.signSession("user-123", 1)
 
 	newApp := appWithSecret("new-secret")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -132,7 +132,7 @@ func TestSessionRejectedAfterSecretRotation(t *testing.T) {
 
 func TestSessionCookieRejectsInvalidTokens(t *testing.T) {
 	app := appWithSecret("test-secret-abc")
-	validToken, _ := app.signSession("user-123")
+	validToken, _ := app.signSession("user-123", 1)
 	validPayload := strings.Split(validToken, ".")[0]
 
 	// 伪造一个未来过期、身份为 admin 的载荷，但签不出正确签名
@@ -205,7 +205,7 @@ func TestSetSessionCookieAttributes(t *testing.T) {
 	t.Run("开发环境不带 Secure", func(t *testing.T) {
 		app := newTestApp(config.Config{SessionSecret: "s", NodeEnv: "development"})
 		rec := httptest.NewRecorder()
-		app.setSessionCookie(rec, "user-1")
+		app.setSessionCookie(rec, "user-1", 1)
 
 		c := readSetCookie(t, rec, sessionCookieName)
 		if !c.HttpOnly {
@@ -225,7 +225,7 @@ func TestSetSessionCookieAttributes(t *testing.T) {
 	t.Run("生产环境必须带 Secure", func(t *testing.T) {
 		app := newTestApp(config.Config{SessionSecret: "s", NodeEnv: "production"})
 		rec := httptest.NewRecorder()
-		app.setSessionCookie(rec, "user-1")
+		app.setSessionCookie(rec, "user-1", 1)
 
 		if c := readSetCookie(t, rec, sessionCookieName); !c.Secure {
 			t.Error("生产环境 session cookie 必须带 Secure")
@@ -321,7 +321,7 @@ func TestExampleEnvHasNoUsableInternalToken(t *testing.T) {
 // 内部令牌无效时应继续回退到 cookie 校验，两条路径不能互相干扰。
 func TestAuthUserIDFallsBackToCookie(t *testing.T) {
 	app := newTestApp(config.Config{InternalToken: "real-token", SessionSecret: "sess"})
-	token, _ := app.signSession("cookie-user")
+	token, _ := app.signSession("cookie-user", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Koinote-Internal-Token", "wrong")

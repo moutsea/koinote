@@ -290,6 +290,7 @@ func (a *App) billingCheckout(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadGateway, "checkout_create_failed", "Could not start checkout")
 		return
 	}
+	a.recordProductMilestone(r.Context(), user.ID, milestoneCheckoutStarted)
 	httpx.JSON(w, http.StatusOK, map[string]string{"sessionId": session.ID, "url": session.URL})
 }
 
@@ -366,7 +367,8 @@ func scanBillingUser(row pgx.Row) (model.User, error) {
 	var user model.User
 	err := row.Scan(
 		&user.ID, &user.AuthUserID, &user.Email, &user.Username, &user.Nickname, &user.AvatarURL,
-		&user.IsVerified, &user.IsAdmin, &user.MembershipTier, &user.MembershipGrantedAt,
+		&user.IsVerified, &user.IsAdmin, &user.HasPassword, &user.SessionVersion,
+		&user.MembershipTier, &user.MembershipGrantedAt,
 		&user.BonusStorageBytes, &user.StripeCustomerID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	return user, err
@@ -459,7 +461,8 @@ func (a *App) grantLifetimeMembership(
 		    updated_at = now()
 		WHERE id = $1
 		RETURNING id, auth_user_id, email, username, nickname, avatar_url,
-		          is_verified, is_admin, membership_tier, membership_granted_at,
+		          is_verified, is_admin, password_hash IS NOT NULL, session_version,
+		          membership_tier, membership_granted_at,
 		          bonus_storage_bytes, stripe_customer_id, created_at, updated_at
 	`, userID, checkout.CustomerID))
 	if err != nil {
@@ -467,6 +470,9 @@ func (a *App) grantLifetimeMembership(
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return membershipGrantResult{}, err
+	}
+	if applied {
+		a.recordProductMilestone(ctx, user.ID, milestoneCheckoutCompleted)
 	}
 	return membershipGrantResult{User: user, Applied: applied}, nil
 }

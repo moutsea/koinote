@@ -7,8 +7,30 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-15
+
 ### Added
 
+- A public changelog page now renders this repository's `CHANGELOG.md` as a version timeline and
+  is linked directly beneath the footer contact shortcuts.
+- Global document search now covers titles and Markdown bodies, opens with `⌘K` / `Ctrl+K`,
+  highlights matching text, excludes trash and other users, and gives MCP clients the same
+  body-search snippets instead of title-only results.
+- My Documents can import individual Markdown files, folders, or ZIP archives with referenced
+  images, and export every document, folder, and reachable image as a re-importable ZIP package.
+- Shared documents now expose a privacy-preserving read count, dynamic browser and OpenGraph
+  metadata, and a “Copy to my Koinote” action that rehosts referenced Koinote images for the new
+  owner. Password-protected metadata never includes the title, body, or cover image.
+- The admin dashboard now reports first-step product funnels and D1/D7/D30 retention from
+  idempotent milestones and one activity row per user per UTC day. Analytics never stores titles,
+  document bodies, search terms, or imported filenames.
+- Password accounts can now request a non-enumerating email recovery code, reset a forgotten
+  password, change it from the dashboard, and explicitly sign out other devices. Password
+  changes increment an account-level session version so old cookies become invalid immediately.
+- The mobile editor now exposes the full document and folder tree in an accessible drawer with
+  backdrop and Escape dismissal, while the desktop resizable panel remains unchanged.
+- Bilingual product roadmaps now record account safety, backup, portability, search, MCP audit,
+  publishing, offline, and version-diff priorities.
 - A public MCP guide now covers Codex, Claude Code, OpenCode, OpenClaw, WorkBuddy,
   generic Streamable HTTP clients, version control, and the document safety boundaries.
 - The MCP token card now generates a ready-to-run OpenClaw CLI configuration and probe command.
@@ -23,6 +45,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The privacy policy now discloses first-party milestone, daily-activity, and aggregate share-view
+  data, while explicitly excluding document content, titles, search terms, and filenames.
 - Public documentation is now split into separate MCP integration and version-control guides,
   both available from a new Docs menu in the top navigation.
 - The editor's WeChat-only export entry is now “Export to publishing platforms,” with an
@@ -51,6 +75,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Newly created MCP personal access tokens are stored as an authentication hash plus an
   AES-GCM-encrypted recovery copy, so their owner can reveal and copy them again. Existing
   one-time-display tokens remain valid but cannot be recovered retroactively.
+
+### Fixed
+
+- Share-page OpenGraph injection now returns replacements from callbacks so JavaScript replacement
+  tokens in user-authored titles and summaries remain literal instead of corrupting or injecting
+  HTML into the generated page.
 
 ## [0.4.0] - 2026-08-13
 

@@ -1,8 +1,8 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { FileText, Lock } from "lucide-react";
+import { Copy, Eye, FileText, LoaderCircle, Lock } from "lucide-react";
 import {
   ApiError,
   getSharedDocument,
@@ -18,6 +18,8 @@ import {
 import { interpolate, useI18n, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { InkSeal } from "../components/Ink";
+import { useSession } from "../auth";
+import { copySharedDocument } from "../documentTransfer";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -68,12 +70,7 @@ export function SharePage() {
   }
 
   if (needsPassword && token) {
-    return (
-      <PasswordGate
-        token={token}
-        onUnlock={(doc) => setUnlocked(doc)}
-      />
-    );
+    return <PasswordGate token={token} onUnlock={(doc) => setUnlocked(doc)} />;
   }
 
   if (!shared) {
@@ -118,7 +115,10 @@ function PasswordGate({
       <form onSubmit={submit} className="w-full max-w-sm text-center">
         <div
           className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl"
-          style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+          style={{
+            background: "var(--cinnabar-soft)",
+            color: "var(--cinnabar)",
+          }}
         >
           <Lock className="h-5 w-5" />
         </div>
@@ -165,11 +165,13 @@ function PasswordGate({
 
 function SharedView({ shared }: { shared: SharedDocument }) {
   const { t, locale } = useI18n();
+  const session = useSession();
+  const navigate = useNavigate();
+  const [copying, setCopying] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
-  const extensions = useMemo(
-    () => createEditorExtensions(""),
-    [],
-  );
+  const extensions = useMemo(() => createEditorExtensions(""), []);
 
   // 只读：editable 关掉，但仍用同一套扩展，
   // 这样代码高亮、公式、图片的呈现与编辑器完全一致。
@@ -191,6 +193,32 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     ? new Date(shared.updatedAt).toLocaleDateString(DATE_LOCALE[locale])
     : "";
 
+  useEffect(() => {
+    const original = document.title;
+    document.title = `${shared.title.trim() || t.editor.untitled} — Koinote`;
+    return () => {
+      document.title = original;
+    };
+  }, [shared.title, t.editor.untitled]);
+
+  async function copyToMine() {
+    setCopying(true);
+    setCopyError(null);
+    setCopyNotice(null);
+    try {
+      const result = await copySharedDocument(shared);
+      setCopyNotice(t.editor.copiedToMine);
+      await navigate({
+        to: "/editor/$docId",
+        params: { docId: result.document.docId },
+      });
+    } catch {
+      setCopyError(t.editor.copyToMineFailed);
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
     <PageContainer className="flex-1 py-10">
       <header
@@ -203,16 +231,27 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         >
           {shared.title.trim() || t.editor.untitled}
         </h1>
-        <p
-          className="mt-2 flex items-center gap-2 text-xs"
+        <div
+          className="mt-2 flex flex-wrap items-center gap-2 text-xs"
           style={{ color: "var(--ink-faint)" }}
         >
           {shared.ownerName && (
-            <span>{interpolate(t.editor.sharedBy, { name: shared.ownerName })}</span>
+            <span>
+              {interpolate(t.editor.sharedBy, { name: shared.ownerName })}
+            </span>
           )}
           {shared.ownerName && updatedAt && <span aria-hidden>·</span>}
           {updatedAt && <span>{updatedAt}</span>}
-        </p>
+          {(shared.ownerName || updatedAt) && <span aria-hidden>·</span>}
+          <span className="inline-flex items-center gap-1">
+            <Eye className="h-3.5 w-3.5" />
+            {interpolate(t.editor.sharedViews, {
+              count: new Intl.NumberFormat(DATE_LOCALE[locale]).format(
+                shared.viewCount ?? 0,
+              ),
+            })}
+          </span>
+        </div>
       </header>
 
       {themeCSS && <style>{themeCSS}</style>}
@@ -227,6 +266,45 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         style={{ borderColor: "var(--ink-line)" }}
       >
         <InkSeal className="h-8 px-0.5 text-[10px]" />
+        {session.data?.user ? (
+          <button
+            type="button"
+            onClick={() => void copyToMine()}
+            disabled={copying}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            style={{ background: "var(--cinnabar)" }}
+          >
+            {copying ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {copying ? t.editor.copyingToMine : t.editor.copyToMine}
+          </button>
+        ) : (
+          <a
+            href={`/login?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ background: "var(--cinnabar)" }}
+          >
+            <Copy className="h-4 w-4" />
+            {t.editor.loginToCopy}
+          </a>
+        )}
+        {copyNotice && (
+          <p
+            role="status"
+            className="text-xs"
+            style={{ color: "var(--ink-mid)" }}
+          >
+            {copyNotice}
+          </p>
+        )}
+        {copyError && (
+          <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+            {copyError}
+          </p>
+        )}
         <Link
           to="/"
           className="kn-ink-link text-xs font-medium transition"

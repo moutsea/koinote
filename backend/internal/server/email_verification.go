@@ -36,6 +36,7 @@ var errEmailDeliveryUnavailable = errors.New("email delivery is unavailable")
 
 type verificationEmailSender interface {
 	SendVerificationEmail(ctx context.Context, to, code, locale string) error
+	SendPasswordResetEmail(ctx context.Context, to, code, locale string) error
 }
 
 type workerVerificationEmailSender struct {
@@ -53,10 +54,20 @@ func newWorkerVerificationEmailSender(cfg config.Config) verificationEmailSender
 }
 
 func (s *workerVerificationEmailSender) SendVerificationEmail(ctx context.Context, to, code, locale string) error {
+	return s.sendCodeEmail(ctx, to, code, locale, "registration")
+}
+
+func (s *workerVerificationEmailSender) SendPasswordResetEmail(ctx context.Context, to, code, locale string) error {
+	return s.sendCodeEmail(ctx, to, code, locale, "password_reset")
+}
+
+func (s *workerVerificationEmailSender) sendCodeEmail(ctx context.Context, to, code, locale, purpose string) error {
 	if s.workerURL == "" || s.internalToken == "" {
 		return errEmailDeliveryUnavailable
 	}
-	body, err := json.Marshal(map[string]string{"email": to, "code": code, "locale": locale})
+	body, err := json.Marshal(map[string]string{
+		"email": to, "code": code, "locale": locale, "purpose": purpose,
+	})
 	if err != nil {
 		return err
 	}
@@ -370,7 +381,7 @@ func (a *App) authVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	limiter.reset(ipKey)
 	limiter.reset(accountKey)
-	a.setSessionCookie(w, rec.AuthUserID)
+	a.setSessionCookie(w, rec.AuthUserID, user.SessionVersion)
 	httpx.JSON(w, http.StatusOK, map[string]any{"user": user})
 }
 

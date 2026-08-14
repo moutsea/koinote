@@ -37,6 +37,7 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/invitations", width: "5xl" },
   { prefix: "/pricing", width: "6xl" },
   { prefix: "/docs", width: "6xl" },
+  { prefix: "/changelog", width: "5xl" },
   // 管理后台包含宽表格和 30 天趋势，比个人控制台多留一档宽度
   { prefix: "/admin", width: "6xl" },
   // 分享页给外人读长文，3xl 是为了行长
@@ -69,10 +70,13 @@ const DEFAULT_WIDTH: ContentWidth = "6xl";
  * 宽度，它必须赢过 /editor，且不能依赖两者在表里的先后。
  */
 export function contentWidthFor(pathname: string): ContentWidth {
-  const matches = ROUTE_WIDTHS.filter(({ prefix }) => isUnder(pathname, prefix));
+  const matches = ROUTE_WIDTHS.filter(({ prefix }) =>
+    isUnder(pathname, prefix),
+  );
   if (matches.length === 0) return DEFAULT_WIDTH;
   // 最长前缀优先："/" 会匹配一切，但更具体的路由该赢
-  return matches.reduce((a, b) => (b.prefix.length > a.prefix.length ? b : a)).width;
+  return matches.reduce((a, b) => (b.prefix.length > a.prefix.length ? b : a))
+    .width;
 }
 
 /**

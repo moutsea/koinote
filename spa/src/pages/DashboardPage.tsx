@@ -8,6 +8,7 @@ import { StorageCard } from "../components/StorageCard";
 import { MembershipCard } from "../components/MembershipCard";
 import { MCPAccessCard } from "../components/MCPAccessCard";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
+import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -113,6 +114,10 @@ export function DashboardPage() {
         <MembershipCard user={user} />
       </div>
 
+      <div id="security" className="mt-4 scroll-mt-20">
+        <PasswordSecurityCard user={user} />
+      </div>
+
       <div id="history-settings" className="mt-4 scroll-mt-20">
         <DocumentHistorySettingsCard user={user} />
       </div>
@@ -135,9 +140,14 @@ function InfoCard({
 }) {
   return (
     <PaperCard className="p-5">
-      <div className="flex items-center gap-2" style={{ color: "var(--ink-faint)" }}>
+      <div
+        className="flex items-center gap-2"
+        style={{ color: "var(--ink-faint)" }}
+      >
         {icon}
-        <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-wide">
+          {label}
+        </span>
       </div>
       <p
         className="mt-2 truncate text-sm font-medium"

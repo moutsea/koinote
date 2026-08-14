@@ -26,6 +26,7 @@ type App struct {
 	paymentNotifier paymentNotifier
 	siteAnalytics   siteAnalyticsClient
 	adminOverview   adminOverviewCache
+	productActivity activityTracker
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
@@ -62,6 +63,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/register", a.authRegister)
 	mux.HandleFunc("POST /api/auth/verification-code", a.authVerificationCode)
 	mux.HandleFunc("POST /api/auth/verify-email", a.authVerifyEmail)
+	mux.HandleFunc("POST /api/auth/password-reset-code", a.authPasswordResetCode)
+	mux.HandleFunc("POST /api/auth/password-reset", a.authPasswordReset)
+	mux.HandleFunc("POST /api/auth/password", a.authPasswordChange)
+	mux.HandleFunc("POST /api/auth/sessions/invalidate", a.authSessionsInvalidate)
 	mux.HandleFunc("POST /api/auth/login", a.authLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.authLogout)
 	mux.HandleFunc("GET /api/auth/session", a.authSession)
@@ -74,6 +79,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/billing/checkout/confirm", a.billingCheckoutConfirm)
 	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
+	mux.HandleFunc("POST /api/analytics/events", a.analyticsEvent)
 	mux.HandleFunc("GET /api/invitations", a.invitationsOverview)
 	mux.HandleFunc("GET /api/mcp/tokens", a.mcpTokensList)
 	mux.HandleFunc("POST /api/mcp/tokens", a.mcpTokenCreate)
@@ -103,6 +109,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/images/record", a.imageRecord)
 
 	mux.HandleFunc("GET /api/documents", a.documentsList)
+	mux.HandleFunc("GET /api/documents/search", a.documentsSearch)
 	mux.HandleFunc("POST /api/documents", a.documentCreate)
 	mux.HandleFunc("GET /api/documents/trash", a.documentsTrashList)
 	mux.HandleFunc("POST /api/documents/{docId}/restore", a.documentRestore)
@@ -119,6 +126,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/documents/{docId}/share", a.shareRevoke)
 	mux.HandleFunc("GET /api/share/{token}", a.shareGet)
 	mux.HandleFunc("POST /api/share/{token}/verify", a.shareVerify)
+	mux.HandleFunc("GET /api/share/{token}/meta", a.shareMeta)
 
 	return a.withCORS(mux)
 }
@@ -156,12 +164,14 @@ func (a *App) getUserByAuthUserID(ctx context.Context, authUserID string) (model
 	var u model.User
 	err := a.db.QueryRow(ctx, `
 		SELECT id, auth_user_id, email, username, nickname, avatar_url,
-		       is_verified, is_admin, membership_tier, membership_granted_at,
+		       is_verified, is_admin, password_hash IS NOT NULL, session_version,
+		       membership_tier, membership_granted_at,
 		       bonus_storage_bytes, stripe_customer_id, created_at, updated_at
 		FROM users WHERE auth_user_id = $1 LIMIT 1
 	`, authUserID).Scan(
 		&u.ID, &u.AuthUserID, &u.Email, &u.Username, &u.Nickname, &u.AvatarURL,
-		&u.IsVerified, &u.IsAdmin, &u.MembershipTier, &u.MembershipGrantedAt,
+		&u.IsVerified, &u.IsAdmin, &u.HasPassword, &u.SessionVersion,
+		&u.MembershipTier, &u.MembershipGrantedAt,
 		&u.BonusStorageBytes, &u.StripeCustomerID, &u.CreatedAt, &u.UpdatedAt,
 	)
 	return u, err

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -150,10 +151,11 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 	// 现有 token 与现有口令状态都要查：是否轮换取决于「改动前有没有口令」
 	var existing sql.NullString
 	var existingHash sql.NullString
+	var viewCount int64
 	err := a.db.QueryRow(r.Context(), `
-		SELECT share_token, share_password_hash
+		SELECT share_token, share_password_hash, share_view_count
 		FROM documents WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
-	`, docID, user.ID).Scan(&existing, &existingHash)
+	`, docID, user.ID).Scan(&existing, &existingHash, &viewCount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return
@@ -199,6 +201,7 @@ func (a *App) shareCreate(w http.ResponseWriter, r *http.Request) {
 			"token":            token,
 			"access":           access,
 			"requiresPassword": passwordHash.Valid,
+			"viewCount":        viewCount,
 			// 轮换必须回传：用户可能已经把老链接发给别人了，
 			// 界面得告诉他老链接已失效，需要重新分享。
 			"tokenRotated": rotated,
@@ -242,6 +245,7 @@ func (a *App) shareRevoke(w http.ResponseWriter, r *http.Request) {
 // ---------- 公开读取 ----------
 
 type sharedDocument struct {
+	ID           int
 	Title        string
 	Theme        string
 	Content      string
@@ -249,21 +253,22 @@ type sharedDocument struct {
 	PasswordHash sql.NullString
 	UpdatedAt    *time.Time
 	OwnerName    sql.NullString
+	ViewCount    int64
 }
 
 func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDocument, error) {
 	var doc sharedDocument
 	var access sql.NullString
 	err := a.db.QueryRow(ctx, `
-		SELECT d.title, d.theme, d.content, d.share_access, d.share_password_hash,
-		       d.updated_at, COALESCE(u.nickname, u.username)
+		SELECT d.id, d.title, d.theme, d.content, d.share_access, d.share_password_hash,
+		       d.updated_at, COALESCE(u.nickname, u.username), d.share_view_count
 		FROM documents d
 		JOIN users u ON u.id = d.user_id
 		WHERE d.share_token = $1 AND d.trashed_at IS NULL
 		LIMIT 1
 	`, token).Scan(
-		&doc.Title, &doc.Theme, &doc.Content, &access, &doc.PasswordHash,
-		&doc.UpdatedAt, &doc.OwnerName,
+		&doc.ID, &doc.Title, &doc.Theme, &doc.Content, &access, &doc.PasswordHash,
+		&doc.UpdatedAt, &doc.OwnerName, &doc.ViewCount,
 	)
 	doc.Access = normalizeShareAccess(access.String)
 	return doc, err
@@ -295,6 +300,7 @@ func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{"requiresPassword": true})
 		return
 	}
+	doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
 
 	writeSharedDocument(w, doc)
 }
@@ -354,8 +360,23 @@ func (a *App) shareVerify(w http.ResponseWriter, r *http.Request) {
 		// 验对了就清掉该链接的失败计数，免得正常用户被之前的尝试连坐
 		limiter.reset(linkKey)
 	}
+	doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
 
 	writeSharedDocument(w, doc)
+}
+
+func (a *App) incrementShareView(ctx context.Context, documentID int, fallback int64) int64 {
+	var count int64
+	if err := a.db.QueryRow(ctx, `
+		UPDATE documents
+		SET share_view_count = share_view_count + 1
+		WHERE id = $1 AND share_token IS NOT NULL AND trashed_at IS NULL
+		RETURNING share_view_count
+	`, documentID).Scan(&count); err != nil {
+		log.Printf("share view count: %v", err)
+		return fallback
+	}
+	return count
 }
 
 // writeSharedDocument 只输出公开视图需要的字段。
@@ -369,6 +390,60 @@ func writeSharedDocument(w http.ResponseWriter, doc sharedDocument) {
 			"content":   doc.Content,
 			"updatedAt": doc.UpdatedAt,
 			"ownerName": strings.TrimSpace(doc.OwnerName.String),
+			"viewCount": doc.ViewCount,
 		},
+	})
+}
+
+var markdownDecorationPattern = regexp.MustCompile(`(?m)(!?)\[([^\]]*)\]\([^)]*\)|^\s{0,3}#{1,6}\s*|[*_~` + "`" + `>|-]+`)
+
+func shareDescription(content string) string {
+	plain := markdownDecorationPattern.ReplaceAllStringFunc(content, func(value string) string {
+		match := markdownDecorationPattern.FindStringSubmatch(value)
+		if len(match) >= 3 && match[1] == "" {
+			return match[2]
+		}
+		return " "
+	})
+	plain = strings.Join(strings.Fields(plain), " ")
+	runes := []rune(plain)
+	if len(runes) > 160 {
+		return string(runes[:160]) + "…"
+	}
+	return plain
+}
+
+// shareMeta 只给 Worker 注入 OpenGraph 使用。口令分享不暴露标题、摘要或封面；
+// 普通链接分享也只返回展示字段，不返回正文和内部标识。
+func (a *App) shareMeta(w http.ResponseWriter, r *http.Request) {
+	setShareResponseHeaders(w)
+	token := strings.TrimSpace(r.PathValue("token"))
+	if token == "" {
+		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
+		return
+	}
+	doc, err := a.sharedDocumentByToken(r.Context(), token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
+		return
+	}
+	if err != nil {
+		log.Printf("share meta: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	if doc.PasswordHash.Valid && strings.TrimSpace(doc.PasswordHash.String) != "" {
+		httpx.JSON(w, http.StatusOK, map[string]any{"protected": true})
+		return
+	}
+	imageKey := ""
+	if match := imageKeyPattern.FindString(doc.Content); isSafeImageKey(match) {
+		imageKey = match
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"title":       doc.Title,
+		"description": shareDescription(doc.Content),
+		"imageKey":    imageKey,
+		"protected":   false,
 	})
 }

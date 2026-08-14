@@ -4,7 +4,7 @@ This document records **why things are built the way they are** — which trade-
 were deliberate, which traps we hit, and which degradations were accepted with the
 cost understood. For features and setup, see the [README](../README.en.md).
 
-Why write it down: almost every decision here has a wrong version that also *works*.
+Why write it down: almost every decision here has a wrong version that also _works_.
 It just fails months later in ways that are hard to trace — an export that silently
 drops content, a rate limiter that locks out the victim, a CDN that is misconfigured
 but looks fine. Unrecorded, the next person (including me in three months) walks
@@ -20,6 +20,7 @@ into the same hole.
 - [Invitation rewards](#invitation-rewards)
 - [Membership and billing](#membership-and-billing)
 - [MCP document access](#mcp-document-access)
+- [Search, portability, and product analytics](#search-portability-and-product-analytics)
 - [Admin dashboard](#admin-dashboard)
 - [Sharing](#sharing)
 - [Export](#export)
@@ -134,12 +135,19 @@ npm run docker:up   # postgres + backend all containerized
 - Email registration: call `POST /api/auth/verification-code`, then submit the code to
   `POST /api/auth/register`; legacy unverified accounts use `POST /api/auth/verify-email`
 - Login / logout / session: `POST /api/auth/{login,logout}`, `GET /api/auth/session`
+- Password security: `POST /api/auth/password-reset-code`, `POST /api/auth/password-reset`,
+  `POST /api/auth/password`, and `POST /api/auth/sessions/invalidate`
 - OAuth: `GET /api/auth/oauth/{google,github}/{start,callback}`
-- Sessions are stateless HMAC-SHA256 signed `koinote_session` cookies
-  (HttpOnly / SameSite=Lax / Secure in production) — **never stored in the database**
+- Session credentials are HMAC-SHA256 signed `koinote_session` cookies
+  (HttpOnly / SameSite=Lax / Secure in production). The backend stores only an account-level
+  `session_version`, not individual sessions
 - Passwords hashed with bcrypt (cost 10); login accepts username or email, case-insensitive
 - Verification codes are stored only as HMACs and expire after 10 minutes; consuming
   the code, creating the user, and deleting the code happen in one transaction
+- Password recovery uses separate tables and an independent HMAC purpose, so registration
+  codes cannot reset a password. Unknown and OAuth-only addresses receive the same response.
+  Resetting or changing a password increments `session_version`; password changes reissue the
+  current device's cookie, while recovery requires a fresh login
 - OAuth accounts are trusted as provider-verified; invitation rewards apply only when a
   genuinely new account is created
 
@@ -168,6 +176,11 @@ constant. Both are gone:
 
 **Changing the key invalidates every issued session** — users must log in again.
 
+The cookie payload includes the account's current `session_version`. Cookies issued before
+migration 0021 omit it and are treated as initial version 1, so deployment itself does not log
+everyone out. Changing or recovering a password, or choosing “sign out other devices,” increments
+the version and immediately rejects all older cookies without maintaining a session table.
+
 ### Internal token BACKEND_INTERNAL_TOKEN
 
 Lateral auth from Worker to backend. **Required, generate your own, never use an
@@ -193,24 +206,26 @@ image accounting, image cleanup, and verification-email delivery all stop workin
 Three places must match. A mismatch breaks image accounting/cleanup and makes
 verification-email delivery return 503:
 
-| Location | Purpose |
-| --- | --- |
-| `.env` | read by the backend, also feeds docker-compose |
-| `.dev.vars` | local `wrangler dev` |
-| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | production Worker |
+| Location                                                      | Purpose                                        |
+| ------------------------------------------------------------- | ---------------------------------------------- |
+| `.env`                                                        | read by the backend, also feeds docker-compose |
+| `.dev.vars`                                                   | local `wrangler dev`                           |
+| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | production Worker                              |
 
 ### Rate limiting
 
-| Endpoint | Dimension | Threshold |
-| --- | --- | --- |
-| Login | IP | 10 / 15 min |
-| Login | Account | 100 / 15 min |
-| Register | IP | 5 / hour |
-| Verification-code send | Email | 5 / hour, at least 1 min apart |
-| Verification-code send | IP | 20 / hour |
-| Verification-code check | Email / code | 5 failed attempts |
-| Share password check | IP | 20 / 15 min |
-| Share password check | Link | 10 / 15 min |
+| Endpoint                | Dimension    | Threshold                             |
+| ----------------------- | ------------ | ------------------------------------- |
+| Login                   | IP           | 10 / 15 min                           |
+| Login                   | Account      | 100 / 15 min                          |
+| Register                | IP           | 5 / hour                              |
+| Verification-code send  | Email        | 5 / hour, at least 1 min apart        |
+| Verification-code send  | IP           | 20 / hour                             |
+| Verification-code check | Email / code | 5 failed attempts                     |
+| Password-recovery send  | Email / IP   | 5 / 20 per hour, at least 1 min apart |
+| Password-recovery check | Email / code | 5 failed attempts                     |
+| Share password check    | IP           | 20 / 15 min                           |
+| Share password check    | Link         | 10 / 15 min                           |
 
 Two deliberate choices, both easy to get backwards:
 
@@ -254,7 +269,7 @@ Two places that must not be casually "tightened":
   KaTeX writes a `style` attribute on every span it renders. Tightening it means
   formulas don't render and themes stop working — and that kind of "broken" usually
   ends with the whole CSP being deleted, which is worse than not having one.
-  `script-src` *is* `'self'` with no `unsafe-inline`.
+  `script-src` _is_ `'self'` with no `unsafe-inline`.
 - HSTS is only sent over https. Sending it over http pins `localhost` to https,
   which makes the dev machine completely unreachable in the browser and can't be
   cleared for the duration of `max-age`.
@@ -447,7 +462,7 @@ exists; the first release keeps the trust boundary smaller, revocable, and audit
 Read tokens expose:
 
 - `list_documents`: recent-first paginated summaries without content
-- `search_documents`: title-only search, avoiding unindexed scans over 1 MiB bodies
+- `search_documents`: title and Markdown-body search with a nearby matching snippet
 - `get_document`: Unicode character offset/limit chunks with total length and `hasMore`
 - `list_document_versions` / `get_document_version`: retained recovery points
 - `list_trashed_documents`: summaries waiting in the 30-day trash
@@ -512,23 +527,49 @@ grows materially, this should move to a dedicated version-image reference table 
 index. Document and image quota changes share a per-user advisory transaction lock so concurrent
 requests cannot both approve against stale usage.
 
+## Search, portability, and product analytics
+
+Global search and MCP `search_documents` share one backend query. It is constrained to the
+authenticated user, excludes trash, matches both title and Markdown body, and returns a short
+snippet around the body hit. Queries are limited to 1–200 Unicode characters and the web route
+returns at most 50 rows; `⌘K` / `Ctrl+K` opens the browser UI and highlighting happens locally.
+Search terms are never written to logs or product analytics. The current implementation is a
+case-insensitive substring scan; PostgreSQL full-text or trigram indexing can be evaluated when
+the corpus justifies it.
+
+Bulk migration keeps Markdown as the source format. Import accepts `.md` files, browser-selected
+folders, or ZIP archives. ZIP processing is capped at 1,000 files and 250 MiB uncompressed data,
+normalizes paths, and rejects traversal outside the archive root. Only PNG, JPEG, GIF, or WebP
+files actually referenced by Markdown are uploaded; Markdown and HTML `<img>` references are then
+rewritten to the recipient account's URLs. Full export preserves folders, reads first-party images
+through same-origin `/images/<key>`, stores them under `assets/`, and writes a manifest. An image
+failure is listed in that manifest instead of silently aborting unrelated documents.
+
+Product analytics is first-party and deliberately minimal. `product_milestones` stores one first
+timestamp per user/event for registration, first document, first upload, first export, first
+successful MCP call, checkout start, and checkout completion. `user_daily_activity` stores at most
+one date per user per day for D1/D7/D30 retention. Document bodies, titles, search terms, filenames,
+and share-reader identities never enter analytics. Only first export must be reported by the browser;
+all other milestones are recorded after backend business success. Retention starts at migration
+deployment and the dashboard exposes that start date rather than fabricating historical activity.
+
 ## Admin dashboard
 
 `GET /api/admin/stats` resolves the user from the server-side session and then checks
 the database `is_admin` flag. Hiding the menu item on the client is only a UX detail,
-not authorization. Unauthenticated requests receive 401 and non-admin users receive
-403. Responses omit password hashes, Stripe Customer IDs, Checkout Session IDs, and
+not authorization. Unauthenticated requests receive 401 and non-admin users receive 403. Responses omit password hashes, Stripe Customer IDs, Checkout Session IDs, and
 internal authentication identifiers.
 
 PostgreSQL is the source of truth for user, verified-user, lifetime-member, document,
-image-ledger, site-storage, order, per-currency revenue, 30-day growth, and recent
+image-ledger, site-storage, order, per-currency revenue, 30-day growth, first-step funnel,
+D1/D7/D30 retention, and recent
 activity metrics. Revenue in different currencies is never added together without an
 exchange-rate source; the frontend formats each currency independently. The overview's
 full-table document and image aggregates use a one-minute cache that also coalesces
 concurrent loads.
 
 Today's UV and PV come from Cloudflare GraphQL Analytics API
-`httpRequests1mGroups`. The query deliberately has no time dimension, so
+`httpRequests1hGroups`. The query deliberately has no time dimension and requests one aggregate, so
 `uniq.uniques` is deduplicated over the whole requested interval rather than incorrectly
 adding minute-bucket uniques. It uses a dedicated least-privilege
 `CLOUDFLARE_ANALYTICS_TOKEN`, filters by hostname, and caches results for one minute.
@@ -541,10 +582,10 @@ they are not equivalent to client-instrumented user sessions.
 
 Two levels:
 
-| Level | Meaning |
-|---|---|
-| `link` | Anyone with the link; the token is 32 random hex chars, not enumerable |
-| `password` | Visitor must enter a password (bcrypt hash, at least 6 characters) |
+| Level      | Meaning                                                                |
+| ---------- | ---------------------------------------------------------------------- |
+| `link`     | Anyone with the link; the token is 32 random hex chars, not enumerable |
+| `password` | Visitor must enter a password (bcrypt hash, at least 6 characters)     |
 
 There used to be a third level, `public`, now removed. It behaved **identically** to
 `link`: no backend branch ever read it, and the "allows indexing" it claimed didn't
@@ -565,11 +606,27 @@ POST   /api/documents/{docId}/share   enable or change access (owner only)
 DELETE /api/documents/{docId}/share   revoke
 GET    /api/share/{token}             public read; the token is the credential
 POST   /api/share/{token}/verify      validate password, then return content
+GET    /api/share/{token}/meta        minimum OpenGraph metadata for the Worker
 ```
 
 The frontend page lives at `/share/$token`, requires no login, and reuses the
 editor's extension set for its read-only view — so highlighting, formulas, and
-images render exactly as they do while editing.
+images render exactly as they do while editing. Before returning the SPA HTML, the Worker injects
+a dynamic title, description, canonical URL, and OpenGraph/Twitter tags. Password-protected metadata
+returns only `protected=true`, never the title, summary, or cover. Shared pages remain `noindex`; the
+metadata is for link previews, not search-engine indexing.
+
+The password protects titles and content returned by the sharing API; it does not make image
+objects private. Referenced `/images/<key>` paths and R2 custom-domain URLs remain readable by
+anyone who has the full URL. Keys are random and non-enumerable, but the image request itself does
+not require the share password. This is consistent with the site-wide image-hosting model and the
+rehosting used by “Copy to my Koinote.” Protecting images too would require short-lived signed URLs
+or an authenticated image proxy, not only a change to the share endpoint.
+
+`share_view_count` increments atomically only after content is actually returned. Failed password
+attempts and metadata requests do not count, and no reader identity, IP, or User-Agent is stored.
+Signed-in readers can copy a share into their own account; referenced Koinote images are re-uploaded
+for the new owner so source-owner deletion or image GC cannot break the copy.
 
 Deliberate semantics:
 
@@ -582,18 +639,18 @@ Deliberate semantics:
   link was once valid
 - **Under password access, GET returns only a `requiresPassword` flag** — not one
   byte of content passes through an unverified response
-- **The public view exposes only title / content / updatedAt / ownerName** —
+- **The public view exposes only title / content / updatedAt / ownerName / viewCount** —
   internal ids, `user_id`, `doc_id`, and `share_token` never leak
 
 ### Loosening access must rotate the token
 
 The rule is asymmetric because the risk is asymmetric (see `shouldRotateShareToken`):
 
-| Change | Token | Why |
-|---|---|---|
-| Tighten (`link` → `password`) | reuse | Old links only get stricter; security strictly increases |
-| Change password (`password` → `password`) | reuse | Access level unchanged |
-| **Loosen (`password` → `link`)** | **rotate** | See below |
+| Change                                    | Token      | Why                                                      |
+| ----------------------------------------- | ---------- | -------------------------------------------------------- |
+| Tighten (`link` → `password`)             | reuse      | Old links only get stricter; security strictly increases |
+| Change password (`password` → `password`) | reuse      | Access level unchanged                                   |
+| **Loosen (`password` → `link`)**          | **rotate** | See below                                                |
 
 Reusing the token while loosening turns the same URL from "needs a password" into
 "anyone who has it reads everything". **Everyone previously blocked by the password
@@ -621,30 +678,34 @@ content were cached by a CDN, holding the cache would bypass the password. Plus
 
 ## Export
 
+The My Documents full ZIP migration is separate from single-document format export: the former
+optimizes for reversible Markdown/folder/image portability, while the latter targets readers,
+office formats, and publishing platforms. See “Search, portability, and product analytics” above.
+
 Six paths, all client-side so they cost no backend resources:
 
-| Format | Implementation |
-|---|---|
-| `.md` | `storage.markdown.getMarkdown()` — the content already *is* Markdown |
-| `.html` | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
-| `.docx` | The `docx` library, built from the ProseMirror document tree |
-| `.pdf` | html2canvas-pro rasterization + jsPDF pagination, one-click download |
-| WeChat | Theme styles inlined + formulas as images, written to the clipboard |
-| Print / Save as PDF | The browser's native print pipeline + `@media print` |
+| Format              | Implementation                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.md`               | `storage.markdown.getMarkdown()` — the content already _is_ Markdown                                   |
+| `.html`             | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
+| `.docx`             | The `docx` library, built from the ProseMirror document tree                                           |
+| `.pdf`              | html2canvas-pro rasterization + jsPDF pagination, one-click download                                   |
+| WeChat              | Theme styles inlined + formulas as images, written to the clipboard                                    |
+| Print / Save as PDF | The browser's native print pipeline + `@media print`                                                   |
 
 **Why PDF has two paths**: the only engine in a browser that produces vector-text
 PDFs hangs off the print pipeline, and the print dialog can't be bypassed. So
 "one-click download" and "selectable, searchable text" cannot both hold in a purely
 client-side implementation. Each path keeps one of them:
 
-| | One-click | Selectable text | Size |
-|---|---|---|---|
-| `.pdf` (raster) | yes | no, text is a bitmap | ~650 KB/page |
-| Print / Save as PDF | no, requires the dialog | yes, vector | much smaller |
+|                     | One-click               | Selectable text      | Size         |
+| ------------------- | ----------------------- | -------------------- | ------------ |
+| `.pdf` (raster)     | yes                     | no, text is a bitmap | ~650 KB/page |
+| Print / Save as PDF | no, requires the dialog | yes, vector          | much smaller |
 
 That dialog has nothing to do with printers: choosing "Save as PDF" in Chrome goes
 through Skia's PDF backend and touches no printer driver, so it works with no
-printer installed. In the CSS specs this area is called *paged media*; PDF is just
+printer installed. In the CSS specs this area is called _paged media_; PDF is just
 one of its output targets.
 
 Trade-offs in the raster path:
@@ -693,14 +754,14 @@ editor. Downloading an `.html`, opening it, and selecting all is three redundant
 
 The WeChat editor's behaviour dictates every part of the implementation:
 
-| WeChat does this | So we must |
-|---|---|
-| Strips `<style>` and external CSS | Put styles in each element's `style` attribute |
-| Strips `class` / `id` | Use tag names as the only selectors |
-| Strips `<script>` and friends | Delete those subtrees outright |
-| Fetches and re-hosts external images on paste | Point formula images at real R2 URLs |
-| Strips `white-space` (verified) | Carry indentation structurally, not via CSS |
-| Keeps `background` (verified) | Dark themes survive as-is |
+| WeChat does this                              | So we must                                     |
+| --------------------------------------------- | ---------------------------------------------- |
+| Strips `<style>` and external CSS             | Put styles in each element's `style` attribute |
+| Strips `class` / `id`                         | Use tag names as the only selectors            |
+| Strips `<script>` and friends                 | Delete those subtrees outright                 |
+| Fetches and re-hosts external images on paste | Point formula images at real R2 URLs           |
+| Strips `white-space` (verified)               | Carry indentation structurally, not via CSS    |
+| Keeps `background` (verified)                 | Dark themes survive as-is                      |
 
 **Themes are stored as tag → declaration strings** (`wechatThemes.ts`), not as CSS
 text. Since the final lookup can only be by tag name, we skip keepask's step of
@@ -712,7 +773,7 @@ pseudo-elements. The only descendant selector kept is `pre code`, since a code b
 `code` looks different from inline `code`.
 
 **Highlighting must be regenerated at export time.** `CodeBlockLowlight` highlights
-via ProseMirror *decorations*, which are a view-layer concern and never enter the
+via ProseMirror _decorations_, which are a view-layer concern and never enter the
 document — so `editor.getHTML()` contains no `hljs-*` spans at all. This was the root
 cause of a reported bug where code came out as a plain gray box: every downstream
 stage was correct, but the class names the inliner read were always empty strings.

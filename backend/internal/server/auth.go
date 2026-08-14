@@ -247,9 +247,11 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	a.recordProductMilestone(r.Context(), user.ID, milestoneRegistered)
+	a.noteUserActivity(user.ID)
 
 	// 注册成功直接签发会话，免去再登录一次
-	a.setSessionCookie(w, newAuthUserID)
+	a.setSessionCookie(w, newAuthUserID, user.SessionVersion)
 	httpx.JSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
@@ -315,8 +317,9 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 	// 与 shareVerify 成功后 reset 同一个理由。
 	limiter.reset(ipKey)
 	limiter.reset(accountKey)
+	a.noteUserActivity(user.ID)
 
-	a.setSessionCookie(w, rec.AuthUserID)
+	a.setSessionCookie(w, rec.AuthUserID, user.SessionVersion)
 	httpx.JSON(w, http.StatusOK, map[string]any{"user": user})
 }
 

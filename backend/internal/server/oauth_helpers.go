@@ -329,7 +329,12 @@ func (a *App) getOrCreateOAuthUser(
 	if err := tx.Commit(ctx); err != nil {
 		return model.User{}, err
 	}
-	return a.getUserByAuthUserID(ctx, authUserID)
+	user, err := a.getUserByAuthUserID(ctx, authUserID)
+	if err == nil {
+		a.recordProductMilestone(ctx, user.ID, milestoneRegistered)
+		a.noteUserActivity(user.ID)
+	}
+	return user, err
 }
 
 func (a *App) oauthUserAfterUniqueConflict(

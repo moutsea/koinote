@@ -594,6 +594,20 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	if len(search.Documents) != 1 || search.Documents[0].DocID != created.DocID {
 		t.Fatalf("标题搜索结果异常: %+v", search.Documents)
 	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO documents (doc_id, user_id, title, content)
+		VALUES ($1, $2, '其他用户文档', '这里也有追加内容，但不应被搜索到')
+	`, "other-search-"+otherLifetime.AuthUserID, otherLifetime.ID); err != nil {
+		t.Fatalf("插入跨用户搜索文档: %v", err)
+	}
+	bodySearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "追加内容", "limit": 10})
+	var bodySearch mcpDocumentPage
+	decodeMCPStructured(t, bodySearchResult, &bodySearch)
+	if len(bodySearch.Documents) != 1 || bodySearch.Documents[0].DocID != created.DocID ||
+		bodySearch.Documents[0].TitleMatched || !bodySearch.Documents[0].ContentMatched ||
+		!strings.Contains(bodySearch.Documents[0].Snippet, "追加内容") {
+		t.Fatalf("正文搜索或跨用户隔离异常: %+v", bodySearch.Documents)
+	}
 	listResult := callMCPToolOK(t, readSession, "list_documents", map[string]any{"limit": 1})
 	var list mcpDocumentPage
 	decodeMCPStructured(t, listResult, &list)
@@ -614,6 +628,12 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	decodeMCPStructured(t, trashedResult, &trashed)
 	if trashed.DocID != created.DocID || trashed.Revision != 5 || trashed.DeletesAt == "" {
 		t.Fatalf("移入回收站结果异常: %+v", trashed)
+	}
+	trashedSearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "追加内容", "limit": 10})
+	var trashedSearch mcpDocumentPage
+	decodeMCPStructured(t, trashedSearchResult, &trashedSearch)
+	if len(trashedSearch.Documents) != 0 {
+		t.Fatalf("回收站文档不应出现在搜索结果: %+v", trashedSearch.Documents)
 	}
 	missing := callMCPTool(t, readSession, "get_document", map[string]any{"docId": created.DocID})
 	if !missing.IsError || !strings.Contains(mcpResultText(missing), "not found") {
@@ -1399,7 +1419,7 @@ func seedMCPUser(t *testing.T, pool *pgxpool.Pool, app *App, tier string) model.
 }
 
 func mcpSessionCookie(app *App, authUserID string) *http.Cookie {
-	token, expiresAt := app.signSession(authUserID)
+	token, expiresAt := app.signSession(authUserID, 1)
 	return &http.Cookie{Name: sessionCookieName, Value: token, Path: "/", Expires: expiresAt}
 }
 

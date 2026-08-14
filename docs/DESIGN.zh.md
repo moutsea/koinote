@@ -17,6 +17,7 @@
 - [邀请奖励](#邀请奖励)
 - [会员与支付](#会员与支付)
 - [MCP 文档访问](#mcp-文档访问)
+- [搜索、迁移与产品分析](#搜索迁移与产品分析)
 - [管理后台](#管理后台)
 - [分享](#分享)
 - [导出](#导出)
@@ -125,10 +126,16 @@ npm run docker:up   # postgres + backend 全部进容器
 - 邮箱注册：先 `POST /api/auth/verification-code` 发码，再把验证码交给
   `POST /api/auth/register`；存量未验证账号走 `POST /api/auth/verify-email`
 - 登录 / 登出 / 会话查询：`POST /api/auth/{login,logout}`、`GET /api/auth/session`
+- 密码安全：`POST /api/auth/password-reset-code`、`POST /api/auth/password-reset`、
+  `POST /api/auth/password` 与 `POST /api/auth/sessions/invalidate`
 - 第三方登录：`GET /api/auth/oauth/{google,github}/{start,callback}`
-- 会话是无状态 HMAC-SHA256 签名的 `koinote_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），**不落库**
+- 会话凭证是 HMAC-SHA256 签名的 `koinote_session` cookie（HttpOnly / SameSite=Lax / 生产 Secure），
+  服务端只保存账户级 `session_version`，不保存逐条会话
 - 密码 bcrypt（cost 10）哈希；登录支持用户名或邮箱，大小写不敏感
 - 验证码只存 HMAC，10 分钟过期；消费验证码、建用户和删除验证码在同一事务中
+- 找回密码使用独立表与 HMAC purpose，不能消费注册验证码；未知邮箱与 OAuth-only
+  账号返回相同结果。重置或修改密码会递增 `session_version`，旧 Cookie 立即失效；
+  修改密码后当前设备会收到新版本 Cookie，找回密码后则必须重新登录
 - OAuth 账号由 provider 视为已验证；只有真正新建账号时才会处理邀请奖励
 
 ### 会话密钥 SESSION_SECRET
@@ -152,6 +159,11 @@ openssl rand -base64 48
 
 **换密钥会让所有已签发的会话立即失效**，用户需重新登录。
 
+Cookie 载荷包含账户当前的 `session_version`。部署 0021 前签发的 Cookie 没有该字段，
+后端把缺失值兼容为初始版本 1；账户执行改密、找回或“退出其他设备”后版本递增，这些
+旧 Cookie 与其他设备上仍未过期的 Cookie 会一起失效。这样无需维护会话表，也能提供
+账户级撤销边界。
+
 ### 内部令牌 BACKEND_INTERNAL_TOKEN
 
 Worker → 后端的横向鉴权。**必填，自己生成，别用任何示例值。**
@@ -172,24 +184,26 @@ openssl rand -base64 36 | tr '+/' '-_' | tr -d '='
 
 三处必须一致；不一致会让图片记账/回收失败，并让邮箱验证码发送返回 503：
 
-| 位置 | 用途 |
-| --- | --- |
-| `.env` | 后端读，也给 docker-compose |
-| `.dev.vars` | 本地 `wrangler dev` |
-| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | 生产的 Worker |
+| 位置                                                          | 用途                        |
+| ------------------------------------------------------------- | --------------------------- |
+| `.env`                                                        | 后端读，也给 docker-compose |
+| `.dev.vars`                                                   | 本地 `wrangler dev`         |
+| `wrangler secret put BACKEND_INTERNAL_TOKEN --env production` | 生产的 Worker               |
 
 ### 限流
 
-| 端点 | 维度 | 阈值 |
-| --- | --- | --- |
-| 登录 | IP | 10 次 / 15 分钟 |
-| 登录 | 账号 | 100 次 / 15 分钟 |
-| 注册 | IP | 5 次 / 小时 |
-| 验证码发送 | 邮箱 | 5 次 / 小时，且至少间隔 1 分钟 |
-| 验证码发送 | IP | 20 次 / 小时 |
-| 验证码校验 | 邮箱 / 验证码 | 最多失败 5 次 |
-| 分享口令校验 | IP | 20 次 / 15 分钟 |
-| 分享口令校验 | 链接 | 10 次 / 15 分钟 |
+| 端点         | 维度          | 阈值                               |
+| ------------ | ------------- | ---------------------------------- |
+| 登录         | IP            | 10 次 / 15 分钟                    |
+| 登录         | 账号          | 100 次 / 15 分钟                   |
+| 注册         | IP            | 5 次 / 小时                        |
+| 验证码发送   | 邮箱          | 5 次 / 小时，且至少间隔 1 分钟     |
+| 验证码发送   | IP            | 20 次 / 小时                       |
+| 验证码校验   | 邮箱 / 验证码 | 最多失败 5 次                      |
+| 找回密码发码 | 邮箱 / IP     | 5 / 20 次每小时，且至少间隔 1 分钟 |
+| 找回密码校验 | 邮箱 / 验证码 | 最多失败 5 次                      |
+| 分享口令校验 | IP            | 20 次 / 15 分钟                    |
+| 分享口令校验 | 链接          | 10 次 / 15 分钟                    |
 
 两处刻意的设计，都容易做反：
 
@@ -378,7 +392,7 @@ PAT 对 CLI 客户端是一等公民，也避免为了首版引入 OAuth 2.1 的
 只读令牌暴露：
 
 - `list_documents`：按最近修改分页列出摘要，不返回正文
-- `search_documents`：只搜标题，避免对 1 MiB 正文做无索引全表扫描
+- `search_documents`：搜索标题与 Markdown 正文，并返回命中位置附近的短摘要
 - `get_document`：按 Unicode 字符 offset/limit 分段读取，并返回总长度与 `hasMore`
 - `list_document_versions` / `get_document_version`：查看保留的恢复点
 - `list_trashed_documents`：列出 30 天回收站中的摘要和自动删除时间
@@ -427,6 +441,25 @@ MCP 安全快照，下一次 Agent 写入会替换旧安全快照；后续产生
 历史正文，数据规模增长后应改为独立的版本图片引用表或等价索引结构。文档与图片配额变更共用
 用户级 advisory transaction lock，防止并发请求都基于旧用量通过检查。
 
+## 搜索、迁移与产品分析
+
+全局搜索和 MCP 的 `search_documents` 共用后端查询：只查当前用户、排除回收站，同时匹配标题与
+Markdown 正文并返回命中位置附近的短摘要。查询长度限制为 1–200 个 Unicode 字符，网页每次最多
+50 条；前端用 `⌘K` / `Ctrl+K` 唤起并在本地高亮结果。搜索词不会写入日志或产品统计。当前实现是
+大小写不敏感的子串扫描；数据量明显增长后再评估 PostgreSQL 全文索引或 trigram。
+
+批量迁移保持 Markdown 为主格式。导入接受单个 `.md`、浏览器选择的文件夹或 ZIP；ZIP 解包限制为
+1000 个文件和 250 MiB 未压缩数据，路径先归一化并拒绝越界。只有被 Markdown 实际引用的 PNG、
+JPEG、GIF、WebP 才上传，随后把 Markdown 与 HTML `<img>` 地址改写为新账号下的 URL，避免不可见
+文件消耗配额。全量导出会保留文件夹结构，把自有图片从同源 `/images/<key>` 读取后写进 `assets/`，
+并附带 manifest；单张图读取失败会记录在 manifest，不会静默阻止其余文档导出。
+
+产品统计是第一方、最小化数据：`product_milestones` 对每个用户/事件只留首次时间，覆盖注册、首篇
+文档、首次上传、首次导出、首次 MCP 成功调用、开始结算和完成结算；`user_daily_activity` 每个用户
+每天最多一行，只用于 D1/D7/D30 留存。正文、标题、搜索词、文件名和分享访客身份都不进入统计。
+除“首次导出”只能由浏览器确认外，其余事件都在后端业务成功路径记录。留存只从迁移上线时间开始
+计算，后台同时展示这个起点，不伪造历史活跃。
+
 ## 管理后台
 
 `GET /api/admin/stats` 先从服务端 session 读取用户，再检查数据库中的 `is_admin`；前端
@@ -434,12 +467,12 @@ MCP 安全快照，下一次 Agent 写入会替换旧安全快照；后续产生
 Stripe Customer ID、Checkout Session ID 或内部鉴权标识。
 
 业务统计以 PostgreSQL 为真值：用户、已验证用户、终生会员、文档、图片账本、全站存储、
-订单、按币种收入、30 天增长和最近记录。不同币种不做无汇率来源的相加；前端分别用
+订单、按币种收入、30 天增长、首次行为漏斗、D1/D7/D30 留存和最近记录。不同币种不做无汇率来源的相加；前端分别用
 `Intl.NumberFormat` 展示。包含文档与图片全表聚合的总览缓存一分钟，缓存锁同时合并并发加载，
 避免多个管理员刷新时重复扫描大表。
 
-今日 UV / PV 通过 Cloudflare GraphQL Analytics API 的 `httpRequests1mGroups` 查询。
-查询不带时间维度，因此 `uniq.uniques` 是整段时间的去重结果，不能把分钟桶的 UV 相加。
+今日 UV / PV 通过 Cloudflare GraphQL Analytics API 的 `httpRequests1hGroups` 查询。
+查询不带时间维度且只取聚合结果，因此 `uniq.uniques` 是整段时间的去重结果，不能把小时桶的 UV 相加。
 它使用独立的最小权限 `CLOUDFLARE_ANALYTICS_TOKEN`，并按 hostname 过滤同一 Zone 下的流量。
 结果缓存一分钟。Token 缺失、权限错误或 Cloudflare 超时时只让 `traffic.available=false`，
 PostgreSQL 业务统计仍返回 200。这个 UV / PV 是边缘 HTTP 口径，可能包含合法爬虫与已放行
@@ -449,10 +482,10 @@ PostgreSQL 业务统计仍返回 200。这个 UV / PV 是边缘 HTTP 口径，�
 
 两档权限：
 
-| 档位 | 含义 |
-|---|---|
-| `link` | 知道链接即可访问，token 随机 32 位十六进制不可枚举 |
-| `password` | 访问者需输入口令（bcrypt 存哈希，至少 6 字符） |
+| 档位       | 含义                                               |
+| ---------- | -------------------------------------------------- |
+| `link`     | 知道链接即可访问，token 随机 32 位十六进制不可枚举 |
+| `password` | 访问者需输入口令（bcrypt 存哈希，至少 6 字符）     |
 
 原本还有第三档 `public`，已删。它与 `link` **行为完全相同**——后端从未有分支
 读它，而它声称的「允许被索引」也不存在：`setShareResponseHeaders` 给所有分享页
@@ -471,10 +504,22 @@ POST   /api/documents/{docId}/share   开启或改权限（需登录且限本人
 DELETE /api/documents/{docId}/share   撤销
 GET    /api/share/{token}             公开读取，token 即凭证
 POST   /api/share/{token}/verify      校验口令后返回正文
+GET    /api/share/{token}/meta        给 Worker 提供最小 OpenGraph 元数据
 ```
 
 前端页面在 `/share/$token`，无需登录，只读视图复用编辑器的同一套扩展，
-所以代码高亮、公式、图片的呈现与编辑时一致。
+所以代码高亮、公式、图片的呈现与编辑时一致。Worker 在返回 SPA HTML 前注入动态标题、摘要、
+canonical 与 OpenGraph/Twitter 卡片；口令档的 meta 只回 `protected=true`，不会泄露标题、摘要或封面。
+分享仍保留 `noindex`，这些元数据服务于聊天工具与社交平台预览，而不是开放搜索引擎收录。
+
+口令只保护分享 API 返回的标题与正文，不把图片对象改成私有资源。正文引用的 `/images/<key>`
+和 R2 自定义域名地址仍是“知道 URL 即可读”；key 随机不可枚举，但拿到完整图片 URL 的人无需
+分享口令即可读取。这与全站图床及“复制到我的 Koinote”的图片转存模型一致。若产品以后要求
+口令同时保护图片，需要改成短期签名 URL 或受鉴权的图片代理，不能只调整分享接口。
+
+正文实际返回后才原子递增 `share_view_count`；口令失败和只取 meta 都不计数，也不记录读者身份、IP
+或 User-Agent。登录用户可把分享复制到自己的账号；复制时会重新上传正文引用的 Koinote 图片，
+避免原作者日后删除文档或触发图片 GC 导致副本裂图。
 
 几处刻意的语义取舍：
 
@@ -483,17 +528,17 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 - **撤销后重新开启会换新 token** —— 老链接永久失效，这是撤销的意义所在
 - **已撤销与从未存在返回同一响应** —— 不泄露某个链接曾经有效
 - **口令档下 GET 只回 `requiresPassword` 标志** —— 正文一个字都不经过未验证的响应
-- **公开视图只输出 title / content / updatedAt / ownerName** —— 内部 id、user_id、doc_id、share_token 一律不外泄
+- **公开视图只输出 title / content / updatedAt / ownerName / viewCount** —— 内部 id、user_id、doc_id、share_token 一律不外泄
 
 ### 放宽权限必须换 token
 
 判定见 `shouldRotateShareToken`。规则不对称，因为风险不对称：
 
-| 改动 | token | 理由 |
-|---|---|---|
-| 收紧（`link` → `password`） | 复用 | 老链接只会变得更严，安全性只增不减 |
-| 改口令（`password` → `password`） | 复用 | 权限档未变 |
-| **放宽（`password` → `link`）** | **换新** | 见下 |
+| 改动                              | token    | 理由                               |
+| --------------------------------- | -------- | ---------------------------------- |
+| 收紧（`link` → `password`）       | 复用     | 老链接只会变得更严，安全性只增不减 |
+| 改口令（`password` → `password`） | 复用     | 权限档未变                         |
+| **放宽（`password` → `link`）**   | **换新** | 见下                               |
 
 放宽时若复用 token，同一个 URL 会从「要口令」变成「谁拿到都能直接读全文」，
 **之前被口令挡住的人瞬间全部获得访问权**，而用户以为自己只是改了个设置。
@@ -514,28 +559,31 @@ POST   /api/share/{token}/verify      校验口令后返回正文
 
 ## 导出
 
+“我的文档”的全量 ZIP 迁移与单篇格式导出分开：前者以 Markdown、目录和图片的可逆搬迁为目标，
+后者以交付给阅读器、办公软件或自媒体平台为目标。全量迁移细节见“搜索、迁移与产品分析”。
+
 六条路径，全部在浏览器端完成，不占后端资源：
 
-| 格式 | 实现 |
-|---|---|
-| `.md` | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown |
-| `.html` | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
-| `.docx` | `docx` 库，走 ProseMirror 文档树构建 |
-| `.pdf` | html2canvas-pro 栅格化 + jsPDF 分页，一键下载 |
-| 微信公众号 | 主题样式内联 + 公式转图，写进剪贴板 |
-| 打印 / 另存为 PDF | 浏览器原生打印管道 + `@media print` |
+| 格式              | 实现                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `.md`             | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown  |
+| `.html`           | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
+| `.docx`           | `docx` 库，走 ProseMirror 文档树构建                          |
+| `.pdf`            | html2canvas-pro 栅格化 + jsPDF 分页，一键下载                 |
+| 微信公众号        | 主题样式内联 + 公式转图，写进剪贴板                           |
+| 打印 / 另存为 PDF | 浏览器原生打印管道 + `@media print`                           |
 
 **PDF 为什么是两条路**：浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
 而打印对话框无法绕过。所以「一键下载」与「文字可选可搜」在纯前端不能同时成立，
 两条路各保留一条：
 
-| | 一键下载 | 文字可选可搜 | 体积 |
-|---|---|---|---|
-| `.pdf`（栅格） | 是 | 否，文字是位图 | 约 650 KB/页 |
-| 打印 / 另存为 PDF | 否，需在对话框选 | 是，矢量 | 小得多 |
+|                   | 一键下载         | 文字可选可搜   | 体积         |
+| ----------------- | ---------------- | -------------- | ------------ |
+| `.pdf`（栅格）    | 是               | 否，文字是位图 | 约 650 KB/页 |
+| 打印 / 另存为 PDF | 否，需在对话框选 | 是，矢量       | 小得多       |
 
 那个对话框与打印机无关：Chrome 选「另存为 PDF」时走的是 Skia 的 PDF 后端，
-不碰任何打印机驱动，未装打印机也能用。CSS 规范里这套东西叫 *paged media*，
+不碰任何打印机驱动，未装打印机也能用。CSS 规范里这套东西叫 _paged media_，
 PDF 只是它的一个输出目标。
 
 栅格路径的实现取舍：
@@ -575,14 +623,14 @@ webp 不被 docx 支持故降级成占位行；单张图片失败只留占位，
 
 微信编辑器的行为决定了实现的每一处：
 
-| 微信的行为 | 因此必须 |
-|---|---|
-| 剥掉 `<style>` 与外链 CSS | 样式只能进每个元素的 `style` 属性 |
-| 剥掉 `class` / `id` | 选择器只能是标签名 |
-| 剥掉 `<script>` 等 | 直接删掉整个子树 |
-| 粘贴时抓取外部图片转存 | 公式图片走 R2 真实 URL |
-| 剥掉 `white-space`（实测确认） | 缩进必须靠结构承载，不能靠 CSS |
-| **不**剥 `background`（实测确认） | 深色主题原样存活 |
+| 微信的行为                        | 因此必须                          |
+| --------------------------------- | --------------------------------- |
+| 剥掉 `<style>` 与外链 CSS         | 样式只能进每个元素的 `style` 属性 |
+| 剥掉 `class` / `id`               | 选择器只能是标签名                |
+| 剥掉 `<script>` 等                | 直接删掉整个子树                  |
+| 粘贴时抓取外部图片转存            | 公式图片走 R2 真实 URL            |
+| 剥掉 `white-space`（实测确认）    | 缩进必须靠结构承载，不能靠 CSS    |
+| **不**剥 `background`（实测确认） | 深色主题原样存活                  |
 
 后两条是靠用户反复粘贴测出来的，不是查文档得来的 —— 微信没有公开的过滤规则清单，
 只能一条条试。记在这里是因为它们决定了下面两处实现。
@@ -642,7 +690,7 @@ R2 堆副本。每次导出会把对象的保留期续到 7 天，之后进入�
 ## 代码高亮与 LaTeX
 
 **代码高亮**：lowlight（highlight.js）的 common 集，约 37 种主流语言。
-打三个反引号加语言名即可，如 ```` ```go ````。配色见 `globals.css` 的 GitHub Dark 精简版。
+打三个反引号加语言名即可，如 ` ```go `。配色见 `globals.css` 的 GitHub Dark 精简版。
 
 **LaTeX**：KaTeX 渲染，用 CommonMark 通行的分隔符。
 

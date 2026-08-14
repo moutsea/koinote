@@ -66,6 +66,7 @@ export function EditorPage() {
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
   const saver = useDocumentSaver(refreshList);
   const serverTabs = useEditorTabs(loggedIn);
@@ -80,6 +81,20 @@ export function EditorPage() {
     true,
   );
   const outline = useOutline(editor);
+
+  useEffect(() => {
+    if (!mobileDocsOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileDocsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileDocsOpen]);
 
   // 自动落地逻辑只跑一次，避免重复建文档
   const bootstrapped = useRef(false);
@@ -562,6 +577,19 @@ export function EditorPage() {
           </div>
         )}
 
+        <div className="flex items-center border-b border-black/5 px-2 py-1.5 dark:border-white/10 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileDocsOpen(true)}
+            aria-label={t.editor.documentsPanel}
+            aria-expanded={mobileDocsOpen}
+            className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-neutral-100"
+          >
+            <FolderTree className="h-4 w-4" />
+            {t.editor.documentsPanel}
+          </button>
+        </div>
+
         <TabBar
           tabs={tabState.openTabs}
           activeDocId={tabState.activeDocId}
@@ -667,6 +695,50 @@ export function EditorPage() {
           share={doc.data.share}
           onClose={() => setShareOpen(false)}
         />
+      )}
+
+      {mobileDocsOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label={t.editor.collapsePanel}
+            onClick={() => setMobileDocsOpen(false)}
+            className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.editor.documentsPanel}
+            className="relative h-full w-[min(86vw,20rem)] border-r bg-white shadow-2xl dark:border-white/10 dark:bg-neutral-950"
+            style={{ borderColor: "var(--ink-line)" }}
+          >
+            <DocumentList
+              documents={documents ?? []}
+              folders={folderList.data ?? []}
+              activeDocId={activeDocId}
+              loading={list.isLoading}
+              creating={create.isPending}
+              onSelect={(docId) => {
+                setMobileDocsOpen(false);
+                handleSelect(docId);
+              }}
+              onCreate={(folderId) => {
+                setMobileDocsOpen(false);
+                handleCreate(folderId);
+              }}
+              onCreateFolder={handleCreateFolder}
+              onDelete={handleDelete}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onMoveDoc={handleMoveDoc}
+              onMoveFolder={handleMoveFolder}
+              onCollapse={() => setMobileDocsOpen(false)}
+              error={folderError}
+              autoEditFolderId={autoEditFolderId}
+              onAutoEditDone={() => setAutoEditFolderId(null)}
+            />
+          </aside>
+        </div>
       )}
     </div>
   );

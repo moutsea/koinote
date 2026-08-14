@@ -44,6 +44,7 @@ import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
 import { useStorageUsage } from "./StorageCard";
+import { GlobalSearch } from "./GlobalSearch";
 
 export function AppShell() {
   const session = useSession();
@@ -118,6 +119,7 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {user && <GlobalSearch />}
             <LocaleSwitcher
               locale={locale}
               setLocale={setLocale}
@@ -629,16 +631,40 @@ function HeaderDocsMenu({
         style={{ color: active ? "var(--cinnabar)" : "var(--ink-mid)" }}
       >
         {label}
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-        {active && <span aria-hidden className="absolute -bottom-1.5 left-0 h-0.5 w-full rounded-full" style={{ background: "var(--cinnabar)" }} />}
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+        {active && (
+          <span
+            aria-hidden
+            className="absolute -bottom-1.5 left-0 h-0.5 w-full rounded-full"
+            style={{ background: "var(--cinnabar)" }}
+          />
+        )}
       </button>
 
       {open && (
-        <div role="menu" aria-label={label} className="absolute left-0 top-8 z-50 w-56 overflow-hidden rounded-xl border py-1 shadow-lg" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
-          <HeaderDocsMenuItem to="/docs/mcp" onSelect={() => setOpen(false)} icon={<Bot className="h-4 w-4" />}>
+        <div
+          role="menu"
+          aria-label={label}
+          className="absolute left-0 top-8 z-50 w-56 overflow-hidden rounded-xl border py-1 shadow-lg"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+          }}
+        >
+          <HeaderDocsMenuItem
+            to="/docs/mcp"
+            onSelect={() => setOpen(false)}
+            icon={<Bot className="h-4 w-4" />}
+          >
             {mcpLabel}
           </HeaderDocsMenuItem>
-          <HeaderDocsMenuItem to="/docs/version-history" onSelect={() => setOpen(false)} icon={<History className="h-4 w-4" />}>
+          <HeaderDocsMenuItem
+            to="/docs/version-history"
+            onSelect={() => setOpen(false)}
+            icon={<History className="h-4 w-4" />}
+          >
             {versionLabel}
           </HeaderDocsMenuItem>
         </div>
@@ -659,7 +685,13 @@ function HeaderDocsMenuItem({
   children: React.ReactNode;
 }) {
   return (
-    <Link to={to} role="menuitem" onClick={onSelect} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]" style={{ color: "var(--ink-strong)" }}>
+    <Link
+      to={to}
+      role="menuitem"
+      onClick={onSelect}
+      className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+      style={{ color: "var(--ink-strong)" }}
+    >
       {icon}
       {children}
     </Link>

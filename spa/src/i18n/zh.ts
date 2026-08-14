@@ -56,9 +56,18 @@ export const zh: Messages = {
         "无需浏览器插件。创建一枚可撤销、可设置期限或永久有效的个人令牌，Codex、Claude Code、OpenCode 等标准 MCP 客户端就能在你的授权范围内查找、读取和编辑 Koinote 文档。",
       agents: "兼容 Streamable HTTP MCP 的 Agent",
       steps: [
-        { title: "按范围授权", desc: "创建只读或读写令牌，随时查看、复制或撤销。" },
-        { title: "安全地修改", desc: "所有写入都带 revision 校验，冲突不会静默覆盖。" },
-        { title: "保留恢复点", desc: "会员可配置完整历史；关闭后仍保留最近安全快照。" },
+        {
+          title: "按范围授权",
+          desc: "创建只读或读写令牌，随时查看、复制或撤销。",
+        },
+        {
+          title: "安全地修改",
+          desc: "所有写入都带 revision 校验，冲突不会静默覆盖。",
+        },
+        {
+          title: "保留恢复点",
+          desc: "会员可配置完整历史；关闭后仍保留最近安全快照。",
+        },
       ],
       cta: "查看会员权益",
     },
@@ -66,7 +75,8 @@ export const zh: Messages = {
   pricing: {
     eyebrow: "简单透明的价格",
     title: "一次升级，长期安心写作",
-    subtitle: "免费版覆盖日常写作；终生会员一次付费，解锁更大空间、MCP 和版本历史。",
+    subtitle:
+      "免费版覆盖日常写作；终生会员一次付费，解锁更大空间、MCP 和版本历史。",
     freeName: "免费版",
     freeDescription: "适合开始写作与体验完整编辑流程。",
     freePrice: "免费",
@@ -97,10 +107,25 @@ export const zh: Messages = {
     unavailable: "当前部署尚未配置在线支付。",
     faqTitle: "常见问题",
     faqs: [
-      { question: "这是订阅吗？", answer: "不是。终生会员是一次性付款，不会自动续费。" },
-      { question: "MCP 能做什么？", answer: "它允许你授权兼容的 Agent 查找、读取、创建、追加、更新、恢复和移入回收站中的文档；永久删除仍需在网页完成。" },
-      { question: "关闭 MCP 完整历史后还能恢复吗？", answer: "可以。会员的 Agent 写入始终至少维护最近 1 个安全快照，并与普通版本共享版本上限。" },
-      { question: "AI 功能现在可用吗？", answer: "尚未上线。终生会员包含后续 AI 功能的使用资格，具体功能会在未来发布。" },
+      {
+        question: "这是订阅吗？",
+        answer: "不是。终生会员是一次性付款，不会自动续费。",
+      },
+      {
+        question: "MCP 能做什么？",
+        answer:
+          "它允许你授权兼容的 Agent 查找、读取、创建、追加、更新、恢复和移入回收站中的文档；永久删除仍需在网页完成。",
+      },
+      {
+        question: "关闭 MCP 完整历史后还能恢复吗？",
+        answer:
+          "可以。会员的 Agent 写入始终至少维护最近 1 个安全快照，并与普通版本共享版本上限。",
+      },
+      {
+        question: "AI 功能现在可用吗？",
+        answer:
+          "尚未上线。终生会员包含后续 AI 功能的使用资格，具体功能会在未来发布。",
+      },
     ],
   },
   mcpGuide: {
@@ -114,11 +139,18 @@ export const zh: Messages = {
     setupTitle: "开始之前",
     setupSteps: [
       { title: "开通终生会员", desc: "MCP 是终生会员权益。" },
-      { title: "创建个人令牌", desc: "在控制台创建只读或读写令牌，并选择期限或永久有效。" },
-      { title: "配置客户端", desc: "使用下方对应方式连接 https://koinote.app/mcp。" },
+      {
+        title: "创建个人令牌",
+        desc: "在控制台创建只读或读写令牌，并选择期限或永久有效。",
+      },
+      {
+        title: "配置客户端",
+        desc: "使用下方对应方式连接 https://koinote.app/mcp。",
+      },
     ],
     clientsTitle: "各 Agent 的接入方式",
-    clientsSubtitle: "令牌属于账号凭据。请放在环境变量或客户端的安全存储中，不要提交到代码仓库。",
+    clientsSubtitle:
+      "令牌属于账号凭据。请放在环境变量或客户端的安全存储中，不要提交到代码仓库。",
     clientDescriptions: [
       "在 ~/.codex/config.toml 中注册远程 MCP，并从环境变量读取令牌。重启 Codex 后即可使用。",
       "使用 Claude Code CLI 添加 HTTP MCP 服务；命令会同时写入 Bearer 鉴权头。",
@@ -151,18 +183,36 @@ export const zh: Messages = {
   versionGuide: {
     eyebrow: "版本控制指南",
     title: "让每一次修改都有迹可循",
-    subtitle: "了解 Koinote 如何保存历史版本、处理网页与 Agent 的并发修改，以及在误操作后恢复内容。",
+    subtitle:
+      "了解 Koinote 如何保存历史版本、处理网页与 Agent 的并发修改，以及在误操作后恢复内容。",
     overviewTitle: "版本历史如何工作",
-    overviewBody: "网页编辑和 MCP 写入共用同一套 revision 与历史策略。历史版本用于回看和恢复；revision 校验则阻止旧内容静默覆盖新修改。",
+    overviewBody:
+      "网页编辑和 MCP 写入共用同一套 revision 与历史策略。历史版本用于回看和恢复；revision 校验则阻止旧内容静默覆盖新修改。",
     availabilityTitle: "会员与保留上限",
-    availabilityBody: "版本历史是终生会员权益。每篇文档可保留 1–100 个版本，账号内全部文档合计最多保留 100 个版本；超过上限时优先淘汰最旧记录。",
+    availabilityBody:
+      "版本历史是终生会员权益。每篇文档可保留 1–100 个版本，账号内全部文档合计最多保留 100 个版本；超过上限时优先淘汰最旧记录。",
     featuresTitle: "核心能力",
     features: [
-      { title: "节流保存", desc: "普通网页编辑按时间间隔生成快照，不会让每次自动保存都占一个版本。" },
-      { title: "灵活上限", desc: "可以开启或关闭历史，并为每篇文档设置 1–100 个版本的保留上限。" },
-      { title: "安全快照", desc: "即使关闭 MCP 完整历史，Agent 覆盖写入前仍保留最近一个可恢复状态。" },
-      { title: "冲突检测", desc: "更新必须携带最新 revision；版本落后时写入失败，而不是覆盖新内容。" },
-      { title: "可撤销恢复", desc: "恢复旧版本前会先保存当前状态，因此恢复操作本身仍可以回退。" },
+      {
+        title: "节流保存",
+        desc: "普通网页编辑按时间间隔生成快照，不会让每次自动保存都占一个版本。",
+      },
+      {
+        title: "灵活上限",
+        desc: "可以开启或关闭历史，并为每篇文档设置 1–100 个版本的保留上限。",
+      },
+      {
+        title: "安全快照",
+        desc: "即使关闭 MCP 完整历史，Agent 覆盖写入前仍保留最近一个可恢复状态。",
+      },
+      {
+        title: "冲突检测",
+        desc: "更新必须携带最新 revision；版本落后时写入失败，而不是覆盖新内容。",
+      },
+      {
+        title: "可撤销恢复",
+        desc: "恢复旧版本前会先保存当前状态，因此恢复操作本身仍可以回退。",
+      },
     ],
     webTitle: "在网页中查看和恢复",
     webSteps: [
@@ -177,7 +227,8 @@ export const zh: Messages = {
       "授权的读写 MCP 客户端可以读取并修改历史设置；只读令牌只能查看。",
     ],
     safetyTitle: "推荐设置",
-    safetyBody: "重要文档建议开启版本历史并保留 MCP 完整历史。若文档较多，请结合账号总计 100 个版本的共享上限设置单篇数量；Agent 整篇覆盖前仍应先读取最新 revision。",
+    safetyBody:
+      "重要文档建议开启版本历史并保留 MCP 完整历史。若文档较多，请结合账号总计 100 个版本的共享上限设置单篇数量；Agent 整篇覆盖前仍应先读取最新 revision。",
     settingsCta: "调整历史设置",
     mcpCta: "查看 MCP 接入",
     pricingCta: "查看会员权益",
@@ -230,6 +281,32 @@ export const zh: Messages = {
     invitationBonusHint:
       "使用 Google、GitHub 或邮箱完成注册均有效；注册成功后，邀请人也会获得 500 MB。",
     haveInvitationCode: "有邀请码？",
+    forgotPassword: "忘记密码？",
+    resetPasswordTitle: "找回密码",
+    resetPasswordDescription:
+      "输入注册邮箱，我们会发送一次性验证码。无论邮箱是否存在，页面都会显示相同结果。",
+    newPassword: "新密码",
+    resetPasswordSubmit: "重置密码",
+    resetPasswordSuccess:
+      "密码已重置，请使用新密码登录。其他设备上的旧会话已失效。",
+    resetCodeSent: "如果该邮箱关联了密码账号，验证码已经发送。请检查邮箱。",
+  },
+  security: {
+    title: "账号安全",
+    description: "修改密码会保留当前设备，并立即退出其他设备上的旧会话。",
+    oauthOnly:
+      "这个账号目前只使用 Google 或 GitHub 登录，没有可修改的站内密码。",
+    currentPassword: "当前密码",
+    newPassword: "新密码",
+    confirmPassword: "确认新密码",
+    changePassword: "修改密码",
+    changingPassword: "修改中…",
+    passwordChanged: "密码已修改，其他设备上的旧会话已退出。",
+    sessionsTitle: "登录会话",
+    sessionsDescription: "保留当前浏览器，立即退出其他浏览器和设备。",
+    invalidateSessions: "退出其他设备",
+    invalidatingSessions: "正在处理…",
+    sessionsInvalidated: "其他设备上的旧会话已退出。",
   },
   storage: {
     title: "云端存储",
@@ -277,7 +354,8 @@ export const zh: Messages = {
     title: "Agent 文档访问（MCP）",
     description:
       "让 Codex、Claude Code、OpenCode 等标准 MCP Agent 在你的授权范围内读取和编辑 Koinote 文档。",
-    membersOnly: "MCP 是付费会员权益。升级后可创建可撤销、可设置期限或永久有效的访问令牌。",
+    membersOnly:
+      "MCP 是付费会员权益。升级后可创建可撤销、可设置期限或永久有效的访问令牌。",
     upgrade: "升级终生会员",
     tokenName: "令牌名称",
     scope: "权限",
@@ -308,12 +386,15 @@ export const zh: Messages = {
   },
   documentHistorySettings: {
     title: "版本历史",
-    description: "设置文档是否保留历史版本，以及网页和 Agent 写入时的保留策略。",
+    description:
+      "设置文档是否保留历史版本，以及网页和 Agent 写入时的保留策略。",
     membersOnly: "版本历史是终生会员权益。升级后可配置保留策略。",
     enabled: "开启版本历史",
-    enabledHint: "关闭后网页不再生成新版本，已有版本不会被删除；Agent 写入仍保留最近 1 个安全快照。",
+    enabledHint:
+      "关闭后网页不再生成新版本，已有版本不会被删除；Agent 写入仍保留最近 1 个安全快照。",
     perDocumentMax: "每篇文档最多保留",
-    limitHint: "这是单篇文档上限；所有文档共享账号总计 {accountMax} 个版本。降低数量会立即删除超出的旧版本。",
+    limitHint:
+      "这是单篇文档上限；所有文档共享账号总计 {accountMax} 个版本。降低数量会立即删除超出的旧版本。",
     mcpEnabled: "MCP 写入保留完整历史",
     mcpEnabledHint:
       "关闭后，Agent 写入仍会保留最近 1 个安全快照，避免整篇覆盖无法恢复。安全快照同样计入版本上限。",
@@ -355,6 +436,29 @@ export const zh: Messages = {
     subtitle: "查看并继续编辑保存在云端的文档。",
     emptyHint: "还没有云端文档，",
     emptyLinkText: "新建第一篇文档",
+  },
+  search: {
+    button: "搜索",
+    title: "搜索全部文档",
+    placeholder: "搜索标题与正文…",
+    hint: "按 ⌘K / Ctrl+K 随时打开",
+    startTyping: "输入关键词，搜索你的标题与 Markdown 正文。",
+    noResults: "没有找到匹配的文档。",
+    loadFailed: "搜索失败，请稍后重试。",
+    titleMatch: "标题匹配",
+    contentMatch: "正文匹配",
+  },
+  transfer: {
+    importButton: "导入文件",
+    importFolderButton: "导入文件夹",
+    exportButton: "导出全部",
+    importing: "正在导入文档与图片…",
+    exporting: "正在打包文档与图片…",
+    importSuccess: "已导入 {count} 篇文档。",
+    exportSuccess: "迁移包已生成。",
+    importFailed: "导入失败，请检查文件格式、图片大小或云端空间。",
+    exportFailed: "导出失败，请稍后重试。",
+    importHint: "支持 .md、文件夹与 ZIP；引用的图片会一起迁移。",
   },
   trashPage: {
     title: "回收站",
@@ -424,6 +528,22 @@ export const zh: Messages = {
     amount: "金额",
     paidAt: "付款时间",
     generatedAt: "更新于 {time} · 时区 {timeZone}",
+    funnel: "产品转化漏斗",
+    funnelHint: "只统计首次完成事件，不记录文档正文、标题、搜索词或文件名。",
+    registered: "完成注册",
+    firstDocument: "首篇文档",
+    firstUpload: "首次上传",
+    firstExport: "首次导出",
+    mcpConnected: "MCP 接入",
+    checkoutStarted: "进入 Checkout",
+    checkoutCompleted: "完成付款",
+    retention: "用户留存",
+    retentionHint:
+      "按 UTC 注册日计算精确 D1 / D7 / D30 回访；仅包含统计启用后的新用户。",
+    day1Retention: "D1 留存",
+    day7Retention: "D7 留存",
+    day30Retention: "D30 留存",
+    retentionSample: "{returned} / {eligible} 人",
   },
   editor: {
     placeholder: "开始写点什么…… 输入 “# ” 变标题，“- ” 变列表，“```” 变代码块",
@@ -504,6 +624,12 @@ export const zh: Messages = {
     sharedPasswordPrompt: "此文档需要口令才能查看",
     sharedPasswordSubmit: "查看",
     sharedOpenApp: "了解 Koinote",
+    sharedViews: "阅读 {count} 次",
+    copyToMine: "复制到我的 Koinote",
+    copyingToMine: "正在复制…",
+    copiedToMine: "已复制，正在打开文档…",
+    copyToMineFailed: "复制失败，请检查云端空间或图片状态。",
+    loginToCopy: "登录后复制到我的 Koinote",
     exportLabel: "导出",
     exportMarkdown: "Markdown (.md)",
     exportHTML: "网页 (.html)",
@@ -526,9 +652,12 @@ export const zh: Messages = {
     mediaCopy: "复制到剪贴板",
     mediaCopied: "已复制，去粘贴吧",
     mediaWorking: "处理中…",
-    mediaRichTextNote: "代码高亮、图片图注与公式会转换为可粘贴的富文本；目标平台仍可能清理部分样式。",
-    mediaMarkdownNote: "复制包含文章标题的完整 Markdown，可直接粘贴到掘金编辑器。",
-    mediaImagesUnreachable: "有 {n} 张图片可能无法被目标平台抓取（{hosts}）。建议粘贴后先预览。",
+    mediaRichTextNote:
+      "代码高亮、图片图注与公式会转换为可粘贴的富文本；目标平台仍可能清理部分样式。",
+    mediaMarkdownNote:
+      "复制包含文章标题的完整 Markdown，可直接粘贴到掘金编辑器。",
+    mediaImagesUnreachable:
+      "有 {n} 张图片可能无法被目标平台抓取（{hosts}）。建议粘贴后先预览。",
     wechatThemeLabel: "排版主题",
     themeNone: "默认排版",
     tabsLabel: "已打开的文档",
@@ -602,6 +731,23 @@ function hello(name) {
     theme: "切换主题",
     language: "语言",
   },
+  changelog: {
+    eyebrow: "持续更新",
+    title: "更新日志",
+    subtitle:
+      "查看 Koinote 每个版本新增了什么、改进了什么，以及修复了哪些问题。",
+    unreleased: "即将发布",
+    sourceLink: "在 GitHub 查看原始记录",
+    sourceNote: "页面与开源仓库共用同一份 CHANGELOG.md，详细条目以英文维护。",
+    categories: {
+      Added: "新增",
+      Changed: "改进",
+      Fixed: "修复",
+      Security: "安全",
+      Deprecated: "即将弃用",
+      Removed: "移除",
+    },
+  },
   footer: {
     tagline:
       "Koinote 是一个所见即所得的在线 Markdown 编辑器：边写边渲染、图片直传图床、一键导出与分享。",
@@ -623,6 +769,7 @@ function hello(name) {
     copyright: "Koinote",
     allRightsReserved: "版权所有",
     contact: "联系我们",
+    changelog: "更新日志",
   },
   legal: {
     updatedLabel: "更新于",
@@ -731,12 +878,13 @@ function hello(name) {
             "你创建的内容：文档标题与正文、文件夹结构、上传的图片",
             "分享设置：分享令牌、访问密码的哈希",
             "运行日志：请求时间、IP、User-Agent 等排障与防滥用所需的记录",
+            "第一方产品统计：注册、首篇文档、首次上传、首次导出、首次 MCP 调用与结算的完成时间；每个账号每天至多一条活跃日期；分享页只保存累计阅读次数",
           ],
         },
         {
           title: "我们不收集什么",
           body: [
-            "我们没有接入第三方广告或行为分析 SDK，不会为投放广告而画像，也不会把你的文档内容用于训练模型。",
+            "我们没有接入第三方广告或行为分析 SDK，不会为投放广告而画像，也不会把你的文档内容用于训练模型。产品统计不记录文档标题、正文、搜索词、导入文件名或分享访客身份。",
           ],
         },
         {
@@ -746,6 +894,7 @@ function hello(name) {
             "提供核心功能：保存与同步文档、托管图片、生成分享链接",
             "验证身份、维持登录会话",
             "排查故障、防止滥用与攻击",
+            "以汇总方式了解注册、首次创作、图片上传、导出、MCP 接入、结算转化与 D1/D7/D30 留存",
             "在你主动联系时提供支持",
           ],
         },
@@ -862,6 +1011,8 @@ function hello(name) {
     password_too_short: "密码至少 6 位",
     conflict: "邮箱或用户名已被注册",
     invalid_credentials: "账号或密码错误",
+    current_password_incorrect: "当前密码不正确",
+    password_not_available: "这个账号没有设置站内密码",
     unauthorized: "未登录",
     session_expired: "会话已失效",
     server_error: "服务器错误，请稍后重试",

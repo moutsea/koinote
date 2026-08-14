@@ -379,6 +379,9 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	if purpose == imagePurposePersistent {
+		a.recordProductMilestone(r.Context(), user.ID, milestoneFirstUpload)
+	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"usedBytes":     used.Total(),

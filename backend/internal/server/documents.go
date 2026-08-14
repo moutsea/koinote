@@ -130,14 +130,15 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 
 	var doc model.Document
 	var shareToken, shareAccess, sharePasswordHash sql.NullString
+	var shareViewCount int64
 	err := a.db.QueryRow(r.Context(), `
 		SELECT doc_id, title, theme, content, revision, created_at, updated_at,
-		       share_token, share_access, share_password_hash
+		       share_token, share_access, share_password_hash, share_view_count
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID).Scan(
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
-		&shareToken, &shareAccess, &sharePasswordHash,
+		&shareToken, &shareAccess, &sharePasswordHash, &shareViewCount,
 	)
 	// 他人文档与不存在的文档一律 404，不泄露「该文档存在」
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -155,6 +156,7 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 			Token:            token,
 			Access:           normalizeShareAccess(shareAccess.String),
 			RequiresPassword: sharePasswordHash.Valid && strings.TrimSpace(sharePasswordHash.String) != "",
+			ViewCount:        shareViewCount,
 		}
 	}
 

@@ -1,9 +1,23 @@
 import { Link } from "@tanstack/react-router";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Archive,
+  FileText,
+  FolderUp,
+  LoaderCircle,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { useSession } from "../auth";
-import { useDocumentList } from "../documents";
-import { useI18n, type Locale } from "../i18n";
+import { useDocumentList, useFolderList } from "../documents";
+import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
+import {
+  exportDocumentsArchive,
+  importDocumentsFromFiles,
+} from "../documentTransfer";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -16,6 +30,60 @@ export function DocumentsPage() {
   const session = useSession();
   const { t, locale } = useI18n();
   const documents = useDocumentList(Boolean(session.data?.user));
+  const folders = useFolderList(Boolean(session.data?.user));
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const [transfer, setTransfer] = useState<{
+    kind: "import" | "export";
+    done: number;
+    total: number;
+  } | null>(null);
+  const [transferNotice, setTransferNotice] = useState<string | null>(null);
+  const [transferError, setTransferError] = useState<string | null>(null);
+
+  async function handleImport(files: File[]) {
+    if (files.length === 0) return;
+    setTransferError(null);
+    setTransferNotice(null);
+    setTransfer({ kind: "import", done: 0, total: 0 });
+    try {
+      const count = await importDocumentsFromFiles(files, (done, total) =>
+        setTransfer({ kind: "import", done, total }),
+      );
+      setTransferNotice(
+        interpolate(t.transfer.importSuccess, { count: String(count) }),
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["folders"] }),
+        queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
+      ]);
+    } catch {
+      setTransferError(t.transfer.importFailed);
+    } finally {
+      setTransfer(null);
+    }
+  }
+
+  async function handleExport() {
+    if (!documents.data?.length) return;
+    setTransferError(null);
+    setTransferNotice(null);
+    setTransfer({ kind: "export", done: 0, total: documents.data.length });
+    try {
+      await exportDocumentsArchive(
+        documents.data,
+        folders.data ?? [],
+        (done, total) => setTransfer({ kind: "export", done, total }),
+      );
+      setTransferNotice(t.transfer.exportSuccess);
+    } catch {
+      setTransferError(t.transfer.exportFailed);
+    } finally {
+      setTransfer(null);
+    }
+  }
 
   if (session.isLoading) {
     return (
@@ -70,6 +138,63 @@ export function DocumentsPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".md,.zip,image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = "";
+              void handleImport(files);
+            }}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            {...({ webkitdirectory: "", directory: "" } as Record<
+              string,
+              string
+            >)}
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = "";
+              void handleImport(files);
+            }}
+          />
+          <button
+            type="button"
+            disabled={Boolean(transfer)}
+            onClick={() => inputRef.current?.click()}
+            className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+          >
+            <Upload className="h-4 w-4" />
+            {t.transfer.importButton}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(transfer)}
+            onClick={() => folderInputRef.current?.click()}
+            className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+          >
+            <FolderUp className="h-4 w-4" />
+            {t.transfer.importFolderButton}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(transfer) || !documents.data?.length}
+            onClick={() => void handleExport()}
+            className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+          >
+            <Archive className="h-4 w-4" />
+            {t.transfer.exportButton}
+          </button>
           <Link
             to="/trash"
             className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
@@ -88,6 +213,63 @@ export function DocumentsPage() {
           </Link>
         </div>
       </div>
+
+      <div
+        className="mt-5 flex flex-wrap items-center gap-3 text-xs"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        <button
+          type="button"
+          disabled={Boolean(transfer)}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 font-medium sm:hidden"
+          style={{ color: "var(--cinnabar)" }}
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {t.transfer.importButton}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(transfer)}
+          onClick={() => folderInputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 font-medium sm:hidden"
+          style={{ color: "var(--cinnabar)" }}
+        >
+          <FolderUp className="h-3.5 w-3.5" />
+          {t.transfer.importFolderButton}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(transfer) || !documents.data?.length}
+          onClick={() => void handleExport()}
+          className="inline-flex items-center gap-1.5 font-medium disabled:opacity-50 sm:hidden"
+          style={{ color: "var(--cinnabar)" }}
+        >
+          <Archive className="h-3.5 w-3.5" />
+          {t.transfer.exportButton}
+        </button>
+        <span>{t.transfer.importHint}</span>
+      </div>
+
+      {(transfer || transferNotice || transferError) && (
+        <div
+          className="mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: "var(--ink-line)",
+            color: transferError ? "#dc2626" : "var(--ink-mid)",
+          }}
+          role={transferError ? "alert" : "status"}
+        >
+          {transfer && (
+            <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
+          )}
+          <span>
+            {transfer
+              ? `${transfer.kind === "import" ? t.transfer.importing : t.transfer.exporting}${transfer.total > 0 ? ` ${transfer.done}/${transfer.total}` : ""}`
+              : transferError || transferNotice}
+          </span>
+        </div>
+      )}
 
       {documents.isLoading ? (
         <p className="mt-8 text-sm" style={{ color: "var(--ink-faint)" }}>

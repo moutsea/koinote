@@ -16,7 +16,7 @@ exports and shares in one click.
 
 **[koinote.app](https://koinote.app)** — try it without deploying anything
 
-[中文](README.md) · [Changelog](CHANGELOG.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
+[中文](README.md) · [Web changelog](https://koinote.app/changelog) · [CHANGELOG.md](CHANGELOG.md) · [Roadmap](docs/ROADMAP.en.md) · [Design notes](docs/DESIGN.en.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
@@ -47,6 +47,8 @@ for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
 - Syntax highlighting for 37 languages (highlight.js `common` set)
 - LaTeX via KaTeX — inline `$…$` and block `$$…$$`, click a formula to edit its source
 - Tabs for several open documents, outline navigation, folder tree, drag to move
+- A mobile document drawer, while desktop keeps the resizable document tree
+- Global title and Markdown-body search with `⌘K` / `Ctrl+K` and highlighted matches
 - Debounced autosave that reports failures instead of silently dropping content
 - Revision-based optimistic locking detects concurrent browser and agent edits; conflicts
   keep the local draft and open an explicit merge UI
@@ -64,6 +66,14 @@ for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
 - Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
   history, and eligibility for future AI capabilities
 
+**Account security**
+
+- Password accounts can recover access by email code and change their password while signed in
+- Changing or resetting a password immediately invalidates old sessions on other devices;
+  users can also explicitly sign out other devices
+- Recovery requests return the same result for unknown and OAuth-only accounts, while codes
+  are stored only as HMAC values
+
 **Image hosting**
 
 - Paste or drop to upload to Cloudflare R2
@@ -79,14 +89,18 @@ for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
 
 **Export**
 
-| Format | Notes |
-|---|---|
-| Markdown | As-is |
-| HTML | One HTML file with embedded document styles; KaTeX CSS and images remain external |
-| DOCX | Built from the document tree; formulas keep their LaTeX source |
-| PDF | One-click download (rasterized) |
-| Print / Save as PDF | Vector text — selectable and searchable |
-| **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin |
+| Format                   | Notes                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| Markdown                 | As-is                                                                             |
+| HTML                     | One HTML file with embedded document styles; KaTeX CSS and images remain external |
+| DOCX                     | Built from the document tree; formulas keep their LaTeX source                    |
+| PDF                      | One-click download (rasterized)                                                   |
+| Print / Save as PDF      | Vector text — selectable and searchable                                           |
+| **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin                          |
+
+My Documents also provides bulk portability: import individual `.md` files, folders with
+images, or ZIP archives, and export every document, folder, and referenced image as a ZIP that
+Koinote can import again.
 
 The rich-text path needed real work: highlighting is regenerated at export time
 (in-editor highlighting is a view decoration and never enters the document),
@@ -99,9 +113,13 @@ rasterized and uploaded as images.
 - Two levels: anyone with the link, or password required
 - Loosening permissions forces a new token, so old links stop working immediately
 - Passwords stored as bcrypt hashes, with two layers of rate limiting
+- Dynamic page titles and OpenGraph cards, aggregate read counts, and “Copy to my Koinote”
+- Password-protected metadata hides the title, summary, and cover until unlock; view counts do not identify readers
 
 **Also**
 
+- A public `/changelog` page renders the repository's `CHANGELOG.md` as a timeline of additions,
+  improvements, security changes, and fixes
 - UI in Chinese, English, Japanese, and French
 - Light and dark themes, ink-wash visual style
 - Verified email registration and password login, plus Google and GitHub OAuth
@@ -112,7 +130,7 @@ rasterized and uploaded as images.
 - Optional Feishu bot notifications after the first successful payment record, deduplicated
   across success-page confirmation and Stripe webhook delivery
 - Administrator dashboard for user/member totals, per-currency revenue, orders,
-  site storage, 30-day growth, and recent accounts and payments
+  site storage, 30-day growth, product funnels, D1/D7/D30 retention, and recent activity
 - Optional Cloudflare Analytics metrics for today's edge UV, PV, requests, and bandwidth
 - Streamable HTTP MCP access for lifetime members to let Codex, Claude Code, and other
   agents work with their own documents
@@ -206,7 +224,7 @@ Other clients need no Koinote-specific integration. They can connect with the sa
 token when they support remote Streamable HTTP MCP plus an
 `Authorization: Bearer <PAT>` request header.
 
-Read tools page through documents, search titles, read Unicode-safe content chunks, inspect
+Read tools page through documents, search titles and Markdown bodies, read Unicode-safe content chunks, inspect
 retained versions, and list the trash. Write tokens additionally expose create, append,
 full replace, version restore, move to trash, and restore from trash. Agents cannot
 permanently delete documents: that action remains in the browser trash page behind a typed-title
@@ -419,23 +437,23 @@ push to `main` once CI passes, then deploys the Worker and SPA and checks the si
 
 Required repository secrets:
 
-| Secret | Purpose |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Deployment needs Workers Scripts, R2, and Routes edit; add Email Sending edit if the token also onboards the sending domain |
-| `CLOUDFLARE_ACCOUNT_ID` | Shown by `wrangler whoami` |
-| `CLOUDFLARE_ZONE_ID` | Zone hosting the image CDN, used for cache purge after deletion |
-| `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge |
-| `CLOUDFLARE_ANALYTICS_TOKEN` | Optional; Analytics Read limited to the target zone, used for Admin UV/PV |
-| `EMAIL_VERIFICATION_SECRET` | Independent verification-code HMAC key, written safely to the VPS `.env` |
-| `MCP_TOKEN_ENCRYPTION_KEY` | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed |
-| `STRIPE_SECRET_KEY` | Stripe server key; start with `sk_test_...`, switch to live mode before real charges |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret for `/api/billing/webhook` (`whsec_...`) |
-| `STRIPE_LIFETIME_PRODUCT_ID` | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist |
-| `BOT_WEBHOOK` | Optional Feishu group-bot webhook; uses the same variable name as Kimiseek |
-| `BOT_WEBHOOK_SECRET` | Optional Feishu bot signing secret; must be configured together with `BOT_WEBHOOK` |
-| `VPS_HOST` | Backend server address |
-| `VPS_SSH_KEY` | Deploy-only private key (generate a dedicated one, don't reuse your personal key) |
-| `VPS_HOST_KEY` | The server's known_hosts entry, used to pin the host key |
+| Secret                         | Purpose                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`         | Deployment needs Workers Scripts, R2, and Routes edit; add Email Sending edit if the token also onboards the sending domain |
+| `CLOUDFLARE_ACCOUNT_ID`        | Shown by `wrangler whoami`                                                                                                  |
+| `CLOUDFLARE_ZONE_ID`           | Zone hosting the image CDN, used for cache purge after deletion                                                             |
+| `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge                                                                                         |
+| `CLOUDFLARE_ANALYTICS_TOKEN`   | Optional; Analytics Read limited to the target zone, used for Admin UV/PV                                                   |
+| `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
+| `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed                           |
+| `STRIPE_SECRET_KEY`            | Stripe server key; start with `sk_test_...`, switch to live mode before real charges                                        |
+| `STRIPE_WEBHOOK_SECRET`        | Signing secret for `/api/billing/webhook` (`whsec_...`)                                                                     |
+| `STRIPE_LIFETIME_PRODUCT_ID`   | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist                                                   |
+| `BOT_WEBHOOK`                  | Optional Feishu group-bot webhook; uses the same variable name as Kimiseek                                                  |
+| `BOT_WEBHOOK_SECRET`           | Optional Feishu bot signing secret; must be configured together with `BOT_WEBHOOK`                                          |
+| `VPS_HOST`                     | Backend server address                                                                                                      |
+| `VPS_SSH_KEY`                  | Deploy-only private key (generate a dedicated one, don't reuse your personal key)                                           |
+| `VPS_HOST_KEY`                 | The server's known_hosts entry, used to pin the host key                                                                    |
 
 To create or rotate the verification-code secret, run this from the repository:
 
@@ -462,7 +480,7 @@ The optional Analytics token is written through the same path when configured.
 ## Tests
 
 ```bash
-npm test          # typecheck (both sides) + 29 frontend/Worker assertion suites
+npm test          # typecheck (both sides) + all frontend/Worker assertion suites
 npm run go:test   # go vet + go test; DB integration tests skip without TEST_DATABASE_URL
 ```
 
@@ -476,8 +494,10 @@ Export and sharing also have Playwright end-to-end scripts — see the
 ## Documentation
 
 - [Changelog](CHANGELOG.md) — notable additions, changes, fixes, and security updates
+- [Product roadmap](docs/ROADMAP.en.md) — near-term priorities, later directions, and principles
 - [Design notes](docs/DESIGN.en.md) — why things are built this way, which traps
   we hit, and which degradations are deliberate
+- [产品路线图（中文）](docs/ROADMAP.zh.md)
 - [设计文档（中文）](docs/DESIGN.zh.md)
 
 ## License

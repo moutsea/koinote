@@ -18,6 +18,7 @@ import {
   safeFilename,
 } from "./exportDocument";
 import { MediaExportDialog } from "./WechatDialog";
+import { trackProductEvent } from "../../api";
 
 export function ExportMenu({
   editor,
@@ -58,6 +59,7 @@ export function ExportMenu({
     setBusy(kind);
     try {
       await action();
+      void trackProductEvent("first_export").catch(() => undefined);
       setOpen(false);
     } catch {
       // 导出失败必须显形，静默失败会让用户以为文件已经下载了
@@ -97,9 +99,7 @@ export function ExportMenu({
             label={t.editor.exportMarkdown}
             busy={busy === "md"}
             onClick={() =>
-              run("md", () =>
-                exportMarkdown(editor, title, t.editor.untitled),
-              )
+              run("md", () => exportMarkdown(editor, title, t.editor.untitled))
             }
           />
           <Item
@@ -210,7 +210,9 @@ function Item({
     >
       <span className="mt-0.5 shrink-0 text-neutral-400">{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm">{busy ? t.editor.exporting : label}</span>
+        <span className="block text-sm">
+          {busy ? t.editor.exporting : label}
+        </span>
         {hint && (
           <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
             {hint}

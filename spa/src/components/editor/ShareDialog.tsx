@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Link2, Lock, X } from "lucide-react";
+import { Check, Copy, Eye, Link2, Lock, X } from "lucide-react";
 import { ApiError } from "../../api";
 import {
   useCreateShare,
@@ -123,6 +123,15 @@ export function ShareDialog({
         <p className="mt-1 text-xs text-neutral-400">
           {share ? t.editor.shareActive : t.editor.shareNotShared}
         </p>
+        {share && (
+          <p className="mt-2 inline-flex items-center gap-1 text-xs text-neutral-400">
+            <Eye className="h-3.5 w-3.5" />
+            {t.editor.sharedViews.replace(
+              "{count}",
+              String(share.viewCount ?? 0),
+            )}
+          </p>
+        )}
 
         <div className="mt-4 space-y-2">
           <AccessOption
@@ -221,7 +230,6 @@ export function ShareDialog({
             </button>
           )}
         </div>
-
       </div>
     </div>
   );

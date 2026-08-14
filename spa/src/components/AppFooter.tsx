@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Github, Mail, Twitter, ExternalLink } from "lucide-react";
+import { Github, Mail, Twitter, ExternalLink, History } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { InkSeal } from "./Ink";
@@ -32,7 +32,10 @@ export function AppFooter() {
   return (
     <footer
       className="kn-app-footer relative overflow-hidden border-t"
-      style={{ borderColor: "var(--ink-line)", background: "var(--ink-footer)" }}
+      style={{
+        borderColor: "var(--ink-line)",
+        background: "var(--ink-footer)",
+      }}
     >
       {/* 墨云 + 卷末朱砂。pointer-events-none 在 -z-10 之外还要写，
           否则这几团模糊的圆会吃掉页脚链接的点击 */}
@@ -47,7 +50,9 @@ export function AppFooter() {
         />
       </div>
 
-      <div className={`mx-auto w-full max-w-6xl py-12 sm:py-16 ${EDGE_PADDING}`}>
+      <div
+        className={`mx-auto w-full max-w-6xl py-12 sm:py-16 ${EDGE_PADDING}`}
+      >
         <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:gap-12">
           {/* 品牌 */}
           <div className="space-y-5 md:col-span-5">
@@ -82,10 +87,21 @@ export function AppFooter() {
               <SocialLink href="https://x.com/LiangMout95522" label="Twitter">
                 <Twitter className="h-5 w-5" />
               </SocialLink>
-              <SocialLink href={`mailto:${CONTACT_EMAIL}`} label={t.footer.contact}>
+              <SocialLink
+                href={`mailto:${CONTACT_EMAIL}`}
+                label={t.footer.contact}
+              >
                 <Mail className="h-5 w-5" />
               </SocialLink>
             </div>
+            <Link
+              to="/changelog"
+              className="kn-ink-link inline-flex min-h-8 items-center gap-2 text-sm transition-colors"
+              style={{ color: "var(--ink-mid)" }}
+            >
+              <History className="h-4 w-4" />
+              {t.footer.changelog}
+            </Link>
           </div>
 
           {/* 链接三栏 */}
@@ -96,7 +112,9 @@ export function AppFooter() {
                 <FooterRoute to="/editor">{t.footer.editor}</FooterRoute>
                 <FooterRoute to="/pricing">{t.footer.pricing}</FooterRoute>
                 <FooterRoute to="/docs/mcp">{t.footer.mcpGuide}</FooterRoute>
-                <FooterRoute to="/docs/version-history">{t.footer.versionHistoryGuide}</FooterRoute>
+                <FooterRoute to="/docs/version-history">
+                  {t.footer.versionHistoryGuide}
+                </FooterRoute>
                 <FooterRoute to="/dashboard">{t.footer.dashboard}</FooterRoute>
               </FooterColumn>
 
@@ -213,7 +231,13 @@ function FooterRoute({ to, children }: { to: string; children: ReactNode }) {
   );
 }
 
-function FooterExternal({ href, children }: { href: string; children: ReactNode }) {
+function FooterExternal({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
   return (
     <li>
       <a

@@ -146,7 +146,7 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 }
 
 func adminRequest(app *App, authUserID string) *httptest.ResponseRecorder {
-	token, _ := app.signSession(authUserID)
+	token, _ := app.signSession(authUserID, 1)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
 	rec := httptest.NewRecorder()

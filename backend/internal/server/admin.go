@@ -114,6 +114,30 @@ type adminStatsResponse struct {
 	RecentUsers    []adminRecentUser    `json:"recentUsers"`
 	RecentPayments []adminRecentPayment `json:"recentPayments"`
 	Traffic        adminTraffic         `json:"traffic"`
+	Funnel         adminFunnel          `json:"funnel"`
+	Retention      adminRetention       `json:"retention"`
+}
+
+type adminFunnel struct {
+	Registered        int64 `json:"registered"`
+	FirstDocument     int64 `json:"firstDocument"`
+	FirstUpload       int64 `json:"firstUpload"`
+	FirstExport       int64 `json:"firstExport"`
+	MCPConnected      int64 `json:"mcpConnected"`
+	CheckoutStarted   int64 `json:"checkoutStarted"`
+	CheckoutCompleted int64 `json:"checkoutCompleted"`
+}
+
+type adminRetentionWindow struct {
+	Eligible int64 `json:"eligible"`
+	Returned int64 `json:"returned"`
+}
+
+type adminRetention struct {
+	TrackingStartedAt time.Time            `json:"trackingStartedAt"`
+	Day1              adminRetentionWindow `json:"day1"`
+	Day7              adminRetentionWindow `json:"day7"`
+	Day30             adminRetentionWindow `json:"day30"`
 }
 
 func (a *App) requireAdmin(w http.ResponseWriter, r *http.Request) (model.User, bool) {
@@ -182,6 +206,18 @@ func (a *App) adminStats(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	funnel, err := a.loadAdminFunnel(r.Context())
+	if err != nil {
+		log.Printf("admin stats funnel: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	retention, err := a.loadAdminRetention(r.Context())
+	if err != nil {
+		log.Printf("admin stats retention: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
 
 	traffic := adminTraffic{From: todayStart, To: now.UTC()}
 	if a.siteAnalytics == nil {
@@ -206,7 +242,103 @@ func (a *App) adminStats(w http.ResponseWriter, r *http.Request) {
 		RecentUsers:    recentUsers,
 		RecentPayments: recentPayments,
 		Traffic:        traffic,
+		Funnel:         funnel,
+		Retention:      retention,
 	})
+}
+
+func (a *App) loadAdminFunnel(ctx context.Context) (adminFunnel, error) {
+	rows, err := a.db.Query(ctx, `
+		SELECT event_name, COUNT(*)
+		FROM product_milestones
+		GROUP BY event_name
+	`)
+	if err != nil {
+		return adminFunnel{}, err
+	}
+	defer rows.Close()
+	var funnel adminFunnel
+	for rows.Next() {
+		var event string
+		var count int64
+		if err := rows.Scan(&event, &count); err != nil {
+			return adminFunnel{}, err
+		}
+		switch productMilestone(event) {
+		case milestoneRegistered:
+			funnel.Registered = count
+		case milestoneFirstDocument:
+			funnel.FirstDocument = count
+		case milestoneFirstUpload:
+			funnel.FirstUpload = count
+		case milestoneFirstExport:
+			funnel.FirstExport = count
+		case milestoneMCPConnected:
+			funnel.MCPConnected = count
+		case milestoneCheckoutStarted:
+			funnel.CheckoutStarted = count
+		case milestoneCheckoutCompleted:
+			funnel.CheckoutCompleted = count
+		}
+	}
+	return funnel, rows.Err()
+}
+
+func (a *App) loadAdminRetention(ctx context.Context) (adminRetention, error) {
+	var out adminRetention
+	err := a.db.QueryRow(ctx, `
+		WITH meta AS (
+			SELECT tracking_started_at FROM product_analytics_meta WHERE singleton = true
+		), eligible_users AS (
+			SELECT
+				u.id,
+				(u.created_at AT TIME ZONE 'UTC')::date AS registered_on,
+				(meta.tracking_started_at AT TIME ZONE 'UTC')::date AS tracking_on
+			FROM users u CROSS JOIN meta
+			WHERE u.created_at >= meta.tracking_started_at
+		), today AS (
+			SELECT (now() AT TIME ZONE 'UTC')::date AS day
+		)
+		SELECT
+			(SELECT tracking_started_at FROM meta),
+			COUNT(*) FILTER (WHERE registered_on <= today.day - 1),
+			COUNT(*) FILTER (
+				WHERE registered_on <= today.day - 1
+				AND EXISTS (
+					SELECT 1 FROM user_daily_activity a
+					WHERE a.user_id = eligible_users.id
+					  AND a.activity_date = eligible_users.registered_on + 1
+				)
+			),
+			COUNT(*) FILTER (WHERE registered_on <= today.day - 7),
+			COUNT(*) FILTER (
+				WHERE registered_on <= today.day - 7
+				AND EXISTS (
+					SELECT 1 FROM user_daily_activity a
+					WHERE a.user_id = eligible_users.id
+					  AND a.activity_date = eligible_users.registered_on + 7
+				)
+			),
+			COUNT(*) FILTER (WHERE registered_on <= today.day - 30),
+			COUNT(*) FILTER (
+				WHERE registered_on <= today.day - 30
+				AND EXISTS (
+					SELECT 1 FROM user_daily_activity a
+					WHERE a.user_id = eligible_users.id
+					  AND a.activity_date = eligible_users.registered_on + 30
+				)
+			)
+		FROM eligible_users CROSS JOIN today
+	`).Scan(
+		&out.TrackingStartedAt,
+		&out.Day1.Eligible,
+		&out.Day1.Returned,
+		&out.Day7.Eligible,
+		&out.Day7.Returned,
+		&out.Day30.Eligible,
+		&out.Day30.Returned,
+	)
+	return out, err
 }
 
 func (a *App) loadAdminOverview(

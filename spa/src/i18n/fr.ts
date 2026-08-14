@@ -56,9 +56,18 @@ export const fr: Messages = {
         "Aucune extension requise. Créez un jeton personnel révocable et à durée limitée pour permettre à Codex, Claude Code, OpenCode et aux autres clients MCP compatibles de rechercher, lire et modifier vos documents selon les droits accordés.",
       agents: "Compatible avec les clients MCP Streamable HTTP",
       steps: [
-        { title: "Limiter les droits", desc: "Créez des jetons en lecture seule ou lecture-écriture, consultables et révocables à tout moment." },
-        { title: "Écrire sans écraser", desc: "Chaque modification vérifie la révision du document et signale les conflits." },
-        { title: "Garder un point de secours", desc: "Les membres règlent l'historique complet et conservent toujours le dernier instantané de sécurité." },
+        {
+          title: "Limiter les droits",
+          desc: "Créez des jetons en lecture seule ou lecture-écriture, consultables et révocables à tout moment.",
+        },
+        {
+          title: "Écrire sans écraser",
+          desc: "Chaque modification vérifie la révision du document et signale les conflits.",
+        },
+        {
+          title: "Garder un point de secours",
+          desc: "Les membres règlent l'historique complet et conservent toujours le dernier instantané de sécurité.",
+        },
       ],
       cta: "Voir les avantages membre",
     },
@@ -66,13 +75,16 @@ export const fr: Messages = {
   pricing: {
     eyebrow: "Des tarifs simples et transparents",
     title: "Une mise à niveau, une écriture sereine",
-    subtitle: "L'offre gratuite couvre l'écriture quotidienne. L'accès à vie ajoute stockage, MCP et historique en un seul paiement.",
+    subtitle:
+      "L'offre gratuite couvre l'écriture quotidienne. L'accès à vie ajoute stockage, MCP et historique en un seul paiement.",
     freeName: "Gratuit",
-    freeDescription: "Tout ce qu'il faut pour commencer à écrire et découvrir l'éditeur.",
+    freeDescription:
+      "Tout ce qu'il faut pour commencer à écrire et découvrir l'éditeur.",
     freePrice: "Gratuit",
     freePeriod: "Utilisable sans limite de durée",
     lifetimeName: "À vie",
-    lifetimeDescription: "Pour l'écriture au long cours et la collaboration avec les agents.",
+    lifetimeDescription:
+      "Pour l'écriture au long cours et la collaboration avec les agents.",
     lifetimePeriod: "Un paiement, accès à vie",
     recommended: "Recommandé",
     included: "Inclus",
@@ -97,26 +109,55 @@ export const fr: Messages = {
     unavailable: "Le paiement en ligne n'est pas configuré sur ce déploiement.",
     faqTitle: "Questions fréquentes",
     faqs: [
-      { question: "Est-ce un abonnement ?", answer: "Non. L'accès à vie est un paiement unique sans renouvellement automatique." },
-      { question: "Que permet MCP ?", answer: "Les agents autorisés peuvent rechercher, lire, créer, compléter, modifier, restaurer et mettre des documents à la corbeille. La suppression définitive reste réservée au Web." },
-      { question: "Puis-je restaurer après avoir désactivé l'historique MCP complet ?", answer: "Oui. Les écritures Agent des membres conservent toujours au moins le dernier instantané de sécurité." },
-      { question: "Les fonctions d'IA sont-elles déjà disponibles ?", answer: "Pas encore. L'accès à vie inclut l'éligibilité aux futures fonctions d'IA lors de leur lancement." },
+      {
+        question: "Est-ce un abonnement ?",
+        answer:
+          "Non. L'accès à vie est un paiement unique sans renouvellement automatique.",
+      },
+      {
+        question: "Que permet MCP ?",
+        answer:
+          "Les agents autorisés peuvent rechercher, lire, créer, compléter, modifier, restaurer et mettre des documents à la corbeille. La suppression définitive reste réservée au Web.",
+      },
+      {
+        question:
+          "Puis-je restaurer après avoir désactivé l'historique MCP complet ?",
+        answer:
+          "Oui. Les écritures Agent des membres conservent toujours au moins le dernier instantané de sécurité.",
+      },
+      {
+        question: "Les fonctions d'IA sont-elles déjà disponibles ?",
+        answer:
+          "Pas encore. L'accès à vie inclut l'éligibilité aux futures fonctions d'IA lors de leur lancement.",
+      },
     ],
   },
   mcpGuide: {
     eyebrow: "Guide d’intégration MCP",
     title: "Autorisez vos agents à travailler avec vos documents",
-    subtitle: "Connectez Codex, Claude Code, OpenCode, OpenClaw ou tout client MCP Streamable HTTP compatible à Koinote.",
+    subtitle:
+      "Connectez Codex, Claude Code, OpenCode, OpenClaw ou tout client MCP Streamable HTTP compatible à Koinote.",
     overviewTitle: "Fonctionnement",
-    overviewBody: "Le modèle est fourni par votre agent. Koinote n’appelle aucun LLM : il gère l’autorisation, les outils documentaires, les conflits et l’audit.",
+    overviewBody:
+      "Le modèle est fourni par votre agent. Koinote n’appelle aucun LLM : il gère l’autorisation, les outils documentaires, les conflits et l’audit.",
     setupTitle: "Avant de commencer",
     setupSteps: [
-      { title: "Activez l’offre à vie", desc: "MCP est un avantage de l’offre à vie." },
-      { title: "Créez un jeton", desc: "Choisissez lecture seule ou lecture/écriture, avec une durée limitée ou permanente." },
-      { title: "Configurez le client", desc: "Utilisez la méthode correspondante pour https://koinote.app/mcp." },
+      {
+        title: "Activez l’offre à vie",
+        desc: "MCP est un avantage de l’offre à vie.",
+      },
+      {
+        title: "Créez un jeton",
+        desc: "Choisissez lecture seule ou lecture/écriture, avec une durée limitée ou permanente.",
+      },
+      {
+        title: "Configurez le client",
+        desc: "Utilisez la méthode correspondante pour https://koinote.app/mcp.",
+      },
     ],
     clientsTitle: "Connexion des agents",
-    clientsSubtitle: "Un jeton est un identifiant de compte. Gardez-le dans une variable d’environnement ou un stockage sécurisé, jamais dans Git.",
+    clientsSubtitle:
+      "Un jeton est un identifiant de compte. Gardez-le dans une variable d’environnement ou un stockage sécurisé, jamais dans Git.",
     clientDescriptions: [
       "Déclarez le MCP dans ~/.codex/config.toml, lisez le jeton depuis l’environnement, puis redémarrez Codex.",
       "Ajoutez le serveur HTTP et son en-tête Bearer avec la CLI Claude Code.",
@@ -127,7 +168,8 @@ export const fr: Messages = {
     tokenPlaceholder: "Remplacez l’exemple par le jeton du tableau de bord",
     verifyLabel: "Exemples à essayer",
     usageTitle: "Utilisation depuis un agent",
-    usageBody: "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille.",
+    usageBody:
+      "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille.",
     prompts: [
       "Liste mes cinq documents Koinote modifiés le plus récemment.",
       "Rédige un article sur le travail à distance et enregistre-le dans Koinote.",
@@ -148,18 +190,36 @@ export const fr: Messages = {
   versionGuide: {
     eyebrow: "Guide du contrôle de version",
     title: "Gardez chaque modification importante récupérable",
-    subtitle: "Découvrez comment Koinote conserve les versions, coordonne le navigateur et les agents, puis restaure un contenu après une erreur.",
+    subtitle:
+      "Découvrez comment Koinote conserve les versions, coordonne le navigateur et les agents, puis restaure un contenu après une erreur.",
     overviewTitle: "Fonctionnement de l’historique",
-    overviewBody: "Les modifications du navigateur et de MCP partagent les mêmes révisions et règles d’historique. Les versions facilitent la récupération, tandis que les révisions empêchent un ancien contenu d’écraser silencieusement le nouveau.",
+    overviewBody:
+      "Les modifications du navigateur et de MCP partagent les mêmes révisions et règles d’historique. Les versions facilitent la récupération, tandis que les révisions empêchent un ancien contenu d’écraser silencieusement le nouveau.",
     availabilityTitle: "Adhésion et limites",
-    availabilityBody: "L’historique est réservé aux membres à vie. Chaque document peut conserver 1 à 100 versions, avec une limite commune de 100 pour tout le compte ; les plus anciennes sont supprimées en premier.",
+    availabilityBody:
+      "L’historique est réservé aux membres à vie. Chaque document peut conserver 1 à 100 versions, avec une limite commune de 100 pour tout le compte ; les plus anciennes sont supprimées en premier.",
     featuresTitle: "Fonctions principales",
     features: [
-      { title: "Instantanés regroupés", desc: "Les modifications web sont regroupées dans le temps au lieu de créer une version à chaque sauvegarde automatique." },
-      { title: "Limites flexibles", desc: "Activez ou désactivez l’historique et choisissez de 1 à 100 versions par document." },
-      { title: "Instantané de sécurité", desc: "Même sans historique MCP complet, le dernier état récupérable est gardé avant un remplacement par un agent." },
-      { title: "Détection des conflits", desc: "Une écriture exige la dernière révision ; une version périmée échoue au lieu d’écraser le contenu récent." },
-      { title: "Restauration réversible", desc: "L’état actuel est sauvegardé avant de restaurer une ancienne version." },
+      {
+        title: "Instantanés regroupés",
+        desc: "Les modifications web sont regroupées dans le temps au lieu de créer une version à chaque sauvegarde automatique.",
+      },
+      {
+        title: "Limites flexibles",
+        desc: "Activez ou désactivez l’historique et choisissez de 1 à 100 versions par document.",
+      },
+      {
+        title: "Instantané de sécurité",
+        desc: "Même sans historique MCP complet, le dernier état récupérable est gardé avant un remplacement par un agent.",
+      },
+      {
+        title: "Détection des conflits",
+        desc: "Une écriture exige la dernière révision ; une version périmée échoue au lieu d’écraser le contenu récent.",
+      },
+      {
+        title: "Restauration réversible",
+        desc: "L’état actuel est sauvegardé avant de restaurer une ancienne version.",
+      },
     ],
     webTitle: "Consulter et restaurer sur le Web",
     webSteps: [
@@ -174,7 +234,8 @@ export const fr: Messages = {
       "Les clients MCP autorisés en écriture peuvent lire et modifier ces règles ; les jetons en lecture seule peuvent seulement les consulter.",
     ],
     safetyTitle: "Réglages recommandés",
-    safetyBody: "Gardez l’historique et l’historique MCP complet pour les documents importants. Ajustez la limite par document en tenant compte des 100 versions partagées par le compte, et demandez à l’agent de lire la dernière révision avant un remplacement.",
+    safetyBody:
+      "Gardez l’historique et l’historique MCP complet pour les documents importants. Ajustez la limite par document en tenant compte des 100 versions partagées par le compte, et demandez à l’agent de lire la dernière révision avant un remplacement.",
     settingsCta: "Régler l’historique",
     mcpCta: "Voir l’intégration MCP",
     pricingCta: "Voir les avantages",
@@ -230,6 +291,37 @@ export const fr: Messages = {
     invitationBonusHint:
       "Valable avec Google, GitHub ou l’e-mail. Votre ami recevra également 500 Mo après votre inscription.",
     haveInvitationCode: "Vous avez un code d’invitation ?",
+    forgotPassword: "Mot de passe oublié ?",
+    resetPasswordTitle: "Réinitialiser le mot de passe",
+    resetPasswordDescription:
+      "Saisissez l’adresse e-mail du compte. Le résultat affiché reste identique, que cette adresse existe ou non.",
+    newPassword: "Nouveau mot de passe",
+    resetPasswordSubmit: "Réinitialiser le mot de passe",
+    resetPasswordSuccess:
+      "Mot de passe réinitialisé. Connectez-vous avec le nouveau mot de passe ; les anciennes sessions sont invalidées.",
+    resetCodeSent:
+      "Si cette adresse correspond à un compte avec mot de passe, un code a été envoyé. Consultez votre boîte de réception.",
+  },
+  security: {
+    title: "Sécurité du compte",
+    description:
+      "Changer le mot de passe conserve cette session et invalide immédiatement les anciennes sessions ailleurs.",
+    oauthOnly:
+      "Ce compte utilise actuellement Google ou GitHub et ne possède pas de mot de passe Koinote à modifier.",
+    currentPassword: "Mot de passe actuel",
+    newPassword: "Nouveau mot de passe",
+    confirmPassword: "Confirmer le nouveau mot de passe",
+    changePassword: "Changer le mot de passe",
+    changingPassword: "Modification…",
+    passwordChanged:
+      "Mot de passe modifié. Les anciennes sessions sur les autres appareils ont été déconnectées.",
+    sessionsTitle: "Sessions de connexion",
+    sessionsDescription:
+      "Conservez ce navigateur connecté et déconnectez immédiatement les autres appareils.",
+    invalidateSessions: "Déconnecter les autres appareils",
+    invalidatingSessions: "Déconnexion…",
+    sessionsInvalidated:
+      "Les anciennes sessions sur les autres appareils ont été déconnectées.",
   },
   storage: {
     title: "Stockage cloud",
@@ -316,12 +408,16 @@ export const fr: Messages = {
   },
   documentHistorySettings: {
     title: "Historique des versions",
-    description: "Choisissez si les documents conservent des versions et comment les écritures Web et Agent sont enregistrées.",
-    membersOnly: "L’historique est réservé aux membres à vie. Passez membre pour configurer la conservation.",
+    description:
+      "Choisissez si les documents conservent des versions et comment les écritures Web et Agent sont enregistrées.",
+    membersOnly:
+      "L’historique est réservé aux membres à vie. Passez membre pour configurer la conservation.",
     enabled: "Activer l’historique",
-    enabledHint: "La désactivation arrête les instantanés Web sans supprimer les versions conservées ; l’Agent garde toujours le dernier instantané de sécurité.",
+    enabledHint:
+      "La désactivation arrête les instantanés Web sans supprimer les versions conservées ; l’Agent garde toujours le dernier instantané de sécurité.",
     perDocumentMax: "Versions par document",
-    limitHint: "Cette limite s’applique à chaque document ; tous les documents partagent le plafond de {accountMax} versions du compte. La réduire supprime immédiatement les plus anciennes versions.",
+    limitHint:
+      "Cette limite s’applique à chaque document ; tous les documents partagent le plafond de {accountMax} versions du compte. La réduire supprime immédiatement les plus anciennes versions.",
     mcpEnabled: "Conserver l’historique MCP complet",
     mcpEnabledHint:
       "Si cette option est désactivée, les écritures de l’Agent conservent quand même le dernier instantané de sécurité. Il compte dans les limites de versions.",
@@ -365,6 +461,32 @@ export const fr: Messages = {
       "Consultez et poursuivez l’édition des documents enregistrés dans le cloud.",
     emptyHint: "Aucun document cloud pour l’instant. ",
     emptyLinkText: "Créer votre premier document",
+  },
+  search: {
+    button: "Rechercher",
+    title: "Rechercher dans tous les documents",
+    placeholder: "Titres et contenu…",
+    hint: "Appuyez sur ⌘K / Ctrl+K",
+    startTyping:
+      "Saisissez un mot-clé pour rechercher dans vos titres et votre contenu Markdown.",
+    noResults: "Aucun document correspondant.",
+    loadFailed: "La recherche a échoué. Réessayez.",
+    titleMatch: "Titre",
+    contentMatch: "Contenu",
+  },
+  transfer: {
+    importButton: "Importer des fichiers",
+    importFolderButton: "Importer un dossier",
+    exportButton: "Tout exporter",
+    importing: "Importation des documents et images…",
+    exporting: "Création de l’archive…",
+    importSuccess: "{count} documents importés.",
+    exportSuccess: "L’archive de migration est prête.",
+    importFailed:
+      "Échec de l’import. Vérifiez le format, la taille des images et le quota.",
+    exportFailed: "Échec de l’export. Réessayez.",
+    importHint:
+      "Prend en charge les fichiers .md, les dossiers et les archives ZIP ; les images référencées sont aussi migrées.",
   },
   trashPage: {
     title: "Corbeille",
@@ -443,6 +565,23 @@ export const fr: Messages = {
     amount: "Montant",
     paidAt: "Paiement",
     generatedAt: "Mis à jour {time} · {timeZone}",
+    funnel: "Entonnoir produit",
+    funnelHint:
+      "Seuls les premiers jalons sont comptés ; aucun contenu, titre, terme de recherche ou nom de fichier n’est enregistré.",
+    registered: "Inscription",
+    firstDocument: "Premier document",
+    firstUpload: "Premier envoi",
+    firstExport: "Premier export",
+    mcpConnected: "MCP connecté",
+    checkoutStarted: "Checkout démarré",
+    checkoutCompleted: "Paiement terminé",
+    retention: "Rétention",
+    retentionHint:
+      "Taux D1 / D7 / D30 exacts selon la date UTC d’inscription, après le début du suivi.",
+    day1Retention: "Rétention D1",
+    day7Retention: "Rétention D7",
+    day30Retention: "Rétention D30",
+    retentionSample: "{returned} / {eligible} utilisateurs",
   },
   editor: {
     placeholder:
@@ -465,7 +604,8 @@ export const fr: Messages = {
       "Le document a encore changé pendant l'enregistrement. Rechargez et fusionnez à nouveau.",
     history: "Historique",
     historyTitle: "Historique des versions",
-    historyDescription: "Consultez et restaurez les versions actuellement conservées pour ce document.",
+    historyDescription:
+      "Consultez et restaurez les versions actuellement conservées pour ce document.",
     historyEmpty: "Aucune version à restaurer.",
     historyLoadFailed: "Impossible de charger l'historique",
     historyRestoreFailed: "Impossible de restaurer cette version",
@@ -536,6 +676,12 @@ export const fr: Messages = {
     sharedPasswordPrompt: "Ce document nécessite un mot de passe",
     sharedPasswordSubmit: "Afficher",
     sharedOpenApp: "À propos de Koinote",
+    sharedViews: "{count} lectures",
+    copyToMine: "Copier dans mon Koinote",
+    copyingToMine: "Copie…",
+    copiedToMine: "Copié. Ouverture du document…",
+    copyToMineFailed: "Échec de la copie. Vérifiez le quota et les images.",
+    loginToCopy: "Se connecter pour copier dans mon Koinote",
     exportLabel: "Exporter",
     exportMarkdown: "Markdown (.md)",
     exportHTML: "Page web (.html)",
@@ -548,7 +694,8 @@ export const fr: Messages = {
     mediaExport: "Exporter vers les médias",
     mediaExportHint: "Adapté à WeChat, Zhihu et Juejin",
     mediaTitle: "Exporter vers une plateforme",
-    mediaSubtitle: "Choisissez la destination ; nous copierons le format le mieux adapté.",
+    mediaSubtitle:
+      "Choisissez la destination ; nous copierons le format le mieux adapté.",
     mediaPlatformLabel: "Plateforme",
     mediaWechat: "WeChat",
     mediaWechatHint: "Texte enrichi stylé",
@@ -559,9 +706,12 @@ export const fr: Messages = {
     mediaCopy: "Copier",
     mediaCopied: "Copié — vous pouvez coller",
     mediaWorking: "Traitement…",
-    mediaRichTextNote: "La coloration, les légendes et les formules deviennent du texte enrichi. La plateforme peut nettoyer certains styles.",
-    mediaMarkdownNote: "Copie le Markdown complet avec le titre, prêt à être collé dans Juejin.",
-    mediaImagesUnreachable: "{n} image(s) pourraient être inaccessibles ({hosts}). Vérifiez l’aperçu après collage.",
+    mediaRichTextNote:
+      "La coloration, les légendes et les formules deviennent du texte enrichi. La plateforme peut nettoyer certains styles.",
+    mediaMarkdownNote:
+      "Copie le Markdown complet avec le titre, prêt à être collé dans Juejin.",
+    mediaImagesUnreachable:
+      "{n} image(s) pourraient être inaccessibles ({hosts}). Vérifiez l’aperçu après collage.",
     wechatThemeLabel: "Thème",
     themeNone: "Style par défaut",
     tabsLabel: "Documents ouverts",
@@ -636,6 +786,24 @@ function hello(name) {
     theme: "Changer de thème",
     language: "Langue",
   },
+  changelog: {
+    eyebrow: "En amélioration continue",
+    title: "Journal des modifications",
+    subtitle:
+      "Découvrez les nouveautés, améliorations et corrections de chaque version de Koinote.",
+    unreleased: "À venir",
+    sourceLink: "Voir la source sur GitHub",
+    sourceNote:
+      "Cette page provient du même fichier CHANGELOG.md que celui du dépôt open source ; les détails sont maintenus en anglais.",
+    categories: {
+      Added: "Ajouts",
+      Changed: "Modifications",
+      Fixed: "Corrections",
+      Security: "Sécurité",
+      Deprecated: "Obsolescence",
+      Removed: "Suppressions",
+    },
+  },
   footer: {
     tagline:
       "Koinote est un éditeur Markdown en ligne WYSIWYG : rendu au fil de la frappe, images envoyées directement vers votre hébergeur, export et partage en un clic.",
@@ -657,6 +825,7 @@ function hello(name) {
     copyright: "Koinote",
     allRightsReserved: "Tous droits réservés",
     contact: "Contact",
+    changelog: "Journal des modifications",
   },
   legal: {
     updatedLabel: "Mis à jour le",
@@ -773,12 +942,13 @@ function hello(name) {
             "Vos contenus : titres et corps des documents, arborescence des dossiers, images envoyées",
             "Paramètres de partage : jetons de partage et mots de passe d’accès hachés",
             "Journaux d’exploitation : horodatage, IP et User-Agent, nécessaires au débogage et à la lutte contre les abus",
+            "Mesures produit internes : date du premier accomplissement pour l’inscription, le premier document, l’envoi d’image, l’export, l’appel MCP et le paiement ; au plus une date d’activité par compte et par jour ; les pages partagées ne conservent qu’un compteur agrégé de lectures",
           ],
         },
         {
           title: "Ce que nous ne collectons pas",
           body: [
-            "Aucun SDK publicitaire ni d’analyse comportementale tierce. Nous ne établissons pas de profil publicitaire et n’utilisons pas le contenu de vos documents pour entraîner des modèles.",
+            "Aucun SDK publicitaire ni d’analyse comportementale tierce. Nous n’établissons pas de profil publicitaire et n’utilisons pas le contenu de vos documents pour entraîner des modèles. Les mesures produit ne stockent jamais les titres, le corps des documents, les recherches, les noms de fichiers importés ni l’identité des lecteurs d’un partage.",
           ],
         },
         {
@@ -790,6 +960,7 @@ function hello(name) {
             "Fournir les fonctions essentielles : sauvegarde et synchronisation des documents, hébergement des images, génération des liens de partage",
             "Vous authentifier et maintenir votre session",
             "Diagnostiquer les pannes et prévenir les abus ou attaques",
+            "Comprendre de façon agrégée l’inscription, la première création, l’envoi d’image, l’export, MCP, la conversion de paiement et la rétention J1/J7/J30",
             "Répondre lorsque vous nous contactez",
           ],
         },
@@ -916,6 +1087,8 @@ function hello(name) {
     password_too_short: "Le mot de passe doit comporter au moins 6 caractères",
     conflict: "L'e-mail ou le nom d'utilisateur est déjà pris",
     invalid_credentials: "Compte ou mot de passe incorrect",
+    current_password_incorrect: "Le mot de passe actuel est incorrect",
+    password_not_available: "Ce compte ne possède pas de mot de passe Koinote",
     unauthorized: "Non connecté",
     session_expired: "Session expirée",
     server_error: "Erreur serveur, veuillez réessayer plus tard",

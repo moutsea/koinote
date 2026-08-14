@@ -56,9 +56,18 @@ export const ja: Messages = {
         "ブラウザ拡張は不要です。期限付きまたは無期限で取り消し可能な個人トークンを作成すると、Codex、Claude Code、OpenCode などの標準 MCP クライアントが許可範囲内で Koinote 文書を検索・閲覧・編集できます。",
       agents: "Streamable HTTP MCP クライアントに対応",
       steps: [
-        { title: "権限を限定", desc: "読み取り専用または読み書きトークンを作成し、いつでも表示・コピー・取り消しできます。" },
-        { title: "安全に書き込む", desc: "すべての変更で revision を確認し、競合時の無言上書きを防ぎます。" },
-        { title: "復元点を保持", desc: "会員は完全履歴を設定でき、無効時も最新の安全スナップショットを保持します。" },
+        {
+          title: "権限を限定",
+          desc: "読み取り専用または読み書きトークンを作成し、いつでも表示・コピー・取り消しできます。",
+        },
+        {
+          title: "安全に書き込む",
+          desc: "すべての変更で revision を確認し、競合時の無言上書きを防ぎます。",
+        },
+        {
+          title: "復元点を保持",
+          desc: "会員は完全履歴を設定でき、無効時も最新の安全スナップショットを保持します。",
+        },
       ],
       cta: "会員特典を見る",
     },
@@ -66,9 +75,11 @@ export const ja: Messages = {
   pricing: {
     eyebrow: "シンプルで透明な料金",
     title: "一度のアップグレードで、安心して書き続ける",
-    subtitle: "無料版は日常の執筆に。終身会員は一度の支払いで容量、MCP、バージョン履歴を追加します。",
+    subtitle:
+      "無料版は日常の執筆に。終身会員は一度の支払いで容量、MCP、バージョン履歴を追加します。",
     freeName: "無料",
-    freeDescription: "執筆を始め、エディタの全体的な流れを試すための基本プランです。",
+    freeDescription:
+      "執筆を始め、エディタの全体的な流れを試すための基本プランです。",
     freePrice: "無料",
     freePeriod: "期間制限なし",
     lifetimeName: "終身会員",
@@ -97,26 +108,50 @@ export const ja: Messages = {
     unavailable: "この環境ではオンライン決済が設定されていません。",
     faqTitle: "よくある質問",
     faqs: [
-      { question: "サブスクリプションですか？", answer: "いいえ。終身会員は一度だけの支払いで、自動更新はありません。" },
-      { question: "MCP では何ができますか？", answer: "許可した Agent は文書の検索、閲覧、作成、追記、更新、復元、ゴミ箱への移動ができます。完全削除は Web のみです。" },
-      { question: "MCP の完全履歴を無効にしても復元できますか？", answer: "はい。会員の Agent 書き込みは常に最低 1 件の最新安全スナップショットを保持します。" },
-      { question: "AI 機能は現在利用できますか？", answer: "まだです。終身会員には今後リリースされる AI 機能の利用資格が含まれます。" },
+      {
+        question: "サブスクリプションですか？",
+        answer: "いいえ。終身会員は一度だけの支払いで、自動更新はありません。",
+      },
+      {
+        question: "MCP では何ができますか？",
+        answer:
+          "許可した Agent は文書の検索、閲覧、作成、追記、更新、復元、ゴミ箱への移動ができます。完全削除は Web のみです。",
+      },
+      {
+        question: "MCP の完全履歴を無効にしても復元できますか？",
+        answer:
+          "はい。会員の Agent 書き込みは常に最低 1 件の最新安全スナップショットを保持します。",
+      },
+      {
+        question: "AI 機能は現在利用できますか？",
+        answer:
+          "まだです。終身会員には今後リリースされる AI 機能の利用資格が含まれます。",
+      },
     ],
   },
   mcpGuide: {
     eyebrow: "MCP 接続ガイド",
     title: "Agent からドキュメントを安全に操作",
-    subtitle: "Codex、Claude Code、OpenCode、OpenClaw、または Streamable HTTP MCP 対応クライアントを Koinote に接続できます。",
+    subtitle:
+      "Codex、Claude Code、OpenCode、OpenClaw、または Streamable HTTP MCP 対応クライアントを Koinote に接続できます。",
     overviewTitle: "仕組み",
-    overviewBody: "モデル機能は Agent 側が提供します。Koinote は LLM を呼び出さず、認証、ドキュメントツール、競合検出、監査だけを担当します。",
+    overviewBody:
+      "モデル機能は Agent 側が提供します。Koinote は LLM を呼び出さず、認証、ドキュメントツール、競合検出、監査だけを担当します。",
     setupTitle: "準備",
     setupSteps: [
       { title: "永久会員を有効化", desc: "MCP は永久会員向け機能です。" },
-      { title: "個人トークンを作成", desc: "読み取り専用または読み書きと、期限付きまたは無期限を選びます。" },
-      { title: "クライアントを設定", desc: "下記の方法で https://koinote.app/mcp に接続します。" },
+      {
+        title: "個人トークンを作成",
+        desc: "読み取り専用または読み書きと、期限付きまたは無期限を選びます。",
+      },
+      {
+        title: "クライアントを設定",
+        desc: "下記の方法で https://koinote.app/mcp に接続します。",
+      },
     ],
     clientsTitle: "各 Agent の接続方法",
-    clientsSubtitle: "トークンはアカウントの認証情報です。環境変数か安全な保存領域に置き、リポジトリへコミットしないでください。",
+    clientsSubtitle:
+      "トークンはアカウントの認証情報です。環境変数か安全な保存領域に置き、リポジトリへコミットしないでください。",
     clientDescriptions: [
       "~/.codex/config.toml にリモート MCP を登録し、環境変数からトークンを読み込んで Codex を再起動します。",
       "Claude Code CLI で HTTP MCP と Bearer 認証ヘッダーを追加します。",
@@ -127,7 +162,8 @@ export const ja: Messages = {
     tokenPlaceholder: "ダッシュボードで作成したトークンに置き換えてください",
     verifyLabel: "設定後に試せるプロンプト",
     usageTitle: "Agent からの使い方",
-    usageBody: "特別な構文は不要です。Koinote を操作すると伝えれば Agent が MCP ツールを選びます。置換やゴミ箱操作では対象文書と結果を明確にしてください。",
+    usageBody:
+      "特別な構文は不要です。Koinote を操作すると伝えれば Agent が MCP ツールを選びます。置換やゴミ箱操作では対象文書と結果を明確にしてください。",
     prompts: [
       "Koinote で最近更新した 5 件のドキュメントを一覧にして。",
       "リモートワークの記事を書いて Koinote に保存して。",
@@ -148,18 +184,36 @@ export const ja: Messages = {
   versionGuide: {
     eyebrow: "バージョン管理ガイド",
     title: "大切な変更をいつでも復元可能に",
-    subtitle: "Koinote が履歴を保持し、ブラウザと Agent の同時編集を調整し、誤操作から内容を復元する仕組みを説明します。",
+    subtitle:
+      "Koinote が履歴を保持し、ブラウザと Agent の同時編集を調整し、誤操作から内容を復元する仕組みを説明します。",
     overviewTitle: "履歴の仕組み",
-    overviewBody: "ブラウザ編集と MCP 書き込みは同じ revision と履歴ポリシーを使います。履歴は確認と復元に使われ、revision 検証は古い内容による静かな上書きを防ぎます。",
+    overviewBody:
+      "ブラウザ編集と MCP 書き込みは同じ revision と履歴ポリシーを使います。履歴は確認と復元に使われ、revision 検証は古い内容による静かな上書きを防ぎます。",
     availabilityTitle: "会員資格と保持上限",
-    availabilityBody: "バージョン履歴は永久会員向けです。文書ごとに 1〜100 件、アカウント全体で合計 100 件まで保持し、上限を超えると古い履歴から削除します。",
+    availabilityBody:
+      "バージョン履歴は永久会員向けです。文書ごとに 1〜100 件、アカウント全体で合計 100 件まで保持し、上限を超えると古い履歴から削除します。",
     featuresTitle: "主な機能",
     features: [
-      { title: "間隔をまとめて保存", desc: "通常の Web 編集は自動保存のたびではなく、一定間隔でスナップショットを作ります。" },
-      { title: "柔軟な上限", desc: "履歴の有効・無効と、文書ごとの 1〜100 件の保持数を設定できます。" },
-      { title: "安全スナップショット", desc: "MCP 完全履歴を無効にしても、Agent の置換前に直近の復元可能な状態を残します。" },
-      { title: "競合検出", desc: "更新には最新 revision が必要で、古い書き込みは新しい内容を上書きせず失敗します。" },
-      { title: "取り消せる復元", desc: "古い版を復元する前に現在の状態を保存するため、復元自体も元に戻せます。" },
+      {
+        title: "間隔をまとめて保存",
+        desc: "通常の Web 編集は自動保存のたびではなく、一定間隔でスナップショットを作ります。",
+      },
+      {
+        title: "柔軟な上限",
+        desc: "履歴の有効・無効と、文書ごとの 1〜100 件の保持数を設定できます。",
+      },
+      {
+        title: "安全スナップショット",
+        desc: "MCP 完全履歴を無効にしても、Agent の置換前に直近の復元可能な状態を残します。",
+      },
+      {
+        title: "競合検出",
+        desc: "更新には最新 revision が必要で、古い書き込みは新しい内容を上書きせず失敗します。",
+      },
+      {
+        title: "取り消せる復元",
+        desc: "古い版を復元する前に現在の状態を保存するため、復元自体も元に戻せます。",
+      },
     ],
     webTitle: "Web で確認・復元する",
     webSteps: [
@@ -174,7 +228,8 @@ export const ja: Messages = {
       "書き込み権限のある MCP クライアントは設定を確認・変更でき、読み取り専用トークンは確認だけできます。",
     ],
     safetyTitle: "おすすめ設定",
-    safetyBody: "重要な文書では履歴と MCP 完全履歴を有効にしてください。アカウント全体の 100 件上限を考慮して文書ごとの保持数を決め、Agent が全文を置換する前に最新 revision を読むよう指示します。",
+    safetyBody:
+      "重要な文書では履歴と MCP 完全履歴を有効にしてください。アカウント全体の 100 件上限を考慮して文書ごとの保持数を決め、Agent が全文を置換する前に最新 revision を読むよう指示します。",
     settingsCta: "履歴設定を変更",
     mcpCta: "MCP 接続を見る",
     pricingCta: "会員特典を見る",
@@ -229,6 +284,36 @@ export const ja: Messages = {
     invitationBonusHint:
       "Google、GitHub、メールのどの方法でも有効です。登録後、友達にも 500 MB が追加されます。",
     haveInvitationCode: "招待コードをお持ちですか？",
+    forgotPassword: "パスワードをお忘れですか？",
+    resetPasswordTitle: "パスワードを再設定",
+    resetPasswordDescription:
+      "登録メールアドレスを入力してください。アドレスが存在するかどうかにかかわらず、同じ結果を表示します。",
+    newPassword: "新しいパスワード",
+    resetPasswordSubmit: "パスワードを再設定",
+    resetPasswordSuccess:
+      "パスワードを再設定しました。新しいパスワードでログインしてください。他の端末の古いセッションは無効です。",
+    resetCodeSent:
+      "このメールアドレスがパスワードアカウントに登録されている場合、確認コードを送信しました。受信トレイをご確認ください。",
+  },
+  security: {
+    title: "アカウントのセキュリティ",
+    description:
+      "パスワードを変更すると、この端末はログイン状態を保ち、他の端末の古いセッションを直ちに無効化します。",
+    oauthOnly:
+      "このアカウントは現在 Google または GitHub でログインしており、変更できる Koinote パスワードはありません。",
+    currentPassword: "現在のパスワード",
+    newPassword: "新しいパスワード",
+    confirmPassword: "新しいパスワードを確認",
+    changePassword: "パスワードを変更",
+    changingPassword: "変更中…",
+    passwordChanged:
+      "パスワードを変更しました。他の端末の古いセッションはログアウトしました。",
+    sessionsTitle: "ログインセッション",
+    sessionsDescription:
+      "このブラウザはログイン状態を保ち、他のブラウザと端末を直ちにログアウトします。",
+    invalidateSessions: "他の端末をログアウト",
+    invalidatingSessions: "処理中…",
+    sessionsInvalidated: "他の端末の古いセッションをログアウトしました。",
   },
   storage: {
     title: "クラウドストレージ",
@@ -291,7 +376,8 @@ export const ja: Messages = {
     editExpiry: "有効期限を編集",
     saveExpiry: "有効期限を保存",
     cancelExpiry: "編集をキャンセル",
-    expiryUpdateFailed: "有効期限を更新できませんでした。もう一度お試しください。",
+    expiryUpdateFailed:
+      "有効期限を更新できませんでした。もう一度お試しください。",
     create: "トークンを作成",
     createFailed: "トークンを作成できませんでした。再試行してください。",
     secretStored:
@@ -313,12 +399,16 @@ export const ja: Messages = {
   },
   documentHistorySettings: {
     title: "バージョン履歴",
-    description: "履歴を保存するか、Web と Agent の書き込みをどう保持するかを設定します。",
-    membersOnly: "バージョン履歴は終身会員向けです。アップグレードすると保持方法を設定できます。",
+    description:
+      "履歴を保存するか、Web と Agent の書き込みをどう保持するかを設定します。",
+    membersOnly:
+      "バージョン履歴は終身会員向けです。アップグレードすると保持方法を設定できます。",
     enabled: "バージョン履歴を有効にする",
-    enabledHint: "無効にすると Web の新しい履歴作成を止めます。既存の履歴は削除されず、Agent は直近 1 件の安全スナップショットを保持します。",
+    enabledHint:
+      "無効にすると Web の新しい履歴作成を止めます。既存の履歴は削除されず、Agent は直近 1 件の安全スナップショットを保持します。",
     perDocumentMax: "文書ごとの最大履歴数",
-    limitHint: "これは文書ごとの上限です。すべての文書でアカウント全体の上限 {accountMax} 件を共有します。数を減らすと古い履歴を直ちに削除します。",
+    limitHint:
+      "これは文書ごとの上限です。すべての文書でアカウント全体の上限 {accountMax} 件を共有します。数を減らすと古い履歴を直ちに削除します。",
     mcpEnabled: "MCP 書き込みの完全な履歴を保存",
     mcpEnabledHint:
       "無効にしても、Agent の書き込みは直近 1 件の安全スナップショットを保持します。安全スナップショットも履歴数の上限に含まれます。",
@@ -360,6 +450,30 @@ export const ja: Messages = {
     subtitle: "クラウドに保存したドキュメントを確認し、編集を続けられます。",
     emptyHint: "クラウドドキュメントはまだありません。",
     emptyLinkText: "最初のドキュメントを作成",
+  },
+  search: {
+    button: "検索",
+    title: "すべてのドキュメントを検索",
+    placeholder: "タイトルと本文を検索…",
+    hint: "⌘K / Ctrl+K でいつでも開けます",
+    startTyping: "キーワードを入力して、タイトルと Markdown 本文を検索します。",
+    noResults: "一致するドキュメントはありません。",
+    loadFailed: "検索に失敗しました。もう一度お試しください。",
+    titleMatch: "タイトル一致",
+    contentMatch: "本文一致",
+  },
+  transfer: {
+    importButton: "ファイルをインポート",
+    importFolderButton: "フォルダーをインポート",
+    exportButton: "すべてエクスポート",
+    importing: "ドキュメントと画像をインポート中…",
+    exporting: "ドキュメントと画像をまとめています…",
+    importSuccess: "{count} 件のドキュメントをインポートしました。",
+    exportSuccess: "移行用アーカイブを作成しました。",
+    importFailed:
+      "インポートに失敗しました。形式、画像サイズ、容量をご確認ください。",
+    exportFailed: "エクスポートに失敗しました。もう一度お試しください。",
+    importHint: ".md、フォルダー、ZIP に対応し、参照画像も一緒に移行します。",
   },
   trashPage: {
     title: "ゴミ箱",
@@ -434,6 +548,23 @@ export const ja: Messages = {
     amount: "金額",
     paidAt: "支払日時",
     generatedAt: "更新 {time} · {timeZone}",
+    funnel: "プロダクトファネル",
+    funnelHint:
+      "初回達成のみを集計し、本文、タイトル、検索語、ファイル名は保存しません。",
+    registered: "登録完了",
+    firstDocument: "最初の文書",
+    firstUpload: "最初の画像",
+    firstExport: "最初の出力",
+    mcpConnected: "MCP 接続",
+    checkoutStarted: "Checkout 開始",
+    checkoutCompleted: "支払い完了",
+    retention: "ユーザー継続率",
+    retentionHint:
+      "計測開始後の新規ユーザーを対象に、UTC 登録日基準の D1 / D7 / D30 を表示します。",
+    day1Retention: "D1 継続率",
+    day7Retention: "D7 継続率",
+    day30Retention: "D30 継続率",
+    retentionSample: "{returned} / {eligible} 人",
   },
   editor: {
     placeholder:
@@ -456,7 +587,8 @@ export const ja: Messages = {
       "保存中に文書が再び変更されました。再読み込みして統合してください。",
     history: "履歴",
     historyTitle: "バージョン履歴",
-    historyDescription: "この文書に現在保持されているバージョンを確認・復元できます。",
+    historyDescription:
+      "この文書に現在保持されているバージョンを確認・復元できます。",
     historyEmpty: "復元できる履歴はまだありません。",
     historyLoadFailed: "バージョン履歴を読み込めませんでした",
     historyRestoreFailed: "このバージョンを復元できませんでした",
@@ -521,6 +653,12 @@ export const ja: Messages = {
     sharedPasswordPrompt: "このドキュメントはパスワードが必要です",
     sharedPasswordSubmit: "表示",
     sharedOpenApp: "Koinote について",
+    sharedViews: "{count} 回閲覧",
+    copyToMine: "自分の Koinote にコピー",
+    copyingToMine: "コピー中…",
+    copiedToMine: "コピーしました。文書を開きます…",
+    copyToMineFailed: "コピーに失敗しました。容量または画像をご確認ください。",
+    loginToCopy: "ログインして自分の Koinote にコピー",
     exportLabel: "エクスポート",
     exportMarkdown: "Markdown (.md)",
     exportHTML: "ウェブページ (.html)",
@@ -544,9 +682,12 @@ export const ja: Messages = {
     mediaCopy: "クリップボードにコピー",
     mediaCopied: "コピーしました",
     mediaWorking: "処理中…",
-    mediaRichTextNote: "コード、画像キャプション、数式を貼り付け可能な形式に変換します。投稿先で一部スタイルが削除される場合があります。",
-    mediaMarkdownNote: "記事タイトルを含む完全な Markdown をコピーし、そのまま Juejin に貼り付けられます。",
-    mediaImagesUnreachable: "{n} 件の画像を投稿先が取得できない可能性があります（{hosts}）。貼り付け後に確認してください。",
+    mediaRichTextNote:
+      "コード、画像キャプション、数式を貼り付け可能な形式に変換します。投稿先で一部スタイルが削除される場合があります。",
+    mediaMarkdownNote:
+      "記事タイトルを含む完全な Markdown をコピーし、そのまま Juejin に貼り付けられます。",
+    mediaImagesUnreachable:
+      "{n} 件の画像を投稿先が取得できない可能性があります（{hosts}）。貼り付け後に確認してください。",
     wechatThemeLabel: "テーマ",
     themeNone: "デフォルト書式",
     tabsLabel: "開いているドキュメント",
@@ -621,6 +762,24 @@ function hello(name) {
     theme: "テーマ切り替え",
     language: "言語",
   },
+  changelog: {
+    eyebrow: "継続的な改善",
+    title: "更新履歴",
+    subtitle:
+      "Koinote の各リリースで追加・改善・修正された内容を確認できます。",
+    unreleased: "次回リリース",
+    sourceLink: "GitHub で原文を見る",
+    sourceNote:
+      "このページはオープンソースリポジトリと同じ CHANGELOG.md から生成され、詳細項目は英語で管理されています。",
+    categories: {
+      Added: "追加",
+      Changed: "変更",
+      Fixed: "修正",
+      Security: "セキュリティ",
+      Deprecated: "非推奨",
+      Removed: "削除",
+    },
+  },
   footer: {
     tagline:
       "Koinote は WYSIWYG のオンライン Markdown エディタです。入力しながら描画、画像はそのまま画像ストレージへ、ワンクリックで書き出しと共有ができます。",
@@ -642,6 +801,7 @@ function hello(name) {
     copyright: "Koinote",
     allRightsReserved: "All rights reserved",
     contact: "お問い合わせ",
+    changelog: "更新履歴",
   },
   legal: {
     updatedLabel: "更新日",
@@ -756,12 +916,13 @@ function hello(name) {
             "作成したコンテンツ：ドキュメントのタイトルと本文、フォルダ構成、アップロードした画像",
             "共有設定：共有トークン、ハッシュ化されたアクセスパスワード",
             "運用ログ：障害調査と不正利用対策に必要な範囲でのリクエスト時刻、IP、User-Agent",
+            "自社プロダクト指標：登録、最初の文書、初回画像アップロード、初回エクスポート、初回 MCP 呼び出し、決済の完了時刻、アカウントごとに1日最大1件のアクティブ日、共有ページの累計閲覧数",
           ],
         },
         {
           title: "取得しないもの",
           body: [
-            "第三者の広告や行動分析 SDK は組み込んでいません。広告配信のためのプロファイリングは行わず、ドキュメントの内容をモデルの学習に使うこともありません。",
+            "第三者の広告や行動分析 SDK は組み込んでいません。広告配信のためのプロファイリングは行わず、ドキュメントの内容をモデルの学習に使うこともありません。プロダクト指標には文書タイトル、本文、検索語、インポートしたファイル名、共有ページ読者の識別情報を保存しません。",
           ],
         },
         {
@@ -771,6 +932,7 @@ function hello(name) {
             "中核機能の提供：ドキュメントの保存と同期、画像のホスティング、共有リンクの生成",
             "本人確認とセッションの維持",
             "障害の調査、不正利用や攻撃の防止",
+            "登録、初回作成、画像アップロード、エクスポート、MCP 接続、決済転換、D1/D7/D30 継続率の集計把握",
             "お問い合わせへの対応",
           ],
         },
@@ -897,6 +1059,8 @@ function hello(name) {
     password_too_short: "パスワードは 6 文字以上必要です",
     conflict: "メールまたはユーザー名はすでに使われています",
     invalid_credentials: "アカウントまたはパスワードが正しくありません",
+    current_password_incorrect: "現在のパスワードが正しくありません",
+    password_not_available: "このアカウントには Koinote パスワードがありません",
     unauthorized: "ログインしていません",
     session_expired: "セッションの有効期限が切れました",
     server_error: "サーバーエラーです。しばらくして再試行してください",

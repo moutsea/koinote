@@ -20,8 +20,9 @@ const sessionTTL = 7 * 24 * time.Hour
 
 // sessionPayload 是无状态会话令牌的载荷，签名后放进 cookie，不落库。
 type sessionPayload struct {
-	AuthUserID string `json:"authUserId"`
-	ExpiresAt  int64  `json:"expiresAt"`
+	AuthUserID     string `json:"authUserId"`
+	ExpiresAt      int64  `json:"expiresAt"`
+	SessionVersion int64  `json:"sessionVersion,omitempty"`
 }
 
 // sessionSecret 会话签名密钥，只认 SESSION_SECRET。
@@ -53,16 +54,18 @@ func (a *App) sessionSignature(encodedPayload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func (a *App) signSession(authUserID string) (string, time.Time) {
+func (a *App) signSession(authUserID string, sessionVersion int64) (string, time.Time) {
 	expiresAt := time.Now().Add(sessionTTL)
-	payload := sessionPayload{AuthUserID: authUserID, ExpiresAt: expiresAt.Unix()}
+	payload := sessionPayload{
+		AuthUserID: authUserID, ExpiresAt: expiresAt.Unix(), SessionVersion: sessionVersion,
+	}
 	payloadBytes, _ := json.Marshal(payload)
 	encoded := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	return encoded + "." + a.sessionSignature(encoded), expiresAt
 }
 
-func (a *App) setSessionCookie(w http.ResponseWriter, authUserID string) {
-	token, expiresAt := a.signSession(authUserID)
+func (a *App) setSessionCookie(w http.ResponseWriter, authUserID string, sessionVersion int64) {
+	token, expiresAt := a.signSession(authUserID, sessionVersion)
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
@@ -118,43 +121,78 @@ func (a *App) authUserIDFromRequest(r *http.Request) string {
 }
 
 func (a *App) authUserIDFromSessionCookie(r *http.Request) (string, bool) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil || cookie.Value == "" {
-		return "", false
-	}
-	parts := strings.Split(cookie.Value, ".")
-	if len(parts) != 2 {
-		return "", false
-	}
-	// 常数时间比对签名，防时序旁路
-	if !hmac.Equal([]byte(a.sessionSignature(parts[0])), []byte(parts[1])) {
-		return "", false
-	}
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return "", false
-	}
-	var payload sessionPayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return "", false
-	}
-	if payload.AuthUserID == "" || payload.ExpiresAt <= time.Now().Unix() {
+	payload, ok := a.sessionPayloadFromCookie(r)
+	if !ok {
 		return "", false
 	}
 	return payload.AuthUserID, true
 }
 
+func (a *App) sessionPayloadFromCookie(r *http.Request) (sessionPayload, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return sessionPayload{}, false
+	}
+	parts := strings.Split(cookie.Value, ".")
+	if len(parts) != 2 {
+		return sessionPayload{}, false
+	}
+	// 常数时间比对签名，防时序旁路
+	if !hmac.Equal([]byte(a.sessionSignature(parts[0])), []byte(parts[1])) {
+		return sessionPayload{}, false
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return sessionPayload{}, false
+	}
+	var payload sessionPayload
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return sessionPayload{}, false
+	}
+	if payload.AuthUserID == "" || payload.ExpiresAt <= time.Now().Unix() {
+		return sessionPayload{}, false
+	}
+	return payload, true
+}
+
 // requireUser 从会话解析出当前用户，未登录时写 401 并返回 false。
 func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, bool) {
-	authUserID := a.authUserIDFromRequest(r)
-	if authUserID == "" {
+	// Worker 内部调用可以显式传递用户身份；浏览器请求即使经过 Worker，也没有这个头，
+	// 因而仍会落到 Cookie 的版本校验，不能借代理令牌绕过会话失效。
+	if a.hasInternalToken(r) {
+		if authUserID := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); authUserID != "" {
+			user, err := a.getUserByAuthUserID(r.Context(), authUserID)
+			if err == nil {
+				a.noteUserActivity(user.ID)
+				return user, true
+			}
+			httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
+			return model.User{}, false
+		}
+	}
+
+	payload, ok := a.sessionPayloadFromCookie(r)
+	if !ok {
 		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
 		return model.User{}, false
 	}
-	user, err := a.getUserByAuthUserID(r.Context(), authUserID)
+	user, err := a.getUserByAuthUserID(r.Context(), payload.AuthUserID)
 	if err != nil {
+		a.clearSessionCookie(w)
 		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
 		return model.User{}, false
 	}
+	// 0021 之前签发的 Cookie 没有这个字段。把缺失值视为初始版本 1，避免部署
+	// 本身让所有在线用户掉线；任一安全操作递增版本后，这些旧 Cookie 同样失效。
+	cookieVersion := payload.SessionVersion
+	if cookieVersion == 0 {
+		cookieVersion = 1
+	}
+	if cookieVersion != user.SessionVersion {
+		a.clearSessionCookie(w)
+		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
+		return model.User{}, false
+	}
+	a.noteUserActivity(user.ID)
 	return user, true
 }

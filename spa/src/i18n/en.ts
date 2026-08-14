@@ -56,9 +56,18 @@ export const en: Messages = {
         "No browser extension required. Create a revocable, expiring personal token and let standard MCP clients such as Codex, Claude Code, and OpenCode search, read, and edit Koinote documents within the scope you grant.",
       agents: "Works with Streamable HTTP MCP clients",
       steps: [
-        { title: "Scope access", desc: "Issue read-only or read-write tokens, then reveal, copy, or revoke them anytime." },
-        { title: "Write safely", desc: "Every mutation checks the document revision, so conflicts never overwrite silently." },
-        { title: "Keep recovery points", desc: "Members can tune full history, with a latest safety snapshot even when it is off." },
+        {
+          title: "Scope access",
+          desc: "Issue read-only or read-write tokens, then reveal, copy, or revoke them anytime.",
+        },
+        {
+          title: "Write safely",
+          desc: "Every mutation checks the document revision, so conflicts never overwrite silently.",
+        },
+        {
+          title: "Keep recovery points",
+          desc: "Members can tune full history, with a latest safety snapshot even when it is off.",
+        },
       ],
       cta: "See membership benefits",
     },
@@ -66,9 +75,11 @@ export const en: Messages = {
   pricing: {
     eyebrow: "Simple, transparent pricing",
     title: "Upgrade once, write with confidence",
-    subtitle: "Free covers everyday writing. Lifetime adds more storage, MCP access, and version history with one payment.",
+    subtitle:
+      "Free covers everyday writing. Lifetime adds more storage, MCP access, and version history with one payment.",
     freeName: "Free",
-    freeDescription: "Everything needed to start writing and try the complete editor workflow.",
+    freeDescription:
+      "Everything needed to start writing and try the complete editor workflow.",
     freePrice: "Free",
     freePeriod: "Use it for as long as you like",
     lifetimeName: "Lifetime",
@@ -97,26 +108,51 @@ export const en: Messages = {
     unavailable: "Online checkout is not configured for this deployment.",
     faqTitle: "Frequently asked questions",
     faqs: [
-      { question: "Is this a subscription?", answer: "No. Lifetime membership is a one-time payment with no automatic renewal." },
-      { question: "What can MCP do?", answer: "It lets authorized agents search, read, create, append, update, restore, and move documents to trash. Permanent deletion remains a web-only action." },
-      { question: "Can I recover after disabling full MCP history?", answer: "Yes. Member Agent writes always maintain at least the latest safety snapshot, sharing the normal version limits." },
-      { question: "Are the AI features available now?", answer: "Not yet. Lifetime membership includes eligibility for future AI capabilities as they are released." },
+      {
+        question: "Is this a subscription?",
+        answer:
+          "No. Lifetime membership is a one-time payment with no automatic renewal.",
+      },
+      {
+        question: "What can MCP do?",
+        answer:
+          "It lets authorized agents search, read, create, append, update, restore, and move documents to trash. Permanent deletion remains a web-only action.",
+      },
+      {
+        question: "Can I recover after disabling full MCP history?",
+        answer:
+          "Yes. Member Agent writes always maintain at least the latest safety snapshot, sharing the normal version limits.",
+      },
+      {
+        question: "Are the AI features available now?",
+        answer:
+          "Not yet. Lifetime membership includes eligibility for future AI capabilities as they are released.",
+      },
     ],
   },
   mcpGuide: {
     eyebrow: "MCP integration guide",
     title: "Let your agents work safely with your documents",
-    subtitle: "Connect Codex, Claude Code, OpenCode, OpenClaw, or any compatible Streamable HTTP MCP client to Koinote.",
+    subtitle:
+      "Connect Codex, Claude Code, OpenCode, OpenClaw, or any compatible Streamable HTTP MCP client to Koinote.",
     overviewTitle: "How it works",
-    overviewBody: "Your agent provides the model capability. Koinote does not call an LLM or need a model API key; it handles authorization, document tools, revision conflicts, and audit records.",
+    overviewBody:
+      "Your agent provides the model capability. Koinote does not call an LLM or need a model API key; it handles authorization, document tools, revision conflicts, and audit records.",
     setupTitle: "Before you start",
     setupSteps: [
       { title: "Activate Lifetime", desc: "MCP is a Lifetime benefit." },
-      { title: "Create a personal token", desc: "Choose read-only or read/write access and a fixed or permanent lifetime in Dashboard." },
-      { title: "Configure your client", desc: "Use the matching setup below for https://koinote.app/mcp." },
+      {
+        title: "Create a personal token",
+        desc: "Choose read-only or read/write access and a fixed or permanent lifetime in Dashboard.",
+      },
+      {
+        title: "Configure your client",
+        desc: "Use the matching setup below for https://koinote.app/mcp.",
+      },
     ],
     clientsTitle: "Connect each agent",
-    clientsSubtitle: "A token is an account credential. Keep it in an environment variable or secure client storage, and never commit it to a repository.",
+    clientsSubtitle:
+      "A token is an account credential. Keep it in an environment variable or secure client storage, and never commit it to a repository.",
     clientDescriptions: [
       "Register the remote MCP in ~/.codex/config.toml, read the token from an environment variable, then restart Codex.",
       "Use the Claude Code CLI to add an HTTP MCP server with its Bearer authorization header.",
@@ -124,10 +160,12 @@ export const en: Messages = {
       "Register the Streamable HTTP server with OpenClaw CLI, then run doctor to probe its tools.",
       "WorkBuddy and other clients only need Streamable HTTP support and a configurable Authorization header.",
     ],
-    tokenPlaceholder: "Replace the placeholder with the token created in Dashboard",
+    tokenPlaceholder:
+      "Replace the placeholder with the token created in Dashboard",
     verifyLabel: "Try these prompts after setup",
     usageTitle: "Using Koinote from an agent",
-    usageBody: "No special syntax is required. Say that you want to work with Koinote and the agent will select the MCP tools. Name the document and desired outcome explicitly for replacement or trash operations.",
+    usageBody:
+      "No special syntax is required. Say that you want to work with Koinote and the agent will select the MCP tools. Name the document and desired outcome explicitly for replacement or trash operations.",
     prompts: [
       "List the five documents I edited most recently in Koinote.",
       "Write an article about remote work and save it to Koinote.",
@@ -148,18 +186,36 @@ export const en: Messages = {
   versionGuide: {
     eyebrow: "Version control guide",
     title: "Keep every important change recoverable",
-    subtitle: "Learn how Koinote retains versions, coordinates browser and agent edits, and restores content after a mistake.",
+    subtitle:
+      "Learn how Koinote retains versions, coordinates browser and agent edits, and restores content after a mistake.",
     overviewTitle: "How version history works",
-    overviewBody: "Browser edits and MCP writes share one revision and history policy. Versions support review and recovery, while revision checks prevent stale content from silently replacing newer work.",
+    overviewBody:
+      "Browser edits and MCP writes share one revision and history policy. Versions support review and recovery, while revision checks prevent stale content from silently replacing newer work.",
     availabilityTitle: "Membership and retention limits",
-    availabilityBody: "Version history is a Lifetime benefit. Each document can retain 1–100 versions, while the whole account shares a cap of 100; the oldest entries are pruned first when a limit is exceeded.",
+    availabilityBody:
+      "Version history is a Lifetime benefit. Each document can retain 1–100 versions, while the whole account shares a cap of 100; the oldest entries are pruned first when a limit is exceeded.",
     featuresTitle: "Core capabilities",
     features: [
-      { title: "Throttled snapshots", desc: "Regular browser edits are grouped over time instead of creating a version on every autosave." },
-      { title: "Flexible limits", desc: "Enable or disable history and choose a per-document retention limit from 1 to 100." },
-      { title: "Safety snapshot", desc: "Even with full MCP history off, the latest recoverable state is kept before an agent replacement." },
-      { title: "Conflict detection", desc: "Updates require the latest revision. A stale write fails instead of replacing newer content." },
-      { title: "Undoable restores", desc: "The current state is saved before restoring an older version, so the restore can be reversed." },
+      {
+        title: "Throttled snapshots",
+        desc: "Regular browser edits are grouped over time instead of creating a version on every autosave.",
+      },
+      {
+        title: "Flexible limits",
+        desc: "Enable or disable history and choose a per-document retention limit from 1 to 100.",
+      },
+      {
+        title: "Safety snapshot",
+        desc: "Even with full MCP history off, the latest recoverable state is kept before an agent replacement.",
+      },
+      {
+        title: "Conflict detection",
+        desc: "Updates require the latest revision. A stale write fails instead of replacing newer content.",
+      },
+      {
+        title: "Undoable restores",
+        desc: "The current state is saved before restoring an older version, so the restore can be reversed.",
+      },
     ],
     webTitle: "Review and restore on the web",
     webSteps: [
@@ -174,7 +230,8 @@ export const en: Messages = {
       "Authorized read/write MCP clients can inspect and update the policy; read-only tokens can only inspect it.",
     ],
     safetyTitle: "Recommended settings",
-    safetyBody: "Keep version history and full MCP history enabled for important documents. Balance the per-document value against the shared 100-version account cap, and have agents read the latest revision before replacing a document.",
+    safetyBody:
+      "Keep version history and full MCP history enabled for important documents. Balance the per-document value against the shared 100-version account cap, and have agents read the latest revision before replacing a document.",
     settingsCta: "Change history settings",
     mcpCta: "View MCP integration",
     pricingCta: "View membership benefits",
@@ -229,6 +286,37 @@ export const en: Messages = {
     invitationBonusHint:
       "Finish with Google, GitHub, or email. Your friend also receives 500 MB when you join.",
     haveInvitationCode: "Have an invitation code?",
+    forgotPassword: "Forgot password?",
+    resetPasswordTitle: "Reset your password",
+    resetPasswordDescription:
+      "Enter your account email and we will send a one-time code. The page shows the same result whether or not the address exists.",
+    newPassword: "New password",
+    resetPasswordSubmit: "Reset password",
+    resetPasswordSuccess:
+      "Your password has been reset. Sign in with the new password; old sessions on other devices are no longer valid.",
+    resetCodeSent:
+      "If this email belongs to a password account, a code has been sent. Check your inbox.",
+  },
+  security: {
+    title: "Account security",
+    description:
+      "Changing your password keeps this device signed in and immediately invalidates older sessions elsewhere.",
+    oauthOnly:
+      "This account currently signs in with Google or GitHub and does not have a Koinote password to change.",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    confirmPassword: "Confirm new password",
+    changePassword: "Change password",
+    changingPassword: "Changing…",
+    passwordChanged:
+      "Password changed. Older sessions on other devices have been signed out.",
+    sessionsTitle: "Login sessions",
+    sessionsDescription:
+      "Keep this browser signed in and immediately sign out other browsers and devices.",
+    invalidateSessions: "Sign out other devices",
+    invalidatingSessions: "Signing out…",
+    sessionsInvalidated:
+      "Older sessions on other devices have been signed out.",
   },
   storage: {
     title: "Cloud storage",
@@ -314,12 +402,16 @@ export const en: Messages = {
   },
   documentHistorySettings: {
     title: "Version history",
-    description: "Choose whether documents keep recovery versions and how web and Agent writes are retained.",
-    membersOnly: "Version history is a lifetime membership benefit. Upgrade to configure retention.",
+    description:
+      "Choose whether documents keep recovery versions and how web and Agent writes are retained.",
+    membersOnly:
+      "Version history is a lifetime membership benefit. Upgrade to configure retention.",
     enabled: "Enable version history",
-    enabledHint: "Turning this off stops new browser snapshots without deleting retained versions; Agent writes still keep the latest safety snapshot.",
+    enabledHint:
+      "Turning this off stops new browser snapshots without deleting retained versions; Agent writes still keep the latest safety snapshot.",
     perDocumentMax: "Versions per document",
-    limitHint: "This is a per-document limit; all documents share the account-wide cap of {accountMax} versions. Lowering it prunes older snapshots immediately.",
+    limitHint:
+      "This is a per-document limit; all documents share the account-wide cap of {accountMax} versions. Lowering it prunes older snapshots immediately.",
     mcpEnabled: "Keep full history for MCP writes",
     mcpEnabledHint:
       "When off, Agent writes still keep the latest safety snapshot so a full replacement remains recoverable. It counts toward the version limits.",
@@ -361,6 +453,31 @@ export const en: Messages = {
     subtitle: "View and continue editing documents saved in the cloud.",
     emptyHint: "No cloud documents yet. ",
     emptyLinkText: "Create your first document",
+  },
+  search: {
+    button: "Search",
+    title: "Search all documents",
+    placeholder: "Search titles and content…",
+    hint: "Press ⌘K / Ctrl+K anywhere",
+    startTyping: "Enter a keyword to search your titles and Markdown content.",
+    noResults: "No matching documents.",
+    loadFailed: "Search failed. Please try again.",
+    titleMatch: "Title match",
+    contentMatch: "Content match",
+  },
+  transfer: {
+    importButton: "Import files",
+    importFolderButton: "Import folder",
+    exportButton: "Export all",
+    importing: "Importing documents and images…",
+    exporting: "Packaging documents and images…",
+    importSuccess: "Imported {count} documents.",
+    exportSuccess: "Your migration archive is ready.",
+    importFailed:
+      "Import failed. Check the file format, image sizes, and storage quota.",
+    exportFailed: "Export failed. Please try again.",
+    importHint:
+      "Supports .md files, folders, and ZIP archives; referenced images migrate with them.",
   },
   trashPage: {
     title: "Trash",
@@ -435,6 +552,23 @@ export const en: Messages = {
     amount: "Amount",
     paidAt: "Paid",
     generatedAt: "Updated {time} · {timeZone}",
+    funnel: "Product funnel",
+    funnelHint:
+      "Counts first-time milestones only; document content, titles, search terms, and filenames are never recorded.",
+    registered: "Registered",
+    firstDocument: "First document",
+    firstUpload: "First upload",
+    firstExport: "First export",
+    mcpConnected: "MCP connected",
+    checkoutStarted: "Checkout started",
+    checkoutCompleted: "Payment completed",
+    retention: "User retention",
+    retentionHint:
+      "Exact D1 / D7 / D30 return rates by UTC registration date, for users who joined after tracking began.",
+    day1Retention: "D1 retention",
+    day7Retention: "D7 retention",
+    day30Retention: "D30 retention",
+    retentionSample: "{returned} / {eligible} users",
   },
   editor: {
     placeholder:
@@ -457,7 +591,8 @@ export const en: Messages = {
       "The document changed again while saving. Reload and merge again.",
     history: "History",
     historyTitle: "Version history",
-    historyDescription: "Inspect and restore the versions currently retained for this document.",
+    historyDescription:
+      "Inspect and restore the versions currently retained for this document.",
     historyEmpty: "No recovery versions yet.",
     historyLoadFailed: "Could not load version history",
     historyRestoreFailed: "Could not restore this version",
@@ -523,6 +658,13 @@ export const en: Messages = {
     sharedPasswordPrompt: "This document requires a password",
     sharedPasswordSubmit: "View",
     sharedOpenApp: "About Koinote",
+    sharedViews: "{count} reads",
+    copyToMine: "Copy to my Koinote",
+    copyingToMine: "Copying…",
+    copiedToMine: "Copied. Opening the document…",
+    copyToMineFailed:
+      "Copy failed. Check your storage quota or the image status.",
+    loginToCopy: "Sign in to copy to my Koinote",
     exportLabel: "Export",
     exportMarkdown: "Markdown (.md)",
     exportHTML: "Web page (.html)",
@@ -535,7 +677,8 @@ export const en: Messages = {
     mediaExport: "Export to publishing platforms",
     mediaExportHint: "Optimized for WeChat, Zhihu, and Juejin",
     mediaTitle: "Export to a publishing platform",
-    mediaSubtitle: "Choose a destination and we will copy the format best suited to its editor.",
+    mediaSubtitle:
+      "Choose a destination and we will copy the format best suited to its editor.",
     mediaPlatformLabel: "Publishing platform",
     mediaWechat: "WeChat",
     mediaWechatHint: "Styled rich text",
@@ -546,9 +689,12 @@ export const en: Messages = {
     mediaCopy: "Copy to clipboard",
     mediaCopied: "Copied — go paste it",
     mediaWorking: "Working…",
-    mediaRichTextNote: "Code highlighting, captions, and formulas become pasteable rich text. The destination may still sanitize some styles.",
-    mediaMarkdownNote: "Copies complete Markdown with the article title, ready to paste into Juejin.",
-    mediaImagesUnreachable: "{n} image(s) may be unreachable by the destination ({hosts}). Preview after pasting.",
+    mediaRichTextNote:
+      "Code highlighting, captions, and formulas become pasteable rich text. The destination may still sanitize some styles.",
+    mediaMarkdownNote:
+      "Copies complete Markdown with the article title, ready to paste into Juejin.",
+    mediaImagesUnreachable:
+      "{n} image(s) may be unreachable by the destination ({hosts}). Preview after pasting.",
     wechatThemeLabel: "Theme",
     themeNone: "Default styling",
     tabsLabel: "Open documents",
@@ -622,6 +768,23 @@ function hello(name) {
     theme: "Toggle theme",
     language: "Language",
   },
+  changelog: {
+    eyebrow: "Always improving",
+    title: "Changelog",
+    subtitle: "See what Koinote adds, improves, and fixes in every release.",
+    unreleased: "Coming next",
+    sourceLink: "View the source on GitHub",
+    sourceNote:
+      "This page is generated from the same CHANGELOG.md maintained in the open-source repository.",
+    categories: {
+      Added: "Added",
+      Changed: "Changed",
+      Fixed: "Fixed",
+      Security: "Security",
+      Deprecated: "Deprecated",
+      Removed: "Removed",
+    },
+  },
   footer: {
     tagline:
       "Koinote is a WYSIWYG online Markdown editor: render as you type, upload images straight to your image store, export and share in one click.",
@@ -643,6 +806,7 @@ function hello(name) {
     copyright: "Koinote",
     allRightsReserved: "All rights reserved",
     contact: "Contact",
+    changelog: "Changelog",
   },
   legal: {
     updatedLabel: "Updated",
@@ -755,12 +919,13 @@ function hello(name) {
             "Content you create: document titles and bodies, folder structure, uploaded images",
             "Share settings: share tokens and hashed access passwords",
             "Operational logs: request time, IP, and User-Agent, as needed for debugging and abuse prevention",
+            "First-party product metrics: completion times for registration, first document, first upload, first export, first MCP call, and checkout; at most one activity date per account per day; shared pages retain only an aggregate read count",
           ],
         },
         {
           title: "What We Do Not Collect",
           body: [
-            "There are no third-party advertising or behavioural analytics SDKs. We do not profile you for ad targeting, and we do not use your document content to train models.",
+            "There are no third-party advertising or behavioural analytics SDKs. We do not profile you for ad targeting, and we do not use your document content to train models. Product metrics never store document titles, bodies, search terms, imported filenames, or share-reader identities.",
           ],
         },
         {
@@ -770,6 +935,7 @@ function hello(name) {
             "Providing core features: saving and syncing documents, hosting images, generating share links",
             "Authenticating you and maintaining your session",
             "Diagnosing faults and preventing abuse or attacks",
+            "Understanding aggregate registration, first creation, upload, export, MCP, checkout conversion, and D1/D7/D30 retention",
             "Responding when you contact us for support",
           ],
         },
@@ -893,6 +1059,8 @@ function hello(name) {
     password_too_short: "Password must be at least 6 characters",
     conflict: "Email or username is already taken",
     invalid_credentials: "Incorrect account or password",
+    current_password_incorrect: "The current password is incorrect",
+    password_not_available: "This account does not have a Koinote password",
     unauthorized: "Not logged in",
     session_expired: "Session expired",
     server_error: "Server error, please try again later",

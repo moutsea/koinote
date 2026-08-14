@@ -52,6 +52,14 @@ const versionHistoryGuideRoute = createRoute({
     "VersionHistoryGuidePage",
   ),
 });
+const changelogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/changelog",
+  component: lazyRouteComponent(
+    () => import("./pages/ChangelogPage"),
+    "ChangelogPage",
+  ),
+});
 // /editor 不带 id：跳最近编辑的一篇，没有则新建
 // /editor/$docId：打开指定文档
 const editorRoute = createRoute({
@@ -156,6 +164,7 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   mcpGuideRoute,
   versionHistoryGuideRoute,
+  changelogRoute,
   editorRoute,
   editorDocRoute,
   loginRoute,

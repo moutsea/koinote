@@ -77,9 +77,10 @@ func mustJSON(t *testing.T, value string) string {
 
 func TestWorkerVerificationEmailSender(t *testing.T) {
 	var received struct {
-		Email  string `json:"email"`
-		Code   string `json:"code"`
-		Locale string `json:"locale"`
+		Email   string `json:"email"`
+		Code    string `json:"code"`
+		Locale  string `json:"locale"`
+		Purpose string `json:"purpose"`
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/internal/email/verification" {
@@ -102,14 +103,24 @@ func TestWorkerVerificationEmailSender(t *testing.T) {
 	if err := sender.SendVerificationEmail(context.Background(), "user@example.com", "123456", "zh"); err != nil {
 		t.Fatalf("发送失败: %v", err)
 	}
-	if received.Email != "user@example.com" || received.Code != "123456" || received.Locale != "zh" {
+	if received.Email != "user@example.com" || received.Code != "123456" || received.Locale != "zh" || received.Purpose != "registration" {
 		t.Fatalf("Worker 收到的载荷错误: %+v", received)
+	}
+	if err := sender.SendPasswordResetEmail(context.Background(), "user@example.com", "654321", "en"); err != nil {
+		t.Fatalf("发送找回邮件失败: %v", err)
+	}
+	if received.Purpose != "password_reset" || received.Code != "654321" {
+		t.Fatalf("Worker 收到的找回载荷错误: %+v", received)
 	}
 }
 
 type failingVerificationEmailSender struct{}
 
 func (failingVerificationEmailSender) SendVerificationEmail(context.Context, string, string, string) error {
+	return errors.New("delivery failed")
+}
+
+func (failingVerificationEmailSender) SendPasswordResetEmail(context.Context, string, string, string) error {
 	return errors.New("delivery failed")
 }
 

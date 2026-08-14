@@ -15,7 +15,7 @@
 
 **[koinote.app](https://koinote.app)** —— 打开即用，不必自己部署
 
-[English](README.en.md) · [更新日志](CHANGELOG.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
+[English](README.en.md) · [在线更新日志](https://koinote.app/changelog) · [CHANGELOG.md](CHANGELOG.md) · [路线图](docs/ROADMAP.zh.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
@@ -43,6 +43,8 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 - 代码高亮 37 种语言（highlight.js common 集）
 - LaTeX 公式，行内 `$…$` 与块级 `$$…$$`，点击可回到源码
 - 多标签同时开多篇、大纲导航、文件夹树、拖拽移动
+- 移动端使用文档抽屉切换文章，桌面端保留可调宽度文件树
+- 全局搜索标题与 Markdown 正文，`⌘K` / `Ctrl+K` 唤起并高亮命中位置
 - 自动保存（防抖），失败会明确告知而不是静默丢内容
 - revision 乐观锁检测网页与 Agent 的并发修改；冲突时保留本地草稿并提供合并界面
 - 终生会员可查看和恢复文档历史，并设置是否启用、每篇保留 1–100 版，以及 MCP 写入是否保留完整历史（即使关闭，Agent 写入仍保留最近 1 个安全快照；账号总计最多 100 版）
@@ -52,6 +54,12 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 - 首页与独立 `/docs/mcp` 指南展示 MCP 的客户端配置、授权、并发保护与版本恢复机制，支持 Codex、Claude Code、OpenCode、OpenClaw 等 Streamable HTTP MCP 客户端
 - 独立 `/pricing` 页面公开对比免费版与终生会员权益，并从后端读取当前多币种 Stripe 价目表
 - 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史和后续 AI 功能使用资格
+
+**账号安全**
+
+- 邮箱密码账号支持验证码找回与登录后修改密码
+- 修改或重置密码会立即失效其他设备上的旧会话；也可单独执行“退出其他设备”
+- 找回密码请求对未知邮箱和 OAuth-only 账号使用统一响应，验证码只保存 HMAC
 
 **图床**
 
@@ -65,14 +73,17 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 
 **导出**
 
-| 格式 | 说明 |
-|---|---|
-| Markdown | 原样导出 |
-| HTML | 单 HTML 文件，正文样式内嵌；KaTeX CSS 与图片仍使用外部地址 |
-| DOCX | 走文档树构建，公式保留 LaTeX 源码 |
-| PDF | 一键下载（栅格化） |
-| 打印 / 另存为 PDF | 文字矢量可选可搜 |
-| **自媒体平台** | 微信公众号 / 知乎复制内联富文本；掘金复制原生 Markdown |
+| 格式              | 说明                                                       |
+| ----------------- | ---------------------------------------------------------- |
+| Markdown          | 原样导出                                                   |
+| HTML              | 单 HTML 文件，正文样式内嵌；KaTeX CSS 与图片仍使用外部地址 |
+| DOCX              | 走文档树构建，公式保留 LaTeX 源码                          |
+| PDF               | 一键下载（栅格化）                                         |
+| 打印 / 另存为 PDF | 文字矢量可选可搜                                           |
+| **自媒体平台**    | 微信公众号 / 知乎复制内联富文本；掘金复制原生 Markdown     |
+
+「我的文档」还支持批量迁移：可导入单个 `.md`、带图片的文件夹或 ZIP，也可把全部
+文档、文件夹结构和引用图片一次导出为可再次导入的 ZIP。
 
 富文本导出做了不少细活：代码高亮在导出时重新生成（编辑器里的高亮是视图装饰，
 不在文档里）、缩进用不换行空格 + `<br>` 承载（微信会剥掉 `white-space`）、
@@ -83,16 +94,19 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 - 两档权限：知道链接即可访问 / 需要口令
 - 放宽权限时强制换 token，老链接立刻失效
 - 口令 bcrypt 存哈希，两层限流防爆破
+- 分享页动态生成网页标题与 OpenGraph 卡片，显示累计阅读次数，并允许登录用户“复制到我的 Koinote”
+- 口令分享在解锁前不暴露标题、摘要或封面；阅读统计只保存累计数，不记录访客身份
 
 **其他**
 
+- 公开 `/changelog` 页面直接读取仓库的 `CHANGELOG.md`，按版本时间线展示新增、改进、安全与修复记录
 - 界面四语：中文 / English / 日本語 / Français
 - 深浅色主题，水墨风格视觉
 - 邮箱验证码注册与密码登录 + Google / GitHub OAuth
 - 邀请奖励：专属链接自动带入邀请码，新用户注册成功后双方各得 500 MB，每个账号累计最多 5 GB
 - Stripe 多币种一次性付款终生会员：支持 USD / CNY / EUR / JPY，以及银行卡、支付宝和微信支付
 - 支付首次落账后可向飞书群机器人发送收款通知，成功页与 webhook 不会重复通知
-- 管理员后台：用户与会员规模、按币种收入、订单、全站存储、30 天趋势、最近用户与付款
+- 管理员后台：用户与会员规模、按币种收入、订单、全站存储、30 天趋势、产品转化漏斗、D1/D7/D30 留存、最近用户与付款
 - 可选接入 Cloudflare Analytics，在管理后台查看当天边缘 UV / PV、请求数和流量
 - 终生会员可通过 Streamable HTTP MCP 让 Codex、Claude Code 等 Agent 读写自己的文档
 
@@ -181,7 +195,7 @@ openclaw mcp doctor koinote --probe
 其他客户端无需 Koinote 专用适配：只要支持远程 Streamable HTTP MCP，并允许给请求设置
 `Authorization: Bearer <PAT>`，即可使用相同端点和令牌接入。
 
-只读工具包括分页列出文档、按标题搜索、分段读取正文、查看历史版本和列出回收站；读写令牌额外获得
+只读工具包括分页列出文档、按标题与正文搜索、分段读取正文、查看历史版本和列出回收站；读写令牌额外获得
 新建、追加、整篇更新、恢复版本、移入回收站与恢复文档。Agent 不能永久删除文档，永久删除只在
 网页回收站提供标题确认；普通删除保留 30 天。整篇更新、追加、移入回收站和恢复都要求最新 revision；网页端使用同一套乐观锁并在冲突时提供
 本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
@@ -370,23 +384,23 @@ Worker 与 SPA，最后验活站点 `/api/images/config`。
 
 需要这几个仓库 secret：
 
-| secret | 用途 |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | 部署需 Workers Scripts / R2 / Routes 编辑权限；若也用它 onboard 发信域，再加 Email Sending 编辑权限 |
-| `CLOUDFLARE_ACCOUNT_ID` | `wrangler whoami` 能看到 |
-| `CLOUDFLARE_ZONE_ID` | 图片 CDN 所在 Zone，用于删除后的缓存清理 |
-| `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限 |
-| `CLOUDFLARE_ANALYTICS_TOKEN` | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用 |
-| `EMAIL_VERIFICATION_SECRET` | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env` |
-| `MCP_TOKEN_ENCRYPTION_KEY` | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看 |
-| `STRIPE_SECRET_KEY` | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode |
-| `STRIPE_WEBHOOK_SECRET` | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`） |
-| `STRIPE_LIFETIME_PRODUCT_ID` | 终生会员 Product ID（`prod_...`），价格由后端白名单生成 |
-| `BOT_WEBHOOK` | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置 |
-| `BOT_WEBHOOK_SECRET` | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置 |
-| `VPS_HOST` | 后端服务器地址 |
-| `VPS_SSH_KEY` | 部署专用私钥（建议单独生成一把，不要复用个人密钥） |
-| `VPS_HOST_KEY` | 服务器的 known_hosts 条目，用于固定 host key |
+| secret                         | 用途                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`         | 部署需 Workers Scripts / R2 / Routes 编辑权限；若也用它 onboard 发信域，再加 Email Sending 编辑权限 |
+| `CLOUDFLARE_ACCOUNT_ID`        | `wrangler whoami` 能看到                                                                            |
+| `CLOUDFLARE_ZONE_ID`           | 图片 CDN 所在 Zone，用于删除后的缓存清理                                                            |
+| `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限                                                                      |
+| `CLOUDFLARE_ANALYTICS_TOKEN`   | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用                                 |
+| `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
+| `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
+| `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |
+| `STRIPE_WEBHOOK_SECRET`        | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`）                                           |
+| `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |
+| `BOT_WEBHOOK`                  | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置                                                |
+| `BOT_WEBHOOK_SECRET`           | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置                                           |
+| `VPS_HOST`                     | 后端服务器地址                                                                                      |
+| `VPS_SSH_KEY`                  | 部署专用私钥（建议单独生成一把，不要复用个人密钥）                                                  |
+| `VPS_HOST_KEY`                 | 服务器的 known_hosts 条目，用于固定 host key                                                        |
 
 首次配置或轮换验证码密钥时，在仓库目录执行：
 
@@ -409,7 +423,7 @@ VPS 的 `/opt/koinote/.env`。可选的 Analytics Token 配置后也会以同样
 ## 测试
 
 ```bash
-npm test          # 两端 typecheck + 29 个前端/Worker 断言套件
+npm test          # 两端 typecheck + 全部前端/Worker 断言套件
 npm run go:test   # go vet + go test；未设 TEST_DATABASE_URL 时数据库集成测试会跳过
 ```
 
@@ -421,7 +435,9 @@ GitHub Actions 在每次 push 与 PR 上额外构建前后端，并用真实 Pos
 ## 文档
 
 - [更新日志](CHANGELOG.md) —— 每个版本新增、变更、修复与安全更新
+- [产品路线图](docs/ROADMAP.zh.md) —— 近期优先级、后续方向与产品原则
 - [设计文档](docs/DESIGN.zh.md) —— 为什么这么实现、踩过哪些坑、哪些是有意的降级
+- [Product Roadmap (English)](docs/ROADMAP.en.md)
 - [Design Notes (English)](docs/DESIGN.en.md)
 
 ## 许可证

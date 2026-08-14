@@ -98,8 +98,8 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 		Annotations: readOnly,
 	}, a.mcpListDocuments)
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "search_documents", Title: "Search document titles",
-		Description: "Search only the authenticated member's own document titles. This does not search document bodies.",
+		Name: "search_documents", Title: "Search documents",
+		Description: "Search the authenticated member's own document titles and Markdown bodies. Results include a matching content snippet and never expose another member's documents.",
 		Annotations: readOnly,
 	}, a.mcpSearchDocuments)
 	mcp.AddTool(server, &mcp.Tool{
@@ -213,10 +213,13 @@ type mcpPageInput struct {
 }
 
 type mcpDocumentSummary struct {
-	DocID     string `json:"docId"`
-	Title     string `json:"title"`
-	Revision  int64  `json:"revision"`
-	UpdatedAt string `json:"updatedAt"`
+	DocID          string `json:"docId"`
+	Title          string `json:"title"`
+	Snippet        string `json:"snippet,omitempty"`
+	TitleMatched   bool   `json:"titleMatched,omitempty"`
+	ContentMatched bool   `json:"contentMatched,omitempty"`
+	Revision       int64  `json:"revision"`
+	UpdatedAt      string `json:"updatedAt"`
 }
 
 type mcpDocumentPage struct {
@@ -320,7 +323,7 @@ func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, inpu
 }
 
 type mcpSearchDocumentsInput struct {
-	Query  string `json:"query" jsonschema:"Non-empty text to find in document titles."`
+	Query  string `json:"query" jsonschema:"Non-empty text to find in document titles or Markdown bodies."`
 	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous call."`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Number of results, from 1 to 100. Defaults to 50."`
 }
@@ -338,29 +341,21 @@ func (a *App) mcpSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, in
 	if err != nil {
 		return nil, mcpDocumentPage{}, err
 	}
-	rows, err := a.db.Query(ctx, `
-		SELECT doc_id, title, revision, updated_at
-		FROM documents
-		WHERE user_id = $1 AND trashed_at IS NULL AND position(lower($2::text) in lower(title)) > 0
-		ORDER BY updated_at DESC, id DESC
-		LIMIT $3 OFFSET $4
-	`, principal.User.ID, query, limit+1, offset)
+	items, err := a.searchDocuments(ctx, principal.User.ID, query, limit+1, offset)
 	if err != nil {
 		return nil, mcpDocumentPage{}, mcpInternalError("search documents", err)
 	}
-	defer rows.Close()
 	page := mcpDocumentPage{Documents: make([]mcpDocumentSummary, 0, limit)}
-	for rows.Next() {
-		var item mcpDocumentSummary
-		var updated time.Time
-		if err := rows.Scan(&item.DocID, &item.Title, &item.Revision, &updated); err != nil {
-			return nil, mcpDocumentPage{}, mcpInternalError("scan documents", err)
+	for _, item := range items {
+		updatedAt := ""
+		if item.UpdatedAt != nil {
+			updatedAt = item.UpdatedAt.UTC().Format(time.RFC3339)
 		}
-		item.UpdatedAt = updated.UTC().Format(time.RFC3339)
-		page.Documents = append(page.Documents, item)
-	}
-	if rows.Err() != nil {
-		return nil, mcpDocumentPage{}, mcpInternalError("iterate documents", rows.Err())
+		page.Documents = append(page.Documents, mcpDocumentSummary{
+			DocID: item.DocID, Title: item.Title, Snippet: item.Snippet,
+			TitleMatched: item.TitleMatched, ContentMatched: item.ContentMatched,
+			Revision: item.Revision, UpdatedAt: updatedAt,
+		})
 	}
 	if len(page.Documents) > limit {
 		page.Documents = page.Documents[:limit]
@@ -893,6 +888,9 @@ func (a *App) auditMCPCall(principal mcpPrincipal, toolName, docID, result strin
 	`, principal.User.ID, principal.TokenID, toolName, docID, result, duration)
 	if err != nil {
 		log.Printf("mcp audit %s: %v", toolName, err)
+	}
+	if result == "success" {
+		a.recordProductMilestoneAsync(principal.User.ID, milestoneMCPConnected)
 	}
 }
 

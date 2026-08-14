@@ -196,8 +196,9 @@ func (a *App) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, a.oauthFailureRedirect("oauth_sync_failed"), http.StatusFound)
 		return
 	}
+	a.noteUserActivity(user.ID)
 
-	a.setSessionCookie(w, user.AuthUserID)
+	a.setSessionCookie(w, user.AuthUserID, user.SessionVersion)
 	http.Redirect(w, r, sanitizeRedirectPath(statePayload.RedirectTo), http.StatusFound)
 }
 
