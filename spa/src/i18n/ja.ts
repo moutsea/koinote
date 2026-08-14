@@ -770,7 +770,7 @@ function hello(name) {
     unreleased: "次回リリース",
     sourceLink: "GitHub で原文を見る",
     sourceNote:
-      "このページはオープンソースリポジトリと同じ CHANGELOG.md から生成され、詳細項目は英語で管理されています。",
+      "このページはオープンソースリポジトリの日本語更新履歴と同期しています。",
     categories: {
       Added: "追加",
       Changed: "変更",

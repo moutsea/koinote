@@ -738,7 +738,7 @@ function hello(name) {
       "查看 Koinote 每个版本新增了什么、改进了什么，以及修复了哪些问题。",
     unreleased: "即将发布",
     sourceLink: "在 GitHub 查看原始记录",
-    sourceNote: "页面与开源仓库共用同一份 CHANGELOG.md，详细条目以英文维护。",
+    sourceNote: "页面与开源仓库中的中文更新日志保持同步。",
     categories: {
       Added: "新增",
       Changed: "改进",

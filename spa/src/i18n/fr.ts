@@ -794,7 +794,7 @@ function hello(name) {
     unreleased: "À venir",
     sourceLink: "Voir la source sur GitHub",
     sourceNote:
-      "Cette page provient du même fichier CHANGELOG.md que celui du dépôt open source ; les détails sont maintenus en anglais.",
+      "Cette page reste synchronisée avec le journal français du dépôt open source.",
     categories: {
       Added: "Ajouts",
       Changed: "Modifications",

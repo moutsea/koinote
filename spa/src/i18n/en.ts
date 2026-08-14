@@ -775,7 +775,7 @@ function hello(name) {
     unreleased: "Coming next",
     sourceLink: "View the source on GitHub",
     sourceNote:
-      "This page is generated from the same CHANGELOG.md maintained in the open-source repository.",
+      "This page stays in sync with the English changelog in the open-source repository.",
     categories: {
       Added: "Added",
       Changed: "Changed",

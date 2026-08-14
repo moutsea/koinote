@@ -52,6 +52,30 @@ assert.ok(
   ),
 );
 
+const localizedFiles = [
+  "CHANGELOG.zh.md",
+  "CHANGELOG.ja.md",
+  "CHANGELOG.fr.md",
+];
+const expectedVersions = current.map((release) => release.version);
+for (const localizedFile of localizedFiles) {
+  const localized = parseChangelog(readFileSync(localizedFile, "utf8"));
+  assert.deepEqual(
+    localized.map((release) => release.version),
+    expectedVersions,
+    `${localizedFile} must contain the same releases as CHANGELOG.md`,
+  );
+  assert.ok(
+    localized.every((release) =>
+      release.sections.every((section) => section.entries.length > 0),
+    ),
+  );
+}
+assert.ok(
+  readFileSync("CHANGELOG.md", "utf8").split("\n").length < 120,
+  "the public changelog should stay concise",
+);
+
 const main = readFileSync("spa/src/main.tsx", "utf8");
 const footer = readFileSync("spa/src/components/AppFooter.tsx", "utf8");
 const page = readFileSync("spa/src/pages/ChangelogPage.tsx", "utf8");
@@ -60,7 +84,15 @@ assert.match(main, /import\("\.\/pages\/ChangelogPage"\)/);
 assert.ok(
   footer.indexOf('to="/changelog"') > footer.indexOf("t.footer.contact"),
 );
-assert.match(page, /CHANGELOG\.md\?raw/);
+for (const filename of [
+  "CHANGELOG.md",
+  "CHANGELOG.zh.md",
+  "CHANGELOG.ja.md",
+  "CHANGELOG.fr.md",
+]) {
+  assert.ok(page.includes(`${filename}?raw`), `${filename} must be bundled`);
+}
+assert.match(page, /CHANGELOGS\[locale\]/);
 assert.doesNotMatch(page, /dangerouslySetInnerHTML/);
 
 console.log("changelog checks passed");

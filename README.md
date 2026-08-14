@@ -15,7 +15,7 @@
 
 **[koinote.app](https://koinote.app)** —— 打开即用，不必自己部署
 
-[English](README.en.md) · [在线更新日志](https://koinote.app/changelog) · [CHANGELOG.md](CHANGELOG.md) · [路线图](docs/ROADMAP.zh.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
+[English](README.en.md) · [在线更新日志](https://koinote.app/changelog) · [中文更新日志](CHANGELOG.zh.md) · [路线图](docs/ROADMAP.zh.md) · [设计文档](docs/DESIGN.zh.md) · [MIT License](LICENSE)
 
 [![CI](https://github.com/moutsea/koinote/actions/workflows/ci.yml/badge.svg)](https://github.com/moutsea/koinote/actions/workflows/ci.yml)
 
@@ -434,7 +434,7 @@ GitHub Actions 在每次 push 与 PR 上额外构建前后端，并用真实 Pos
 
 ## 文档
 
-- [更新日志](CHANGELOG.md) —— 每个版本新增、变更、修复与安全更新
+- [更新日志](CHANGELOG.zh.md) —— 每个版本新增、变更、修复与安全更新
 - [产品路线图](docs/ROADMAP.zh.md) —— 近期优先级、后续方向与产品原则
 - [设计文档](docs/DESIGN.zh.md) —— 为什么这么实现、踩过哪些坑、哪些是有意的降级
 - [Product Roadmap (English)](docs/ROADMAP.en.md)

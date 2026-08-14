@@ -1,13 +1,27 @@
 import { ExternalLink, GitCommitHorizontal, History } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import changelogMarkdown from "../../../CHANGELOG.md?raw";
+import changelogEnglish from "../../../CHANGELOG.md?raw";
+import changelogFrench from "../../../CHANGELOG.fr.md?raw";
+import changelogJapanese from "../../../CHANGELOG.ja.md?raw";
+import changelogChinese from "../../../CHANGELOG.zh.md?raw";
 import { parseChangelog } from "../changelogCore";
 import { InkClouds, InkSeal, PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n, type Locale } from "../i18n";
 
-const releases = parseChangelog(changelogMarkdown);
-const SOURCE_URL = "https://github.com/moutsea/koinote/blob/main/CHANGELOG.md";
+const CHANGELOGS: Record<Locale, string> = {
+  en: changelogEnglish,
+  zh: changelogChinese,
+  fr: changelogFrench,
+  ja: changelogJapanese,
+};
+const SOURCE_FILES: Record<Locale, string> = {
+  en: "CHANGELOG.md",
+  zh: "CHANGELOG.zh.md",
+  fr: "CHANGELOG.fr.md",
+  ja: "CHANGELOG.ja.md",
+};
+const SOURCE_BASE_URL = "https://github.com/moutsea/koinote/blob/main/";
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
   zh: "zh-CN",
@@ -17,6 +31,8 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function ChangelogPage() {
   const { t, locale } = useI18n();
+  const releases = parseChangelog(CHANGELOGS[locale]);
+  const sourceURL = `${SOURCE_BASE_URL}${SOURCE_FILES[locale]}`;
 
   useEffect(() => {
     const original = document.title;
@@ -60,7 +76,7 @@ export function ChangelogPage() {
             {t.changelog.subtitle}
           </p>
           <a
-            href={SOURCE_URL}
+            href={sourceURL}
             target="_blank"
             rel="noopener noreferrer"
             className="kn-ink-link mt-5 inline-flex items-center gap-1.5 text-sm transition-colors"
