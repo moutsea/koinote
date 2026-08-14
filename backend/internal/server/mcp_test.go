@@ -62,6 +62,37 @@ func TestMCPTokenEncryptionKeyIsolation(t *testing.T) {
 	}
 }
 
+func TestMCPTokenExpiryValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      mcpTokenExpiryInput
+		useDefault bool
+		valid      bool
+		permanent  bool
+	}{
+		{name: "创建默认九十天", useDefault: true, valid: true},
+		{name: "永久", input: mcpTokenExpiryInput{NeverExpires: true}, valid: true, permanent: true},
+		{name: "三十天", input: mcpTokenExpiryInput{ExpiresInDays: 30}, valid: true},
+		{name: "更新不接受空值", valid: false},
+		{name: "超过一年", input: mcpTokenExpiryInput{ExpiresInDays: 366}, valid: false},
+		{name: "永久不能同时带天数", input: mcpTokenExpiryInput{ExpiresInDays: 30, NeverExpires: true}, valid: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			expiresAt, valid := mcpTokenExpiry(tc.input, tc.useDefault)
+			if valid != tc.valid {
+				t.Fatalf("valid = %v，期望 %v", valid, tc.valid)
+			}
+			if !valid {
+				return
+			}
+			if tc.permanent != (expiresAt == nil) {
+				t.Fatalf("expiresAt = %v，permanent 期望 %v", expiresAt, tc.permanent)
+			}
+		})
+	}
+}
+
 func TestMCPOriginValidation(t *testing.T) {
 	app := newTestApp(config.Config{AppURL: "https://koinote.app"})
 	cases := []struct {
@@ -256,6 +287,78 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	writeToken := createMCPTokenForTest(t, server, lifetimeCookie, "Codex", "write")
 	readToken := createMCPTokenForTest(t, server, lifetimeCookie, "Claude", "read")
 	otherReadToken := createMCPTokenForTest(t, server, otherLifetimeCookie, "Other", "read")
+
+	t.Run("创建永久令牌并编辑有效期", func(t *testing.T) {
+		response := requestMCPTokenAPI(t, server.Client(), http.MethodPost, server.URL+"/api/mcp/tokens", lifetimeCookie,
+			map[string]any{"name": "Permanent", "scope": "read", "neverExpires": true})
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusCreated {
+			t.Fatalf("创建永久令牌期望 201，实际 %d", response.StatusCode)
+		}
+		var created createdMCPToken
+		if err := json.NewDecoder(response.Body).Decode(&created); err != nil {
+			t.Fatal(err)
+		}
+		if created.Token.ExpiresAt != nil {
+			t.Fatalf("永久令牌 expiresAt = %v，期望 nil", created.Token.ExpiresAt)
+		}
+
+		response = requestMCPTokenAPI(t, server.Client(), http.MethodPatch,
+			server.URL+"/api/mcp/tokens/"+created.Token.TokenID, lifetimeCookie,
+			map[string]any{"expiresInDays": 30})
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("永久改为 30 天期望 200，实际 %d", response.StatusCode)
+		}
+		var updated struct {
+			Token mcpTokenView `json:"token"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&updated); err != nil {
+			t.Fatal(err)
+		}
+		if updated.Token.ExpiresAt == nil || time.Until(*updated.Token.ExpiresAt) < 29*24*time.Hour {
+			t.Fatalf("更新后的到期时间异常: %v", updated.Token.ExpiresAt)
+		}
+
+		response = requestMCPTokenAPI(t, server.Client(), http.MethodPatch,
+			server.URL+"/api/mcp/tokens/"+created.Token.TokenID, lifetimeCookie,
+			map[string]any{"neverExpires": true})
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("改回永久期望 200，实际 %d", response.StatusCode)
+		}
+		if err := json.NewDecoder(response.Body).Decode(&updated); err != nil {
+			t.Fatal(err)
+		}
+		if updated.Token.ExpiresAt != nil {
+			t.Fatalf("改回永久后 expiresAt = %v，期望 nil", updated.Token.ExpiresAt)
+		}
+	})
+
+	t.Run("不能编辑其他账号令牌有效期", func(t *testing.T) {
+		response := requestMCPTokenAPI(t, server.Client(), http.MethodPatch,
+			server.URL+"/api/mcp/tokens/"+writeToken.Token.TokenID, otherLifetimeCookie,
+			map[string]any{"neverExpires": true})
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("跨账号编辑有效期期望 404，实际 %d", response.StatusCode)
+		}
+	})
+
+	t.Run("拒绝冲突或非法有效期", func(t *testing.T) {
+		for _, body := range []map[string]any{
+			{"expiresInDays": 0},
+			{"expiresInDays": 366},
+			{"expiresInDays": 30, "neverExpires": true},
+		} {
+			response := requestMCPTokenAPI(t, server.Client(), http.MethodPatch,
+				server.URL+"/api/mcp/tokens/"+writeToken.Token.TokenID, lifetimeCookie, body)
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusBadRequest || decodeHTTPErrorCode(t, response) != "invalid_token_expiry" {
+				t.Fatalf("非法有效期 %#v 期望 400 invalid_token_expiry，实际 %d", body, response.StatusCode)
+			}
+		}
+	})
 
 	t.Run("令牌用摘要鉴权并加密保存恢复副本", func(t *testing.T) {
 		var storedHash, ciphertext []byte
@@ -569,8 +672,8 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	}
 
 	t.Run("有效令牌上限", func(t *testing.T) {
-		// 当前已有 write/read/legacy 三个，补到 20。过期令牌不占有效名额。
-		for index := 0; index < mcpTokenMaxActive-3; index++ {
+		// 当前已有 write/read/legacy/permanent 四个，补到 20。过期令牌不占有效名额。
+		for index := 0; index < mcpTokenMaxActive-4; index++ {
 			plain := fmt.Sprintf("%s%064x", mcpTokenPrefix, index+1)
 			hash := sha256.Sum256([]byte(plain))
 			if _, err := pool.Exec(ctx, `

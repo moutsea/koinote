@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, Copy, Eye, EyeOff, KeyRound, LoaderCircle, PlugZap, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound, LoaderCircle, Pencil, PlugZap, Trash2, X } from "lucide-react";
 import {
   createMCPToken,
   listMCPTokens,
   revealMCPToken,
   revokeMCPToken,
+  updateMCPTokenExpiry,
   type User,
 } from "../api";
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 
 const MCP_TOKENS_KEY = ["mcp-tokens"] as const;
+type ExpiryChoice = 30 | 90 | 180 | 365 | "never";
 
 export function MCPAccessCard({ user }: { user: User }) {
   const { t, locale } = useI18n();
@@ -20,7 +22,8 @@ export function MCPAccessCard({ user }: { user: User }) {
   const active = user.membershipTier === "lifetime";
   const [name, setName] = useState("Codex");
   const [scope, setScope] = useState<"read" | "write">("write");
-  const [expiresInDays, setExpiresInDays] = useState(90);
+  const [expiryChoice, setExpiryChoice] = useState<ExpiryChoice>(90);
+  const [editingExpiry, setEditingExpiry] = useState<{ tokenId: string; choice: ExpiryChoice } | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, string>>({});
   const [revealErrors, setRevealErrors] = useState<Record<string, boolean>>({});
@@ -57,6 +60,14 @@ export function MCPAccessCard({ user }: { user: User }) {
     },
     onError(_error, tokenId) {
       setRevealErrors((current) => ({ ...current, [tokenId]: true }));
+    },
+  });
+  const updateExpiry = useMutation({
+    mutationFn: ({ tokenId, choice }: { tokenId: string; choice: ExpiryChoice }) =>
+      updateMCPTokenExpiry(tokenId, expiryParams(choice)),
+    onSuccess() {
+      setEditingExpiry(null);
+      void queryClient.invalidateQueries({ queryKey: MCP_TOKENS_KEY });
     },
   });
 
@@ -128,8 +139,8 @@ export function MCPAccessCard({ user }: { user: User }) {
               <label className="text-xs" style={{ color: "var(--ink-mid)" }}>
                 <span className="mb-1.5 block">{t.mcp.expiry}</span>
                 <select
-                  value={expiresInDays}
-                  onChange={(event) => setExpiresInDays(Number(event.target.value))}
+                  value={expiryChoice}
+                  onChange={(event) => setExpiryChoice(parseExpiryChoice(event.target.value))}
                   className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
                   style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                 >
@@ -138,12 +149,13 @@ export function MCPAccessCard({ user }: { user: User }) {
                       {t.mcp.days.replace("{n}", String(days))}
                     </option>
                   ))}
+                  <option value="never">{t.mcp.neverExpires}</option>
                 </select>
               </label>
               <button
                 type="button"
                 disabled={create.isPending || !name.trim()}
-                onClick={() => create.mutate({ name: name.trim(), scope, expiresInDays })}
+                onClick={() => create.mutate({ name: name.trim(), scope, ...expiryParams(expiryChoice) })}
                 className="mt-5 inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
                 style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
               >
@@ -183,10 +195,65 @@ export function MCPAccessCard({ user }: { user: User }) {
                         <p className="truncate font-medium" style={{ color: "var(--ink-strong)" }}>{token.name}</p>
                         <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
                           {token.hint} · {token.scope === "write" ? t.mcp.readWrite : t.mcp.readOnly}
-                          {token.expiresAt ? ` · ${t.mcp.expires} ${new Date(token.expiresAt).toLocaleDateString(locale)}` : ""}
+                          {token.expiresAt
+                            ? ` · ${t.mcp.expires} ${new Date(token.expiresAt).toLocaleDateString(locale)}`
+                            : ` · ${t.mcp.neverExpires}`}
                           {token.lastUsedAt ? ` · ${t.mcp.lastUsed} ${new Date(token.lastUsedAt).toLocaleString(locale)}` : ""}
                         </p>
                       </div>
+                      {editingExpiry?.tokenId === token.tokenId ? (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            aria-label={t.mcp.expiry}
+                            value={editingExpiry.choice}
+                            onChange={(event) => setEditingExpiry({
+                              tokenId: token.tokenId,
+                              choice: parseExpiryChoice(event.target.value),
+                            })}
+                            disabled={updateExpiry.isPending}
+                            className="rounded-lg border bg-transparent px-2 py-1.5 text-xs outline-none disabled:opacity-60"
+                            style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                          >
+                            {[30, 90, 180, 365].map((days) => (
+                              <option key={days} value={days}>{t.mcp.days.replace("{n}", String(days))}</option>
+                            ))}
+                            <option value="never">{t.mcp.neverExpires}</option>
+                          </select>
+                          <button
+                            type="button"
+                            disabled={updateExpiry.isPending}
+                            onClick={() => updateExpiry.mutate(editingExpiry)}
+                            aria-label={t.mcp.saveExpiry}
+                            title={t.mcp.saveExpiry}
+                            className="rounded-lg p-1.5 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
+                          >
+                            {updateExpiry.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={updateExpiry.isPending}
+                            onClick={() => setEditingExpiry(null)}
+                            aria-label={t.mcp.cancelExpiry}
+                            title={t.mcp.cancelExpiry}
+                            className="rounded-lg p-1.5 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingExpiry({
+                            tokenId: token.tokenId,
+                            choice: expiryChoiceForToken(token.expiresAt),
+                          })}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10"
+                          style={{ color: "var(--ink-mid)" }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t.mcp.editExpiry}
+                        </button>
+                      )}
                       {revealedSecrets[token.tokenId] ? (
                         <button
                           type="button"
@@ -229,6 +296,9 @@ export function MCPAccessCard({ user }: { user: User }) {
                       {revealErrors[token.tokenId] && (
                         <p className="basis-full text-xs" style={{ color: "var(--ink-mid)" }}>{t.mcp.revealFailed}</p>
                       )}
+                      {updateExpiry.isError && updateExpiry.variables?.tokenId === token.tokenId && (
+                        <p className="basis-full text-xs" style={{ color: "var(--ink-mid)" }}>{t.mcp.expiryUpdateFailed}</p>
+                      )}
                       {revealedSecrets[token.tokenId] && (
                         <div className="basis-full rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}>
                           <SecretRow
@@ -263,6 +333,25 @@ function withoutKey<T>(record: Record<string, T>, key: string) {
   const next = { ...record };
   delete next[key];
   return next;
+}
+
+function parseExpiryChoice(value: string): ExpiryChoice {
+  if (value === "never") return "never";
+  const days = Number(value);
+  return days === 30 || days === 180 || days === 365 ? days : 90;
+}
+
+function expiryParams(choice: ExpiryChoice): { expiresInDays?: number; neverExpires?: boolean } {
+  return choice === "never" ? { neverExpires: true } : { expiresInDays: choice };
+}
+
+function expiryChoiceForToken(expiresAt?: string | null): ExpiryChoice {
+  if (!expiresAt) return "never";
+  const remainingDays = Math.max(1, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000));
+  if (remainingDays <= 30) return 30;
+  if (remainingDays <= 90) return 90;
+  if (remainingDays <= 180) return 180;
+  return 365;
 }
 
 function SecretRow({ value, copied, onCopy }: { value: string; copied: boolean; onCopy: () => void }) {
@@ -302,12 +391,17 @@ function TokenConfigurations({
     }
   }
 }`;
+  const openClaw = `export KOINOTE_MCP_TOKEN='${secret}'\n\nopenclaw mcp add koinote \\
+  --url ${endpoint} \\
+  --transport streamable-http \\
+  --header "Authorization=Bearer \${KOINOTE_MCP_TOKEN}"\n\nopenclaw mcp doctor koinote --probe`;
   const generic = `Transport: Streamable HTTP\nURL: ${endpoint}\nHeader: Authorization: Bearer ${secret}`;
   return (
     <>
       <ConfigBlock title="Codex" value={codex} copied={copied === `${copyKeyPrefix}-codex`} onCopy={() => void onCopy(codex, `${copyKeyPrefix}-codex`)} />
       <ConfigBlock title="Claude Code" value={claude} copied={copied === `${copyKeyPrefix}-claude`} onCopy={() => void onCopy(claude, `${copyKeyPrefix}-claude`)} />
       <ConfigBlock title="OpenCode" value={openCode} copied={copied === `${copyKeyPrefix}-opencode`} onCopy={() => void onCopy(openCode, `${copyKeyPrefix}-opencode`)} />
+      <ConfigBlock title="OpenClaw" value={openClaw} copied={copied === `${copyKeyPrefix}-openclaw`} onCopy={() => void onCopy(openClaw, `${copyKeyPrefix}-openclaw`)} />
       <ConfigBlock title="Other MCP clients" value={generic} copied={copied === `${copyKeyPrefix}-generic`} onCopy={() => void onCopy(generic, `${copyKeyPrefix}-generic`)} />
     </>
   );

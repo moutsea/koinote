@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { buildWechatHTML, copyRichText } from "./exportWechat";
+import { exportToMedia, mediaExportFormat, type MediaPlatform } from "./exportMedia";
 import { findWechatTheme } from "./wechatThemes";
 
 /**
- * 导出到微信公众号。
+ * 导出到自媒体平台。
  *
- * 不带主题选择也不带预览：主题是文档属性，在编辑区已经生效了。这里只做一件事
- * —— 把编辑区看到的样子转成内联 style 的 HTML 写进剪贴板。
+ * 微信与知乎使用内联样式富文本；掘金原生支持 Markdown，直接复制源码能保留最多语义。
+ * 不带主题选择也不带预览：主题是文档属性，在编辑区已经生效了。
  */
-export function WechatDialog({
+export function MediaExportDialog({
   editor,
   title,
   themeId,
@@ -23,6 +23,7 @@ export function WechatDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const [platform, setPlatform] = useState<MediaPlatform>("wechat");
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -49,18 +50,17 @@ export function WechatDialog({
     setDone(false);
     setBusy(true);
     try {
-      // 公式栅格化 + 上传放在这里而不是打开弹窗时：只是点开看看又关掉的话，
-      // 不该往 R2 里堆图（现在没有 images 表，堆进去也没法列举清理）
-      const result = await buildWechatHTML(editor, title, themeId);
-      await copyRichText(result.html, editor.storage.markdown.getMarkdown());
+      const result = await exportToMedia(platform, editor, title, themeId);
       setDone(true);
-      setBytes(result.bytes);
+      setBytes(result?.bytes ?? null);
+
+      if (!result) return;
 
       // 图片抓不到是比公式更严重的问题：粘贴不报错，要等文章预览才看到裂图。
       // 所以它单独占一条警告，不跟公式那条抢同一个位置
       if (result.images.unreachable > 0) {
         setImageWarning(
-          t.editor.wechatImagesUnreachable
+          t.editor.mediaImagesUnreachable
             .replace("{n}", String(result.images.unreachable))
             .replace("{hosts}", result.images.unreachableHosts.join("、")),
         );
@@ -113,15 +113,15 @@ export function WechatDialog({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t.editor.wechatTitle}
+        aria-label={t.editor.mediaTitle}
         tabIndex={-1}
         className="w-full max-w-md rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl outline-none dark:border-white/15"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">{t.editor.wechatTitle}</h2>
+            <h2 className="text-base font-semibold">{t.editor.mediaTitle}</h2>
             <p className="mt-1 text-xs leading-relaxed text-neutral-400">
-              {t.editor.wechatSubtitle}
+              {t.editor.mediaSubtitle}
             </p>
           </div>
           <button
@@ -134,15 +134,51 @@ export function WechatDialog({
           </button>
         </div>
 
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t.editor.mediaPlatformLabel}>
+          {([
+            ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
+            ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
+            ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
+          ] as const).map(([value, label, hint]) => {
+            const selected = platform === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => {
+                  setPlatform(value);
+                  setDone(false);
+                  setBytes(null);
+                  setError(null);
+                  setNote(null);
+                  setImageWarning(null);
+                }}
+                className="rounded-xl border px-3 py-3 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/5"
+                style={{
+                  borderColor: selected ? "var(--ink-strong)" : "var(--ink-line)",
+                  background: selected ? "var(--ink-wash)" : "transparent",
+                }}
+              >
+                <span className="block text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{label}</span>
+                <span className="mt-1 block text-[11px] leading-4" style={{ color: "var(--ink-faint)" }}>{hint}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* 当前用的是哪套主题。改主题要回编辑区改 —— 那里改完立刻能看见效果，
             在这个弹窗里改反而看不见 */}
-        <p className="mt-4 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-neutral-500 dark:bg-white/5 dark:text-neutral-400">
-          {t.editor.wechatThemeLabel}
-          <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-          <span className="font-medium text-neutral-700 dark:text-neutral-200">
-            {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
-          </span>
-        </p>
+        {mediaExportFormat(platform) === "rich-text" && (
+          <p className="mt-4 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-neutral-500 dark:bg-white/5 dark:text-neutral-400">
+            {t.editor.wechatThemeLabel}
+            <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
+            <span className="font-medium text-neutral-700 dark:text-neutral-200">
+              {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
+            </span>
+          </p>
+        )}
 
         {/* 排在公式提示之前：这条更严重（图会裂），先看到它 */}
         {imageWarning && (
@@ -173,7 +209,9 @@ export function WechatDialog({
         )}
 
         <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">
-          {t.editor.wechatCodeNote}
+          {mediaExportFormat(platform) === "markdown"
+            ? t.editor.mediaMarkdownNote
+            : t.editor.mediaRichTextNote}
         </p>
 
         <div className="mt-4 flex items-center gap-2">
@@ -181,22 +219,23 @@ export function WechatDialog({
             type="button"
             onClick={run}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-cinnabar-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-cinnabar-500 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
+            style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
           >
             {busy ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t.editor.wechatWorking}
+                {t.editor.mediaWorking}
               </>
             ) : done ? (
               <>
                 <Check className="h-3.5 w-3.5" />
-                {t.editor.wechatCopied}
+                {t.editor.mediaCopied}
               </>
             ) : (
               <>
                 <Copy className="h-3.5 w-3.5" />
-                {t.editor.wechatCopy}
+                {t.editor.mediaCopy}
               </>
             )}
           </button>

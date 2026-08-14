@@ -51,6 +51,11 @@ type mcpPrincipal struct {
 	Scope   string
 }
 
+type mcpTokenExpiryInput struct {
+	ExpiresInDays int  `json:"expiresInDays"`
+	NeverExpires  bool `json:"neverExpires"`
+}
+
 func (p mcpPrincipal) canWrite() bool {
 	return p.Scope == "write"
 }
@@ -117,6 +122,7 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		Name          string `json:"name"`
 		Scope         string `json:"scope"`
 		ExpiresInDays int    `json:"expiresInDays"`
+		NeverExpires  bool   `json:"neverExpires"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, mcpTokenRequestBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -133,11 +139,12 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_scope", "Token scope must be read or write")
 		return
 	}
-	if body.ExpiresInDays == 0 {
-		body.ExpiresInDays = defaultMCPTokenDays
-	}
-	if body.ExpiresInDays < 1 || body.ExpiresInDays > mcpTokenMaxDays {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_expiry", "Token expiry must be between 1 and 365 days")
+	expiresAt, valid := mcpTokenExpiry(mcpTokenExpiryInput{
+		ExpiresInDays: body.ExpiresInDays,
+		NeverExpires:  body.NeverExpires,
+	}, true)
+	if !valid {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_expiry", "Token expiry must be permanent or between 1 and 365 days")
 		return
 	}
 
@@ -159,7 +166,6 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	expiresAt := time.Now().Add(time.Duration(body.ExpiresInDays) * 24 * time.Hour)
 	hint := "…" + secret[len(secret)-8:]
 
 	tx, err := a.db.Begin(r.Context())
@@ -211,6 +217,72 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, map[string]any{"token": view, "secret": plainToken})
+}
+
+func (a *App) mcpTokenUpdateExpiry(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	user, ok := a.requireLifetimeMember(w, r)
+	if !ok {
+		return
+	}
+	tokenID := strings.TrimSpace(r.PathValue("tokenId"))
+	if tokenID == "" {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Token not found")
+		return
+	}
+
+	var body mcpTokenExpiryInput
+	r.Body = http.MaxBytesReader(w, r.Body, mcpTokenRequestBytes)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
+		return
+	}
+	expiresAt, valid := mcpTokenExpiry(body, false)
+	if !valid {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_expiry", "Token expiry must be permanent or between 1 and 365 days")
+		return
+	}
+
+	var view mcpTokenView
+	err := a.db.QueryRow(r.Context(), `
+		UPDATE mcp_tokens
+		SET expires_at = $1
+		WHERE token_id = $2 AND user_id = $3 AND revoked_at IS NULL
+		  AND (expires_at IS NULL OR expires_at > now())
+		RETURNING token_id, name, token_hint, scope, expires_at, last_used_at, created_at,
+		          token_ciphertext IS NOT NULL
+	`, expiresAt, tokenID, user.ID).Scan(
+		&view.TokenID, &view.Name, &view.Hint, &view.Scope, &view.ExpiresAt,
+		&view.LastUsedAt, &view.CreatedAt, &view.Revealable,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Token not found")
+		return
+	}
+	if err != nil {
+		log.Printf("mcp token update expiry: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"token": view})
+}
+
+func mcpTokenExpiry(input mcpTokenExpiryInput, useDefault bool) (*time.Time, bool) {
+	if input.NeverExpires {
+		if input.ExpiresInDays != 0 {
+			return nil, false
+		}
+		return nil, true
+	}
+	days := input.ExpiresInDays
+	if days == 0 && useDefault {
+		days = defaultMCPTokenDays
+	}
+	if days < 1 || days > mcpTokenMaxDays {
+		return nil, false
+	}
+	expiresAt := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+	return &expiresAt, true
 }
 
 func (a *App) mcpTokenReveal(w http.ResponseWriter, r *http.Request) {

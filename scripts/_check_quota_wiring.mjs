@@ -67,7 +67,7 @@ ok(
   "spa/src/components/editor/wechatMath.ts",
 );
 ok(
-  "公众号导出显示临时配额专属提示",
+  "富文本自媒体导出显示临时配额专属提示",
   wechatDialog.includes("wechatMathTemporaryQuotaExceeded"),
   "spa/src/components/editor/WechatDialog.tsx",
 );

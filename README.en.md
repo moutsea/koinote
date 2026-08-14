@@ -31,9 +31,9 @@ what you type turns into typeset text as you go.
 
 Four things set it apart from a local editor: **paste an image and it uploads**
 (to your own R2 bucket, so the document holds a clean URL rather than a wall of
-base64), **export for WeChat** (15 typographic themes, styles inlined into the
-form the WeChat editor accepts), and **documents live in the cloud** (multi-device,
-shareable), plus **safe MCP access for Codex, Claude Code, OpenCode, and other agents**.
+base64), **export to publishing platforms** (rich text for WeChat and Zhihu, Markdown
+for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
+**safe MCP access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**.
 
 > The current open-source scope covers editing, image hosting, export, sharing,
 > and the account flow. AI features are still planned; a one-time lifetime membership
@@ -57,8 +57,8 @@ shareable), plus **safe MCP access for Codex, Claude Code, OpenCode, and other a
 
 **MCP and membership**
 
-- The home page explains MCP authorization, conflict protection, and recovery for
-  Streamable HTTP clients such as Codex, Claude Code, and OpenCode
+- The home page and public `/docs/mcp` guide explain client setup, authorization,
+  conflict protection, and recovery for Codex, Claude Code, OpenCode, and OpenClaw
 - A public `/pricing` page compares Free and Lifetime benefits and reads the current
   multi-currency Stripe price allowlist from the backend
 - Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
@@ -86,9 +86,9 @@ shareable), plus **safe MCP access for Codex, Claude Code, OpenCode, and other a
 | DOCX | Built from the document tree; formulas keep their LaTeX source |
 | PDF | One-click download (rasterized) |
 | Print / Save as PDF | Vector text — selectable and searchable |
-| **WeChat** | 15 themes, styles inlined to the clipboard, paste straight in |
+| **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin |
 
-The WeChat path needed real work: highlighting is regenerated at export time
+The rich-text path needed real work: highlighting is regenerated at export time
 (in-editor highlighting is a view decoration and never enters the document),
 indentation is carried by non-breaking spaces plus `<br>` (WeChat strips
 `white-space`), code blocks get macOS-style window dots, and formulas are
@@ -139,11 +139,14 @@ Sessions are stateless HMAC-SHA256 signed cookies — nothing stored in the data
 
 Lifetime members can create a personal access token (PAT) in the Dashboard's
 “Agent document access (MCP)” card and connect any Streamable HTTP MCP client to
-`https://koinote.app/mcp`. Koinote itself only handles authorization, document I/O,
+`https://koinote.app/mcp`. The public [MCP guide](https://koinote.app/docs/mcp)
+covers Codex, Claude Code, OpenCode, OpenClaw, WorkBuddy, generic clients, and version
+control. Koinote itself only handles authorization, document I/O,
 versioning, and audit metadata. It **does not call an LLM and needs no OpenAI,
 Anthropic, or other model API key**; Codex or Claude Code supplies the model capability.
 
-PATs have read or write scope, a 1–365 day lifetime, and individual revocation.
+PATs have read or write scope, a 1–365 day or permanent lifetime, editable expiry,
+and individual revocation.
 PostgreSQL authenticates with a SHA-256 hash and keeps a separate AES-GCM-encrypted
 recovery copy. The account owner can reveal it on demand, while list responses never
 include complete tokens. Every MCP request rechecks membership, expiry, and revocation.
@@ -186,6 +189,17 @@ OpenCode (put this in a global or project-level `opencode.json`; see the
     }
   }
 }
+```
+
+OpenClaw:
+
+```bash
+openclaw mcp add koinote \
+  --url https://koinote.app/mcp \
+  --transport streamable-http \
+  --header "Authorization=Bearer ${KOINOTE_MCP_TOKEN}"
+
+openclaw mcp doctor koinote --probe
 ```
 
 Other clients need no Koinote-specific integration. They can connect with the same endpoint and

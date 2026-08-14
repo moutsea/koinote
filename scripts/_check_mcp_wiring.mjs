@@ -39,6 +39,22 @@ const mcp = readFileSync(
   new URL("../backend/internal/server/mcp.go", import.meta.url),
   "utf8",
 );
+const main = readFileSync(
+  new URL("../spa/src/main.tsx", import.meta.url),
+  "utf8",
+);
+const guide = readFileSync(
+  new URL("../spa/src/pages/MCPGuidePage.tsx", import.meta.url),
+  "utf8",
+);
+const versionGuide = readFileSync(
+  new URL("../spa/src/pages/VersionHistoryGuidePage.tsx", import.meta.url),
+  "utf8",
+);
+const shell = readFileSync(
+  new URL("../spa/src/components/AppShell.tsx", import.meta.url),
+  "utf8",
+);
 
 ok(
   "Worker 只精确代理 MCP 根端点",
@@ -84,6 +100,15 @@ ok(
   "远程 PAT 鉴权应关闭 OAuth 自动探测，且不能把令牌写进 opencode.json",
 );
 ok(
+  "OpenClaw 使用 Streamable HTTP 与环境变量令牌",
+  /title="OpenClaw"/.test(accessCard) &&
+    /openclaw mcp add koinote/.test(accessCard) &&
+    /--transport streamable-http/.test(accessCard) &&
+    /Authorization=Bearer \\?\$\{KOINOTE_MCP_TOKEN\}/.test(accessCard) &&
+    /openclaw mcp doctor koinote --probe/.test(accessCard),
+  "OpenClaw 配置应能直接添加并探测 Koinote MCP",
+);
+ok(
   "其他标准 MCP 客户端有通用连接参数",
   /title="Other MCP clients"/.test(accessCard) &&
     /Transport: Streamable HTTP/.test(accessCard) &&
@@ -96,6 +121,14 @@ ok(
     /revealMCPToken/.test(accessCard) &&
     /token\.revealable/.test(accessCard),
   "列表不返回完整令牌，用户点击后才从所属账号的专用接口解密",
+);
+ok(
+  "令牌支持永久有效与创建后修改有效期",
+  /PATCH \/api\/mcp\/tokens\/\{tokenId\}/.test(server) &&
+    /updateMCPTokenExpiry/.test(accessCard) &&
+    /neverExpires/.test(accessCard) &&
+    /editExpiry/.test(accessCard),
+  "永久令牌应使用显式字段，已创建令牌应能重新选择有效期",
 );
 ok(
   "MCP 只提供可恢复删除",
@@ -112,6 +145,31 @@ ok(
   /Name:\s*["']get_document_history_settings["']/.test(mcp) &&
     /Name:\s*["']update_document_history_settings["']/.test(mcp),
   "Agent 需要和网页使用同一套历史版本设置",
+);
+ok(
+  "公开 MCP 指南覆盖客户端配置且链接独立版本文档",
+  /path:\s*["']\/docs\/mcp["']/.test(main) &&
+    /name: ["']OpenClaw["']/.test(guide) &&
+    /name: ["']WorkBuddy \/ Other clients["']/.test(guide) &&
+    /to=["']\/docs\/version-history["']/.test(guide) &&
+    !/t\.mcpGuide\.historyFeatures/.test(guide),
+  "MCP 接入方式与版本控制不应继续混在同一篇文档里",
+);
+ok(
+  "独立版本控制指南覆盖保留、冲突与恢复",
+  /path:\s*["']\/docs\/version-history["']/.test(main) &&
+    /t\.versionGuide\.features/.test(versionGuide) &&
+    /t\.versionGuide\.webSteps/.test(versionGuide) &&
+    /t\.versionGuide\.mcpRules/.test(versionGuide) &&
+    /hash=["']history-settings["']/.test(versionGuide),
+  "版本策略和恢复方式需要有可直接访问的独立文档",
+);
+ok(
+  "顶部文档菜单可进入两篇指南",
+  /<HeaderDocsMenu/.test(shell) &&
+    /to=["']\/docs\/mcp["']/.test(shell) &&
+    /to=["']\/docs\/version-history["']/.test(shell),
+  "公开文档不应只藏在首页或页脚",
 );
 
 console.log(`MCP 接线：${pass} 通过，${fail} 失败`);

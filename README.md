@@ -28,9 +28,9 @@
 一个 Typora 式的在线 Markdown 编辑器：不分左右分栏，写下的语法立刻变成排版后的样子。
 
 和本地编辑器的区别在于四件事：**图片粘贴即上传**（自己的 R2 图床，正文里是干净的
-链接而不是一坨 base64）、**导出到微信公众号**（15 套排版主题，样式内联成公众号
-编辑器认得的形式）、**文档在云端**（多设备、可分享），以及让 **Codex、Claude Code、
-OpenCode 等 Agent 通过 MCP 安全操作自己的文档**。
+链接而不是一坨 base64）、**导出到自媒体**（微信公众号与知乎使用内联富文本，掘金使用
+Markdown）、**文档在云端**（多设备、可分享），以及让 **Codex、Claude Code、OpenCode、
+OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 
 > 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
 > 已通过 Stripe Checkout 支持一次性付款。
@@ -49,7 +49,7 @@ OpenCode 等 Agent 通过 MCP 安全操作自己的文档**。
 
 **MCP 与会员**
 
-- 首页展示 MCP 的授权、并发保护与恢复机制，支持 Codex、Claude Code、OpenCode 等 Streamable HTTP MCP 客户端
+- 首页与独立 `/docs/mcp` 指南展示 MCP 的客户端配置、授权、并发保护与版本恢复机制，支持 Codex、Claude Code、OpenCode、OpenClaw 等 Streamable HTTP MCP 客户端
 - 独立 `/pricing` 页面公开对比免费版与终生会员权益，并从后端读取当前多币种 Stripe 价目表
 - 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史和后续 AI 功能使用资格
 
@@ -72,9 +72,9 @@ OpenCode 等 Agent 通过 MCP 安全操作自己的文档**。
 | DOCX | 走文档树构建，公式保留 LaTeX 源码 |
 | PDF | 一键下载（栅格化） |
 | 打印 / 另存为 PDF | 文字矢量可选可搜 |
-| **微信公众号** | 15 套主题，样式内联进剪贴板，直接粘贴 |
+| **自媒体平台** | 微信公众号 / 知乎复制内联富文本；掘金复制原生 Markdown |
 
-微信这条做了不少细活：代码高亮在导出时重新生成（编辑器里的高亮是视图装饰，
+富文本导出做了不少细活：代码高亮在导出时重新生成（编辑器里的高亮是视图装饰，
 不在文档里）、缩进用不换行空格 + `<br>` 承载（微信会剥掉 `white-space`）、
 代码块带 Mac 窗口三点、公式栅格化成图片上传。
 
@@ -117,11 +117,13 @@ Go 后端 ──内部回调────────────▶ Worker（验
 ## Agent 文档访问（MCP）
 
 终生会员可以在 Dashboard 的「Agent 文档访问（MCP）」区域创建个人访问令牌（PAT），
-然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。Koinote
+然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。站内的
+[MCP 接入指南](https://koinote.app/docs/mcp)汇总了 Codex、Claude Code、OpenCode、OpenClaw、
+WorkBuddy 与通用客户端的配置及版本控制说明。Koinote
 本身只负责鉴权、文档读写、版本控制与审计，**不会调用 LLM，也不需要 OpenAI、Anthropic
 或其他模型 API Key**；理解指令和选择工具的是 Codex、Claude Code 等客户端自身。
 
-PAT 支持只读或读写 scope、1–365 天有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
+PAT 支持只读或读写 scope、1–365 天或永久有效、创建后修改有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
 AES-GCM 加密保存可恢复副本；账号本人可按需再次查看，列表不会直接返回完整令牌。每次 MCP
 请求都会重新检查会员状态、有效期与撤销状态。建议先创建只读令牌，需要写入时再单独创建
 读写令牌。
@@ -163,6 +165,17 @@ OpenCode（写入全局或项目级 `opencode.json`；配置格式见其
     }
   }
 }
+```
+
+OpenClaw：
+
+```bash
+openclaw mcp add koinote \
+  --url https://koinote.app/mcp \
+  --transport streamable-http \
+  --header "Authorization=Bearer ${KOINOTE_MCP_TOKEN}"
+
+openclaw mcp doctor koinote --probe
 ```
 
 其他客户端无需 Koinote 专用适配：只要支持远程 Streamable HTTP MCP，并允许给请求设置

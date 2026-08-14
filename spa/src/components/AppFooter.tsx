@@ -95,6 +95,8 @@ export function AppFooter() {
                 <FooterRoute to="/">{t.footer.home}</FooterRoute>
                 <FooterRoute to="/editor">{t.footer.editor}</FooterRoute>
                 <FooterRoute to="/pricing">{t.footer.pricing}</FooterRoute>
+                <FooterRoute to="/docs/mcp">{t.footer.mcpGuide}</FooterRoute>
+                <FooterRoute to="/docs/version-history">{t.footer.versionHistoryGuide}</FooterRoute>
                 <FooterRoute to="/dashboard">{t.footer.dashboard}</FooterRoute>
               </FooterColumn>
 

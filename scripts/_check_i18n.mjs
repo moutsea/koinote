@@ -154,7 +154,7 @@ const PLACEHOLDERS = {
   "editor.wechatMathConverted": ["{n}"],
   "editor.wechatMathFailed": ["{n}"],
   "editor.wechatMathTemporaryQuotaExceeded": ["{n}"],
-  "editor.wechatImagesUnreachable": ["{n}", "{hosts}"],
+  "editor.mediaImagesUnreachable": ["{n}", "{hosts}"],
   "editor.uploadingImages": ["{n}"],
 };
 for (const [path, tokens] of Object.entries(PLACEHOLDERS)) {

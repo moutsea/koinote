@@ -475,12 +475,23 @@ export function listMCPTokens() {
 export function createMCPToken(params: {
   name: string;
   scope: "read" | "write";
-  expiresInDays: number;
+  expiresInDays?: number;
+  neverExpires?: boolean;
 }) {
   return apiJson<{ token: MCPToken; secret: string }>("/api/mcp/tokens", {
     method: "POST",
     body: JSON.stringify(params),
   });
+}
+
+export function updateMCPTokenExpiry(
+  tokenId: string,
+  params: { expiresInDays?: number; neverExpires?: boolean },
+) {
+  return apiJson<{ token: MCPToken }>(
+    `/api/mcp/tokens/${encodeURIComponent(tokenId)}`,
+    { method: "PATCH", body: JSON.stringify(params) },
+  );
 }
 
 export function revealMCPToken(tokenId: string) {

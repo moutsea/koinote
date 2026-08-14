@@ -421,7 +421,8 @@ The Worker therefore remains a thin edge proxy while all authorization stays in 
 ### Why the first release uses PATs instead of OAuth
 
 The initial audience is lifetime members, using personal access tokens created on the
-account page. Tokens have `read` or `write` scope, a 1–365 day lifetime, individual
+account page. Tokens have `read` or `write` scope, a 1–365 day or permanent lifetime,
+an editable expiry, individual
 revocation, and a maximum of 20 active tokens. Plaintext starts with `knt_mcp_`; PostgreSQL
 authenticates with SHA-256 and stores a separate AES-GCM-encrypted recovery copy under a
 dedicated key. The owner can explicitly reveal it through a rate-limited endpoint, while

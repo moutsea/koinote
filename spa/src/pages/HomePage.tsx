@@ -183,13 +183,22 @@ export function HomePage() {
                 })}
               </div>
 
-              <Link
-                to="/pricing"
-                className="mt-8 inline-flex rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
-                style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
-              >
-                {t.home.mcp.cta}
-              </Link>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/docs/mcp"
+                  className="inline-flex rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
+                  style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+                >
+                  {t.footer.mcpGuide}
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="inline-flex rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
+                  style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                >
+                  {t.home.mcp.cta}
+                </Link>
+              </div>
             </div>
 
             <PaperCard className="overflow-hidden">
@@ -210,7 +219,7 @@ export function HomePage() {
                 </div>
               </div>
               <div className="space-y-3 p-5 sm:p-6">
-                {["Codex", "Claude Code", "OpenCode", "WorkBuddy"].map((agent) => (
+                {["Codex", "Claude Code", "OpenCode", "OpenClaw", "WorkBuddy"].map((agent) => (
                   <div
                     key={agent}
                     className="flex items-center justify-between rounded-lg border px-4 py-3"

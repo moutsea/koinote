@@ -36,6 +36,22 @@ const pricingRoute = createRoute({
     "PricingPage",
   ),
 });
+const mcpGuideRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/mcp",
+  component: lazyRouteComponent(
+    () => import("./pages/MCPGuidePage"),
+    "MCPGuidePage",
+  ),
+});
+const versionHistoryGuideRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/version-history",
+  component: lazyRouteComponent(
+    () => import("./pages/VersionHistoryGuidePage"),
+    "VersionHistoryGuidePage",
+  ),
+});
 // /editor 不带 id：跳最近编辑的一篇，没有则新建
 // /editor/$docId：打开指定文档
 const editorRoute = createRoute({
@@ -138,6 +154,8 @@ const cookiesRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   pricingRoute,
+  mcpGuideRoute,
+  versionHistoryGuideRoute,
   editorRoute,
   editorDocRoute,
   loginRoute,

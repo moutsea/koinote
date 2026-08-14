@@ -17,7 +17,7 @@ import {
   exportPrint,
   safeFilename,
 } from "./exportDocument";
-import { WechatDialog } from "./WechatDialog";
+import { MediaExportDialog } from "./WechatDialog";
 
 export function ExportMenu({
   editor,
@@ -31,7 +31,7 @@ export function ExportMenu({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [wechatOpen, setWechatOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -145,11 +145,11 @@ export function ExportMenu({
           />
           <Item
             icon={<MessageSquare className="h-3.5 w-3.5" />}
-            label={t.editor.wechatExport}
-            hint={t.editor.wechatExportHint}
+            label={t.editor.mediaExport}
+            hint={t.editor.mediaExportHint}
             onClick={() => {
               setOpen(false);
-              setWechatOpen(true);
+              setMediaOpen(true);
             }}
           />
           <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
@@ -174,12 +174,12 @@ export function ExportMenu({
         </p>
       )}
 
-      {wechatOpen && (
-        <WechatDialog
+      {mediaOpen && (
+        <MediaExportDialog
           editor={editor}
           title={title}
           themeId={themeId}
-          onClose={() => setWechatOpen(false)}
+          onClose={() => setMediaOpen(false)}
         />
       )}
     </div>

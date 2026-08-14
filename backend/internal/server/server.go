@@ -77,6 +77,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/invitations", a.invitationsOverview)
 	mux.HandleFunc("GET /api/mcp/tokens", a.mcpTokensList)
 	mux.HandleFunc("POST /api/mcp/tokens", a.mcpTokenCreate)
+	mux.HandleFunc("PATCH /api/mcp/tokens/{tokenId}", a.mcpTokenUpdateExpiry)
 	mux.HandleFunc("POST /api/mcp/tokens/{tokenId}/reveal", a.mcpTokenReveal)
 	mux.HandleFunc("DELETE /api/mcp/tokens/{tokenId}", a.mcpTokenRevoke)
 	mux.HandleFunc("GET /api/settings/document-history", a.documentHistorySettingsGet)
@@ -138,7 +139,7 @@ func (a *App) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		}
 		if r.Method == http.MethodOptions {

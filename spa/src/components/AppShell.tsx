@@ -11,10 +11,12 @@ import {
   Globe,
   Check,
   ChevronDown,
+  Bot,
   Crown,
   FileText,
   Gift,
   HardDrive,
+  History,
   LayoutDashboard,
   LogOut,
   ShieldCheck,
@@ -99,6 +101,12 @@ export function AppShell() {
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
+            <HeaderDocsMenu
+              active={isUnder(pathname, "/docs")}
+              label={t.nav.docs}
+              mcpLabel={t.nav.mcpGuide}
+              versionLabel={t.nav.versionHistoryGuide}
+            />
             <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
               {t.nav.pricing}
             </HeaderLink>
@@ -571,6 +579,84 @@ function HeaderLink({
           style={{ background: "var(--cinnabar)" }}
         />
       )}
+    </Link>
+  );
+}
+
+function HeaderDocsMenu({
+  active,
+  label,
+  mcpLabel,
+  versionLabel,
+}: {
+  active: boolean;
+  label: string;
+  mcpLabel: string;
+  versionLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        className={`kn-ink-link relative flex items-center gap-1 transition ${active ? "font-medium" : ""}`}
+        style={{ color: active ? "var(--cinnabar)" : "var(--ink-mid)" }}
+      >
+        {label}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        {active && <span aria-hidden className="absolute -bottom-1.5 left-0 h-0.5 w-full rounded-full" style={{ background: "var(--cinnabar)" }} />}
+      </button>
+
+      {open && (
+        <div role="menu" aria-label={label} className="absolute left-0 top-8 z-50 w-56 overflow-hidden rounded-xl border py-1 shadow-lg" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+          <HeaderDocsMenuItem to="/docs/mcp" onSelect={() => setOpen(false)} icon={<Bot className="h-4 w-4" />}>
+            {mcpLabel}
+          </HeaderDocsMenuItem>
+          <HeaderDocsMenuItem to="/docs/version-history" onSelect={() => setOpen(false)} icon={<History className="h-4 w-4" />}>
+            {versionLabel}
+          </HeaderDocsMenuItem>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeaderDocsMenuItem({
+  to,
+  onSelect,
+  icon,
+  children,
+}: {
+  to: "/docs/mcp" | "/docs/version-history";
+  onSelect: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link to={to} role="menuitem" onClick={onSelect} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]" style={{ color: "var(--ink-strong)" }}>
+      {icon}
+      {children}
     </Link>
   );
 }

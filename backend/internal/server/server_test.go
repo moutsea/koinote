@@ -106,6 +106,8 @@ func TestCORSPreflight(t *testing.T) {
 	}
 	if methods := rec.Header().Get("Access-Control-Allow-Methods"); methods == "" {
 		t.Error("预检响应应带 Allow-Methods")
+	} else if !strings.Contains(methods, http.MethodPatch) {
+		t.Errorf("预检响应应允许 PATCH，实际 %q", methods)
 	}
 }
 

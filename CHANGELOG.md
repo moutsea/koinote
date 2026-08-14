@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A public MCP guide now covers Codex, Claude Code, OpenCode, OpenClaw, WorkBuddy,
+  generic Streamable HTTP clients, version control, and the document safety boundaries.
+- The MCP token card now generates a ready-to-run OpenClaw CLI configuration and probe command.
+- MCP tokens can now be permanent, and an active token's expiry can be changed after creation.
+- Publishing export now supports Zhihu and Juejin alongside WeChat: WeChat and Zhihu receive
+  inlined rich text, while Juejin receives the original Markdown body.
 - The home page now explains how scoped MCP tokens, revision checks, and safety snapshots
   let Codex, Claude Code, OpenCode, and other compatible agents work with Koinote documents.
 - A public, localized Pricing page compares Free and Lifetime benefits. It reads storage
@@ -17,6 +23,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Public documentation is now split into separate MCP integration and version-control guides,
+  both available from a new Docs menu in the top navigation.
+- The editor's WeChat-only export entry is now “Export to publishing platforms,” with an
+  explicit destination picker for WeChat, Zhihu, and Juejin.
 - Public pricing responses now carry a short shared-cache policy, and version-history settings
   explicitly distinguish the per-document limit from the 100-version account-wide shared cap.
 - Image object-key rules now have a shared boundary corpus across the Worker and browser helpers,
@@ -69,6 +79,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Juejin export now prepends the document title as a level-one Markdown heading instead of
+  copying only the editor body.
 - Document and image quota mutations now share a user-level transaction lock, preventing
   concurrent MCP/web writes and image uploads from each approving against stale usage.
 - Retained document versions protect referenced images from garbage collection; pruning
