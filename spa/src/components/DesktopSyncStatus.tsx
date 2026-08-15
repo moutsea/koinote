@@ -1,7 +1,8 @@
 import { AlertTriangle, Check, Cloud, RefreshCw, WifiOff, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isDesktopRuntime } from "../desktop/runtime";
+import { REMOTE_UPDATE_INTERVAL_MS } from "../remoteUpdates";
 import {
   desktopListConflicts,
   desktopSyncEventName,
@@ -27,6 +28,7 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
   const [summary, setSummary] = useState(INITIAL);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [conflicts, setConflicts] = useState<DesktopConflict[]>([]);
+  const previousConflictCount = useRef(0);
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
@@ -41,23 +43,50 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
         void queryClient.invalidateQueries({ queryKey: ["document-search"] });
       }
       if (next.conflicts > 0) {
-        void desktopListConflicts().then(setConflicts);
+        const shouldPrompt = next.conflicts > previousConflictCount.current;
+        void desktopListConflicts().then((items) => {
+          if (disposed) return;
+          setConflicts(items);
+          if (shouldPrompt) setDialogOpen(true);
+        });
       }
+      previousConflictCount.current = next.conflicts;
     };
     const onOnline = () => void syncDesktopNow();
+    const checkRemote = () => {
+      if (!navigator.onLine || document.visibilityState !== "visible") return;
+      void syncDesktopNow({ silent: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkRemote();
+    };
     window.addEventListener(eventName, onStatus);
     window.addEventListener("online", onOnline);
+    window.addEventListener("focus", checkRemote);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const interval = window.setInterval(checkRemote, REMOTE_UPDATE_INTERVAL_MS);
     void desktopSyncSummary()
       .then((initial) => {
         if (disposed) return;
         setSummary(initial);
+        previousConflictCount.current = initial.conflicts;
+        if (initial.conflicts > 0) {
+          void desktopListConflicts().then((items) => {
+            if (disposed) return;
+            setConflicts(items);
+            setDialogOpen(true);
+          });
+        }
         if (navigator.onLine) void syncDesktopNow();
       })
       .catch(() => undefined);
     return () => {
       disposed = true;
+      window.clearInterval(interval);
       window.removeEventListener(eventName, onStatus);
       window.removeEventListener("online", onOnline);
+      window.removeEventListener("focus", checkRemote);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [queryClient]);
 

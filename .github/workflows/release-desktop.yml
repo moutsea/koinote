@@ -156,7 +156,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version includes automatic update checks, a focused desktop workspace, and refreshed platform icons."
+          notes="Koinote Desktop $version detects remote document changes while foregrounded, automatically refreshes clean documents, and protects concurrent local drafts with explicit conflict resolution."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -186,6 +186,8 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
+          此版本新增前台远端更新检测：其他客户端修改文档后，干净文档会自动刷新；存在本地草稿时会保留双方内容并提示处理冲突。
+
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
           - **macOS Apple 芯片**：文件名包含 \`aarch64\`
@@ -197,6 +199,8 @@ jobs:
           ---
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
+
+          This release adds foreground remote-change detection: clean documents refresh automatically after another client edits them, while concurrent local drafts retain both copies for explicit conflict resolution.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

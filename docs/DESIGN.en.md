@@ -338,6 +338,12 @@ flight therefore survives. If both bodies changed, the complete local and cloud 
 for an explicit choice. Folders have no server revision yet, so a conflicting local folder mutation
 remains pending and is replayed on the next pass.
 
+While visible, the web app refreshes document revisions every 30 seconds and checks immediately when
+the window regains focus; it fetches a full body only after a revision changes. The desktop client runs
+the same foreground cadence as a silent sync and flushes the editor debounce window into SQLite before
+applying remote content. Clean documents adopt the remote version automatically. Concurrent local drafts
+retain both copies and prompt the user, without flashing the visible sync status on every background check.
+
 The alpha's offline boundary is Markdown content, folders, search, and tabs. It does not yet cache
 the bytes of remote images that have never been loaded, and history, sharing, billing, and admin
 operations still require a connection. Signing out erases that account's local SQLite cache to avoid
@@ -345,9 +351,9 @@ leaving document content on a shared machine. Before logout, the editor flushes 
 SQLite. If unsynced changes or conflicts remain, the user must explicitly confirm their deletion; offline
 content is never discarded silently.
 
-CI compiles the Rust / Tauri app on both macOS and Windows. Public distribution still needs Apple
-Developer ID signing and notarization, a Windows code-signing certificate, and signed auto-updates;
-those are release infrastructure rather than blockers for the local alpha.
+CI compiles the Rust / Tauri app on both macOS and Windows. Update artifacts use an independent Tauri
+signature. Public distribution still needs Apple Developer ID signing and notarization plus a Windows
+code-signing certificate; those are platform reputation infrastructure rather than blockers for the local alpha.
 
 ## Invitation rewards
 

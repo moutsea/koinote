@@ -41,7 +41,7 @@ import { useSession } from "../auth";
 import { ApiError } from "../api";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopRuntime } from "../desktop/runtime";
-import { registerDesktopLogoutPreparation } from "../desktop/logoutGuard";
+import { registerDesktopSyncPreparation } from "../desktop/logoutGuard";
 import { confirmAction } from "../confirmAction";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
@@ -88,7 +88,7 @@ export function EditorPage() {
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
-    return registerDesktopLogoutPreparation(() => saver.flushAll());
+    return registerDesktopSyncPreparation(() => saver.flushAll());
   }, [saver]);
 
   useEffect(() => {
@@ -200,10 +200,10 @@ export function EditorPage() {
    */
   const createdHere = useRef<Set<string>>(new Set());
 
-  // 桌面同步可能发现某篇文档已经在另一端删除。列表会刷新，但单篇 query 和标签池
+  // 后台检查可能发现某篇文档已经在另一端删除。列表会刷新，但单篇 query 和标签池
   // 都有独立缓存，若不主动对齐就会留下“未命名文档”假标签和旧正文。
   useEffect(() => {
-    if (!isDesktopRuntime() || !documents || !hydrated.current) return;
+    if (!documents || !hydrated.current) return;
     const current = tabStateRef.current;
     const preserved = current.openTabs.filter((id) => saverRef.current.isDirty(id));
     const { next, removed } = removeUnavailable(
@@ -676,6 +676,7 @@ export function EditorPage() {
           <LiveEditor
             key={liveId}
             docId={liveId}
+            remoteRevision={documents?.find((document) => document.docId === liveId)?.revision}
             historyAvailable={session.data?.user?.membershipTier === "lifetime"}
             visible={
               liveId === tabState.activeDocId && !doc.isLoading && !doc.isError

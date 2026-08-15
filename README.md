@@ -77,6 +77,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 
 - macOS 与 Windows 共用 React / TipTap 界面，Tauri 只承载原生窗口、SQLite、深链和系统钥匙串
 - 文档、目录和标签页本地优先；离线可创建、编辑、搜索和整理，联网后后台推送与拉取
+- 网页与客户端在前台定时检测远端修改，窗口重新聚焦时立即检查；无本地改动时自动更新，有草稿时提示处理冲突
 - revision 冲突会同时保留本地稿与云端稿，由用户明确选择，不用“最后写入者”静默覆盖正文
 - OAuth / 密码登录仍在系统浏览器完成；PKCE 授权码单次有效，访问令牌 15 分钟，刷新令牌 30 天轮换
 - 访问令牌、刷新令牌和未完成的 PKCE verifier 只存 macOS Keychain / Windows Credential Manager，不进 SQLite

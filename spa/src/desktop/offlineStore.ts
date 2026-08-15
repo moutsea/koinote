@@ -6,6 +6,7 @@ import type {
   Folder,
 } from "../api";
 import { getStoredDesktopSession } from "./auth";
+import { prepareDesktopSync } from "./logoutGuard";
 import { desktopFetch } from "./network";
 import { DESKTOP_SYNC_EVENT } from "./runtime";
 import {
@@ -388,9 +389,9 @@ export async function desktopPutEditorTabs(value: EditorTabs): Promise<EditorTab
   return value;
 }
 
-export function syncDesktopNow(): Promise<DesktopSyncSummary> {
+export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<DesktopSyncSummary> {
   if (syncPromise) return syncPromise;
-  syncPromise = performSync().finally(() => {
+  syncPromise = performPreparedSync(options).finally(() => {
     syncPromise = null;
   });
   return syncPromise;
@@ -511,9 +512,21 @@ function scheduleSync(delay = 1500) {
   }, delay);
 }
 
-async function performSync(): Promise<DesktopSyncSummary> {
+async function performPreparedSync(options: { silent?: boolean }): Promise<DesktopSyncSummary> {
   const account = await accountID();
-  notify(await calculateSummary(account, "syncing"));
+  if (!(await prepareDesktopSync())) {
+    const summary = await calculateSummary(account, "error", "Local edits could not be saved before sync");
+    notify(summary);
+    return summary;
+  }
+  return performSync(account, options);
+}
+
+async function performSync(
+  account: string,
+  options: { silent?: boolean },
+): Promise<DesktopSyncSummary> {
+  if (!options.silent) notify(await calculateSummary(account, "syncing"));
   try {
     await pushFolders(account);
     await pushDocuments(account);
@@ -698,6 +711,9 @@ async function pullRemoteSnapshot(account: string) {
     remoteJSON<{ documents: DocumentSummary[] }>("/api/documents"),
     remoteJSON<{ folders: Folder[] }>("/api/folders"),
   ]);
+  if (!(await prepareDesktopSync())) {
+    throw new Error("Local edits could not be saved before applying remote updates");
+  }
   const db = await database();
   const localDocuments = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents WHERE account_id = $1

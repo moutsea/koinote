@@ -28,7 +28,7 @@ const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
   .trim()
   .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.4");
+ok("客户端版本已升级", config.version === "0.1.5");
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
 ok("配置 GitHub 更新清单", config.plugins.updater.endpoints.includes("https://github.com/moutsea/koinote/releases/latest/download/latest.json"));
 ok(

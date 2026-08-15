@@ -553,6 +553,9 @@ export const zh: Messages = {
     saved: "已保存",
     charCount: "{n} 字",
     saveFailed: "保存失败",
+    remoteUpdated: "已同步其他设备上的最新修改",
+    remoteUpdateAvailable: "云端有新版本，本地草稿不会被自动覆盖。",
+    reviewRemoteUpdate: "查看并处理",
     resolveConflict: "处理冲突",
     conflictTitle: "文档在其他位置被修改",
     conflictDescription:

@@ -592,6 +592,9 @@ export const fr: Messages = {
     saved: "Enregistré",
     charCount: "{n} caractères",
     saveFailed: "Échec de l'enregistrement",
+    remoteUpdated: "Les dernières modifications d’un autre appareil ont été appliquées",
+    remoteUpdateAvailable: "Une version cloud plus récente est disponible. Votre brouillon local ne sera pas écrasé.",
+    reviewRemoteUpdate: "Examiner les modifications",
     resolveConflict: "Résoudre le conflit",
     conflictTitle: "Ce document a été modifié ailleurs",
     conflictDescription:

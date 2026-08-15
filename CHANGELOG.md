@@ -14,6 +14,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
   and Windows x64 installers.
 - Added signed desktop auto-updates with startup checks, a manual account-menu action, download
   progress, and restart-to-install support.
+- Added foreground remote-change detection for the web editor and desktop client. Clean documents
+  update automatically, while concurrent local drafts trigger an explicit conflict prompt.
 
 ### Changed
 

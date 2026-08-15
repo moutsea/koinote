@@ -30,6 +30,8 @@ import {
   type Folder,
   type ShareAccess,
 } from "./api";
+import { isDesktopRuntime } from "./desktop/runtime";
+import { REMOTE_UPDATE_INTERVAL_MS } from "./remoteUpdates";
 
 // 列表与单篇分开缓存：列表频繁失效（标题/时间会变），单篇按 docId 各自独立。
 const LIST_KEY = ["documents"] as const;
@@ -38,11 +40,15 @@ const docKey = (docId: string) => ["document", docId] as const;
 export function useDocumentList(
   enabled: boolean,
 ): UseQueryResult<DocumentSummary[]> {
+  const desktop = isDesktopRuntime();
   return useQuery({
     queryKey: LIST_KEY,
     queryFn: async () => (await listDocuments()).documents,
     enabled,
     retry: false,
+    refetchInterval: desktop ? false : REMOTE_UPDATE_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: !desktop,
   });
 }
 

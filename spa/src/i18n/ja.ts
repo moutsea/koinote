@@ -575,6 +575,9 @@ export const ja: Messages = {
     saved: "保存しました",
     charCount: "{n} 文字",
     saveFailed: "保存に失敗しました",
+    remoteUpdated: "別のデバイスでの最新変更を反映しました",
+    remoteUpdateAvailable: "クラウドに新しい版があります。ローカル下書きは自動で上書きされません。",
+    reviewRemoteUpdate: "変更を確認",
     resolveConflict: "競合を解決",
     conflictTitle: "この文書は別の場所で変更されました",
     conflictDescription:

@@ -10,6 +10,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
   jetons dans le trousseau du système, documents SQLite local-first, synchronisation et résolution explicite des conflits.
 - Ajout d’un lien de téléchargement vers les GitHub Releases pour macOS Apple Silicon, macOS Intel
   et Windows x64.
+- Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
+  des documents propres et demande explicite en cas de brouillon local concurrent.
 
 ## [0.5.0] - 2026-08-15
 

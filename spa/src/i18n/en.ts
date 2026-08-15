@@ -579,6 +579,9 @@ export const en: Messages = {
     saved: "Saved",
     charCount: "{n} chars",
     saveFailed: "Save failed",
+    remoteUpdated: "Updated with the latest changes from another device",
+    remoteUpdateAvailable: "A newer cloud version is available. Your local draft will not be overwritten.",
+    reviewRemoteUpdate: "Review changes",
     resolveConflict: "Resolve conflict",
     conflictTitle: "This document changed elsewhere",
     conflictDescription:

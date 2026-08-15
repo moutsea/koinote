@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History } from "lucide-react";
+import { History, RefreshCw } from "lucide-react";
 import { getDocument } from "../../api";
 import { DESKTOP_SYNC_EVENT, isDesktopRuntime } from "../../desktop/runtime";
 import type { DesktopSyncSummary } from "../../desktop/offlineStore";
@@ -11,6 +11,7 @@ import type { DocPatch, DocumentSaver } from "./useDocumentSaver";
 import { ConflictDialog } from "./ConflictDialog";
 import { VersionHistoryDialog } from "./VersionHistoryDialog";
 import { useI18n } from "../../i18n";
+import { decideRemoteDocumentUpdate } from "../../remoteUpdates";
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -24,6 +25,7 @@ import { useI18n } from "../../i18n";
  */
 export function LiveEditor({
   docId,
+  remoteRevision,
   visible,
   historyAvailable,
   saver,
@@ -34,6 +36,7 @@ export function LiveEditor({
   outlineSlot,
 }: {
   docId: string;
+  remoteRevision?: number;
   visible: boolean;
   historyAvailable: boolean;
   saver: DocumentSaver;
@@ -53,6 +56,29 @@ export function LiveEditor({
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [seededDocId, setSeededDocId] = useState<string | null>(null);
+  const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
+  const [remoteUpdated, setRemoteUpdated] = useState(false);
+  const remoteUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const acceptLatestDocument = useCallback((document: NonNullable<typeof doc.data>) => {
+    saver.acceptRemote(docId, {
+      title: document.title,
+      content: document.content,
+      theme: document.theme ?? "",
+      revision: document.revision,
+    });
+    queryClient.setQueryData(["document", docId], document);
+    onTitleChange?.(docId, document.title);
+    setRemoteUpdateAvailable(false);
+    setRemoteUpdated(true);
+    if (remoteUpdatedTimer.current) clearTimeout(remoteUpdatedTimer.current);
+    remoteUpdatedTimer.current = setTimeout(() => setRemoteUpdated(false), 4_000);
+    setEditorGeneration((value) => value + 1);
+  }, [docId, onTitleChange, queryClient, saver]);
+
+  useEffect(() => () => {
+    if (remoteUpdatedTimer.current) clearTimeout(remoteUpdatedTimer.current);
+  }, []);
 
   // 文档到手后铺一份基线。seed 内部对已有待存内容不覆盖 ——
   // 被淘汰又点回来时，本地未落库的改动比服务端那份新
@@ -84,15 +110,7 @@ export function LiveEditor({
         ) {
           return;
         }
-        saver.acceptRemote(docId, {
-          title: document.title,
-          content: document.content,
-          theme: document.theme ?? "",
-          revision: document.revision,
-        });
-        queryClient.setQueryData(["document", docId], document);
-        onTitleChange?.(docId, document.title);
-        setEditorGeneration((value) => value + 1);
+        acceptLatestDocument(document);
       }).catch(() => undefined);
     };
     window.addEventListener(DESKTOP_SYNC_EVENT, onDesktopSync);
@@ -100,7 +118,37 @@ export function LiveEditor({
       disposed = true;
       window.removeEventListener(DESKTOP_SYNC_EVENT, onDesktopSync);
     };
-  }, [docId, onTitleChange, queryClient, saver]);
+  }, [acceptLatestDocument, docId, saver]);
+
+  useEffect(() => {
+    if (isDesktopRuntime() || remoteRevision === undefined) return;
+    const current = saver.peek(docId);
+    const decision = decideRemoteDocumentUpdate(
+      current?.revision ?? doc.data?.revision ?? 0,
+      remoteRevision,
+      saver.isDirty(docId),
+    );
+    if (decision === "unchanged") return;
+
+    let disposed = false;
+    void getDocument(docId).then(({ document }) => {
+      if (disposed) return;
+      const latest = saver.peek(docId);
+      const latestDecision = decideRemoteDocumentUpdate(
+        latest?.revision ?? doc.data?.revision ?? 0,
+        document.revision,
+        saver.isDirty(docId),
+      );
+      if (latestDecision === "prompt") {
+        setRemoteUpdateAvailable(true);
+      } else if (latestDecision === "apply") {
+        acceptLatestDocument(document);
+      }
+    }).catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [acceptLatestDocument, doc.data?.revision, docId, remoteRevision, saver]);
 
   // 隐藏前记住滚动位置，显示后还原
   useEffect(() => {
@@ -148,11 +196,41 @@ export function LiveEditor({
       theme: next.theme ?? "",
       revision: next.revision,
     });
+    setRemoteUpdateAvailable(false);
+    setRemoteUpdated(false);
     setEditorGeneration((value) => value + 1);
   }
 
   return (
     <div className={visible ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+      {remoteUpdateAvailable && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 border-b px-4 py-2 text-xs"
+          style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+        >
+          <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+          <span>{t.editor.remoteUpdateAvailable}</span>
+          <button
+            type="button"
+            onClick={() => setConflictOpen(true)}
+            className="ml-auto shrink-0 font-semibold hover:underline"
+            style={{ color: "var(--cinnabar)" }}
+          >
+            {t.editor.reviewRemoteUpdate}
+          </button>
+        </div>
+      )}
+      {remoteUpdated && !remoteUpdateAvailable && (
+        <div
+          role="status"
+          className="flex items-center gap-2 border-b px-4 py-2 text-xs"
+          style={{ borderColor: "var(--ink-line)", color: "var(--ink-faint)" }}
+        >
+          <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+          {t.editor.remoteUpdated}
+        </div>
+      )}
       <MarkdownEditor
         key={`${docId}:${editorGeneration}`}
         document={merged}
@@ -204,6 +282,8 @@ export function LiveEditor({
           onOverwrite={async (remoteRevision, patch) => {
             const saved = await saver.overwrite(docId, remoteRevision, patch);
             if (saved) {
+              setRemoteUpdateAvailable(false);
+              setRemoteUpdated(false);
               onTitleChange?.(docId, patch.title);
               void queryClient.invalidateQueries({ queryKey: ["documents"] });
               setConflictOpen(false);

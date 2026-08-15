@@ -3,13 +3,17 @@ import { readFileSync } from "node:fs";
 
 const {
   acknowledgedLocalRevision,
+  decideRemoteDocumentUpdate,
   decideRemoteDocument,
   decideRemoteFolder,
   isDesktopAuthenticationRejection,
   confirmAction,
   prepareDesktopLogout,
+  prepareDesktopSync,
   pulledLocalRevision,
   registerDesktopLogoutPreparation,
+  registerDesktopSyncPreparation,
+  REMOTE_UPDATE_INTERVAL_MS,
   shouldAttachDesktopAuthorization,
   snapshotGuard,
 } = await import("./_offline_sync_bundle.mjs");
@@ -51,6 +55,25 @@ assert.equal(
 unregisterSuccessfulPreparation();
 unregisterFailedPreparation();
 assert.equal(await prepareDesktopLogout(), true, "没有打开编辑器时允许正常登出");
+
+let syncPrepared = 0;
+const unregisterSyncPreparation = registerDesktopSyncPreparation(async () => {
+  syncPrepared += 1;
+  return true;
+});
+assert.equal(await prepareDesktopSync(), true);
+assert.equal(syncPrepared, 1, "后台拉取前必须复用编辑器保存屏障");
+unregisterSyncPreparation();
+
+assert.equal(REMOTE_UPDATE_INTERVAL_MS, 30_000);
+assert.equal(decideRemoteDocumentUpdate(5, 5, false), "unchanged");
+assert.equal(decideRemoteDocumentUpdate(6, 5, false), "unchanged");
+assert.equal(decideRemoteDocumentUpdate(5, 6, false), "apply");
+assert.equal(
+  decideRemoteDocumentUpdate(5, 6, true),
+  "prompt",
+  "本地有草稿时远端更新不能静默覆盖",
+);
 
 assert.equal(isDesktopAuthenticationRejection(401), true);
 assert.equal(isDesktopAuthenticationRejection(403), true);
@@ -192,6 +215,16 @@ assert.match(
   /clearDesktopOfflineAccount[\s\S]*?await initialization\.catch[\s\S]*?clearTimeout\(syncTimer\)[\s\S]*?await activeSync\.catch[\s\S]*?DELETE FROM offline_documents[\s\S]*?snapshotInitializations\.delete\(account\)/,
   "登出清库前必须停止并等待后台同步，避免数据被异步写回",
 );
+assert.match(
+  offlineStore,
+  /syncDesktopNow\(options:[\s\S]*?performPreparedSync[\s\S]*?prepareDesktopSync\(\)[\s\S]*?performSync\(account, options\)/,
+  "每次桌面同步都必须先保存编辑器内尚未落 SQLite 的草稿",
+);
+assert.match(
+  offlineStore,
+  /remoteJSON<\{ documents:[\s\S]*?remoteJSON<\{ folders:[\s\S]*?prepareDesktopSync\(\)[\s\S]*?SELECT \* FROM offline_documents/,
+  "远端列表请求期间产生的新编辑也必须在应用远端内容前落盘",
+);
 
 for (const file of [
   "../spa/src/documentTransfer.ts",
@@ -247,8 +280,8 @@ const editorPage = readFileSync(
 );
 assert.match(
   editorPage,
-  /registerDesktopLogoutPreparation\(\(\) => saver\.flushAll\(\)\)/,
-  "编辑器必须把防抖窗口内的改动接入桌面登出屏障",
+  /registerDesktopSyncPreparation\(\(\) => saver\.flushAll\(\)\)/,
+  "编辑器必须把防抖窗口内的改动接入桌面同步与登出屏障",
 );
 assert.match(
   editorPage,
@@ -264,6 +297,41 @@ assert.match(
   syncStatus,
   /desktopSyncSummary\(\)[\s\S]*?navigator\.onLine[\s\S]*?syncDesktopNow\(\)/,
   "客户端启动后必须自动拉取远端并重试待同步修改",
+);
+assert.match(
+  syncStatus,
+  /addEventListener\("focus", checkRemote\)[\s\S]*?visibilitychange[\s\S]*?setInterval\(checkRemote, REMOTE_UPDATE_INTERVAL_MS\)/,
+  "客户端前台必须定时检查，并在重新聚焦时立即检查远端",
+);
+assert.match(
+  syncStatus,
+  /syncDesktopNow\(\{ silent: true \}\)/,
+  "后台检查不能让同步状态每 30 秒闪烁",
+);
+assert.match(
+  syncStatus,
+  /shouldPrompt[\s\S]*?setDialogOpen\(true\)/,
+  "客户端发现新的同步冲突时必须主动提示用户",
+);
+
+const documentsSource = readFileSync(
+  new URL("../spa/src/documents.ts", import.meta.url),
+  "utf8",
+);
+assert.match(
+  documentsSource,
+  /refetchInterval:\s*desktop \? false : REMOTE_UPDATE_INTERVAL_MS[\s\S]*?refetchOnWindowFocus:\s*!desktop/,
+  "网页文档列表必须在前台轮询并在窗口聚焦时更新 revision",
+);
+
+const liveEditor = readFileSync(
+  new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  liveEditor,
+  /decideRemoteDocumentUpdate[\s\S]*?latestDecision === "prompt"[\s\S]*?setRemoteUpdateAvailable\(true\)[\s\S]*?latestDecision === "apply"[\s\S]*?acceptLatestDocument/,
+  "网页编辑器必须自动应用干净远端更新，并保护本地草稿",
 );
 
 const desktopNetwork = readFileSync(

@@ -419,6 +419,9 @@ export interface Messages {
     saving: string;
     saved: string;
     saveFailed: string;
+    remoteUpdated: string;
+    remoteUpdateAvailable: string;
+    reviewRemoteUpdate: string;
     resolveConflict: string;
     conflictTitle: string;
     conflictDescription: string;
