@@ -17,6 +17,7 @@ import {
 import type { Editor } from "@tiptap/react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { fetchAppResource } from "../../api";
+import { imageFetchURL } from "./imageLoading";
 
 /**
  * 导出 .docx。
@@ -112,7 +113,9 @@ function sniffImageType(bytes: ArrayBuffer): "png" | "jpg" | "gif" | "bmp" | nul
 /** 抓图片字节。失败返回 null，由调用方降级成占位文字。 */
 async function fetchImage(src: string): Promise<ArrayBuffer | null> {
   try {
-    const response = await fetchAppResource(src, { credentials: "include" });
+    const response = await fetchAppResource(imageFetchURL(src), {
+      credentials: "include",
+    });
     if (!response.ok) return null;
     return await response.arrayBuffer();
   } catch {

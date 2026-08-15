@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   FilePlus,
   FolderPlus,
+  LoaderCircle,
   Pencil,
   Plus,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { useI18n } from "../../i18n";
 import type { DocumentSummary, Folder } from "../../documents";
@@ -43,6 +45,9 @@ export function DocumentList({
   onMoveDoc,
   onMoveFolder,
   onCollapse,
+  importing,
+  onImport,
+  notice,
   error,
   autoEditFolderId,
   onAutoEditDone,
@@ -66,8 +71,12 @@ export function DocumentList({
   onMoveDoc: (docId: string, folderId: string | null) => void;
   onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
+  importing: boolean;
+  onImport: (files: File[]) => void;
+  notice?: string | null;
 }) {
   const { t } = useI18n();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [rootOver, setRootOver] = useState(false);
@@ -269,6 +278,35 @@ export function DocumentList({
         </button>
       </div>
 
+      <div className="px-3 pb-2">
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".md,.zip,image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = "";
+            if (files.length > 0) onImport(files);
+          }}
+        />
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => importInputRef.current?.click()}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-2 text-xs font-medium text-neutral-500 transition hover:border-cinnabar-400 hover:bg-cinnabar-50/60 hover:text-cinnabar-700 disabled:opacity-50 dark:border-white/10 dark:text-neutral-400 dark:hover:border-cinnabar-500/60 dark:hover:bg-cinnabar-950/30 dark:hover:text-cinnabar-300"
+          title={t.transfer.importHint}
+        >
+          {importing ? (
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          {t.transfer.importButton}
+        </button>
+      </div>
+
       {/* 整个滚动区都是「根」的放置区：拖到空白处即移出文件夹。
           提示只在拖动中显现，静止时不该有多余的框 */}
       <div
@@ -296,6 +334,15 @@ export function DocumentList({
             className="mb-1 rounded-lg bg-red-50 px-2 py-1.5 text-[11px] leading-relaxed text-red-600 dark:bg-red-950/40 dark:text-red-400"
           >
             {error}
+          </p>
+        )}
+
+        {notice && !error && (
+          <p
+            role="status"
+            className="mb-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-[11px] leading-relaxed text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+          >
+            {notice}
           </p>
         )}
 

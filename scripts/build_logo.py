@@ -109,7 +109,7 @@ def plate(mark: Image.Image, size: int, bg, gamma: float) -> Image.Image:
 
 
 def desktop_plate(mark: Image.Image, size: int, bg, gamma: float) -> Image.Image:
-    """桌面图标：在透明画布内保留平台安全留白，避免边缘贴框。"""
+    """传统桌面图标：透明画布内保留平台安全留白。"""
     c = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     plate_size = round(size * 0.82)
     plate_offset = (size - plate_size) // 2
@@ -121,6 +121,16 @@ def desktop_plate(mark: Image.Image, size: int, bg, gamma: float) -> Image.Image
     ]
     ImageDraw.Draw(c).rounded_rectangle(plate_box, radius=round(plate_size * 0.22), fill=bg)
     inner = round(plate_size * 0.84)
+    m = densify(mark, inner, gamma)
+    off = (size - inner) // 2
+    c.paste(m, (off, off), m)
+    return c
+
+
+def desktop_mark(mark: Image.Image, size: int, gamma: float) -> Image.Image:
+    """macOS 26 Icon Composer 前景层：底色由系统的原生图标资源负责。"""
+    c = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    inner = round(size * 0.69)
     m = densify(mark, inner, gamma)
     off = (size - inner) // 2
     c.paste(m, (off, off), m)
@@ -147,7 +157,10 @@ def main() -> None:
     desktop_icons = Path("src-tauri/icons")
     if desktop_icons.is_dir():
         desktop_plate(rev, 1024, ink, 0.5).save(desktop_icons / "app-icon.png", optimize=True)
-        print("wrote src-tauri/icons/app-icon.png; run `npx tauri icon src-tauri/icons/app-icon.png`")
+        composer_assets = desktop_icons / "AppIcon.icon" / "Assets"
+        composer_assets.mkdir(parents=True, exist_ok=True)
+        desktop_mark(rev, 1024, 0.5).save(composer_assets / "mark.png", optimize=True)
+        print("wrote src-tauri/icons/app-icon.png and AppIcon.icon/Assets/mark.png; run `npx tauri icon src-tauri/icons/app-icon.png`")
     print("wrote logo.png logo-dark.png favicon.png apple-touch-icon.png")
 
 

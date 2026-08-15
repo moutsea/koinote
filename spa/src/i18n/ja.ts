@@ -452,8 +452,10 @@ export const ja: Messages = {
   },
   documentsPage: {
     title: "マイドキュメント",
-    subtitle: "クラウドに保存したドキュメントを確認し、編集を続けられます。",
-    emptyHint: "クラウドドキュメントはまだありません。",
+    subtitle:
+      "クラウド文書を表示し、Markdown・フォルダ・ZIP 移行データを読み込めます。",
+    emptyHint:
+      "クラウド文書はまだありません。既存の内容を読み込むか、最初の文書を作成してください。",
     emptyLinkText: "最初のドキュメントを作成",
   },
   search: {

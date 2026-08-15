@@ -10,8 +10,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 - Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens,
   local-first SQLite documents, background synchronization, and explicit conflict recovery.
-- Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel,
-  and Windows x64 installers.
+- Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.
 - Added signed desktop auto-updates with startup checks, a manual account-menu action, download
   progress, and restart-to-install support.
 - Added foreground remote-change detection for the web editor and desktop client. Clean documents
@@ -21,11 +20,12 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 - The desktop client now opens to a focused local-first workspace with continue-writing, recent
   documents, quick actions, sync status, and offline availability instead of the website landing page.
-- Desktop app icons now use platform-safe transparent spacing so their rounded edge renders cleanly
-  without a visible fringe on macOS and Windows.
+- Markdown import is now exposed in the editor sidebar and through dedicated file and folder actions on the empty Documents page.
+- macOS 26 builds now use a native Icon Composer asset; older macOS and Windows keep their normal fallback icons.
 
 ### Fixed
 
+- Word and PDF exports now read Koinote-hosted images through the same-origin proxy, avoiding browser CORS failure placeholders.
 - Fixed desktop Admin and MCP-token requests being rejected by the desktop Bearer allowlist,
   restored the Docs and Pricing navigation, and routed web-only security and permanent-deletion
   actions to the system browser instead of letting them fail with 403.

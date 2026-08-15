@@ -13,8 +13,14 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
   des documents propres et demande explicite en cas de brouillon local concurrent.
 
+### Changed
+
+- L’import Markdown est désormais visible dans la barre latérale de l’éditeur ; la page vide propose aussi l’import de fichiers et de dossiers.
+- macOS 26 utilise une ressource Icon Composer native ; les anciennes versions de macOS et Windows conservent leurs icônes de secours.
+
 ### Fixed
 
+- Correction de l’export Word et PDF des images Koinote : leur lecture passe désormais par le proxy même origine et n’est plus bloquée par CORS.
 - Correction du refus des statistiques d’administration et des jetons MCP par la liste d’autorisation
   Bearer du client, retour des entrées Documentation et Tarifs, et ouverture dans le navigateur système
   des opérations de sécurité et de suppression définitive réservées au Web au lieu d’un échec 403.

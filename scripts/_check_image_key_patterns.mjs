@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
 import { isSafeImageKey } from "./_image_key_worker_bundle.mjs";
-import { sameOriginImageURL } from "./_image_key_loading_bundle.mjs";
+import {
+  imageFetchURL,
+  sameOriginImageURL,
+} from "./_image_key_loading_bundle.mjs";
 import { isOwnImage } from "./_image_key_rehost_bundle.mjs";
 
 let pass = 0;
@@ -71,6 +75,39 @@ check(
   "图片 URL 查询串不触发重复转存",
   isOwnImage(`/images/${validKey}?v=2`) === true,
 );
+
+const reportedURL =
+  "https://img.koinote.app/u/google_104742467398561921274/3644918289f68adacc34fcbd8f68c9c7.png";
+check(
+  "导出读取自有图片时走同源代理",
+  imageFetchURL(reportedURL) ===
+    "/images/u/google_104742467398561921274/3644918289f68adacc34fcbd8f68c9c7.png",
+  imageFetchURL(reportedURL),
+);
+check(
+  "导出读取地址保留下划线且不添加 Markdown 转义",
+  !imageFetchURL(reportedURL).includes("\\_") &&
+    imageFetchURL(reportedURL).includes("google_104742467398561921274"),
+  imageFetchURL(reportedURL),
+);
+const externalURL = "https://images.example.com/article/cover.png";
+check(
+  "导出读取外站图片时保持原地址",
+  imageFetchURL(externalURL) === externalURL,
+  imageFetchURL(externalURL),
+);
+
+for (const file of ["exportDocx.ts", "exportPdf.ts"]) {
+  const source = readFileSync(
+    new URL(`../spa/src/components/editor/${file}`, import.meta.url),
+    "utf8",
+  );
+  check(
+    `${file} 通过共享规则读取图片`,
+    /fetchAppResource\(imageFetchURL\(src\)/.test(source),
+    "自有 CDN 地址不能直接交给 fetchAppResource",
+  );
+}
 
 console.log(`图片 key 正则：${pass} 通过，${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

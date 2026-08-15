@@ -15,7 +15,8 @@ function withRetryQuery(src: string, attempt: number): string {
  *
  * 某些本地代理会把 img.koinote.app 解析到 fake-IP/ULA 地址。Chrome 会把这种跨域
  * 子资源判为 local address space 并拦截，但同源的 /images/... 不受这条检查影响。
- * 这里只返回显示地址，不修改 TipTap 节点里的 src；正文与导出仍保留 CDN 地址。
+ * 这里只返回读取地址，不修改 TipTap 节点里的 src；正文持久化与导出内容里的地址
+ * 仍保留 CDN 地址。
  * 只接受生产图床域名和合法对象 key，避免把任意外站图片误映射到站内路径。
  */
 export function sameOriginImageURL(
@@ -36,8 +37,19 @@ export function sameOriginImageURL(
 }
 
 /**
+ * 返回浏览器/桌面客户端读取图片字节时使用的地址。
+ *
+ * 自有 CDN 没有开放给网页 fetch 的 CORS 响应头，直接读取会失败；改走同源 Worker
+ * 代理后，Word/PDF 导出才能把图片真正内嵌。桌面网络层会把相对路径解析到远端
+ * Koinote origin，因此网页与客户端可以共用这一条规则。
+ */
+export function imageFetchURL(src: string): string {
+  return sameOriginImageURL(src) ?? src;
+}
+
+/**
  * 自有 CDN 图片从首次加载起就走同源代理；其他图片保持原地址，失败重试时绕过缓存。
- * 这里只改实际显示地址，不修改文档里的 src，因此导出仍使用 CDN。
+ * 这里只改实际显示地址，不修改文档里的 src，因此导出内容仍保留 CDN 地址。
  */
 export function imageURLForAttempt(
   src: string,

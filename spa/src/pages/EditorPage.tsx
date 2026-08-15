@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { FolderTree, ListTree, Share2 } from "lucide-react";
@@ -43,6 +44,7 @@ import { interpolate, useI18n } from "../i18n";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { registerDesktopSyncPreparation } from "../desktop/logoutGuard";
 import { confirmAction } from "../confirmAction";
+import { importDocumentsFromFiles } from "../documentTransfer";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -51,6 +53,7 @@ const LEGACY_STORAGE_KEY = "koinote:document";
 export function EditorPage() {
   const { t } = useI18n();
   const session = useSession();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { docId?: string };
   const activeDocId = params.docId;
@@ -71,6 +74,11 @@ export function EditorPage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importNotice, setImportNotice] = useState<{
+    error: boolean;
+    message: string;
+  } | null>(null);
   const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
   const saver = useDocumentSaver(refreshList);
   const serverTabs = useEditorTabs(loggedIn);
@@ -509,6 +517,32 @@ export function EditorPage() {
     [moveFolderMut],
   );
 
+  const handleImport = useCallback(
+    async (files: File[]) => {
+      setImporting(true);
+      setImportNotice(null);
+      try {
+        const count = await importDocumentsFromFiles(files);
+        setImportNotice({
+          error: false,
+          message: interpolate(t.transfer.importSuccess, {
+            count: String(count),
+          }),
+        });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["documents"] }),
+          queryClient.invalidateQueries({ queryKey: ["folders"] }),
+          queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
+        ]);
+      } catch {
+        setImportNotice({ error: true, message: t.transfer.importFailed });
+      } finally {
+        setImporting(false);
+      }
+    },
+    [queryClient, t.transfer],
+  );
+
   /**
    * 文件夹六种写操作的失败合成一条提示。
    *
@@ -612,7 +646,10 @@ export function EditorPage() {
             onMoveDoc={handleMoveDoc}
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
-            error={folderError}
+            importing={importing}
+            onImport={(files) => void handleImport(files)}
+            notice={importNotice?.error ? null : importNotice?.message}
+            error={importNotice?.error ? importNotice.message : folderError}
             autoEditFolderId={autoEditFolderId}
             onAutoEditDone={() => setAutoEditFolderId(null)}
           />
@@ -786,7 +823,10 @@ export function EditorPage() {
               onMoveDoc={handleMoveDoc}
               onMoveFolder={handleMoveFolder}
               onCollapse={() => setMobileDocsOpen(false)}
-              error={folderError}
+              importing={importing}
+              onImport={(files) => void handleImport(files)}
+              notice={importNotice?.error ? null : importNotice?.message}
+              error={importNotice?.error ? importNotice.message : folderError}
               autoEditFolderId={autoEditFolderId}
               onAutoEditDone={() => setAutoEditFolderId(null)}
             />

@@ -6,6 +6,8 @@ const read = (path) =>
 const shell = read("spa/src/components/AppShell.tsx");
 const search = read("spa/src/components/GlobalSearch.tsx");
 const documents = read("spa/src/pages/DocumentsPage.tsx");
+const documentList = read("spa/src/components/editor/DocumentList.tsx");
+const editor = read("spa/src/pages/EditorPage.tsx");
 const share = read("spa/src/pages/SharePage.tsx");
 const admin = read("spa/src/pages/AdminPage.tsx");
 const home = read("spa/src/pages/HomePage.tsx");
@@ -18,6 +20,9 @@ assert.match(documents, /importDocumentsFromFiles/);
 assert.match(documents, /exportDocumentsArchive/);
 assert.match(documents, /webkitdirectory/);
 assert.match(documents, /importFolderButton/);
+assert.match(documentList, /onImport\(files\)/);
+assert.match(documentList, /transfer\.importButton/);
+assert.match(editor, /importDocumentsFromFiles\(files\)/);
 assert.match(share, /copySharedDocument/);
 assert.match(share, /sharedViews/);
 assert.match(admin, /stats\.funnel/);

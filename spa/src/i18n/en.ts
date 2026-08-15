@@ -455,8 +455,10 @@ export const en: Messages = {
   },
   documentsPage: {
     title: "My documents",
-    subtitle: "View and continue editing documents saved in the cloud.",
-    emptyHint: "No cloud documents yet. ",
+    subtitle:
+      "Browse cloud documents or import Markdown, folders, and ZIP migration archives.",
+    emptyHint:
+      "No cloud documents yet. Import existing work or create your first document.",
     emptyLinkText: "Create your first document",
   },
   search: {

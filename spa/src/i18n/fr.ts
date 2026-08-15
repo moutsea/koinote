@@ -463,8 +463,9 @@ export const fr: Messages = {
   documentsPage: {
     title: "Mes documents",
     subtitle:
-      "Consultez et poursuivez l’édition des documents enregistrés dans le cloud.",
-    emptyHint: "Aucun document cloud pour l’instant. ",
+      "Consultez vos documents ou importez du Markdown, des dossiers et des archives ZIP.",
+    emptyHint:
+      "Aucun document cloud. Importez du contenu existant ou créez votre premier document.",
     emptyLinkText: "Créer votre premier document",
   },
   search: {

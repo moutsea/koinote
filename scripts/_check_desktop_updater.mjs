@@ -23,13 +23,17 @@ const rust = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
 const updater = fs.readFileSync("spa/src/components/DesktopUpdater.tsx", "utf8");
 const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
 const workflow = fs.readFileSync(".github/workflows/release-desktop.yml", "utf8");
+const composerIcon = JSON.parse(fs.readFileSync("src-tauri/icons/AppIcon.icon/icon.json", "utf8"));
 const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
   .toString("utf8")
   .trim()
   .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.6");
+ok("客户端版本已升级", config.version === "0.1.7");
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
+ok("配置 macOS 26 原生图标", config.bundle.icon.includes("icons/AppIcon.icon"));
+ok("原生图标使用深色底", composerIcon.fill?.solid === "srgb:0.12157,0.13725,0.15686,1.00000");
+ok("原生图标包含水墨前景", composerIcon.groups?.[0]?.layers?.[0]?.["image-name"] === "mark.png" && fs.existsSync("src-tauri/icons/AppIcon.icon/Assets/mark.png"));
 ok("配置 GitHub 更新清单", config.plugins.updater.endpoints.includes("https://github.com/moutsea/koinote/releases/latest/download/latest.json"));
 ok(
   "配置完整 Minisign 更新公钥",
@@ -55,6 +59,8 @@ includes("显示下载进度", updater, 'event.event === "Progress"');
 includes("桌面外壳懒加载更新器", shell, 'import("./DesktopUpdater")');
 includes("账户菜单可检查更新", shell, "requestDesktopUpdateCheck()");
 includes("发布流程读取签名私钥", workflow, "TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}");
+includes("使用支持 Icon Composer 的 macOS 构建机", workflow, "os: macos-26");
+includes("校验 macOS 原生图标产物", workflow, 'test -f "$app/Contents/Resources/Assets.car"');
 includes("发布 macOS 更新包", workflow, "*.app.tar.gz");
 includes("发布 Windows 更新包", workflow, "updaters=(\"$bundle_dir\"/nsis/*-setup.exe)");
 includes("生成静态更新清单", workflow, "> release-artifacts/latest.json");

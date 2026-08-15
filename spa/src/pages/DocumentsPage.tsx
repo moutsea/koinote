@@ -335,14 +335,43 @@ export function DocumentsPage() {
           />
           <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
             {t.documentsPage.emptyHint}
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              disabled={Boolean(transfer)}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
+              style={{
+                borderColor: "var(--ink-line)",
+                color: "var(--ink-strong)",
+              }}
+            >
+              <Upload className="h-4 w-4" />
+              {t.transfer.importButton}
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(transfer)}
+              onClick={() => folderInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
+              style={{
+                borderColor: "var(--ink-line)",
+                color: "var(--ink-strong)",
+              }}
+            >
+              <FolderUp className="h-4 w-4" />
+              {t.transfer.importFolderButton}
+            </button>
             <Link
               to="/editor"
-              className="font-medium hover:underline"
-              style={{ color: "var(--cinnabar)" }}
+              className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "var(--cinnabar)" }}
             >
+              <Plus className="h-4 w-4" />
               {t.documentsPage.emptyLinkText}
             </Link>
-          </p>
+          </div>
         </div>
       )}
     </PageContainer>

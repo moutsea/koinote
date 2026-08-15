@@ -437,8 +437,8 @@ export const zh: Messages = {
   },
   documentsPage: {
     title: "我的文档",
-    subtitle: "查看并继续编辑保存在云端的文档。",
-    emptyHint: "还没有云端文档，",
+    subtitle: "查看云端文档，也可以导入 Markdown、文件夹或 ZIP 迁移包。",
+    emptyHint: "还没有云端文档，可以导入已有内容或新建第一篇。",
     emptyLinkText: "新建第一篇文档",
   },
   search: {

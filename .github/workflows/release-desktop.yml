@@ -20,10 +20,10 @@ jobs:
       matrix:
         include:
           - label: macOS Apple Silicon
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-darwin
           - label: macOS Intel
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
           - label: Windows x64
             os: windows-latest
@@ -73,6 +73,10 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint "$mount_dir" "${dmgs[0]}" >/dev/null
           trap 'hdiutil detach "$mount_dir" >/dev/null 2>&1 || true' EXIT
           app="$mount_dir/Koinote.app"
+          test -f "$app/Contents/Resources/Assets.car" || {
+            echo "::error::Assets.car 缺失，macOS 26 原生图标未生成（请检查 actool 版本是否不低于 26）"
+            exit 1
+          }
           codesign --verify --deep --strict --verbose=4 "$app"
           identifier=$(codesign -dv --verbose=4 "$app" 2>&1 | sed -n 's/^Identifier=//p')
           if [ "$identifier" != "app.koinote.desktop" ]; then
@@ -156,7 +160,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version restores Admin statistics, MCP token management, Docs and Pricing, and opens sensitive web-only actions safely in the system browser."
+          notes="Koinote Desktop $version adds a native macOS 26 Liquid Glass icon so Tahoe no longer wraps Koinote in a gray-white compatibility plate."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -186,7 +190,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本修复客户端管理后台与 MCP 令牌请求被错误拒绝的问题，补回“文档”和“价格”入口，并将账号安全与永久删除等仅网页允许的敏感操作交给系统浏览器完成。
+          此版本为 macOS 26 增加原生 Icon Composer 图标资源，避免 Tahoe 把传统图标包进额外的灰白兼容底板。旧版 macOS 继续使用 ICNS 回退图标，Windows 图标不受影响。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -200,7 +204,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release restores Admin statistics and MCP token management, adds Docs and Pricing navigation, and opens sensitive web-only account-security and permanent-deletion actions in the system browser.
+          This release adds a native Icon Composer asset for macOS 26, preventing Tahoe from wrapping Koinote in an extra gray-white compatibility plate. Older macOS versions keep the ICNS fallback, and Windows icons are unchanged.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
