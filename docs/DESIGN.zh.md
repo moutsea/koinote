@@ -276,8 +276,9 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 5. 访问令牌 15 分钟有效，刷新令牌 30 天有效且每次使用都轮换。数据库只存 token 摘要，
    原文只留在系统钥匙串；撤销、修改密码和“退出其他设备”都通过 `session_version` 立即生效。
 
-Bearer token 通过后端显式 allowlist 只能访问桌面编辑、整理、分享、存储用量与只读会员状态所需接口，
-不能调用支付 Checkout、MCP 令牌、管理后台、密码与会话安全操作，也不能永久删除文档。
+Bearer token 通过后端显式 allowlist 只能访问桌面编辑、整理、分享、存储用量、会员 Checkout、
+MCP 令牌管理，以及管理员读取统计所需的精确路径和方法；会员与管理员资格仍由对应端点二次校验。
+密码、会话安全操作和永久删除文档继续禁止。
 
 深链本身是不可信输入，所以 code、state、client ID 和 PKCE 字符集在前后端都会校验。Windows
 收到深链时会启动第二个进程，single-instance 插件负责把 URL 转给已有窗口。

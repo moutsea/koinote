@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { FileText, RotateCcw, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { useSession } from "../auth";
 import {
   usePermanentlyDeleteDocument,
@@ -9,6 +10,8 @@ import {
 import { interpolate, useI18n, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { confirmAction } from "../confirmAction";
+import { isDesktopRuntime } from "../desktop/runtime";
+import { openKoinoteWebPath } from "../externalNavigation";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -23,6 +26,8 @@ export function TrashPage() {
   const documents = useTrashedDocumentList(Boolean(session.data?.user));
   const restore = useRestoreTrashedDocument();
   const purge = usePermanentlyDeleteDocument();
+  const desktopRuntime = isDesktopRuntime();
+  const [openWebFailed, setOpenWebFailed] = useState(false);
 
   if (session.isLoading) {
     return (
@@ -56,6 +61,15 @@ export function TrashPage() {
     );
     if (confirmation === null) return;
     purge.mutate({ docId, confirmation });
+  }
+
+  async function managePermanentDeletionOnWeb() {
+    setOpenWebFailed(false);
+    try {
+      await openKoinoteWebPath("/trash");
+    } catch {
+      setOpenWebFailed(true);
+    }
   }
 
   return (
@@ -132,18 +146,30 @@ export function TrashPage() {
                 <RotateCcw className="h-4 w-4" />
                 {t.trashPage.restore}
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void permanentlyDelete(document.docId, document.title)
-                }
-                disabled={purge.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition hover:bg-red-50"
-                style={{ color: "var(--cinnabar)" }}
-              >
-                <Trash2 className="h-4 w-4" />
-                {t.trashPage.deletePermanently}
-              </button>
+              {desktopRuntime ? (
+                <button
+                  type="button"
+                  onClick={() => void managePermanentDeletionOnWeb()}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+                  style={{ color: "var(--ink-strong)" }}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  {t.trashPage.manageOnWeb}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void permanentlyDelete(document.docId, document.title)
+                  }
+                  disabled={purge.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition hover:bg-red-50"
+                  style={{ color: "var(--cinnabar)" }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t.trashPage.deletePermanently}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -165,7 +191,7 @@ export function TrashPage() {
         </div>
       )}
 
-      {(restore.isError || purge.isError) && (
+      {(restore.isError || purge.isError || openWebFailed) && (
         <p className="mt-4 text-sm" style={{ color: "var(--cinnabar)" }}>
           {t.trashPage.actionFailed}
         </p>

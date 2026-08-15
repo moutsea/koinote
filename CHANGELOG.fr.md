@@ -13,6 +13,12 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
   des documents propres et demande explicite en cas de brouillon local concurrent.
 
+### Fixed
+
+- Correction du refus des statistiques d’administration et des jetons MCP par la liste d’autorisation
+  Bearer du client, retour des entrées Documentation et Tarifs, et ouverture dans le navigateur système
+  des opérations de sécurité et de suppression définitive réservées au Web au lieu d’un échec 403.
+
 ## [0.5.0] - 2026-08-15
 
 ### Added

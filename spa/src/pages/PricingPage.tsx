@@ -12,6 +12,7 @@ import {
 import { PageContainer } from "../components/PageContainer";
 import { interpolate, useI18n } from "../i18n";
 import { formatBytes } from "../storage";
+import { openMembershipCheckout } from "../externalNavigation";
 
 const PRICING_KEY = ["billing-pricing"] as const;
 
@@ -27,9 +28,10 @@ export function PricingPage() {
     retry: false,
   });
   const checkout = useMutation({
-    mutationFn: createMembershipCheckout,
-    onSuccess(result) {
-      window.location.assign(result.url);
+    async mutationFn(currency: string) {
+      const result = await createMembershipCheckout(currency);
+      await openMembershipCheckout(result.url);
+      return result;
     },
   });
 

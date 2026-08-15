@@ -46,13 +46,48 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		allowed bool
 	}{
 		{http.MethodGet, "/api/auth/session", true},
+		{http.MethodGet, "/api/billing/status", true},
 		{http.MethodPost, "/api/documents", true},
+		{http.MethodGet, "/api/documents", true},
+		{http.MethodGet, "/api/documents/search", true},
+		{http.MethodGet, "/api/documents/trash", true},
+		{http.MethodGet, "/api/documents/doc-id", true},
 		{http.MethodPut, "/api/documents/doc-id", true},
+		{http.MethodDelete, "/api/documents/doc-id", true},
+		{http.MethodPut, "/api/documents/doc-id/folder", true},
+		{http.MethodPost, "/api/documents/doc-id/restore", true},
+		{http.MethodPost, "/api/documents/doc-id/share", true},
+		{http.MethodDelete, "/api/documents/doc-id/share", true},
+		{http.MethodGet, "/api/documents/doc-id/versions", true},
+		{http.MethodGet, "/api/documents/doc-id/versions/2", true},
+		{http.MethodPost, "/api/documents/doc-id/versions/2/restore", true},
 		{http.MethodDelete, "/api/documents/doc-id/permanent", false},
-		{http.MethodPost, "/api/billing/checkout", false},
-		{http.MethodGet, "/api/mcp/tokens", false},
-		{http.MethodGet, "/api/admin/stats", false},
+		{http.MethodGet, "/api/folders", true},
+		{http.MethodPost, "/api/folders", true},
+		{http.MethodPut, "/api/folders/folder-id", true},
+		{http.MethodDelete, "/api/folders/folder-id", true},
+		{http.MethodPut, "/api/folders/folder-id/parent", true},
+		{http.MethodGet, "/api/editor/tabs", true},
+		{http.MethodPut, "/api/editor/tabs", true},
+		{http.MethodGet, "/api/storage/usage", true},
+		{http.MethodGet, "/api/invitations", true},
+		{http.MethodPost, "/api/analytics/events", true},
+		{http.MethodGet, "/api/settings/document-history", true},
+		{http.MethodPut, "/api/settings/document-history", true},
+		{http.MethodPost, "/api/billing/checkout", true},
+		{http.MethodPost, "/api/billing/checkout/confirm", true},
+		{http.MethodGet, "/api/mcp/tokens", true},
+		{http.MethodPost, "/api/mcp/tokens", true},
+		{http.MethodPatch, "/api/mcp/tokens/token-id", true},
+		{http.MethodDelete, "/api/mcp/tokens/token-id", true},
+		{http.MethodPost, "/api/mcp/tokens/token-id/reveal", true},
+		{http.MethodGet, "/api/mcp/tokens/token-id/reveal", false},
+		{http.MethodGet, "/api/admin/stats", true},
+		{http.MethodPost, "/api/admin/stats", false},
+		{http.MethodPost, "/api/auth/password", false},
 		{http.MethodPost, "/api/auth/sessions/invalidate", false},
+		{http.MethodPost, "/api/billing/webhook", false},
+		{http.MethodPost, "/api/images/record", false},
 	} {
 		req := httptest.NewRequest(test.method, test.path, nil)
 		if got := desktopRequestAllowed(req); got != test.allowed {
@@ -83,8 +118,11 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	authUserID := "desktop-test-" + suffix
 	var userID int
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO users (auth_user_id, email, is_verified)
-		VALUES ($1, $2, true) RETURNING id
+		INSERT INTO users (
+			auth_user_id, email, is_verified, is_admin,
+			membership_tier, membership_granted_at
+		)
+		VALUES ($1, $2, true, true, 'lifetime', now()) RETURNING id
 	`, authUserID, authUserID+"@example.test").Scan(&userID); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
@@ -206,13 +244,32 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	if status := accessSessionStatus(pair1.AccessToken); status != http.StatusOK {
 		t.Fatalf("access token session status=%d", status)
 	}
-	for _, forbiddenPath := range []string{
+	for _, allowedPath := range []string{
 		"/api/admin/stats",
+		"/api/billing/pricing",
 		"/api/mcp/tokens",
 	} {
-		rec := authenticatedJSON(pair1.AccessToken, http.MethodGet, forbiddenPath, "")
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("desktop scope %s status=%d body=%s", forbiddenPath, rec.Code, rec.Body.String())
+		rec := authenticatedJSON(pair1.AccessToken, http.MethodGet, allowedPath, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("desktop scope %s status=%d body=%s", allowedPath, rec.Code, rec.Body.String())
+		}
+	}
+	checkout := authenticatedJSON(pair1.AccessToken, http.MethodPost, "/api/billing/checkout", `{ "currency": "usd" }`)
+	if checkout.Code != http.StatusServiceUnavailable {
+		t.Fatalf("desktop checkout should pass scope before config validation: status=%d body=%s", checkout.Code, checkout.Body.String())
+	}
+	for _, test := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodPost, "/api/auth/password", `{ "currentPassword": "old", "newPassword": "new-password" }`},
+		{http.MethodPost, "/api/auth/sessions/invalidate", ""},
+		{http.MethodDelete, "/api/documents/123e4567-e89b-42d3-a456-426614174000/permanent", `{ "confirmation": "DELETE" }`},
+	} {
+		forbidden := authenticatedJSON(pair1.AccessToken, test.method, test.path, test.body)
+		if forbidden.Code != http.StatusForbidden {
+			t.Fatalf("desktop restricted endpoint %s %s status=%d body=%s", test.method, test.path, forbidden.Code, forbidden.Body.String())
 		}
 	}
 

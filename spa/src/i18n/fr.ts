@@ -308,6 +308,9 @@ export const fr: Messages = {
     title: "Sécurité du compte",
     description:
       "Changer le mot de passe conserve cette session et invalide immédiatement les anciennes sessions ailleurs.",
+    desktopDescription:
+      "Le changement de mot de passe et la révocation des sessions sont des actions sensibles qui s’ouvrent dans le navigateur système.",
+    manageOnWeb: "Gérer sur le Web",
     oauthOnly:
       "Ce compte utilise actuellement Google ou GitHub et ne possède pas de mot de passe Koinote à modifier.",
     currentPassword: "Mot de passe actuel",
@@ -499,6 +502,7 @@ export const fr: Messages = {
     deletesOn: "Suppression définitive le {date}",
     restore: "Restaurer",
     deletePermanently: "Supprimer définitivement",
+    manageOnWeb: "Supprimer définitivement sur le Web",
     permanentWarning:
       "La suppression définitive efface aussi l’historique et ne peut pas être annulée. Continuer ?",
     typeToConfirm:

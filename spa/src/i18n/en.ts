@@ -303,6 +303,9 @@ export const en: Messages = {
     title: "Account security",
     description:
       "Changing your password keeps this device signed in and immediately invalidates older sessions elsewhere.",
+    desktopDescription:
+      "Password changes and session revocation are sensitive actions and open in your system browser.",
+    manageOnWeb: "Manage on the web",
     oauthOnly:
       "This account currently signs in with Google or GitHub and does not have a Koinote password to change.",
     currentPassword: "Current password",
@@ -490,6 +493,7 @@ export const en: Messages = {
     deletesOn: "Permanently deleted on {date}",
     restore: "Restore",
     deletePermanently: "Delete permanently",
+    manageOnWeb: "Permanently delete on the web",
     permanentWarning:
       "Permanent deletion also removes version history and cannot be undone. Continue?",
     typeToConfirm: "Type “{title}” to confirm permanent deletion:",

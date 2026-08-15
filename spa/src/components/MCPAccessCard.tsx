@@ -13,6 +13,7 @@ import {
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 import { confirmAction } from "../confirmAction";
+import { desktopAPIOrigin, isDesktopRuntime } from "../desktop/runtime";
 
 const MCP_TOKENS_KEY = ["mcp-tokens"] as const;
 type ExpiryChoice = 30 | 90 | 180 | 365 | "never";
@@ -72,7 +73,9 @@ export function MCPAccessCard({ user }: { user: User }) {
     },
   });
 
-  const endpoint = `${window.location.origin}/mcp`;
+  const endpoint = isDesktopRuntime()
+    ? `${desktopAPIOrigin()}/mcp`
+    : `${window.location.origin}/mcp`;
 
   async function copy(value: string, key: string) {
     try {

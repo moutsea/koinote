@@ -26,6 +26,9 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Fixed desktop Admin and MCP-token requests being rejected by the desktop Bearer allowlist,
+  restored the Docs and Pricing navigation, and routed web-only security and permanent-deletion
+  actions to the system browser instead of letting them fail with 403.
 - macOS Apple Silicon and Intel release bundles now receive a complete ad-hoc signature and are
   verified from inside the generated DMG, preventing Gatekeeper from reporting a broken partial
   signature as a damaged application.

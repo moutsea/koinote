@@ -301,6 +301,9 @@ export const ja: Messages = {
     title: "アカウントのセキュリティ",
     description:
       "パスワードを変更すると、この端末はログイン状態を保ち、他の端末の古いセッションを直ちに無効化します。",
+    desktopDescription:
+      "パスワード変更とセッション無効化は機密性の高い操作のため、システムブラウザで行います。",
+    manageOnWeb: "Web で管理",
     oauthOnly:
       "このアカウントは現在 Google または GitHub でログインしており、変更できる Koinote パスワードはありません。",
     currentPassword: "現在のパスワード",
@@ -485,6 +488,7 @@ export const ja: Messages = {
     deletesOn: "{date} に完全に削除されます",
     restore: "復元",
     deletePermanently: "完全に削除",
+    manageOnWeb: "Web で完全に削除",
     permanentWarning:
       "完全に削除すると履歴も失われ、元に戻せません。続行しますか？",
     typeToConfirm: "完全削除を確認するには「{title}」と入力してください：",

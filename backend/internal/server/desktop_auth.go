@@ -419,6 +419,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/billing/status", "/api/invitations", "/api/storage/usage":
 		return method == http.MethodGet
+	case "/api/billing/checkout", "/api/billing/checkout/confirm":
+		return method == http.MethodPost
+	case "/api/admin/stats":
+		return method == http.MethodGet
+	case "/api/mcp/tokens":
+		return method == http.MethodGet || method == http.MethodPost
 	case "/api/analytics/events":
 		return method == http.MethodPost
 	case "/api/settings/document-history":
@@ -438,6 +444,13 @@ func desktopRequestAllowed(r *http.Request) bool {
 			return method == http.MethodPut || method == http.MethodDelete
 		}
 		return len(parts) == 2 && parts[0] != "" && parts[1] == "parent" && method == http.MethodPut
+	}
+	if rest, found := strings.CutPrefix(path, "/api/mcp/tokens/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && parts[0] != "" {
+			return method == http.MethodPatch || method == http.MethodDelete
+		}
+		return len(parts) == 2 && parts[0] != "" && parts[1] == "reveal" && method == http.MethodPost
 	}
 	if rest, found := strings.CutPrefix(path, "/api/documents/"); found {
 		parts := strings.Split(rest, "/")

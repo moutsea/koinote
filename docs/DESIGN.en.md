@@ -315,9 +315,10 @@ The desktop WebView never collects a password or duplicates Google / GitHub OAut
 4. The browser opens `koinote://auth?code=…&state=…`; the client verifies state before exchanging the verifier for tokens.
 5. Access tokens last 15 minutes. Refresh tokens last 30 days and rotate on every use. PostgreSQL stores only token hashes; plaintext stays in the OS keychain. Revocation, password changes, and “sign out other devices” all take effect through `session_version`.
 
-The backend applies an explicit allowlist to desktop bearer tokens. They can reach only the editing,
-organization, sharing, storage-usage, and read-only membership endpoints needed by the app; Checkout,
-MCP-token management, admin, password/session-security operations, and permanent deletion remain forbidden.
+The backend's explicit Bearer allowlist includes only the exact methods needed for desktop editing,
+organization, sharing, storage usage, membership Checkout, MCP-token management, and admin statistics.
+Each endpoint still enforces membership or admin status independently. Password/session-security
+operations and permanent document deletion remain forbidden.
 
 Deep links are untrusted input, so both sides validate the code, state, client ID, and PKCE alphabet.
 Windows launches another process for a deep link; the single-instance plugin forwards that URL to

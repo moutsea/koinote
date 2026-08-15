@@ -87,6 +87,7 @@ operating system will show a security warning on first launch.
 
 - macOS and Windows share the React / TipTap UI; Tauri supplies the native window, SQLite, deep links, and OS keychain
 - Documents, folders, and tabs are local-first, including offline create, edit, search, and organization
+- Desktop navigation exposes the MCP/version-history guides and Pricing; online users can manage MCP tokens and start Checkout, while admins can read site statistics; account-security and permanent-deletion actions continue in the system browser
 - The web and desktop editors check for remote changes while foregrounded and immediately on focus; clean documents update automatically, while local drafts require conflict resolution
 - Revision conflicts retain both local and cloud copies for an explicit choice instead of silently applying last-write-wins
 - OAuth and password sign-in stay in the system browser; PKCE codes are single-use, access tokens last 15 minutes, and rotating refresh tokens last 30 days

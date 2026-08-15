@@ -170,9 +170,17 @@ export function AppShell() {
               {t.nav.editor}
             </HeaderLink>
             {desktopRuntime ? (
-              <HeaderLink to="/documents" active={isUnder(pathname, "/documents")}>
-                {t.nav.documents}
-              </HeaderLink>
+              <>
+                <HeaderDocsMenu
+                  active={isUnder(pathname, "/docs")}
+                  label={t.nav.docs}
+                  mcpLabel={t.nav.mcpGuide}
+                  versionLabel={t.nav.versionHistoryGuide}
+                />
+                <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
+                  {t.nav.pricing}
+                </HeaderLink>
+              </>
             ) : (
               <>
                 <a href={DESKTOP_DOWNLOAD_URL} className="kn-ink-link transition">

@@ -296,6 +296,8 @@ export const zh: Messages = {
   security: {
     title: "账号安全",
     description: "修改密码会保留当前设备，并立即退出其他设备上的旧会话。",
+    desktopDescription: "修改密码和退出其他设备属于敏感操作，请在系统浏览器中完成。",
+    manageOnWeb: "在网页中管理",
     oauthOnly:
       "这个账号目前只使用 Google 或 GitHub 登录，没有可修改的站内密码。",
     currentPassword: "当前密码",
@@ -470,6 +472,7 @@ export const zh: Messages = {
     deletesOn: "将在 {date} 自动永久删除",
     restore: "恢复",
     deletePermanently: "永久删除",
+    manageOnWeb: "在网页中永久删除",
     permanentWarning: "永久删除会同时移除版本历史，且无法撤销。是否继续？",
     typeToConfirm: "请输入“{title}”确认永久删除：",
     loadFailed: "回收站加载失败，请稍后重试。",

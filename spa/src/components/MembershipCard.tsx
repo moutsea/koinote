@@ -10,6 +10,7 @@ import {
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 import { STORAGE_USAGE_KEY } from "./StorageCard";
+import { openMembershipCheckout } from "../externalNavigation";
 
 export const MEMBERSHIP_STATUS_KEY = ["membership-status"] as const;
 
@@ -60,9 +61,10 @@ export function MembershipCard({ user }: { user: User }) {
     retry: false,
   });
   const checkout = useMutation({
-    mutationFn: createMembershipCheckout,
-    onSuccess(data) {
-      window.location.assign(data.url);
+    async mutationFn(currency: string) {
+      const data = await createMembershipCheckout(currency);
+      await openMembershipCheckout(data.url);
+      return data;
     },
     onError() {
       setNotice("failed");

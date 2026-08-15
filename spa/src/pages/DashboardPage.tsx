@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, Clock, User as UserIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  Clock,
+  ExternalLink,
+  KeyRound,
+  Plus,
+  User as UserIcon,
+} from "lucide-react";
 import { useSession } from "../auth";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
@@ -9,6 +16,8 @@ import { MembershipCard } from "../components/MembershipCard";
 import { MCPAccessCard } from "../components/MCPAccessCard";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
+import { isDesktopRuntime } from "../desktop/runtime";
+import { openKoinoteWebPath } from "../externalNavigation";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -20,6 +29,7 @@ const DATE_LOCALE: Record<Locale, string> = {
 export function DashboardPage() {
   const session = useSession();
   const { t, locale } = useI18n();
+  const desktopRuntime = isDesktopRuntime();
 
   if (session.isLoading) {
     return (
@@ -115,7 +125,11 @@ export function DashboardPage() {
       </div>
 
       <div id="security" className="mt-4 scroll-mt-20">
-        <PasswordSecurityCard user={user} />
+        {desktopRuntime ? (
+          <DesktopSecurityCard />
+        ) : (
+          <PasswordSecurityCard user={user} />
+        )}
       </div>
 
       <div id="history-settings" className="mt-4 scroll-mt-20">
@@ -126,6 +140,57 @@ export function DashboardPage() {
         <MCPAccessCard user={user} />
       </div>
     </PageContainer>
+  );
+}
+
+function DesktopSecurityCard() {
+  const { t } = useI18n();
+  const [failed, setFailed] = useState(false);
+
+  async function openWebSecuritySettings() {
+    setFailed(false);
+    try {
+      await openKoinoteWebPath("/dashboard#security");
+    } catch {
+      setFailed(true);
+    }
+  }
+
+  return (
+    <PaperCard className="p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <KeyRound
+          className="mt-0.5 h-5 w-5 shrink-0"
+          style={{ color: "var(--ink-faint)" }}
+        />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold" style={{ color: "var(--ink-black)" }}>
+            {t.security.title}
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--ink-mid)" }}>
+            {t.security.desktopDescription}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void openWebSecuritySettings()}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash)]"
+          style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+        >
+          <ExternalLink className="h-4 w-4" />
+          {t.security.manageOnWeb}
+        </button>
+      </div>
+      {failed && (
+        <p
+          className="mt-4 text-sm"
+          role="alert"
+          style={{ color: "var(--cinnabar)" }}
+        >
+          {t.auth.requestFailed}
+        </p>
+      )}
+    </PaperCard>
   );
 }
 

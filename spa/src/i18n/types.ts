@@ -169,6 +169,8 @@ export interface Messages {
   security: {
     title: string;
     description: string;
+    desktopDescription: string;
+    manageOnWeb: string;
     oauthOnly: string;
     currentPassword: string;
     newPassword: string;
@@ -339,6 +341,7 @@ export interface Messages {
     deletesOn: string;
     restore: string;
     deletePermanently: string;
+    manageOnWeb: string;
     permanentWarning: string;
     typeToConfirm: string;
     loadFailed: string;
