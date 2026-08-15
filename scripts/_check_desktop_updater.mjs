@@ -23,11 +23,21 @@ const rust = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
 const updater = fs.readFileSync("spa/src/components/DesktopUpdater.tsx", "utf8");
 const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
 const workflow = fs.readFileSync(".github/workflows/release-desktop.yml", "utf8");
+const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
+  .toString("utf8")
+  .trim()
+  .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.3");
+ok("客户端版本已升级", config.version === "0.1.4");
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
 ok("配置 GitHub 更新清单", config.plugins.updater.endpoints.includes("https://github.com/moutsea/koinote/releases/latest/download/latest.json"));
-ok("配置非空更新公钥", typeof config.plugins.updater.pubkey === "string" && config.plugins.updater.pubkey.length > 100);
+ok(
+  "配置完整 Minisign 更新公钥",
+  decodedPublicKey.length === 2
+    && decodedPublicKey[0].startsWith("untrusted comment: minisign public key:")
+    && decodedPublicKey[1].length === 56
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(decodedPublicKey[1]),
+);
 ok("授权完整更新流程", capability.permissions.includes("updater:default"));
 ok("只授权进程重启", capability.permissions.includes("process:allow-restart") && !capability.permissions.includes("process:default"));
 ok("安装前端 updater 插件", Boolean(pkg.dependencies["@tauri-apps/plugin-updater"]));

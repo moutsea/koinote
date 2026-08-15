@@ -27,6 +27,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - macOS Apple Silicon and Intel release bundles now receive a complete ad-hoc signature and are
   verified from inside the generated DMG, preventing Gatekeeper from reporting a broken partial
   signature as a damaged application.
+- Desktop release builds now validate and embed the complete updater public key before signing
+  platform update artifacts.
 
 ## [0.5.0] - 2026-08-15
 
