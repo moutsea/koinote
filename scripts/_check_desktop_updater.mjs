@@ -29,7 +29,7 @@ const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
   .trim()
   .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.7");
+ok("客户端版本已升级", config.version === "0.1.8");
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
 ok("配置 macOS 26 原生图标", config.bundle.icon.includes("icons/AppIcon.icon"));
 ok("原生图标使用深色底", composerIcon.fill?.solid === "srgb:0.12157,0.13725,0.15686,1.00000");
@@ -60,6 +60,9 @@ includes("桌面外壳懒加载更新器", shell, 'import("./DesktopUpdater")');
 includes("账户菜单可检查更新", shell, "requestDesktopUpdateCheck()");
 includes("发布流程读取签名私钥", workflow, "TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}");
 includes("使用支持 Icon Composer 的 macOS 构建机", workflow, "os: macos-26");
+includes("绕过 Tauri actool 临时目录缺陷", workflow, "预编译 macOS 原生图标");
+includes("预编译 Assets.car", workflow, "actool src-tauri/icons/AppIcon.icon");
+includes("打包预编译图标", workflow, '"icons/Assets.car"');
 includes("校验 macOS 原生图标产物", workflow, 'test -f "$app/Contents/Resources/Assets.car"');
 includes("发布 macOS 更新包", workflow, "*.app.tar.gz");
 includes("发布 Windows 更新包", workflow, "updaters=(\"$bundle_dir\"/nsis/*-setup.exe)");

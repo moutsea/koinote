@@ -56,6 +56,55 @@ jobs:
           shared-key: ${{ matrix.target }}
 
       - run: npm ci
+
+      # Tauri 2.11.x 在临时目录内编译 .icon 时会触发 actool 崩溃：
+      # https://github.com/tauri-apps/tauri/issues/15315
+      # 先从源码目录直接生成 Assets.car，再让 Tauri 复制成品；重试用于规避
+      # ibtoold 偶发残留状态。Windows 继续使用原配置，不执行这一步。
+      - name: 预编译 macOS 原生图标
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated=""
+          for attempt in 1 2 3; do
+            attempt_dir=$(mktemp -d)
+            output_dir="$attempt_dir/out"
+            mkdir -p "$output_dir"
+            if actool src-tauri/icons/AppIcon.icon \
+              --compile "$output_dir" \
+              --output-format human-readable-text \
+              --notices --warnings \
+              --output-partial-info-plist "$output_dir/assetcatalog_generated_info.plist" \
+              --app-icon Icon \
+              --include-all-app-icons \
+              --accent-color AccentColor \
+              --enable-on-demand-resources NO \
+              --development-region en \
+              --target-device mac \
+              --minimum-deployment-target 26.0 \
+              --platform macosx && test -f "$output_dir/Assets.car"; then
+              cp "$output_dir/Assets.car" src-tauri/icons/Assets.car
+              generated="yes"
+              break
+            fi
+            echo "::warning::actool 第 $attempt 次执行失败，清理 ibtoold 后重试"
+            killall ibtoold >/dev/null 2>&1 || true
+          done
+          test -n "$generated" || {
+            echo "::error::无法从 AppIcon.icon 生成 Assets.car"
+            exit 1
+          }
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = "src-tauri/tauri.conf.json";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          config.bundle.icon = config.bundle.icon.map((icon) =>
+            icon === "icons/AppIcon.icon" ? "icons/Assets.car" : icon,
+          );
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
       - run: npm run desktop:build -- --target ${{ matrix.target }}
 
       - name: 验证 macOS DMG 与应用签名完整性

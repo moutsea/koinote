@@ -6,8 +6,6 @@
     {
       "layers": [
         {
-          "blend-mode": "normal",
-          "fill": "automatic",
           "glass": false,
           "hidden": false,
           "image-name": "mark.png",
