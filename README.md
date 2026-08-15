@@ -37,7 +37,10 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 
 桌面客户端可从 [Koinote 官网下载入口](https://koinote.app/download) 获取。该地址会跳转到
 最新 GitHub Release，提供 macOS Apple 芯片、macOS Intel 和 Windows x64 安装包及 SHA-256
-校验文件。Alpha 安装包目前尚未代码签名，首次运行时系统会显示安全提醒。
+校验文件。Alpha 安装包目前尚未购买平台证书；macOS 包会做 ad-hoc 完整性签名，但没有
+Apple Developer ID 与公证，首次运行时系统仍会显示安全提醒。请先右键应用选择“打开”，
+或在“系统设置 → 隐私与安全性”中选择“仍要打开”；若系统仍提示应用“已损坏”，请先核对
+Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications/Koinote.app`。
 
 > 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
 > 已通过 Stripe Checkout 支持一次性付款。

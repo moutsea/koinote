@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Koinote",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "app.koinote.desktop",
   "build": {
     "frontendDist": "../spa/dist",
@@ -43,6 +43,10 @@
     "category": "Productivity",
     "shortDescription": "Offline-first Markdown writing with Koinote sync",
     "longDescription": "Koinote is a Markdown editor with offline document access and secure synchronization.",
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

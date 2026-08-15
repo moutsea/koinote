@@ -13,6 +13,12 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel,
   and Windows x64 installers.
 
+### Fixed
+
+- macOS Apple Silicon and Intel release bundles now receive a complete ad-hoc signature and are
+  verified from inside the generated DMG, preventing Gatekeeper from reporting a broken partial
+  signature as a damaged application.
+
 ## [0.5.0] - 2026-08-15
 
 ### Added
