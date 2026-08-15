@@ -2,6 +2,7 @@
 // 错开，而这只有真去点那个页面才看得见。已经因此改过三轮，所以钉住。
 import {
   EDGE_PADDING,
+  EDITOR_ROOT_SCROLL_LOCK_CLASS,
   FOOTERLESS_PREFIXES,
   ROUTE_WIDTHS,
   containerClass,
@@ -9,6 +10,7 @@ import {
   hasFooter,
   isUnder,
   shellViewportClass,
+  shouldLockRootScroll,
   widthClass,
 } from "./_layout_bundle.mjs";
 
@@ -261,6 +263,7 @@ ok("/shared-notes 挂页脚", hasFooter("/shared-notes"), hasFooter("/shared-not
 // 桌面编辑器必须锁在一屏内，正文现有的 overflow-y-auto 才会成为滚动容器；移动端
 // 则保留自然页面滚动，避开 iOS Safari 的动态地址栏与 100dvh 内层滚动抖动。
 for (const path of ["/editor", "/editor/", "/editor/abc123"]) {
+  ok(`${path} 锁住桌面根滚动`, shouldLockRootScroll(path));
   eq(
     `${path} 仅在桌面锁定视口`,
     shellViewportClass(path),
@@ -268,12 +271,18 @@ for (const path of ["/editor", "/editor/", "/editor/abc123"]) {
   );
 }
 for (const path of ["/", "/dashboard", "/documents", "/editor-guide"]) {
+  ok(`${path} 不锁根滚动`, !shouldLockRootScroll(path));
   eq(
     `${path} 保持自然页面高度`,
     shellViewportClass(path),
     "min-h-[100dvh]",
   );
 }
+eq(
+  "根滚动锁 class 与全局样式约定一致",
+  EDITOR_ROOT_SCROLL_LOCK_CLASS,
+  "kn-editor-root-scroll-lock",
+);
 
 // 页脚里排着三条条款链接，宽度表里也得有对应条目，否则那三页会掉到兜底档
 for (const path of ["/privacy", "/terms", "/cookies"]) {

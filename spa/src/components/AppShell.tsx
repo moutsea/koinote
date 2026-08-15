@@ -33,9 +33,11 @@ import {
 } from "../i18n";
 import {
   EDGE_PADDING,
+  EDITOR_ROOT_SCROLL_LOCK_CLASS,
   hasFooter,
   isUnder,
   shellViewportClass,
+  shouldLockRootScroll,
 } from "../layout";
 import { formatBytes, usageLevel, usageRatio } from "../storage";
 import { AppFooter } from "./AppFooter";
@@ -67,6 +69,19 @@ export function AppShell() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  const lockRootScroll = shouldLockRootScroll(pathname);
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      EDITOR_ROOT_SCROLL_LOCK_CLASS,
+      lockRootScroll,
+    );
+    return () => {
+      document.documentElement.classList.remove(
+        EDITOR_ROOT_SCROLL_LOCK_CLASS,
+      );
+    };
+  }, [lockRootScroll]);
 
   async function handleLogout() {
     if (isDesktopRuntime()) {

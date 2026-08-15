@@ -118,6 +118,14 @@ export function isUnder(pathname: string, prefix: string): boolean {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
+/** 桌面编辑器用来锁住浏览器根滚动容器的 class。 */
+export const EDITOR_ROOT_SCROLL_LOCK_CLASS = "kn-editor-root-scroll-lock";
+
+/** 只有编辑器路由需要把根滚动交给正文自己的滚动容器。 */
+export function shouldLockRootScroll(pathname: string): boolean {
+  return isUnder(pathname, "/editor");
+}
+
 /**
  * 应用外壳的视口高度策略。
  *
@@ -126,7 +134,7 @@ export function isUnder(pathname: string, prefix: string): boolean {
  * 滚动，避开 iOS Safari 地址栏变化时 100dvh 与内层滚动容器互相拉扯。
  */
 export function shellViewportClass(pathname: string): string {
-  return isUnder(pathname, "/editor")
+  return shouldLockRootScroll(pathname)
     ? "min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden"
     : "min-h-[100dvh]";
 }

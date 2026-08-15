@@ -86,6 +86,18 @@ body {
   min-height: 100dvh;
 }
 
+/* 桌面编辑器的正文已经有独立滚动容器，浏览器根节点不能再滚。
+   只锁 AppShell 不够：WebKit 聚焦 contenteditable 时会尝试滚动 html/body，短暂
+   造出第二条滚动轴。移动端仍走自然页面滚动，避免和动态地址栏互相拉扯。 */
+@media (min-width: 64rem) {
+  html.kn-editor-root-scroll-lock,
+  html.kn-editor-root-scroll-lock body,
+  html.kn-editor-root-scroll-lock #root {
+    height: 100dvh;
+    overflow: hidden;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
