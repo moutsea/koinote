@@ -41,6 +41,8 @@ OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 Apple Developer ID 与公证，首次运行时系统仍会显示安全提醒。请先右键应用选择“打开”，
 或在“系统设置 → 隐私与安全性”中选择“仍要打开”；若系统仍提示应用“已损坏”，请先核对
 Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications/Koinote.app`。
+从 `0.1.3` 起客户端会在启动后自动检查新版本，也可以在账户菜单中手动检查、下载并重启
+安装；更新包使用独立的 Tauri 签名验证，不依赖付费平台证书。
 
 > 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
 > 已通过 Stripe Checkout 支持一次性付款。
@@ -78,6 +80,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 - revision 冲突会同时保留本地稿与云端稿，由用户明确选择，不用“最后写入者”静默覆盖正文
 - OAuth / 密码登录仍在系统浏览器完成；PKCE 授权码单次有效，访问令牌 15 分钟，刷新令牌 30 天轮换
 - 访问令牌、刷新令牌和未完成的 PKCE verifier 只存 macOS Keychain / Windows Credential Manager，不进 SQLite
+- 启动后自动检查签名更新，账户菜单也可手动检查并查看下载进度；安装完成后自动重启
 
 **图床**
 
@@ -298,6 +301,11 @@ npm run desktop:build     # 生成当前平台安装包
 
 生产构建默认同步 `https://koinote.app`；本地开发默认同步 `http://localhost:5273`。桌面端
 SQLite 不保存令牌，退出账号会清除该账号在本机的离线文档缓存。
+
+官方 Release 使用 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+生成更新签名，并发布 `latest.json`。Fork 仓库发布自己的客户端前，必须生成新的 Tauri
+签名密钥，把私钥写入同名 GitHub Secrets，并替换 `src-tauri/tauri.conf.json` 中的
+`plugins.updater.pubkey` 与更新地址；不要复用 Koinote 官方公钥和 Release 地址。
 
 ## 自建须知
 

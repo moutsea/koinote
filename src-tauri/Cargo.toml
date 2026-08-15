@@ -27,6 +27,8 @@ tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-http = "2.5.9"
 tauri-plugin-opener = "2.5.4"
+tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
+tauri-plugin-updater = "2.10.1"
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native"] }

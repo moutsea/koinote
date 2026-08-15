@@ -19,6 +19,7 @@ import {
   History,
   LayoutDashboard,
   LogOut,
+  RefreshCw,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
@@ -50,10 +51,17 @@ import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useStorageUsage } from "./StorageCard";
 import { GlobalSearch } from "./GlobalSearch";
 import { isDesktopRuntime } from "../desktop/runtime";
+import { requestDesktopUpdateCheck } from "../desktop/updaterEvents";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
     default: module.DesktopSyncStatus,
+  })),
+);
+
+const DesktopUpdater = lazy(() =>
+  import("./DesktopUpdater").then((module) => ({
+    default: module.DesktopUpdater,
   })),
 );
 
@@ -225,6 +233,7 @@ export function AppShell() {
                 trashActive={isUnder(pathname, "/trash")}
                 invitationsActive={isUnder(pathname, "/invitations")}
                 adminActive={isUnder(pathname, "/admin")}
+                desktopRuntime={desktopRuntime}
                 onLogout={handleLogout}
               />
             ) : (
@@ -250,6 +259,11 @@ export function AppShell() {
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
+      {desktopRuntime && (
+        <Suspense fallback={null}>
+          <DesktopUpdater />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -271,6 +285,7 @@ function UserMenu({
   trashActive,
   invitationsActive,
   adminActive,
+  desktopRuntime,
   onLogout,
 }: {
   name: string;
@@ -284,6 +299,7 @@ function UserMenu({
   trashActive: boolean;
   invitationsActive: boolean;
   adminActive: boolean;
+  desktopRuntime: boolean;
   onLogout: () => void | Promise<void>;
 }) {
   const { t, locale } = useI18n();
@@ -500,6 +516,22 @@ function UserMenu({
               <ShieldCheck className="h-4 w-4 shrink-0" />
               {t.nav.admin}
             </Link>
+          )}
+
+          {desktopRuntime && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                requestDesktopUpdateCheck();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-strong)" }}
+            >
+              <RefreshCw className="h-4 w-4 shrink-0" />
+              {t.desktopUpdate.check}
+            </button>
           )}
 
           <button

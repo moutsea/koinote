@@ -614,6 +614,23 @@ export interface Messages {
     offlineDescription: string;
     documentCount: string;
   };
+  desktopUpdate: {
+    check: string;
+    checking: string;
+    checkingDescription: string;
+    availableTitle: string;
+    availableDescription: string;
+    downloadAndRestart: string;
+    downloading: string;
+    currentTitle: string;
+    currentDescription: string;
+    failedTitle: string;
+    failedDescription: string;
+    saveFailedDescription: string;
+    retry: string;
+    later: string;
+    close: string;
+  };
   desktopSync: {
     synced: string;
     syncing: string;

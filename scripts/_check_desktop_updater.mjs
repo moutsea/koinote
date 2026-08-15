@@ -1,0 +1,56 @@
+import fs from "node:fs";
+
+let passed = 0;
+let failed = 0;
+
+function ok(label, condition) {
+  if (condition) passed += 1;
+  else {
+    failed += 1;
+    console.error(`FAIL  ${label}`);
+  }
+}
+
+function includes(label, source, fragment) {
+  ok(label, source.includes(fragment));
+}
+
+const config = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+const capability = JSON.parse(fs.readFileSync("src-tauri/capabilities/default.json", "utf8"));
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+const rust = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
+const updater = fs.readFileSync("spa/src/components/DesktopUpdater.tsx", "utf8");
+const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
+const workflow = fs.readFileSync(".github/workflows/release-desktop.yml", "utf8");
+
+ok("客户端版本已升级", config.version === "0.1.3");
+ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
+ok("配置 GitHub 更新清单", config.plugins.updater.endpoints.includes("https://github.com/moutsea/koinote/releases/latest/download/latest.json"));
+ok("配置非空更新公钥", typeof config.plugins.updater.pubkey === "string" && config.plugins.updater.pubkey.length > 100);
+ok("授权完整更新流程", capability.permissions.includes("updater:default"));
+ok("只授权进程重启", capability.permissions.includes("process:allow-restart") && !capability.permissions.includes("process:default"));
+ok("安装前端 updater 插件", Boolean(pkg.dependencies["@tauri-apps/plugin-updater"]));
+ok("安装前端 process 插件", Boolean(pkg.dependencies["@tauri-apps/plugin-process"]));
+includes("安装 Rust updater 插件", cargo, 'tauri-plugin-updater = "2.10.1"');
+includes("安装 Rust process 插件", cargo, 'tauri-plugin-process = "2.3.1"');
+includes("注册 updater 插件", rust, "tauri_plugin_updater::Builder::new().build()");
+includes("注册 process 插件", rust, "tauri_plugin_process::init()");
+includes("启动后自动检查", updater, "window.setTimeout(() => void runCheck(false), 2_000)");
+includes("支持手动检查事件", updater, "DESKTOP_UPDATE_CHECK_EVENT");
+includes("下载并安装更新", updater, "availableUpdate.downloadAndInstall");
+includes("安装前保存编辑内容", updater, "await prepareDesktopLogout()");
+includes("安装后重启", updater, "await relaunch()");
+includes("显示下载进度", updater, 'event.event === "Progress"');
+includes("桌面外壳懒加载更新器", shell, 'import("./DesktopUpdater")');
+includes("账户菜单可检查更新", shell, "requestDesktopUpdateCheck()");
+includes("发布流程读取签名私钥", workflow, "TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}");
+includes("发布 macOS 更新包", workflow, "*.app.tar.gz");
+includes("发布 Windows 更新包", workflow, "updaters=(\"$bundle_dir\"/nsis/*-setup.exe)");
+includes("生成静态更新清单", workflow, "> release-artifacts/latest.json");
+includes("清单包含 Apple Silicon", workflow, '"darwin-aarch64"');
+includes("清单包含 Intel macOS", workflow, '"darwin-x86_64"');
+includes("清单包含 Windows x64", workflow, '"windows-x86_64"');
+
+console.log(`\ndesktop updater: ${passed} passed, ${failed} failed`);
+process.exit(failed === 0 ? 0 : 1);

@@ -12,6 +12,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
   local-first SQLite documents, background synchronization, and explicit conflict recovery.
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel,
   and Windows x64 installers.
+- Added signed desktop auto-updates with startup checks, a manual account-menu action, download
+  progress, and restart-to-install support.
 
 ### Changed
 
