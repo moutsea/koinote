@@ -21,7 +21,7 @@ const INITIAL: DesktopSyncSummary = {
   lastSyncedAt: null,
 };
 
-export function DesktopSyncStatus() {
+export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" | "panel" }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [summary, setSummary] = useState(INITIAL);
@@ -100,11 +100,19 @@ export function DesktopSyncStatus() {
         onClick={() => void activate()}
         title={label}
         aria-label={label}
-        className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs transition hover:bg-[var(--ink-wash-strong)]"
-        style={{ color: summary.conflicts > 0 ? "var(--cinnabar)" : "var(--ink-mid)" }}
+        className={
+          variant === "panel"
+            ? "flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"
+            : "flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs transition hover:bg-[var(--ink-wash-strong)]"
+        }
+        style={{
+          borderColor: variant === "panel" ? "var(--ink-line)" : undefined,
+          color: summary.conflicts > 0 ? "var(--cinnabar)" : "var(--ink-mid)",
+        }}
       >
         <Icon className={`h-4 w-4 ${summary.state === "syncing" ? "animate-spin" : ""}`} />
-        <span className="hidden xl:inline">{label}</span>
+        <span className={variant === "panel" ? "inline" : "hidden xl:inline"}>{label}</span>
+        {variant === "panel" && <RefreshCw className="ml-auto h-3.5 w-3.5" aria-hidden />}
       </button>
 
       {dialogOpen && (

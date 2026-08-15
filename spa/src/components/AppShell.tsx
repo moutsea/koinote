@@ -64,6 +64,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t, locale, setLocale } = useI18n();
+  const desktopRuntime = isDesktopRuntime();
 
   const [theme, setTheme] = useState<Theme>(() => readStoredTheme());
   useEffect(() => {
@@ -160,22 +161,30 @@ export function AppShell() {
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
-            <a href={DESKTOP_DOWNLOAD_URL} className="kn-ink-link transition">
-              {t.nav.download}
-            </a>
-            <HeaderDocsMenu
-              active={isUnder(pathname, "/docs")}
-              label={t.nav.docs}
-              mcpLabel={t.nav.mcpGuide}
-              versionLabel={t.nav.versionHistoryGuide}
-            />
-            <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
-              {t.nav.pricing}
-            </HeaderLink>
+            {desktopRuntime ? (
+              <HeaderLink to="/documents" active={isUnder(pathname, "/documents")}>
+                {t.nav.documents}
+              </HeaderLink>
+            ) : (
+              <>
+                <a href={DESKTOP_DOWNLOAD_URL} className="kn-ink-link transition">
+                  {t.nav.download}
+                </a>
+                <HeaderDocsMenu
+                  active={isUnder(pathname, "/docs")}
+                  label={t.nav.docs}
+                  mcpLabel={t.nav.mcpGuide}
+                  versionLabel={t.nav.versionHistoryGuide}
+                />
+                <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
+                  {t.nav.pricing}
+                </HeaderLink>
+              </>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {user && isDesktopRuntime() && (
+            {user && desktopRuntime && pathname !== "/" && (
               <Suspense fallback={null}>
                 <DesktopSyncStatus />
               </Suspense>
@@ -236,7 +245,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      {hasFooter(pathname) && <AppFooter />}
+      {!desktopRuntime && hasFooter(pathname) && <AppFooter />}
 
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
@@ -628,7 +637,7 @@ function HeaderLink({
   active,
   children,
 }: {
-  to: "/editor" | "/pricing";
+  to: "/editor" | "/documents" | "/pricing";
   active: boolean;
   children: React.ReactNode;
 }) {

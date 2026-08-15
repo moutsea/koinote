@@ -16,12 +16,20 @@ import { HomePage } from "./pages/HomePage";
 import { isDesktopRuntime } from "./desktop/runtime";
 
 const queryClient = new QueryClient();
+const desktopRuntime = isDesktopRuntime();
 
-if (isDesktopRuntime()) {
+if (desktopRuntime) {
   void import("./desktop/auth").then(({ initializeDesktopAuth }) =>
     initializeDesktopAuth(),
   );
 }
+
+const IndexPage = desktopRuntime
+  ? lazyRouteComponent(
+      () => import("./pages/DesktopHomePage"),
+      "DesktopHomePage",
+    )
+  : HomePage;
 
 // 主页与 AppShell 静态导入，保证首屏最快。
 // 编辑器（TipTap 最胖）、Dashboard、登录页按路由懒加载，用到才下载对应 chunk。
@@ -33,7 +41,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomePage,
+  component: IndexPage,
 });
 const pricingRoute = createRoute({
   getParentRoute: () => rootRoute,

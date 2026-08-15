@@ -13,6 +13,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel,
   and Windows x64 installers.
 
+### Changed
+
+- The desktop client now opens to a focused local-first workspace with continue-writing, recent
+  documents, quick actions, sync status, and offline availability instead of the website landing page.
+- Desktop app icons now use platform-safe transparent spacing so their rounded edge renders cleanly
+  without a visible fringe on macOS and Windows.
+
 ### Fixed
 
 - macOS Apple Silicon and Intel release bundles now receive a complete ad-hoc signature and are

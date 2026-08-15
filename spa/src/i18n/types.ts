@@ -594,6 +594,26 @@ export interface Messages {
     invalid: string;
     failed: string;
   };
+  desktopHome: {
+    eyebrow: string;
+    welcome: string;
+    subtitle: string;
+    newDocument: string;
+    importDocuments: string;
+    createFailed: string;
+    loadFailed: string;
+    continueTitle: string;
+    recentTitle: string;
+    allDocuments: string;
+    updated: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    syncTitle: string;
+    syncDescription: string;
+    offlineTitle: string;
+    offlineDescription: string;
+    documentCount: string;
+  };
   desktopSync: {
     synced: string;
     syncing: string;
