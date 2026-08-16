@@ -476,9 +476,21 @@ export const ja: Messages = {
     importing: "ドキュメントと画像をインポート中…",
     exporting: "ドキュメントと画像をまとめています…",
     importSuccess: "{count} 件のドキュメントをインポートしました。",
+    importGifFlattened:
+      "10 MB を超える GIF {count} 件を静止 WebP に圧縮しました。アニメーションは保持されません。",
     exportSuccess: "移行用アーカイブを作成しました。",
     importFailed:
       "インポートに失敗しました。形式、画像サイズ、容量をご確認ください。",
+    unsupportedImportFormat:
+      "{filename} はサポートされていません。Markdown（.md）または Koinote の ZIP 移行アーカイブを選択してください。",
+    importTooManyFiles:
+      "一度にインポートできるのは 1,000 ファイルまでです。分割して再試行してください。",
+    importTooLarge:
+      "インポート内容が 250 MB の上限を超えています。分割して再試行してください。",
+    importDocumentTooLarge:
+      "{filename} は Markdown 1 件あたりの上限 1 MB を超えています。",
+    importImageTooLarge:
+      "{filename} の寸法が大きすぎるため、ブラウザーで安全に圧縮できません。",
     exportFailed: "エクスポートに失敗しました。もう一度お試しください。",
     importHint: ".md、フォルダー、ZIP に対応し、参照画像も一緒に移行します。",
   },
@@ -795,10 +807,10 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "デスクトップアプリ",
     title: "Koinote アプリを承認",
-    description: "この端末にオフラインコピーを保存し、接続が戻ったときに変更を同期します。",
+    description: "文書と画像のオフラインコピーをこの端末に保存し、接続が戻ったときに変更を同期します。",
     permissionsTitle: "承認すると、アプリは次の操作を行えます：",
     permissionDocuments: "文書とフォルダーの閲覧・作成・整理・共有・ゴミ箱への移動",
-    permissionOffline: "この端末への文書のオフラインコピー保存",
+    permissionOffline: "文書、送信待ち画像、最大 512 MB の画像キャッシュをこの端末に保存",
     permissionIdentity: "ログイン中のアカウントを表示するための基本情報の取得",
     approve: "許可してアプリに戻る",
     cancel: "キャンセル",
@@ -823,8 +835,12 @@ function hello(name) {
     syncTitle: "同期状態",
     syncDescription: "オンライン時にローカルの変更を自動同期します。競合した場合は残すバージョンを選べます。",
     offlineTitle: "オフライン作業の準備完了",
-    offlineDescription: "文書のコピーはこの端末に保存されるため、オフラインでも閲覧と編集を続けられます。",
+    offlineDescription: "文書と画像はこの端末に保存されます。オフラインでも画像を貼り付けて編集でき、接続後に自動でアップロードして画像 URL を置き換えます。",
     documentCount: "ローカルで利用可能な文書：{count} 件",
+    imageCacheUsage: "ローカル画像 {total}、ホスト画像キャッシュ {cached} / {limit}、送信待ち {pending}",
+    clearImageCache: "ホスト画像キャッシュを消去",
+    clearingImageCache: "消去中…",
+    imageCacheCleared: "画像キャッシュを消去しました。文書を開くと必要な画像が再びキャッシュされます。",
   },
   desktopUpdate: {
     check: "アップデートを確認",
@@ -1167,6 +1183,12 @@ function hello(name) {
     image_too_large: "画像が 10 MB の上限を超えています",
     image_quota_exceeded:
       "画像ストレージがいっぱいです。ゴミ箱から不要なドキュメントを完全に削除してください",
+    image_upload_failed:
+      "ローカル画像を同期できませんでした。接続を確認して再試行してください",
+    image_cache_full:
+      "ローカル画像キャッシュがいっぱいです。デスクトップのホーム画面から消去してください",
+    local_image_missing:
+      "ローカル画像が見つかりません。文書から削除して、もう一度挿入してください",
     storage_quota_exceeded:
       "クラウドの容量がいっぱいです。ゴミ箱から不要なドキュメントを完全に削除してください",
     image_empty: "画像が空です",

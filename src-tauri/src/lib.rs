@@ -87,12 +87,26 @@ fn desktop_pending_auth_clear() -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "create_offline_cache",
-        sql: include_str!("../migrations/0001_offline_cache.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "create_offline_cache",
+            sql: include_str!("../migrations/0001_offline_cache.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "create_offline_images",
+            sql: include_str!("../migrations/0002_offline_images.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "bound_offline_image_cache",
+            sql: include_str!("../migrations/0003_offline_image_cache.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {

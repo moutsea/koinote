@@ -24,6 +24,8 @@ const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
 const dashboard = fs.readFileSync("spa/src/pages/DashboardPage.tsx", "utf8");
 const documents = fs.readFileSync("spa/src/pages/DocumentsPage.tsx", "utf8");
 const invitations = fs.readFileSync("spa/src/pages/InvitationsPage.tsx", "utf8");
+const invitationCard = fs.readFileSync("spa/src/components/InvitationCard.tsx", "utf8");
+const shareDialog = fs.readFileSync("spa/src/components/editor/ShareDialog.tsx", "utf8");
 const historySettings = fs.readFileSync("spa/src/components/DocumentHistorySettingsCard.tsx", "utf8");
 const pricing = fs.readFileSync("spa/src/pages/PricingPage.tsx", "utf8");
 
@@ -52,6 +54,10 @@ includes("历史版本设置可读取", historySettings, "getDocumentHistorySett
 includes("历史版本设置可修改", historySettings, "updateDocumentHistorySettings");
 includes("文档页读取文档列表", documents, "useDocumentList");
 includes("邀请页渲染邀请卡", invitations, "InvitationCard");
+includes("邀请链接使用站点公开域名", invitationCard, "koinoteWebURL(");
+excludes("邀请链接不使用 Tauri 本地域名", invitationCard, "window.location.origin");
+includes("分享链接使用站点公开域名", shareDialog, "koinoteWebURL(");
+excludes("分享链接不使用 Tauri 本地域名", shareDialog, "window.location.origin");
 includes("价格页读取公开价目表", pricing, "getBillingPricing");
 includes("价格页登录用户可直接结账", pricing, "createMembershipCheckout");
 includes("顶栏包含价格入口", shell, 'to="/pricing"');

@@ -1,14 +1,16 @@
-import { strFromU8, strToU8, unzipSync, zip } from "fflate";
+import { strFromU8, strToU8, zip } from "fflate";
 import {
   createDocument,
   createFolder,
   fetchAppResource,
   getDocument,
+  releaseUnusedImages,
   trackProductEvent,
   uploadImage,
   type DocumentSummary,
   type Folder,
   type SharedDocument,
+  type UploadedImage,
 } from "./api";
 import { downloadBlob, safeFilename } from "./components/editor/exportDocument";
 import {
@@ -16,16 +18,30 @@ import {
   cleanArchivePath,
   dirname,
   extension,
+  forEachConcurrent,
+  ImportValidationError,
+  importFileKind,
   imageReferences,
+  MAX_IMPORT_BYTES,
+  MAX_IMPORT_FILES,
   resolveRelativePath,
+  replaceFilenamePlaceholder,
   rewriteImageReferences,
   truncateUnicode,
+  UnsupportedImportFormatError,
+  validateImportEntrySize,
+} from "./documentTransferCore";
+import { prepareImportedImage } from "./importImageCompression";
+import { unpackImportArchiveFile } from "./importArchive";
+import { desktopLocalImageID } from "./desktop/offlineImagesCore";
+
+export {
+  rewriteImageReferences,
+  ImportValidationError,
+  UnsupportedImportFormatError,
 } from "./documentTransferCore";
 
-export { rewriteImageReferences } from "./documentTransferCore";
-
-const MAX_ARCHIVE_FILES = 1_000;
-const MAX_ARCHIVE_BYTES = 250 * 1024 * 1024;
+const IMPORT_IMAGE_CONCURRENCY = 3;
 const IMAGE_KEY_PATTERN =
   /u\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8,64}\.(?:png|jpg|gif|webp)/;
 const IMAGE_TYPES: Record<string, string> = {
@@ -38,16 +54,78 @@ const IMAGE_TYPES: Record<string, string> = {
 
 export type TransferProgress = (done: number, total: number) => void;
 
+type ImportErrorMessages = {
+  importFailed: string;
+  unsupportedImportFormat: string;
+  importTooManyFiles: string;
+  importTooLarge: string;
+  importDocumentTooLarge: string;
+  importImageTooLarge: string;
+};
+
+function withFilename(template: string, filename?: string): string {
+  return replaceFilenamePlaceholder(template, filename || "");
+}
+
+export function getImportErrorMessage(
+  error: unknown,
+  messages: ImportErrorMessages,
+): string {
+  if (error instanceof UnsupportedImportFormatError) {
+    return withFilename(messages.unsupportedImportFormat, error.filename);
+  }
+  if (error instanceof ImportValidationError) {
+    switch (error.reason) {
+      case "too_many_files":
+        return messages.importTooManyFiles;
+      case "import_too_large":
+        return messages.importTooLarge;
+      case "document_too_large":
+        return withFilename(messages.importDocumentTooLarge, error.filename);
+      case "image_too_large":
+        return withFilename(messages.importImageTooLarge, error.filename);
+    }
+  }
+  return messages.importFailed;
+}
+
 function withoutExtension(path: string): string {
   return path.replace(/\.[^.]+$/, "");
 }
 
-async function filesToEntries(files: File[]): Promise<Map<string, Uint8Array>> {
-  const entries = new Map<string, Uint8Array>();
+type ImportEntry = {
+  size: number;
+  read: () => Promise<Uint8Array>;
+};
+
+function bytesEntry(bytes: Uint8Array): ImportEntry {
+  return { size: bytes.byteLength, read: async () => bytes };
+}
+
+function fileEntry(file: File): ImportEntry {
+  return {
+    size: file.size,
+    read: async () => new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
+function unzipFile(
+  file: File,
+  remainingFiles: number,
+  remainingBytes: number,
+): Promise<Record<string, Uint8Array>> {
+  if (file.size > MAX_IMPORT_BYTES) {
+    return Promise.reject(new ImportValidationError("import_too_large"));
+  }
+  return unpackImportArchiveFile(file, remainingFiles, remainingBytes);
+}
+
+async function filesToEntries(files: File[]): Promise<Map<string, ImportEntry>> {
+  const entries = new Map<string, ImportEntry>();
   let fileCount = 0;
   let totalBytes = 0;
 
-  const add = (path: string, bytes: Uint8Array) => {
+  const add = (path: string, entry: ImportEntry) => {
     const clean = cleanArchivePath(path);
     if (
       !clean ||
@@ -56,49 +134,54 @@ async function filesToEntries(files: File[]): Promise<Map<string, Uint8Array>> {
     )
       return;
     fileCount += 1;
-    totalBytes += bytes.byteLength;
-    if (fileCount > MAX_ARCHIVE_FILES || totalBytes > MAX_ARCHIVE_BYTES) {
-      throw new Error("archive_limit_exceeded");
+    totalBytes += entry.size;
+    if (fileCount > MAX_IMPORT_FILES) {
+      throw new ImportValidationError("too_many_files");
     }
-    entries.set(clean, bytes);
+    if (totalBytes > MAX_IMPORT_BYTES) {
+      throw new ImportValidationError("import_too_large");
+    }
+    entries.set(clean, entry);
   };
 
   for (const file of files) {
-    if (file.name.toLowerCase().endsWith(".zip")) {
-      let zipFileCount = 0;
-      let zipBytes = 0;
-      const unpacked = unzipSync(new Uint8Array(await file.arrayBuffer()), {
-        filter(info) {
-          zipFileCount += 1;
-          zipBytes += info.originalSize;
-          if (
-            zipFileCount > MAX_ARCHIVE_FILES ||
-            zipBytes > MAX_ARCHIVE_BYTES
-          ) {
-            throw new Error("archive_limit_exceeded");
-          }
-          const ext = extension(info.name);
-          return ext === "md" || Boolean(IMAGE_TYPES[ext]);
-        },
-      });
-      for (const [path, bytes] of Object.entries(unpacked)) add(path, bytes);
+    const path = file.webkitRelativePath || file.name;
+    const kind = importFileKind(path);
+    const fromDirectory = Boolean(file.webkitRelativePath);
+    if (!kind) {
+      if (fromDirectory) continue;
+      throw new UnsupportedImportFormatError(file.name);
+    }
+    if (kind === "manifest" && !fromDirectory) {
+      throw new UnsupportedImportFormatError(file.name);
+    }
+    if (kind === "archive") {
+      const unpacked = await unzipFile(
+        file,
+        MAX_IMPORT_FILES - fileCount,
+        MAX_IMPORT_BYTES - totalBytes,
+      );
+      for (const [entryPath, bytes] of Object.entries(unpacked)) {
+        add(entryPath, bytesEntry(bytes));
+      }
       continue;
     }
-    const path = file.webkitRelativePath || file.name;
-    add(path, new Uint8Array(await file.arrayBuffer()));
+    validateImportEntrySize(path, file.size, kind);
+    add(path, fileEntry(file));
   }
-  for (const [path, bytes] of entries) {
+  for (const [path, entry] of entries) {
     if (basename(path) !== "manifest.json") continue;
     try {
+      const bytes = await entry.read();
       const manifest = JSON.parse(strFromU8(bytes)) as { format?: string };
       if (manifest.format !== "koinote-markdown-export") continue;
       const root = dirname(path);
       if (!root) break;
       const prefix = `${root}/`;
-      const shifted = new Map<string, Uint8Array>();
-      for (const [entryPath, entryBytes] of entries) {
+      const shifted = new Map<string, ImportEntry>();
+      for (const [entryPath, shiftedEntry] of entries) {
         if (entryPath.startsWith(prefix))
-          shifted.set(entryPath.slice(prefix.length), entryBytes);
+          shifted.set(entryPath.slice(prefix.length), shiftedEntry);
       }
       return shifted;
     } catch {
@@ -111,17 +194,29 @@ async function filesToEntries(files: File[]): Promise<Map<string, Uint8Array>> {
 async function uploadArchiveImage(
   path: string,
   bytes: Uint8Array,
-): Promise<string> {
+  compress = false,
+): Promise<{ image: UploadedImage; flattenedAnimation: boolean }> {
   const mime = IMAGE_TYPES[extension(path)];
   if (!mime) throw new Error("unsupported_image");
-  const file = new File([bytes as BlobPart], basename(path), { type: mime });
-  return (await uploadImage(file)).url;
+  const original = new File([bytes as BlobPart], basename(path), { type: mime });
+  const prepared = compress
+    ? await prepareImportedImage(original)
+    : { file: original, flattenedAnimation: false };
+  return {
+    image: await uploadImage(prepared.file),
+    flattenedAnimation: prepared.flattenedAnimation,
+  };
 }
+
+export type ImportDocumentsResult = {
+  imported: number;
+  flattenedGifCount: number;
+};
 
 export async function importDocumentsFromFiles(
   files: File[],
   onProgress?: TransferProgress,
-): Promise<number> {
+): Promise<ImportDocumentsResult> {
   const entries = await filesToEntries(files);
   const markdownPaths = [...entries.keys()]
     .filter((path) => extension(path) === "md")
@@ -130,7 +225,16 @@ export async function importDocumentsFromFiles(
 
   const folderIDs = new Map<string, string | null>([["", null]]);
   const uploadedImages = new Map<string, string>();
+  const uploadedImageKeys = new Set<string>();
+  const plannedDocuments: Array<{
+    path: string;
+    content: string;
+    references: Array<{ original: string; resolved: string }>;
+  }> = [];
+  const referencedImages = new Set<string>();
   let imported = 0;
+  let flattenedGifCount = 0;
+  let completedWork = 0;
 
   async function ensureFolder(path: string): Promise<string | null> {
     if (folderIDs.has(path)) return folderIDs.get(path) ?? null;
@@ -145,32 +249,62 @@ export async function importDocumentsFromFiles(
   }
 
   for (const markdownPath of markdownPaths) {
-    const bytes = entries.get(markdownPath)!;
-    let content = strFromU8(bytes);
-    const replacements = new Map<string, string>();
+    const entry = entries.get(markdownPath)!;
+    const content = strFromU8(await entry.read());
+    entries.delete(markdownPath);
+    const references: Array<{ original: string; resolved: string }> = [];
     for (const ref of imageReferences(content)) {
       const resolved = resolveRelativePath(markdownPath, ref);
       if (!resolved) continue;
-      const imageBytes = entries.get(resolved);
-      if (!imageBytes || !IMAGE_TYPES[extension(resolved)]) continue;
-      let uploadedURL = uploadedImages.get(resolved);
-      if (!uploadedURL) {
-        uploadedURL = await uploadArchiveImage(resolved, imageBytes);
-        uploadedImages.set(resolved, uploadedURL);
-      }
-      replacements.set(ref, uploadedURL);
+      const imageEntry = entries.get(resolved);
+      if (!imageEntry || !IMAGE_TYPES[extension(resolved)]) continue;
+      references.push({ original: ref, resolved });
+      referencedImages.add(resolved);
     }
-    content = rewriteImageReferences(content, replacements);
-    const folderId = await ensureFolder(dirname(markdownPath));
-    await createDocument({
-      title: truncateUnicode(withoutExtension(basename(markdownPath)), 200),
-      content,
-      folderId,
-    });
-    imported += 1;
-    onProgress?.(imported, markdownPaths.length);
+    plannedDocuments.push({ path: markdownPath, content, references });
   }
-  return imported;
+
+  const totalWork = referencedImages.size + plannedDocuments.length;
+  onProgress?.(0, totalWork);
+  try {
+    await forEachConcurrent(
+      [...referencedImages],
+      IMPORT_IMAGE_CONCURRENCY,
+      async (imagePath) => {
+        const entry = entries.get(imagePath);
+        if (!entry) return;
+        const bytes = await entry.read();
+        const uploaded = await uploadArchiveImage(imagePath, bytes, true);
+        uploadedImageKeys.add(uploaded.image.key);
+        uploadedImages.set(imagePath, uploaded.image.url);
+        if (uploaded.flattenedAnimation) flattenedGifCount += 1;
+        entries.delete(imagePath);
+        completedWork += 1;
+        onProgress?.(completedWork, totalWork);
+      },
+    );
+
+    for (const planned of plannedDocuments) {
+      const replacements = new Map<string, string>();
+      for (const reference of planned.references) {
+        const uploadedURL = uploadedImages.get(reference.resolved);
+        if (uploadedURL) replacements.set(reference.original, uploadedURL);
+      }
+      const folderId = await ensureFolder(dirname(planned.path));
+      await createDocument({
+        title: truncateUnicode(withoutExtension(basename(planned.path)), 200),
+        content: rewriteImageReferences(planned.content, replacements),
+        folderId,
+      });
+      imported += 1;
+      completedWork += 1;
+      onProgress?.(completedWork, totalWork);
+    }
+    return { imported, flattenedGifCount };
+  } catch (error) {
+    await releaseUnusedImages([...uploadedImageKeys]).catch(() => undefined);
+    throw error;
+  }
 }
 
 function folderPath(folderId: string | null, folders: Folder[]): string {
@@ -202,6 +336,23 @@ async function readImageObject(key: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+async function readLocalImageObject(reference: string): Promise<{
+  bytes: Uint8Array;
+  extension: string;
+}> {
+  const response = await fetchAppResource(reference);
+  if (!response.ok) throw new Error(`image_fetch_${response.status}`);
+  const contentType = response.headers.get("Content-Type")?.split(";", 1)[0];
+  const imageExtension = Object.entries(IMAGE_TYPES).find(
+    ([candidate, mime]) => candidate !== "jpeg" && mime === contentType,
+  )?.[0];
+  if (!imageExtension) throw new Error("image_type_unsupported");
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    extension: imageExtension,
+  };
+}
+
 function relativeAssetPath(documentFolder: string, key: string): string {
   const depth = documentFolder ? documentFolder.split("/").length : 0;
   return `${"../".repeat(depth)}assets/${key}`;
@@ -224,6 +375,7 @@ export async function exportDocumentsArchive(
   const root = "Koinote Export";
   const entries: Record<string, Uint8Array> = {};
   const imageCache = new Map<string, Uint8Array>();
+  const imageAssetPaths = new Map<string, string>();
   const usedPaths = new Set<string>();
   const failedImages = new Set<string>();
 
@@ -242,17 +394,31 @@ export async function exportDocumentsArchive(
     const replacements = new Map<string, string>();
     for (const ref of imageReferences(document.content)) {
       const key = imageKeyFromReference(ref);
-      if (!key) continue;
+      const localImageID = desktopLocalImageID(ref);
+      if (!key && !localImageID) continue;
+      const cacheKey = key
+        ? `remote:${key}`
+        : `local:${localImageID}`;
       try {
-        let bytes = imageCache.get(key);
+        let bytes = imageCache.get(cacheKey);
+        let assetKey = imageAssetPaths.get(cacheKey);
         if (!bytes) {
-          bytes = await readImageObject(key);
-          imageCache.set(key, bytes);
-          entries[`${root}/assets/${key}`] = bytes;
+          if (key) {
+            bytes = await readImageObject(key);
+            assetKey = key;
+          } else {
+            const local = await readLocalImageObject(ref);
+            bytes = local.bytes;
+            assetKey = `offline/${localImageID}.${local.extension}`;
+          }
+          imageCache.set(cacheKey, bytes);
+          imageAssetPaths.set(cacheKey, assetKey);
+          entries[`${root}/assets/${assetKey}`] = bytes;
         }
-        replacements.set(ref, relativeAssetPath(documentFolder, key));
+        if (!assetKey) throw new Error("image_asset_path_missing");
+        replacements.set(ref, relativeAssetPath(documentFolder, assetKey));
       } catch {
-        failedImages.add(key);
+        failedImages.add(key ?? ref);
       }
     }
     const content = rewriteImageReferences(document.content, replacements);
@@ -292,7 +458,7 @@ export async function copySharedDocument(shared: SharedDocument) {
     let url = copied.get(key);
     if (!url) {
       const bytes = await readImageObject(key);
-      url = await uploadArchiveImage(key, bytes);
+      url = (await uploadArchiveImage(key, bytes)).image.url;
       copied.set(key, url);
     }
     replacements.set(ref, url);

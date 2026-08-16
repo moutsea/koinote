@@ -105,8 +105,22 @@ func (a *App) enqueueOrphanedImages(ctx context.Context, user userRef, content s
 // 先从该用户的当前文档和历史版本中一次性抽出全部图片 key，再与候选集合做差集。
 // 这样删除一篇含多张图片的文档时只扫描一次正文，而不是每个 key 都全表扫描一遍。
 func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys []string) {
-	if len(keys) == 0 {
+	queued, err := a.enqueueOrphanedImageKeysChecked(ctx, user, keys)
+	if err != nil {
+		// 入队失败只记日志：触发回收的文档写操作已经成功，不能再回滚正文。
+		log.Printf("image gc: 入队失败（候选 %d 个）: %v", len(keys), err)
 		return
+	}
+	if queued > 0 {
+		log.Printf("image gc: 已排队 %d 个孤儿对象", queued)
+	}
+}
+
+// enqueueOrphanedImageKeysChecked 与 enqueueOrphanedImageKeys 做同样的归属和引用复查，
+// 但把错误返回给需要向用户确认结果的调用方（例如失败导入的图片回滚接口）。
+func (a *App) enqueueOrphanedImageKeysChecked(ctx context.Context, user userRef, keys []string) (int, error) {
+	if len(keys) == 0 {
+		return 0, nil
 	}
 
 	candidates := make([]string, 0, len(keys))
@@ -123,7 +137,7 @@ func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys [
 		candidates = append(candidates, key)
 	}
 	if len(candidates) == 0 {
-		return
+		return 0, nil
 	}
 
 	rows, err := a.db.Query(ctx, `
@@ -150,28 +164,25 @@ func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys [
 	`, user.ID, imageKeyPattern.String(), user.AuthUserID, candidates)
 	if err != nil {
 		// 查不动就别删 —— 宁可留着孤儿对象，也不能删掉还在用的图。
-		log.Printf("image gc: 批量检查引用失败，跳过 %d 个 key: %v", len(candidates), err)
-		return
+		return 0, fmt.Errorf("批量检查引用: %w", err)
 	}
 	defer rows.Close()
 	orphans := make([]string, 0, len(candidates))
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err != nil {
-			log.Printf("image gc: 扫描孤儿 key 失败: %v", err)
-			return
+			return 0, fmt.Errorf("扫描孤儿 key: %w", err)
 		}
 		orphans = append(orphans, key)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("image gc: 遍历孤儿 key 失败: %v", err)
-		return
+		return 0, fmt.Errorf("遍历孤儿 key: %w", err)
 	}
 
 	if err := a.enqueueImageDeletions(ctx, user.ID, orphans); err != nil {
-		// 入队失败只记日志：文档已经删成功了，不能因为回收失败就把删除也回滚
-		log.Printf("image gc: 入队失败（%d 个 key）: %v", len(orphans), err)
+		return 0, fmt.Errorf("写入回收队列: %w", err)
 	}
+	return len(orphans), nil
 }
 
 // userRef 是回收逻辑需要的用户字段。用它而不是整个 model.User，

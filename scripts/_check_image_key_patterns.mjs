@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { isSafeImageKey } from "./_image_key_worker_bundle.mjs";
 import {
   imageFetchURL,
+  koinoteImageObjectKey,
   sameOriginImageURL,
 } from "./_image_key_loading_bundle.mjs";
+import { imageObjectKeyFromSource } from "./_image_key_offline_bundle.mjs";
 import { isOwnImage } from "./_image_key_rehost_bundle.mjs";
 
 let pass = 0;
@@ -37,6 +39,7 @@ const cases = [
 for (const testCase of cases) {
   const workerResult = isSafeImageKey(testCase.key);
   const loadingResult = sameOriginImageURL(`https://img.koinote.app/${testCase.key}`);
+  const offlineResult = imageObjectKeyFromSource(`https://img.koinote.app/${testCase.key}`);
   const rehostResult = isOwnImage(`/images/${testCase.key}`);
 
   check(
@@ -48,6 +51,11 @@ for (const testCase of cases) {
     `${testCase.name}：同源图片映射`,
     (loadingResult !== null) === testCase.valid,
     `得到 ${JSON.stringify(loadingResult)}`,
+  );
+  check(
+    `${testCase.name}：桌面离线缓存 key`,
+    (offlineResult !== null) === testCase.valid,
+    `得到 ${JSON.stringify(offlineResult)}`,
   );
 
   // isOwnImage 按 URL 的最后一个 /u/<owner>/<file> 判断，因为部署者可配置带子路径的
@@ -95,6 +103,24 @@ check(
   "导出读取外站图片时保持原地址",
   imageFetchURL(externalURL) === externalURL,
   imageFetchURL(externalURL),
+);
+
+for (const untrusted of [
+  "https://evil.com/u/alice/abcdef1234567890.png",
+  "https://img.koinote.app.evil.com/u/alice/abcdef1234567890.png",
+  "http://127.0.0.1:9/u/alice/abcdef1234567890.png",
+  "https://evil.com/redirect?to=/u/alice/abcdef1234567890.png",
+]) {
+  check(
+    `桌面缓存拒绝非站内来源：${untrusted}`,
+    imageObjectKeyFromSource(untrusted) === null &&
+      koinoteImageObjectKey(untrusted) === null,
+  );
+}
+check(
+  "桌面缓存接受 Worker 同源读取路径",
+  imageObjectKeyFromSource("/images/u/alice/abcdef1234567890.webp?v=1") ===
+    "u/alice/abcdef1234567890.webp",
 );
 
 for (const file of ["exportDocx.ts", "exportPdf.ts"]) {

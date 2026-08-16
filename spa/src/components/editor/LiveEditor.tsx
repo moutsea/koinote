@@ -98,7 +98,7 @@ export function LiveEditor({
     let disposed = false;
     const onDesktopSync = (event: Event) => {
       const summary = (event as CustomEvent<DesktopSyncSummary>).detail;
-      if (summary.state !== "idle" || saver.isDirty(docId)) return;
+      if ((summary.state !== "idle" && summary.state !== "error") || saver.isDirty(docId)) return;
       void getDocument(docId).then(({ document }) => {
         if (disposed || saver.isDirty(docId)) return;
         const current = saver.peek(docId);

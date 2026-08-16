@@ -1,6 +1,37 @@
 const KOINOTE_IMAGE_ORIGIN = "https://img.koinote.app";
 const KOINOTE_IMAGE_PATH =
-  /^\/u\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8,64}\.(png|jpg|gif|webp)$/;
+  /^\/u\/([A-Za-z0-9_-]{1,128})\/([0-9a-f]{8,64})\.(png|jpg|gif|webp)$/;
+
+function imageObjectKeyFromPath(pathname: string): string | null {
+  const match = KOINOTE_IMAGE_PATH.exec(pathname);
+  if (!match) return null;
+  return `u/${match[1]}/${match[2]}.${match[3]}`;
+}
+
+/**
+ * 只从可信 Koinote 图片地址提取 R2 object key。
+ *
+ * 绝对地址必须精确属于官方图床域名；相对地址必须是本站 Worker 的
+ * `/images/u/...` 读取路径。不能只按路径末尾判断，否则任意外站都能伪装成站内图，
+ * 诱导桌面客户端出网并污染本地缓存。
+ */
+export function koinoteImageObjectKey(src: string): string | null {
+  const value = src.trim();
+  if (!value) return null;
+  if (value.startsWith("/images/")) {
+    const suffixAt = value.search(/[?#]/);
+    const pathname = value.slice(0, suffixAt >= 0 ? suffixAt : value.length);
+    return imageObjectKeyFromPath(pathname.slice("/images".length));
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.origin !== KOINOTE_IMAGE_ORIGIN) return null;
+  return imageObjectKeyFromPath(url.pathname);
+}
 
 function withRetryQuery(src: string, attempt: number): string {
   const hashAt = src.indexOf("#");
@@ -30,7 +61,7 @@ export function sameOriginImageURL(
     return null;
   }
   if (url.origin !== KOINOTE_IMAGE_ORIGIN) return null;
-  if (!KOINOTE_IMAGE_PATH.test(url.pathname)) return null;
+  if (!imageObjectKeyFromPath(url.pathname)) return null;
   const path = `/images${url.pathname}${url.search}${url.hash}`;
   const origin = proxyOrigin?.replace(/\/+$/, "");
   return origin ? `${origin}${path}` : path;
@@ -57,6 +88,6 @@ export function imageURLForAttempt(
   proxyOrigin?: string,
 ): string {
   const displayURL = sameOriginImageURL(src, proxyOrigin) ?? src;
-  if (attempt <= 0) return displayURL;
+  if (attempt <= 0 || /^(?:data|blob):/i.test(displayURL)) return displayURL;
   return withRetryQuery(displayURL, attempt);
 }

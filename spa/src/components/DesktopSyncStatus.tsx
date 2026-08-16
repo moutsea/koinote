@@ -39,6 +39,7 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
       setSummary(next);
       if (next.state === "idle") {
         void queryClient.invalidateQueries({ queryKey: ["documents"] });
+        void queryClient.invalidateQueries({ queryKey: ["document"] });
         void queryClient.invalidateQueries({ queryKey: ["folders"] });
         void queryClient.invalidateQueries({ queryKey: ["document-search"] });
       }
@@ -92,16 +93,18 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
 
   if (!isDesktopRuntime()) return null;
 
-  const label = syncLabel(summary, t.desktopSync);
+  const label = syncLabel(summary, t.desktopSync, t.errors);
   const Icon = summary.conflicts > 0
     ? AlertTriangle
-    : summary.state === "offline"
-      ? WifiOff
-      : summary.state === "syncing"
-        ? RefreshCw
-        : summary.state === "idle" && summary.pending === 0
-          ? Check
-          : Cloud;
+    : summary.state === "error"
+      ? AlertTriangle
+      : summary.state === "offline"
+        ? WifiOff
+        : summary.state === "syncing"
+          ? RefreshCw
+          : summary.state === "idle" && summary.pending === 0
+            ? Check
+            : Cloud;
 
   async function activate() {
     if (summary.conflicts > 0) {
@@ -136,7 +139,10 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
         }
         style={{
           borderColor: variant === "panel" ? "var(--ink-line)" : undefined,
-          color: summary.conflicts > 0 ? "var(--cinnabar)" : "var(--ink-mid)",
+          color:
+            summary.conflicts > 0 || summary.state === "error"
+              ? "var(--cinnabar)"
+              : "var(--ink-mid)",
         }}
       >
         <Icon className={`h-4 w-4 ${summary.state === "syncing" ? "animate-spin" : ""}`} />
@@ -199,11 +205,18 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
   );
 }
 
-function syncLabel(summary: DesktopSyncSummary, copy: ReturnType<typeof useI18n>["t"]["desktopSync"]): string {
+function syncLabel(
+  summary: DesktopSyncSummary,
+  copy: ReturnType<typeof useI18n>["t"]["desktopSync"],
+  errors: Record<string, string>,
+): string {
   if (summary.conflicts > 0) return `${summary.conflicts} ${copy.conflicts}`;
   if (summary.state === "syncing") return copy.syncing;
   if (summary.state === "offline") return summary.pending > 0 ? `${copy.offline} · ${summary.pending} ${copy.pending}` : copy.offline;
-  if (summary.state === "error") return copy.error;
+  if (summary.state === "error") {
+    const code = summary.message?.replace(/^Error:\s*/, "");
+    return (code && errors[code]) || copy.error;
+  }
   if (summary.pending > 0) return `${summary.pending} ${copy.pending}`;
   return copy.synced;
 }

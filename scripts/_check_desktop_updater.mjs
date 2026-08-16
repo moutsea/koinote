@@ -29,8 +29,12 @@ const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
   .trim()
   .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.8");
+ok("客户端版本已升级", config.version === "0.1.9");
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
+ok(
+  "桌面端允许受控后台压缩 Worker",
+  config.app.security.csp.includes("worker-src 'self' blob:"),
+);
 ok("配置 macOS 26 原生图标", config.bundle.icon.includes("icons/AppIcon.icon"));
 ok("原生图标使用深色底", composerIcon.fill?.solid === "srgb:0.12157,0.13725,0.15686,1.00000");
 ok("原生图标包含水墨前景", composerIcon.groups?.[0]?.layers?.[0]?.["image-name"] === "mark.png" && fs.existsSync("src-tauri/icons/AppIcon.icon/Assets/mark.png"));

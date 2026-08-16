@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Gift, HardDrive, Users } from "lucide-react";
 import { getInvitationOverview } from "../api";
+import { koinoteWebURL } from "../externalNavigation";
 import { useI18n, interpolate } from "../i18n";
 import { formatBytes } from "../storage";
 import { PaperCard } from "./Ink";
@@ -19,7 +20,9 @@ export function InvitationCard() {
 
   async function copyInviteLink() {
     if (!overview.data) return;
-    const url = `${window.location.origin}/register?invite=${encodeURIComponent(overview.data.invitationCode)}`;
+    const url = koinoteWebURL(
+      `/register?invite=${encodeURIComponent(overview.data.invitationCode)}`,
+    );
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

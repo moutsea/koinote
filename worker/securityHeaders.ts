@@ -33,6 +33,10 @@
  *
  * connect-src 'self'：所有 API 都同源（/api/* 由 Worker 代理）。
  *
+ * worker-src 允许同源和 blob:：导入解压与图片压缩使用同源 Worker，导出 ZIP
+ * 使用 fflate 从可信的已打包脚本生成 blob Worker。这里不放行任意网络来源，
+ * 也不放宽 script-src；没有这条时大压缩包会在生产 CSP 下失败。
+ *
  * frame-ancestors 'none' 比 X-Frame-Options 更强也更现代，但两个都发 ——
  * 老浏览器只认后者。
  *
@@ -43,6 +47,7 @@
 const CSP = [
   "default-src 'self'",
   "script-src 'self' https://static.cloudflareinsights.com",
+  "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",
   "font-src 'self' data:",

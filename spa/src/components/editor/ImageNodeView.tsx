@@ -3,6 +3,10 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { desktopAPIOrigin, isDesktopRuntime } from "../../desktop/runtime";
 import { useI18n } from "../../i18n";
 import { imageURLForAttempt } from "./imageLoading";
+import {
+  DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
+  isDesktopLocalImageURL,
+} from "../../desktop/offlineImagesCore";
 
 /**
  * Typora 式图片节点：平时渲染图片，点击后浮出 Markdown 源码可编辑。
@@ -42,7 +46,16 @@ export function ImageNodeView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
-  const imageProxyOrigin = isDesktopRuntime() ? desktopAPIOrigin() : undefined;
+  const desktopRuntime = isDesktopRuntime();
+  const imageProxyOrigin = desktopRuntime ? desktopAPIOrigin() : undefined;
+  const [displaySrc, setDisplaySrc] = useState(() =>
+    desktopRuntime && isDesktopLocalImageURL(src) ? "" : src,
+  );
+  const [resolvingLocalImage, setResolvingLocalImage] = useState(
+    desktopRuntime && isDesktopLocalImageURL(src),
+  );
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const retryableDisplaySource = !/^(?:data|blob):/i.test(displaySrc);
   // 重试轮次。既驱动退避定时器，也改变实际请求 URL 与 <img> 的 key。
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -60,7 +73,60 @@ export function ImageNodeView({
   useEffect(() => {
     setBroken(false);
     setAttempt(0);
+    setSyncError(null);
   }, [src]);
+
+  useEffect(() => {
+    if (!desktopRuntime) {
+      setDisplaySrc(src);
+      setResolvingLocalImage(false);
+      return;
+    }
+    let disposed = false;
+    const localSource = isDesktopLocalImageURL(src);
+    if (localSource) setDisplaySrc("");
+    setResolvingLocalImage(localSource);
+    void import("../../desktop/offlineStore")
+      .then(({ desktopImageSyncError, desktopResolveImageSource }) =>
+        Promise.all([
+          desktopResolveImageSource(src),
+          desktopImageSyncError(src),
+        ]),
+      )
+      .then(([resolved, imageSyncError]) => {
+        if (disposed) return;
+        setSyncError(imageSyncError);
+        setResolvingLocalImage(false);
+        if (!resolved) {
+          setDisplaySrc("");
+          setBroken(true);
+          return;
+        }
+        setDisplaySrc(resolved);
+        setBroken(false);
+        setAttempt(0);
+      })
+      .catch(() => {
+        if (disposed) return;
+        setResolvingLocalImage(false);
+        setDisplaySrc(localSource ? "" : src);
+        if (localSource) setBroken(true);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [desktopRuntime, src]);
+
+  useEffect(() => {
+    if (!desktopRuntime) return;
+    const onUploadFailed = (event: Event) => {
+      const detail = (event as CustomEvent<{ localURL?: string; code?: string }>).detail;
+      if (detail?.localURL === src && detail.code) setSyncError(detail.code);
+    };
+    window.addEventListener(DESKTOP_IMAGE_UPLOAD_FAILED_EVENT, onUploadFailed);
+    return () =>
+      window.removeEventListener(DESKTOP_IMAGE_UPLOAD_FAILED_EVENT, onUploadFailed);
+  }, [desktopRuntime, src]);
 
   // 加载失败后退避重试。
   //
@@ -75,14 +141,14 @@ export function ImageNodeView({
   // 白费一次请求还是失败。600ms / 1.2s / 2.4s 三次，累计约 4 秒 —— 覆盖边缘
   // 回源的正常耗时，又不会让真正坏掉的地址转很久。
   useEffect(() => {
-    if (!broken || attempt >= MAX_IMAGE_RETRIES) return;
+    if (!broken || !retryableDisplaySource || attempt >= MAX_IMAGE_RETRIES) return;
     const delay = IMAGE_RETRY_BASE_MS * 2 ** attempt;
     const timer = setTimeout(() => {
       setAttempt((n) => n + 1);
       setBroken(false); // 清掉才会重新渲染 <img>，配合 key 变化触发新请求
     }, delay);
     return () => clearTimeout(timer);
-  }, [broken, attempt]);
+  }, [broken, attempt, retryableDisplaySource]);
 
   useEffect(() => {
     if (!editing) return;
@@ -235,12 +301,16 @@ export function ImageNodeView({
                 : "cursor-pointer border-transparent hover:border-cinnabar-500/40"
           }`}
         >
-          {broken ? (
+          {resolvingLocalImage ? (
+            <span className="block px-3 py-6 text-center text-xs text-neutral-400">
+              {t.editor.imageRetrying}
+            </span>
+          ) : broken ? (
             // 图挂了也要能点开改 URL，否则用户被困在一个坏节点上。
             // 还在重试期间给不同的文案：那几秒里说"加载失败"会让人以为已经没救，
             // 于是去动一个其实马上就会自己好的地址
             <span className="block px-3 py-6 text-center text-xs text-neutral-400">
-              {attempt < MAX_IMAGE_RETRIES
+              {retryableDisplaySource && attempt < MAX_IMAGE_RETRIES
                 ? t.editor.imageRetrying
                 : t.editor.imageBroken}
             </span>
@@ -249,7 +319,7 @@ export function ImageNodeView({
               // key 强制重挂 DOM；自有 CDN 从首次显示起就映射到同源 /images/...，
               // 其他图片重试时用轮次查询串绕过失败缓存。正文 src 始终不变。
               key={attempt}
-              src={imageURLForAttempt(src, attempt, imageProxyOrigin)}
+              src={imageURLForAttempt(displaySrc, attempt, imageProxyOrigin)}
               alt={alt}
               title={title || undefined}
               onError={() => setBroken(true)}
@@ -257,6 +327,12 @@ export function ImageNodeView({
             />
           )}
         </button>
+
+        {syncError && (
+          <p className="mt-1 text-center text-xs text-red-600 dark:text-red-400" role="alert">
+            {t.errors[syncError] || t.editor.uploadFailed}
+          </p>
+        )}
 
         {/* 非编辑态用 alt 当图注。编辑态下源码行已经把 alt 显示出来了，
             再挂一行图注是重复信息。 */}

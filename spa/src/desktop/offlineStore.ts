@@ -4,18 +4,34 @@ import type {
   DocumentSummary,
   EditorTabs,
   Folder,
+  UploadedImage,
 } from "../api";
+import {
+  forEachConcurrent,
+  imageReferences,
+  MAX_IMPORT_UPLOAD_IMAGE_BYTES,
+} from "../documentTransferCore";
+import { imageFetchURL } from "../components/editor/imageLoading";
 import { getStoredDesktopSession } from "./auth";
 import { prepareDesktopSync } from "./logoutGuard";
 import { desktopFetch } from "./network";
 import { DESKTOP_SYNC_EVENT } from "./runtime";
 import {
   acknowledgedLocalRevision,
+  createAsyncSerialQueue,
   decideRemoteDocument,
   decideRemoteFolder,
   pulledLocalRevision,
   snapshotGuard,
 } from "./offlineSyncCore";
+import {
+  DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
+  DESKTOP_IMAGE_UPLOADED_EVENT,
+  desktopLocalImageID,
+  desktopLocalImageURL,
+  imageObjectKeyFromSource,
+  replaceDesktopLocalImageURLs,
+} from "./offlineImagesCore";
 
 type SyncState = "clean" | "create" | "update" | "trash" | "conflict";
 type FolderSyncState = "clean" | "create" | "update" | "delete" | "conflict";
@@ -50,6 +66,21 @@ type FolderRow = {
   last_error: string | null;
 };
 
+type OfflineImageRow = {
+  account_id: string;
+  image_id: string;
+  content_type: string;
+  base64_data: string;
+  byte_size: number;
+  object_key: string | null;
+  remote_url: string | null;
+  created_at: string;
+  last_error: string | null;
+  is_local_origin: number;
+};
+
+type OfflineImageIdentity = Pick<OfflineImageRow, "image_id" | "object_key">;
+
 export type DesktopSyncSummary = {
   state: "idle" | "syncing" | "offline" | "error";
   pending: number;
@@ -65,14 +96,31 @@ export type DesktopConflict = {
   remote: Document;
 };
 
+export type DesktopImageCacheSummary = {
+  usedBytes: number;
+  remoteCacheBytes: number;
+  pendingLocalBytes: number;
+  remoteCacheLimitBytes: number;
+};
+
 const DATABASE_URL = "sqlite:koinote-offline.db";
 const DEFAULT_DOCUMENT_THEME = "minimal";
+const DESKTOP_IMAGE_CONCURRENCY = 3;
+export const DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
+const DESKTOP_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
 
 let databasePromise: Promise<import("@tauri-apps/plugin-sql").default> | null = null;
-let mutationTail: Promise<void> = Promise.resolve();
+const serializeMutation = createAsyncSerialQueue();
+const serializeImageCacheMutation = createAsyncSerialQueue();
 let syncPromise: Promise<DesktopSyncSummary> | null = null;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 const snapshotInitializations = new Map<string, Promise<void>>();
+const remoteCacheFullAccounts = new Set<string>();
 
 async function database() {
   if (!databasePromise) {
@@ -89,13 +137,457 @@ async function accountID(): Promise<string> {
   return session.accountId;
 }
 
-function serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
-  const result = mutationTail.then(operation, operation);
-  mutationTail = result.then(
-    () => undefined,
-    () => undefined,
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function imageDataURL(row: OfflineImageRow): string {
+  return `data:${row.content_type};base64,${row.base64_data}`;
+}
+
+function imageContentType(response: Response, objectKey: string): string | null {
+  const header = response.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
+  if (header && DESKTOP_IMAGE_TYPES.has(header)) return header;
+  const extension = objectKey.slice(objectKey.lastIndexOf(".") + 1).toLowerCase();
+  if (extension === "jpg") return "image/jpeg";
+  const inferred = `image/${extension}`;
+  return DESKTOP_IMAGE_TYPES.has(inferred) ? inferred : null;
+}
+
+async function selectOfflineImageByID(
+  account: string,
+  imageID: string,
+): Promise<OfflineImageRow | null> {
+  const db = await database();
+  const rows = await db.select<OfflineImageRow[]>(`
+    SELECT * FROM offline_images WHERE account_id = $1 AND image_id = $2
+  `, [account, imageID]);
+  return rows[0] ?? null;
+}
+
+async function selectOfflineImageByObjectKey(
+  account: string,
+  objectKey: string,
+): Promise<OfflineImageRow | null> {
+  const db = await database();
+  const rows = await db.select<OfflineImageRow[]>(`
+    SELECT * FROM offline_images WHERE account_id = $1 AND object_key = $2
+  `, [account, objectKey]);
+  return rows[0] ?? null;
+}
+
+async function selectOfflineImageIdentityByObjectKey(
+  account: string,
+  objectKey: string,
+): Promise<OfflineImageIdentity | null> {
+  const db = await database();
+  const rows = await db.select<OfflineImageIdentity[]>(`
+    SELECT image_id, object_key FROM offline_images
+    WHERE account_id = $1 AND object_key = $2
+    LIMIT 1
+  `, [account, objectKey]);
+  return rows[0] ?? null;
+}
+
+async function selectOfflineImageError(
+  account: string,
+  field: "image_id" | "object_key",
+  value: string,
+): Promise<string | null> {
+  const db = await database();
+  const rows = await db.select<{ last_error: string | null }[]>(`
+    SELECT last_error FROM offline_images
+    WHERE account_id = $1 AND ${field} = $2
+    LIMIT 1
+  `, [account, value]);
+  return rows[0]?.last_error ?? null;
+}
+
+async function imageCacheSummaryForAccount(
+  account: string,
+): Promise<DesktopImageCacheSummary> {
+  const db = await database();
+  const rows = await db.select<{
+    used_bytes: number;
+    remote_cache_bytes: number;
+    pending_local_bytes: number;
+  }[]>(`
+    SELECT
+      COALESCE(SUM(byte_size), 0) AS used_bytes,
+      COALESCE(SUM(CASE WHEN is_local_origin = 0 THEN byte_size ELSE 0 END), 0)
+        AS remote_cache_bytes,
+      COALESCE(SUM(CASE WHEN is_local_origin = 1 AND object_key IS NULL
+        THEN byte_size ELSE 0 END), 0) AS pending_local_bytes
+    FROM offline_images WHERE account_id = $1
+  `, [account]);
+  return {
+    usedBytes: Number(rows[0]?.used_bytes ?? 0),
+    remoteCacheBytes: Number(rows[0]?.remote_cache_bytes ?? 0),
+    pendingLocalBytes: Number(rows[0]?.pending_local_bytes ?? 0),
+    remoteCacheLimitBytes: DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES,
+  };
+}
+
+class OfflineImageUploadError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = "OfflineImageUploadError";
+  }
+}
+
+export async function desktopStoreLocalImage(file: File): Promise<UploadedImage> {
+  if (!DESKTOP_IMAGE_TYPES.has(file.type) || file.size <= 0) {
+    throw new Error("image_type_unsupported");
+  }
+  if (file.size > MAX_IMPORT_UPLOAD_IMAGE_BYTES) {
+    throw new Error("image_too_large");
+  }
+  const account = await accountID();
+  const imageID = crypto.randomUUID();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const db = await database();
+  await db.execute(`
+    INSERT INTO offline_images (
+      account_id, image_id, content_type, base64_data, byte_size,
+      object_key, remote_url, created_at, last_error, is_local_origin
+    ) VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, NULL, 1)
+  `, [
+    account,
+    imageID,
+    file.type,
+    bytesToBase64(bytes),
+    bytes.byteLength,
+    new Date().toISOString(),
+  ]);
+  const localURL = desktopLocalImageURL(imageID);
+  return {
+    key: localURL,
+    url: localURL,
+    size: bytes.byteLength,
+    contentType: file.type,
+  };
+}
+
+export async function desktopResolveImageSource(
+  source: string,
+): Promise<string | null> {
+  const account = await accountID();
+  const localImageID = desktopLocalImageID(source);
+  if (localImageID) {
+    const row = await selectOfflineImageByID(account, localImageID);
+    return row ? imageDataURL(row) : null;
+  }
+  const objectKey = imageObjectKeyFromSource(source);
+  if (!objectKey) return source;
+  const cached = await selectOfflineImageByObjectKey(account, objectKey);
+  return cached ? imageDataURL(cached) : source;
+}
+
+export async function desktopImageSyncError(source: string): Promise<string | null> {
+  const account = await accountID();
+  const localImageID = desktopLocalImageID(source);
+  if (localImageID) {
+    return selectOfflineImageError(account, "image_id", localImageID);
+  }
+  const objectKey = imageObjectKeyFromSource(source);
+  if (!objectKey) return null;
+  return selectOfflineImageError(account, "object_key", objectKey);
+}
+
+export async function desktopImageCacheSummary(): Promise<DesktopImageCacheSummary> {
+  return imageCacheSummaryForAccount(await accountID());
+}
+
+export async function desktopClearRemoteImageCache(): Promise<DesktopImageCacheSummary> {
+  return serializeImageCacheMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    await db.execute(`
+      DELETE FROM offline_images
+      WHERE account_id = $1 AND is_local_origin = 0
+    `, [account]);
+    await db.execute(`
+      INSERT INTO offline_meta (account_id, key, value)
+      VALUES ($1, 'remote-image-cache-manual', '1')
+      ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
+    `, [account]);
+    remoteCacheFullAccounts.delete(account);
+    return imageCacheSummaryForAccount(account);
+  });
+}
+
+export async function desktopCacheRemoteImage(source: string): Promise<string> {
+  const account = await accountID();
+  return cacheRemoteImageForAccount(account, source);
+}
+
+async function cacheRemoteImageForAccount(
+  account: string,
+  source: string,
+): Promise<string> {
+  const objectKey = imageObjectKeyFromSource(source);
+  if (!objectKey) return source;
+  if (remoteCacheFullAccounts.has(account)) throw new Error("image_cache_full");
+  const existing = await selectOfflineImageIdentityByObjectKey(account, objectKey);
+  if (existing) return desktopLocalImageURL(existing.image_id);
+
+  const response = await desktopFetch(imageFetchURL(source));
+  if (!response.ok) throw new Error(`image_cache_${response.status}`);
+  const contentLength = Number(response.headers.get("Content-Length") ?? 0);
+  if (contentLength > MAX_IMPORT_UPLOAD_IMAGE_BYTES) {
+    throw new Error("image_too_large");
+  }
+  const contentType = imageContentType(response, objectKey);
+  if (!contentType) throw new Error("image_type_unsupported");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMPORT_UPLOAD_IMAGE_BYTES) {
+    throw new Error("image_too_large");
+  }
+
+  const stored = await serializeImageCacheMutation(async () => {
+    const concurrent = await selectOfflineImageIdentityByObjectKey(account, objectKey);
+    if (concurrent) return concurrent;
+    const usage = await imageCacheSummaryForAccount(account);
+    if (usage.remoteCacheBytes + bytes.byteLength > DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES) {
+      remoteCacheFullAccounts.add(account);
+      throw new Error("image_cache_full");
+    }
+    const imageID = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const db = await database();
+    await db.execute(`
+      INSERT OR IGNORE INTO offline_images (
+        account_id, image_id, content_type, base64_data, byte_size,
+        object_key, remote_url, created_at, last_error, is_local_origin
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, 0)
+    `, [
+      account,
+      imageID,
+      contentType,
+      bytesToBase64(bytes),
+      bytes.byteLength,
+      objectKey,
+      source,
+      now,
+    ]);
+    return selectOfflineImageIdentityByObjectKey(account, objectKey);
+  });
+  if (!stored) throw new Error("image_cache_failed");
+  return desktopLocalImageURL(stored.image_id);
+}
+
+async function uploadOfflineImage(
+  account: string,
+  row: OfflineImageRow,
+): Promise<string> {
+  if (row.remote_url) {
+    await applyUploadedImageMapping(account, row.image_id, row.remote_url);
+    return row.remote_url;
+  }
+  const bytes = base64ToBytes(row.base64_data);
+  const response = await desktopFetch("/api/images", {
+    method: "POST",
+    headers: {
+      "Content-Type": row.content_type,
+      "X-Koinote-Image-Purpose": "persistent",
+    },
+    body: new Blob([bytes as BlobPart], { type: row.content_type }),
+  });
+  if (!response.ok) {
+    let code = "image_upload_failed";
+    try {
+      const body = (await response.json()) as { code?: string };
+      if (body.code) code = body.code;
+    } catch {
+      // 状态码仍可用于同步错误提示。
+    }
+    const db = await database();
+    await db.execute(`
+      UPDATE offline_images SET last_error = $3
+      WHERE account_id = $1 AND image_id = $2
+    `, [account, row.image_id, code]);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOAD_FAILED_EVENT, {
+        detail: { localURL: desktopLocalImageURL(row.image_id), code },
+      }));
+    }
+    throw new OfflineImageUploadError(code);
+  }
+  const result = (await response.json()) as { image: UploadedImage };
+  const db = await database();
+  await db.execute(`
+    UPDATE offline_images
+    SET object_key = $3, remote_url = $4, last_error = NULL,
+        is_local_origin = 0
+    WHERE account_id = $1 AND image_id = $2
+  `, [account, row.image_id, result.image.key, result.image.url]);
+  await applyUploadedImageMapping(account, row.image_id, result.image.url);
+  return result.image.url;
+}
+
+async function applyUploadedImageMapping(
+  account: string,
+  imageID: string,
+  remoteURL: string,
+): Promise<void> {
+  const db = await database();
+  const localURL = desktopLocalImageURL(imageID);
+  await db.execute(`
+    UPDATE offline_documents
+    SET content = replace(content, $2, $3),
+        sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
+        change_seq = change_seq + 1,
+        last_error = NULL
+    WHERE account_id = $1 AND instr(content, $2) > 0
+  `, [account, localURL, remoteURL]);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
+      detail: { localURL, remoteURL },
+    }));
+  }
+}
+
+async function prepareDocumentContentForRemote(
+  account: string,
+  content: string,
+): Promise<string> {
+  const localSources = [...new Set(
+    imageReferences(content).filter((source) => desktopLocalImageID(source)),
+  )];
+  if (localSources.length === 0) return content;
+  const replacements = new Map<string, string>();
+  const failures: OfflineImageUploadError[] = [];
+  await forEachConcurrent(
+    localSources,
+    DESKTOP_IMAGE_CONCURRENCY,
+    async (source) => {
+      const imageID = desktopLocalImageID(source);
+      if (!imageID) return;
+      const row = await selectOfflineImageByID(account, imageID);
+      if (!row) {
+        failures.push(new OfflineImageUploadError("local_image_missing"));
+        return;
+      }
+      try {
+        replacements.set(source, await uploadOfflineImage(account, row));
+      } catch (error) {
+        if (!(error instanceof OfflineImageUploadError)) throw error;
+        failures.push(error);
+      }
+    },
   );
-  return result;
+  if (failures.length > 0) throw failures[0];
+  return replaceDesktopLocalImageURLs(content, replacements);
+}
+
+async function cacheDocumentImages(account: string, content: string): Promise<void> {
+  const remoteSources = [...new Set(
+    imageReferences(content).filter((source) => imageObjectKeyFromSource(source)),
+  )];
+  await forEachConcurrent(
+    remoteSources,
+    DESKTOP_IMAGE_CONCURRENCY,
+    async (source) => {
+      const objectKey = imageObjectKeyFromSource(source);
+      if (!objectKey || await selectOfflineImageIdentityByObjectKey(account, objectKey)) return;
+      try {
+        await cacheRemoteImageForAccount(account, source);
+      } catch {
+        // 远端文档本身仍要可用；缓存失败会在下一轮同步再次尝试。
+      }
+    },
+  );
+}
+
+async function cacheAllDocumentImages(account: string): Promise<void> {
+  const db = await database();
+  const manual = await db.select<{ value: string }[]>(`
+    SELECT value FROM offline_meta
+    WHERE account_id = $1 AND key = 'remote-image-cache-manual'
+  `, [account]);
+  if (manual[0] || remoteCacheFullAccounts.has(account)) return;
+  const usage = await imageCacheSummaryForAccount(account);
+  if (
+    usage.remoteCacheBytes >=
+    DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES - MAX_IMPORT_UPLOAD_IMAGE_BYTES
+  ) return;
+  const rows = await db.select<Pick<DocumentRow, "content">[]>(`
+    SELECT content FROM offline_documents
+    WHERE account_id = $1 AND sync_state <> 'trash'
+  `, [account]);
+  for (const row of rows) {
+    await cacheDocumentImages(account, row.content);
+  }
+}
+
+export async function desktopReleaseUnusedImages(sources: string[]): Promise<void> {
+  const account = await accountID();
+  const imageIDs = [...new Set(
+    sources.map(desktopLocalImageID).filter((value): value is string => Boolean(value)),
+  )];
+  if (imageIDs.length === 0) return;
+  const db = await database();
+  for (const imageID of imageIDs) {
+    await db.execute(`
+      DELETE FROM offline_images
+      WHERE account_id = $1 AND image_id = $2
+        AND NOT EXISTS (
+          SELECT 1 FROM offline_documents d
+          WHERE d.account_id = $1
+            AND instr(d.content, $3 || offline_images.image_id) > 0
+        )
+    `, [account, imageID, "koinote-local-image://"]);
+  }
+}
+
+async function cleanupUnusedOfflineImages(account: string): Promise<void> {
+  const db = await database();
+  const rows = await db.select<OfflineImageIdentity[]>(`
+    SELECT i.image_id, i.object_key FROM offline_images i
+    WHERE i.account_id = $1
+      AND NOT EXISTS (
+        SELECT 1 FROM offline_documents d
+        WHERE d.account_id = $1 AND (
+          instr(d.content, $2 || i.image_id) > 0 OR
+          instr(d.remote_snapshot, $2 || i.image_id) > 0 OR
+          (i.object_key IS NOT NULL AND (
+            instr(d.content, i.object_key) > 0 OR
+            instr(d.remote_snapshot, i.object_key) > 0
+          ))
+        )
+      )
+  `, [account, "koinote-local-image://"]);
+  const remoteKeys = rows
+    .map((row) => row.object_key)
+    .filter((value): value is string => Boolean(value));
+  if (remoteKeys.length > 0) {
+    await remoteJSON("/api/storage/release-images", {
+      method: "POST",
+      body: JSON.stringify({ keys: remoteKeys }),
+    });
+  }
+  if (rows.length > 0) {
+    for (const row of rows) {
+      await db.execute(`
+        DELETE FROM offline_images WHERE account_id = $1 AND image_id = $2
+      `, [account, row.image_id]);
+    }
+    remoteCacheFullAccounts.delete(account);
+  }
 }
 
 function notify(summary: DesktopSyncSummary) {
@@ -166,7 +658,10 @@ export async function desktopSearchDocuments(
 export async function desktopGetDocument(docId: string): Promise<{ document: Document }> {
   const account = await accountID();
   const row = await selectDocument(account, docId);
-  if (row && row.sync_state !== "trash") return { document: rowToDocument(row) };
+  if (row && row.sync_state !== "trash") {
+    if (navigator.onLine) void cacheDocumentImages(account, row.content);
+    return { document: rowToDocument(row) };
+  }
 
   const remote = await remoteJSON<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
@@ -399,7 +894,8 @@ export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<Desk
 
 export async function desktopSyncSummary(): Promise<DesktopSyncSummary> {
   const account = await accountID();
-  return calculateSummary(account, "idle");
+  const summary = await calculateSummary(account, "idle");
+  return summary.message ? { ...summary, state: "error" } : summary;
 }
 
 export async function desktopListConflicts(): Promise<DesktopConflict[]> {
@@ -431,6 +927,7 @@ export async function resolveDesktopConflict(docId: string, choice: "local" | "r
     const remote = JSON.parse(row.remote_snapshot) as Document;
     const db = await database();
     if (choice === "remote") {
+      await cacheDocumentImages(account, remote.content);
       await db.execute(`
         UPDATE offline_documents
         SET title = $3, theme = $4, content = $5,
@@ -471,6 +968,8 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
   await db.execute(`DELETE FROM offline_documents WHERE account_id = $1`, [account]);
   await db.execute(`DELETE FROM offline_folders WHERE account_id = $1`, [account]);
   await db.execute(`DELETE FROM offline_meta WHERE account_id = $1`, [account]);
+  await db.execute(`DELETE FROM offline_images WHERE account_id = $1`, [account]);
+  remoteCacheFullAccounts.delete(account);
   snapshotInitializations.delete(account);
 }
 
@@ -529,20 +1028,30 @@ async function performSync(
   if (!options.silent) notify(await calculateSummary(account, "syncing"));
   try {
     await pushFolders(account);
-    await pushDocuments(account);
+    const imageUploadIssues = await pushDocuments(account);
     await pullRemoteSnapshot(account);
+    await cacheAllDocumentImages(account);
+    await cleanupUnusedOfflineImages(account);
     const db = await database();
     const now = new Date().toISOString();
     await db.execute(`
       INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'last-synced-at', $2)
       ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
     `, [account, now]);
-    const summary = await calculateSummary(account, "idle");
+    const summary = await calculateSummary(
+      account,
+      imageUploadIssues.length > 0 ? "error" : "idle",
+      imageUploadIssues[0],
+    );
     notify(summary);
     return summary;
   } catch (error) {
     const offline = !navigator.onLine;
-    const summary = await calculateSummary(account, offline ? "offline" : "error", String(error));
+    const summary = await calculateSummary(
+      account,
+      offline ? "offline" : "error",
+      error instanceof Error ? error.message : "desktop_sync_failed",
+    );
     notify(summary);
     return summary;
   }
@@ -595,8 +1104,9 @@ async function pushFolders(account: string) {
   }
 }
 
-async function pushDocuments(account: string) {
+async function pushDocuments(account: string): Promise<string[]> {
   const db = await database();
+  const imageUploadIssues: string[] = [];
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
     WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1)
@@ -619,13 +1129,15 @@ async function pushDocuments(account: string) {
     }
 
     try {
+      const remoteContent = await prepareDocumentContentForRemote(account, row.content);
+      const remoteRow = { ...row, content: remoteContent };
       let remote: Document | null = null;
       if (row.sync_state === "create") {
         remote = (await remoteJSON<{ document: Document }>("/api/documents", {
           method: "POST",
           body: JSON.stringify({
             docId: row.doc_id, title: row.title, theme: row.theme,
-            content: row.content, folderId: row.folder_id,
+            content: remoteRow.content, folderId: row.folder_id,
           }),
         })).document;
       } else if (row.sync_state === "update") {
@@ -633,13 +1145,13 @@ async function pushDocuments(account: string) {
           remote = (await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(row.doc_id)}`, {
             method: "PUT",
             body: JSON.stringify({
-              title: row.title, theme: row.theme, content: row.content,
+              title: row.title, theme: row.theme, content: remoteRow.content,
               expectedRevision: row.base_revision,
             }),
           })).document;
         } catch (error) {
           if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
-          remote = await recoverDeletedRemoteDocument(row);
+          remote = await recoverDeletedRemoteDocument(remoteRow);
           await db.execute(`
             UPDATE offline_documents SET folder_dirty = 1
             WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
@@ -659,18 +1171,30 @@ async function pushDocuments(account: string) {
         `, [account, row.doc_id, current.change_seq]);
       }
     } catch (error) {
+      if (error instanceof OfflineImageUploadError) {
+        imageUploadIssues.push(error.code);
+        await db.execute(`
+          UPDATE offline_documents SET last_error = $3
+          WHERE account_id = $1 AND doc_id = $2
+            AND sync_state NOT IN ('trash', 'conflict')
+        `, [account, row.doc_id, error.code]);
+        continue;
+      }
       if (error instanceof RemoteHTTPError && error.status === 409) {
         const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(row.doc_id)}`);
+        await cacheDocumentImages(account, remote.document.content);
         await db.execute(`
           UPDATE offline_documents
           SET sync_state = 'conflict', remote_snapshot = $3, last_error = $4
           WHERE account_id = $1 AND doc_id = $2
+            AND sync_state NOT IN ('trash', 'conflict')
         `, [account, row.doc_id, JSON.stringify(remote.document), error.code ?? "document_revision_conflict"]);
         continue;
       }
       throw error;
     }
   }
+  return imageUploadIssues;
 }
 
 async function recoverDeletedRemoteDocument(row: DocumentRow): Promise<Document> {
@@ -746,11 +1270,23 @@ async function pullRemoteSnapshot(account: string) {
       continue;
     }
     const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(summary.docId)}`);
+    await cacheDocumentImages(account, remote.document.content);
+    let comparableLocalContent = local.content;
+    try {
+      comparableLocalContent = await prepareDocumentContentForRemote(
+        account,
+        local.content,
+      );
+    } catch (error) {
+      if (!(error instanceof OfflineImageUploadError)) throw error;
+      // 本地占位地址必然与远端正文不同，后面的决策会保留双方并进入冲突；
+      // 不能让一张失败图片中断其余远端文档的拉取。
+    }
     const decision = decideRemoteDocument(
       {
         title: local.title,
         theme: local.theme,
-        content: local.content,
+        content: comparableLocalContent,
         folderId: local.folder_id,
         localRevision: local.local_revision,
         baseRevision: local.base_revision,
@@ -855,17 +1391,33 @@ async function acknowledgeDocument(account: string, sent: DocumentRow, remote: D
     SET title = CASE WHEN change_seq = $3 THEN $4 ELSE title END,
         theme = CASE WHEN change_seq = $3 THEN $5 ELSE theme END,
         content = CASE WHEN change_seq = $3 THEN $6 ELSE content END,
-        local_revision = CASE WHEN change_seq = $3 THEN $7 ELSE local_revision END,
-        base_revision = $8,
+        local_revision = CASE
+          WHEN sync_state IN ('trash', 'conflict') THEN local_revision
+          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6)
+            THEN $7
+          ELSE local_revision
+        END,
+        base_revision = CASE
+          WHEN sync_state IN ('trash', 'conflict') THEN base_revision
+          ELSE $8
+        END,
         created_at = CASE WHEN change_seq = $3 THEN $9 ELSE created_at END,
         updated_at = CASE WHEN change_seq = $3 THEN $10 ELSE updated_at END,
         share_json = CASE WHEN change_seq = $3 THEN $11 ELSE share_json END,
         sync_state = CASE
-          WHEN change_seq = $3 THEN 'clean'
-          WHEN sync_state = 'trash' THEN 'trash'
+          WHEN sync_state IN ('trash', 'conflict') THEN sync_state
+          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6)
+            THEN 'clean'
           ELSE 'update'
         END,
-        remote_snapshot = NULL, last_error = NULL
+        remote_snapshot = CASE
+          WHEN sync_state IN ('trash', 'conflict') THEN remote_snapshot
+          ELSE NULL
+        END,
+        last_error = CASE
+          WHEN sync_state IN ('trash', 'conflict') THEN last_error
+          ELSE NULL
+        END
     WHERE account_id = $1 AND doc_id = $2
   `, [
     account, sent.doc_id, sent.change_seq, remote.title, remote.theme, remote.content,
@@ -892,6 +1444,7 @@ async function acknowledgeFolder(account: string, sent: FolderRow, remote: Folde
 }
 
 async function insertRemoteDocument(account: string, document: Document, folderID: string | null) {
+  await cacheDocumentImages(account, document.content);
   const db = await database();
   await db.execute(`
     INSERT INTO offline_documents (
@@ -913,6 +1466,7 @@ async function replaceDocumentFromRemote(
   document: Document,
   folderID: string | null,
 ) {
+  await cacheDocumentImages(account, document.content);
   const db = await database();
   const [baseRevision, syncState, changeSeq] = snapshotGuard({
     baseRevision: local.base_revision,
@@ -943,6 +1497,7 @@ async function acknowledgeMatchingRemoteDocument(
   document: Document,
   folderID: string | null,
 ) {
+  await cacheDocumentImages(account, document.content);
   const db = await database();
   const [baseRevision, syncState, changeSeq] = snapshotGuard({
     baseRevision: local.base_revision,
@@ -959,7 +1514,7 @@ async function acknowledgeMatchingRemoteDocument(
     WHERE account_id = $1 AND doc_id = $2
       AND base_revision = $12 AND sync_state = $13 AND change_seq = $14
   `, [
-    account, document.docId, document.title, document.theme, document.content, folderID,
+    account, document.docId, document.title, document.theme, local.content, folderID,
     acknowledgedLocalRevision(local.local_revision, document.revision), document.revision,
     document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
@@ -1025,12 +1580,23 @@ async function calculateSummary(
   const meta = await db.select<{ value: string }[]>(`
     SELECT value FROM offline_meta WHERE account_id = $1 AND key = 'last-synced-at'
   `, [account]);
+  const storedIssues = await db.select<{ error_code: string | null }[]>(`
+    SELECT COALESCE(
+      (SELECT last_error FROM offline_documents
+       WHERE account_id = $1 AND last_error IS NOT NULL
+       ORDER BY updated_at DESC LIMIT 1),
+      (SELECT last_error FROM offline_images
+       WHERE account_id = $1 AND last_error IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1)
+    ) AS error_code
+  `, [account]);
+  const effectiveMessage = message ?? storedIssues[0]?.error_code ?? undefined;
   return {
     state,
     pending: Number(counts[0]?.pending ?? 0),
     conflicts: Number(counts[0]?.conflicts ?? 0),
     lastSyncedAt: meta[0]?.value ?? null,
-    ...(message ? { message } : {}),
+    ...(effectiveMessage ? { message: effectiveMessage } : {}),
   };
 }
 

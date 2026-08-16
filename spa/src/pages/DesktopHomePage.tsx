@@ -10,15 +10,26 @@ import {
   LoaderCircle,
   Upload,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "../auth";
 import { DesktopSyncStatus } from "../components/DesktopSyncStatus";
 import { PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useCreateDocument, useDocumentList } from "../documents";
-import { importDocumentsFromFiles } from "../documentTransfer";
+import {
+  getImportErrorMessage,
+  importDocumentsFromFiles,
+} from "../documentTransfer";
+import { IMPORT_FILE_ACCEPT } from "../documentTransferCore";
+import {
+  desktopClearRemoteImageCache,
+  desktopImageCacheSummary,
+  desktopSyncEventName,
+  type DesktopImageCacheSummary,
+} from "../desktop/offlineStore";
 import { interpolate, type Locale, useI18n } from "../i18n";
+import { formatBytes } from "../storage";
 import { DesktopLoginPage } from "./DesktopLoginPage";
 
 const DATE_LOCALE: Record<Locale, string> = {
@@ -39,6 +50,26 @@ export function DesktopHomePage() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
   const [importNotice, setImportNotice] = useState<{ error: boolean; message: string } | null>(null);
+  const [imageCache, setImageCache] = useState<DesktopImageCacheSummary | null>(null);
+  const [clearingImageCache, setClearingImageCache] = useState(false);
+  const [imageCacheNotice, setImageCacheNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => {
+      void desktopImageCacheSummary().then(setImageCache).catch(() => undefined);
+    };
+    const eventName = desktopSyncEventName();
+    refresh();
+    window.addEventListener(eventName, refresh);
+    return () => window.removeEventListener(eventName, refresh);
+  }, [user]);
+
+  useEffect(() => {
+    if (!importNotice) return;
+    const timer = window.setTimeout(() => setImportNotice(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [importNotice]);
 
   if (session.isLoading) {
     return (
@@ -71,20 +102,44 @@ export function DesktopHomePage() {
     setImporting(true);
     setImportNotice(null);
     try {
-      const count = await importDocumentsFromFiles(files);
+      const result = await importDocumentsFromFiles(files);
+      const success = interpolate(t.transfer.importSuccess, {
+        count: result.imported,
+      });
+      const gifNotice = result.flattenedGifCount
+        ? ` ${interpolate(t.transfer.importGifFlattened, {
+            count: result.flattenedGifCount,
+          })}`
+        : "";
       setImportNotice({
         error: false,
-        message: interpolate(t.transfer.importSuccess, { count }),
+        message: `${success}${gifNotice}`,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
         queryClient.invalidateQueries({ queryKey: ["folders"] }),
         queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
       ]);
-    } catch {
-      setImportNotice({ error: true, message: t.transfer.importFailed });
+    } catch (error) {
+      setImportNotice({
+        error: true,
+        message: getImportErrorMessage(error, t.transfer),
+      });
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function clearImageCache() {
+    setClearingImageCache(true);
+    setImageCacheNotice(null);
+    try {
+      setImageCache(await desktopClearRemoteImageCache());
+      setImageCacheNotice(t.desktopHome.imageCacheCleared);
+    } catch {
+      setImageCacheNotice(t.desktopSync.error);
+    } finally {
+      setClearingImageCache(false);
     }
   }
 
@@ -112,7 +167,7 @@ export function DesktopHomePage() {
             <input
               ref={importInputRef}
               type="file"
-              accept=".md,.zip,image/png,image/jpeg,image/gif,image/webp"
+              accept={IMPORT_FILE_ACCEPT}
               multiple
               className="hidden"
               onChange={(event) => {
@@ -270,9 +325,37 @@ export function DesktopHomePage() {
                 {t.desktopHome.offlineDescription}
               </p>
               {!documents.isLoading && !documents.isError && (
-                <p className="mt-4 border-t pt-4 text-xs font-medium" style={{ borderColor: "var(--ink-line)", color: "var(--ink-faint)" }}>
-                  {interpolate(t.desktopHome.documentCount, { count: allDocuments.length })}
-                </p>
+                <div className="mt-4 space-y-3 border-t pt-4" style={{ borderColor: "var(--ink-line)" }}>
+                  <p className="text-xs font-medium" style={{ color: "var(--ink-faint)" }}>
+                    {interpolate(t.desktopHome.documentCount, { count: allDocuments.length })}
+                  </p>
+                  {imageCache && (
+                    <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                      {interpolate(t.desktopHome.imageCacheUsage, {
+                        total: formatBytes(imageCache.usedBytes, DATE_LOCALE[locale]),
+                        cached: formatBytes(imageCache.remoteCacheBytes, DATE_LOCALE[locale]),
+                        limit: formatBytes(imageCache.remoteCacheLimitBytes, DATE_LOCALE[locale]),
+                        pending: formatBytes(imageCache.pendingLocalBytes, DATE_LOCALE[locale]),
+                      })}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={clearingImageCache}
+                    onClick={() => void clearImageCache()}
+                    className="text-xs font-medium hover:underline disabled:opacity-60"
+                    style={{ color: "var(--ink-mid)" }}
+                  >
+                    {clearingImageCache
+                      ? t.desktopHome.clearingImageCache
+                      : t.desktopHome.clearImageCache}
+                  </button>
+                  {imageCacheNotice && (
+                    <p className="text-xs leading-5" role="status" style={{ color: "var(--ink-mid)" }}>
+                      {imageCacheNotice}
+                    </p>
+                  )}
+                </div>
               )}
             </PaperCard>
           </aside>

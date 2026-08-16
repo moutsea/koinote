@@ -120,6 +120,13 @@ function parseCSP(header) {
       !(csp["script-src"] ?? []).includes("https:"),
     String(csp["script-src"]),
   );
+  ok(
+    "worker-src 只允许同源与 blob（fflate 后台压缩/解压需要）",
+    (csp["worker-src"] ?? []).includes("'self'") &&
+      (csp["worker-src"] ?? []).includes("blob:") &&
+      !(csp["worker-src"] ?? []).includes("https:"),
+    String(csp["worker-src"]),
+  );
 
   // style-src 必须含 unsafe-inline，否则主题和公式当场坏掉。
   // 这条断言方向和上面相反 —— 它防的是"有人顺手收紧 CSP 把功能弄坏"。

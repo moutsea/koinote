@@ -1,22 +1,146 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
+
+function sourceBetween(source, startMarker, endMarker) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.notEqual(start, -1, `源码中缺少起始标记：${startMarker}`);
+  assert.notEqual(end, -1, `源码中缺少结束标记：${endMarker}`);
+  return source.slice(start, end);
+}
 
 const {
   acknowledgedLocalRevision,
+  DESKTOP_IMAGE_MAPPING_META,
+  DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
+  DESKTOP_IMAGE_UPLOADED_EVENT,
+  desktopLocalImageID,
+  desktopLocalImageURL,
   decideRemoteDocumentUpdate,
   decideRemoteDocument,
   decideRemoteFolder,
   isDesktopAuthenticationRejection,
+  isDesktopLocalImageURL,
+  imageObjectKeyFromSource,
+  localWebURL,
   confirmAction,
+  createAsyncSerialQueue,
   prepareDesktopLogout,
   prepareDesktopSync,
   pulledLocalRevision,
+  replaceDesktopLocalImageURLs,
   registerDesktopLogoutPreparation,
   registerDesktopSyncPreparation,
   REMOTE_UPDATE_INTERVAL_MS,
   shouldAttachDesktopAuthorization,
   snapshotGuard,
 } = await import("./_offline_sync_bundle.mjs");
+
+const localImageID = "550e8400-e29b-41d4-a716-446655440000";
+const localImageURL = desktopLocalImageURL(localImageID);
+assert.equal(localImageURL, `koinote-local-image://${localImageID}`);
+assert.equal(desktopLocalImageID(localImageURL), localImageID);
+assert.equal(isDesktopLocalImageURL(localImageURL), true);
+assert.equal(desktopLocalImageID("koinote-local-image://not-a-uuid"), null);
+assert.throws(() => desktopLocalImageURL("../escape"), /invalid_local_image_id/);
+assert.equal(
+  imageObjectKeyFromSource(
+    "https://img.koinote.app/u/google_123/abcdef1234567890.png?cache=1",
+  ),
+  "u/google_123/abcdef1234567890.png",
+);
+assert.equal(
+  imageObjectKeyFromSource("https://example.com/photo.png"),
+  null,
+);
+assert.equal(
+  imageObjectKeyFromSource("https://evil.example/u/google_123/abcdef1234567890.png"),
+  null,
+);
+assert.equal(
+  replaceDesktopLocalImageURLs(
+    `![](${localImageURL})\n${localImageURL}`,
+    new Map([[localImageURL, "https://img.koinote.app/u/me/abcdef1234567890.png"]]),
+  ),
+  "![](https://img.koinote.app/u/me/abcdef1234567890.png)\nhttps://img.koinote.app/u/me/abcdef1234567890.png",
+);
+assert.equal(DESKTOP_IMAGE_UPLOADED_EVENT, "koinote:desktop-image-uploaded");
+assert.equal(DESKTOP_IMAGE_UPLOAD_FAILED_EVENT, "koinote:desktop-image-upload-failed");
+assert.equal(DESKTOP_IMAGE_MAPPING_META, "koinote:desktop-image-mapping");
+assert.equal(
+  localWebURL("https://koinote.app", "/register?invite=ABC234"),
+  "https://koinote.app/register?invite=ABC234",
+);
+assert.equal(
+  localWebURL("https://koinote.app", "/share/token"),
+  "https://koinote.app/share/token",
+);
+assert.throws(() => localWebURL("tauri://localhost", "/register"), /HTTP or HTTPS/);
+assert.throws(() => localWebURL("https://koinote.app", "//evil.example"), /absolute local path/);
+assert.throws(() => localWebURL("https://koinote.app", "/\\evil.example"), /absolute local path/);
+
+const documentQueue = createAsyncSerialQueue();
+const imageCacheQueue = createAsyncSerialQueue();
+const nestedQueueResult = await Promise.race([
+  documentQueue(async () => {
+    await imageCacheQueue(async () => "cached");
+    return "resolved";
+  }),
+  new Promise((resolve) => setTimeout(() => resolve("timeout"), 100)),
+]);
+assert.equal(
+  nestedQueueResult,
+  "resolved",
+  "文档冲突处理与图片缓存必须使用独立队列，不能嵌套自锁",
+);
+
+const reentrantQueue = createAsyncSerialQueue();
+const reentrantEvents = [];
+let releaseOuter;
+let markOuterStarted;
+const outerStarted = new Promise((resolve) => {
+  markOuterStarted = resolve;
+});
+const outerGate = new Promise((resolve) => {
+  releaseOuter = resolve;
+});
+const outerOperation = reentrantQueue(async (scope) => {
+  reentrantEvents.push("outer-start");
+  markOuterStarted();
+  await Promise.resolve();
+  await scope.runNested(async () => {
+    reentrantEvents.push("nested");
+  });
+  await outerGate;
+  reentrantEvents.push("outer-end");
+});
+await outerStarted;
+const queuedOperation = reentrantQueue(async () => {
+  reentrantEvents.push("queued");
+});
+await Promise.resolve();
+assert.deepEqual(
+  reentrantEvents,
+  ["outer-start", "nested"],
+  "无作用域的并发操作必须继续排队，不能借重入机制绕过串行保证",
+);
+releaseOuter();
+await Promise.all([outerOperation, queuedOperation]);
+assert.deepEqual(reentrantEvents, ["outer-start", "nested", "outer-end", "queued"]);
+await assert.rejects(
+  reentrantQueue((scope) =>
+    scope.runNested(async () => {
+      throw new Error("nested_failed");
+    }),
+  ),
+  /nested_failed/,
+);
+assert.equal(
+  await reentrantQueue(async () => "recovered"),
+  "recovered",
+  "嵌套操作失败后队列必须继续服务后续操作",
+);
 
 const originalWindow = globalThis.window;
 let confirmationRoute = "";
@@ -195,10 +319,227 @@ const offlineStore = readFileSync(
   new URL("../spa/src/desktop/offlineStore.ts", import.meta.url),
   "utf8",
 );
+const offlineStoreAST = ts.createSourceFile(
+  "offlineStore.ts",
+  offlineStore,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS,
+);
+const offlineStoreFunctions = new Map();
+for (const statement of offlineStoreAST.statements) {
+  if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+    offlineStoreFunctions.set(statement.name.text, statement);
+  }
+}
+function calledIdentifiers(node) {
+  const names = new Set();
+  function visit(current) {
+    if (ts.isCallExpression(current) && ts.isIdentifier(current.expression)) {
+      names.add(current.expression.text);
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+  return names;
+}
+const serializedMutationFunctions = new Set(
+  [...offlineStoreFunctions]
+    .filter(([, declaration]) => calledIdentifiers(declaration).has("serializeMutation"))
+    .map(([name]) => name),
+);
+const nestedSerializedCalls = [];
+for (const name of serializedMutationFunctions) {
+  const calls = calledIdentifiers(offlineStoreFunctions.get(name));
+  for (const called of serializedMutationFunctions) {
+    if (calls.has(called)) {
+      nestedSerializedCalls.push(`${name} -> ${called}`);
+    }
+  }
+}
+assert.deepEqual(
+  nestedSerializedCalls,
+  [],
+  "已排队的桌面 mutation 不能直接调用另一个排队 mutation；请抽出内部操作并通过队列 scope.runNested 复用",
+);
+const apiSource = readFileSync(
+  new URL("../spa/src/api.ts", import.meta.url),
+  "utf8",
+);
+const editorSource = readFileSync(
+  new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
+  "utf8",
+);
+const imageNodeSource = readFileSync(
+  new URL("../spa/src/components/editor/ImageNodeView.tsx", import.meta.url),
+  "utf8",
+);
+const syncStatusSource = readFileSync(
+  new URL("../spa/src/components/DesktopSyncStatus.tsx", import.meta.url),
+  "utf8",
+);
+const desktopMigration = readFileSync(
+  new URL("../src-tauri/migrations/0002_offline_images.sql", import.meta.url),
+  "utf8",
+);
+const desktopCacheMigration = readFileSync(
+  new URL("../src-tauri/migrations/0003_offline_image_cache.sql", import.meta.url),
+  "utf8",
+);
+const tauriSource = readFileSync(
+  new URL("../src-tauri/src/lib.rs", import.meta.url),
+  "utf8",
+);
 assert.match(
   offlineStore,
   /DEFAULT_DOCUMENT_THEME\s*=\s*"minimal"/,
   "桌面端新文档默认主题必须与网页端一致",
+);
+assert.match(offlineStore, /desktopStoreLocalImage[\s\S]*?INSERT INTO offline_images/);
+assert.match(
+  offlineStore,
+  /prepareDocumentContentForRemote[\s\S]*?uploadOfflineImage[\s\S]*?replaceDesktopLocalImageURLs/,
+  "同步文档前必须先把本地图片上传并替换成远端 URL",
+);
+assert.match(
+  offlineStore,
+  /applyUploadedImageMapping[\s\S]*?UPDATE offline_documents[\s\S]*?replace\(content, \$2, \$3\)/,
+  "上传映射必须持久化到 SQLite，不能只更新当前编辑器",
+);
+assert.match(
+  offlineStore,
+  /sync_state IN \('trash', 'conflict'\)[\s\S]*?title = \$4 AND theme = \$5 AND content = \$6/,
+  "图片映射确认不能复活已删除或冲突中的文档",
+);
+assert.match(
+  offlineStore,
+  /base_revision = CASE[\s\S]*?sync_state IN \('trash', 'conflict'\)[\s\S]*?THEN base_revision/,
+  "同步响应不能推进已删除或冲突文档的基准版本",
+);
+assert.match(
+  offlineStore,
+  /remote_snapshot = CASE[\s\S]*?sync_state IN \('trash', 'conflict'\)[\s\S]*?THEN remote_snapshot/,
+  "同步响应不能清掉并发产生的冲突快照",
+);
+assert.match(
+  offlineStore,
+  /SET sync_state = 'conflict'[\s\S]*?sync_state NOT IN \('trash', 'conflict'\)/,
+  "远端 409 不能把同步期间删除的文档复活成冲突",
+);
+assert.match(
+  offlineStore,
+  /SELECT i\.image_id, i\.object_key FROM offline_images i/,
+  "清理本地附件时不能把无关图片的 base64 正文全部读入内存",
+);
+assert.match(offlineStore, /cacheAllDocumentImages\(account\)/);
+assert.match(offlineStore, /DELETE FROM offline_images WHERE account_id = \$1/);
+assert.match(apiSource, /purpose === "persistent"[\s\S]*?desktopStoreLocalImage/);
+assert.match(
+  apiSource,
+  /flattenedAnimation[\s\S]*?desktopStoreLocalImage/,
+  "桌面粘贴大 GIF 时必须把静态化结果返回给编辑器",
+);
+assert.match(
+  apiSource,
+  /fetchAppResource[\s\S]*?isDesktopLocalImageURL\(path\)[\s\S]*?desktopResolveImageSource/,
+  "Word、PDF 等读取链路必须能直接读取桌面本地图片",
+);
+assert.match(
+  editorSource,
+  /DESKTOP_IMAGE_UPLOADED_EVENT[\s\S]*?DESKTOP_IMAGE_MAPPING_META/,
+  "编辑器必须接收上传映射且避免把内部替换当成用户编辑",
+);
+assert.match(imageNodeSource, /desktopResolveImageSource\(src\)/);
+assert.match(
+  imageNodeSource,
+  /DESKTOP_IMAGE_UPLOAD_FAILED_EVENT[\s\S]*?t\.errors\[syncError\]/,
+  "失败图片必须在具体节点下显示本地化原因",
+);
+assert.match(
+  syncStatusSource,
+  /syncLabel\(summary, t\.desktopSync, t\.errors\)[\s\S]*?errors\[code\]/,
+  "同步状态必须把持久化的图片错误码映射为本地化文案",
+);
+assert.match(desktopMigration, /CREATE TABLE IF NOT EXISTS offline_images/);
+assert.match(desktopMigration, /base64_data TEXT NOT NULL/);
+assert.match(tauriSource, /version: 2[\s\S]*?0002_offline_images\.sql/);
+assert.match(tauriSource, /version: 3[\s\S]*?0003_offline_image_cache\.sql/);
+assert.match(desktopCacheMigration, /is_local_origin[\s\S]*?CHECK/);
+assert.match(
+  desktopCacheMigration,
+  /UPDATE offline_images[\s\S]*?object_key IS NULL AND remote_url IS NULL/,
+  "升级旧数据库时必须保住尚未上传的本地图片",
+);
+assert.match(offlineStore, /DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES = 512 \* 1024 \* 1024/);
+assert.match(
+  offlineStore,
+  /desktopClearRemoteImageCache[\s\S]*?is_local_origin = 0[\s\S]*?remote-image-cache-manual/,
+  "清空缓存只能删除可重新下载的远端副本，并暂停后台全量回填",
+);
+const cacheRemoteImageSection = sourceBetween(
+  offlineStore,
+  "async function cacheRemoteImageForAccount",
+  "async function uploadOfflineImage",
+);
+const cacheDocumentImagesSection = sourceBetween(
+  offlineStore,
+  "async function cacheDocumentImages",
+  "async function cacheAllDocumentImages",
+);
+const pushDocumentsSection = sourceBetween(
+  offlineStore,
+  "async function pushDocuments",
+  "async function recoverDeletedRemoteDocument",
+);
+assert.match(
+  cacheRemoteImageSection,
+  /serializeImageCacheMutation\(/,
+  "远端图片缓存必须使用独立队列，不能嵌套文档 mutation 队列",
+);
+assert.doesNotMatch(
+  cacheRemoteImageSection,
+  /serializeMutation\(/,
+  "远端图片缓存不能重新使用文档 mutation 队列",
+);
+assert.match(
+  cacheDocumentImagesSection,
+  /selectOfflineImageIdentityByObjectKey\(account, objectKey\)/,
+  "热路径的缓存存在性判断必须调用轻量查询",
+);
+assert.doesNotMatch(
+  cacheDocumentImagesSection,
+  /selectOfflineImageByObjectKey\(/,
+  "热路径不能把图片 base64 正文读入内存",
+);
+assert.match(
+  offlineStore,
+  /remoteCacheFullAccounts\.has\(account\)[\s\S]*?DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES[\s\S]*?remoteCacheFullAccounts\.add\(account\)/,
+  "远端缓存达到上限后不能每轮同步继续下载图片",
+);
+assert.match(
+  pushDocumentsSection,
+  /catch \(error\) \{\s*if \(error instanceof OfflineImageUploadError\) \{\s*imageUploadIssues\.push\(error\.code\);[\s\S]*?continue;/,
+  "单张图片被拒绝时必须继续同步后续文档",
+);
+assert.match(
+  offlineStore,
+  /SET object_key = \$3, remote_url = \$4, last_error = NULL,\s*is_local_origin = 0/,
+  "本地图片上传成功后必须转为可清理的远端缓存",
+);
+assert.match(
+  offlineStore,
+  /let code = "image_upload_failed";[\s\S]*?if \(body\.code\) code = body\.code/,
+  "未知上传错误必须使用可翻译的通用错误码",
+);
+assert.match(
+  offlineStore,
+  /instr\(d\.remote_snapshot, i\.object_key\) > 0/,
+  "冲突云端稿引用的图片不能被本地清理器误删",
+);
+assert.match(
+  editorSource,
+  /flattenedAnimation[\s\S]*?setUploadNotice\([\s\S]*?importGifFlattened/,
+  "桌面粘贴大 GIF 被静态化时必须向用户提示",
 );
 assert.match(
   offlineStore,
@@ -254,12 +595,12 @@ assert.match(
   "服务端临时故障必须保留钥匙串会话并进入离线回退",
 );
 
-const apiSource = readFileSync(
+const apiLogoutSource = readFileSync(
   new URL("../spa/src/api.ts", import.meta.url),
   "utf8",
 );
 assert.match(
-  apiSource,
+  apiLogoutSource,
   /clearDesktopOfflineAccount[\s\S]*?finally\s*\{[\s\S]*?clearDesktopSession\(\)/,
   "桌面登出即使本地缓存清理失败也必须删除钥匙串令牌",
 );
@@ -292,6 +633,11 @@ assert.match(
 const syncStatus = readFileSync(
   new URL("../spa/src/components/DesktopSyncStatus.tsx", import.meta.url),
   "utf8",
+);
+assert.match(
+  syncStatus,
+  /syncLabel\(summary, t\.desktopSync, t\.errors\)[\s\S]*?errors\[code\]/,
+  "桌面同步状态必须把图片错误码翻译成用户可读文案",
 );
 assert.match(
   syncStatus,

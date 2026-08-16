@@ -328,8 +328,14 @@ export interface Messages {
     importing: string;
     exporting: string;
     importSuccess: string;
+    importGifFlattened: string;
     exportSuccess: string;
     importFailed: string;
+    unsupportedImportFormat: string;
+    importTooManyFiles: string;
+    importTooLarge: string;
+    importDocumentTooLarge: string;
+    importImageTooLarge: string;
     exportFailed: string;
     importHint: string;
   };
@@ -619,6 +625,10 @@ export interface Messages {
     offlineTitle: string;
     offlineDescription: string;
     documentCount: string;
+    imageCacheUsage: string;
+    clearImageCache: string;
+    clearingImageCache: string;
+    imageCacheCleared: string;
   };
   desktopUpdate: {
     check: string;

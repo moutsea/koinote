@@ -16,6 +16,11 @@ import {
   replaceImageSrcs,
 } from "./rehost";
 import type { Document } from "../../documents";
+import {
+  DESKTOP_IMAGE_MAPPING_META,
+  DESKTOP_IMAGE_UPLOADED_EVENT,
+} from "../../desktop/offlineImagesCore";
+import { isDesktopRuntime } from "../../desktop/runtime";
 
 /**
  * 没套主题时标题的排版。
@@ -76,6 +81,13 @@ export default function MarkdownEditor({
   const editorRef = useRef<Editor | null>(null);
   const [uploading, setUploading] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!uploadNotice) return;
+    const timer = window.setTimeout(() => setUploadNotice(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [uploadNotice]);
 
   const uploadFiles = useCallback(
     async (files: File[]) => {
@@ -84,6 +96,9 @@ export default function MarkdownEditor({
         setUploading((n) => n + 1);
         try {
           const image = await uploadImage(file);
+          if (image.flattenedAnimation) {
+            setUploadNotice(interpolate(t.transfer.importGifFlattened, { count: 1 }));
+          }
           const instance = editorRef.current;
           if (!instance) continue;
           // alt 留空，不拿 file.name 顶上。
@@ -191,6 +206,9 @@ export default function MarkdownEditor({
           setUploading((n) => n + 1);
           try {
             const image = await uploadImage(file);
+            if (image.flattenedAnimation) {
+              setUploadNotice(interpolate(t.transfer.importGifFlattened, { count: 1 }));
+            }
             mapping.set(uri, image.url);
           } catch (err) {
             if (err instanceof ApiError) {
@@ -282,8 +300,10 @@ export default function MarkdownEditor({
         return false;
       },
     },
-    onUpdate: ({ editor }) => {
-      onChange({ content: editor.storage.markdown.getMarkdown() });
+    onUpdate: ({ editor, transaction }) => {
+      if (!transaction.getMeta(DESKTOP_IMAGE_MAPPING_META)) {
+        onChange({ content: editor.storage.markdown.getMarkdown() });
+      }
       setCharCount(editor.getText().length);
     },
   });
@@ -294,6 +314,40 @@ export default function MarkdownEditor({
     onEditorReady?.(editor);
     return () => onEditorReady?.(null);
   }, [editor, onEditorReady]);
+
+  useEffect(() => {
+    if (!editor || !isDesktopRuntime()) return;
+    const replaceUploadedImage = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        localURL?: string;
+        remoteURL?: string;
+      }>).detail;
+      if (!detail?.localURL || !detail.remoteURL) return;
+      const transaction = editor.state.tr;
+      let changed = false;
+      editor.state.doc.descendants((node, position) => {
+        if (node.type.name !== "image" || node.attrs.src !== detail.localURL) return;
+        transaction.setNodeMarkup(position, undefined, {
+          ...node.attrs,
+          src: detail.remoteURL,
+        });
+        changed = true;
+      });
+      if (changed) {
+        editor.view.dispatch(
+          transaction
+            .setMeta("addToHistory", false)
+            .setMeta(DESKTOP_IMAGE_MAPPING_META, true),
+        );
+      }
+    };
+    window.addEventListener(DESKTOP_IMAGE_UPLOADED_EVENT, replaceUploadedImage);
+    return () =>
+      window.removeEventListener(
+        DESKTOP_IMAGE_UPLOADED_EVENT,
+        replaceUploadedImage,
+      );
+  }, [editor]);
 
   // editorProps 只在 useEditor 初始化时读一次，换主题必须显式改写。
   // 切的是 prose 的有无：套主题时 prose 会用 code::before 给行内代码补反引号，
@@ -376,6 +430,16 @@ export default function MarkdownEditor({
             className="shrink-0 truncate text-xs text-red-600 hover:underline dark:text-red-400"
           >
             {uploadError}
+          </button>
+        )}
+        {uploadNotice && (
+          <button
+            type="button"
+            onClick={() => setUploadNotice(null)}
+            title={uploadNotice}
+            className="shrink-0 truncate text-xs text-neutral-500 hover:underline dark:text-neutral-400"
+          >
+            {uploadNotice}
           </button>
         )}
         {statusText && (

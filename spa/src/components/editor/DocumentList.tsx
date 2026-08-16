@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../../i18n";
 import type { DocumentSummary, Folder } from "../../documents";
+import { IMPORT_FILE_ACCEPT } from "../../documentTransferCore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { buildTree, canCreateSubfolder, canDropDoc, canDropFolder } from "./tree";
 import {
@@ -282,7 +283,7 @@ export function DocumentList({
         <input
           ref={importInputRef}
           type="file"
-          accept=".md,.zip,image/png,image/jpeg,image/gif,image/webp"
+          accept={IMPORT_FILE_ACCEPT}
           multiple
           className="hidden"
           onChange={(event) => {

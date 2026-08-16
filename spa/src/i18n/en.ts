@@ -479,9 +479,21 @@ export const en: Messages = {
     importing: "Importing documents and images…",
     exporting: "Packaging documents and images…",
     importSuccess: "Imported {count} documents.",
+    importGifFlattened:
+      "{count} GIFs over 10 MB were compressed to static WebP images; animation was not preserved.",
     exportSuccess: "Your migration archive is ready.",
     importFailed:
       "Import failed. Check the file format, image sizes, and storage quota.",
+    unsupportedImportFormat:
+      "{filename} is not supported. Choose a Markdown (.md) file or a Koinote ZIP migration archive.",
+    importTooManyFiles:
+      "You can import up to 1,000 files at once. Split the import and try again.",
+    importTooLarge:
+      "The import exceeds the 250 MB limit. Split it and try again.",
+    importDocumentTooLarge:
+      "{filename} exceeds the 1 MB limit for one Markdown document.",
+    importImageTooLarge:
+      "{filename} has dimensions too large for the browser to compress safely.",
     exportFailed: "Export failed. Please try again.",
     importHint:
       "Supports .md files, folders, and ZIP archives; referenced images migrate with them.",
@@ -800,10 +812,10 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "Desktop app",
     title: "Authorize the Koinote app",
-    description: "The app keeps offline copies on this device and syncs your changes when connectivity returns.",
+    description: "The app keeps offline copies of documents and images on this device and syncs your changes when connectivity returns.",
     permissionsTitle: "After approval, the app can:",
     permissionDocuments: "Read, create, organize, share, and move your documents and folders to trash",
-    permissionOffline: "Keep offline copies of documents on this device",
+    permissionOffline: "Keep documents, pending images, and up to 512 MB of hosted-image cache on this device",
     permissionIdentity: "Read basic account details to show the signed-in account",
     approve: "Allow and return to the app",
     cancel: "Cancel",
@@ -828,8 +840,12 @@ function hello(name) {
     syncTitle: "Sync status",
     syncDescription: "Local changes sync automatically when online. If both copies change, you choose which version to keep.",
     offlineTitle: "Ready for offline work",
-    offlineDescription: "Document copies live on this device, so you can keep reading and writing without a connection.",
+    offlineDescription: "Documents and images live on this device. You can paste images and keep editing offline; they upload and switch to hosted URLs when connectivity returns.",
     documentCount: "{count} documents available locally",
+    imageCacheUsage: "Local images {total}; hosted cache {cached} / {limit}, pending {pending}",
+    clearImageCache: "Clear hosted-image cache",
+    clearingImageCache: "Clearing…",
+    imageCacheCleared: "The image cache was cleared. Images are cached again as you open documents.",
   },
   desktopUpdate: {
     check: "Check for updates",
@@ -1165,6 +1181,12 @@ function hello(name) {
     image_too_large: "Image exceeds the 10 MB limit",
     image_quota_exceeded:
       "Image storage is full — permanently delete unneeded documents from Trash",
+    image_upload_failed:
+      "The local image could not be synced. Check your connection and try again.",
+    image_cache_full:
+      "The local image cache is full. Clear it from the desktop home page.",
+    local_image_missing:
+      "A local image is missing. Remove it from the document and insert it again.",
     storage_quota_exceeded:
       "Cloud storage is full — permanently delete unneeded documents from Trash",
     image_empty: "The image is empty",

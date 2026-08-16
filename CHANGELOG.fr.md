@@ -7,7 +7,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 ### Added
 
 - Ajout d’une version alpha macOS / Windows avec Tauri 2 : connexion PKCE dans le navigateur système,
-  jetons dans le trousseau du système, documents SQLite local-first, synchronisation et résolution explicite des conflits.
+  jetons dans le trousseau, documents et images local-first, envoi différé, cache d’images limité et résolution des conflits.
 - Ajout d’un lien de téléchargement vers les GitHub Releases pour macOS Apple Silicon, macOS Intel
   et Windows x64.
 - Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
@@ -15,7 +15,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Changed
 
-- L’import Markdown est désormais visible dans la barre latérale de l’éditeur ; la page vide propose aussi l’import de fichiers et de dossiers.
+- L’import Markdown vérifie les gros lots, décompresse les ZIP en arrière-plan, limite les envois,
+  compresse en WebP les images de plus de 10 Mo (avec avertissement GIF statique) et libère les envois orphelins après un échec.
 - macOS 26 utilise une ressource Icon Composer native ; les anciennes versions de macOS et Windows conservent leurs icônes de secours.
 
 ### Fixed
@@ -24,6 +25,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Correction du refus des statistiques d’administration et des jetons MCP par la liste d’autorisation
   Bearer du client, retour des entrées Documentation et Tarifs, et ouverture dans le navigateur système
   des opérations de sécurité et de suppression définitive réservées au Web au lieu d’un échec 403.
+  Les liens d’invitation et de partage copiés utilisent aussi l’URL publique plutôt qu’une adresse Tauri locale.
+- L’échec d’une image ne bloque plus toute la synchronisation : l’erreur est affichée, les sources du cache sont vérifiées et les images locales sont incluses dans l’export.
 
 ## [0.5.0] - 2026-08-15
 

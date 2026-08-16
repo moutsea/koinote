@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Koinote",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "identifier": "app.koinote.desktop",
   "build": {
     "frontendDist": "../spa/dist",
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http://localhost:5273 data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://koinote.app https://img.koinote.app http://localhost:5273; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      "csp": "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: http://localhost:5273 data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://koinote.app https://img.koinote.app http://localhost:5273; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
   },
   "plugins": {
@@ -48,8 +48,8 @@
     "createUpdaterArtifacts": true,
     "targets": "all",
     "category": "Productivity",
-    "shortDescription": "Offline-first Markdown writing with Koinote sync",
-    "longDescription": "Koinote is a Markdown editor with offline document access and secure synchronization.",
+    "shortDescription": "Offline-first Markdown and image editing with Koinote sync",
+    "longDescription": "Koinote is a Markdown editor with offline document and image access plus secure synchronization.",
     "macOS": {
       "signingIdentity": "-",
       "hardenedRuntime": false

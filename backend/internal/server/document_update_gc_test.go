@@ -606,6 +606,31 @@ func TestWechatExportQuotaIsSeparateFromPersistentStorage(t *testing.T) {
 	}
 }
 
+func TestFailedImportImageReleaseOnlyQueuesOrphans(t *testing.T) {
+	pool := newGCTestPool(t)
+	authUserID := "gc-failed-import"
+	referenced := gcKey(authUserID, gcHexA)
+	orphan := gcKey(authUserID, gcHexB)
+	user, _ := seedGCUser(t, pool, authUserID, "![仍在使用](https://img.test/"+referenced+")")
+	app := &App{db: pool}
+
+	queued, err := app.enqueueOrphanedImageKeysChecked(
+		context.Background(),
+		user,
+		[]string{referenced, orphan, orphan, "u/other-user/cccccccc33333333.png"},
+	)
+	if err != nil {
+		t.Fatalf("失败导入图片回滚失败: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("应只排队一张孤儿图，实际 queued=%d", queued)
+	}
+	keys := pendingKeys(t, pool, authUserID)
+	if len(keys) != 1 || keys[0] != orphan {
+		t.Fatalf("回收队列 = %v，期望只包含 %q", keys, orphan)
+	}
+}
+
 func TestGCBackoffFallsBackToDailyRetries(t *testing.T) {
 	if got := gcBackoff(gcFastRetryAttempts - 1); got != 64*time.Minute {
 		t.Fatalf("最后一次快速退避 = %s，期望 64m", got)

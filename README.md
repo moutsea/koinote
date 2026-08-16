@@ -32,8 +32,9 @@
 Markdown）、**文档在云端**（多设备、可分享），以及让 **Codex、Claude Code、OpenCode、
 OpenClaw 等 Agent 通过 MCP 安全操作自己的文档**。
 
-仓库还包含基于 Tauri 2 的 macOS / Windows 客户端 alpha：本地 SQLite 优先读写，恢复网络后
-自动同步；登录在系统浏览器完成，通过 `koinote://auth` + PKCE 把短期访问令牌交回客户端。
+仓库还包含基于 Tauri 2 的 macOS / Windows 客户端 alpha：文档与图片本地优先保存，恢复网络后
+自动上传图片、替换正文地址并同步文档；登录在系统浏览器完成，通过 `koinote://auth` + PKCE
+把短期访问令牌交回客户端。
 
 桌面客户端可从 [Koinote 官网下载入口](https://koinote.app/download) 获取。该地址会跳转到
 最新 GitHub Release，提供 macOS Apple 芯片、macOS Intel 和 Windows x64 安装包及 SHA-256
@@ -76,7 +77,8 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 **桌面客户端（alpha）**
 
 - macOS 与 Windows 共用 React / TipTap 界面，Tauri 只承载原生窗口、SQLite、深链和系统钥匙串
-- 文档、目录和标签页本地优先；离线可创建、编辑、搜索和整理，联网后后台推送与拉取
+- 文档、目录、标签页和图片本地优先；离线可创建、编辑、粘贴图片、搜索和整理，联网后自动上传本地图片、替换为图床 URL 并同步正文
+- 已同步的站内图片自动缓存上限为 512 MB，也可在客户端首页手动清空；清空后会按打开的文档重新缓存，退出账号会删除全部本地副本
 - 客户端主导航提供 MCP / 版本控制文档和价格页，联网时可管理 MCP 令牌、发起会员 Checkout，并由管理员查看站点统计；账号安全与永久删除继续在系统浏览器中完成
 - 网页与客户端在前台定时检测远端修改，窗口重新聚焦时立即检查；无本地改动时自动更新，有草稿时提示处理冲突
 - revision 冲突会同时保留本地稿与云端稿，由用户明确选择，不用“最后写入者”静默覆盖正文
@@ -142,7 +144,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
                                └─ 其余 /api/*、/mcp ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
 浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端 ──▶ 飞书机器人
-桌面端 ──本地 SQLite──────────▶ 离线读写 ──联网同步 / Bearer token──▶ Worker / Go 后端
+桌面端 ──本地 SQLite（正文与图片）──▶ 离线读写 ──联网同步 / Bearer token──▶ Worker / Go 后端 / R2
 ```
 
 - **前端** Vite · React 19 · TypeScript · TanStack Router · Tailwind v4
@@ -302,7 +304,9 @@ npm run desktop:build     # 生成当前平台安装包
 ```
 
 生产构建默认同步 `https://koinote.app`；本地开发默认同步 `http://localhost:5273`。桌面端
-SQLite 不保存令牌，退出账号会清除该账号在本机的离线文档缓存。
+SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的图片先使用本地占位地址，联网后
+自动上传到 R2 并把正文替换成图床 URL。自动下载的远端图片缓存最多占用 512 MB；用户主动
+粘贴但尚未上传的图片不会被缓存上限淘汰。退出账号会清除该账号的离线文档与图片缓存。
 
 官方 Release 使用 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 生成更新签名，并发布 `latest.json`。Fork 仓库发布自己的客户端前，必须生成新的 Tauri

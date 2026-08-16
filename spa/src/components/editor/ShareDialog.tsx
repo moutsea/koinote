@@ -9,6 +9,7 @@ import {
 } from "../../documents";
 import { useI18n } from "../../i18n";
 import { confirmAction } from "../../confirmAction";
+import { koinoteWebURL } from "../../externalNavigation";
 
 export function ShareDialog({
   docId,
@@ -31,7 +32,7 @@ export function ShareDialog({
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   const shareURL = share
-    ? `${window.location.origin}/share/${share.token}`
+    ? koinoteWebURL(`/share/${encodeURIComponent(share.token)}`)
     : "";
 
   // Esc 关闭 + 打开时焦点进入对话框，避免焦点留在背后的编辑器里

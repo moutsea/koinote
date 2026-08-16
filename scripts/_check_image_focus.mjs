@@ -225,8 +225,14 @@ ok(
   );
   ok(
     "重试 URL 带 cache-busting 轮次",
-    /src=\{imageURLForAttempt\(src,\s*attempt,\s*imageProxyOrigin\)\}/.test(bare),
-    "只重挂相同 URL 会继续命中 CDN 负缓存，必须只改显示 URL 的查询参数",
+    /src=\{imageURLForAttempt\(displaySrc,\s*attempt,\s*imageProxyOrigin\)\}/.test(bare),
+    "桌面端可能先解析成本地 data URL；重试必须基于实际显示地址并加入轮次",
+  );
+  ok(
+    "本地 data URL 不进入网络退避重试",
+    /!retryableDisplaySource/.test(bare) &&
+      /\^\(\?:data\|blob\):/.test(bare),
+    "data URL 失败时应直接显示错误，不走 CDN 查询串重试",
   );
   ok(
     "重试期间与彻底失败的文案分开",
@@ -294,6 +300,12 @@ ok(
     imageURLForAttempt(cdn, 0, "https://koinote.app/") ===
       `https://koinote.app/images/${key}`,
     imageURLForAttempt(cdn, 0, "https://koinote.app/"),
+  );
+  ok(
+    "data URL 重试不追加查询串",
+    imageURLForAttempt("data:image/png;base64,AA==", 2) ===
+      "data:image/png;base64,AA==",
+    imageURLForAttempt("data:image/png;base64,AA==", 2),
   );
 
   const lookalike = `https://example.com/${key}`;

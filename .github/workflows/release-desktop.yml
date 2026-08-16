@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds a native macOS 26 Liquid Glass icon so Tahoe no longer wraps Koinote in a gray-white compatibility plate."
+          notes="Koinote Desktop $version adds complete offline image editing, safer large imports, and more resilient background synchronization."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本为 macOS 26 增加原生 Icon Composer 图标资源，避免 Tahoe 把传统图标包进额外的灰白兼容底板。旧版 macOS 继续使用 ICNS 回退图标，Windows 图标不受影响。
+          此版本补全离线图片编辑：断网时粘贴的图片会保存在本机并正常显示，联网后自动上传并替换远端地址。图片缓存现在限制可信来源和总量，上传失败不会阻塞其他文档同步，也会向用户展示可操作的错误信息。Markdown、文件夹与 ZIP 导入同时加入后台解压、图片压缩、有限并发和失败清理，处理大型内容更稳定。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds a native Icon Composer asset for macOS 26, preventing Tahoe from wrapping Koinote in an extra gray-white compatibility plate. Older macOS versions keep the ICNS fallback, and Windows icons are unchanged.
+          This release completes offline image editing: images pasted without a network connection remain visible from local storage and upload automatically after reconnection. The image cache now enforces trusted origins and a bounded size, individual upload failures no longer block unrelated document synchronization, and actionable errors are shown to the user. Markdown, folder, and ZIP imports also gain background extraction, image compression, bounded concurrency, and failed-upload cleanup for more reliable large migrations.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

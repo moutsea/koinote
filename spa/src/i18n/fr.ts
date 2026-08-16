@@ -487,9 +487,21 @@ export const fr: Messages = {
     importing: "Importation des documents et images…",
     exporting: "Création de l’archive…",
     importSuccess: "{count} documents importés.",
+    importGifFlattened:
+      "{count} GIF de plus de 10 Mo ont été convertis en images WebP statiques ; l’animation n’a pas été conservée.",
     exportSuccess: "L’archive de migration est prête.",
     importFailed:
       "Échec de l’import. Vérifiez le format, la taille des images et le quota.",
+    unsupportedImportFormat:
+      "{filename} n’est pas pris en charge. Choisissez un fichier Markdown (.md) ou une archive ZIP de migration Koinote.",
+    importTooManyFiles:
+      "Vous pouvez importer jusqu’à 1 000 fichiers à la fois. Fractionnez l’importation et réessayez.",
+    importTooLarge:
+      "L’importation dépasse la limite de 250 Mo. Fractionnez-la et réessayez.",
+    importDocumentTooLarge:
+      "{filename} dépasse la limite de 1 Mo par document Markdown.",
+    importImageTooLarge:
+      "Les dimensions de {filename} sont trop grandes pour une compression sûre dans le navigateur.",
     exportFailed: "Échec de l’export. Réessayez.",
     importHint:
       "Prend en charge les fichiers .md, les dossiers et les archives ZIP ; les images référencées sont aussi migrées.",
@@ -818,10 +830,10 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "Application de bureau",
     title: "Autoriser l’application Koinote",
-    description: "L’application conserve des copies hors ligne sur cet appareil et synchronise les modifications au retour du réseau.",
+    description: "L’application conserve des copies hors ligne des documents et images sur cet appareil, puis synchronise les modifications au retour du réseau.",
     permissionsTitle: "Après autorisation, l’application peut :",
     permissionDocuments: "Lire, créer, organiser, partager et placer vos documents et dossiers dans la corbeille",
-    permissionOffline: "Conserver des copies hors ligne de vos documents sur cet appareil",
+    permissionOffline: "Conserver les documents, les images en attente et jusqu’à 512 Mo de cache d’images sur cet appareil",
     permissionIdentity: "Lire les informations de base du compte actuellement connecté",
     approve: "Autoriser et revenir à l’application",
     cancel: "Annuler",
@@ -846,8 +858,12 @@ function hello(name) {
     syncTitle: "État de la synchronisation",
     syncDescription: "Les modifications locales sont synchronisées automatiquement en ligne. En cas de conflit, vous choisissez la version à conserver.",
     offlineTitle: "Prêt pour le mode hors ligne",
-    offlineDescription: "Les copies sont conservées sur cet appareil afin de pouvoir lire et écrire sans connexion.",
+    offlineDescription: "Les documents et images sont conservés sur cet appareil. Vous pouvez coller des images et écrire hors ligne ; elles seront envoyées et remplacées par leurs URL au retour du réseau.",
     documentCount: "{count} documents disponibles localement",
+    imageCacheUsage: "Images locales {total} ; cache hébergé {cached} / {limit}, en attente {pending}",
+    clearImageCache: "Vider le cache d’images hébergées",
+    clearingImageCache: "Nettoyage…",
+    imageCacheCleared: "Le cache d’images a été vidé. Les images seront remises en cache à l’ouverture des documents.",
   },
   desktopUpdate: {
     check: "Rechercher des mises à jour",
@@ -1198,6 +1214,12 @@ function hello(name) {
     image_too_large: "L'image dépasse la limite de 10 Mo",
     image_quota_exceeded:
       "Stockage d'images plein — supprimez définitivement les documents inutiles depuis la corbeille",
+    image_upload_failed:
+      "Impossible de synchroniser l’image locale. Vérifiez la connexion puis réessayez.",
+    image_cache_full:
+      "Le cache d’images local est plein. Videz-le depuis l’accueil de l’application.",
+    local_image_missing:
+      "Une image locale est introuvable. Retirez-la du document puis insérez-la de nouveau.",
     storage_quota_exceeded:
       "Stockage cloud plein — supprimez définitivement les documents inutiles depuis la corbeille",
     image_empty: "L'image est vide",

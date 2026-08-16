@@ -40,6 +40,30 @@ export type RemoteFolderDecision =
   | "acknowledge-local"
   | "keep-local";
 
+export type AsyncSerialQueueScope = {
+  runNested<T>(operation: (scope: AsyncSerialQueueScope) => Promise<T>): Promise<T>;
+};
+
+export function createAsyncSerialQueue() {
+  let tail: Promise<void> = Promise.resolve();
+  const scope: AsyncSerialQueueScope = {
+    runNested<T>(operation: (activeScope: AsyncSerialQueueScope) => Promise<T>) {
+      return operation(scope);
+    },
+  };
+  return function serialize<T>(
+    operation: (activeScope: AsyncSerialQueueScope) => Promise<T>,
+  ): Promise<T> {
+    const run = () => operation(scope);
+    const result = tail.then(run, run);
+    tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+}
+
 export function acknowledgedLocalRevision(
   localRevision: number,
   remoteRevision: number,

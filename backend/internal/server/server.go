@@ -108,6 +108,7 @@ func (a *App) Routes() http.Handler {
 	// /api/storage/usage 而不是 /api/images/usage：Worker 把 /api/images/<key> 当作
 	// 取图处理，"usage" 会被它当成一个 key 截走，永远到不了这里。
 	mux.HandleFunc("GET /api/storage/usage", a.storageUsage)
+	mux.HandleFunc("POST /api/storage/release-images", a.imageReleaseUnused)
 	// Worker 写完 R2 来报账。鉴权走内部令牌 + X-Auth-User-Id（见 authUserIDFromRequest）
 	mux.HandleFunc("POST /api/images/record", a.imageRecord)
 

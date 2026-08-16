@@ -1,4 +1,5 @@
 import { desktopAPIOrigin, isDesktopRuntime } from "./desktop/runtime";
+import { localWebURL } from "./webLinksCore";
 
 export async function openMembershipCheckout(value: string): Promise<void> {
   const url = new URL(value);
@@ -9,15 +10,14 @@ export async function openMembershipCheckout(value: string): Promise<void> {
 }
 
 export async function openKoinoteWebPath(path: string): Promise<void> {
-  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
-    throw new Error("Koinote web path must be an absolute local path");
-  }
-  const base = new URL(desktopAPIOrigin());
-  const url = new URL(path, `${base.origin}/`);
-  if (url.origin !== base.origin) {
-    throw new Error("Koinote web path must stay on the configured origin");
-  }
-  await openURL(url);
+  await openURL(new URL(koinoteWebURL(path)));
+}
+
+export function koinoteWebURL(path: string): string {
+  const origin = isDesktopRuntime()
+    ? desktopAPIOrigin()
+    : window.location.origin;
+  return localWebURL(origin, path);
 }
 
 async function openURL(url: URL): Promise<void> {

@@ -4,6 +4,7 @@
 
 import { isDesktopRuntime } from "./desktop/runtime";
 import { isDesktopAuthenticationRejection } from "./desktop/networkPolicy";
+import { isDesktopLocalImageURL } from "./desktop/offlineImagesCore";
 
 export type User = {
   id: number;
@@ -136,6 +137,12 @@ export async function fetchAppResource(
   init?: RequestInit,
 ): Promise<Response> {
   if (isDesktopRuntime()) {
+    if (isDesktopLocalImageURL(path)) {
+      const { desktopResolveImageSource } = await import("./desktop/offlineStore");
+      const source = await desktopResolveImageSource(path);
+      if (!source) return new Response(null, { status: 404 });
+      return fetch(source, { signal: init?.signal });
+    }
     const { desktopFetch } = await import("./desktop/network");
     return desktopFetch(path, init);
   }
@@ -836,6 +843,7 @@ export type UploadedImage = {
   url: string;
   size: number;
   contentType: string;
+  flattenedAnimation?: boolean;
 };
 
 // Worker 侧按 magic byte 校验真实类型，允许的集合与之保持一致
@@ -845,6 +853,7 @@ const UPLOADABLE_TYPES = new Set([
   "image/gif",
   "image/webp",
 ]);
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export function isUploadableImage(file: File): boolean {
   return UPLOADABLE_TYPES.has(file.type);
@@ -867,6 +876,28 @@ export async function uploadImage(
   if (!isUploadableImage(file)) {
     // 前端先挡一道：服务端也会拒，但等一趟往返才报错体验更差
     throw new ApiError(415, "Unsupported image type", "image_type_unsupported");
+  }
+  if (isDesktopRuntime() && purpose === "persistent") {
+    try {
+      let localFile = file;
+      let flattenedAnimation = false;
+      if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+        const { prepareImportedImage } = await import("./importImageCompression");
+        const prepared = await prepareImportedImage(file);
+        localFile = prepared.file;
+        flattenedAnimation = prepared.flattenedAnimation;
+      }
+      const { desktopStoreLocalImage } = await import("./desktop/offlineStore");
+      return {
+        ...await desktopStoreLocalImage(localFile),
+        ...(flattenedAnimation ? { flattenedAnimation: true } : {}),
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === "image_too_large") {
+        throw new ApiError(413, "Image is too large", "image_too_large");
+      }
+      throw error;
+    }
   }
 
   const response = await fetchAppResource("/api/images", {
@@ -893,11 +924,16 @@ export async function uploadImage(
  *
  * 服务端那侧是个 SSRF 原语，防护见 worker/ssrf.ts。
  */
-export function fetchImageToBucket(url: string) {
-  return apiJson<{ image: UploadedImage }>("/api/images/fetch", {
+export async function fetchImageToBucket(url: string) {
+  const result = await apiJson<{ image: UploadedImage }>("/api/images/fetch", {
     method: "POST",
     body: JSON.stringify({ url }),
   });
+  if (isDesktopRuntime()) {
+    const { desktopCacheRemoteImage } = await import("./desktop/offlineStore");
+    await desktopCacheRemoteImage(result.image.url).catch(() => undefined);
+  }
+  return result;
 }
 
 /**
@@ -924,6 +960,24 @@ export type StorageUsage = {
  */
 export function getStorageUsage() {
   return apiJson<StorageUsage>("/api/storage/usage");
+}
+
+export async function releaseUnusedImages(keys: string[]) {
+  if (keys.length === 0) return Promise.resolve({ queued: 0 });
+  let remoteKeys = keys;
+  if (isDesktopRuntime()) {
+    const localKeys = keys.filter((key) => key.startsWith("koinote-local-image://"));
+    remoteKeys = keys.filter((key) => !key.startsWith("koinote-local-image://"));
+    if (localKeys.length > 0) {
+      const { desktopReleaseUnusedImages } = await import("./desktop/offlineStore");
+      await desktopReleaseUnusedImages(localKeys);
+    }
+  }
+  if (remoteKeys.length === 0) return { queued: 0 };
+  return apiJson<{ queued: number }>("/api/storage/release-images", {
+    method: "POST",
+    body: JSON.stringify({ keys: remoteKeys }),
+  });
 }
 
 export function trashDocument(docId: string) {

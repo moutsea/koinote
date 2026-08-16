@@ -9,15 +9,17 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "../auth";
 import { useDocumentList, useFolderList } from "../documents";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import {
   exportDocumentsArchive,
+  getImportErrorMessage,
   importDocumentsFromFiles,
 } from "../documentTransfer";
+import { IMPORT_FILE_ACCEPT } from "../documentTransferCore";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -42,25 +44,40 @@ export function DocumentsPage() {
   const [transferNotice, setTransferNotice] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!transferNotice && !transferError) return;
+    const timer = window.setTimeout(() => {
+      setTransferNotice(null);
+      setTransferError(null);
+    }, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [transferNotice, transferError]);
+
   async function handleImport(files: File[]) {
     if (files.length === 0) return;
     setTransferError(null);
     setTransferNotice(null);
     setTransfer({ kind: "import", done: 0, total: 0 });
     try {
-      const count = await importDocumentsFromFiles(files, (done, total) =>
+      const result = await importDocumentsFromFiles(files, (done, total) =>
         setTransfer({ kind: "import", done, total }),
       );
-      setTransferNotice(
-        interpolate(t.transfer.importSuccess, { count: String(count) }),
-      );
+      const success = interpolate(t.transfer.importSuccess, {
+        count: String(result.imported),
+      });
+      const gifNotice = result.flattenedGifCount
+        ? ` ${interpolate(t.transfer.importGifFlattened, {
+            count: String(result.flattenedGifCount),
+          })}`
+        : "";
+      setTransferNotice(`${success}${gifNotice}`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
         queryClient.invalidateQueries({ queryKey: ["folders"] }),
         queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
       ]);
-    } catch {
-      setTransferError(t.transfer.importFailed);
+    } catch (error) {
+      setTransferError(getImportErrorMessage(error, t.transfer));
     } finally {
       setTransfer(null);
     }
@@ -141,7 +158,7 @@ export function DocumentsPage() {
           <input
             ref={inputRef}
             type="file"
-            accept=".md,.zip,image/png,image/jpeg,image/gif,image/webp"
+            accept={IMPORT_FILE_ACCEPT}
             multiple
             className="hidden"
             onChange={(event) => {
