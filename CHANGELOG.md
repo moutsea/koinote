@@ -10,10 +10,10 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 - Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens, local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.
-- Added signed desktop auto-updates with startup checks, a manual account-menu action, download
-  progress, and restart-to-install support.
+- Added signed desktop auto-updates with startup checks, a manual action, progress, and restart-to-install support.
 - Added foreground remote-change detection for the web editor and desktop client. Clean documents
   update automatically, while concurrent local drafts trigger an explicit conflict prompt.
+- Added encrypted six-hour PostgreSQL backups to private R2 with retention, health checks, alerts, and a documented recovery drill.
 
 ### Changed
 

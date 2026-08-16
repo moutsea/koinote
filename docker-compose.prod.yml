@@ -34,6 +34,38 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
 
+  database-backup:
+    profiles: ["backup"]
+    build:
+      context: ./deploy/database-backup
+    image: koinote-database-backup:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-koinote}
+      POSTGRES_DB: ${POSTGRES_DB:-koinote}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-koinote}
+      BACKEND_INTERNAL_TOKEN: ${BACKEND_INTERNAL_TOKEN:-}
+      WORKER_URL: ${WORKER_URL:-}
+      BOT_WEBHOOK: ${BOT_WEBHOOK:-}
+      BOT_WEBHOOK_SECRET: ${BOT_WEBHOOK_SECRET:-}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_RETRY_SECONDS: ${BACKUP_RETRY_SECONDS:-900}
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/koinote-database-backup-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 2m
+    volumes:
+      - koinote-backup-state:/var/lib/koinote-backup
+    networks:
+      - koinote-network
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -50,3 +82,4 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  koinote-backup-state:

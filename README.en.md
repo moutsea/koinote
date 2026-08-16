@@ -162,6 +162,7 @@ Browser ──▶ Cloudflare Worker ──┬─ serves the SPA assets
                                 ├─ /api/internal/email/* ──▶ Email Sending
                                 └─ other /api/* and /mcp ──▶ Go backend ──▶ PostgreSQL
 Go backend ── internal callbacks ──▶ Worker (verification email / R2 cleanup)
+PostgreSQL ── pg_dump / AES-256-GCM ──▶ private backup R2 (every 6 hours)
 Browser ── Stripe Checkout ────────▶ Stripe ── signed webhook ──▶ Go backend ──▶ Feishu bot
 Desktop ── local SQLite ───────────▶ offline writes ── sync / Bearer token ──▶ Worker / Go backend
 ```
@@ -424,6 +425,66 @@ token is needed. Set `WORKER_URL=https://koinote.app` in the VPS `.env`, with th
 `EMAIL_VERIFICATION_SECRET`. Verification codes are stored only as HMACs in Postgres
 and expire after 10 minutes.
 
+### Off-site PostgreSQL backup and recovery
+
+`database-backup` is an opt-in Compose profile. Every six hours it creates a compressed
+PostgreSQL 16 custom-format dump, encrypts it with CMS AES-256-GCM and a recovery certificate,
+then uploads it through an internal-only endpoint to a separate private R2 bucket. Failures retry
+after 15 minutes and, when Feishu is configured, alert at most once every six hours. Retention keeps
+all recent 28 copies, one per day through day 35, one per week through day 180, and one per month
+through day 400. A healthy installation therefore has an RPO of roughly six hours.
+
+This backs up PostgreSQL data only (accounts, documents, billing, and the image ledger); it does
+**not copy image objects from `koinote-images`**. Do not expose the backup bucket through public
+access or a custom domain. One encrypted dump is limited to 95 MiB to remain within normal
+Cloudflare request-body limits; move to multipart or direct R2 S3 uploads before reaching it.
+
+Before enabling the profile, create the private bucket and a recovery key that only operators hold.
+The checked-in certificate belongs to the hosted deployment, so self-hosters must replace it with
+their own public certificate. Keep at least one offline copy of the private key and never put it on
+the VPS, in the image, or in Git:
+
+```bash
+mkdir -p ~/.koinote-backup
+chmod 700 ~/.koinote-backup
+openssl req -x509 -newkey rsa:4096 -nodes -sha256 -days 3650 \
+  -subj '/CN=Koinote Database Backup' \
+  -keyout ~/.koinote-backup/database-backup-private-key.pem \
+  -out deploy/database-backup/database-backup-certificate.pem
+chmod 600 ~/.koinote-backup/database-backup-private-key.pem
+npx wrangler r2 bucket create koinote-backups
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build database-backup
+```
+
+For recovery, download the object, compare its SHA-256 with the
+`X-Koinote-Backup-Sha256` response header, decrypt it, and validate its catalog. Restore into a new,
+empty database first; check user/document counts and migration state before a controlled cutover
+instead of overwriting the live database:
+
+```bash
+read -rsp 'Internal token: ' KOINOTE_INTERNAL_TOKEN; echo
+BACKUP_NAME=koinote-2026-08-16T1200Z.dump.cms
+curl -fsS -D backup.headers \
+  -H "X-Koinote-Internal-Token: $KOINOTE_INTERNAL_TOKEN" \
+  "https://koinote.app/api/internal/backups/database/$BACKUP_NAME" \
+  -o "$BACKUP_NAME"
+unset KOINOTE_INTERNAL_TOKEN
+grep -i '^x-koinote-backup-sha256:' backup.headers
+sha256sum "$BACKUP_NAME"
+openssl cms -decrypt -binary -inform DER \
+  -in "$BACKUP_NAME" \
+  -recip deploy/database-backup/database-backup-certificate.pem \
+  -inkey ~/.koinote-backup/database-backup-private-key.pem \
+  -out koinote.dump
+pg_restore --list koinote.dump >/dev/null
+createdb koinote_restore
+pg_restore --exit-on-error --no-owner --no-privileges \
+  --dbname koinote_restore koinote.dump
+```
+
+`GET /api/internal/backups` with the same internal token reports the object count and latest upload,
+size, and checksum.
+
 The Admin link is shown only to users whose database row has `is_admin=true`. Grant the
 first administrator by email after deployment:
 
@@ -470,8 +531,8 @@ Serving images over a CDN (optional, saves Worker requests) is covered in the
 ### Continuous deployment
 
 `.github/workflows/deploy.yml` deploys and health-checks the backend first on every
-push to `main` once CI passes, then deploys the Worker and SPA and checks the site
-(`/api/images/config`).
+push to `main` once CI passes, then deploys the Worker and SPA, verifies the first off-site database
+backup, and checks the site (`/api/images/config`).
 
 Required repository secrets:
 

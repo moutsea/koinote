@@ -143,6 +143,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
                                ├─ /api/internal/email/* ──▶ Email Sending
                                └─ 其余 /api/*、/mcp ──▶ Go 后端 ──▶ PostgreSQL
 Go 后端 ──内部回调────────────▶ Worker（验证码邮件 / R2 回收）
+PostgreSQL ──pg_dump / AES-256-GCM──▶ 私有备份 R2（每 6 小时）
 浏览器 ──Stripe Checkout──────▶ Stripe ──签名 Webhook──▶ Go 后端 ──▶ 飞书机器人
 桌面端 ──本地 SQLite（正文与图片）──▶ 离线读写 ──联网同步 / Bearer token──▶ Worker / Go 后端 / R2
 ```
@@ -388,6 +389,59 @@ VPS 的 `.env` 需要把 `WORKER_URL` 设为 `https://koinote.app`，并与 Work
 `BACKEND_INTERNAL_TOKEN`。生产还必须设置独立的 `EMAIL_VERIFICATION_SECRET`；验证码
 仅以 HMAC 形式保存在 Postgres，10 分钟失效。
 
+### PostgreSQL 异地备份与恢复
+
+`database-backup` 是显式启用的 compose profile。它每 6 小时执行一次 PostgreSQL 16
+custom-format `pg_dump`，压缩后以 CMS AES-256-GCM 公钥加密，再通过内部鉴权上传到独立的
+私有 R2 bucket。失败会在 15 分钟后重试；配置了飞书机器人时，同一故障最多每 6 小时告警一次。
+保留策略是最近 28 份全部保留，此后保留到第 35 天的每日版本、到第 180 天的每周版本，以及
+到第 400 天的每月版本，因此成功运行时 RPO 最多约 6 小时。
+
+这份备份只包含 PostgreSQL（账号、文档、支付与图片账本），**不复制 `koinote-images` 中的图片对象**。
+备份 bucket 不要配置公共访问或自定义域名。单份备份限制为 95 MiB，以保持在 Cloudflare 常规
+请求体上限内；接近该大小时应在告警发生前改为分片或 R2 S3 直传。
+
+首次启用需要创建私有 bucket，并生成仅由运维人员保存的恢复私钥。仓库里的证书属于官方部署；
+自建实例必须替换成自己的公钥证书，私钥应至少另存一份离线副本，不能放在 VPS、容器镜像或 Git：
+
+```bash
+mkdir -p ~/.koinote-backup
+chmod 700 ~/.koinote-backup
+openssl req -x509 -newkey rsa:4096 -nodes -sha256 -days 3650 \
+  -subj '/CN=Koinote Database Backup' \
+  -keyout ~/.koinote-backup/database-backup-private-key.pem \
+  -out deploy/database-backup/database-backup-certificate.pem
+chmod 600 ~/.koinote-backup/database-backup-private-key.pem
+npx wrangler r2 bucket create koinote-backups
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build database-backup
+```
+
+恢复时先下载、核对响应中的 `X-Koinote-Backup-Sha256`，再解密并让 `pg_restore` 检查目录；
+应恢复到新建的空数据库，验证用户数、文档数和迁移版本后再做受控切换，不要直接覆盖正在运行的主库：
+
+```bash
+read -rsp 'Internal token: ' KOINOTE_INTERNAL_TOKEN; echo
+BACKUP_NAME=koinote-2026-08-16T1200Z.dump.cms
+curl -fsS -D backup.headers \
+  -H "X-Koinote-Internal-Token: $KOINOTE_INTERNAL_TOKEN" \
+  "https://koinote.app/api/internal/backups/database/$BACKUP_NAME" \
+  -o "$BACKUP_NAME"
+unset KOINOTE_INTERNAL_TOKEN
+grep -i '^x-koinote-backup-sha256:' backup.headers
+sha256sum "$BACKUP_NAME"
+openssl cms -decrypt -binary -inform DER \
+  -in "$BACKUP_NAME" \
+  -recip deploy/database-backup/database-backup-certificate.pem \
+  -inkey ~/.koinote-backup/database-backup-private-key.pem \
+  -out koinote.dump
+pg_restore --list koinote.dump >/dev/null
+createdb koinote_restore
+pg_restore --exit-on-error --no-owner --no-privileges \
+  --dbname koinote_restore koinote.dump
+```
+
+`GET /api/internal/backups` 使用同一个内部令牌，可查看备份总数、最近一次上传时间、大小和校验和。
+
 管理员入口只对数据库中 `is_admin=true` 的用户显示。首次部署可按邮箱授予管理员：
 
 ```bash
@@ -429,7 +483,7 @@ SPF 放在 `cf-bounce.<域名>`，DKIM 放在 `cf-bounce._domainkey.<域名>`；
 ### 自动部署
 
 `.github/workflows/deploy.yml`：push 到 `main` 且 CI 全绿后先部署并验活后端，再部署
-Worker 与 SPA，最后验活站点 `/api/images/config`。
+Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/api/images/config`。
 
 需要这几个仓库 secret：
 

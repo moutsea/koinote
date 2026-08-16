@@ -16,6 +16,11 @@ import {
   handleImageUpload,
 } from "./images";
 import { handleVerificationEmail } from "./email";
+import {
+  handleDatabaseBackupDownload,
+  handleDatabaseBackupStatus,
+  handleDatabaseBackupUpload,
+} from "./backups";
 import { applySecurityHeaders } from "./securityHeaders";
 
 export interface Env extends Cloudflare.Env {
@@ -24,6 +29,7 @@ export interface Env extends Cloudflare.Env {
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
   IMAGE_PUBLIC_BASE: string;
+  BACKUPS: R2Bucket;
 }
 
 const API_PREFIXES = ["/api/", "/health"];
@@ -76,6 +82,20 @@ async function route(request: Request, env: Env): Promise<Response> {
     request.method === "POST"
   ) {
     return handleVerificationEmail(request, env);
+  }
+  if (
+    url.pathname === "/api/internal/backups" &&
+    request.method === "GET"
+  ) {
+    return handleDatabaseBackupStatus(request, env);
+  }
+  if (url.pathname.startsWith("/api/internal/backups/database/")) {
+    if (request.method === "PUT") {
+      return handleDatabaseBackupUpload(request, env);
+    }
+    if (request.method === "GET") {
+      return handleDatabaseBackupDownload(request, env);
+    }
   }
   // HEAD 也要走这里：CDN 与浏览器用它做缓存校验，
   // 漏掉的话会落到 SPA 资源处理器，返回 text/html 的假响应。

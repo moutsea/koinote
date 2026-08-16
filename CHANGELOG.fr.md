@@ -12,6 +12,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
   et Windows x64.
 - Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
   des documents propres et demande explicite en cas de brouillon local concurrent.
+- Sauvegardes PostgreSQL chiffrées toutes les six heures vers un R2 privé, avec rétention, contrôle de santé, alertes et procédure de restauration.
 
 ### Changed
 

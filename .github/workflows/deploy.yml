@@ -127,6 +127,9 @@ jobs:
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
             backend/ "root@$HOST:/opt/koinote/backend/"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            deploy/ "root@$HOST:/opt/koinote/deploy/"
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
             docker-compose.yml docker-compose.prod.yml "root@$HOST:/opt/koinote/"
@@ -264,6 +267,37 @@ jobs:
         env:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+
+      - name: 启动并验证数据库异地备份
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "root@$HOST" \
+            'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build database-backup'
+          for i in $(seq 1 60); do
+            status=$(ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "root@$HOST" '
+                cd /opt/koinote
+                container=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q database-backup)
+                if [ -z "$container" ]; then
+                  echo missing
+                else
+                  docker inspect "$container" --format "{{.State.Health.Status}}"
+                fi
+              ' || true)
+            if [ "$status" = "healthy" ]; then
+              echo "数据库异地备份已成功写入并通过健康检查"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "数据库备份容器未进入 healthy（最后状态: $status）"
+              ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+                "root@$HOST" 'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 database-backup'
+              exit 1
+            fi
+            sleep 5
+          done
 
       # 站点也验一遍：Worker 部署成功但配置错误（比如 BACKEND_URL 没设）时，
       # 上面的后端健康检查照样通过，而用户打开页面是 500

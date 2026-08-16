@@ -16,6 +16,11 @@
       "bucket_name": "koinote-images",
       // wrangler dev 用本地模拟的 bucket，不碰线上数据
       "preview_bucket_name": "koinote-images"
+    },
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "koinote-backups",
+      "preview_bucket_name": "koinote-backups"
     }
   ],
   "send_email": [
@@ -66,6 +71,10 @@
         {
           "binding": "IMAGES",
           "bucket_name": "koinote-images"
+        },
+        {
+          "binding": "BACKUPS",
+          "bucket_name": "koinote-backups"
         }
       ],
       "send_email": [
