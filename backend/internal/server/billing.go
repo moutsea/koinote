@@ -24,14 +24,19 @@ import (
 )
 
 const (
-	membershipTierFree     = "free"
-	membershipTierLifetime = "lifetime"
-	lifetimePlanCode       = "lifetime"
-	stripeServiceName      = "koinote"
-	checkoutParamsVersion  = "v3-service-metadata"
-	maxStripeWebhookBytes  = 64 * 1024
-	checkoutUserAttempts   = 5
-	checkoutUserWindow     = 10 * time.Minute
+	membershipTierFree      = "free"
+	membershipTierLifetime  = "lifetime"
+	lifetimePlanCode        = "lifetime"
+	stripeServiceName       = "koinote"
+	checkoutParamsVersion   = "v4-single-session-desktop-return"
+	maxStripeWebhookBytes   = 64 * 1024
+	checkoutUserAttempts    = 5
+	checkoutUserWindow      = 10 * time.Minute
+	checkoutConfirmAttempts = 12
+	checkoutConfirmWindow   = 10 * time.Minute
+	checkoutClientWeb       = "web"
+	checkoutClientDesktop   = "desktop"
+	defaultCheckoutTTL      = 24 * time.Hour
 )
 
 type lifetimePriceOption struct {
@@ -61,14 +66,25 @@ func currencyMinorUnitDigits(currency stripe.Currency) int {
 }
 
 var (
-	errCheckoutPending = errors.New("checkout payment is pending")
-	errCheckoutInvalid = errors.New("invalid checkout session")
-	errCheckoutOwner   = errors.New("checkout session belongs to another user")
+	errCheckoutPending           = errors.New("checkout payment is pending")
+	errCheckoutInvalid           = errors.New("invalid checkout session")
+	errCheckoutOwner             = errors.New("checkout session belongs to another user")
+	errCheckoutAlreadyProcessing = errors.New("checkout payment is already processing")
+	errMembershipAlreadyActive   = errors.New("lifetime membership is already active")
 )
 
 type stripeCheckoutSessionClient interface {
 	Create(context.Context, *stripe.CheckoutSessionCreateParams) (*stripe.CheckoutSession, error)
 	Retrieve(context.Context, string, *stripe.CheckoutSessionRetrieveParams) (*stripe.CheckoutSession, error)
+	Expire(context.Context, string, *stripe.CheckoutSessionExpireParams) (*stripe.CheckoutSession, error)
+}
+
+type checkoutAttempt struct {
+	SessionID string
+	URL       string
+	Currency  stripe.Currency
+	Client    string
+	ExpiresAt time.Time
 }
 
 type validatedLifetimeCheckout struct {
@@ -133,7 +149,7 @@ func billingPricesPayload() []billingPricePayload {
 	return prices
 }
 
-func lifetimeCheckoutIdempotencyKey(cfg config.Config, user model.User, price lifetimePriceOption, attemptID string) string {
+func lifetimeCheckoutIdempotencyKey(cfg config.Config, user model.User, price lifetimePriceOption, attemptID, client string) string {
 	customerIdentity := "email:" + strings.ToLower(strings.TrimSpace(user.Email))
 	if user.StripeCustomerID != nil && strings.TrimSpace(*user.StripeCustomerID) != "" {
 		customerIdentity = "customer:" + strings.TrimSpace(*user.StripeCustomerID)
@@ -147,6 +163,7 @@ func lifetimeCheckoutIdempotencyKey(cfg config.Config, user model.User, price li
 		string(price.Currency),
 		strconv.FormatInt(price.Amount, 10),
 		customerIdentity,
+		client,
 	}, "\x00")))
 	return "koinote-lifetime-" + checkoutParamsVersion + "-" + hex.EncodeToString(fingerprint[:16])
 }
@@ -199,12 +216,31 @@ func (a *App) takeBillingCheckoutAttempt(w http.ResponseWriter, userID int) bool
 	return false
 }
 
-func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePriceOption, attemptID string) *stripe.CheckoutSessionCreateParams {
+func (a *App) takeBillingCheckoutConfirmAttempt(w http.ResponseWriter, userID int) bool {
+	key := "billing:checkout-confirm:user:" + strconv.Itoa(userID)
+	if a.rateLimit().allow(key, checkoutConfirmAttempts, checkoutConfirmWindow) {
+		return true
+	}
+	tooManyAttempts(w)
+	return false
+}
+
+func validCheckoutClient(value string) bool {
+	return value == checkoutClientWeb || value == checkoutClientDesktop
+}
+
+func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePriceOption, attemptID, client string) *stripe.CheckoutSessionCreateParams {
 	baseURL := strings.TrimRight(cfg.AppURL, "/")
+	successURL := baseURL + "/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}"
+	cancelURL := baseURL + "/dashboard?checkout=cancelled"
+	if client == checkoutClientDesktop {
+		successURL = baseURL + "/billing/desktop-return?checkout=success&session_id={CHECKOUT_SESSION_ID}"
+		cancelURL = baseURL + "/billing/desktop-return?checkout=cancelled"
+	}
 	params := &stripe.CheckoutSessionCreateParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String(baseURL + "/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:         stripe.String(baseURL + "/dashboard?checkout=cancelled"),
+		SuccessURL:        stripe.String(successURL),
+		CancelURL:         stripe.String(cancelURL),
 		ClientReferenceID: stripe.String(user.AuthUserID),
 		LineItems: []*stripe.CheckoutSessionCreateLineItemParams{
 			{
@@ -223,6 +259,7 @@ func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePr
 			"koinote_user_id":      strconv.Itoa(user.ID),
 			"koinote_auth_user_id": user.AuthUserID,
 			"koinote_currency":     string(price.Currency),
+			"koinote_client":       client,
 		},
 		PaymentIntentData: &stripe.CheckoutSessionCreatePaymentIntentDataParams{
 			Metadata: map[string]string{
@@ -233,7 +270,7 @@ func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePr
 	}
 	// 同一次购买尝试的 Stripe 网络重试复用 Session；用户取消、超时或主动重试时会生成
 	// 新 attemptID，不能再被带回旧 Session。参数结构变化时仍需更新版本。
-	params.SetIdempotencyKey(lifetimeCheckoutIdempotencyKey(cfg, user, price, attemptID))
+	params.SetIdempotencyKey(lifetimeCheckoutIdempotencyKey(cfg, user, price, attemptID, client))
 	if user.StripeCustomerID != nil && strings.TrimSpace(*user.StripeCustomerID) != "" {
 		params.Customer = stripe.String(strings.TrimSpace(*user.StripeCustomerID))
 	} else {
@@ -241,6 +278,134 @@ func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePr
 		params.CustomerEmail = stripe.String(user.Email)
 	}
 	return params
+}
+
+func checkoutExpiresAt(session *stripe.CheckoutSession, now time.Time) time.Time {
+	if session != nil && session.ExpiresAt > now.Unix() {
+		return time.Unix(session.ExpiresAt, 0).UTC()
+	}
+	return now.Add(defaultCheckoutTTL)
+}
+
+func (a *App) createOrReuseLifetimeCheckout(
+	ctx context.Context,
+	userID int,
+	price lifetimePriceOption,
+	client string,
+) (checkoutAttempt, error) {
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return checkoutAttempt{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	user, err := scanBillingUser(tx.QueryRow(ctx, `
+		SELECT id, auth_user_id, email, username, nickname, avatar_url,
+		       is_verified, is_admin, password_hash IS NOT NULL, session_version,
+		       membership_tier, membership_granted_at,
+		       bonus_storage_bytes, stripe_customer_id, created_at, updated_at
+		FROM users WHERE id = $1
+		FOR UPDATE
+	`, userID))
+	if err != nil {
+		return checkoutAttempt{}, err
+	}
+	if user.MembershipTier == membershipTierLifetime {
+		return checkoutAttempt{}, errMembershipAlreadyActive
+	}
+
+	var existing checkoutAttempt
+	var existingCurrency string
+	err = tx.QueryRow(ctx, `
+		SELECT checkout_session_id, checkout_url, currency, client, expires_at
+		FROM stripe_checkout_attempts
+		WHERE user_id = $1
+	`, userID).Scan(
+		&existing.SessionID, &existing.URL, &existingCurrency, &existing.Client, &existing.ExpiresAt,
+	)
+	existing.Currency = stripe.Currency(existingCurrency)
+	now := time.Now().UTC()
+	hadExisting := err == nil
+	if err == nil && existing.ExpiresAt.After(now) {
+		if existing.Currency == price.Currency && existing.Client == client {
+			if err := tx.Commit(ctx); err != nil {
+				return checkoutAttempt{}, err
+			}
+			return existing, nil
+		}
+		if _, expireErr := a.stripeCheckout.Expire(ctx, existing.SessionID, &stripe.CheckoutSessionExpireParams{}); expireErr != nil {
+			current, retrieveErr := a.stripeCheckout.Retrieve(ctx, existing.SessionID, &stripe.CheckoutSessionRetrieveParams{})
+			if retrieveErr != nil || current == nil {
+				return checkoutAttempt{}, fmt.Errorf("expire previous checkout: %w", expireErr)
+			}
+			switch current.Status {
+			case stripe.CheckoutSessionStatusComplete:
+				return checkoutAttempt{}, errCheckoutAlreadyProcessing
+			case stripe.CheckoutSessionStatusExpired:
+			default:
+				return checkoutAttempt{}, fmt.Errorf("expire previous checkout: %w", expireErr)
+			}
+		}
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return checkoutAttempt{}, err
+	}
+	if hadExisting {
+		if _, err := tx.Exec(ctx, `DELETE FROM stripe_checkout_attempts WHERE user_id = $1`, userID); err != nil {
+			return checkoutAttempt{}, err
+		}
+	}
+
+	attemptID, err := randomHex(16)
+	if err != nil {
+		return checkoutAttempt{}, err
+	}
+	session, err := a.stripeCheckout.Create(ctx, lifetimeCheckoutParams(a.cfg, user, price, attemptID, client))
+	if err != nil {
+		if hadExisting {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return checkoutAttempt{}, fmt.Errorf("create checkout: %v; clear previous checkout: %w", err, commitErr)
+			}
+		}
+		return checkoutAttempt{}, err
+	}
+	if session == nil || session.ID == "" || session.URL == "" {
+		if session != nil && session.ID != "" {
+			_, _ = a.stripeCheckout.Expire(ctx, session.ID, &stripe.CheckoutSessionExpireParams{})
+		}
+		if hadExisting {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return checkoutAttempt{}, fmt.Errorf("incomplete checkout response; clear previous checkout: %w", commitErr)
+			}
+		}
+		return checkoutAttempt{}, errors.New("Stripe returned an incomplete checkout session")
+	}
+	created := checkoutAttempt{
+		SessionID: session.ID,
+		URL:       session.URL,
+		Currency:  price.Currency,
+		Client:    client,
+		ExpiresAt: checkoutExpiresAt(session, now),
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO stripe_checkout_attempts (
+			user_id, checkout_session_id, checkout_url, currency, client, expires_at
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (user_id) DO UPDATE SET
+			checkout_session_id = EXCLUDED.checkout_session_id,
+			checkout_url = EXCLUDED.checkout_url,
+			currency = EXCLUDED.currency,
+			client = EXCLUDED.client,
+			expires_at = EXCLUDED.expires_at,
+			updated_at = now()
+	`, userID, created.SessionID, created.URL, created.Currency, created.Client, created.ExpiresAt); err != nil {
+		_, _ = a.stripeCheckout.Expire(ctx, created.SessionID, &stripe.CheckoutSessionExpireParams{})
+		return checkoutAttempt{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		_, _ = a.stripeCheckout.Expire(ctx, created.SessionID, &stripe.CheckoutSessionExpireParams{})
+		return checkoutAttempt{}, err
+	}
+	return created, nil
 }
 
 func (a *App) billingCheckout(w http.ResponseWriter, r *http.Request) {
@@ -252,12 +417,9 @@ func (a *App) billingCheckout(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "billing_not_configured", "Membership checkout is not configured")
 		return
 	}
-	if user.MembershipTier == membershipTierLifetime {
-		httpx.ErrorCode(w, http.StatusConflict, "membership_already_active", "Lifetime membership is already active")
-		return
-	}
 	var body struct {
 		Currency string `json:"currency"`
+		Client   string `json:"client"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid checkout request")
@@ -268,30 +430,36 @@ func (a *App) billingCheckout(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "unsupported_currency", "Unsupported checkout currency")
 		return
 	}
-	if !a.takeBillingCheckoutAttempt(w, user.ID) {
+	client := strings.ToLower(strings.TrimSpace(body.Client))
+	if client == "" {
+		client = checkoutClientWeb
+	}
+	if !validCheckoutClient(client) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Unsupported checkout client")
 		return
 	}
-	attemptID, err := randomHex(16)
-	if err != nil {
-		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+	if !a.takeBillingCheckoutAttempt(w, user.ID) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	session, err := a.stripeCheckout.Create(ctx, lifetimeCheckoutParams(a.cfg, user, price, attemptID))
+	attempt, err := a.createOrReuseLifetimeCheckout(ctx, user.ID, price, client)
+	if errors.Is(err, errMembershipAlreadyActive) {
+		httpx.ErrorCode(w, http.StatusConflict, "membership_already_active", "Lifetime membership is already active")
+		return
+	}
+	if errors.Is(err, errCheckoutAlreadyProcessing) {
+		httpx.ErrorCode(w, http.StatusConflict, "checkout_in_progress", "A previous checkout is already being processed")
+		return
+	}
 	if err != nil {
 		log.Printf("stripe checkout create: %v", err)
 		httpx.ErrorCode(w, http.StatusBadGateway, "checkout_create_failed", "Could not start checkout")
 		return
 	}
-	if session == nil || session.ID == "" || session.URL == "" {
-		log.Printf("stripe checkout create: Stripe returned an incomplete session")
-		httpx.ErrorCode(w, http.StatusBadGateway, "checkout_create_failed", "Could not start checkout")
-		return
-	}
 	a.recordProductMilestone(r.Context(), user.ID, milestoneCheckoutStarted)
-	httpx.JSON(w, http.StatusOK, map[string]string{"sessionId": session.ID, "url": session.URL})
+	httpx.JSON(w, http.StatusOK, map[string]string{"sessionId": attempt.SessionID, "url": attempt.URL})
 }
 
 func validCheckoutSessionID(sessionID string) bool {
@@ -372,6 +540,39 @@ func scanBillingUser(row pgx.Row) (model.User, error) {
 		&user.BonusStorageBytes, &user.StripeCustomerID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	return user, err
+}
+
+func (a *App) expirePendingCheckoutForMember(ctx context.Context, userID int, completedSessionID string) error {
+	var pendingSessionID string
+	err := a.db.QueryRow(ctx, `
+		SELECT checkout_session_id
+		FROM stripe_checkout_attempts
+		WHERE user_id = $1
+	`, userID).Scan(&pendingSessionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if pendingSessionID != completedSessionID {
+		if _, expireErr := a.stripeCheckout.Expire(ctx, pendingSessionID, &stripe.CheckoutSessionExpireParams{}); expireErr != nil {
+			current, retrieveErr := a.stripeCheckout.Retrieve(ctx, pendingSessionID, &stripe.CheckoutSessionRetrieveParams{})
+			if retrieveErr != nil || current == nil {
+				return fmt.Errorf("expire pending checkout: %w", expireErr)
+			}
+			switch current.Status {
+			case stripe.CheckoutSessionStatusComplete, stripe.CheckoutSessionStatusExpired:
+			default:
+				return fmt.Errorf("expire pending checkout: %w", expireErr)
+			}
+		}
+	}
+	_, err = a.db.Exec(ctx, `
+		DELETE FROM stripe_checkout_attempts
+		WHERE user_id = $1 AND checkout_session_id = $2
+	`, userID, pendingSessionID)
+	return err
 }
 
 func (a *App) grantLifetimeMembership(
@@ -484,8 +685,18 @@ func (a *App) grantLifetimeMembershipAndNotify(
 	expectedUser *model.User,
 ) (membershipGrantResult, error) {
 	result, err := a.grantLifetimeMembership(ctx, checkout, sourceEventID, expectedUser)
-	if err != nil || !result.Applied || a.paymentNotifier == nil {
+	if err != nil {
 		return result, err
+	}
+	if a.stripeCheckout != nil {
+		expireCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if expireErr := a.expirePendingCheckoutForMember(expireCtx, result.User.ID, checkout.SessionID); expireErr != nil {
+			log.Printf("expire superseded Stripe checkout after membership grant: %v", expireErr)
+		}
+		cancel()
+	}
+	if !result.Applied || a.paymentNotifier == nil {
+		return result, nil
 	}
 	a.deliverPaymentNotification(checkout.SessionID)
 	return result, nil
@@ -505,6 +716,9 @@ func (a *App) billingCheckoutConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !validCheckoutSessionID(strings.TrimSpace(body.SessionID)) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "A valid Checkout Session ID is required")
+		return
+	}
+	if !a.takeBillingCheckoutConfirmAttempt(w, user.ID) {
 		return
 	}
 

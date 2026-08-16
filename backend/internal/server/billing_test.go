@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,11 +26,68 @@ type fakeStripeCheckoutClient struct {
 	createdParams  *stripe.CheckoutSessionCreateParams
 	createResponse *stripe.CheckoutSession
 	retrieveResult *stripe.CheckoutSession
+	expiredIDs     []string
 }
 
 type fakePaymentNotifier struct {
 	notifications []paymentNotification
 	err           error
+}
+
+type concurrentStripeCheckoutClient struct {
+	mu          sync.Mutex
+	prefix      string
+	createCount int
+	expiredIDs  []string
+	sessions    map[string]*stripe.CheckoutSession
+}
+
+func newConcurrentStripeCheckoutClient(prefix string) *concurrentStripeCheckoutClient {
+	return &concurrentStripeCheckoutClient{prefix: prefix, sessions: make(map[string]*stripe.CheckoutSession)}
+}
+
+func (f *concurrentStripeCheckoutClient) Create(_ context.Context, _ *stripe.CheckoutSessionCreateParams) (*stripe.CheckoutSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createCount++
+	session := &stripe.CheckoutSession{
+		ID:        "cs_test_attempt_" + f.prefix + "_" + strconv.Itoa(f.createCount),
+		URL:       "https://checkout.stripe.test/session/" + strconv.Itoa(f.createCount),
+		Status:    stripe.CheckoutSessionStatusOpen,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	}
+	f.sessions[session.ID] = session
+	return session, nil
+}
+
+func (f *concurrentStripeCheckoutClient) Retrieve(_ context.Context, sessionID string, _ *stripe.CheckoutSessionRetrieveParams) (*stripe.CheckoutSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	session := f.sessions[sessionID]
+	if session == nil {
+		return nil, errors.New("session not found")
+	}
+	copy := *session
+	return &copy, nil
+}
+
+func (f *concurrentStripeCheckoutClient) Expire(_ context.Context, sessionID string, _ *stripe.CheckoutSessionExpireParams) (*stripe.CheckoutSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	session := f.sessions[sessionID]
+	if session == nil {
+		return nil, errors.New("session not found")
+	}
+	session.Status = stripe.CheckoutSessionStatusExpired
+	f.expiredIDs = append(f.expiredIDs, sessionID)
+	copy := *session
+	return &copy, nil
+}
+
+func (f *concurrentStripeCheckoutClient) snapshot() (int, []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.createCount, append([]string(nil), f.expiredIDs...)
 }
 
 func (f *fakePaymentNotifier) NotifyPayment(_ context.Context, notification paymentNotification) error {
@@ -43,6 +102,11 @@ func (f *fakeStripeCheckoutClient) Create(_ context.Context, params *stripe.Chec
 
 func (f *fakeStripeCheckoutClient) Retrieve(_ context.Context, _ string, _ *stripe.CheckoutSessionRetrieveParams) (*stripe.CheckoutSession, error) {
 	return f.retrieveResult, nil
+}
+
+func (f *fakeStripeCheckoutClient) Expire(_ context.Context, sessionID string, _ *stripe.CheckoutSessionExpireParams) (*stripe.CheckoutSession, error) {
+	f.expiredIDs = append(f.expiredIDs, sessionID)
+	return &stripe.CheckoutSession{ID: sessionID, Status: stripe.CheckoutSessionStatusExpired}, nil
 }
 
 func paidLifetimeCheckout() *stripe.CheckoutSession {
@@ -83,7 +147,7 @@ func TestLifetimeCheckoutParamsUseFixedPriceAndOwnership(t *testing.T) {
 	if !ok {
 		t.Fatal("USD 价格不存在")
 	}
-	params := lifetimeCheckoutParams(cfg, user, price, "attempt-1")
+	params := lifetimeCheckoutParams(cfg, user, price, "attempt-1", checkoutClientWeb)
 
 	if stripe.StringValue(params.Mode) != string(stripe.CheckoutSessionModePayment) {
 		t.Fatalf("Checkout mode = %q", stripe.StringValue(params.Mode))
@@ -109,11 +173,14 @@ func TestLifetimeCheckoutParamsUseFixedPriceAndOwnership(t *testing.T) {
 	if stripe.StringValue(params.SuccessURL) != "https://koinote.app/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}" {
 		t.Fatalf("成功回跳地址不正确: %q", stripe.StringValue(params.SuccessURL))
 	}
+	if params.Metadata["koinote_client"] != checkoutClientWeb {
+		t.Fatalf("Checkout 客户端元数据 = %q", params.Metadata["koinote_client"])
+	}
 	if len(params.PaymentMethodTypes) != 0 {
 		t.Fatalf("应由 Stripe 动态选择已启用且适配币种的支付方式: %+v", params.PaymentMethodTypes)
 	}
-	if stripe.StringValue(params.IdempotencyKey) != lifetimeCheckoutIdempotencyKey(cfg, user, price, "attempt-1") ||
-		!strings.HasPrefix(stripe.StringValue(params.IdempotencyKey), "koinote-lifetime-v3-service-metadata-") {
+	if stripe.StringValue(params.IdempotencyKey) != lifetimeCheckoutIdempotencyKey(cfg, user, price, "attempt-1", checkoutClientWeb) ||
+		!strings.HasPrefix(stripe.StringValue(params.IdempotencyKey), "koinote-lifetime-v4-single-session-desktop-return-") {
 		t.Fatalf("缺少按参数版本和用户固定的 Stripe 幂等键: %q", stripe.StringValue(params.IdempotencyKey))
 	}
 	if stripe.StringValue(params.CustomerEmail) != user.Email ||
@@ -127,26 +194,30 @@ func TestLifetimeCheckoutIdempotencyKeyTracksVariableParams(t *testing.T) {
 	user := model.User{AuthUserID: "auth-user-1", Email: "user@example.com"}
 	usd, _ := lifetimePriceFor("usd")
 	eur, _ := lifetimePriceFor("eur")
-	base := lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1")
+	base := lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1", checkoutClientWeb)
 
-	if base != lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1") {
+	if base != lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1", checkoutClientWeb) {
 		t.Fatal("相同 Checkout 参数必须生成稳定的幂等键")
 	}
-	if base == lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-2") {
+	if base == lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-2", checkoutClientWeb) {
 		t.Fatal("新的购买尝试必须生成新的幂等键，不能复用已取消或过期的 Session")
 	}
 	changedURL := cfg
 	changedURL.AppURL = "https://preview.koinote.app"
-	if base == lifetimeCheckoutIdempotencyKey(changedURL, user, usd, "attempt-1") {
+	if base == lifetimeCheckoutIdempotencyKey(changedURL, user, usd, "attempt-1", checkoutClientWeb) {
 		t.Fatal("回跳地址变化后必须生成新的幂等键")
 	}
-	if base == lifetimeCheckoutIdempotencyKey(cfg, user, eur, "attempt-1") {
+	if base == lifetimeCheckoutIdempotencyKey(cfg, user, eur, "attempt-1", checkoutClientWeb) {
 		t.Fatal("币种变化后必须生成新的幂等键")
 	}
 	customerID := "cus_existing"
 	user.StripeCustomerID = &customerID
-	if base == lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1") {
+	if base == lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1", checkoutClientWeb) {
 		t.Fatal("Customer 参数变化后必须生成新的幂等键")
+	}
+	user.StripeCustomerID = nil
+	if base == lifetimeCheckoutIdempotencyKey(cfg, user, usd, "attempt-1", checkoutClientDesktop) {
+		t.Fatal("桌面回跳参数变化后必须生成新的幂等键")
 	}
 }
 
@@ -159,13 +230,31 @@ func TestLifetimeCheckoutParamsReuseCustomer(t *testing.T) {
 	params := lifetimeCheckoutParams(config.Config{
 		AppURL:                  "https://koinote.app",
 		StripeLifetimeProductID: "prod_lifetime",
-	}, model.User{ID: 42, AuthUserID: "auth-user-1", Email: "user@example.com", StripeCustomerID: &customerID}, price, "attempt-1")
+	}, model.User{ID: 42, AuthUserID: "auth-user-1", Email: "user@example.com", StripeCustomerID: &customerID}, price, "attempt-1", checkoutClientWeb)
 
 	if stripe.StringValue(params.Customer) != customerID {
 		t.Fatalf("应复用已有 Customer，实际 %q", stripe.StringValue(params.Customer))
 	}
 	if params.CustomerEmail != nil || params.CustomerCreation != nil {
 		t.Fatal("复用 Customer 时不应同时要求创建新 Customer")
+	}
+}
+
+func TestLifetimeCheckoutParamsUseDesktopReturnPage(t *testing.T) {
+	price, _ := lifetimePriceFor("usd")
+	params := lifetimeCheckoutParams(config.Config{
+		AppURL:                  "https://koinote.app/",
+		StripeLifetimeProductID: "prod_lifetime",
+	}, model.User{ID: 42, AuthUserID: "auth-user-1", Email: "user@example.com"}, price, "attempt-1", checkoutClientDesktop)
+
+	if got := stripe.StringValue(params.SuccessURL); got != "https://koinote.app/billing/desktop-return?checkout=success&session_id={CHECKOUT_SESSION_ID}" {
+		t.Fatalf("桌面成功回跳地址 = %q", got)
+	}
+	if got := stripe.StringValue(params.CancelURL); got != "https://koinote.app/billing/desktop-return?checkout=cancelled" {
+		t.Fatalf("桌面取消回跳地址 = %q", got)
+	}
+	if params.Metadata["koinote_client"] != checkoutClientDesktop {
+		t.Fatalf("桌面 Checkout 元数据 = %q", params.Metadata["koinote_client"])
 	}
 }
 
@@ -230,6 +319,177 @@ func TestBillingCheckoutRateLimitIsPerUser(t *testing.T) {
 	}
 	if !app.takeBillingCheckoutAttempt(httptest.NewRecorder(), 43) {
 		t.Fatal("一个用户触发限流不应影响其他用户")
+	}
+}
+
+func TestBillingCheckoutConfirmRateLimitIsPerUser(t *testing.T) {
+	app := newTestApp(config.Config{})
+	for range checkoutConfirmAttempts {
+		if !app.takeBillingCheckoutConfirmAttempt(httptest.NewRecorder(), 42) {
+			t.Fatal("确认接口在阈值内不应被限流")
+		}
+	}
+	blocked := httptest.NewRecorder()
+	if app.takeBillingCheckoutConfirmAttempt(blocked, 42) || blocked.Code != http.StatusTooManyRequests {
+		t.Fatalf("确认接口限流响应 = %d %s", blocked.Code, blocked.Body.String())
+	}
+	if !app.takeBillingCheckoutConfirmAttempt(httptest.NewRecorder(), 43) {
+		t.Fatal("确认接口限流不应影响其他用户")
+	}
+}
+
+func TestCheckoutAttemptsSerializeAndReplaceCurrency(t *testing.T) {
+	dsn := strings.TrimSpace(os.Getenv("TEST_DATABASE_URL"))
+	if dsn == "" {
+		t.Skip("未设 TEST_DATABASE_URL，跳过 Checkout 并发校验（CI 里会跑）")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("连库失败: %v", err)
+	}
+	defer pool.Close()
+	if err := migrations.Apply(ctx, pool, "../../migrations"); err != nil {
+		t.Fatalf("跑迁移失败: %v", err)
+	}
+
+	suffix, err := randomHex(8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var userID int
+	err = pool.QueryRow(ctx, `
+		INSERT INTO users (auth_user_id, email, is_verified)
+		VALUES ($1, $2, true) RETURNING id
+	`, "checkout-attempt-"+suffix, "checkout-attempt-"+suffix+"@example.com").Scan(&userID)
+	if err != nil {
+		t.Fatalf("创建测试用户: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
+	}()
+
+	stripeClient := newConcurrentStripeCheckoutClient(suffix)
+	app := &App{
+		db: pool,
+		cfg: config.Config{
+			AppURL:                  "https://koinote.app",
+			StripeLifetimeProductID: "prod_lifetime",
+		},
+		stripeCheckout: stripeClient,
+	}
+	usd, _ := lifetimePriceFor("usd")
+	results := make(chan checkoutAttempt, 2)
+	errorsChannel := make(chan error, 2)
+	var wait sync.WaitGroup
+	for range 2 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			attempt, createErr := app.createOrReuseLifetimeCheckout(ctx, userID, usd, checkoutClientWeb)
+			results <- attempt
+			errorsChannel <- createErr
+		}()
+	}
+	wait.Wait()
+	close(results)
+	close(errorsChannel)
+	for createErr := range errorsChannel {
+		if createErr != nil {
+			t.Fatalf("并发创建 Checkout: %v", createErr)
+		}
+	}
+	var sessionID string
+	for attempt := range results {
+		if sessionID == "" {
+			sessionID = attempt.SessionID
+		} else if attempt.SessionID != sessionID {
+			t.Fatalf("并发请求返回不同 Session: %q / %q", sessionID, attempt.SessionID)
+		}
+	}
+	if createCount, expired := stripeClient.snapshot(); createCount != 1 || len(expired) != 0 {
+		t.Fatalf("并发请求 create=%d expired=%v", createCount, expired)
+	}
+
+	eur, _ := lifetimePriceFor("eur")
+	replacement, err := app.createOrReuseLifetimeCheckout(ctx, userID, eur, checkoutClientWeb)
+	if err != nil {
+		t.Fatalf("切换币种: %v", err)
+	}
+	if replacement.SessionID == sessionID || replacement.Currency != stripe.CurrencyEUR {
+		t.Fatalf("币种切换未替换 Session: %+v", replacement)
+	}
+	if createCount, expired := stripeClient.snapshot(); createCount != 2 || len(expired) != 1 || expired[0] != sessionID {
+		t.Fatalf("币种切换 create=%d expired=%v", createCount, expired)
+	}
+	var storedSessionID, storedCurrency string
+	var attemptCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), max(checkout_session_id), max(currency)
+		FROM stripe_checkout_attempts WHERE user_id = $1
+	`, userID).Scan(&attemptCount, &storedSessionID, &storedCurrency); err != nil {
+		t.Fatal(err)
+	}
+	if attemptCount != 1 || storedSessionID != replacement.SessionID || storedCurrency != "eur" {
+		t.Fatalf("数据库待支付记录 count=%d session=%q currency=%q", attemptCount, storedSessionID, storedCurrency)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET membership_tier = 'lifetime' WHERE id = $1`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.cleanupStripeCheckoutAttempts(ctx); err != nil {
+		t.Fatalf("后台清理会员待支付 Session: %v", err)
+	}
+	if createCount, expired := stripeClient.snapshot(); createCount != 2 || len(expired) != 2 || expired[1] != replacement.SessionID {
+		t.Fatalf("会员生效后的清理 create=%d expired=%v", createCount, expired)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM stripe_checkout_attempts WHERE user_id = $1
+	`, userID).Scan(&attemptCount); err != nil {
+		t.Fatal(err)
+	}
+	if attemptCount != 0 {
+		t.Fatalf("会员生效后仍有 %d 条待支付记录", attemptCount)
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE users SET membership_tier = 'free' WHERE id = $1`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO stripe_checkout_attempts (
+			user_id, checkout_session_id, checkout_url, currency, client, expires_at
+		) VALUES ($1, $2, $3, 'usd', 'web', now() - interval '1 hour')
+	`, userID, "cs_test_expired_"+suffix, "https://checkout.stripe.test/expired/"+suffix); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.cleanupStripeCheckoutAttempts(ctx); err != nil {
+		t.Fatalf("后台删除过期待支付记录: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM stripe_checkout_attempts WHERE user_id = $1
+	`, userID).Scan(&attemptCount); err != nil {
+		t.Fatal(err)
+	}
+	if attemptCount != 0 {
+		t.Fatalf("过期待支付记录仍有 %d 条", attemptCount)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO stripe_checkout_attempts (
+			user_id, checkout_session_id, checkout_url, currency, client, expires_at
+		) VALUES ($1, $2, $3, 'usd', 'web', now() + interval '1 hour')
+	`, userID, "cs_test_live_"+suffix, "https://checkout.stripe.test/live/"+suffix); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.cleanupStripeCheckoutAttempts(ctx); err != nil {
+		t.Fatalf("后台检查未过期待支付记录: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM stripe_checkout_attempts WHERE user_id = $1
+	`, userID).Scan(&attemptCount); err != nil {
+		t.Fatal(err)
+	}
+	if attemptCount != 1 {
+		t.Fatalf("免费用户未过期待支付记录被误删，剩余 %d 条", attemptCount)
 	}
 }
 
@@ -388,10 +648,10 @@ func TestGrantLifetimeMembershipIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建测试用户: %v", err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM stripe_payments WHERE user_id = $1`, userID)
 		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
-	})
+	}()
 
 	notifier := &fakePaymentNotifier{err: errors.New("temporary Feishu failure")}
 	app := &App{

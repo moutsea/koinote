@@ -19,8 +19,17 @@ const queryClient = new QueryClient();
 const desktopRuntime = isDesktopRuntime();
 
 if (desktopRuntime) {
-  void import("./desktop/auth").then(({ initializeDesktopAuth }) =>
-    initializeDesktopAuth(),
+  void import("./desktop/auth").then(
+    ({ DESKTOP_BILLING_EVENT, initializeDesktopAuth }) => {
+      window.addEventListener(DESKTOP_BILLING_EVENT, (event) => {
+        const detail = (event as CustomEvent<{ user?: unknown }>).detail;
+        if (detail?.user) queryClient.setQueryData(["session"], { user: detail.user });
+        void queryClient.invalidateQueries({ queryKey: ["session"] });
+        void queryClient.invalidateQueries({ queryKey: ["membership-status"] });
+        void queryClient.invalidateQueries({ queryKey: ["storage-usage"] });
+      });
+      void initializeDesktopAuth();
+    },
   );
 }
 
@@ -109,6 +118,14 @@ const desktopAuthorizeRoute = createRoute({
     "DesktopAuthorizePage",
   ),
 });
+const desktopBillingReturnRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/billing/desktop-return",
+  component: lazyRouteComponent(
+    () => import("./pages/DesktopBillingReturnPage"),
+    "DesktopBillingReturnPage",
+  ),
+});
 const registerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/register",
@@ -192,6 +209,7 @@ const routeTree = rootRoute.addChildren([
   editorDocRoute,
   loginRoute,
   desktopAuthorizeRoute,
+  desktopBillingReturnRoute,
   registerRoute,
   dashboardRoute,
   documentsRoute,

@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Check, Crown, LoaderCircle } from "lucide-react";
-import { createMembershipCheckout, getBillingPricing } from "../api";
+import {
+  ApiError,
+  createMembershipCheckout,
+  getBillingPricing,
+  getMembershipStatus,
+} from "../api";
 import { useCurrentUser } from "../auth";
 import { InkClouds, PaperCard } from "../components/Ink";
 import {
@@ -18,6 +23,7 @@ const PRICING_KEY = ["billing-pricing"] as const;
 
 export function PricingPage() {
   const user = useCurrentUser();
+  const queryClient = useQueryClient();
   const { t, locale } = useI18n();
   const [selectedCurrency, setSelectedCurrency] = useState(
     () => DEFAULT_CURRENCY_BY_LOCALE[locale] ?? "usd",
@@ -33,6 +39,27 @@ export function PricingPage() {
       await openMembershipCheckout(result.url);
       return result;
     },
+    onError(error) {
+      if (
+        error instanceof ApiError &&
+        (error.code === "checkout_in_progress" ||
+          error.code === "membership_already_active")
+      ) {
+        void queryClient.invalidateQueries({ queryKey: ["session"] });
+        void queryClient.invalidateQueries({ queryKey: ["membership-status"] });
+      }
+    },
+  });
+  const checkoutErrorCode =
+    checkout.error instanceof ApiError ? checkout.error.code : undefined;
+  const checkoutInProgress = checkoutErrorCode === "checkout_in_progress";
+  const membership = useQuery({
+    queryKey: ["membership-status"],
+    queryFn: getMembershipStatus,
+    enabled: Boolean(user),
+    retry: false,
+    refetchInterval: (query) =>
+      checkoutInProgress && !query.state.data?.membership.active ? 2_000 : false,
   });
 
   const data = pricing.data?.pricing;
@@ -44,7 +71,8 @@ export function PricingPage() {
   const lifetimePrice = selectedPrice
     ? formatMembershipPrice(selectedPrice.amount, selectedPrice.currency, locale)
     : "—";
-  const active = user?.membershipTier === "lifetime";
+  const active =
+    membership.data?.membership.active ?? user?.membershipTier === "lifetime";
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -113,7 +141,7 @@ export function PricingPage() {
                       <select
                         value={selectedPrice?.currency.toLowerCase() ?? selectedCurrency}
                         onChange={(event) => setSelectedCurrency(event.target.value)}
-                        disabled={checkout.isPending}
+                        disabled={checkout.isPending || checkoutInProgress}
                         className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
                         style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                       >
@@ -145,7 +173,12 @@ export function PricingPage() {
                     <button
                       type="button"
                       onClick={() => selectedPrice && checkout.mutate(selectedPrice.currency)}
-                      disabled={!data.billingEnabled || !selectedPrice || checkout.isPending}
+                      disabled={
+                        !data.billingEnabled ||
+                        !selectedPrice ||
+                        checkout.isPending ||
+                        checkoutInProgress
+                      }
                       className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                     >
@@ -167,8 +200,12 @@ export function PricingPage() {
                     ? t.pricing.active
                     : !data.billingEnabled
                       ? t.pricing.unavailable
-                      : checkout.isError
-                        ? t.membership.checkoutFailed
+                      : checkoutErrorCode === "checkout_in_progress"
+                        ? t.membership.checkoutPending
+                        : checkoutErrorCode === "membership_already_active"
+                          ? t.membership.checkoutSuccess
+                          : checkout.isError
+                            ? t.membership.checkoutFailed
                         : undefined
                 }
               />

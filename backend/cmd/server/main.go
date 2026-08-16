@@ -86,6 +86,7 @@ func main() {
 	app.StartImageGC(backgroundCtx)
 	app.StartDocumentTrashCleanup(backgroundCtx)
 	app.StartPaymentNotificationRetry(backgroundCtx)
+	app.StartStripeCheckoutCleanup(backgroundCtx)
 	app.StartMCPAuditCleanup(backgroundCtx)
 
 	httpServer := &http.Server{

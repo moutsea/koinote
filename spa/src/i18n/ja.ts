@@ -361,6 +361,7 @@ export const ja: Messages = {
     loadFailed: "会員ステータスを読み込めませんでした。",
     checkoutSuccess: "支払いを確認しました。ライフタイム会員が有効です。",
     checkoutPending: "支払いを確認中です。完了後、権利は自動的に更新されます。",
+    checkoutDelayed: "Stripe が支払いを処理中です。重複して支払わず、後でもう一度ご確認ください。請求後も長時間反映されない場合はサポートへご連絡ください。",
     checkoutCancelled: "決済をキャンセルしました。請求は発生していません。",
     checkoutFailed: "決済を完了できませんでした。もう一度お試しください。",
   },
@@ -817,6 +818,14 @@ function hello(name) {
     signIn: "ログインして続行",
     invalid: "承認リンクが無効です。アプリに戻ってもう一度お試しください。",
     failed: "承認を完了できませんでした。もう一度お試しください。",
+  },
+  desktopBilling: {
+    successTitle: "支払いが完了しました",
+    cancelledTitle: "支払いをキャンセルしました",
+    description: "Koinote アプリに戻ります。アプリが支払いを安全に確認し、会員状態を更新します。",
+    openApp: "Koinote アプリを開く",
+    invalid: "決済の戻り先リンクが無効です。アプリに戻ってもう一度お試しください。",
+    dismiss: "支払い状況を閉じる",
   },
   desktopHome: {
     eyebrow: "デスクトップワークスペース",

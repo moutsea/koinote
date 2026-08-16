@@ -227,6 +227,7 @@ export interface Messages {
     loadFailed: string;
     checkoutSuccess: string;
     checkoutPending: string;
+    checkoutDelayed: string;
     checkoutCancelled: string;
     checkoutFailed: string;
   };
@@ -605,6 +606,14 @@ export interface Messages {
     signIn: string;
     invalid: string;
     failed: string;
+  };
+  desktopBilling: {
+    successTitle: string;
+    cancelledTitle: string;
+    description: string;
+    openApp: string;
+    invalid: string;
+    dismiss: string;
   };
   desktopHome: {
     eyebrow: string;

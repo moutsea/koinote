@@ -8,8 +8,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
-- Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens,
-  local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.
+- Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens, local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.
 - Added signed desktop auto-updates with startup checks, a manual account-menu action, download
   progress, and restart-to-install support.
@@ -25,6 +24,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Stripe Checkout now keeps one payable session per user and securely returns desktop payments through `koinote://`.
 - Word/PDF exports use the same-origin image proxy; desktop image failures no longer block unrelated sync, errors are visible, cache origins are trusted, and exports include pending local images.
 - Fixed desktop Admin and MCP-token requests being rejected by the desktop Bearer allowlist,
   restored the Docs and Pricing navigation, and routed web-only security and permanent-deletion

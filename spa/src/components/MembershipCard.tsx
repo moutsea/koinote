@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crown, HardDrive, LoaderCircle, Sparkles } from "lucide-react";
 import {
+  ApiError,
   confirmMembershipCheckout,
   createMembershipCheckout,
   getMembershipStatus,
@@ -11,10 +12,17 @@ import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 import { STORAGE_USAGE_KEY } from "./StorageCard";
 import { openMembershipCheckout } from "../externalNavigation";
+import { isTerminalBillingHTTPStatus } from "../billingCore";
 
 export const MEMBERSHIP_STATUS_KEY = ["membership-status"] as const;
 
-type CheckoutNotice = "none" | "success" | "pending" | "cancelled" | "failed";
+type CheckoutNotice =
+  | "none"
+  | "success"
+  | "pending"
+  | "delayed"
+  | "cancelled"
+  | "failed";
 
 export const DEFAULT_CURRENCY_BY_LOCALE: Record<string, string> = {
   zh: "cny",
@@ -66,7 +74,21 @@ export function MembershipCard({ user }: { user: User }) {
       await openMembershipCheckout(data.url);
       return data;
     },
-    onError() {
+    onError(error) {
+      if (error instanceof ApiError && error.code === "checkout_in_progress") {
+        setNotice("pending");
+        return;
+      }
+      if (
+        error instanceof ApiError &&
+        error.code === "membership_already_active"
+      ) {
+        setNotice("success");
+        void queryClient.invalidateQueries({ queryKey: ["session"] });
+        void queryClient.invalidateQueries({ queryKey: MEMBERSHIP_STATUS_KEY });
+        void queryClient.invalidateQueries({ queryKey: STORAGE_USAGE_KEY });
+        return;
+      }
       setNotice("failed");
     },
   });
@@ -103,28 +125,58 @@ export function MembershipCard({ user }: { user: User }) {
         setNotice("success");
         clearCheckoutQuery();
       })
-      .catch(() => setNotice("failed"));
+      .catch((error) => {
+        if (
+          error instanceof ApiError &&
+          isTerminalBillingHTTPStatus(error.status)
+        ) {
+          setNotice("failed");
+          return;
+        }
+        setNotice("pending");
+      });
   }, [queryClient]);
 
   useEffect(() => {
     if (notice !== "pending") return;
     let attempts = 0;
-    const timer = window.setInterval(() => {
+    let cancelled = false;
+    let timer = 0;
+    const poll = async () => {
       attempts += 1;
-      void queryClient
-        .fetchQuery({ queryKey: MEMBERSHIP_STATUS_KEY, queryFn: getMembershipStatus })
-        .then((result) => {
-          if (!result.membership.active) return;
-          window.clearInterval(timer);
+      try {
+        const result = await queryClient.fetchQuery({
+          queryKey: MEMBERSHIP_STATUS_KEY,
+          queryFn: getMembershipStatus,
+        });
+        if (result.membership.active) {
           setNotice("success");
           clearCheckoutQuery();
           void queryClient.invalidateQueries({ queryKey: ["session"] });
           void queryClient.invalidateQueries({ queryKey: STORAGE_USAGE_KEY });
-        })
-        .catch(() => undefined);
-      if (attempts >= 30) window.clearInterval(timer);
-    }, 2_000);
-    return () => window.clearInterval(timer);
+          return;
+        }
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          isTerminalBillingHTTPStatus(error.status)
+        ) {
+          setNotice("failed");
+          return;
+        }
+      }
+      if (cancelled) return;
+      if (attempts >= 30) {
+        setNotice("delayed");
+        return;
+      }
+      timer = window.setTimeout(poll, 2_000);
+    };
+    timer = window.setTimeout(poll, 2_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [notice, queryClient]);
 
   const membership = status.data?.membership;
@@ -135,17 +187,20 @@ export function MembershipCard({ user }: { user: User }) {
   const selectedPrice =
     prices.find((option) => option.currency.toLowerCase() === selectedCurrency) ?? prices[0];
   const price = formatMembershipPrice(selectedPrice.amount, selectedPrice.currency, locale);
+  const checkoutUnresolved = notice === "pending" || notice === "delayed";
 
   const noticeText =
     notice === "success"
       ? t.membership.checkoutSuccess
       : notice === "pending"
         ? t.membership.checkoutPending
-        : notice === "cancelled"
-          ? t.membership.checkoutCancelled
-          : notice === "failed"
-            ? t.membership.checkoutFailed
-            : "";
+        : notice === "delayed"
+          ? t.membership.checkoutDelayed
+          : notice === "cancelled"
+            ? t.membership.checkoutCancelled
+            : notice === "failed"
+              ? t.membership.checkoutFailed
+              : "";
 
   return (
     <PaperCard>
@@ -229,7 +284,7 @@ export function MembershipCard({ user }: { user: User }) {
                     <select
                       value={selectedPrice.currency.toLowerCase()}
                       onChange={(event) => setSelectedCurrency(event.target.value)}
-                      disabled={checkout.isPending}
+                      disabled={checkout.isPending || checkoutUnresolved}
                       className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
                       style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                     >
@@ -252,7 +307,7 @@ export function MembershipCard({ user }: { user: User }) {
                   <button
                     type="button"
                     onClick={() => checkout.mutate(selectedPrice.currency)}
-                    disabled={checkout.isPending || status.isLoading}
+                    disabled={checkout.isPending || status.isLoading || checkoutUnresolved}
                     className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
                     style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                   >

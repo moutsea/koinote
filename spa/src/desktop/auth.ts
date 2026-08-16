@@ -2,6 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import type { User } from "../api";
 import { desktopAPIOrigin } from "./runtime";
 import { desktopRawFetch } from "./transport";
+import {
+  DESKTOP_BILLING_EVENT,
+  isTerminalBillingHTTPStatus,
+  publishDesktopBillingEvent,
+} from "./billingCore";
+
+export { DESKTOP_BILLING_EVENT } from "./billingCore";
 
 const CLIENT_ID = "koinote-desktop";
 const CALLBACK_SCHEME = "koinote:";
@@ -87,9 +94,14 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
     } catch {
       continue;
     }
-    if (callback.protocol !== CALLBACK_SCHEME || callback.hostname !== "auth") {
+    if (callback.protocol !== CALLBACK_SCHEME) {
       continue;
     }
+    if (callback.hostname === "billing") {
+      await handleDesktopBillingCallback(callback);
+      continue;
+    }
+    if (callback.hostname !== "auth") continue;
     try {
       await exchangeDesktopCallback(callback);
       window.dispatchEvent(new CustomEvent("koinote:desktop-authenticated"));
@@ -102,6 +114,80 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
       );
     }
   }
+}
+
+async function handleDesktopBillingCallback(callback: URL): Promise<void> {
+  const checkout = callback.searchParams.get("checkout")?.trim() ?? "";
+  if (checkout === "cancelled") {
+    publishDesktopBillingEvent({ status: "cancelled" });
+    return;
+  }
+  const sessionId = callback.searchParams.get("session_id")?.trim() ?? "";
+  if (checkout !== "success" || !sessionId.startsWith("cs_")) {
+    publishDesktopBillingEvent({ status: "failed" });
+    return;
+  }
+
+  publishDesktopBillingEvent({ status: "pending" });
+  const {
+    ApiError,
+    confirmMembershipCheckout,
+    getMembershipStatus,
+    getSession,
+  } = await import("../api");
+  try {
+    const result = await confirmMembershipCheckout(sessionId);
+    if (result.status === "active") {
+      if (result.user) await updateCachedDesktopUser(result.user);
+      publishDesktopBillingEvent({ status: "active", user: result.user });
+      return;
+    }
+
+    void pollDesktopMembership(getMembershipStatus, getSession, ApiError);
+  } catch (error) {
+    if (isTerminalDesktopBillingError(error, ApiError)) {
+      publishDesktopBillingEvent({ status: "failed" });
+      return;
+    }
+    void pollDesktopMembership(getMembershipStatus, getSession, ApiError);
+  }
+}
+
+async function pollDesktopMembership(
+  getMembershipStatus: typeof import("../api").getMembershipStatus,
+  getSession: typeof import("../api").getSession,
+  ApiError: typeof import("../api").ApiError,
+): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await delay(2_000);
+    try {
+      const status = await getMembershipStatus();
+      if (!status.membership.active) continue;
+      const session = await getSession();
+      publishDesktopBillingEvent({ status: "active", user: session.user });
+      return;
+    } catch (error) {
+      if (isTerminalDesktopBillingError(error, ApiError)) {
+        publishDesktopBillingEvent({ status: "failed" });
+        return;
+      }
+    }
+  }
+  publishDesktopBillingEvent({ status: "delayed" });
+}
+
+function isTerminalDesktopBillingError(
+  error: unknown,
+  ApiError: typeof import("../api").ApiError,
+): boolean {
+  return (
+    error instanceof ApiError &&
+    isTerminalBillingHTTPStatus(error.status)
+  );
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 async function exchangeDesktopCallback(callback: URL): Promise<void> {

@@ -21,7 +21,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
-- Correction de l’export Word et PDF des images Koinote : leur lecture passe désormais par le proxy même origine et n’est plus bloquée par CORS.
+- Correction du CORS des exports Word/PDF.
+- Stripe Checkout ne conserve qu’une session payable par utilisateur et le retour sécurisé `koinote://` permet au client de confirmer le paiement et d’actualiser l’abonnement.
 - Correction du refus des statistiques d’administration et des jetons MCP par la liste d’autorisation
   Bearer du client, retour des entrées Documentation et Tarifs, et ouverture dans le navigateur système
   des opérations de sécurité et de suppression définitive réservées au Web au lieu d’un échec 403.

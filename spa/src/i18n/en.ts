@@ -365,6 +365,7 @@ export const en: Messages = {
     checkoutSuccess: "Payment confirmed. Your lifetime membership is active.",
     checkoutPending:
       "Payment is still being confirmed. Your access will update automatically.",
+    checkoutDelayed: "Stripe is still processing this payment. Do not pay again; check back later, or contact support if you were charged and membership remains inactive.",
     checkoutCancelled: "Checkout was cancelled. You were not charged.",
     checkoutFailed: "Checkout couldn't be completed. Please try again.",
   },
@@ -822,6 +823,14 @@ function hello(name) {
     signIn: "Sign in to continue",
     invalid: "This authorization link is invalid. Return to the app and try again.",
     failed: "Authorization could not be completed. Please try again.",
+  },
+  desktopBilling: {
+    successTitle: "Payment complete",
+    cancelledTitle: "Payment cancelled",
+    description: "Returning to the Koinote app. The app will securely confirm the payment and refresh your membership.",
+    openApp: "Open the Koinote app",
+    invalid: "This checkout return link is invalid. Return to the app and try again.",
+    dismiss: "Dismiss payment status",
   },
   desktopHome: {
     eyebrow: "Desktop workspace",

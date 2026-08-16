@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  X,
 } from "lucide-react";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
@@ -52,6 +53,12 @@ import { useStorageUsage } from "./StorageCard";
 import { GlobalSearch } from "./GlobalSearch";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { requestDesktopUpdateCheck } from "../desktop/updaterEvents";
+import {
+  clearLatestDesktopBillingEvent,
+  DESKTOP_BILLING_EVENT,
+  getLatestDesktopBillingEvent,
+  type DesktopBillingEventDetail,
+} from "../desktop/billingCore";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
@@ -73,6 +80,36 @@ export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t, locale, setLocale } = useI18n();
   const desktopRuntime = isDesktopRuntime();
+  const [desktopBillingNotice, setDesktopBillingNotice] =
+    useState<DesktopBillingEventDetail | null>(() =>
+      desktopRuntime ? getLatestDesktopBillingEvent() : null,
+    );
+
+  useEffect(() => {
+    if (!desktopRuntime) return;
+    const onBilling = (event: Event) => {
+      setDesktopBillingNotice(
+        (event as CustomEvent<DesktopBillingEventDetail>).detail,
+      );
+    };
+    window.addEventListener(DESKTOP_BILLING_EVENT, onBilling);
+    return () => window.removeEventListener(DESKTOP_BILLING_EVENT, onBilling);
+  }, [desktopRuntime]);
+
+  useEffect(() => {
+    if (
+      !desktopBillingNotice ||
+      desktopBillingNotice.status === "pending" ||
+      desktopBillingNotice.status === "delayed"
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      clearLatestDesktopBillingEvent();
+      setDesktopBillingNotice(null);
+    }, 8_000);
+    return () => window.clearTimeout(timer);
+  }, [desktopBillingNotice]);
 
   const [theme, setTheme] = useState<Theme>(() => readStoredTheme());
   useEffect(() => {
@@ -125,6 +162,18 @@ export function AppShell() {
     await logout();
     void navigate({ to: "/" });
   }
+
+  const desktopBillingText = desktopBillingNotice
+    ? desktopBillingNotice.status === "active"
+      ? t.membership.checkoutSuccess
+      : desktopBillingNotice.status === "pending"
+        ? t.membership.checkoutPending
+        : desktopBillingNotice.status === "delayed"
+          ? t.membership.checkoutDelayed
+          : desktopBillingNotice.status === "cancelled"
+            ? t.membership.checkoutCancelled
+            : t.membership.checkoutFailed
+    : "";
 
   return (
     <div
@@ -267,6 +316,32 @@ export function AppShell() {
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
+      {desktopRuntime && desktopBillingNotice && (
+        <div
+          className="fixed bottom-5 left-1/2 z-[70] flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+            color: "var(--ink-strong)",
+          }}
+          role="status"
+        >
+          <span className="min-w-0 flex-1 leading-6">{desktopBillingText}</span>
+          <button
+            type="button"
+            aria-label={t.desktopBilling.dismiss}
+            title={t.desktopBilling.dismiss}
+            onClick={() => {
+              clearLatestDesktopBillingEvent();
+              setDesktopBillingNotice(null);
+            }}
+            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition hover:bg-[var(--ink-wash-strong)]"
+            style={{ color: "var(--ink-mid)" }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       {desktopRuntime && (
         <Suspense fallback={null}>
           <DesktopUpdater />

@@ -371,6 +371,7 @@ export const fr: Messages = {
     checkoutSuccess: "Paiement confirmé. Votre abonnement à vie est actif.",
     checkoutPending:
       "Le paiement est encore en cours de confirmation. Vos droits seront mis à jour automatiquement.",
+    checkoutDelayed: "Stripe traite encore ce paiement. Ne payez pas une seconde fois ; revenez plus tard ou contactez l’assistance si le débit reste sans effet.",
     checkoutCancelled: "Le paiement a été annulé. Vous n'avez pas été débité.",
     checkoutFailed: "Le paiement n'a pas abouti. Veuillez réessayer.",
   },
@@ -840,6 +841,14 @@ function hello(name) {
     signIn: "Se connecter pour continuer",
     invalid: "Ce lien d’autorisation est invalide. Revenez dans l’application et réessayez.",
     failed: "L’autorisation n’a pas pu aboutir. Veuillez réessayer.",
+  },
+  desktopBilling: {
+    successTitle: "Paiement terminé",
+    cancelledTitle: "Paiement annulé",
+    description: "Retour à l’application Koinote. L’application va confirmer le paiement et actualiser votre abonnement en toute sécurité.",
+    openApp: "Ouvrir l’application Koinote",
+    invalid: "Ce lien de retour de paiement est invalide. Revenez dans l’application et réessayez.",
+    dismiss: "Fermer l’état du paiement",
   },
   desktopHome: {
     eyebrow: "Espace de travail",

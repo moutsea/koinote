@@ -374,7 +374,10 @@ export function getInvitationOverview() {
 export function createMembershipCheckout(currency: string) {
   return apiJson<{ sessionId: string; url: string }>("/api/billing/checkout", {
     method: "POST",
-    body: JSON.stringify({ currency }),
+    body: JSON.stringify({
+      currency,
+      client: isDesktopRuntime() ? "desktop" : "web",
+    }),
   });
 }
 

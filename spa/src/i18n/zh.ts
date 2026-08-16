@@ -351,6 +351,7 @@ export const zh: Messages = {
     loadFailed: "会员状态读取失败。",
     checkoutSuccess: "支付已确认，终生会员已经生效。",
     checkoutPending: "支付仍在确认中，完成后权益会自动更新。",
+    checkoutDelayed: "Stripe 仍在处理这笔支付。请勿重复付款，你可以稍后回来查看；若已扣款但长时间未生效，请联系支持。",
     checkoutCancelled: "支付已取消，本次不会扣款。",
     checkoutFailed: "支付未能完成，请稍后重试。",
   },
@@ -778,6 +779,14 @@ function hello(name) {
     signIn: "登录后继续",
     invalid: "授权链接无效或已经损坏，请返回客户端重试。",
     failed: "授权未能完成，请稍后重试。",
+  },
+  desktopBilling: {
+    successTitle: "支付已完成",
+    cancelledTitle: "支付已取消",
+    description: "正在返回 Koinote 客户端。会员状态会由客户端安全确认并自动更新。",
+    openApp: "打开 Koinote 客户端",
+    invalid: "支付回跳链接无效，请返回客户端重试。",
+    dismiss: "关闭支付状态提示",
   },
   desktopHome: {
     eyebrow: "桌面工作台",
