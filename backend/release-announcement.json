@@ -1,0 +1,53 @@
+{
+  "version": "0.6.0",
+  "translations": {
+    "en": {
+      "title": "What's new in Koinote 0.6.0",
+      "summary": "A quick look at the improvements now available in Koinote.",
+      "highlights": [
+        "Added multilingual in-app announcements: every release automatically highlights user-facing upgrades, while administrators can publish manual notices translated server-side into English, Chinese, Japanese, and French.",
+        "Added a fully local desktop mode with no account, password-derived encryption for documents, folders, and images, and a hard network block. After signing in, users can verify the local password and copy a detached snapshot into normal account documents.",
+        "Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens, local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.",
+        "Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.",
+        "Added signed desktop auto-updates with startup checks, a manual action, progress, and restart-to-install support.",
+        "Desktop clients now check for updates every six hours, retry transient failures after 30 minutes, and catch up when the app returns to the foreground or reconnects."
+      ]
+    },
+    "zh": {
+      "title": "Koinote 0.6.0 新功能",
+      "summary": "快速了解这个版本已经可以使用的重要升级。",
+      "highlights": [
+        "新增多语言站内提醒：每次版本发布会自动提取面向用户的功能升级要点，管理员也可手动发布提醒，由后端调用 LLM 生成中文、英文、日文和法文版本。",
+        "客户端新增完全本地模式：无需账号，密码派生密钥加密本机文档、文件夹与图片，模式内硬阻断所有网络请求；登录账号后可再次验证密码，将本地资料复制为相互隔离的普通账号文档。",
+        "新增 Tauri 2 macOS / Windows 客户端 alpha：系统浏览器 PKCE 登录、系统钥匙串令牌、 SQLite 本地优先文档与图片、联网后延迟上传、有限图片缓存、后台同步与显式冲突恢复。",
+        "官网新增桌面客户端下载入口，GitHub Release 同时提供 macOS Apple 芯片、Intel 与 Windows x64 安装包。",
+        "客户端每 6 小时自动检查版本更新，临时失败后 30 分钟重试，并在应用回到前台或恢复联网时补检提醒。",
+        "网页编辑器与桌面客户端新增前台远端更新检测：无本地改动时自动更新，同时编辑时保留双方内容并提示处理冲突。"
+      ]
+    },
+    "fr": {
+      "title": "Nouveautés de Koinote 0.6.0",
+      "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
+      "highlights": [
+        "Ajout d’annonces multilingues intégrées : chaque version met automatiquement en avant les améliorations visibles, et l’administration peut publier des annonces manuelles traduites côté serveur en français, anglais, chinois et japonais.",
+        "Ajout d’un mode bureau entièrement local, sans compte : documents, dossiers et images sont chiffrés avec une clé dérivée du mot de passe et toute connexion réseau est bloquée. Après connexion, une nouvelle vérification permet d’en copier un instantané indépendant vers le compte.",
+        "Ajout d’une version alpha macOS / Windows avec Tauri 2 : connexion PKCE dans le navigateur système, jetons dans le trousseau, documents et images local-first, envoi différé, cache d’images limité et résolution des conflits.",
+        "Ajout d’un lien de téléchargement vers les GitHub Releases pour macOS Apple Silicon, macOS Intel et Windows x64.",
+        "Le client vérifie les mises à jour toutes les six heures, réessaie après 30 minutes en cas d’échec temporaire et se remet à jour au retour au premier plan ou après reconnexion.",
+        "Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique des documents propres et demande explicite en cas de brouillon local concurrent."
+      ]
+    },
+    "ja": {
+      "title": "Koinote 0.6.0 の新機能",
+      "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
+      "highlights": [
+        "多言語のアプリ内お知らせを追加しました。各リリースでユーザー向けの機能改善を自動抽出し、管理者の手動通知はサーバー側の LLM が日本語・英語・中国語・フランス語へ翻訳します。",
+        "アカウント不要の完全ローカルモードを追加しました。パスワードから生成した鍵で文書・フォルダー・画像を暗号化し、すべてのネットワーク通信を遮断します。ログイン後に再度パスワードを確認すると、独立した通常文書としてコピーできます。",
+        "Tauri 2 ベースの macOS / Windows alpha を追加。システムブラウザの PKCE 認証、OS キーチェーン、 SQLite のローカル優先ドキュメントと画像、遅延アップロード、上限付き画像キャッシュ、同期、競合復旧に対応しました。",
+        "Web サイトから GitHub Releases へ移動でき、macOS Apple Silicon／Intel と Windows x64 の インストーラをダウンロードできます。",
+        "クライアントは 6 時間ごとに更新を確認し、一時的な失敗は 30 分後に再試行します。前面復帰時や再接続時にも確認します。",
+        "Web エディターとデスクトップクライアントでリモート更新を検出し、ローカル変更がなければ 自動反映し、同時編集がある場合は両方を保持して競合解決を促します。"
+      ]
+    }
+  }
+}

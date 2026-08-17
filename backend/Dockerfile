@@ -19,6 +19,7 @@ RUN apk add --no-cache ca-certificates curl && adduser -D -u 10001 koinote
 
 COPY --from=builder /out/koinote-backend /app/koinote-backend
 COPY --from=builder /src/migrations /app/migrations
+COPY --from=builder /src/release-announcement.json /app/release-announcement.json
 
 USER koinote
 EXPOSE 8080

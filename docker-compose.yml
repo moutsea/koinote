@@ -49,6 +49,11 @@ services:
       CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
       CLOUDFLARE_ANALYTICS_TOKEN: ${CLOUDFLARE_ANALYTICS_TOKEN:-}
       CLOUDFLARE_ANALYTICS_HOST: ${CLOUDFLARE_ANALYTICS_HOST:-}
+      # Admin 手动提醒由后端调用 LLM 翻译；API Key 绝不进入前端或 Worker。
+      ANNOUNCEMENT_LLM_BASE_URL: ${ANNOUNCEMENT_LLM_BASE_URL:-}
+      ANNOUNCEMENT_LLM_API_KEY: ${ANNOUNCEMENT_LLM_API_KEY:-}
+      ANNOUNCEMENT_LLM_MODEL: ${ANNOUNCEMENT_LLM_MODEL:-}
+      RELEASE_ANNOUNCEMENT_PATH: /app/release-announcement.json
       # 图片回收和邮箱验证码发信都由后端回调 Worker。生产环境必须配置；
       # 留空时图片待删记录仍会排队，但邮箱注册无法发送验证码。
       WORKER_URL: ${WORKER_URL:-}

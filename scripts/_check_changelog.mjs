@@ -41,9 +41,12 @@ assert.deepEqual(parseChangelog(fixture), [
   },
 ]);
 
-const current = parseChangelog(readFileSync("CHANGELOG.md", "utf8"));
-assert.equal(current[0]?.version, "Unreleased");
-assert.equal(current[0]?.date, undefined);
+const changelogMarkdown = readFileSync("CHANGELOG.md", "utf8");
+const current = parseChangelog(changelogMarkdown);
+const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+assert.match(changelogMarkdown, /^## \[Unreleased\]\s*$/m);
+assert.equal(current[0]?.version, packageVersion);
+assert.match(current[0]?.date ?? "", /^\d{4}-\d{2}-\d{2}$/);
 assert.equal(current[1]?.version, "0.5.0");
 assert.equal(current[1]?.date, "2026-08-15");
 assert.ok(current.some((release) => release.version === "0.4.0"));
@@ -74,8 +77,14 @@ for (const localizedFile of localizedFiles) {
   );
 }
 assert.ok(
-  readFileSync("CHANGELOG.md", "utf8").split("\n").length < 120,
-  "the public changelog should stay concise",
+  current.every(
+    (release) =>
+      release.sections.reduce(
+        (count, section) => count + section.entries.length,
+        0,
+      ) <= 30,
+  ),
+  "each public release should stay concise",
 );
 
 const main = readFileSync("spa/src/main.tsx", "utf8");

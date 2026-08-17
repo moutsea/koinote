@@ -45,8 +45,8 @@ and Windows x64 installers plus SHA-256 checksums. Alpha installers are currentl
 operating system will show a security warning on first launch.
 
 > The current open-source scope covers editing, image hosting, export, sharing,
-> and the account flow. AI features are still planned; a one-time lifetime membership
-> is available through Stripe Checkout.
+> and the account flow. User-facing AI writing features are still planned; a one-time
+> lifetime membership is available through Stripe Checkout.
 
 ## Features
 
@@ -141,6 +141,7 @@ rasterized and uploaded as images.
 
 **Also**
 
+- Every release extracts user-facing highlights from all four changelogs and shows them once to users who already existed when it was published. Admins can also write a notice that the backend LLM translates into English, Chinese, Japanese, and French before publishing
 - A public `/changelog` page renders the repository's `CHANGELOG.md` as a timeline of additions,
   improvements, security changes, and fixes
 - UI in Chinese, English, Japanese, and French
@@ -366,6 +367,15 @@ credential. `.env.example` deliberately leaves it blank.
 to reuse `SESSION_SECRET` in production, so rotating verification keys does not log
 everyone out and an email-path secret leak cannot become session forgery.
 
+**Manual announcement translation is an optional backend-only capability.**
+`ANNOUNCEMENT_LLM_BASE_URL`, `ANNOUNCEMENT_LLM_API_KEY`, and
+`ANNOUNCEMENT_LLM_MODEL` must either all be configured or all be empty; production
+accepts HTTPS only. This connects to an Anthropic Messages-compatible relay, whose operator can
+receive the API key and the admin-authored title, summary, and highlights, so configure only a
+relay you trust. Requests never include user accounts, documents, or images, and the key never
+enters the SPA, Worker, or desktop client. Release announcements still import when this
+integration is disabled; only manual multilingual publishing becomes unavailable.
+
 **Production Stripe configuration must be complete.** If any of `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, or `STRIPE_LIFETIME_PRODUCT_ID` is set, all three are required.
 The database membership tier is the entitlement source of truth; no frontend response
@@ -403,7 +413,11 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 The production `.env` should set `POSTGRES_PORT=127.0.0.1:5432` and
 `BACKEND_PORT=127.0.0.1:8080`, plus `NODE_ENV=production`, `APP_URL`, `WORKER_URL`,
-and the session/OAuth credentials. The checked-in `koinote.app`, `api.koinote.app`, `img.koinote.app`, and
+and the session/OAuth credentials. Configure the three backend `ANNOUNCEMENT_LLM_*`
+variables as well if admins should publish manual notices. The hosted deployment keeps the API
+key in an Actions Secret and stores the relay URL and model in Actions Variables named
+`ANNOUNCEMENT_LLM_BASE_URL` and `ANNOUNCEMENT_LLM_MODEL`; leaving all three empty does not block
+an ordinary deployment. The checked-in `koinote.app`, `api.koinote.app`, `img.koinote.app`, and
 `verify@koinote.app` values belong to the hosted deployment; self-hosters must update
 `wrangler.jsonc`, `deploy/Caddyfile`, and their OAuth callback configuration together.
 

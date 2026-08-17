@@ -242,8 +242,33 @@ func TestBillingRoutesRejectWrongMethod(t *testing.T) {
 
 func TestAdminRouteRejectsWrongMethod(t *testing.T) {
 	app := newTestApp(config.Config{SessionSecret: "s"})
-	rec := doRequest(app, http.MethodPost, "/api/admin/stats")
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("POST /api/admin/stats 期望 405，实际 %d", rec.Code)
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/admin/stats"},
+		{http.MethodPut, "/api/admin/announcements"},
+		{http.MethodGet, "/api/admin/announcements/1"},
+	} {
+		rec := doRequest(app, tc.method, tc.path)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s 期望 405，实际 %d", tc.method, tc.path, rec.Code)
+		}
+	}
+}
+
+func TestAnnouncementRoutesRejectWrongMethod(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "s"})
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/announcements/unread"},
+		{http.MethodGet, "/api/announcements/1/read"},
+	} {
+		rec := doRequest(app, tc.method, tc.path)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s 期望 405，实际 %d", tc.method, tc.path, rec.Code)
+		}
 	}
 }

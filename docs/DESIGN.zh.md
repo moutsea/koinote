@@ -556,6 +556,26 @@ Stripe Customer ID、Checkout Session ID 或内部鉴权标识。
 PostgreSQL 业务统计仍返回 200。这个 UV / PV 是边缘 HTTP 口径，可能包含合法爬虫与已放行
 的自动流量，不等同于客户端埋点的真实用户会话。
 
+站内提醒同样把权限与真值放在后端。`announcements` 保存发布类型、版本号和发布时间，
+`announcement_translations` 一次性保存 `en/zh/fr/ja` 四份内容，`announcement_reads`
+按用户记录已读状态。用户只会读到“不晚于当前时间、且不早于其注册时间”的提醒，因此新注册账号
+不会被历史版本弹窗淹没；标记已读使用同一可见性条件，不能借接口探测未来或注册前提醒。
+撤回提醒只写入 `withdrawn_at`，不删除原记录；用户立即不再收到它，但后台历史与版本去重依据仍保留。
+
+版本提醒由 `scripts/build_release_announcement.mjs` 在构建时从四份 changelog 的当前版本
+`Added` / `Changed` 段提取，写入后端镜像中的 `release-announcement.json`。后端启动时验证四语
+结构，并以实际导入时刻作为发布时间；`version` 唯一约束与 `ON CONFLICT DO NOTHING` 让多实例
+同时启动也只发布一次。构建会检查四份 changelog 的日期一致，但不会把日期写入 manifest，
+也不会用它决定用户可见时间。
+
+管理员通过 `POST /api/admin/announcements` 提交一种语言的标题、摘要和 1–8 条要点。只有通过
+`requireAdmin` 后，Go 后端才会用 `ANNOUNCEMENT_LLM_*` 调兼容 Anthropic Messages 的中转服务
+`POST /v1/messages`，通过 `x-api-key` 与固定的 `anthropic-version` 鉴权，验证返回语言集合、
+条目数量、长度和 JSON 结构，再在一个事务里发布四语
+内容。API Key 不进入 SPA、Worker、桌面客户端或日志；模型请求只包含管理员正在编写的提醒，
+不会包含用户资料、文档或图片。调用禁用重定向，限时 30 秒并限制响应为 1 MiB；翻译失败时整条
+提醒不落库。三项配置全空只关闭手动发布，不影响版本提醒。
+
 ## 分享
 
 两档权限：

@@ -67,6 +67,15 @@ type Config struct {
 	CloudflareAnalyticsToken string
 	CloudflareAnalyticsHost  string
 	TimeZone                 string
+
+	// 站内提醒翻译使用兼容 Anthropic Messages 的中转接口。密钥只在后端使用，
+	// 不得下发给 Worker 或 SPA。三项齐全时管理员才能发布手动提醒。
+	AnnouncementLLMBaseURL string
+	AnnouncementLLMAPIKey  string
+	AnnouncementLLMModel   string
+	// 构建阶段从四语 Changelog 生成的版本提醒。文件不存在时只跳过自动导入，
+	// 不影响手动提醒和服务启动。
+	ReleaseAnnouncementPath string
 }
 
 // dotenvCandidates 是相对工作目录向上查找 .env 的顺序。
@@ -136,6 +145,14 @@ func Load() Config {
 		CloudflareAnalyticsToken: strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_TOKEN")),
 		CloudflareAnalyticsHost:  strings.TrimSpace(os.Getenv("CLOUDFLARE_ANALYTICS_HOST")),
 		TimeZone:                 getenv("TZ", "Asia/Shanghai"),
+
+		AnnouncementLLMBaseURL: strings.TrimSpace(os.Getenv("ANNOUNCEMENT_LLM_BASE_URL")),
+		AnnouncementLLMAPIKey:  strings.TrimSpace(os.Getenv("ANNOUNCEMENT_LLM_API_KEY")),
+		AnnouncementLLMModel:   strings.TrimSpace(os.Getenv("ANNOUNCEMENT_LLM_MODEL")),
+		ReleaseAnnouncementPath: strings.TrimSpace(getenv(
+			"RELEASE_ANNOUNCEMENT_PATH",
+			"release-announcement.json",
+		)),
 	}
 
 	if cfg.CloudflareAnalyticsHost == "" {
@@ -211,6 +228,32 @@ func (c Config) ValidateFeishuConfig() error {
 	}
 	if !validBotWebhook(c.BotWebhook) {
 		return fmt.Errorf("BOT_WEBHOOK 必须是合法的 HTTPS URL")
+	}
+	return nil
+}
+
+func (c Config) AnnouncementTranslationEnabled() bool {
+	return c.AnnouncementLLMBaseURL != "" && c.AnnouncementLLMAPIKey != "" && c.AnnouncementLLMModel != ""
+}
+
+// ValidateAnnouncementLLMConfig 防止“后台显示可发布、点下去才发现少一项”的
+// 半配置状态。生产环境还要求 HTTPS，避免 Bearer 密钥经明文链路发送。
+func (c Config) ValidateAnnouncementLLMConfig() error {
+	configured := 0
+	for _, value := range []string{c.AnnouncementLLMBaseURL, c.AnnouncementLLMAPIKey, c.AnnouncementLLMModel} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 {
+		return nil
+	}
+	if configured != 3 {
+		return fmt.Errorf("ANNOUNCEMENT_LLM_BASE_URL、ANNOUNCEMENT_LLM_API_KEY、ANNOUNCEMENT_LLM_MODEL 必须同时配置或同时留空")
+	}
+	parsed, err := url.Parse(c.AnnouncementLLMBaseURL)
+	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && (c.IsProduction() || parsed.Scheme != "http")) {
+		return fmt.Errorf("ANNOUNCEMENT_LLM_BASE_URL 必须是合法的 HTTPS URL")
 	}
 	return nil
 }

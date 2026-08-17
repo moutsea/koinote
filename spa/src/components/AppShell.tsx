@@ -51,6 +51,7 @@ import { InkSeal } from "./Ink";
 import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
+import { AnnouncementDialog } from "./AnnouncementDialog";
 import { confirmAction } from "../confirmAction";
 import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useStorageUsage } from "./StorageCard";
@@ -389,6 +390,7 @@ export function AppShell() {
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
+      {user && !localMode && <AnnouncementDialog />}
       {desktopRuntime && !localMode && desktopBillingNotice && (
         <div
           className="fixed bottom-5 left-1/2 z-[70] flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg"

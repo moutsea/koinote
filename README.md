@@ -45,8 +45,8 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 从 `0.1.4` 起客户端会在启动后自动检查新版本，也可以在账户菜单中手动检查、下载并重启
 安装；更新包使用独立的 Tauri 签名验证，不依赖付费平台证书。
 
-> 当前开源版聚焦编辑、图床、导出、分享与账号闭环；AI 功能尚在规划中，终生会员
-> 已通过 Stripe Checkout 支持一次性付款。
+> 当前开源版聚焦编辑、图床、导出、分享与账号闭环；面向用户的 AI 写作功能尚在规划中，
+> 终生会员已通过 Stripe Checkout 支持一次性付款。
 
 ## 功能
 
@@ -128,6 +128,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 
 **其他**
 
+- 每次发布新版本会从四语更新日志自动提取功能要点，并向版本发布前已注册的用户展示一次；管理员也可在后台编写提醒，由后端 LLM 翻译为中文、英文、日文和法文后统一发布
 - 公开 `/changelog` 页面直接读取仓库的 `CHANGELOG.md`，按版本时间线展示新增、改进、安全与修复记录
 - 界面四语：中文 / English / 日本語 / Français
 - 深浅色主题，水墨风格视觉
@@ -336,6 +337,13 @@ SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的�
 复用 `SESSION_SECRET`，这样轮换验证码密钥不会让所有会话失效，邮件链路泄露也不会
 扩大成会话伪造。
 
+**手动提醒翻译是可选的后端能力。** `ANNOUNCEMENT_LLM_BASE_URL`、
+`ANNOUNCEMENT_LLM_API_KEY`、`ANNOUNCEMENT_LLM_MODEL` 必须同时配置或同时留空；生产环境
+只接受 HTTPS。这里连接的是兼容 Anthropic Messages 的中转服务，端点运营者会收到 API Key
+和管理员正在发布的标题、摘要与要点，因此只能配置你信任的服务；请求不会包含用户账号、文档
+或图片，密钥也不会下发到 SPA、Worker 或客户端。不配置时版本提醒仍会正常导入，只是后台不能
+手动发布多语言提醒。
+
 **Stripe 生产配置必须完整。** `STRIPE_SECRET_KEY`、`STRIPE_WEBHOOK_SECRET`、
 `STRIPE_LIFETIME_PRODUCT_ID` 三项只要配置了一项，生产环境就要求全部齐全。支付成功后
 本站数据库里的会员等级才是权益真值；前端返回值不会直接授予 10 GB 配额。
@@ -367,7 +375,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 生产 `.env` 应设置 `POSTGRES_PORT=127.0.0.1:5432`、
 `BACKEND_PORT=127.0.0.1:8080`，并正确设置 `NODE_ENV=production`、`APP_URL`、
-`WORKER_URL` 以及会话/OAuth 凭据。仓库里的
+`WORKER_URL` 以及会话/OAuth 凭据；如需后台手动发布提醒，还要设置三项
+`ANNOUNCEMENT_LLM_*` 后端变量。官方部署 workflow 把 API Key 放在 Actions Secret，
+把中转地址和模型名分别放在 Actions Variable `ANNOUNCEMENT_LLM_BASE_URL` 与
+`ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。仓库里的
 `koinote.app`、`api.koinote.app`、`img.koinote.app` 和 `verify@koinote.app` 是当前官方
 部署值，自建时要同步替换 `wrangler.jsonc`、`deploy/Caddyfile` 与 OAuth 回调配置。
 

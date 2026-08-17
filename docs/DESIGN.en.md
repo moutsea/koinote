@@ -671,6 +671,34 @@ Missing configuration, permission errors, or Cloudflare timeouts set
 These are edge HTTP metrics and may include legitimate crawlers and allowed automation;
 they are not equivalent to client-instrumented user sessions.
 
+In-app announcements keep authorization and source-of-truth state in the backend as well.
+`announcements` stores kind, version, and publication time; `announcement_translations`
+stores the complete `en/zh/fr/ja` set; and `announcement_reads` records per-user read state.
+A withdrawal sets `withdrawn_at` instead of deleting the row, so users stop receiving it while
+the admin history and release-version deduplication record remain intact.
+A user can only fetch notices published no later than now and no earlier than that account's
+creation time, so new accounts do not receive the historical backlog. Mark-read applies the
+same visibility rule and cannot probe future or pre-registration notices.
+
+`scripts/build_release_announcement.mjs` extracts the current version's `Added` and `Changed`
+entries from all four changelogs during builds and writes `release-announcement.json` into the
+backend image. Startup validates the four-locale manifest and uses the actual import time as
+`published_at`. The `version` unique constraint plus `ON CONFLICT DO NOTHING` makes concurrent
+backend starts publish it exactly once. Changelog dates are checked for consistency during the
+build but are not copied into the manifest or used to decide audience visibility.
+
+Admins submit one source locale, title, summary, and 1–8 highlights to
+`POST /api/admin/announcements`. Only after `requireAdmin` succeeds does the Go backend call the
+Anthropic Messages-compatible relay `POST /v1/messages` endpoint configured by
+`ANNOUNCEMENT_LLM_*`, using
+`x-api-key` and a fixed `anthropic-version` header. It validates the exact locale set, item count,
+lengths, and JSON structure, then publishes all four translations
+in one transaction. The API key never enters the SPA, Worker, desktop client, or logs; the model
+receives only the admin-authored notice, never user profiles, documents, or images. Redirects are
+disabled, requests time out after 30 seconds, and responses are capped at 1 MiB. A translation
+failure inserts nothing. Leaving all three variables empty disables only manual publishing, not
+automatic release notices.
+
 ## Sharing
 
 Two levels:

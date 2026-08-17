@@ -4,8 +4,11 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-17
+
 ### Added
 
+- Ajout d’annonces multilingues intégrées : chaque version met automatiquement en avant les améliorations visibles, et l’administration peut publier des annonces manuelles traduites côté serveur en français, anglais, chinois et japonais.
 - Ajout d’un mode bureau entièrement local, sans compte : documents, dossiers et images sont chiffrés avec une clé dérivée du mot de passe et toute connexion réseau est bloquée. Après connexion, une nouvelle vérification permet d’en copier un instantané indépendant vers le compte.
 - Ajout d’une version alpha macOS / Windows avec Tauri 2 : connexion PKCE dans le navigateur système,
   jetons dans le trousseau, documents et images local-first, envoi différé, cache d’images limité et résolution des conflits.
@@ -28,6 +31,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- Une annonce intégrée invalide ne bloque plus le démarrage du serveur ; elle peut être fermée localement si l’enregistrement de lecture échoue, et l’administration peut la retirer sans effacer l’historique. La traduction optionnelle ne bloque plus les déploiements sans rapport.
+- Dans le titre, Entrée confirme désormais un candidat IME chinois, japonais ou coréen sans déplacer le curseur vers le corps ; hors composition, le raccourci vers le corps reste inchangé.
 - La suppression de compte et le nettoyage Checkout revérifient désormais auprès de Stripe les sessions expirées localement et conservent les paiements terminés jusqu’à leur webhook. L’import du mode local passe par des lots temporaires bornés avec validation atomique, et les textes utilisateur contenant `$` ne sont plus altérés dans les messages de compte ou d’historique.
 - Correction du CORS des exports Word/PDF.
 - Stripe Checkout ne conserve qu’une session payable par utilisateur et le retour sécurisé `koinote://` permet au client de confirmer le paiement et d’actualiser l’abonnement.

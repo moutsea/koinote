@@ -425,6 +425,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodPost
 	case "/api/admin/stats":
 		return method == http.MethodGet
+	case "/api/admin/announcements":
+		return method == http.MethodGet || method == http.MethodPost
+	case "/api/announcements/unread":
+		return method == http.MethodGet
 	case "/api/mcp/tokens":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/mcp/activity":
@@ -455,6 +459,13 @@ func desktopRequestAllowed(r *http.Request) bool {
 			return method == http.MethodPatch || method == http.MethodDelete
 		}
 		return len(parts) == 2 && parts[0] != "" && parts[1] == "reveal" && method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/admin/announcements/"); found {
+		return rest != "" && !strings.Contains(rest, "/") && method == http.MethodDelete
+	}
+	if rest, found := strings.CutPrefix(path, "/api/announcements/"); found {
+		parts := strings.Split(rest, "/")
+		return len(parts) == 2 && parts[0] != "" && parts[1] == "read" && method == http.MethodPost
 	}
 	if rest, found := strings.CutPrefix(path, "/api/documents/"); found {
 		parts := strings.Split(rest, "/")

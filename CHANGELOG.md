@@ -6,8 +6,11 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-17
+
 ### Added
 
+- Added multilingual in-app announcements: every release automatically highlights user-facing upgrades, while administrators can publish manual notices translated server-side into English, Chinese, Japanese, and French.
 - Added a fully local desktop mode with no account, password-derived encryption for documents, folders, and images, and a hard network block. After signing in, users can verify the local password and copy a detached snapshot into normal account documents.
 - Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens, local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.
@@ -25,6 +28,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- In-app announcements no longer block service startup when bundled content is invalid, can be dismissed locally if read-state saving fails, and can be withdrawn by administrators without erasing release history. Optional translation configuration no longer blocks unrelated deployments.
+- Pressing Enter to confirm a Chinese, Japanese, or Korean IME candidate in the document title no longer moves focus into the body; ordinary Enter keeps the existing title-to-body shortcut.
 - Account deletion and Checkout cleanup now verify expired sessions with Stripe, preserving completed payments until their webhook is recorded. Local-mode imports stream through bounded staging batches and commit atomically, and user text containing `$` is no longer altered in account or version-history messages.
 - Stripe Checkout now keeps one payable session per user and securely returns desktop payments through `koinote://`.
 - Word/PDF exports use the same-origin image proxy; desktop image failures no longer block unrelated sync, errors are visible, cache origins are trusted, and exports include pending local images.

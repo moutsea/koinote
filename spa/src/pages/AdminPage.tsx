@@ -20,6 +20,7 @@ import {
 import { getAdminStats, type AdminStats } from "../api";
 import { useSession } from "../auth";
 import { PaperCard } from "../components/Ink";
+import { AnnouncementAdminPanel } from "../components/AnnouncementAdminPanel";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { formatBytes } from "../storage";
@@ -105,6 +106,8 @@ export function AdminPage() {
           {t.admin.refresh}
         </button>
       </div>
+
+      <AnnouncementAdminPanel />
 
       {stats.isLoading ? (
         <CenteredMessage>{t.admin.loading}</CenteredMessage>

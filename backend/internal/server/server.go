@@ -17,26 +17,28 @@ import (
 )
 
 type App struct {
-	cfg             config.Config
-	db              *pgxpool.Pool
-	emailSender     verificationEmailSender
-	limiter         *rateLimiter
-	limiterOnce     sync.Once
-	stripeCheckout  stripeCheckoutSessionClient
-	paymentNotifier paymentNotifier
-	siteAnalytics   siteAnalyticsClient
-	adminOverview   adminOverviewCache
-	productActivity activityTracker
+	cfg                    config.Config
+	db                     *pgxpool.Pool
+	emailSender            verificationEmailSender
+	limiter                *rateLimiter
+	limiterOnce            sync.Once
+	stripeCheckout         stripeCheckoutSessionClient
+	paymentNotifier        paymentNotifier
+	siteAnalytics          siteAnalyticsClient
+	adminOverview          adminOverviewCache
+	productActivity        activityTracker
+	announcementTranslator announcementTranslator
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
 	app := &App{
-		cfg:             cfg,
-		db:              db,
-		emailSender:     newWorkerVerificationEmailSender(cfg),
-		limiter:         newRateLimiter(),
-		paymentNotifier: newPaymentNotifier(cfg),
-		siteAnalytics:   newCloudflareAnalyticsClient(cfg),
+		cfg:                    cfg,
+		db:                     db,
+		emailSender:            newWorkerVerificationEmailSender(cfg),
+		limiter:                newRateLimiter(),
+		paymentNotifier:        newPaymentNotifier(cfg),
+		siteAnalytics:          newCloudflareAnalyticsClient(cfg),
+		announcementTranslator: newAnnouncementTranslator(cfg),
 	}
 	if cfg.StripeEnabled() {
 		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions
@@ -83,6 +85,11 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/billing/checkout/confirm", a.billingCheckoutConfirm)
 	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
+	mux.HandleFunc("GET /api/admin/announcements", a.adminAnnouncementsList)
+	mux.HandleFunc("POST /api/admin/announcements", a.adminAnnouncementPublish)
+	mux.HandleFunc("DELETE /api/admin/announcements/{announcementId}", a.adminAnnouncementWithdraw)
+	mux.HandleFunc("GET /api/announcements/unread", a.announcementsUnread)
+	mux.HandleFunc("POST /api/announcements/{announcementId}/read", a.announcementMarkRead)
 	mux.HandleFunc("POST /api/analytics/events", a.analyticsEvent)
 	mux.HandleFunc("GET /api/invitations", a.invitationsOverview)
 	mux.HandleFunc("GET /api/mcp/tokens", a.mcpTokensList)

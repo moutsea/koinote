@@ -307,3 +307,60 @@ func TestLoadPopulatesCloudflareAnalyticsConfiguration(t *testing.T) {
 		t.Fatalf("显式 hostname 应优先，实际 %q", got)
 	}
 }
+
+func TestAnnouncementLLMConfiguration(t *testing.T) {
+	complete := Config{
+		NodeEnv:                "production",
+		AnnouncementLLMBaseURL: "https://llm.example.com/",
+		AnnouncementLLMAPIKey:  "secret",
+		AnnouncementLLMModel:   "translation-model",
+	}
+	if err := complete.ValidateAnnouncementLLMConfig(); err != nil || !complete.AnnouncementTranslationEnabled() {
+		t.Fatalf("完整提醒翻译配置未启用: err=%v cfg=%+v", err, complete)
+	}
+	for _, cfg := range []Config{
+		{NodeEnv: "production", AnnouncementLLMBaseURL: complete.AnnouncementLLMBaseURL},
+		{NodeEnv: "production", AnnouncementLLMAPIKey: "secret"},
+		{NodeEnv: "production", AnnouncementLLMModel: "translation-model"},
+		{
+			NodeEnv:                "production",
+			AnnouncementLLMBaseURL: "http://llm.example.com/",
+			AnnouncementLLMAPIKey:  "secret",
+			AnnouncementLLMModel:   "translation-model",
+		},
+		{
+			NodeEnv:                "production",
+			AnnouncementLLMBaseURL: "https://user@example.com/",
+			AnnouncementLLMAPIKey:  "secret",
+			AnnouncementLLMModel:   "translation-model",
+		},
+	} {
+		if err := cfg.ValidateAnnouncementLLMConfig(); err == nil {
+			t.Fatalf("不安全或不完整的提醒翻译配置应报错: %+v", cfg)
+		}
+	}
+	local := Config{
+		NodeEnv:                "development",
+		AnnouncementLLMBaseURL: "http://127.0.0.1:9999/v1",
+		AnnouncementLLMAPIKey:  "secret",
+		AnnouncementLLMModel:   "local-model",
+	}
+	if err := local.ValidateAnnouncementLLMConfig(); err != nil || !local.AnnouncementTranslationEnabled() {
+		t.Fatalf("开发环境应允许本地 HTTP 翻译代理: err=%v", err)
+	}
+}
+
+func TestLoadPopulatesAnnouncementLLMConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("ANNOUNCEMENT_LLM_BASE_URL", " https://llm.example.com/v1 ")
+	t.Setenv("ANNOUNCEMENT_LLM_API_KEY", " secret ")
+	t.Setenv("ANNOUNCEMENT_LLM_MODEL", " translation-model ")
+	t.Setenv("RELEASE_ANNOUNCEMENT_PATH", "/tmp/release.json")
+	cfg := Load()
+	if cfg.AnnouncementLLMBaseURL != "https://llm.example.com/v1" ||
+		cfg.AnnouncementLLMAPIKey != "secret" ||
+		cfg.AnnouncementLLMModel != "translation-model" ||
+		cfg.ReleaseAnnouncementPath != "/tmp/release.json" {
+		t.Fatalf("提醒配置未完整加载: %+v", cfg)
+	}
+}

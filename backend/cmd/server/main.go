@@ -45,6 +45,9 @@ func main() {
 	if err := cfg.ValidateFeishuConfig(); err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.ValidateAnnouncementLLMConfig(); err != nil {
+		log.Fatal(err)
+	}
 
 	// 启动时把生效的配额打出来。配错的表现是"传图突然失败"，那时再去翻配置很绕；
 	// 启动日志里有这一行，一眼就能对上。
@@ -64,6 +67,11 @@ func main() {
 	} else {
 		log.Printf("Admin Cloudflare 流量统计未配置，业务统计仍可用")
 	}
+	if cfg.AnnouncementTranslationEnabled() {
+		log.Printf("Admin 手动提醒多语言翻译已启用")
+	} else {
+		log.Printf("Admin 手动提醒翻译未配置，版本提醒仍会自动导入")
+	}
 
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
@@ -79,6 +87,9 @@ func main() {
 	}
 
 	app := server.New(cfg, pool)
+	if err := app.SyncBundledReleaseAnnouncement(ctx); err != nil {
+		log.Printf("导入版本提醒失败，跳过本次提醒但继续启动服务: %v", err)
+	}
 
 	// 后台维护任务都跟随 HTTP 服务的生命周期一起收摊。
 	backgroundCtx, stopBackground := context.WithCancel(ctx)

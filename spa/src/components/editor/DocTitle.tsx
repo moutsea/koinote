@@ -1,4 +1,5 @@
 import { useI18n } from "../../i18n";
+import { shouldLeaveTitleOnEnter } from "./titleKeyboard";
 
 /**
  * 文档标题。渲染在正文列里、正文之上，跟着主题的 h1 走。
@@ -46,7 +47,15 @@ export function DocTitle({
           // 而粘贴一段带换行的文本是很常见的
           onChange={(e) => onChange(e.target.value.replace(/[\r\n]+/g, " "))}
           onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
+            if (
+              !shouldLeaveTitleOnEnter({
+                key: e.key,
+                isComposing: e.nativeEvent.isComposing,
+                keyCode: e.keyCode,
+              })
+            ) {
+              return;
+            }
             e.preventDefault();
             onEnter?.();
           }}

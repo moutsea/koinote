@@ -11,6 +11,7 @@
 //
 // 这些都不是运行时错误，typecheck 也管不到 —— 只能读 CSS 断言。
 import { readFileSync } from "node:fs";
+import { shouldLeaveTitleOnEnter } from "./_doc_title_keyboard_bundle.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -177,6 +178,28 @@ ok(
   "回车不插换行而是交给 onEnter",
   /e\.preventDefault\(\)/.test(tsx) && /onEnter\?\.\(\)/.test(tsx),
   tsx.slice(0, 0),
+);
+ok(
+  "普通回车会离开标题",
+  shouldLeaveTitleOnEnter({ key: "Enter", isComposing: false, keyCode: 13 }),
+);
+ok(
+  "输入法组合态的回车留在标题中",
+  !shouldLeaveTitleOnEnter({ key: "Enter", isComposing: true, keyCode: 13 }),
+);
+ok(
+  "兼容 keyCode 229 的输入法确认键",
+  !shouldLeaveTitleOnEnter({ key: "Enter", isComposing: false, keyCode: 229 }),
+);
+ok(
+  "非回车键不会离开标题",
+  !shouldLeaveTitleOnEnter({ key: "Process", isComposing: false, keyCode: 229 }),
+);
+ok(
+  "组件把浏览器组合态和兼容键码交给统一判断",
+  /isComposing:\s*e\.nativeEvent\.isComposing/.test(tsx) &&
+    /keyCode:\s*e\.keyCode/.test(tsx),
+  "缺少输入法状态会让确认候选词的回车误跳到正文",
 );
 // 无障碍：placeholder 不是可访问名，必须另有 aria-label
 ok(

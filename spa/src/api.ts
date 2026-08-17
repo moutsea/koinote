@@ -522,6 +522,64 @@ export function getAdminStats() {
   return apiJson<AdminStats>("/api/admin/stats");
 }
 
+export type AnnouncementTranslation = {
+  title: string;
+  summary: string;
+  highlights: string[];
+};
+
+export type Announcement = {
+  id: number;
+  kind: "release" | "manual";
+  version: string | null;
+  publishedAt: string;
+  translation: AnnouncementTranslation;
+};
+
+export type AdminAnnouncement = Omit<Announcement, "translation"> & {
+  createdBy: string | null;
+  createdAt: string;
+  withdrawnAt: string | null;
+  translations: Record<string, AnnouncementTranslation>;
+};
+
+export function getUnreadAnnouncements(locale: string) {
+  return apiJson<{ announcements: Announcement[] }>(
+    `/api/announcements/unread?locale=${encodeURIComponent(locale)}`,
+  );
+}
+
+export function withdrawAdminAnnouncement(announcementId: number) {
+  return apiJson<{ success: boolean }>(
+    `/api/admin/announcements/${announcementId}`,
+    { method: "DELETE" },
+  );
+}
+
+export function markAnnouncementRead(announcementId: number) {
+  return apiJson<{ success: boolean }>(
+    `/api/announcements/${announcementId}/read`,
+    { method: "POST" },
+  );
+}
+
+export function getAdminAnnouncements() {
+  return apiJson<{
+    announcements: AdminAnnouncement[];
+    translationEnabled: boolean;
+  }>("/api/admin/announcements");
+}
+
+export function publishAdminAnnouncement(input: {
+  sourceLocale: string;
+  translation: AnnouncementTranslation;
+}) {
+  return apiJson<{ announcement: AdminAnnouncement }>(
+    "/api/admin/announcements",
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
 export function trackProductEvent(event: "first_export") {
   return apiJson<{ success: boolean }>("/api/analytics/events", {
     method: "POST",
