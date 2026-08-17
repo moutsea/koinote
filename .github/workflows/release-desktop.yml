@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds encrypted local mode, safer account deletion, MCP activity, version diffs, scheduled update checks, and more resilient sync."
+          notes="Koinote Desktop $version adds multilingual release announcements and fixes IME confirmation in document titles."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本新增密码保护、完全断网的本地模式，可在登录后验证密码并原子导入本地资料；同时加入账号注销、MCP 活动日志、版本 Diff、客户端回收站永久删除与定时更新检查，并增强离线图片和同步错误恢复。
+          此版本新增多语言站内版本提醒，并修复在文档标题中使用中文、日文或韩文输入法时，按回车确认候选词会误跳到正文的问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds a password-protected, fully disconnected local mode with atomic import into a signed-in account. It also adds account deletion, MCP activity logs, version diffs, permanent trash deletion, scheduled update checks, and more resilient offline-image synchronization.
+          This release adds multilingual in-app release announcements and fixes Enter incorrectly moving focus into the document body while confirming Chinese, Japanese, or Korean IME candidates in document titles.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
