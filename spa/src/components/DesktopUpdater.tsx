@@ -8,7 +8,13 @@ import { Download, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DESKTOP_UPDATE_CHECK_EVENT } from "../desktop/updaterEvents";
+import {
+  DESKTOP_UPDATE_TIMER_TICK_MS,
+  desktopUpdateCheckDue,
+  nextDesktopUpdateCheckAt,
+} from "../desktop/updaterSchedule";
 import { interpolate, useI18n } from "../i18n";
+import { isDesktopLocalModeSelected } from "../desktop/localMode";
 
 type UpdatePhase =
   | "idle"
@@ -26,16 +32,23 @@ export function DesktopUpdater() {
   const [contentLength, setContentLength] = useState<number | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const checkingRef = useRef(false);
+  const availableUpdateRef = useRef<Update | null>(null);
   const contentLengthRef = useRef<number | null>(null);
+  const nextScheduledCheckAtRef = useRef<number | null>(null);
 
   const runCheck = useCallback(async (interactive: boolean) => {
-    if (checkingRef.current) return;
+    if (isDesktopLocalModeSelected()) return;
+    if (checkingRef.current || (!interactive && availableUpdateRef.current)) return;
     checkingRef.current = true;
     setSaveFailed(false);
     if (interactive) setPhase("checking");
+    let succeeded = false;
     try {
       const update = await check({ timeout: 15_000 });
+      succeeded = true;
       if (update) {
+        if (availableUpdateRef.current) void availableUpdateRef.current.close();
+        availableUpdateRef.current = update;
         setAvailableUpdate(update);
         setPhase("available");
       } else if (interactive) {
@@ -44,23 +57,45 @@ export function DesktopUpdater() {
     } catch {
       if (interactive) setPhase("failed");
     } finally {
+      nextScheduledCheckAtRef.current = nextDesktopUpdateCheckAt(
+        Date.now(),
+        succeeded,
+      );
       checkingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void runCheck(false), 2_000);
+    const startupTimer = window.setTimeout(() => void runCheck(false), 2_000);
+    const checkIfDue = () => {
+      if (desktopUpdateCheckDue(nextScheduledCheckAtRef.current, Date.now())) {
+        void runCheck(false);
+      }
+    };
     const handleManualCheck = () => void runCheck(true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkIfDue();
+    };
+    const handleOnline = () => void runCheck(false);
+    const interval = window.setInterval(checkIfDue, DESKTOP_UPDATE_TIMER_TICK_MS);
     window.addEventListener(DESKTOP_UPDATE_CHECK_EVENT, handleManualCheck);
+    window.addEventListener("focus", checkIfDue);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(startupTimer);
+      window.clearInterval(interval);
       window.removeEventListener(DESKTOP_UPDATE_CHECK_EVENT, handleManualCheck);
+      window.removeEventListener("focus", checkIfDue);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [runCheck]);
 
   function dismiss() {
     if (phase === "installing") return;
     if (availableUpdate) void availableUpdate.close();
+    availableUpdateRef.current = null;
     setAvailableUpdate(null);
     setPhase("idle");
   }

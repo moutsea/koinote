@@ -40,7 +40,8 @@ Browser ──▶ Cloudflare Worker (worker/index.ts)
                                     │ docker-compose:          │
                                     │  Go backend + Postgres   │
                                     └──────────────────────────┘
-Desktop client ── local SQLite / OS keychain ──▶ Worker / Go backend (Bearer sync)
+Desktop account mode ── local SQLite / OS keychain ──▶ Worker / Go backend (Bearer sync)
+Desktop local mode ── password-encrypted SQLite namespace only (no network)
 ```
 
 - **Frontend** Vite + React 19 + TypeScript + TanStack Router + react-query + Tailwind v4
@@ -345,12 +346,42 @@ the same foreground cadence as a silent sync and flushes the editor debounce win
 applying remote content. Clean documents adopt the remote version automatically. Concurrent local drafts
 retain both copies and prompt the user, without flashing the visible sync status on every background check.
 
-The alpha's offline boundary is Markdown content, folders, search, and tabs. It does not yet cache
-the bytes of remote images that have never been loaded, and history, sharing, billing, and admin
-operations still require a connection. Signing out erases that account's local SQLite cache to avoid
-leaving document content on a shared machine. Before logout, the editor flushes its debounce window into
-SQLite. If unsynced changes or conflicts remain, the user must explicitly confirm their deletion; offline
-content is never discarded silently.
+Account offline mode covers Markdown content, folders, search, tabs, and images. Images pasted while
+offline use local URLs in SQLite, then upload and replace those references after connectivity returns.
+Already-synced hosted images use an LRU cache capped at 512 MiB by default. History, sharing, billing,
+and admin operations still require a connection. Signing out erases that account's local SQLite cache
+to avoid leaving document content on a shared machine. Before logout, the editor flushes its debounce
+window into SQLite. If unsynced changes or conflicts remain, the user must explicitly confirm their
+deletion; offline content is never discarded silently.
+
+### Fully local mode is not account offline mode
+
+Fully local mode creates no session and never reads account tokens from the OS keychain. First use
+requires a password of at least eight characters. PBKDF2-SHA256 with 310,000 iterations derives 512 bits:
+half becomes the AES-GCM key and half becomes a password verifier. SQLite stores only a random salt,
+the iteration count, and that verifier. The password is never persisted, and the AES key lives only in
+process memory, so closing or locking the app requires another password entry. There is no password
+recovery, which the setup UI must state before data is created.
+
+Local data always uses the `local:v1` namespace, isolated from every account cache. Titles, bodies,
+themes, folder names, editor tabs, and image base64 are individually AES-GCM encrypted before entering
+SQLite; IDs, timestamps, byte sizes, and state remain queryable index metadata. This is not merely a
+temporarily failed sync. Anyone holding the database file can still infer document counts, folder
+relationships, edit times, and approximate sizes, but cannot directly read titles, bodies, folder names,
+or image bytes. Local search must decrypt every candidate before filtering in memory; that deliberate
+cost grows linearly once a local collection reaches thousands of documents. The desktop HTTP transport
+rejects requests before loading the native networking
+plugin, update checks and remote pages are not mounted, and uncached remote images are not handed to the
+WebView for an implicit download. Editing, search, trash, and local import/export remain available;
+sharing, billing, MCP, invitations, admin, and every other remote-dependent feature do not.
+
+Switching from an account to local mode first runs normal logout protection, then locks and changes the
+namespace; no document object is shared. After signing into an account, the user may enter the local
+password again to copy current documents, folders, and referenced images into that account namespace.
+Every object receives a fresh UUID, and Rust writes the complete batch in one SQLite transaction so any
+failed insert rolls back the whole import. Those copies then follow the normal account sync flow while
+the source stays unchanged. Later edits on either side are invisible to the other, and importing again
+creates another independent copy.
 
 CI compiles the Rust / Tauri app on both macOS and Windows. Update artifacts use an independent Tauri
 signature. Public distribution still needs Apple Developer ID signing and notarization plus a Windows

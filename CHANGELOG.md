@@ -8,32 +8,32 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
+- Added a fully local desktop mode with no account, password-derived encryption for documents, folders, and images, and a hard network block. After signing in, users can verify the local password and copy a detached snapshot into normal account documents.
 - Added a Tauri 2 macOS / Windows alpha with PKCE system-browser sign-in, OS-keychain tokens, local-first SQLite documents and images, deferred uploads, a bounded image cache, and conflict recovery.
 - Added a website download entry backed by GitHub Releases for macOS Apple Silicon, macOS Intel, and Windows x64 installers.
 - Added signed desktop auto-updates with startup checks, a manual action, progress, and restart-to-install support.
-- Added foreground remote-change detection for the web editor and desktop client. Clean documents
-  update automatically, while concurrent local drafts trigger an explicit conflict prompt.
+- Desktop clients now check for updates every six hours, retry transient failures after 30 minutes, and catch up when the app returns to the foreground or reconnects.
+- Added foreground remote-change detection for web and desktop: clean documents update automatically, while concurrent local drafts trigger an explicit conflict prompt.
 - Added encrypted six-hour PostgreSQL backups to private R2 with retention, health checks, alerts, and a documented recovery drill.
+- Added self-service account deletion with detached Stripe records still visible to administrators, privacy-preserving MCP activity logs, and bounded line-by-line version diffs against current or retained versions.
 
 ### Changed
 
-- The desktop client now opens to a focused local-first workspace with continue-writing, recent
-  documents, quick actions, sync status, and offline availability instead of the website landing page.
-- Markdown import validates large batches, decompresses ZIPs off-thread, compresses images over 10 MB, limits concurrency, and releases orphaned uploads after failures.
+- The desktop client now opens to a focused local-first workspace with continue-writing, recent documents, quick actions, sync status, and offline availability instead of the website landing page.
+- Markdown import validates large batches, decompresses ZIPs off-thread, compresses images over 10 MB, limits concurrency, and releases orphaned uploads after failures. The Terms now clarify Lifetime, fixed 10 GB storage, future AI eligibility, account deletion, and refund boundaries.
 - macOS 26 builds now use a native Icon Composer asset; older macOS and Windows keep their normal fallback icons.
 
 ### Fixed
 
+- Account deletion and Checkout cleanup now verify expired sessions with Stripe, preserving completed payments until their webhook is recorded. Local-mode imports stream through bounded staging batches and commit atomically, and user text containing `$` is no longer altered in account or version-history messages.
 - Stripe Checkout now keeps one payable session per user and securely returns desktop payments through `koinote://`.
 - Word/PDF exports use the same-origin image proxy; desktop image failures no longer block unrelated sync, errors are visible, cache origins are trusted, and exports include pending local images.
-- Fixed desktop Admin and MCP-token requests being rejected by the desktop Bearer allowlist,
-  restored the Docs and Pricing navigation, and routed web-only security and permanent-deletion
-  actions to the system browser instead of letting them fail with 403. Copied invitation and document-share links now use the configured website URL instead of a Tauri-local address.
+- Fixed desktop Admin and MCP-token requests being rejected by the desktop Bearer allowlist, restored the Docs and Pricing navigation, and routed web-only account-security actions to the system browser instead of letting them fail with 403. Copied invitation and document-share links now use the configured website URL instead of a Tauri-local address.
+- Desktop trash now supports permanent deletion with one native confirmation, while the web keeps its typed-title safeguard; deleted local drafts and unreferenced offline images are cleaned up.
 - macOS Apple Silicon and Intel release bundles now receive a complete ad-hoc signature and are
   verified from inside the generated DMG, preventing Gatekeeper from reporting a broken partial
   signature as a damaged application.
-- Desktop release builds now validate and embed the complete updater public key before signing
-  platform update artifacts.
+- Desktop release builds now validate and embed the complete updater public key before signing platform update artifacts.
 
 ## [0.5.0] - 2026-08-15
 

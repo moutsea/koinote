@@ -26,6 +26,7 @@ const {
   localWebURL,
   confirmAction,
   createAsyncSerialQueue,
+  desktopMaintenanceBackoff,
   prepareDesktopLogout,
   prepareDesktopSync,
   pulledLocalRevision,
@@ -33,6 +34,7 @@ const {
   registerDesktopLogoutPreparation,
   registerDesktopSyncPreparation,
   REMOTE_UPDATE_INTERVAL_MS,
+  runDesktopSyncSequence,
   shouldAttachDesktopAuthorization,
   snapshotGuard,
 } = await import("./_offline_sync_bundle.mjs");
@@ -140,6 +142,69 @@ assert.equal(
   await reentrantQueue(async () => "recovered"),
   "recovered",
   "嵌套操作失败后队列必须继续服务后续操作",
+);
+
+const syncSequenceEvents = [];
+let reportedMaintenanceError = null;
+const successfulSync = await runDesktopSyncSequence({
+  async pushFolders() {
+    syncSequenceEvents.push("push-folders");
+  },
+  async pushDocuments() {
+    syncSequenceEvents.push("push-documents");
+    return [];
+  },
+  async pullRemoteSnapshot() {
+    syncSequenceEvents.push("pull-remote");
+  },
+  async maintain() {
+    syncSequenceEvents.push("maintain");
+    throw new Error("cleanup_failed");
+  },
+  async recordSuccess() {
+    syncSequenceEvents.push("record-success");
+  },
+  reportMaintenanceFailure(error) {
+    reportedMaintenanceError = error;
+  },
+});
+assert.deepEqual(syncSequenceEvents, [
+  "push-folders",
+  "push-documents",
+  "pull-remote",
+  "maintain",
+  "record-success",
+]);
+assert.deepEqual(successfulSync, { state: "idle" });
+assert.match(String(reportedMaintenanceError), /cleanup_failed/);
+
+let recordedFailedSync = false;
+await assert.rejects(
+  runDesktopSyncSequence({
+    async pushFolders() {},
+    async pushDocuments() { return []; },
+    async pullRemoteSnapshot() { throw new Error("pull_failed"); },
+    async maintain() {},
+    async recordSuccess() { recordedFailedSync = true; },
+  }),
+  /pull_failed/,
+);
+assert.equal(recordedFailedSync, false, "权威拉取失败时不能记录同步成功");
+assert.equal(desktopMaintenanceBackoff(1), 30_000);
+assert.equal(desktopMaintenanceBackoff(2), 60_000);
+assert.equal(desktopMaintenanceBackoff(100), 30 * 60_000);
+assert.equal(desktopMaintenanceBackoff(Number.NaN), 30_000);
+assert.deepEqual(
+  await runDesktopSyncSequence({
+    async pushFolders() {},
+    async pushDocuments() { return ["image_quota_exceeded"]; },
+    async pullRemoteSnapshot() {},
+    async maintain() { throw new Error("maintenance_failed"); },
+    async recordSuccess() {},
+    reportMaintenanceFailure() { throw new Error("logger_failed"); },
+  }),
+  { state: "error", message: "image_quota_exceeded" },
+  "维护日志失败不能覆盖真正的待上传图片错误",
 );
 
 const originalWindow = globalThis.window;
@@ -395,6 +460,36 @@ assert.match(
   /DEFAULT_DOCUMENT_THEME\s*=\s*"minimal"/,
   "桌面端新文档默认主题必须与网页端一致",
 );
+const permanentDeletionSection = sourceBetween(
+  offlineStore,
+  "export async function desktopPermanentlyDeleteDocument",
+  "export async function desktopListFolders",
+);
+assert.match(
+  permanentDeletionSection,
+  /remoteJSON\(`\/api\/documents\/\$\{encodeURIComponent\(docId\)\}\/permanent`/,
+  "桌面永久删除必须先调用服务端权威接口",
+);
+assert.match(
+  permanentDeletionSection,
+  /DELETE FROM offline_documents WHERE account_id = \$1 AND doc_id = \$2/,
+  "服务端永久删除成功后必须清掉本地文档，避免同步复活",
+);
+assert.match(
+  permanentDeletionSection,
+  /cleanupUnusedOfflineImages\(account\)/,
+  "永久删除本地文档后必须清理不再引用的离线图片",
+);
+assert.match(
+  permanentDeletionSection,
+  /cleanupUnusedOfflineImages\(account\)[\s\S]*?if \(!local\) scheduleSync\(0\)/,
+  "远端账号永久删除后无论图片清理结果如何都必须立即补一轮同步",
+);
+assert.match(
+  apiSource,
+  /permanentlyDeleteDocument[\s\S]*?isDesktopRuntime\(\)[\s\S]*?desktopPermanentlyDeleteDocument/,
+  "桌面永久删除必须通过本地协调层处理",
+);
 assert.match(offlineStore, /desktopStoreLocalImage[\s\S]*?INSERT INTO offline_images/);
 assert.match(
   offlineStore,
@@ -491,6 +586,11 @@ const pushDocumentsSection = sourceBetween(
   "async function pushDocuments",
   "async function recoverDeletedRemoteDocument",
 );
+const calculateSummarySection = sourceBetween(
+  offlineStore,
+  "async function calculateSummary",
+  "class RemoteHTTPError",
+);
 assert.match(
   cacheRemoteImageSection,
   /serializeImageCacheMutation\(/,
@@ -520,6 +620,22 @@ assert.match(
   pushDocumentsSection,
   /catch \(error\) \{\s*if \(error instanceof OfflineImageUploadError\) \{\s*imageUploadIssues\.push\(error\.code\);[\s\S]*?continue;/,
   "单张图片被拒绝时必须继续同步后续文档",
+);
+assert.match(offlineStore, /runDesktopSyncSequence\(\{/);
+assert.match(
+  offlineStore,
+  /IMAGE_MAINTENANCE_META_KEY[\s\S]*?desktopMaintenanceBackoff\(attempts\)/,
+  "图片维护失败必须持久化并按退避时间重试",
+);
+assert.match(
+  calculateSummarySection,
+  /last_error IS NOT NULL\s*AND \(sync_state <> 'clean' OR folder_dirty = 1\)/,
+  "已同步文档的陈旧错误不能污染同步状态",
+);
+assert.match(
+  calculateSummarySection,
+  /SELECT i\.last_error FROM offline_images i[\s\S]*?EXISTS \([\s\S]*?d\.sync_state <> 'clean'[\s\S]*?instr\(d\.content, \$2 \|\| i\.image_id\) > 0/,
+  "图片错误只应在仍被待同步文档引用时显示",
 );
 assert.match(
   offlineStore,

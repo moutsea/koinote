@@ -7,6 +7,10 @@ import {
   isTerminalBillingHTTPStatus,
   publishDesktopBillingEvent,
 } from "./billingCore";
+import {
+  isDesktopLocalModeSelected,
+  leaveDesktopLocalMode,
+} from "./localMode";
 
 export { DESKTOP_BILLING_EVENT } from "./billingCore";
 
@@ -63,6 +67,7 @@ function enqueueDesktopURLs(urls: string[]): Promise<void> {
 }
 
 export async function beginDesktopAuthorization(): Promise<void> {
+  leaveDesktopLocalMode();
   const verifier = randomBase64URL(48);
   const challenge = await sha256Base64URL(verifier);
   const state = randomBase64URL(32);
@@ -87,6 +92,7 @@ export async function beginDesktopAuthorization(): Promise<void> {
 }
 
 async function handleDesktopURLs(urls: string[]): Promise<void> {
+  if (isDesktopLocalModeSelected()) return;
   for (const value of urls) {
     let callback: URL;
     try {
@@ -164,7 +170,10 @@ async function pollDesktopMembership(
       const status = await getMembershipStatus();
       if (!status.membership.active) continue;
       const session = await getSession();
-      publishDesktopBillingEvent({ status: "active", user: session.user });
+      publishDesktopBillingEvent({
+        status: "active",
+        user: session.user ?? undefined,
+      });
       return;
     } catch (error) {
       if (isTerminalDesktopBillingError(error, ApiError)) {

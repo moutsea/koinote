@@ -148,6 +148,14 @@ const dashboardRoute = createRoute({
     "DashboardPage",
   ),
 });
+const mcpActivityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/mcp/activity",
+  component: lazyRouteComponent(
+    () => import("./pages/MCPActivityPage"),
+    "MCPActivityPage",
+  ),
+});
 const documentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/documents",
@@ -212,6 +220,7 @@ const routeTree = rootRoute.addChildren([
   desktopBillingReturnRoute,
   registerRoute,
   dashboardRoute,
+  mcpActivityRoute,
   documentsRoute,
   trashRoute,
   invitationsRoute,

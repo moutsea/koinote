@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
+  CloudOff,
   Clock3,
   FilePlus2,
   Files,
@@ -14,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "../auth";
 import { DesktopSyncStatus } from "../components/DesktopSyncStatus";
+import { DesktopLocalImportCard } from "../components/DesktopLocalImportCard";
 import { PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useCreateDocument, useDocumentList } from "../documents";
@@ -42,6 +44,7 @@ const DATE_LOCALE: Record<Locale, string> = {
 export function DesktopHomePage() {
   const session = useSession();
   const user = session.data?.user;
+  const localMode = Boolean(user?.isLocalMode);
   const documents = useDocumentList(Boolean(user));
   const create = useCreateDocument();
   const queryClient = useQueryClient();
@@ -84,7 +87,9 @@ export function DesktopHomePage() {
   const allDocuments = documents.data ?? [];
   const continueDocument = allDocuments[0];
   const recentDocuments = allDocuments.slice(1, 6);
-  const displayName = user.nickname || user.username || user.email;
+  const displayName = localMode
+    ? t.desktopLocalMode.badge
+    : user.nickname || user.username || user.email;
 
   function createDocument() {
     create.mutate(undefined, {
@@ -159,7 +164,7 @@ export function DesktopHomePage() {
               {interpolate(t.desktopHome.welcome, { name: displayName })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
-              {t.desktopHome.subtitle}
+              {localMode ? t.desktopLocalMode.localSubtitle : t.desktopHome.subtitle}
             </p>
           </div>
 
@@ -308,48 +313,74 @@ export function DesktopHomePage() {
           </div>
 
           <aside className="space-y-4">
-            <PaperCard className="p-5">
-              <h2 className="kn-heading-cn font-semibold">{t.desktopHome.syncTitle}</h2>
-              <p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
-                {t.desktopHome.syncDescription}
-              </p>
-              <div className="mt-4">
-                <DesktopSyncStatus variant="panel" />
-              </div>
-            </PaperCard>
+            {localMode ? (
+              <PaperCard className="p-5">
+                <CloudOff className="h-5 w-5" style={{ color: "var(--ink-mid)" }} />
+                <h2 className="kn-heading-cn mt-3 font-semibold">{t.desktopLocalMode.localStorageTitle}</h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+                  {t.desktopLocalMode.localStorageDescription}
+                </p>
+                <p className="mt-3 text-xs leading-5" style={{ color: "var(--ink-faint)" }}>
+                  {t.desktopLocalMode.encrypted}
+                </p>
+              </PaperCard>
+            ) : (
+              <PaperCard className="p-5">
+                <h2 className="kn-heading-cn font-semibold">{t.desktopHome.syncTitle}</h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+                  {t.desktopHome.syncDescription}
+                </p>
+                <div className="mt-4">
+                  <DesktopSyncStatus variant="panel" />
+                </div>
+              </PaperCard>
+            )}
 
             <PaperCard className="p-5">
               <HardDrive className="h-5 w-5" style={{ color: "var(--ink-mid)" }} />
-              <h2 className="kn-heading-cn mt-3 font-semibold">{t.desktopHome.offlineTitle}</h2>
+              <h2 className="kn-heading-cn mt-3 font-semibold">
+                {localMode ? t.desktopLocalMode.badge : t.desktopHome.offlineTitle}
+              </h2>
               <p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
-                {t.desktopHome.offlineDescription}
+                {localMode
+                  ? t.desktopLocalMode.networkDisabled
+                  : t.desktopHome.offlineDescription}
               </p>
               {!documents.isLoading && !documents.isError && (
                 <div className="mt-4 space-y-3 border-t pt-4" style={{ borderColor: "var(--ink-line)" }}>
                   <p className="text-xs font-medium" style={{ color: "var(--ink-faint)" }}>
                     {interpolate(t.desktopHome.documentCount, { count: allDocuments.length })}
                   </p>
-                  {imageCache && (
-                    <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                      {interpolate(t.desktopHome.imageCacheUsage, {
-                        total: formatBytes(imageCache.usedBytes, DATE_LOCALE[locale]),
-                        cached: formatBytes(imageCache.remoteCacheBytes, DATE_LOCALE[locale]),
-                        limit: formatBytes(imageCache.remoteCacheLimitBytes, DATE_LOCALE[locale]),
-                        pending: formatBytes(imageCache.pendingLocalBytes, DATE_LOCALE[locale]),
-                      })}
-                    </p>
+                  {imageCache && !localMode && (
+                    <>
+                      <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                        {interpolate(t.desktopHome.imageCacheUsage, {
+                          total: formatBytes(imageCache.usedBytes, DATE_LOCALE[locale]),
+                          cached: formatBytes(imageCache.remoteCacheBytes, DATE_LOCALE[locale]),
+                          limit: formatBytes(imageCache.remoteCacheLimitBytes, DATE_LOCALE[locale]),
+                          pending: formatBytes(imageCache.pendingLocalBytes, DATE_LOCALE[locale]),
+                        })}
+                      </p>
+                      {imageCache.maintenanceIssue && (
+                        <p className="text-xs leading-5" role="status" style={{ color: "var(--cinnabar)" }}>
+                          {t.desktopHome.imageMaintenanceDelayed}
+                        </p>
+                      )}
+                    </>
                   )}
-                  <button
-                    type="button"
-                    disabled={clearingImageCache}
-                    onClick={() => void clearImageCache()}
-                    className="text-xs font-medium hover:underline disabled:opacity-60"
-                    style={{ color: "var(--ink-mid)" }}
-                  >
-                    {clearingImageCache
-                      ? t.desktopHome.clearingImageCache
-                      : t.desktopHome.clearImageCache}
-                  </button>
+                  {!localMode && (
+                    <button
+                      type="button"
+                      disabled={clearingImageCache}
+                      onClick={() => void clearImageCache()}
+                      className="text-xs font-medium hover:underline disabled:opacity-60"
+                      style={{ color: "var(--ink-mid)" }}
+                    >
+                      {clearingImageCache
+                        ? t.desktopHome.clearingImageCache
+                        : t.desktopHome.clearImageCache}
+                    </button>
+                  )}
                   {imageCacheNotice && (
                     <p className="text-xs leading-5" role="status" style={{ color: "var(--ink-mid)" }}>
                       {imageCacheNotice}
@@ -358,6 +389,7 @@ export function DesktopHomePage() {
                 </div>
               )}
             </PaperCard>
+            {!localMode && <DesktopLocalImportCard />}
           </aside>
         </div>
       </PageContainer>

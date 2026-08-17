@@ -20,6 +20,7 @@ import {
   DESKTOP_IMAGE_MAPPING_META,
   DESKTOP_IMAGE_UPLOADED_EVENT,
 } from "../../desktop/offlineImagesCore";
+import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { isDesktopRuntime } from "../../desktop/runtime";
 
 /**
@@ -170,7 +171,9 @@ export default function MarkdownEditor({
       } catch (err) {
         // 转存失败不撤掉已插入的图：外链虽然可能失效，但比让图直接消失好。
         // 提示要给到，否则用户以为图已经进图床了
-        if (err instanceof ApiError) {
+        if (isLocalModeNetworkDisabled(err)) {
+          setUploadError(t.desktopLocalMode.networkDisabled);
+        } else if (err instanceof ApiError) {
           setUploadError(
             (err.code && t.errors[err.code]) || err.message || t.editor.rehostFailed,
           );

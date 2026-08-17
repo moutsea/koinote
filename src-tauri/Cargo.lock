@@ -2447,12 +2447,13 @@ dependencies = [
 
 [[package]]
 name = "koinote-desktop"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "keyring",
  "log",
  "serde",
  "serde_json",
+ "sqlx",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",

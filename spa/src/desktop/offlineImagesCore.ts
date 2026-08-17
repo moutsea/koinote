@@ -26,6 +26,10 @@ export function isDesktopLocalImageURL(source: string): boolean {
   return desktopLocalImageID(source) !== null;
 }
 
+export function isRemoteHTTPImageSource(source: string): boolean {
+  return /^(?:https?:|[\\/]{2})/i.test(source.trim());
+}
+
 export function imageObjectKeyFromSource(source: string): string | null {
   return koinoteImageObjectKey(source);
 }

@@ -75,6 +75,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/desktop/authorize", a.desktopAuthorize)
 	mux.HandleFunc("POST /api/auth/desktop/token", a.desktopToken)
 	mux.HandleFunc("POST /api/auth/desktop/revoke", a.desktopRevoke)
+	mux.HandleFunc("DELETE /api/account", a.accountDelete)
 
 	mux.HandleFunc("GET /api/billing/status", a.billingStatus)
 	mux.HandleFunc("GET /api/billing/pricing", a.billingPricing)
@@ -89,6 +90,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/mcp/tokens/{tokenId}", a.mcpTokenUpdateExpiry)
 	mux.HandleFunc("POST /api/mcp/tokens/{tokenId}/reveal", a.mcpTokenReveal)
 	mux.HandleFunc("DELETE /api/mcp/tokens/{tokenId}", a.mcpTokenRevoke)
+	mux.HandleFunc("GET /api/mcp/activity", a.mcpActivityList)
 	mux.HandleFunc("GET /api/settings/document-history", a.documentHistorySettingsGet)
 	mux.HandleFunc("PUT /api/settings/document-history", a.documentHistorySettingsPut)
 	mux.Handle("/mcp", a.mcpHandler())

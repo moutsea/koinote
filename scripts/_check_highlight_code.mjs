@@ -8,6 +8,7 @@
 // 之前那轮修复没抓到这一点，正是因为没有 DOM 环境、只测了纯函数。所以这里
 // 用 linkedom 跑真实 DOM 路径 —— 断言的是「HTML 进、带 span 的 HTML 出」。
 import { parseHTML } from "linkedom";
+import { readFileSync } from "node:fs";
 import { highlightCodeBlocks, languageFrom } from "./_highlight_code_bundle.mjs";
 
 let pass = 0;
@@ -67,6 +68,21 @@ eq("空 class", languageFrom(""), null);
 // TipTap 在没有语言时不写这个 class，但空值要挡住，否则会拿 "" 去查注册表
 eq("空语言名", languageFrom("language-"), null);
 eq("带连字符的语言名", languageFrom("language-objective-c"), "objective-c");
+
+// 默认排版的行内 code 必须有可见底色，且不能把同一规则套到 pre code 上。
+const editorCSS = readFileSync("spa/src/globals.css", "utf8");
+ok(
+  "行内代码有独立高亮",
+  /\.ProseMirror\.prose code:not\(pre code\)\s*\{[\s\S]*?background:\s*var\(--ink-wash-strong\)/.test(editorCSS),
+);
+ok(
+  "所见即所得模式不补反引号",
+  /code:not\(pre code\)::before,[\s\S]*?code:not\(pre code\)::after\s*\{\s*content:\s*none;/.test(editorCSS),
+);
+ok(
+  "代码块仍有独立样式",
+  /\.ProseMirror pre code\s*\{[\s\S]*?background:\s*none;/.test(editorCSS),
+);
 
 // ---------- 核心：真的产出了 span ----------
 //

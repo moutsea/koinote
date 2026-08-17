@@ -1,6 +1,6 @@
 [package]
 name = "koinote-desktop"
-version = "0.1.10"
+version = "0.1.11"
 description = "Koinote offline desktop client"
 authors = ["Koinote contributors"]
 license = "MIT"
@@ -20,6 +20,7 @@ tauri-build = { version = "2.6.3", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio"] }
 log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"

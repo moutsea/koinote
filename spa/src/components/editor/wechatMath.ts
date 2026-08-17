@@ -4,6 +4,7 @@ import {
   TEMPORARY_IMAGE_QUOTA_CODE,
   uploadImage,
 } from "../../api";
+import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { WECHAT_SKIP_CAPTION_ATTR } from "./wechatImages";
 
 /**
@@ -67,6 +68,7 @@ export async function replaceMathWithImages(
       node.replaceWith(img);
       result.converted++;
     } catch (error) {
+      if (isLocalModeNetworkDisabled(error)) throw error;
       result.failed++;
       if (
         error instanceof ApiError &&

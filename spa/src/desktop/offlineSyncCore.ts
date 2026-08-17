@@ -44,6 +44,46 @@ export type AsyncSerialQueueScope = {
   runNested<T>(operation: (scope: AsyncSerialQueueScope) => Promise<T>): Promise<T>;
 };
 
+export type DesktopSyncSequenceResult = {
+  state: "idle" | "error";
+  message?: string;
+};
+
+export type DesktopSyncSequenceSteps = {
+  pushFolders: () => Promise<void>;
+  pushDocuments: () => Promise<string[]>;
+  pullRemoteSnapshot: () => Promise<void>;
+  maintain: () => Promise<void>;
+  recordSuccess: () => Promise<void>;
+  reportMaintenanceFailure?: (error: unknown) => void;
+};
+
+export async function runDesktopSyncSequence(
+  steps: DesktopSyncSequenceSteps,
+): Promise<DesktopSyncSequenceResult> {
+  await steps.pushFolders();
+  const imageUploadIssues = await steps.pushDocuments();
+  await steps.pullRemoteSnapshot();
+  try {
+    await steps.maintain();
+  } catch (error) {
+    try {
+      steps.reportMaintenanceFailure?.(error);
+    } catch {}
+  }
+  await steps.recordSuccess();
+  return {
+    state: imageUploadIssues.length > 0 ? "error" : "idle",
+    ...(imageUploadIssues[0] ? { message: imageUploadIssues[0] } : {}),
+  };
+}
+
+export function desktopMaintenanceBackoff(attempts: number): number {
+  const finiteAttempts = Number.isFinite(attempts) ? Math.floor(attempts) : 1;
+  const normalized = Math.max(1, Math.min(16, finiteAttempts));
+  return Math.min(30_000 * 2 ** (normalized - 1), 30 * 60_000);
+}
+
 export function createAsyncSerialQueue() {
   let tail: Promise<void> = Promise.resolve();
   const scope: AsyncSerialQueueScope = {

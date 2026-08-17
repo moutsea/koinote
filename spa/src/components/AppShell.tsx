@@ -5,6 +5,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Moon,
   Sun,
@@ -12,13 +13,16 @@ import {
   Check,
   ChevronDown,
   Bot,
+  CloudOff,
   Crown,
   FileText,
   Gift,
   HardDrive,
   History,
   LayoutDashboard,
+  Laptop,
   LogOut,
+  LockKeyhole,
   RefreshCw,
   ShieldCheck,
   Trash2,
@@ -59,6 +63,11 @@ import {
   getLatestDesktopBillingEvent,
   type DesktopBillingEventDetail,
 } from "../desktop/billingCore";
+import {
+  leaveDesktopLocalMode,
+  isDesktopLocalModeSelected,
+  lockDesktopLocalMode,
+} from "../desktop/localMode";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
@@ -75,11 +84,16 @@ const DesktopUpdater = lazy(() =>
 export function AppShell() {
   const session = useSession();
   const user = session.data?.user;
+  const desktopRuntime = isDesktopRuntime();
+  const localMode = desktopRuntime && (
+    Boolean(user?.isLocalMode) || isDesktopLocalModeSelected()
+  );
   const logout = useLogout();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t, locale, setLocale } = useI18n();
-  const desktopRuntime = isDesktopRuntime();
+  const localModeRouteBlocked = localMode && !isLocalModeAllowedPath(pathname);
   const [desktopBillingNotice, setDesktopBillingNotice] =
     useState<DesktopBillingEventDetail | null>(() =>
       desktopRuntime ? getLatestDesktopBillingEvent() : null,
@@ -129,7 +143,25 @@ export function AppShell() {
     };
   }, [lockRootScroll]);
 
-  async function handleLogout() {
+  function clearDesktopModeQueries() {
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== "session",
+    });
+  }
+
+  async function handleLogout(switchToLocalMode = false) {
+    if (localMode) {
+      const { prepareDesktopLogout } = await import("../desktop/logoutGuard");
+      if (!(await prepareDesktopLogout())) {
+        window.alert(t.desktopSync.logoutSaveFailed);
+        return;
+      }
+      lockDesktopLocalMode();
+      clearDesktopModeQueries();
+      queryClient.setQueryData(["session"], { user: null });
+      void navigate({ to: "/" });
+      return;
+    }
     if (isDesktopRuntime()) {
       const [{ prepareDesktopLogout }, { desktopSyncSummary }] =
         await Promise.all([
@@ -160,7 +192,23 @@ export function AppShell() {
       }
     }
     await logout();
+    if (switchToLocalMode) lockDesktopLocalMode();
+    clearDesktopModeQueries();
     void navigate({ to: "/" });
+  }
+
+  async function handleUseAccount() {
+    const { prepareDesktopLogout } = await import("../desktop/logoutGuard");
+    if (!(await prepareDesktopLogout())) {
+      window.alert(t.desktopSync.logoutSaveFailed);
+      return;
+    }
+    leaveDesktopLocalMode();
+    clearDesktopModeQueries();
+    queryClient.setQueryData(["session"], { user: null });
+    void navigate({ to: "/" });
+    const { beginDesktopAuthorization } = await import("../desktop/auth");
+    await beginDesktopAuthorization().catch(() => undefined);
   }
 
   const desktopBillingText = desktopBillingNotice
@@ -218,7 +266,7 @@ export function AppShell() {
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
             </HeaderLink>
-            {desktopRuntime ? (
+            {desktopRuntime && localMode ? null : desktopRuntime ? (
               <>
                 <HeaderDocsMenu
                   active={isUnder(pathname, "/docs")}
@@ -249,7 +297,7 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {user && desktopRuntime && pathname !== "/" && (
+            {user && desktopRuntime && !localMode && pathname !== "/" && (
               <Suspense fallback={null}>
                 <DesktopSyncStatus />
               </Suspense>
@@ -291,16 +339,21 @@ export function AppShell() {
                 invitationsActive={isUnder(pathname, "/invitations")}
                 adminActive={isUnder(pathname, "/admin")}
                 desktopRuntime={desktopRuntime}
-                onLogout={handleLogout}
+                localMode={localMode}
+                onLogout={() => handleLogout()}
+                onSwitchLocal={() => handleLogout(true)}
+                onUseAccount={handleUseAccount}
               />
             ) : (
               // 主行动按钮走朱砂，全站唯一的高饱和色留给它
               <Link
-                to="/login"
+                to={desktopRuntime ? "/" : "/login"}
                 className="rounded-full px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
                 style={{ background: "var(--cinnabar)" }}
               >
-                {t.nav.login}
+                {desktopRuntime && localMode
+                  ? t.desktopLocalMode.badge
+                  : t.nav.login}
               </Link>
             )}
           </div>
@@ -308,7 +361,27 @@ export function AppShell() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col">
-        <Outlet />
+        {localModeRouteBlocked ? (
+          <div className="flex flex-1 items-center justify-center px-4 py-16">
+            <div className="w-full max-w-lg rounded-2xl border p-7 text-center" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+              <CloudOff className="mx-auto h-8 w-8" style={{ color: "var(--ink-mid)" }} />
+              <h1 className="kn-heading-cn mt-4 text-xl font-semibold">{t.desktopLocalMode.badge}</h1>
+              <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+                {t.desktopLocalMode.networkDisabled}
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleUseAccount()}
+                className="mt-5 rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
+                style={{ background: "var(--cinnabar)" }}
+              >
+                {t.desktopLocalMode.useAccount}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       {!desktopRuntime && hasFooter(pathname) && <AppFooter />}
@@ -316,7 +389,7 @@ export function AppShell() {
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
-      {desktopRuntime && desktopBillingNotice && (
+      {desktopRuntime && !localMode && desktopBillingNotice && (
         <div
           className="fixed bottom-5 left-1/2 z-[70] flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg"
           style={{
@@ -342,13 +415,27 @@ export function AppShell() {
           </button>
         </div>
       )}
-      {desktopRuntime && (
+      {desktopRuntime && !localMode && (
         <Suspense fallback={null}>
           <DesktopUpdater />
         </Suspense>
       )}
     </div>
   );
+}
+
+function isLocalModeAllowedPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return [
+    "/changelog",
+    "/cookies",
+    "/docs",
+    "/documents",
+    "/editor",
+    "/privacy",
+    "/terms",
+    "/trash",
+  ].some((prefix) => isUnder(pathname, prefix));
 }
 
 /**
@@ -369,7 +456,10 @@ function UserMenu({
   invitationsActive,
   adminActive,
   desktopRuntime,
+  localMode,
   onLogout,
+  onSwitchLocal,
+  onUseAccount,
 }: {
   name: string;
   email: string;
@@ -383,11 +473,14 @@ function UserMenu({
   invitationsActive: boolean;
   adminActive: boolean;
   desktopRuntime: boolean;
+  localMode: boolean;
   onLogout: () => void | Promise<void>;
+  onSwitchLocal: () => void | Promise<void>;
+  onUseAccount: () => void | Promise<void>;
 }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
-  const storage = useStorageUsage(open);
+  const storage = useStorageUsage(open && !localMode);
   const membershipActive = membershipTier === "lifetime";
 
   useEffect(() => {
@@ -445,7 +538,13 @@ function UserMenu({
             className="flex items-center gap-2.5 border-b px-3 pb-2.5 pt-2"
             style={{ borderColor: "var(--ink-line)" }}
           >
-            <Avatar name={name} avatarUrl={avatarUrl} size={36} />
+            {localMode ? (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--ink-wash-strong)" }}>
+                <CloudOff className="h-4 w-4" />
+              </span>
+            ) : (
+              <Avatar name={name} avatarUrl={avatarUrl} size={36} />
+            )}
             {/* min-w-0 是 truncate 在 flex 子项里生效的前提：
                 flex item 默认 min-width:auto，不会缩到内容宽度以下 */}
             <div className="min-w-0">
@@ -467,7 +566,7 @@ function UserMenu({
             </div>
           </div>
 
-          <div
+          {!localMode && <div
             className="border-b px-3 py-3"
             style={{ borderColor: "var(--ink-line)" }}
           >
@@ -509,9 +608,9 @@ function UserMenu({
                 usedOf={t.storage.usedOf}
               />
             )}
-          </div>
+          </div>}
 
-          {!membershipActive && (
+          {!localMode && !membershipActive && (
             <Link
               to="/pricing"
               role="menuitem"
@@ -527,7 +626,7 @@ function UserMenu({
             </Link>
           )}
 
-          <Link
+          {!localMode && <Link
             to="/dashboard"
             role="menuitem"
             onClick={() => setOpen(false)}
@@ -539,7 +638,7 @@ function UserMenu({
           >
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             {t.nav.dashboard}
-          </Link>
+          </Link>}
 
           <Link
             to="/documents"
@@ -569,7 +668,7 @@ function UserMenu({
             {t.nav.trash}
           </Link>
 
-          <Link
+          {!localMode && <Link
             to="/invitations"
             role="menuitem"
             onClick={() => setOpen(false)}
@@ -583,9 +682,9 @@ function UserMenu({
           >
             <Gift className="h-4 w-4 shrink-0" />
             {t.nav.invitations}
-          </Link>
+          </Link>}
 
-          {isAdmin && (
+          {!localMode && isAdmin && (
             <Link
               to="/admin"
               role="menuitem"
@@ -601,7 +700,7 @@ function UserMenu({
             </Link>
           )}
 
-          {desktopRuntime && (
+          {desktopRuntime && !localMode && (
             <button
               type="button"
               role="menuitem"
@@ -617,6 +716,38 @@ function UserMenu({
             </button>
           )}
 
+          {desktopRuntime && !localMode && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void onSwitchLocal();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-strong)" }}
+            >
+              <CloudOff className="h-4 w-4 shrink-0" />
+              {t.desktopLocalMode.enterLocalMode}
+            </button>
+          )}
+
+          {localMode && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void onUseAccount();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-strong)" }}
+            >
+              <Laptop className="h-4 w-4 shrink-0" />
+              {t.desktopLocalMode.useAccount}
+            </button>
+          )}
+
           <button
             type="button"
             role="menuitem"
@@ -627,8 +758,8 @@ function UserMenu({
             className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
             style={{ color: "var(--ink-strong)" }}
           >
-            <LogOut className="h-4 w-4 shrink-0" />
-            {t.nav.logout}
+            {localMode ? <LockKeyhole className="h-4 w-4 shrink-0" /> : <LogOut className="h-4 w-4 shrink-0" />}
+            {localMode ? t.desktopLocalMode.lock : t.nav.logout}
           </button>
         </div>
       )}

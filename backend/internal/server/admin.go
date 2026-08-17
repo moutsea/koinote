@@ -87,8 +87,8 @@ type adminRecentUser struct {
 }
 
 type adminRecentPayment struct {
-	UserName  string    `json:"userName"`
-	UserEmail string    `json:"userEmail"`
+	UserName  *string   `json:"userName"`
+	UserEmail *string   `json:"userEmail"`
 	Amount    int64     `json:"amount"`
 	Currency  string    `json:"currency"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -528,7 +528,7 @@ func (a *App) loadAdminRecentPayments(ctx context.Context) ([]adminRecentPayment
 			lower(stripe_payments.currency),
 			stripe_payments.created_at
 		FROM stripe_payments
-		JOIN users ON users.id = stripe_payments.user_id
+		LEFT JOIN users ON users.id = stripe_payments.user_id
 		ORDER BY stripe_payments.created_at DESC
 		LIMIT 10
 	`)

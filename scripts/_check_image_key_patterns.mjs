@@ -5,7 +5,10 @@ import {
   koinoteImageObjectKey,
   sameOriginImageURL,
 } from "./_image_key_loading_bundle.mjs";
-import { imageObjectKeyFromSource } from "./_image_key_offline_bundle.mjs";
+import {
+  imageObjectKeyFromSource,
+  isRemoteHTTPImageSource,
+} from "./_image_key_offline_bundle.mjs";
 import { isOwnImage } from "./_image_key_rehost_bundle.mjs";
 
 let pass = 0;
@@ -122,6 +125,27 @@ check(
   imageObjectKeyFromSource("/images/u/alice/abcdef1234567890.webp?v=1") ===
     "u/alice/abcdef1234567890.webp",
 );
+for (const remoteSource of [
+  "https://example.com/image.png",
+  "http:\\example.com/image.png",
+  "//example.com/image.png",
+  "\\\\example.com\\image.png",
+]) {
+  check(
+    `本地模式同步识别远端图片：${remoteSource}`,
+    isRemoteHTTPImageSource(remoteSource),
+  );
+}
+for (const localSource of [
+  "koinote-local-image://550e8400-e29b-41d4-a716-446655440000",
+  "data:image/png;base64,aW1hZ2U=",
+  "./images/local.png",
+]) {
+  check(
+    `本地模式保留本地图片：${localSource}`,
+    !isRemoteHTTPImageSource(localSource),
+  );
+}
 
 for (const file of ["exportDocx.ts", "exportPdf.ts"]) {
   const source = readFileSync(

@@ -54,6 +54,7 @@ includes("桌面首页显示同步面板", home, '<DesktopSyncStatus variant="pa
 includes("桌面首页显示图片缓存用量", home, "desktopImageCacheSummary");
 includes("桌面首页区分自动缓存与待上传图片", home, "pendingLocalBytes");
 includes("桌面首页显示远端图片缓存上限", home, "remoteCacheLimitBytes");
+includes("图片维护失败与文档同步状态分开提示", home, "imageCache.maintenanceIssue");
 includes("桌面首页允许清空远端图片缓存", home, "desktopClearRemoteImageCache");
 includes("桌面图片缓存清理失败会显示反馈", home, "setImageCacheNotice(t.desktopSync.error)");
 includes("同步组件支持面板形态", sync, 'variant?: "header" | "panel"');
@@ -62,8 +63,8 @@ matches(
   shell,
   /desktopRuntime \? \(\s*<>\s*<HeaderDocsMenu[\s\S]*?<HeaderLink to="\/pricing"/,
 );
-includes("桌面端隐藏营销导航", shell, "{desktopRuntime ? (");
-includes("工作台不重复挂载同步状态", shell, 'desktopRuntime && pathname !== "/"');
+includes("桌面端隐藏营销导航", shell, "desktopRuntime && localMode ? null : desktopRuntime ? (");
+includes("工作台不重复挂载同步状态", shell, 'desktopRuntime && !localMode && pathname !== "/"');
 includes("桌面端隐藏官网页脚", shell, "{!desktopRuntime && hasFooter(pathname) && <AppFooter />}");
 includes("桌面 MCP 配置使用线上端点", mcp, '`${desktopAPIOrigin()}/mcp`');
 includes("Checkout 拒绝非 HTTPS 地址", externalNavigation, 'url.protocol !== "https:"');
@@ -73,7 +74,12 @@ includes("站内网页跳转拒绝反斜杠", webLinksCore, 'path.includes("\\\\
 includes("会员卡复用安全 Checkout 导航", membership, "openMembershipCheckout(data.url)");
 includes("价格页复用安全 Checkout 导航", pricing, "openMembershipCheckout(result.url)");
 includes("桌面账户安全操作转到网页", dashboard, 'openKoinoteWebPath("/dashboard#security")');
-includes("桌面永久删除转到网页", trash, 'openKoinoteWebPath("/trash")');
+matches(
+  "桌面永久删除只需一次确认且自动提交服务端校验文字",
+  trash,
+  /confirmAction\([\s\S]*?const confirmation = desktopRuntime\s*\? expected\s*:\s*window\.prompt/,
+);
+excludes("桌面永久删除不再跳转网页", trash, 'openKoinoteWebPath("/trash")');
 excludes("客户端首页不再宣传下载客户端", home, "DESKTOP_DOWNLOAD_URL");
 excludes("客户端首页不再渲染营销功能卡", home, "FEATURE_ICONS");
 

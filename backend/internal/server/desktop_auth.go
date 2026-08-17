@@ -417,6 +417,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 	switch path {
 	case "/api/auth/session":
 		return method == http.MethodGet
+	case "/api/account":
+		return method == http.MethodDelete
 	case "/api/billing/status", "/api/invitations", "/api/storage/usage":
 		return method == http.MethodGet
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
@@ -425,6 +427,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/mcp/tokens":
 		return method == http.MethodGet || method == http.MethodPost
+	case "/api/mcp/activity":
+		return method == http.MethodGet
 	case "/api/analytics/events":
 		return method == http.MethodPost
 	case "/api/settings/document-history":
@@ -461,6 +465,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 			switch parts[1] {
 			case "folder":
 				return method == http.MethodPut
+			case "permanent":
+				return method == http.MethodDelete
 			case "restore":
 				return method == http.MethodPost
 			case "share":

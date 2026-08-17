@@ -62,6 +62,7 @@ export function EditorPage() {
   const activeDocId = params.docId;
 
   const loggedIn = Boolean(session.data?.user);
+  const localMode = Boolean(session.data?.user?.isLocalMode);
   const list = useDocumentList(loggedIn);
   const create = useCreateDocument();
   const remove = useTrashDocument();
@@ -756,7 +757,7 @@ export function EditorPage() {
                     title={doc.data.title}
                     themeId={doc.data.theme ?? ""}
                   />
-                  <button
+                  {!localMode && <button
                     type="button"
                     onClick={() => setShareOpen(true)}
                     title={t.editor.share}
@@ -769,7 +770,7 @@ export function EditorPage() {
                   >
                     <Share2 className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">{t.editor.share}</span>
-                  </button>
+                  </button>}
                 </>
               ) : null
             }
@@ -797,7 +798,7 @@ export function EditorPage() {
         ))}
       </div>
 
-      {shareOpen && doc.data && (
+      {!localMode && shareOpen && doc.data && (
         <ShareDialog
           docId={doc.data.docId}
           share={doc.data.share}

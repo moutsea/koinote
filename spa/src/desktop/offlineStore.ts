@@ -4,8 +4,10 @@ import type {
   DocumentSummary,
   EditorTabs,
   Folder,
+  TrashedDocumentSummary,
   UploadedImage,
 } from "../api";
+import { invoke } from "@tauri-apps/api/core";
 import {
   forEachConcurrent,
   imageReferences,
@@ -17,11 +19,21 @@ import { prepareDesktopSync } from "./logoutGuard";
 import { desktopFetch } from "./network";
 import { DESKTOP_SYNC_EVENT } from "./runtime";
 import {
+  decryptDesktopLocalValue,
+  DESKTOP_LOCAL_ACCOUNT_ID,
+  encryptDesktopLocalValue,
+  isDesktopLocalModeSelected,
+  isDesktopLocalModeUnlocked,
+  verifyDesktopLocalModePassword,
+} from "./localMode";
+import {
   acknowledgedLocalRevision,
   createAsyncSerialQueue,
+  desktopMaintenanceBackoff,
   decideRemoteDocument,
   decideRemoteFolder,
   pulledLocalRevision,
+  runDesktopSyncSequence,
   snapshotGuard,
 } from "./offlineSyncCore";
 import {
@@ -30,6 +42,7 @@ import {
   desktopLocalImageID,
   desktopLocalImageURL,
   imageObjectKeyFromSource,
+  isRemoteHTTPImageSource,
   replaceDesktopLocalImageURLs,
 } from "./offlineImagesCore";
 
@@ -101,11 +114,57 @@ export type DesktopImageCacheSummary = {
   remoteCacheBytes: number;
   pendingLocalBytes: number;
   remoteCacheLimitBytes: number;
+  maintenanceIssue: {
+    attempts: number;
+    stages: string[];
+    nextRetryAt: string;
+  } | null;
+};
+
+export type DesktopLocalImportSummary = {
+  documents: number;
+  folders: number;
+  images: number;
+};
+
+type DesktopLocalImportBatch = {
+  stagingAccount: string;
+  folders: Array<{
+    folderId: string;
+    name: string;
+    parentFolderId: string | null;
+  }>;
+  images: Array<{
+    imageId: string;
+    contentType: string;
+    base64Data: string;
+    byteSize: number;
+    createdAt: string;
+  }>;
+  documents: Array<{
+    docId: string;
+    title: string;
+    theme: string;
+    content: string;
+    folderId: string | null;
+    createdAt: string;
+  }>;
+};
+
+type ImageMaintenanceState = {
+  attempts: number;
+  stages: string[];
+  errors: Record<string, string>;
+  lastFailedAt: string;
+  nextRetryAt: string;
 };
 
 const DATABASE_URL = "sqlite:koinote-offline.db";
 const DEFAULT_DOCUMENT_THEME = "minimal";
 const DESKTOP_IMAGE_CONCURRENCY = 3;
+const LOCAL_IMPORT_FOLDER_BATCH_SIZE = 100;
+const LOCAL_IMPORT_DOCUMENT_BATCH_SIZE = 10;
+const IMAGE_MAINTENANCE_META_KEY = "image-maintenance-state";
 export const DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
 const DESKTOP_IMAGE_TYPES = new Set([
   "image/png",
@@ -132,9 +191,56 @@ async function database() {
 }
 
 async function accountID(): Promise<string> {
+  if (isDesktopLocalModeUnlocked()) return DESKTOP_LOCAL_ACCOUNT_ID;
+  if (isDesktopLocalModeSelected()) throw new Error("local_mode_locked");
   const session = await getStoredDesktopSession();
   if (!session?.accountId) throw new Error("Desktop session is unavailable");
   return session.accountId;
+}
+
+function isLocalAccount(account: string): boolean {
+  return account === DESKTOP_LOCAL_ACCOUNT_ID;
+}
+
+async function storedLocalValue(account: string, value: string): Promise<string> {
+  return isLocalAccount(account) ? encryptDesktopLocalValue(value) : value;
+}
+
+async function readableDocumentRow(
+  account: string,
+  row: DocumentRow,
+  key?: CryptoKey,
+): Promise<DocumentRow> {
+  if (!isLocalAccount(account)) return row;
+  return {
+    ...row,
+    title: await decryptDesktopLocalValue(row.title, key),
+    theme: await decryptDesktopLocalValue(row.theme, key),
+    content: await decryptDesktopLocalValue(row.content, key),
+    share_json: null,
+    remote_snapshot: null,
+  };
+}
+
+async function readableFolderRow(
+  account: string,
+  row: FolderRow,
+  key?: CryptoKey,
+): Promise<FolderRow> {
+  if (!isLocalAccount(account)) return row;
+  return { ...row, name: await decryptDesktopLocalValue(row.name, key) };
+}
+
+async function readableImageRow(
+  account: string,
+  row: OfflineImageRow,
+  key?: CryptoKey,
+): Promise<OfflineImageRow> {
+  if (!isLocalAccount(account)) return row;
+  return {
+    ...row,
+    base64_data: await decryptDesktopLocalValue(row.base64_data, key),
+  };
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -234,12 +340,63 @@ async function imageCacheSummaryForAccount(
         THEN byte_size ELSE 0 END), 0) AS pending_local_bytes
     FROM offline_images WHERE account_id = $1
   `, [account]);
+  const maintenance = await imageMaintenanceState(account);
   return {
     usedBytes: Number(rows[0]?.used_bytes ?? 0),
     remoteCacheBytes: Number(rows[0]?.remote_cache_bytes ?? 0),
     pendingLocalBytes: Number(rows[0]?.pending_local_bytes ?? 0),
     remoteCacheLimitBytes: DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES,
+    maintenanceIssue: maintenance
+      ? {
+          attempts: maintenance.attempts,
+          stages: maintenance.stages,
+          nextRetryAt: maintenance.nextRetryAt,
+        }
+      : null,
   };
+}
+
+async function imageMaintenanceState(
+  account: string,
+): Promise<ImageMaintenanceState | null> {
+  const db = await database();
+  const rows = await db.select<{ value: string }[]>(`
+    SELECT value FROM offline_meta
+    WHERE account_id = $1 AND key = $2
+    LIMIT 1
+  `, [account, IMAGE_MAINTENANCE_META_KEY]);
+  if (!rows[0]) return null;
+  try {
+    const state = JSON.parse(rows[0].value) as Partial<ImageMaintenanceState>;
+    if (
+      !Number.isInteger(state.attempts) ||
+      Number(state.attempts) < 1 ||
+      !Array.isArray(state.stages) ||
+      typeof state.nextRetryAt !== "string" ||
+      Number.isNaN(Date.parse(state.nextRetryAt))
+    ) {
+      return null;
+    }
+    return {
+      attempts: Number(state.attempts),
+      stages: state.stages.filter((stage): stage is string => typeof stage === "string"),
+      errors: state.errors && typeof state.errors === "object" ? state.errors : {},
+      lastFailedAt: typeof state.lastFailedAt === "string" ? state.lastFailedAt : "",
+      nextRetryAt: state.nextRetryAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function imageMaintenanceError(error: unknown): string {
+  if (error instanceof RemoteHTTPError) {
+    return error.code ?? `http_${error.status}`;
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim().slice(0, 200);
+  }
+  return "desktop_image_maintenance_failed";
 }
 
 class OfflineImageUploadError extends Error {
@@ -259,6 +416,7 @@ export async function desktopStoreLocalImage(file: File): Promise<UploadedImage>
   const account = await accountID();
   const imageID = crypto.randomUUID();
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const base64Data = await storedLocalValue(account, bytesToBase64(bytes));
   const db = await database();
   await db.execute(`
     INSERT INTO offline_images (
@@ -269,7 +427,7 @@ export async function desktopStoreLocalImage(file: File): Promise<UploadedImage>
     account,
     imageID,
     file.type,
-    bytesToBase64(bytes),
+    base64Data,
     bytes.byteLength,
     new Date().toISOString(),
   ]);
@@ -289,12 +447,18 @@ export async function desktopResolveImageSource(
   const localImageID = desktopLocalImageID(source);
   if (localImageID) {
     const row = await selectOfflineImageByID(account, localImageID);
-    return row ? imageDataURL(row) : null;
+    return row ? imageDataURL(await readableImageRow(account, row)) : null;
   }
   const objectKey = imageObjectKeyFromSource(source);
-  if (!objectKey) return source;
+  if (!objectKey) {
+    if (isLocalAccount(account) && isRemoteHTTPImageSource(source)) {
+      return null;
+    }
+    return source;
+  }
   const cached = await selectOfflineImageByObjectKey(account, objectKey);
-  return cached ? imageDataURL(cached) : source;
+  if (cached) return imageDataURL(await readableImageRow(account, cached));
+  return isLocalAccount(account) ? null : source;
 }
 
 export async function desktopImageSyncError(source: string): Promise<string | null> {
@@ -332,6 +496,7 @@ export async function desktopClearRemoteImageCache(): Promise<DesktopImageCacheS
 
 export async function desktopCacheRemoteImage(source: string): Promise<string> {
   const account = await accountID();
+  if (isLocalAccount(account)) throw new Error("local_mode_network_disabled");
   return cacheRemoteImageForAccount(account, source);
 }
 
@@ -534,6 +699,48 @@ async function cacheAllDocumentImages(account: string): Promise<void> {
   }
 }
 
+async function maintainOfflineImages(account: string): Promise<void> {
+  const previous = await imageMaintenanceState(account);
+  if (previous && Date.parse(previous.nextRetryAt) > Date.now()) return;
+
+  const failures: Array<{ stage: string; error: unknown }> = [];
+  for (const operation of [
+    { stage: "cache", run: () => cacheAllDocumentImages(account) },
+    { stage: "cleanup", run: () => cleanupUnusedOfflineImages(account) },
+  ]) {
+    try {
+      await operation.run();
+    } catch (error) {
+      failures.push({ stage: operation.stage, error });
+    }
+  }
+
+  const db = await database();
+  if (failures.length === 0) {
+    await db.execute(`
+      DELETE FROM offline_meta WHERE account_id = $1 AND key = $2
+    `, [account, IMAGE_MAINTENANCE_META_KEY]);
+    return;
+  }
+
+  const attempts = (previous?.attempts ?? 0) + 1;
+  const now = Date.now();
+  const state: ImageMaintenanceState = {
+    attempts,
+    stages: failures.map((failure) => failure.stage),
+    errors: Object.fromEntries(
+      failures.map((failure) => [failure.stage, imageMaintenanceError(failure.error)]),
+    ),
+    lastFailedAt: new Date(now).toISOString(),
+    nextRetryAt: new Date(now + desktopMaintenanceBackoff(attempts)).toISOString(),
+  };
+  await db.execute(`
+    INSERT INTO offline_meta (account_id, key, value) VALUES ($1, $2, $3)
+    ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
+  `, [account, IMAGE_MAINTENANCE_META_KEY, JSON.stringify(state)]);
+  console.warn("Desktop image maintenance delayed", state);
+}
+
 export async function desktopReleaseUnusedImages(sources: string[]): Promise<void> {
   const account = await accountID();
   const imageIDs = [...new Set(
@@ -541,6 +748,17 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
   )];
   if (imageIDs.length === 0) return;
   const db = await database();
+  if (isLocalAccount(account)) {
+    const referenced = await localReferencedImageIDs(account);
+    for (const imageID of imageIDs) {
+      if (referenced.has(imageID)) continue;
+      await db.execute(`
+        DELETE FROM offline_images
+        WHERE account_id = $1 AND image_id = $2
+      `, [account, imageID]);
+    }
+    return;
+  }
   for (const imageID of imageIDs) {
     await db.execute(`
       DELETE FROM offline_images
@@ -554,8 +772,40 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
   }
 }
 
+async function localReferencedImageIDs(account: string): Promise<Set<string>> {
+  const db = await database();
+  const rows = await db.select<Array<Pick<DocumentRow, "content">>>(`
+    SELECT content FROM offline_documents WHERE account_id = $1
+  `, [account]);
+  const contents = await Promise.all(
+    rows.map((row) => decryptDesktopLocalValue(row.content)),
+  );
+  return new Set(
+    contents.flatMap((content) =>
+      imageReferences(content)
+        .map(desktopLocalImageID)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
 async function cleanupUnusedOfflineImages(account: string): Promise<void> {
   const db = await database();
+  if (isLocalAccount(account)) {
+    const [images, referenced] = await Promise.all([
+      db.select<OfflineImageIdentity[]>(`
+        SELECT image_id, object_key FROM offline_images WHERE account_id = $1
+      `, [account]),
+      localReferencedImageIDs(account),
+    ]);
+    for (const image of images) {
+      if (referenced.has(image.image_id)) continue;
+      await db.execute(`
+        DELETE FROM offline_images WHERE account_id = $1 AND image_id = $2
+      `, [account, image.image_id]);
+    }
+    return;
+  }
   const rows = await db.select<OfflineImageIdentity[]>(`
     SELECT i.image_id, i.object_key FROM offline_images i
     WHERE i.account_id = $1
@@ -574,7 +824,7 @@ async function cleanupUnusedOfflineImages(account: string): Promise<void> {
   const remoteKeys = rows
     .map((row) => row.object_key)
     .filter((value): value is string => Boolean(value));
-  if (remoteKeys.length > 0) {
+  if (remoteKeys.length > 0 && !isLocalAccount(account)) {
     await remoteJSON("/api/storage/release-images", {
       method: "POST",
       body: JSON.stringify({ keys: remoteKeys }),
@@ -602,11 +852,14 @@ export async function desktopListDocuments(): Promise<{ documents: DocumentSumma
   const account = await accountID();
   await ensureInitialSnapshot(account);
   const db = await database();
-  const rows = await db.select<DocumentRow[]>(`
+  const storedRows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
     WHERE account_id = $1 AND sync_state <> 'trash'
     ORDER BY COALESCE(updated_at, '') DESC, doc_id DESC
   `, [account]);
+  const rows = await Promise.all(
+    storedRows.map((row) => readableDocumentRow(account, row)),
+  );
   return {
     documents: rows.map((row) => ({
       docId: row.doc_id,
@@ -626,13 +879,28 @@ export async function desktopSearchDocuments(
   if (!normalized) return { results: [] };
   const account = await accountID();
   const db = await database();
-  const rows = await db.select<DocumentRow[]>(`
-    SELECT * FROM offline_documents
-    WHERE account_id = $1 AND sync_state <> 'trash'
-      AND (instr(lower(title), $2) > 0 OR instr(lower(content), $2) > 0)
-    ORDER BY COALESCE(updated_at, '') DESC
-    LIMIT $3
-  `, [account, normalized, limit]);
+  const storedRows = isLocalAccount(account)
+    ? await db.select<DocumentRow[]>(`
+        SELECT * FROM offline_documents
+        WHERE account_id = $1 AND sync_state <> 'trash'
+        ORDER BY COALESCE(updated_at, '') DESC
+      `, [account])
+    : await db.select<DocumentRow[]>(`
+        SELECT * FROM offline_documents
+        WHERE account_id = $1 AND sync_state <> 'trash'
+          AND (instr(lower(title), $2) > 0 OR instr(lower(content), $2) > 0)
+        ORDER BY COALESCE(updated_at, '') DESC
+        LIMIT $3
+      `, [account, normalized, limit]);
+  const readableRows = await Promise.all(
+    storedRows.map((row) => readableDocumentRow(account, row)),
+  );
+  const rows = readableRows
+    .filter((row) =>
+      row.title.toLocaleLowerCase().includes(normalized) ||
+      row.content.toLocaleLowerCase().includes(normalized),
+    )
+    .slice(0, limit);
   return {
     results: rows.map((row) => {
       const titleMatched = row.title.toLocaleLowerCase().includes(normalized);
@@ -659,9 +927,13 @@ export async function desktopGetDocument(docId: string): Promise<{ document: Doc
   const account = await accountID();
   const row = await selectDocument(account, docId);
   if (row && row.sync_state !== "trash") {
-    if (navigator.onLine) void cacheDocumentImages(account, row.content);
+    if (!isLocalAccount(account) && navigator.onLine) {
+      void cacheDocumentImages(account, row.content);
+    }
     return { document: rowToDocument(row) };
   }
+
+  if (isLocalAccount(account)) throw new Error("Document not found");
 
   const remote = await remoteJSON<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
@@ -679,6 +951,7 @@ export async function desktopCreateDocument(params?: {
     const account = await accountID();
     const db = await database();
     const now = new Date().toISOString();
+    const local = isLocalAccount(account);
     const document: Document = {
       docId: crypto.randomUUID(),
       title: params?.title?.trim() ?? "",
@@ -689,14 +962,22 @@ export async function desktopCreateDocument(params?: {
       updatedAt: now,
       share: null,
     };
+    const [storedTitle, storedTheme, storedContent] = await Promise.all([
+      storedLocalValue(account, document.title),
+      storedLocalValue(account, document.theme),
+      storedLocalValue(account, document.content),
+    ]);
     await db.execute(`
       INSERT INTO offline_documents (
         account_id, doc_id, title, theme, content, folder_id,
         local_revision, base_revision, created_at, updated_at, share_json,
         sync_state, change_seq
-      ) VALUES ($1, $2, $3, $4, $5, $6, 1, 0, $7, $7, NULL, 'create', 1)
-    `, [account, document.docId, document.title, document.theme, document.content, params?.folderId ?? null, now]);
-    scheduleSync();
+      ) VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, $8, NULL, $9, 1)
+    `, [
+      account, document.docId, storedTitle, storedTheme, storedContent,
+      params?.folderId ?? null, local ? 1 : 0, now, local ? "clean" : "create",
+    ]);
+    if (!local) scheduleSync();
     return { document };
   });
 }
@@ -714,23 +995,38 @@ export async function desktopUpdateDocument(
     const account = await accountID();
     const db = await database();
     const now = new Date().toISOString();
+    const local = isLocalAccount(account);
+    const [storedTitle, storedContent, storedTheme] = await Promise.all([
+      storedLocalValue(account, params.title.trim()),
+      storedLocalValue(account, params.content),
+      params.theme === undefined
+        ? Promise.resolve<string | null>(null)
+        : storedLocalValue(account, params.theme),
+    ]);
     const result = await db.execute(`
       UPDATE offline_documents
       SET title = $3, content = $4,
           theme = CASE WHEN $5 IS NULL THEN theme ELSE $5 END,
           local_revision = local_revision + 1,
           updated_at = $6,
-          sync_state = CASE WHEN sync_state = 'create' THEN 'create' ELSE 'update' END,
+          sync_state = CASE
+            WHEN $8 = 1 THEN 'clean'
+            WHEN sync_state = 'create' THEN 'create'
+            ELSE 'update'
+          END,
           change_seq = change_seq + 1,
           remote_snapshot = NULL,
           last_error = NULL
       WHERE account_id = $1 AND doc_id = $2
         AND local_revision = $7 AND sync_state <> 'trash'
-    `, [account, docId, params.title.trim(), params.content, params.theme ?? null, now, params.expectedRevision]);
+    `, [
+      account, docId, storedTitle, storedContent, storedTheme, now,
+      params.expectedRevision, local ? 1 : 0,
+    ]);
     if (result.rowsAffected !== 1) throw new Error("document_revision_conflict");
     const row = await selectDocument(account, docId);
     if (!row) throw new Error("Document not found");
-    scheduleSync();
+    if (!local) scheduleSync();
     return { document: rowToDocument(row) };
   });
 }
@@ -745,8 +1041,277 @@ export async function desktopTrashDocument(docId: string): Promise<{ success: bo
           updated_at = $3, last_error = NULL
       WHERE account_id = $1 AND doc_id = $2
     `, [account, docId, new Date().toISOString()]);
-    scheduleSync();
+    if (!isLocalAccount(account)) scheduleSync();
     return { success: true };
+  });
+}
+
+export async function desktopPermanentlyDeleteDocument(
+  docId: string,
+  confirmation: string,
+): Promise<{ success: boolean }> {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const local = isLocalAccount(account);
+    if (!local) {
+      try {
+        await remoteJSON(`/api/documents/${encodeURIComponent(docId)}/permanent`, {
+          method: "DELETE",
+          body: JSON.stringify({ confirmation }),
+        });
+      } catch (error) {
+        if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
+      }
+    }
+    await db.execute(`
+      DELETE FROM offline_documents WHERE account_id = $1 AND doc_id = $2
+    `, [account, docId]);
+    try {
+      await cleanupUnusedOfflineImages(account);
+    } catch {}
+    if (!local) scheduleSync(0);
+    return { success: true };
+  });
+}
+
+export async function desktopListLocalTrashedDocuments(): Promise<{
+  documents: TrashedDocumentSummary[];
+}> {
+  const account = await accountID();
+  if (!isLocalAccount(account)) throw new Error("local_mode_required");
+  const db = await database();
+  const storedRows = await db.select<DocumentRow[]>(`
+    SELECT * FROM offline_documents
+    WHERE account_id = $1 AND sync_state = 'trash'
+    ORDER BY COALESCE(updated_at, '') DESC, doc_id DESC
+  `, [account]);
+  const rows = await Promise.all(
+    storedRows.map((row) => readableDocumentRow(account, row)),
+  );
+  return {
+    documents: rows.map((row) => ({
+      docId: row.doc_id,
+      title: row.title,
+      revision: row.local_revision,
+      trashedAt: row.updated_at ?? new Date(0).toISOString(),
+      deletesAt: "9999-12-31T23:59:59.999Z",
+    })),
+  };
+}
+
+export async function desktopRestoreLocalTrashedDocument(
+  docId: string,
+): Promise<{ document: Document }> {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    if (!isLocalAccount(account)) throw new Error("local_mode_required");
+    const db = await database();
+    const result = await db.execute(`
+      UPDATE offline_documents
+      SET sync_state = 'clean', local_revision = local_revision + 1,
+          change_seq = change_seq + 1, updated_at = $3, last_error = NULL
+      WHERE account_id = $1 AND doc_id = $2 AND sync_state = 'trash'
+    `, [account, docId, new Date().toISOString()]);
+    if (result.rowsAffected !== 1) throw new Error("Document not found");
+    const row = await selectDocument(account, docId);
+    if (!row) throw new Error("Document not found");
+    return { document: rowToDocument(row) };
+  });
+}
+
+export async function desktopLocalImportSummary(): Promise<DesktopLocalImportSummary> {
+  if (isDesktopLocalModeSelected()) {
+    return { documents: 0, folders: 0, images: 0 };
+  }
+  await serializeMutation(() => invoke("desktop_abort_local_mode_import", {
+    request: { stagingAccount: null },
+  }));
+  const db = await database();
+  const rows = await db.select<DesktopLocalImportSummary[]>(`
+    SELECT
+      (SELECT COUNT(*) FROM offline_documents
+       WHERE account_id = $1 AND sync_state <> 'trash') AS documents,
+      (SELECT COUNT(*) FROM offline_folders
+       WHERE account_id = $1 AND sync_state <> 'delete') AS folders,
+      (SELECT COUNT(*) FROM offline_images
+       WHERE account_id = $1 AND is_local_origin = 1) AS images
+  `, [DESKTOP_LOCAL_ACCOUNT_ID]);
+  return {
+    documents: Number(rows[0]?.documents ?? 0),
+    folders: Number(rows[0]?.folders ?? 0),
+    images: Number(rows[0]?.images ?? 0),
+  };
+}
+
+export async function desktopImportLocalMode(
+  password: string,
+): Promise<DesktopLocalImportSummary> {
+  const key = await verifyDesktopLocalModePassword(password);
+  return serializeMutation(async () => {
+    const targetAccount = await accountID();
+    if (isLocalAccount(targetAccount)) throw new Error("account_mode_required");
+    const db = await database();
+    await invoke("desktop_abort_local_mode_import", {
+      request: { stagingAccount: null },
+    });
+    const stagingAccount = `local-import:${crypto.randomUUID()}`;
+    const folderIDs = new Map<string, string>();
+    const referencedImageIDs = new Set<string>();
+    const imageURLs = new Map<string, string>();
+    const now = new Date().toISOString();
+    let documentCount = 0;
+
+    try {
+      let afterFolderID = "";
+      while (true) {
+        const rows = await db.select<Array<{ folder_id: string }>>(`
+          SELECT folder_id FROM offline_folders
+          WHERE account_id = $1 AND sync_state <> 'delete' AND folder_id > $2
+          ORDER BY folder_id
+          LIMIT $3
+        `, [DESKTOP_LOCAL_ACCOUNT_ID, afterFolderID, LOCAL_IMPORT_FOLDER_BATCH_SIZE]);
+        if (rows.length === 0) break;
+        for (const row of rows) folderIDs.set(row.folder_id, crypto.randomUUID());
+        afterFolderID = rows.at(-1)!.folder_id;
+      }
+
+      let afterDocumentID = "";
+      while (true) {
+        const rows = await db.select<DocumentRow[]>(`
+          SELECT * FROM offline_documents
+          WHERE account_id = $1 AND sync_state <> 'trash' AND doc_id > $2
+          ORDER BY doc_id
+          LIMIT $3
+        `, [DESKTOP_LOCAL_ACCOUNT_ID, afterDocumentID, LOCAL_IMPORT_DOCUMENT_BATCH_SIZE]);
+        if (rows.length === 0) break;
+        for (const storedDocument of rows) {
+          const document = await readableDocumentRow(
+            DESKTOP_LOCAL_ACCOUNT_ID,
+            storedDocument,
+            key,
+          );
+          documentCount += 1;
+          for (const reference of imageReferences(document.content)) {
+            const imageID = desktopLocalImageID(reference);
+            if (imageID) referencedImageIDs.add(imageID);
+          }
+        }
+        afterDocumentID = rows.at(-1)!.doc_id;
+      }
+
+      afterFolderID = "";
+      while (true) {
+        const storedFolders = await db.select<FolderRow[]>(`
+          SELECT * FROM offline_folders
+          WHERE account_id = $1 AND sync_state <> 'delete' AND folder_id > $2
+          ORDER BY folder_id
+          LIMIT $3
+        `, [DESKTOP_LOCAL_ACCOUNT_ID, afterFolderID, LOCAL_IMPORT_FOLDER_BATCH_SIZE]);
+        if (storedFolders.length === 0) break;
+        const folders = [];
+        for (const storedFolder of storedFolders) {
+          const folder = await readableFolderRow(
+            DESKTOP_LOCAL_ACCOUNT_ID,
+            storedFolder,
+            key,
+          );
+          folders.push({
+            folderId: folderIDs.get(folder.folder_id)!,
+            name: folder.name,
+            parentFolderId: folder.parent_folder_id
+              ? folderIDs.get(folder.parent_folder_id) ?? null
+              : null,
+          });
+        }
+        const batch: DesktopLocalImportBatch = {
+          stagingAccount,
+          folders,
+          images: [],
+          documents: [],
+        };
+        await invoke("desktop_import_local_mode", { batch });
+        afterFolderID = storedFolders.at(-1)!.folder_id;
+      }
+
+      for (const imageID of referencedImageIDs) {
+        const storedImage = await selectOfflineImageByID(DESKTOP_LOCAL_ACCOUNT_ID, imageID);
+        if (!storedImage) throw new Error("local_image_missing");
+        const image = await readableImageRow(DESKTOP_LOCAL_ACCOUNT_ID, storedImage, key);
+        const nextImageID = crypto.randomUUID();
+        imageURLs.set(
+          desktopLocalImageURL(image.image_id),
+          desktopLocalImageURL(nextImageID),
+        );
+        const batch: DesktopLocalImportBatch = {
+          stagingAccount,
+          folders: [],
+          images: [{
+            imageId: nextImageID,
+            contentType: image.content_type,
+            base64Data: image.base64_data,
+            byteSize: image.byte_size,
+            createdAt: now,
+          }],
+          documents: [],
+        };
+        await invoke("desktop_import_local_mode", { batch });
+      }
+
+      afterDocumentID = "";
+      while (true) {
+        const storedDocuments = await db.select<DocumentRow[]>(`
+          SELECT * FROM offline_documents
+          WHERE account_id = $1 AND sync_state <> 'trash' AND doc_id > $2
+          ORDER BY doc_id
+          LIMIT $3
+        `, [DESKTOP_LOCAL_ACCOUNT_ID, afterDocumentID, LOCAL_IMPORT_DOCUMENT_BATCH_SIZE]);
+        if (storedDocuments.length === 0) break;
+        const documents: DesktopLocalImportBatch["documents"] = [];
+        for (const storedDocument of storedDocuments) {
+          const document = await readableDocumentRow(
+            DESKTOP_LOCAL_ACCOUNT_ID,
+            storedDocument,
+            key,
+          );
+          documents.push({
+              docId: crypto.randomUUID(),
+              title: document.title,
+              theme: document.theme,
+              content: replaceDesktopLocalImageURLs(document.content, imageURLs),
+              folderId: document.folder_id
+                ? folderIDs.get(document.folder_id) ?? null
+                : null,
+              createdAt: now,
+          });
+        }
+        const batch: DesktopLocalImportBatch = {
+          stagingAccount,
+          folders: [],
+          images: [],
+          documents,
+        };
+        await invoke("desktop_import_local_mode", { batch });
+        afterDocumentID = storedDocuments.at(-1)!.doc_id;
+      }
+
+      await invoke("desktop_finalize_local_mode_import", {
+        request: { stagingAccount, targetAccount },
+      });
+    } catch (error) {
+      try {
+        await invoke("desktop_abort_local_mode_import", {
+          request: { stagingAccount },
+        });
+      } catch {}
+      throw error;
+    }
+    if (documentCount > 0 || folderIDs.size > 0) scheduleSync(0);
+    return {
+      documents: documentCount,
+      folders: folderIDs.size,
+      images: referencedImageIDs.size,
+    };
   });
 }
 
@@ -754,11 +1319,15 @@ export async function desktopListFolders(): Promise<{ folders: Folder[] }> {
   const account = await accountID();
   await ensureInitialSnapshot(account);
   const db = await database();
-  const rows = await db.select<FolderRow[]>(`
+  const storedRows = await db.select<FolderRow[]>(`
     SELECT * FROM offline_folders
     WHERE account_id = $1 AND sync_state <> 'delete'
     ORDER BY name, folder_id
   `, [account]);
+  const rows = await Promise.all(
+    storedRows.map((row) => readableFolderRow(account, row)),
+  );
+  if (isLocalAccount(account)) rows.sort((left, right) => left.name.localeCompare(right.name));
   return { folders: rows.map(rowToFolder) };
 }
 
@@ -769,30 +1338,35 @@ export async function desktopCreateFolder(params: {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
+    const local = isLocalAccount(account);
     const folder: Folder = {
       folderId: crypto.randomUUID(),
       name: params.name.trim(),
       parentFolderId: params.parentFolderId,
     };
+    const storedName = await storedLocalValue(account, folder.name);
     await db.execute(`
       INSERT INTO offline_folders (
         account_id, folder_id, name, parent_folder_id, sync_state, change_seq
-      ) VALUES ($1, $2, $3, $4, 'create', 1)
-    `, [account, folder.folderId, folder.name, folder.parentFolderId]);
-    scheduleSync();
+      ) VALUES ($1, $2, $3, $4, $5, 1)
+    `, [
+      account, folder.folderId, storedName, folder.parentFolderId,
+      local ? "clean" : "create",
+    ]);
+    if (!local) scheduleSync();
     return { folder };
   });
 }
 
 export async function desktopRenameFolder(folderId: string, name: string): Promise<{ folder: Folder }> {
-  await mutateFolder(folderId, `name = $3`, [name.trim()]);
   const account = await accountID();
+  await mutateFolder(folderId, `name = $3`, [await storedLocalValue(account, name.trim())]);
   const db = await database();
   const rows = await db.select<FolderRow[]>(`
     SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2
   `, [account, folderId]);
   if (!rows[0]) throw new Error("Folder not found");
-  return { folder: rowToFolder(rows[0]) };
+  return { folder: rowToFolder(await readableFolderRow(account, rows[0])) };
 }
 
 export async function desktopMoveFolder(folderId: string, parentFolderId: string | null) {
@@ -803,13 +1377,18 @@ async function mutateFolder(folderId: string, assignment: string, values: unknow
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
+    const local = isLocalAccount(account);
     await db.execute(`
       UPDATE offline_folders SET ${assignment},
-        sync_state = CASE WHEN sync_state = 'create' THEN 'create' ELSE 'update' END,
+        sync_state = CASE
+          WHEN $${values.length + 3} = 1 THEN 'clean'
+          WHEN sync_state = 'create' THEN 'create'
+          ELSE 'update'
+        END,
         change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
       WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'delete'
-    `, [account, folderId, ...values]);
-    scheduleSync();
+    `, [account, folderId, ...values, local ? 1 : 0]);
+    if (!local) scheduleSync();
     return { ok: true };
   });
 }
@@ -818,22 +1397,28 @@ export async function desktopDeleteFolder(folderId: string) {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
+    const local = isLocalAccount(account);
     const rows = await db.select<FolderRow[]>(`
       SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2
     `, [account, folderId]);
     const folder = rows[0];
     if (!folder) return { ok: true };
     await db.execute(`
-      UPDATE offline_documents SET folder_id = $3, folder_dirty = 1, change_seq = change_seq + 1
+      UPDATE offline_documents
+      SET folder_id = $3, folder_dirty = $4, change_seq = change_seq + 1
       WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
-    `, [account, folderId, folder.parent_folder_id]);
+    `, [account, folderId, folder.parent_folder_id, local ? 0 : 1]);
     await db.execute(`
       UPDATE offline_folders SET parent_folder_id = $3,
-        sync_state = CASE WHEN sync_state = 'create' THEN 'create' ELSE 'update' END,
+        sync_state = CASE
+          WHEN $4 = 1 THEN 'clean'
+          WHEN sync_state = 'create' THEN 'create'
+          ELSE 'update'
+        END,
         change_seq = change_seq + 1
       WHERE account_id = $1 AND parent_folder_id = $2 AND sync_state <> 'delete'
-    `, [account, folderId, folder.parent_folder_id]);
-    if (folder.sync_state === "create") {
+    `, [account, folderId, folder.parent_folder_id, local ? 1 : 0]);
+    if (local || folder.sync_state === "create") {
       await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, folderId]);
     } else {
       await db.execute(`
@@ -841,7 +1426,7 @@ export async function desktopDeleteFolder(folderId: string) {
         WHERE account_id = $1 AND folder_id = $2
       `, [account, folderId]);
     }
-    scheduleSync();
+    if (!local) scheduleSync();
     return { ok: true };
   });
 }
@@ -850,12 +1435,13 @@ export async function desktopMoveDocument(docId: string, folderId: string | null
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
+    const local = isLocalAccount(account);
     await db.execute(`
       UPDATE offline_documents
-      SET folder_id = $3, folder_dirty = 1, change_seq = change_seq + 1
+      SET folder_id = $3, folder_dirty = $4, change_seq = change_seq + 1
       WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
-    `, [account, docId, folderId]);
-    scheduleSync();
+    `, [account, docId, folderId, local ? 0 : 1]);
+    if (!local) scheduleSync();
     return { ok: true };
   });
 }
@@ -868,7 +1454,10 @@ export async function desktopGetEditorTabs(): Promise<EditorTabs> {
   `, [account]);
   if (!rows[0]) return { tabs: [], activeDocId: null };
   try {
-    return JSON.parse(rows[0].value) as EditorTabs;
+    const value = isLocalAccount(account)
+      ? await decryptDesktopLocalValue(rows[0].value)
+      : rows[0].value;
+    return JSON.parse(value) as EditorTabs;
   } catch {
     return { tabs: [], activeDocId: null };
   }
@@ -877,14 +1466,23 @@ export async function desktopGetEditorTabs(): Promise<EditorTabs> {
 export async function desktopPutEditorTabs(value: EditorTabs): Promise<EditorTabs> {
   const account = await accountID();
   const db = await database();
+  const storedValue = await storedLocalValue(account, JSON.stringify(value));
   await db.execute(`
     INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'editor-tabs', $2)
     ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
-  `, [account, JSON.stringify(value)]);
+  `, [account, storedValue]);
   return value;
 }
 
 export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<DesktopSyncSummary> {
+  if (isDesktopLocalModeSelected()) {
+    return Promise.resolve({
+      state: "idle",
+      pending: 0,
+      conflicts: 0,
+      lastSyncedAt: null,
+    });
+  }
   if (syncPromise) return syncPromise;
   syncPromise = performPreparedSync(options).finally(() => {
     syncPromise = null;
@@ -894,12 +1492,16 @@ export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<Desk
 
 export async function desktopSyncSummary(): Promise<DesktopSyncSummary> {
   const account = await accountID();
+  if (isLocalAccount(account)) {
+    return { state: "idle", pending: 0, conflicts: 0, lastSyncedAt: null };
+  }
   const summary = await calculateSummary(account, "idle");
   return summary.message ? { ...summary, state: "error" } : summary;
 }
 
 export async function desktopListConflicts(): Promise<DesktopConflict[]> {
   const account = await accountID();
+  if (isLocalAccount(account)) return [];
   const db = await database();
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents WHERE account_id = $1 AND sync_state = 'conflict'
@@ -974,6 +1576,7 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
 }
 
 async function ensureInitialSnapshot(account: string): Promise<void> {
+  if (isLocalAccount(account)) return;
   const existing = snapshotInitializations.get(account);
   if (existing) return existing;
 
@@ -1027,21 +1630,27 @@ async function performSync(
 ): Promise<DesktopSyncSummary> {
   if (!options.silent) notify(await calculateSummary(account, "syncing"));
   try {
-    await pushFolders(account);
-    const imageUploadIssues = await pushDocuments(account);
-    await pullRemoteSnapshot(account);
-    await cacheAllDocumentImages(account);
-    await cleanupUnusedOfflineImages(account);
-    const db = await database();
-    const now = new Date().toISOString();
-    await db.execute(`
-      INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'last-synced-at', $2)
-      ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
-    `, [account, now]);
+    const outcome = await runDesktopSyncSequence({
+      pushFolders: () => pushFolders(account),
+      pushDocuments: () => pushDocuments(account),
+      pullRemoteSnapshot: () => pullRemoteSnapshot(account),
+      maintain: () => maintainOfflineImages(account),
+      recordSuccess: async () => {
+        const db = await database();
+        const now = new Date().toISOString();
+        await db.execute(`
+          INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'last-synced-at', $2)
+          ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
+        `, [account, now]);
+      },
+      reportMaintenanceFailure: (error) => {
+        console.warn("Desktop image maintenance state could not be saved", error);
+      },
+    });
     const summary = await calculateSummary(
       account,
-      imageUploadIssues.length > 0 ? "error" : "idle",
-      imageUploadIssues[0],
+      outcome.state,
+      outcome.message,
     );
     notify(summary);
     return summary;
@@ -1537,7 +2146,7 @@ async function selectDocument(account: string, docID: string): Promise<DocumentR
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents WHERE account_id = $1 AND doc_id = $2
   `, [account, docID]);
-  return rows[0] ?? null;
+  return rows[0] ? readableDocumentRow(account, rows[0]) : null;
 }
 
 function rowToDocument(row: DocumentRow): Document {
@@ -1584,12 +2193,19 @@ async function calculateSummary(
     SELECT COALESCE(
       (SELECT last_error FROM offline_documents
        WHERE account_id = $1 AND last_error IS NOT NULL
+         AND (sync_state <> 'clean' OR folder_dirty = 1)
        ORDER BY updated_at DESC LIMIT 1),
-      (SELECT last_error FROM offline_images
-       WHERE account_id = $1 AND last_error IS NOT NULL
-       ORDER BY created_at DESC LIMIT 1)
+      (SELECT i.last_error FROM offline_images i
+       WHERE i.account_id = $1 AND i.last_error IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM offline_documents d
+           WHERE d.account_id = $1
+             AND (d.sync_state <> 'clean' OR d.folder_dirty = 1)
+             AND instr(d.content, $2 || i.image_id) > 0
+         )
+       ORDER BY i.created_at DESC LIMIT 1)
     ) AS error_code
-  `, [account]);
+  `, [account, "koinote-local-image://"]);
   const effectiveMessage = message ?? storedIssues[0]?.error_code ?? undefined;
   return {
     state,

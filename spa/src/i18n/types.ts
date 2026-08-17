@@ -184,6 +184,22 @@ export interface Messages {
     invalidatingSessions: string;
     sessionsInvalidated: string;
   };
+  accountDeletion: {
+    title: string;
+    description: string;
+    immediate: string;
+    membership: string;
+    paymentRecords: string;
+    confirmLabel: string;
+    finalConfirmation: string;
+    deleteButton: string;
+    deleting: string;
+    mismatch: string;
+    paymentPending: string;
+    unavailable: string;
+    failed: string;
+    localCleanupFailed: string;
+  };
   storage: {
     /** 控制台卡片标题 */
     title: string;
@@ -262,6 +278,22 @@ export interface Messages {
     legacyNotRevealable: string;
     revoke: string;
     revokeConfirm: string;
+    activity: string;
+  };
+  mcpActivity: {
+    title: string;
+    description: string;
+    back: string;
+    membersOnly: string;
+    loading: string;
+    loadFailed: string;
+    retry: string;
+    empty: string;
+    loadMore: string;
+    success: string;
+    error: string;
+    deletedToken: string;
+    deletedDocument: string;
   };
   documentHistorySettings: {
     title: string;
@@ -348,7 +380,6 @@ export interface Messages {
     deletesOn: string;
     restore: string;
     deletePermanently: string;
-    manageOnWeb: string;
     permanentWarning: string;
     typeToConfirm: string;
     loadFailed: string;
@@ -398,6 +429,7 @@ export interface Messages {
     recentPayments: string;
     noUsers: string;
     noPayments: string;
+    deletedAccount: string;
     user: string;
     status: string;
     joinedAt: string;
@@ -449,6 +481,12 @@ export interface Messages {
     historyRestoreFailed: string;
     historyConflict: string;
     restoreVersion: string;
+    historyCompareWith: string;
+    historyCurrent: string;
+    historyLoadingDiff: string;
+    historyNoChanges: string;
+    historyLinesOmitted: string;
+    historyTitleChanged: string;
     historySource: Record<"web" | "mcp" | "restore", string>;
     historySafetySnapshot: string;
     charCount: string; // 用 {n} 占位
@@ -607,6 +645,42 @@ export interface Messages {
     invalid: string;
     failed: string;
   };
+  desktopLocalMode: {
+    badge: string;
+    title: string;
+    description: string;
+    setupTitle: string;
+    setupDescription: string;
+    unlockTitle: string;
+    unlockDescription: string;
+    password: string;
+    confirmPassword: string;
+    passwordHint: string;
+    create: string;
+    unlock: string;
+    creating: string;
+    unlocking: string;
+    useAccount: string;
+    enterLocalMode: string;
+    lock: string;
+    encrypted: string;
+    networkDisabled: string;
+    passwordMismatch: string;
+    invalidPassword: string;
+    genericError: string;
+    localSubtitle: string;
+    localStorageTitle: string;
+    localStorageDescription: string;
+    trashRetention: string;
+    importTitle: string;
+    importDescription: string;
+    importButton: string;
+    importing: string;
+    importSuccess: string;
+    importEmpty: string;
+    importPassword: string;
+    importWarning: string;
+  };
   desktopBilling: {
     successTitle: string;
     cancelledTitle: string;
@@ -638,6 +712,7 @@ export interface Messages {
     clearImageCache: string;
     clearingImageCache: string;
     imageCacheCleared: string;
+    imageMaintenanceDelayed: string;
   };
   desktopUpdate: {
     check: string;

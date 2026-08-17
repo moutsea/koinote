@@ -21,6 +21,7 @@ export type User = {
   bonusStorageBytes: number;
   createdAt?: string | null;
   updatedAt?: string | null;
+  isLocalMode?: boolean;
 };
 
 // 带后端错误码的错误对象：code 供前端 i18n 翻译，message 为英文兜底。
@@ -258,9 +259,61 @@ export async function logout() {
   }
 }
 
+export async function deleteAccount(confirmation: string) {
+  const desktopRuntime = isDesktopRuntime();
+  const session = desktopRuntime
+    ? await import("./desktop/auth").then(({ getStoredDesktopSession }) =>
+        getStoredDesktopSession(),
+      )
+    : null;
+  const result = await apiJson<{ success: boolean }>("/api/account", {
+    method: "DELETE",
+    body: JSON.stringify({ confirmation }),
+  });
+  if (!desktopRuntime) return { ...result, localCleanupFailed: false };
+
+  let localCleanupFailed = false;
+  try {
+    if (session?.accountId) {
+      const { clearDesktopOfflineAccount } = await import("./desktop/offlineStore");
+      await clearDesktopOfflineAccount(session.accountId);
+    }
+  } catch {
+    localCleanupFailed = true;
+  }
+  try {
+    const { clearDesktopSession } = await import("./desktop/auth");
+    await clearDesktopSession();
+  } catch {
+    localCleanupFailed = true;
+  }
+  return { ...result, localCleanupFailed };
+}
+
 export async function getSession() {
   if (!isDesktopRuntime()) {
     return apiJson<{ user: User }>("/api/auth/session");
+  }
+  const {
+    isDesktopLocalModeSelected,
+    isDesktopLocalModeUnlocked,
+  } = await import("./desktop/localMode");
+  if (isDesktopLocalModeSelected()) {
+    if (!isDesktopLocalModeUnlocked()) return { user: null };
+    return {
+      user: {
+        id: 0,
+        authUserId: "local:v1",
+        email: "",
+        nickname: "Local",
+        isVerified: false,
+        isAdmin: false,
+        hasPassword: true,
+        membershipTier: "free" as const,
+        bonusStorageBytes: 0,
+        isLocalMode: true,
+      },
+    };
   }
   try {
     const result = await apiJson<{ user: User }>("/api/auth/session");
@@ -432,8 +485,8 @@ export type AdminStats = {
     createdAt: string;
   }>;
   recentPayments: Array<{
-    userName: string;
-    userEmail: string;
+    userName: string | null;
+    userEmail: string | null;
     amount: number;
     currency: string;
     createdAt: string;
@@ -693,6 +746,26 @@ export function revokeMCPToken(tokenId: string) {
   return apiJson<{ success: boolean }>(
     `/api/mcp/tokens/${encodeURIComponent(tokenId)}`,
     { method: "DELETE" },
+  );
+}
+
+export type MCPActivity = {
+  id: number;
+  toolName: string;
+  result: "success" | "error";
+  durationMs: number;
+  createdAt?: string | null;
+  docId?: string | null;
+  documentTitle?: string | null;
+  tokenName?: string | null;
+  tokenHint?: string | null;
+};
+
+export function listMCPActivity(cursor?: string, limit = 50) {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return apiJson<{ activities: MCPActivity[]; nextCursor: string }>(
+    `/api/mcp/activity?${query.toString()}`,
   );
 }
 
@@ -975,6 +1048,8 @@ export async function releaseUnusedImages(keys: string[]) {
       const { desktopReleaseUnusedImages } = await import("./desktop/offlineStore");
       await desktopReleaseUnusedImages(localKeys);
     }
+    const { isDesktopLocalModeSelected } = await import("./desktop/localMode");
+    if (isDesktopLocalModeSelected()) return { queued: 0 };
   }
   if (remoteKeys.length === 0) return { queued: 0 };
   return apiJson<{ queued: number }>("/api/storage/release-images", {
@@ -996,12 +1071,37 @@ export function trashDocument(docId: string) {
 }
 
 export function listTrashedDocuments() {
+  if (isDesktopRuntime()) {
+    return import("./desktop/localMode").then(({ isDesktopLocalModeSelected }) =>
+      isDesktopLocalModeSelected()
+        ? import("./desktop/offlineStore").then(
+            ({ desktopListLocalTrashedDocuments }) =>
+              desktopListLocalTrashedDocuments(),
+          )
+        : apiJson<{ documents: TrashedDocumentSummary[] }>(
+            "/api/documents/trash",
+          ),
+    );
+  }
   return apiJson<{ documents: TrashedDocumentSummary[] }>(
     "/api/documents/trash",
   );
 }
 
 export function restoreTrashedDocument(docId: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/localMode").then(({ isDesktopLocalModeSelected }) =>
+      isDesktopLocalModeSelected()
+        ? import("./desktop/offlineStore").then(
+            ({ desktopRestoreLocalTrashedDocument }) =>
+              desktopRestoreLocalTrashedDocument(docId),
+          )
+        : apiJson<{ document: Document }>(
+            `/api/documents/${encodeURIComponent(docId)}/restore`,
+            { method: "POST" },
+          ),
+    );
+  }
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}/restore`,
     { method: "POST" },
@@ -1009,6 +1109,12 @@ export function restoreTrashedDocument(docId: string) {
 }
 
 export function permanentlyDeleteDocument(docId: string, confirmation: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(
+      ({ desktopPermanentlyDeleteDocument }) =>
+        desktopPermanentlyDeleteDocument(docId, confirmation),
+    );
+  }
   return apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}/permanent`,
     { method: "DELETE", body: JSON.stringify({ confirmation }) },

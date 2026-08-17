@@ -55,6 +55,14 @@ const shell = readFileSync(
   new URL("../spa/src/components/AppShell.tsx", import.meta.url),
   "utf8",
 );
+const activityPage = readFileSync(
+  new URL("../spa/src/pages/MCPActivityPage.tsx", import.meta.url),
+  "utf8",
+);
+const historyDialog = readFileSync(
+  new URL("../spa/src/components/editor/VersionHistoryDialog.tsx", import.meta.url),
+  "utf8",
+);
 
 ok(
   "Worker 只精确代理 MCP 根端点",
@@ -145,6 +153,21 @@ ok(
   /Name:\s*["']get_document_history_settings["']/.test(mcp) &&
     /Name:\s*["']update_document_history_settings["']/.test(mcp),
   "Agent 需要和网页使用同一套历史版本设置",
+);
+ok(
+  "会员可以查看 MCP 活动日志",
+  /GET \/api\/mcp\/activity/.test(server) &&
+    /to="\/mcp\/activity"/.test(accessCard) &&
+    /listMCPActivity/.test(activityPage) &&
+    /entry\.documentTitle/.test(activityPage),
+  "审计表已有数据，用户界面必须能分页查看工具、令牌和文档关联",
+);
+ok(
+  "版本历史支持比较当前或其他历史版本",
+  /buildVersionDiff/.test(historyDialog) &&
+    /historyCompareWith/.test(historyDialog) &&
+    /historyCurrent/.test(historyDialog),
+  "历史窗口不能只提供整篇预览和恢复",
 );
 ok(
   "公开 MCP 指南覆盖客户端配置且链接独立版本文档",

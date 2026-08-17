@@ -60,44 +60,34 @@ func (a *App) cleanupStripeCheckoutAttempts(ctx context.Context) error {
 		return nil
 	}
 
-	if _, err := conn.Exec(ctx, `
-		WITH expired AS (
-			SELECT user_id
-			FROM stripe_checkout_attempts
-			WHERE expires_at <= now()
-			ORDER BY expires_at
-			LIMIT $1
-			FOR UPDATE SKIP LOCKED
-		)
-		DELETE FROM stripe_checkout_attempts AS attempts
-		USING expired
-		WHERE attempts.user_id = expired.user_id
-	`, stripeCheckoutCleanupBatch); err != nil {
-		return err
-	}
 	if a.stripeCheckout == nil {
 		release()
 		return nil
 	}
 	rows, err := conn.Query(ctx, `
-		SELECT attempts.user_id
+		SELECT attempts.user_id, attempts.checkout_session_id
 		FROM stripe_checkout_attempts AS attempts
 		JOIN users ON users.id = attempts.user_id
-		WHERE users.membership_tier = 'lifetime'
-		ORDER BY attempts.updated_at
+		WHERE attempts.expires_at <= now()
+		   OR users.membership_tier = 'lifetime'
+		ORDER BY attempts.expires_at
 		LIMIT $1
 	`, stripeCheckoutCleanupBatch)
 	if err != nil {
 		return err
 	}
-	userIDs := make([]int, 0, stripeCheckoutCleanupBatch)
+	type cleanupCandidate struct {
+		userID    int
+		sessionID string
+	}
+	candidates := make([]cleanupCandidate, 0, stripeCheckoutCleanupBatch)
 	for rows.Next() {
-		var userID int
-		if err := rows.Scan(&userID); err != nil {
+		var candidate cleanupCandidate
+		if err := rows.Scan(&candidate.userID, &candidate.sessionID); err != nil {
 			rows.Close()
 			return err
 		}
-		userIDs = append(userIDs, userID)
+		candidates = append(candidates, candidate)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -106,15 +96,25 @@ func (a *App) cleanupStripeCheckoutAttempts(ctx context.Context) error {
 	rows.Close()
 	release()
 
-	for _, userID := range userIDs {
+	for _, candidate := range candidates {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		expireCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		expireErr := a.expirePendingCheckoutForMember(expireCtx, userID, "")
+		removable, expireErr := a.expireCheckoutSessionForRemoval(expireCtx, candidate.sessionID)
 		cancel()
 		if expireErr != nil {
-			log.Printf("Stripe checkout cleanup for member %d: %v", userID, expireErr)
+			log.Printf("Stripe checkout cleanup for user %d session %s: %v", candidate.userID, candidate.sessionID, expireErr)
+			continue
+		}
+		if !removable {
+			continue
+		}
+		if _, err := a.db.Exec(ctx, `
+			DELETE FROM stripe_checkout_attempts
+			WHERE user_id = $1 AND checkout_session_id = $2
+		`, candidate.userID, candidate.sessionID); err != nil {
+			return err
 		}
 	}
 	return nil

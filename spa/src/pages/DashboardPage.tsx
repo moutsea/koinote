@@ -16,6 +16,7 @@ import { MembershipCard } from "../components/MembershipCard";
 import { MCPAccessCard } from "../components/MCPAccessCard";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
+import { AccountDeletionCard } from "../components/AccountDeletionCard";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { openKoinoteWebPath } from "../externalNavigation";
 
@@ -138,6 +139,10 @@ export function DashboardPage() {
 
       <div id="mcp" className="mt-4 scroll-mt-20">
         <MCPAccessCard user={user} />
+      </div>
+
+      <div id="delete-account" className="mt-4 scroll-mt-20">
+        <AccountDeletionCard user={user} />
       </div>
     </PageContainer>
   );

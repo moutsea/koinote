@@ -1,9 +1,13 @@
 import { desktopURL } from "./runtime";
+import { isDesktopLocalModeSelected } from "./localMode";
 
 export async function desktopRawFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
+  if (isDesktopLocalModeSelected()) {
+    throw new Error("local_mode_network_disabled");
+  }
   const { fetch } = await import("@tauri-apps/plugin-http");
   const authenticated = new Headers(init?.headers).has("Authorization");
   return fetch(desktopURL(path), {

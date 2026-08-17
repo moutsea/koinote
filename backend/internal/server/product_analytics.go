@@ -49,13 +49,18 @@ func (a *App) recordProductMilestone(ctx context.Context, userID int, event prod
 	if a.db == nil || userID <= 0 {
 		return
 	}
-	if _, err := a.db.Exec(ctx, `
-		INSERT INTO product_milestones (user_id, event_name, occurred_at)
-		VALUES ($1, $2, now())
-		ON CONFLICT (user_id, event_name) DO NOTHING
-	`, userID, string(event)); err != nil {
+	if err := a.insertProductMilestone(ctx, userID, event); err != nil {
 		log.Printf("product milestone %s: %v", event, err)
 	}
+}
+
+func (a *App) insertProductMilestone(ctx context.Context, userID int, event productMilestone) error {
+	_, err := a.db.Exec(ctx, `
+		INSERT INTO product_milestones (user_id, event_name, occurred_at)
+		SELECT id, $2, now() FROM users WHERE id = $1 FOR KEY SHARE
+		ON CONFLICT (user_id, event_name) DO NOTHING
+	`, userID, string(event))
+	return err
 }
 
 func (a *App) recordProductMilestoneAsync(userID int, event productMilestone) {
@@ -76,7 +81,7 @@ func (a *App) noteUserActivity(userID int) {
 		defer cancel()
 		if _, err := a.db.Exec(ctx, `
 			INSERT INTO user_daily_activity (user_id, activity_date, first_seen_at)
-			VALUES ($1, $2::date, now())
+			SELECT id, $2::date, now() FROM users WHERE id = $1 FOR KEY SHARE
 			ON CONFLICT (user_id, activity_date) DO NOTHING
 		`, userID, day.Format("2006-01-02")); err != nil {
 			log.Printf("daily activity: %v", err)

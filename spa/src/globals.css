@@ -440,6 +440,27 @@ body {
   color: inherit;
 }
 
+/* 默认排版下的行内代码。Typography 只会改字体并补一对反引号，
+   背景与正文相同，看起来像没有解析；这里改成真正的 WYSIWYG 高亮。
+   套自媒体主题时编辑器会移除 prose class，由主题自己的 code 规则接管。 */
+.ProseMirror.prose code:not(pre code) {
+  color: var(--ink-strong);
+  background: var(--ink-wash-strong);
+  border: 1px solid var(--ink-line);
+  border-radius: 0.3rem;
+  padding: 0.12em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  font-weight: 600;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.ProseMirror.prose code:not(pre code)::before,
+.ProseMirror.prose code:not(pre code)::after {
+  content: none;
+}
+
 /* 代码块：等宽字体与背景 */
 .ProseMirror pre {
   background: #0d1117;

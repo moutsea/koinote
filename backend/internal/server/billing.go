@@ -556,16 +556,12 @@ func (a *App) expirePendingCheckoutForMember(ctx context.Context, userID int, co
 		return err
 	}
 	if pendingSessionID != completedSessionID {
-		if _, expireErr := a.stripeCheckout.Expire(ctx, pendingSessionID, &stripe.CheckoutSessionExpireParams{}); expireErr != nil {
-			current, retrieveErr := a.stripeCheckout.Retrieve(ctx, pendingSessionID, &stripe.CheckoutSessionRetrieveParams{})
-			if retrieveErr != nil || current == nil {
-				return fmt.Errorf("expire pending checkout: %w", expireErr)
-			}
-			switch current.Status {
-			case stripe.CheckoutSessionStatusComplete, stripe.CheckoutSessionStatusExpired:
-			default:
-				return fmt.Errorf("expire pending checkout: %w", expireErr)
-			}
+		removable, expireErr := a.expireCheckoutSessionForRemoval(ctx, pendingSessionID)
+		if expireErr != nil {
+			return fmt.Errorf("expire pending checkout: %w", expireErr)
+		}
+		if !removable {
+			return nil
 		}
 	}
 	_, err = a.db.Exec(ctx, `
@@ -573,6 +569,31 @@ func (a *App) expirePendingCheckoutForMember(ctx context.Context, userID int, co
 		WHERE user_id = $1 AND checkout_session_id = $2
 	`, userID, pendingSessionID)
 	return err
+}
+
+func (a *App) expireCheckoutSessionForRemoval(ctx context.Context, sessionID string) (bool, error) {
+	if a.stripeCheckout == nil {
+		return false, errors.New("Stripe checkout client is unavailable")
+	}
+	if _, err := a.stripeCheckout.Expire(ctx, sessionID, &stripe.CheckoutSessionExpireParams{}); err == nil {
+		return true, nil
+	} else {
+		current, retrieveErr := a.stripeCheckout.Retrieve(ctx, sessionID, &stripe.CheckoutSessionRetrieveParams{})
+		if retrieveErr != nil {
+			return false, fmt.Errorf("retrieve checkout after expiration failed: %w", retrieveErr)
+		}
+		if current == nil {
+			return false, errors.New("retrieve checkout after expiration returned no session")
+		}
+		switch current.Status {
+		case stripe.CheckoutSessionStatusExpired:
+			return true, nil
+		case stripe.CheckoutSessionStatusComplete:
+			return false, nil
+		default:
+			return false, fmt.Errorf("expire checkout %s: %w", sessionID, err)
+		}
+	}
 }
 
 func (a *App) grantLifetimeMembership(
@@ -805,6 +826,18 @@ func (a *App) billingWebhook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("stripe webhook validation: %v", err)
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "checkout_invalid", "Checkout could not be validated")
+		return
+	}
+	detached, err := a.acknowledgeDetachedCheckout(ctx, checkout, event.ID)
+	if err != nil {
+		log.Printf("stripe webhook detached payment lookup: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Could not verify prior payment")
+		return
+	}
+	if detached {
+		httpx.JSON(w, http.StatusOK, map[string]any{
+			"received": true, "status": "account_deleted",
+		})
 		return
 	}
 	if _, err := a.grantLifetimeMembershipAndNotify(ctx, checkout, event.ID, nil); err != nil {

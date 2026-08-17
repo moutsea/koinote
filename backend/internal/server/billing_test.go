@@ -26,6 +26,8 @@ type fakeStripeCheckoutClient struct {
 	createdParams  *stripe.CheckoutSessionCreateParams
 	createResponse *stripe.CheckoutSession
 	retrieveResult *stripe.CheckoutSession
+	retrieveErr    error
+	expireErr      error
 	expiredIDs     []string
 }
 
@@ -101,12 +103,21 @@ func (f *fakeStripeCheckoutClient) Create(_ context.Context, params *stripe.Chec
 }
 
 func (f *fakeStripeCheckoutClient) Retrieve(_ context.Context, _ string, _ *stripe.CheckoutSessionRetrieveParams) (*stripe.CheckoutSession, error) {
-	return f.retrieveResult, nil
+	return f.retrieveResult, f.retrieveErr
 }
 
 func (f *fakeStripeCheckoutClient) Expire(_ context.Context, sessionID string, _ *stripe.CheckoutSessionExpireParams) (*stripe.CheckoutSession, error) {
 	f.expiredIDs = append(f.expiredIDs, sessionID)
+	if f.expireErr != nil {
+		return nil, f.expireErr
+	}
 	return &stripe.CheckoutSession{ID: sessionID, Status: stripe.CheckoutSessionStatusExpired}, nil
+}
+
+func (f *concurrentStripeCheckoutClient) addSession(sessionID string, status stripe.CheckoutSessionStatus) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sessions[sessionID] = &stripe.CheckoutSession{ID: sessionID, Status: status}
 }
 
 func paidLifetimeCheckout() *stripe.CheckoutSession {
@@ -461,6 +472,7 @@ func TestCheckoutAttemptsSerializeAndReplaceCurrency(t *testing.T) {
 	`, userID, "cs_test_expired_"+suffix, "https://checkout.stripe.test/expired/"+suffix); err != nil {
 		t.Fatal(err)
 	}
+	stripeClient.addSession("cs_test_expired_"+suffix, stripe.CheckoutSessionStatusExpired)
 	if err := app.cleanupStripeCheckoutAttempts(ctx); err != nil {
 		t.Fatalf("后台删除过期待支付记录: %v", err)
 	}

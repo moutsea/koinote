@@ -6,7 +6,9 @@ import { imageURLForAttempt } from "./imageLoading";
 import {
   DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
   isDesktopLocalImageURL,
+  isRemoteHTTPImageSource,
 } from "../../desktop/offlineImagesCore";
+import { isDesktopLocalModeSelected } from "../../desktop/localMode";
 
 /**
  * Typora 式图片节点：平时渲染图片，点击后浮出 Markdown 源码可编辑。
@@ -47,15 +49,18 @@ export function ImageNodeView({
   const [draft, setDraft] = useState(() => toMarkdown(alt, src, title));
   const [broken, setBroken] = useState(false);
   const desktopRuntime = isDesktopRuntime();
+  const localMode = desktopRuntime && isDesktopLocalModeSelected();
   const imageProxyOrigin = desktopRuntime ? desktopAPIOrigin() : undefined;
+  const resolveBeforeDisplay =
+    desktopRuntime && (localMode || isDesktopLocalImageURL(src));
   const [displaySrc, setDisplaySrc] = useState(() =>
-    desktopRuntime && isDesktopLocalImageURL(src) ? "" : src,
+    resolveBeforeDisplay ? "" : src,
   );
-  const [resolvingLocalImage, setResolvingLocalImage] = useState(
-    desktopRuntime && isDesktopLocalImageURL(src),
-  );
+  const [resolvingLocalImage, setResolvingLocalImage] = useState(resolveBeforeDisplay);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const retryableDisplaySource = !/^(?:data|blob):/i.test(displaySrc);
+  const blockedByLocalMode = localMode && isRemoteHTTPImageSource(displaySrc);
+  const retryableDisplaySource =
+    !blockedByLocalMode && !/^(?:data|blob):/i.test(displaySrc);
   // 重试轮次。既驱动退避定时器，也改变实际请求 URL 与 <img> 的 key。
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -84,8 +89,9 @@ export function ImageNodeView({
     }
     let disposed = false;
     const localSource = isDesktopLocalImageURL(src);
-    if (localSource) setDisplaySrc("");
-    setResolvingLocalImage(localSource);
+    const mustResolveBeforeDisplay = localMode || localSource;
+    if (mustResolveBeforeDisplay) setDisplaySrc("");
+    setResolvingLocalImage(mustResolveBeforeDisplay);
     void import("../../desktop/offlineStore")
       .then(({ desktopImageSyncError, desktopResolveImageSource }) =>
         Promise.all([
@@ -109,13 +115,13 @@ export function ImageNodeView({
       .catch(() => {
         if (disposed) return;
         setResolvingLocalImage(false);
-        setDisplaySrc(localSource ? "" : src);
-        if (localSource) setBroken(true);
+        setDisplaySrc(mustResolveBeforeDisplay ? "" : src);
+        if (mustResolveBeforeDisplay) setBroken(true);
       });
     return () => {
       disposed = true;
     };
-  }, [desktopRuntime, src]);
+  }, [desktopRuntime, localMode, src]);
 
   useEffect(() => {
     if (!desktopRuntime) return;
@@ -305,7 +311,7 @@ export function ImageNodeView({
             <span className="block px-3 py-6 text-center text-xs text-neutral-400">
               {t.editor.imageRetrying}
             </span>
-          ) : broken ? (
+          ) : broken || blockedByLocalMode ? (
             // 图挂了也要能点开改 URL，否则用户被困在一个坏节点上。
             // 还在重试期间给不同的文案：那几秒里说"加载失败"会让人以为已经没救，
             // 于是去动一个其实马上就会自己好的地址

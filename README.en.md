@@ -61,7 +61,7 @@ operating system will show a security warning on first launch.
 - Debounced autosave that reports failures instead of silently dropping content
 - Revision-based optimistic locking detects concurrent browser and agent edits; conflicts
   keep the local draft and open an explicit merge UI
-- Lifetime members can inspect and restore history, enable or disable regular snapshots,
+- Lifetime members can inspect, compare line-by-line, and restore history, enable or disable regular snapshots,
   keep 1–100 versions per document, and choose whether MCP writes keep full history.
   Agent writes still retain the latest safety snapshot when full history is off
   (100 versions per account in total)
@@ -70,6 +70,7 @@ operating system will show a security warning on first launch.
 
 - The home page and public `/docs/mcp` guide explain client setup, authorization,
   conflict protection, and recovery for Codex, Claude Code, OpenCode, and OpenClaw
+- Dashboard exposes 180-day MCP activity logs with tool, token, document, result, and duration metadata, never document or token contents
 - A public `/pricing` page compares Free and Lifetime benefits and reads the current
   multi-currency Stripe price allowlist from the backend
 - Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
@@ -82,12 +83,15 @@ operating system will show a security warning on first launch.
   users can also explicitly sign out other devices
 - Recovery requests return the same result for unknown and OAuth-only accounts, while codes
   are stored only as HMAC values
+- Users can immediately delete an account from Dashboard after typed-email confirmation; images are removed asynchronously and required financial records are detached and retained as required by law
 
 **Desktop client (alpha)**
 
 - macOS and Windows share the React / TipTap UI; Tauri supplies the native window, SQLite, deep links, and OS keychain
+- A no-account local mode derives an AES-GCM key from a password, encrypts documents, folder names, and images in SQLite, and disables sync, sharing, billing, MCP, update checks, and every other network request
+- Local-mode data and account offline caches use separate namespaces. After sign-in, users can verify the local password and copy the current local documents, folders, and images into detached normal account documents
 - Documents, folders, and tabs are local-first, including offline create, edit, search, and organization
-- Desktop navigation exposes the MCP/version-history guides and Pricing; online users can manage MCP tokens and start Checkout, while admins can read site statistics; account-security and permanent-deletion actions continue in the system browser
+- Desktop navigation exposes the MCP/version-history guides and Pricing; online users can manage MCP tokens, inspect activity, and start Checkout, while admins can read site statistics; account deletion also clears local SQLite data and keychain tokens
 - The web and desktop editors check for remote changes while foregrounded and immediately on focus; clean documents update automatically, while local drafts require conflict resolution
 - Revision conflicts retain both local and cloud copies for an explicit choice instead of silently applying last-write-wins
 - OAuth and password sign-in stay in the system browser; PKCE codes are single-use, access tokens last 15 minutes, and rotating refresh tokens last 30 days
@@ -192,7 +196,9 @@ and individual revocation.
 PostgreSQL authenticates with a SHA-256 hash and keeps a separate AES-GCM-encrypted
 recovery copy. The account owner can reveal it on demand, while list responses never
 include complete tokens. Every MCP request rechecks membership, expiry, and revocation.
-Prefer a read-only token unless the client actually needs to modify documents.
+Prefer a read-only token unless the client actually needs to modify documents. Dashboard also
+shows a paginated 180-day activity log of tools, linked documents, outcomes, and duration without
+storing document bodies or bearer-token values.
 
 Configure Codex without committing the token:
 
@@ -338,7 +344,10 @@ npm run desktop:build     # installer for the current platform
 
 Production builds sync with `https://koinote.app`; development defaults to
 `http://localhost:5273`. SQLite never stores tokens, and signing out clears that account's
-offline document cache from the machine.
+offline document cache from the machine. Fully local mode uses a separate encrypted SQLite
+namespace; neither the password nor its derived key is uploaded, and the key is never persisted.
+Closing the app requires another unlock. A forgotten password cannot be recovered, so users should
+export ZIP backups regularly.
 
 ## Before you self-host
 

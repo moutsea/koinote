@@ -709,7 +709,7 @@ function RecentPayments({
               <tbody>
                 {payments.map((payment, index) => (
                   <tr
-                    key={`${payment.userEmail}-${payment.createdAt}-${index}`}
+                    key={`${payment.userEmail ?? "deleted"}-${payment.createdAt}-${index}`}
                     className="border-t"
                     style={{ borderColor: "var(--ink-line)" }}
                   >
@@ -718,14 +718,16 @@ function RecentPayments({
                         className="font-medium"
                         style={{ color: "var(--ink-black)" }}
                       >
-                        {payment.userName}
+                        {payment.userName ?? t.admin.deletedAccount}
                       </p>
-                      <p
-                        className="mt-0.5 text-xs"
-                        style={{ color: "var(--ink-faint)" }}
-                      >
-                        {payment.userEmail}
-                      </p>
+                      {payment.userEmail && (
+                        <p
+                          className="mt-0.5 text-xs"
+                          style={{ color: "var(--ink-faint)" }}
+                        >
+                          {payment.userEmail}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span

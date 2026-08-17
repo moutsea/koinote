@@ -9,6 +9,7 @@ import {
 } from "./exportMedia";
 import { findWechatTheme } from "./wechatThemes";
 import { trackProductEvent } from "../../api";
+import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 
 /**
  * 导出到自媒体平台。
@@ -100,8 +101,12 @@ export function MediaExportDialog({
           ),
         );
       }
-    } catch {
-      setError(t.editor.exportFailed);
+    } catch (error) {
+      setError(
+        isLocalModeNetworkDisabled(error)
+          ? t.desktopLocalMode.networkDisabled
+          : t.editor.exportFailed,
+      );
     } finally {
       setBusy(false);
     }

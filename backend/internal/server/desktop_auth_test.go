@@ -61,7 +61,7 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodGet, "/api/documents/doc-id/versions", true},
 		{http.MethodGet, "/api/documents/doc-id/versions/2", true},
 		{http.MethodPost, "/api/documents/doc-id/versions/2/restore", true},
-		{http.MethodDelete, "/api/documents/doc-id/permanent", false},
+		{http.MethodDelete, "/api/documents/doc-id/permanent", true},
 		{http.MethodGet, "/api/folders", true},
 		{http.MethodPost, "/api/folders", true},
 		{http.MethodPut, "/api/folders/folder-id", true},
@@ -82,6 +82,8 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodDelete, "/api/mcp/tokens/token-id", true},
 		{http.MethodPost, "/api/mcp/tokens/token-id/reveal", true},
 		{http.MethodGet, "/api/mcp/tokens/token-id/reveal", false},
+		{http.MethodGet, "/api/mcp/activity", true},
+		{http.MethodPost, "/api/mcp/activity", false},
 		{http.MethodGet, "/api/admin/stats", true},
 		{http.MethodPost, "/api/admin/stats", false},
 		{http.MethodPost, "/api/auth/password", false},
@@ -265,7 +267,6 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/auth/password", `{ "currentPassword": "old", "newPassword": "new-password" }`},
 		{http.MethodPost, "/api/auth/sessions/invalidate", ""},
-		{http.MethodDelete, "/api/documents/123e4567-e89b-42d3-a456-426614174000/permanent", `{ "confirmation": "DELETE" }`},
 	} {
 		forbidden := authenticatedJSON(pair1.AccessToken, test.method, test.path, test.body)
 		if forbidden.Code != http.StatusForbidden {
@@ -339,6 +340,21 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 		`{"docId":"`+docID+`","title":"Different","content":"body"}`)
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("different document retry status=%d body=%s", conflict.Code, conflict.Body.String())
+	}
+	trash := authenticatedJSON(pair2.AccessToken, http.MethodDelete, "/api/documents/"+docID, "")
+	if trash.Code != http.StatusOK {
+		t.Fatalf("desktop document trash status=%d body=%s", trash.Code, trash.Body.String())
+	}
+	purge := authenticatedJSON(pair2.AccessToken, http.MethodDelete, "/api/documents/"+docID+"/permanent", `{ "confirmation": "Offline draft" }`)
+	if purge.Code != http.StatusOK {
+		t.Fatalf("desktop document purge status=%d body=%s", purge.Code, purge.Body.String())
+	}
+	var purgedDocumentExists bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM documents WHERE doc_id = $1)`, docID).Scan(&purgedDocumentExists); err != nil {
+		t.Fatal(err)
+	}
+	if purgedDocumentExists {
+		t.Fatal("desktop permanent deletion left the document in the database")
 	}
 	cookieOnly := httptest.NewRequest(http.MethodPost, "/api/documents", strings.NewReader(
 		`{"docId":"`+docID+`","title":"Cookie cannot choose IDs"}`,

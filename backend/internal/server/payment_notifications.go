@@ -79,6 +79,7 @@ func (a *App) retryPaymentNotifications(ctx context.Context) error {
 		SELECT checkout_session_id
 		FROM stripe_payments
 		WHERE notified_at IS NULL
+		  AND user_id IS NOT NULL
 		  AND notification_next_try_at IS NOT NULL
 		  AND notification_next_try_at <= now()
 		  AND (notification_locked_until IS NULL OR notification_locked_until < now())
@@ -124,6 +125,7 @@ func (a *App) claimPaymentNotification(ctx context.Context, checkoutID string) (
 		SET notification_locked_until = now() + $2::interval,
 		    updated_at = now()
 		WHERE checkout_session_id = $1
+		  AND user_id IS NOT NULL
 		  AND notified_at IS NULL
 		  AND notification_next_try_at IS NOT NULL
 		  AND notification_next_try_at <= now()

@@ -100,7 +100,7 @@ export const fr: Messages = {
       "{storage} de stockage cloud pour documents et images",
       "Accès MCP pour Codex, Claude Code, OpenCode et d'autres agents",
       "Historique configurable et restauration par instantané de sécurité",
-      "Accès aux futures fonctions d'IA",
+      "Éligibilité membre aux futures fonctions d’IA, sous limites raisonnables d’usage et de disponibilité",
       "Toutes les fonctions de l'offre gratuite",
     ],
     loginToUpgrade: "Se connecter pour passer membre",
@@ -130,7 +130,7 @@ export const fr: Messages = {
       {
         question: "Les fonctions d'IA sont-elles déjà disponibles ?",
         answer:
-          "Pas encore. L'accès à vie inclut l'éligibilité aux futures fonctions d'IA lors de leur lancement.",
+          "Pas encore. L’accès à vie donne une éligibilité membre lors du lancement des fonctions concernées, sans garantie de date, de modèle, de fonctions précises ni d’inférence gratuite illimitée. Des limites d’usage, de coût, de région ou de fournisseur peuvent s’appliquer.",
       },
     ],
   },
@@ -328,6 +328,22 @@ export const fr: Messages = {
     sessionsInvalidated:
       "Les anciennes sessions sur les autres appareils ont été déconnectées.",
   },
+  accountDeletion: {
+    title: "Supprimer le compte",
+    description: "Cette action est irréversible. Exportez d’abord les documents et images à conserver.",
+    immediate: "Le compte, les documents, versions, partages, jetons MCP et images synchronisées sont immédiatement mis en suppression.",
+    membership: "L’abonnement à vie prend fin avec le compte. La suppression ne déclenche pas de remboursement automatique ; vos droits légaux restent applicables.",
+    paymentRecords: "Les données de paiement minimales nécessaires à la fiscalité, aux litiges et à la lutte contre la fraude sont dissociées du compte et conservées conformément à la loi.",
+    confirmLabel: "Saisissez l’adresse actuelle {email} pour confirmer",
+    finalConfirmation: "Supprimer ce compte immédiatement ? Cette action est irréversible.",
+    deleteButton: "Supprimer définitivement le compte",
+    deleting: "Suppression…",
+    mismatch: "L’adresse saisie ne correspond pas à ce compte.",
+    paymentPending: "Un paiement est encore en cours. Attendez sa fin ou contactez l’assistance avant de supprimer le compte.",
+    unavailable: "Impossible de fermer le paiement en toute sécurité pour le moment. Réessayez plus tard.",
+    failed: "La suppression du compte a échoué. Réessayez plus tard.",
+    localCleanupFailed: "Le compte cloud a été supprimé, mais certaines données hors ligne n’ont pas pu être effacées de cet appareil. Les jetons serveur sont invalides ; quittez l’application et supprimez manuellement ses données locales.",
+  },
   storage: {
     title: "Stockage cloud",
     documents: "Documents",
@@ -353,18 +369,18 @@ export const fr: Messages = {
     lifetimeBadge: "À vie",
     activeBadge: "Actif",
     description:
-      "Une mise à niveau unique pour plus d'espace d'écriture et l'accès aux futures fonctions d'IA.",
+      "Une mise à niveau unique pour plus de stockage, MCP, l’historique et l’éligibilité aux futures fonctions d’IA.",
     oneTimePayment: "Paiement unique, valable à vie",
     currencyLabel: "Devise de paiement",
     currencyHint: "Stripe Checkout vous facturera dans la devise sélectionnée.",
     storageBenefit: "10 Go de stockage cloud",
-    aiBenefit: "Accès aux futures fonctions d'IA",
+    aiBenefit: "Éligibilité membre aux futures fonctions d’IA lors de leur lancement",
     aiComingSoon: "Les fonctions d'IA arriveront plus tard",
     purchase: "Obtenir l'accès à vie",
     redirecting: "Ouverture du paiement sécurisé…",
     activeTitle: "Abonnement à vie débloqué",
     activeDescription:
-      "Votre compte bénéficie de 10 Go de stockage cloud et de l'accès futur à l'IA.",
+      "Votre compte bénéficie de 10 Go fixes de stockage cloud et de l’éligibilité membre aux futures fonctions d’IA lors de leur lancement.",
     unavailable:
       "Le paiement des abonnements n'est pas configuré sur ce déploiement.",
     loadFailed: "Impossible de charger le statut de l'abonnement.",
@@ -411,6 +427,22 @@ export const fr: Messages = {
     revoke: "Révoquer",
     revokeConfirm:
       "Les agents connectés perdront immédiatement l'accès. Révoquer ce jeton ?",
+    activity: "Journal d’activité",
+  },
+  mcpActivity: {
+    title: "Journal d’activité MCP",
+    description: "Consultez les outils appelés par l’Agent, les documents concernés et le résultat. Les journaux sont conservés 180 jours sans contenu de document ni de jeton.",
+    back: "Retour aux paramètres MCP",
+    membersOnly: "Le journal d’activité MCP est réservé aux membres à vie.",
+    loading: "Chargement de l’activité…",
+    loadFailed: "Impossible de charger l’activité MCP. Réessayez.",
+    retry: "Réessayer",
+    empty: "Aucune activité MCP. Les appels apparaîtront après la première utilisation d’un outil par un Agent.",
+    loadMore: "Charger plus",
+    success: "Réussi",
+    error: "Échec",
+    deletedToken: "Jeton révoqué ou supprimé",
+    deletedDocument: "Document supprimé",
   },
   documentHistorySettings: {
     title: "Historique des versions",
@@ -516,14 +548,12 @@ export const fr: Messages = {
     deletesOn: "Suppression définitive le {date}",
     restore: "Restaurer",
     deletePermanently: "Supprimer définitivement",
-    manageOnWeb: "Supprimer définitivement sur le Web",
     permanentWarning:
       "La suppression définitive efface aussi l’historique et ne peut pas être annulée. Continuer ?",
     typeToConfirm:
       "Saisissez « {title} » pour confirmer la suppression définitive :",
     loadFailed: "Impossible de charger la corbeille. Réessayez.",
-    actionFailed:
-      "L’action a échoué. Vérifiez le texte de confirmation ou réessayez.",
+    actionFailed: "L’action a échoué. Veuillez réessayer.",
   },
   invitationsPage: {
     title: "Inviter des amis",
@@ -575,6 +605,7 @@ export const fr: Messages = {
     recentPayments: "Paiements récents",
     noUsers: "Aucun utilisateur.",
     noPayments: "Aucun paiement.",
+    deletedAccount: "Compte supprimé",
     user: "Utilisateur",
     status: "Statut",
     joinedAt: "Inscription",
@@ -635,6 +666,12 @@ export const fr: Messages = {
     historyConflict:
       "Le document a encore changé. Fermez puis rouvrez l'historique.",
     restoreVersion: "Restaurer cette version",
+    historyCompareWith: "Comparer avec",
+    historyCurrent: "Version actuelle",
+    historyLoadingDiff: "Création du diff…",
+    historyNoChanges: "Ces versions sont identiques.",
+    historyLinesOmitted: "{n} lignes inchangées ou trop longues masquées",
+    historyTitleChanged: "Titre : {before} → {after}",
     historySource: {
       web: "Éditeur web",
       mcp: "Agent MCP",
@@ -842,6 +879,42 @@ function hello(name) {
     invalid: "Ce lien d’autorisation est invalide. Revenez dans l’application et réessayez.",
     failed: "L’autorisation n’a pas pu aboutir. Veuillez réessayer.",
   },
+  desktopLocalMode: {
+    badge: "Mode local",
+    title: "Écrire uniquement sur cet appareil",
+    description: "Aucun compte requis. Les documents et images sont chiffrés sur cet appareil, jamais envoyés, et les fonctions distantes sont désactivées.",
+    setupTitle: "Définir un mot de passe local",
+    setupDescription: "Ce mot de passe chiffre et déverrouille les données locales. Il n’est jamais envoyé et ne peut pas être récupéré.",
+    unlockTitle: "Déverrouiller le mode local",
+    unlockDescription: "Saisissez le mot de passe local pour accéder aux documents de cet appareil.",
+    password: "Mot de passe du mode local",
+    confirmPassword: "Confirmer le mot de passe",
+    passwordHint: "Au moins 8 caractères. Il sera redemandé après la fermeture de l’application.",
+    create: "Créer et ouvrir le mode local",
+    unlock: "Déverrouiller",
+    creating: "Création…",
+    unlocking: "Déverrouillage…",
+    useAccount: "Utiliser un compte Koinote",
+    enterLocalMode: "Passer en mode local",
+    lock: "Verrouiller le mode local",
+    encrypted: "Documents, noms de dossiers et images sont chiffrés en AES-GCM avant leur stockage dans SQLite.",
+    networkDisabled: "Le mode local bloque synchronisation, mises à jour, partage, paiement, MCP et toute autre requête distante.",
+    passwordMismatch: "Les mots de passe ne correspondent pas.",
+    invalidPassword: "Le mot de passe est incorrect.",
+    genericError: "Le mode local est indisponible. Redémarrez l’application et réessayez.",
+    localSubtitle: "Vous êtes en mode local. Les modifications restent sur cet appareil et ne sont pas synchronisées.",
+    localStorageTitle: "Stockage entièrement local",
+    localStorageDescription: "Il n’existe aucune copie cloud ni récupération automatique. Exportez régulièrement une sauvegarde ZIP.",
+    trashRetention: "Les documents de la corbeille locale ne sont jamais supprimés automatiquement.",
+    importTitle: "Importer les données locales",
+    importDescription: "Après vérification du mot de passe, copiez les documents, dossiers et images référencées vers ce compte. Cette copie reste indépendante.",
+    importButton: "Vérifier et importer",
+    importing: "Importation…",
+    importSuccess: "{documents} documents, {folders} dossiers et {images} images importés. Ils suivent maintenant la synchronisation normale.",
+    importEmpty: "Le mode local ne contient encore aucun document à importer.",
+    importPassword: "Saisissez le mot de passe local",
+    importWarning: "Une nouvelle importation crée une autre copie indépendante sans écraser la précédente.",
+  },
   desktopBilling: {
     successTitle: "Paiement terminé",
     cancelledTitle: "Paiement annulé",
@@ -873,6 +946,7 @@ function hello(name) {
     clearImageCache: "Vider le cache d’images hébergées",
     clearingImageCache: "Nettoyage…",
     imageCacheCleared: "Le cache d’images a été vidé. Les images seront remises en cache à l’ouverture des documents.",
+    imageMaintenanceDelayed: "La maintenance des images est retardée. Vos documents sont synchronisés et l’application réessaiera automatiquement.",
   },
   desktopUpdate: {
     check: "Rechercher des mises à jour",
@@ -1003,6 +1077,15 @@ function hello(name) {
           ],
         },
         {
+          title: "Accès à vie",
+          body: [
+            "« À vie » désigne un statut membre payé une seule fois, sans renouvellement et non transférable, tant que votre compte et le service Koinote existent. Ce n’est pas une promesse d’exploitation perpétuelle du service.",
+            "L’offre inclut actuellement 10 Go fixes de stockage cloud partagés entre documents et images ; les bonus d’invitation sont distincts. Aucune augmentation automatique future de ce quota de base n’est promise.",
+            "Les avantages IA futurs signifient une éligibilité membre si et quand les fonctions concernées sont lancées. Aucune date, fonction, modèle ou fournisseur n’est garanti, et cela ne signifie pas une inférence gratuite illimitée. Des limites raisonnables d’usage, de coût, de région, de modèle ou de fournisseur peuvent s’appliquer et seront précisées au lancement.",
+            "La suppression du compte met immédiatement fin au statut membre. Elle ne déclenche pas automatiquement de remboursement, sans limiter les droits légaux au remboursement ou ceux du consommateur.",
+          ],
+        },
+        {
           title: "Résiliation",
           body: [
             "Nous pouvons suspendre ou résilier l’accès en cas d’abus, de fraude, de risque de sécurité ou de violation de ces conditions. Vous pouvez cesser d’utiliser le service à tout moment.",
@@ -1089,7 +1172,9 @@ function hello(name) {
           title: "Conservation et suppression",
           body: [
             "Les documents passent d’abord par une corbeille de 30 jours ; contenu, versions, images et utilisation du stockage restent conservés. Après suppression définitive ou expiration, les images non référencées ailleurs sont mises en file d’attente de suppression.",
-            "Pour supprimer l’intégralité de votre compte et de ses données, écrivez-nous.",
+            "Vous pouvez supprimer immédiatement tout le compte depuis le tableau de bord en saisissant l’adresse actuelle puis en confirmant. Le compte, les documents, versions, partages, jetons MCP et le registre d’images sont supprimés ; les images associées sont retirées du stockage objet en arrière-plan. Cette action est irréversible.",
+            "Les données de paiement Stripe minimales nécessaires à la fiscalité, aux litiges et à la lutte contre la fraude sont dissociées du compte et conservées conformément à la loi. Les données supprimées présentes dans les sauvegardes expirent avec leur cycle de conservation et ne servent pas à restaurer un compte supprimé.",
+            "Si vous ne pouvez pas vous connecter ou souhaitez exercer un autre droit légal, contactez-nous à l’adresse ci-dessous.",
           ],
         },
         {
@@ -1101,7 +1186,7 @@ function hello(name) {
         {
           title: "Vos droits",
           body: [
-            "Vous pouvez consulter et modifier les informations de votre compte, exporter tous vos documents, et supprimer des documents ou votre compte à tout moment. Si votre droit local vous accorde des droits d’accès, de rectification, de portabilité ou d’effacement, vous pouvez les exercer via l’adresse ci-dessous.",
+            "Vous pouvez consulter et modifier les informations du compte, exporter tous les documents, et supprimer des documents ou le compte directement depuis le tableau de bord. Si votre droit local accorde d’autres droits d’accès, de rectification, de portabilité ou d’effacement, vous pouvez les exercer via l’adresse ci-dessous.",
           ],
         },
         {

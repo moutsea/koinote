@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds resilient Stripe Checkout returns and clearer payment recovery across web and desktop."
+          notes="Koinote Desktop $version adds encrypted local mode, safer account deletion, MCP activity, version diffs, scheduled update checks, and more resilient sync."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本完善会员支付体验：Stripe Checkout 会复用仍可付款的 Session，避免重复创建或重复支付；桌面支付完成后通过安全的 \`koinote://\` 回跳确认会员状态。短暂网络故障会继续等待，长时间未确认时会明确提示不要再次付款并联系支持。
+          此版本新增密码保护、完全断网的本地模式，可在登录后验证密码并原子导入本地资料；同时加入账号注销、MCP 活动日志、版本 Diff、客户端回收站永久删除与定时更新检查，并增强离线图片和同步错误恢复。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release improves membership payments: Stripe Checkout reuses an existing payable Session to avoid duplicate checkout attempts, and desktop payments return through a secure \`koinote://\` callback to confirm membership. Transient network failures keep polling, while delayed confirmation clearly tells users not to pay again and how to get support.
+          This release adds a password-protected, fully disconnected local mode with atomic import into a signed-in account. It also adds account deletion, MCP activity logs, version diffs, permanent trash deletion, scheduled update checks, and more resilient offline-image synchronization.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

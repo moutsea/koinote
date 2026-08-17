@@ -14,7 +14,7 @@ export function useSession() {
 }
 
 export function useCurrentUser(): User | undefined {
-  return useSession().data?.user;
+  return useSession().data?.user ?? undefined;
 }
 
 // 登出后清掉会话缓存，让依赖登录态的 UI 立即刷新。

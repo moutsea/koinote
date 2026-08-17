@@ -28,6 +28,8 @@ const invitationCard = fs.readFileSync("spa/src/components/InvitationCard.tsx", 
 const shareDialog = fs.readFileSync("spa/src/components/editor/ShareDialog.tsx", "utf8");
 const historySettings = fs.readFileSync("spa/src/components/DocumentHistorySettingsCard.tsx", "utf8");
 const pricing = fs.readFileSync("spa/src/pages/PricingPage.tsx", "utf8");
+const accountDeletion = fs.readFileSync("spa/src/components/AccountDeletionCard.tsx", "utf8");
+const admin = fs.readFileSync("spa/src/pages/AdminPage.tsx", "utf8");
 
 includes("注册文档页路由", main, 'path: "/documents"');
 includes("注册邀请页路由", main, 'path: "/invitations"');
@@ -50,6 +52,8 @@ excludes("控制台不再读取文档列表", dashboard, "useDocumentList");
 excludes("控制台不再渲染邀请卡", dashboard, "InvitationCard");
 excludes("控制台不再渲染用户名卡片", dashboard, "t.dashboard.username");
 includes("控制台渲染历史版本设置", dashboard, "<DocumentHistorySettingsCard user={user} />");
+includes("控制台渲染账号注销入口", dashboard, "<AccountDeletionCard user={user} />");
+includes("账号注销要求当前邮箱确认", accountDeletion, "t.accountDeletion.confirmLabel");
 includes("历史版本设置可读取", historySettings, "getDocumentHistorySettings");
 includes("历史版本设置可修改", historySettings, "updateDocumentHistorySettings");
 includes("文档页读取文档列表", documents, "useDocumentList");
@@ -61,6 +65,7 @@ excludes("分享链接不使用 Tauri 本地域名", shareDialog, "window.locati
 includes("价格页读取公开价目表", pricing, "getBillingPricing");
 includes("价格页登录用户可直接结账", pricing, "createMembershipCheckout");
 includes("顶栏包含价格入口", shell, 'to="/pricing"');
+includes("注销账号付款保留明确占位", admin, "payment.userName ?? t.admin.deletedAccount");
 
 console.log(`\naccount pages: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

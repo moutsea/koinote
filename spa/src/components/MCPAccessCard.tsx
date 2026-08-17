@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, Copy, Eye, EyeOff, KeyRound, LoaderCircle, Pencil, PlugZap, Trash2, X } from "lucide-react";
+import { Activity, Check, Copy, Eye, EyeOff, KeyRound, LoaderCircle, Pencil, PlugZap, Trash2, X } from "lucide-react";
 import {
   createMCPToken,
   listMCPTokens,
@@ -97,7 +97,7 @@ export function MCPAccessCard({ user }: { user: User }) {
           >
             <PlugZap className="h-5 w-5" />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="kn-heading-cn text-lg font-bold" style={{ color: "var(--ink-black)" }}>
               {t.mcp.title}
             </h2>
@@ -105,6 +105,16 @@ export function MCPAccessCard({ user }: { user: User }) {
               {active ? t.mcp.description : t.mcp.membersOnly}
             </p>
           </div>
+          {active && (
+            <Link
+              to="/mcp/activity"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--ink-wash)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+            >
+              <Activity className="h-3.5 w-3.5" />
+              {t.mcp.activity}
+            </Link>
+          )}
         </div>
 
         {!active ? (

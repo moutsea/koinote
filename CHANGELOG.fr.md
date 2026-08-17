@@ -6,28 +6,37 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Added
 
+- Ajout d’un mode bureau entièrement local, sans compte : documents, dossiers et images sont chiffrés avec une clé dérivée du mot de passe et toute connexion réseau est bloquée. Après connexion, une nouvelle vérification permet d’en copier un instantané indépendant vers le compte.
 - Ajout d’une version alpha macOS / Windows avec Tauri 2 : connexion PKCE dans le navigateur système,
   jetons dans le trousseau, documents et images local-first, envoi différé, cache d’images limité et résolution des conflits.
 - Ajout d’un lien de téléchargement vers les GitHub Releases pour macOS Apple Silicon, macOS Intel
   et Windows x64.
+- Le client vérifie les mises à jour toutes les six heures, réessaie après 30 minutes en cas d’échec temporaire et se remet à jour au retour au premier plan ou après reconnexion.
 - Détection des modifications distantes dans l’éditeur web et le client : mise à jour automatique
   des documents propres et demande explicite en cas de brouillon local concurrent.
 - Sauvegardes PostgreSQL chiffrées toutes les six heures vers un R2 privé, avec rétention, contrôle de santé, alertes et procédure de restauration.
+- Suppression autonome du compte avec confirmation de l’e-mail, nettoyage asynchrone des images et conservation dissociée des données financières requises, toujours visibles par l’administration comme compte supprimé.
+- Journal d’activité MCP paginé indiquant outil, jeton, document, résultat et durée, sans enregistrer le contenu des documents ni des jetons.
+- Diff ligne par ligne avec la version actuelle ou une autre version, avec calcul borné et repli des zones inchangées pour les grands documents.
 
 ### Changed
 
+- Clarification dans les conditions de l’accès à vie, des 10 Go fixes, de l’éligibilité IA future, des limites d’usage raisonnables, de la suppression du compte et des remboursements.
 - L’import Markdown vérifie les gros lots, décompresse les ZIP en arrière-plan, limite les envois,
   compresse en WebP les images de plus de 10 Mo (avec avertissement GIF statique) et libère les envois orphelins après un échec.
 - macOS 26 utilise une ressource Icon Composer native ; les anciennes versions de macOS et Windows conservent leurs icônes de secours.
 
 ### Fixed
 
+- La suppression de compte et le nettoyage Checkout revérifient désormais auprès de Stripe les sessions expirées localement et conservent les paiements terminés jusqu’à leur webhook. L’import du mode local passe par des lots temporaires bornés avec validation atomique, et les textes utilisateur contenant `$` ne sont plus altérés dans les messages de compte ou d’historique.
 - Correction du CORS des exports Word/PDF.
 - Stripe Checkout ne conserve qu’une session payable par utilisateur et le retour sécurisé `koinote://` permet au client de confirmer le paiement et d’actualiser l’abonnement.
 - Correction du refus des statistiques d’administration et des jetons MCP par la liste d’autorisation
   Bearer du client, retour des entrées Documentation et Tarifs, et ouverture dans le navigateur système
-  des opérations de sécurité et de suppression définitive réservées au Web au lieu d’un échec 403.
+  des opérations de sécurité du compte réservées au Web au lieu d’un échec 403.
   Les liens d’invitation et de partage copiés utilisent aussi l’URL publique plutôt qu’une adresse Tauri locale.
+- La corbeille du client permet désormais une suppression définitive après une seule confirmation native ;
+  le Web conserve la saisie du titre, et les brouillons locaux ainsi que les images hors ligne inutilisées sont nettoyés.
 - L’échec d’une image ne bloque plus toute la synchronisation : l’erreur est affichée, les sources du cache sont vérifiées et les images locales sont incluses dans l’export.
 
 ## [0.5.0] - 2026-08-15
