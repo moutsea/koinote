@@ -1,8 +1,7 @@
 /**
- * 导出物的排版样式，HTML 与 PDF 两条路径共用。
+ * HTML 导出物的排版样式。
  *
- * 这里只放浅色规则：PDF 是打印物，必须白底黑字，不能跟随用户的深色偏好。
- * HTML 导出会在此基础上追加一段 prefers-color-scheme 覆盖。
+ * 这里只放浅色规则，随后再追加一段 prefers-color-scheme 覆盖。
  */
 export const EXPORT_BASE_CSS = `
   body {
@@ -45,32 +44,6 @@ export const EXPORT_BASE_CSS = `
   .hljs-number, .hljs-symbol { color: #79c0ff; }
   .hljs-title, .hljs-title.function_, .hljs-section { color: #d2a8ff; }
   .hljs-variable, .hljs-name, .hljs-attribute { color: #ffa657; }
-`;
-
-/**
- * 仅 PDF 导出使用，覆盖在 EXPORT_BASE_CSS 之后。
- *
- * 代码块改成浅底：
- *   1. 与打印路径（globals.css 的 @media print）一致 —— 同一份文档走两条
- *      PDF 路径不该长得不一样；
- *   2. 深底在纸上是整片实色，打印机吃墨；
- *   3. 浅底位图压缩率高得多，直接决定 PDF 体积。
- * 高亮配色换成浅色主题而非像打印那样全部压成单色 —— PDF 多数在屏幕上看，
- * 留着高亮更有用。
- */
-export const EXPORT_PDF_CSS = `
-  pre {
-    background: #f6f8fa;
-    color: #1f2328;
-    border: 1px solid #d0d7de;
-  }
-  pre code { color: inherit; }
-  .hljs-comment, .hljs-quote { color: #6a737d; font-style: italic; }
-  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: #d73a49; }
-  .hljs-string, .hljs-attr, .hljs-template-tag { color: #032f62; }
-  .hljs-number, .hljs-symbol { color: #005cc5; }
-  .hljs-title, .hljs-title.function_, .hljs-section { color: #6f42c1; }
-  .hljs-variable, .hljs-name, .hljs-attribute { color: #e36209; }
 `;
 
 /** 仅 HTML 导出使用：静态文件会被人在深色系统下打开。 */

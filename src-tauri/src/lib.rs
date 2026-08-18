@@ -298,6 +298,19 @@ async fn desktop_abort_local_mode_import(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn desktop_print(window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        return window.print().map_err(|error| error.to_string());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    window
+        .eval("window.print()")
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -367,6 +380,7 @@ pub fn run() {
             desktop_import_local_mode,
             desktop_finalize_local_mode_import,
             desktop_abort_local_mode_import,
+            desktop_print,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Koinote");

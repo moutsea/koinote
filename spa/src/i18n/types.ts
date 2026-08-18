@@ -745,8 +745,6 @@ export interface Messages {
     exportHTML: string;
     exportPDF: string;
     exportDOCX: string;
-    exportPDFHint: string;
-    exportPrint: string;
     exportPrintHint: string;
     mediaExport: string;
     mediaExportHint: string;

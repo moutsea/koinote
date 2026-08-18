@@ -94,10 +94,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      // 这两个只在导出 PDF 时按需 import。不预先声明的话，dev 环境下首次点
-      // 「导出 PDF」会触发 Vite 现场预构建并强制整页刷新 —— 刷新会掐断
-      // 正在进行的下载，表现为「点了没反应，再点一次才行」。
-      include: ["html2canvas-pro", "jspdf"],
+      // 自媒体公式转图时才按需 import。不预先声明的话，dev 环境下首次导出
+      // 会触发 Vite 现场预构建并强制整页刷新，掐断正在进行的操作。
+      include: ["html2canvas-pro"],
     },
     build: {
       outDir: "dist",

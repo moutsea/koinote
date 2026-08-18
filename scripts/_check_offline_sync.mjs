@@ -731,7 +731,6 @@ assert.match(
 for (const file of [
   "../spa/src/documentTransfer.ts",
   "../spa/src/components/editor/exportDocx.ts",
-  "../spa/src/components/editor/exportPdf.ts",
 ]) {
   const source = readFileSync(new URL(file, import.meta.url), "utf8");
   assert.match(

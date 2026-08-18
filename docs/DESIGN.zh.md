@@ -660,47 +660,24 @@ canonical 与 OpenGraph/Twitter 卡片；口令档的 meta 只回 `protected=tru
 “我的文档”的全量 ZIP 迁移与单篇格式导出分开：前者以 Markdown、目录和图片的可逆搬迁为目标，
 后者以交付给阅读器、办公软件或自媒体平台为目标。全量迁移细节见“搜索、迁移与产品分析”。
 
-六条路径，全部在浏览器端完成，不占后端资源：
+五条路径，全部在客户端完成，不占后端资源：
 
-| 格式              | 实现                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `.md`             | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown  |
-| `.html`           | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
-| `.docx`           | `docx` 库，走 ProseMirror 文档树构建                          |
-| `.pdf`            | html2canvas-pro 栅格化 + jsPDF 分页，一键下载                 |
-| 微信公众号        | 主题样式内联 + 公式转图，写进剪贴板                           |
-| 打印 / 另存为 PDF | 浏览器原生打印管道 + `@media print`                           |
+| 格式       | 实现                                                          |
+| ---------- | ------------------------------------------------------------- |
+| `.md`      | 直接取 `storage.markdown.getMarkdown()`，内容本就是 Markdown  |
+| `.html`    | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
+| `.docx`    | `docx` 库，走 ProseMirror 文档树构建                          |
+| `.pdf`     | 系统原生打印管道 + `@media print`                             |
+| 自媒体平台 | 微信公众号 / 知乎复制富文本，掘金复制原生 Markdown            |
 
-**PDF 为什么是两条路**：浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
-而打印对话框无法绕过。所以「一键下载」与「文字可选可搜」在纯前端不能同时成立，
-两条路各保留一条：
+PDF 只保留一个入口。浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
+打印对话框也无法绕过，因此用户在系统对话框中选择“保存为 PDF”。桌面 macOS
+通过 Tauri 原生命令打开系统打印面板，Windows 与网页使用浏览器打印管道。
+产物保留可选择、可搜索、可复制的文字，不再维护体积更大且文字不可选的栅格版本。
 
-|                   | 一键下载         | 文字可选可搜   | 体积         |
-| ----------------- | ---------------- | -------------- | ------------ |
-| `.pdf`（栅格）    | 是               | 否，文字是位图 | 约 650 KB/页 |
-| 打印 / 另存为 PDF | 否，需在对话框选 | 是，矢量       | 小得多       |
-
-那个对话框与打印机无关：Chrome 选「另存为 PDF」时走的是 Skia 的 PDF 后端，
-不碰任何打印机驱动，未装打印机也能用。CSS 规范里这套东西叫 _paged media_，
-PDF 只是它的一个输出目标。
-
-栅格路径的实现取舍：
-
-- **栅格化真实 DOM，而不是手工在 canvas 上画字**。公式、代码高亮、表格边框
-  都由浏览器排版，不用自己写排版逻辑 —— 手绘方案要支持 LaTeX 等于重写一个
-  TeX 排版引擎。
-- **分页切口对齐到块元素边界**，避免把一行字横着切两半。但若紧随切点的元素
-  本身高过一页（长代码块），它无论如何都要被硬切，此时不提前断页，否则白扔
-  半页空白。
-- **图片先转 data URL 再栅格化**。跨域图片会让 canvas 变成 tainted，之后
-  `toDataURL` 直接抛 `SecurityError`，表现是整个导出失败而非少一张图。
-- **代码块在 PDF 里用浅底**，与打印路径一致；深底在纸上是整片实色，且位图
-  压缩率差得多。
-- **倍率 2 倍（≈192 DPI），无损 PNG**。压缩等级与去 alpha 通道都实测过，
-  对体积没有影响；唯一有效的是有损 JPEG（省 14%~40%），但中文小字在 JPEG 下
-  边缘起振铃，画质优先。
-- `html2canvas-pro` 而非 `html2canvas`：Tailwind v4 默认输出 `oklch()` 颜色，
-  原版认不出会渲染成透明或黑色。
+这个对话框与必须存在实体打印机无关：浏览器选择“保存为 PDF”时走自身的 PDF
+后端，不碰打印机驱动。CSS 规范里这套东西叫 _paged media_，PDF 只是它的一个
+输出目标。
 
 **DOCX 的降级取舍**：公式保留为 LaTeX 源文本（转 Word 的 OMML 是另一个量级的
 工作，保留源码至少无损可读）；代码块只给等宽字体加浅灰底，不做语法高亮着色；
@@ -1000,15 +977,14 @@ Worker：`npm run test:worker` —— `normalizeImageBase` 的 21 条纯函数�
 `/api/images/config` 路由挂对、`env` 读到、响应结构正确（Node 那层验不了这些）。
 它会临时改写 `wrangler.jsonc` 再从 `git show HEAD` 还原。
 
-前端导出这块没有单元测试框架，改用**真浏览器端到端验证** —— 协议层的 curl
-验不了「点了导出按钮之后浏览器到底下载了什么」。两个脚本走完整链路：登录、
-写入含公式/代码/表格的内容、点菜单、抓下载文件、解析产物。
+前端下载导出改用**真浏览器端到端验证** —— 协议层的 curl 验不了「点了导出
+按钮之后浏览器到底下载了什么」。脚本走完整链路：登录、写入含公式/代码/表格
+的内容、点菜单、抓下载文件并解析产物。
 
 ```bash
-pip install playwright pypdf pillow && playwright install chromium
+pip install playwright && playwright install chromium
 
 # 建议对着生产构建物跑（npm run build && npx vite preview）
-PROBE_BASE=http://localhost:5274 python3 scripts/verify_pdf_export.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_export_formats.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_share_rotation.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
@@ -1025,14 +1001,11 @@ PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
 `verify_share_rotation.py` 验证放宽权限时老链接确实失效。这条必须走真实 HTTP：
 单元测试只能证明判定函数对，证明不了「那个 URL 真的打不开了」。
 
-`verify_pdf_export.py` 会解析 PDF 内部结构：页数、A4 尺寸、**每页内容流实际
-引用的 XObject**（判断分页是否正确 —— jsPDF 把所有位图放在一个共享资源字典里，
-所以不能只看 `page.images`）、各页位图指纹是否互不相同、分页填充率、单页体积，
-以及导出时按需加载了哪些 chunk。
+`verify_export_formats.py` 覆盖 Markdown、HTML 与 DOCX 三种下载格式，重点是公式
+是否真的落地。PDF 统一走系统打印面板，`test:media-export` 会校验唯一菜单入口、
+网页打印管道与 Tauri 原生命令接线；发版前仍需在目标系统手动确认打印面板。
 
-`verify_export_formats.py` 覆盖四种下载格式，重点是公式在每种格式里是否真的落地。
-
-两个脚本都需要后端与数据库在跑，且会在数据库里留下一个 `pdfprobe` 测试账号。
+这些浏览器脚本需要后端与数据库在跑，且会在数据库里留下测试账号。
 
 ## 构建与部署
 

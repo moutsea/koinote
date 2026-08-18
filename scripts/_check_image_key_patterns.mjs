@@ -147,7 +147,7 @@ for (const localSource of [
   );
 }
 
-for (const file of ["exportDocx.ts", "exportPdf.ts"]) {
+for (const file of ["exportDocx.ts"]) {
   const source = readFileSync(
     new URL(`../spa/src/components/editor/${file}`, import.meta.url),
     "utf8",

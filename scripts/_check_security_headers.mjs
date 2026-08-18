@@ -141,7 +141,7 @@ function parseCSP(header) {
   ok("img-src 允许 https:", (csp["img-src"] ?? []).includes("https:"), String(csp["img-src"]));
   ok("img-src 允许 data:", (csp["img-src"] ?? []).includes("data:"), String(csp["img-src"]));
   ok(
-    "img-src 允许 blob:（导出 PDF 时 html2canvas 的中间产物）",
+    "img-src 允许 blob:（本地图片预览与浏览器图像处理中间产物）",
     (csp["img-src"] ?? []).includes("blob:"),
     String(csp["img-src"]),
   );

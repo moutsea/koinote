@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证四种导出格式，重点是公式在各格式里是否真的落地。
+"""验证三种下载格式，重点是公式在各格式里是否真的落地。
 
 起因：@tiptap/extension-mathematics 的 renderHTML 只输出带 data-latex 的空元素，
 公式的可见形态由编辑器内的 nodeview 提供。导出走 getHTML()，拿不到 nodeview，
@@ -123,13 +123,7 @@ def main():
         # 公式在 DOCX 里保留为 LaTeX 源码（Word 的 OMML 转换不在范围内）
         check("公式以 LaTeX 源码保留", "E=mc^2" in doc, "公式内容丢失")
 
-        print("\n[5] PDF（回归确认）")
-        pdf = export_via_menu("PDF\n")
-        import pypdf
-        r = pypdf.PdfReader(str(pdf))
-        check("PDF 可解析", len(r.pages) >= 1, f"{len(r.pages)} 页")
-
-        print("\n[6] JS 报错")
+        print("\n[5] JS 报错")
         check("无未捕获异常", not errors, "; ".join(errors[:2]))
 
         b.close()

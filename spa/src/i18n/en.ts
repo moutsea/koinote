@@ -919,10 +919,8 @@ export const en: Messages = {
     exportHTML: "Web page (.html)",
     exportPDF: "PDF",
     exportDOCX: "Word (.docx)",
-    exportPDFHint: "Downloads directly; text becomes an image",
-    exportPrint: "Print / Save as PDF",
     exportPrintHint:
-      "Selectable, searchable text — choose “Save as PDF” in the dialog",
+      "Selectable, searchable text — save as PDF in the system dialog",
     mediaExport: "Export to publishing platforms",
     mediaExportHint: "Optimized for WeChat, Zhihu, and Juejin",
     mediaTitle: "Export to a publishing platform",

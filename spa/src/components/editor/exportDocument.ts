@@ -2,16 +2,9 @@ import type { Editor } from "@tiptap/react";
 import { EXPORT_BASE_CSS, EXPORT_DARK_CSS } from "./exportStyles";
 import { highlightCodeBlocks } from "./highlightCode";
 import { renderMathInHTML } from "./renderMath";
+import { isDesktopRuntime } from "../../desktop/runtime";
 
-/**
- * 文档导出。
- *
- * PDF 有两条路径，各有取舍，都保留：
- *   - exportPDF（见 exportPdf.ts）：一键下载，栅格化，文字不可选
- *   - exportPrint：走浏览器打印管道，文字矢量可选可搜，但要在对话框里选「另存为 PDF」
- * 浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，这个对话框绕不开，
- * 所以「一键」与「文字可选」在纯前端无法同时成立。
- */
+/** 文档导出。PDF 统一走系统打印管道，保留可选择、可搜索的矢量文字。 */
 
 /** 字符串进、字符串出地补高亮。HTML 导出走的是字符串拼接，不经过 DOM 舞台。 */
 function withHighlightedCode(html: string): string {
@@ -105,15 +98,14 @@ export function exportHTML(editor: Editor, title: string, fallback: string) {
   );
 }
 
-// ---------- 打印 / 另存为 PDF ----------
+// ---------- PDF ----------
 
 /**
  * 走浏览器打印管道。文字是矢量的，可选可搜可复制，但用户要在对话框里
  * 选「另存为 PDF」—— 浏览器不提供绕过对话框直接产出矢量 PDF 的接口。
- * 想一键下载见 exportPdf.ts。
  * 打印样式见 globals.css 的 @media print 段。
  */
-export function exportPrint(title: string, fallback: string) {
+export async function exportPrint(title: string, fallback: string) {
   const root = document.body;
   root.classList.add("koinote-printing");
 
@@ -130,5 +122,14 @@ export function exportPrint(title: string, fallback: string) {
   // 部分浏览器不触发 afterprint，兜一个超时避免类名与标题残留
   window.setTimeout(cleanup, 60_000);
 
+  if (isDesktopRuntime()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    try {
+      await invoke("desktop_print");
+    } finally {
+      cleanup();
+    }
+    return;
+  }
   window.print();
 }

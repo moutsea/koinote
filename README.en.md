@@ -117,8 +117,7 @@ operating system will show a security warning on first launch.
 | Markdown                 | As-is                                                                             |
 | HTML                     | One HTML file with embedded document styles; KaTeX CSS and images remain external |
 | DOCX                     | Built from the document tree; formulas keep their LaTeX source                    |
-| PDF                      | One-click download (rasterized)                                                   |
-| Print / Save as PDF      | Vector text — selectable and searchable                                           |
+| PDF                      | Opens the system print dialog for selectable, searchable text                     |
 | **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin                          |
 
 My Documents also provides bulk portability: import individual `.md` files, folders with

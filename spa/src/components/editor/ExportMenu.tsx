@@ -7,7 +7,6 @@ import {
   FileText,
   FileType,
   MessageSquare,
-  Printer,
 } from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
@@ -133,14 +132,10 @@ export function ExportMenu({
           <Item
             icon={<FileDown className="h-3.5 w-3.5" />}
             label={t.editor.exportPDF}
-            hint={t.editor.exportPDFHint}
+            hint={t.editor.exportPrintHint}
             busy={busy === "pdf"}
             onClick={() =>
-              run("pdf", async () => {
-                // html2canvas + jsPDF 合计约 600 KB，只在真导出时才下载
-                const { exportPDF } = await import("./exportPdf");
-                await exportPDF(editor, title, t.editor.untitled);
-              })
+              run("pdf", () => exportPrint(title, t.editor.untitled))
             }
           />
           <Item
@@ -151,16 +146,6 @@ export function ExportMenu({
               setOpen(false);
               setMediaOpen(true);
             }}
-          />
-          <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
-          <Item
-            icon={<Printer className="h-3.5 w-3.5" />}
-            label={t.editor.exportPrint}
-            hint={t.editor.exportPrintHint}
-            busy={busy === "print"}
-            onClick={() =>
-              run("print", () => exportPrint(title, t.editor.untitled))
-            }
           />
         </div>
       )}

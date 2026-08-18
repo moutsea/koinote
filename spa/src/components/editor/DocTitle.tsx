@@ -5,7 +5,7 @@ import { shouldLeaveTitleOnEnter } from "./titleKeyboard";
  * 文档标题。渲染在正文列里、正文之上，跟着主题的 h1 走。
  *
  * 为什么放进正文列而不是控件栏：标题在导出时**就是**正文的第一个 h1
- * （见 exportWechat.ts / exportDocument.ts / exportPdf.ts 里的 heading 拼接）。
+ * （见 exportWechat.ts / exportDocument.ts 里的 heading 拼接）。
  * 原来它是控件栏里一个 text-sm 的输入框，和产物里那个 28px 的大标题毫无关系
  * —— 编辑区号称即预览，唯独标题不是。
  *

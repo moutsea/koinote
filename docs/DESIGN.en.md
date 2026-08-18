@@ -803,52 +803,26 @@ The My Documents full ZIP migration is separate from single-document format expo
 optimizes for reversible Markdown/folder/image portability, while the latter targets readers,
 office formats, and publishing platforms. See “Search, portability, and product analytics” above.
 
-Six paths, all client-side so they cost no backend resources:
+Five paths, all client-side so they cost no backend resources:
 
-| Format              | Implementation                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| `.md`               | `storage.markdown.getMarkdown()` — the content already _is_ Markdown                                   |
-| `.html`             | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
-| `.docx`             | The `docx` library, built from the ProseMirror document tree                                           |
-| `.pdf`              | html2canvas-pro rasterization + jsPDF pagination, one-click download                                   |
-| WeChat              | Theme styles inlined + formulas as images, written to the clipboard                                    |
-| Print / Save as PDF | The browser's native print pipeline + `@media print`                                                   |
+| Format               | Implementation                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.md`                | `storage.markdown.getMarkdown()` — the content already _is_ Markdown                                   |
+| `.html`              | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
+| `.docx`              | The `docx` library, built from the ProseMirror document tree                                           |
+| `.pdf`               | The system print pipeline + `@media print`                                                             |
+| Publishing platforms | Rich text for WeChat / Zhihu and native Markdown for Juejin                                            |
 
-**Why PDF has two paths**: the only engine in a browser that produces vector-text
-PDFs hangs off the print pipeline, and the print dialog can't be bypassed. So
-"one-click download" and "selectable, searchable text" cannot both hold in a purely
-client-side implementation. Each path keeps one of them:
+PDF has one menu action. The only browser engine that produces vector-text PDFs
+hangs off the print pipeline, and the print dialog cannot be bypassed, so users
+choose “Save as PDF” in the system dialog. On desktop, macOS opens the native panel
+through a Tauri command; Windows and the web use the browser print pipeline. The
+result keeps selectable, searchable, copyable text instead of maintaining a larger
+raster variant whose text is only pixels.
 
-|                     | One-click               | Selectable text      | Size         |
-| ------------------- | ----------------------- | -------------------- | ------------ |
-| `.pdf` (raster)     | yes                     | no, text is a bitmap | ~650 KB/page |
-| Print / Save as PDF | no, requires the dialog | yes, vector          | much smaller |
-
-That dialog has nothing to do with printers: choosing "Save as PDF" in Chrome goes
-through Skia's PDF backend and touches no printer driver, so it works with no
-printer installed. In the CSS specs this area is called _paged media_; PDF is just
-one of its output targets.
-
-Trade-offs in the raster path:
-
-- **Rasterize the real DOM rather than hand-drawing text onto a canvas.** Formulas,
-  syntax highlighting, and table borders are all laid out by the browser, so we
-  don't write layout code — a hand-drawn approach that supported LaTeX would mean
-  rewriting a TeX engine.
-- **Page breaks align to block boundaries** so a line of text isn't sliced in half.
-  But when the element right after the break is itself taller than a page (a long
-  code block), it has to be cut regardless — in that case we don't break early,
-  which would waste half a page of white space.
-- **Images are converted to data URLs before rasterizing.** A cross-origin image
-  taints the canvas, after which `toDataURL` throws `SecurityError` — so the symptom
-  would be the entire export failing rather than one missing image.
-- **Code blocks use a light background in PDF**, matching the print path. Dark
-  backgrounds are a solid ink field on paper and compress far worse as bitmaps.
-- **2× scale (≈192 DPI), lossless PNG.** Compression level and alpha-channel removal
-  were both measured and made no difference to size; only lossy JPEG helped (14–40%),
-  but small CJK glyphs ring at the edges under JPEG, so image quality won.
-- `html2canvas-pro` rather than `html2canvas`: Tailwind v4 emits `oklch()` colors by
-  default, which the original renders as transparent or black.
+The dialog does not require a physical printer: choosing “Save as PDF” uses the
+browser or operating system PDF backend without touching a printer driver. In CSS,
+this is _paged media_; PDF is just one output target.
 
 **DOCX degradations**: formulas are kept as LaTeX source text (converting to Word's
 OMML is an order of magnitude more work, and the source is at least lossless and
@@ -1186,17 +1160,15 @@ workerd that the `/api/images/config` route is mounted, `env` is readable, and t
 response shape is right — none of which the Node layer can verify. It temporarily
 rewrites `wrangler.jsonc` and restores it from `git show HEAD`.
 
-Export has no unit-test framework and uses **real-browser end-to-end verification**
-instead — curl at the protocol layer can't verify what the browser actually
-downloaded when you clicked export. The scripts walk the whole path: log in, write
-content with formulas/code/tables, click the menu, capture the downloaded file,
-parse the result.
+Download exports use **real-browser end-to-end verification** — curl at the protocol
+layer cannot verify what the browser actually downloaded. The scripts walk the
+whole path: log in, write content with formulas/code/tables, click the menu, capture
+the downloaded file, and parse the result.
 
 ```bash
-pip install playwright pypdf pillow && playwright install chromium
+pip install playwright && playwright install chromium
 
 # Best run against the production build (npm run build && npx vite preview)
-PROBE_BASE=http://localhost:5274 python3 scripts/verify_pdf_export.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_export_formats.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_share_rotation.py
 PROBE_BASE=http://localhost:5274 python3 scripts/verify_wechat_export.py
@@ -1217,16 +1189,13 @@ clipboard. It needs wrangler on 8788, since formulas upload to R2.
 old link. This has to go over real HTTP: a unit test can prove the decision function
 is correct but not that the URL stopped working.
 
-`verify_pdf_export.py` parses PDF internals: page count, A4 dimensions, **which
-XObjects each page's content stream actually references** (to judge pagination —
-jsPDF puts every bitmap in one shared resource dictionary, so `page.images` alone
-isn't enough), whether per-page bitmap fingerprints differ, fill ratio, per-page
-size, and which chunks were lazily loaded during export.
+`verify_export_formats.py` covers the Markdown, HTML, and DOCX downloads, focusing
+on whether formulas survive in each. PDF now uses the system print dialog;
+`test:media-export` verifies the single menu action, browser print pipeline, and
+Tauri native-command wiring. Release validation still opens the dialog manually on
+each target operating system.
 
-`verify_export_formats.py` covers four downloadable formats, focusing on whether formulas
-actually survive in each.
-
-Both need the backend and database running, and leave a `pdfprobe` test account
+The browser scripts need the backend and database running and leave test accounts
 behind.
 
 ## Build and deploy

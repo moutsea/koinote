@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds multilingual release announcements and fixes IME confirmation in document titles."
+          notes="Koinote Desktop $version adds member AI optimization and unifies PDF export through the native system print dialog."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本新增多语言站内版本提醒，并修复在文档标题中使用中文、日文或韩文输入法时，按回车确认候选词会误跳到正文的问题。
+          此版本新增会员 AI 优化、credits 与自有模型渠道设置，并将 PDF 导出统一为一个入口；客户端现在会打开系统原生打印面板，保留可选择、可搜索的文字。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds multilingual in-app release announcements and fixes Enter incorrectly moving focus into the document body while confirming Chinese, Japanese, or Korean IME candidates in document titles.
+          This release adds member AI optimization, credits and BYOK model settings, and unifies PDF export behind one action that opens the native system print dialog with selectable, searchable text.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

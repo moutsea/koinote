@@ -913,10 +913,8 @@ export const ja: Messages = {
     exportHTML: "ウェブページ (.html)",
     exportPDF: "PDF",
     exportDOCX: "Word (.docx)",
-    exportPDFHint: "そのままダウンロード。文字は画像になります",
-    exportPrint: "印刷 / PDF として保存",
     exportPrintHint:
-      "文字は選択・検索可能 — ダイアログで「PDF として保存」を選択",
+      "文字は選択・検索可能 — システムダイアログで PDF として保存",
     mediaExport: "メディア向けに書き出す",
     mediaExportHint: "WeChat、Zhihu、Juejin に最適化",
     mediaTitle: "メディア向けエクスポート",

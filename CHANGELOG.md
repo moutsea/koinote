@@ -15,6 +15,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 ### Fixed
 
 - Kept headings immediately after block images separate across repeated Markdown saves, and repaired legacy escaped headings when documents open.
+- PDF export now uses one clear menu action and opens the native system print dialog on desktop, preserving selectable, searchable text instead of silently doing nothing in the embedded webview.
 
 ## [0.6.0] - 2026-08-17
 
