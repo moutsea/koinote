@@ -14,8 +14,8 @@ import { useCurrentUser } from "../auth";
 import { InkClouds, PaperCard } from "../components/Ink";
 import {
   DEFAULT_CURRENCY_BY_LOCALE,
-  formatMembershipPrice,
-} from "../components/MembershipCard";
+  formatBillingPrice,
+} from "../billingCore";
 import { PageContainer } from "../components/PageContainer";
 import { formatCreditPackPrice } from "../components/AgentCreditsCard";
 import { interpolate, useI18n } from "../i18n";
@@ -65,8 +65,8 @@ export function PricingPage() {
       checkoutInProgress && !query.state.data?.membership.active ? 2_000 : false,
   });
   const creditCheckout = useMutation({
-    async mutationFn(pack: AgentCreditPack) {
-      const result = await createAgentCreditsCheckout(pack.code);
+    async mutationFn({ pack, currency }: { pack: AgentCreditPack; currency: string }) {
+      const result = await createAgentCreditsCheckout(pack.code, currency);
       await openMembershipCheckout(result.url);
       return result;
     },
@@ -79,7 +79,7 @@ export function PricingPage() {
   const freeStorage = formatBytes(data?.freeStorageQuotaBytes ?? 500 * 1024 * 1024, locale);
   const lifetimeStorage = formatBytes(data?.lifetimeStorageQuotaBytes ?? 10 * 1024 * 1024 * 1024, locale);
   const lifetimePrice = selectedPrice
-    ? formatMembershipPrice(selectedPrice.amount, selectedPrice.currency, locale)
+    ? formatBillingPrice(selectedPrice.amount, selectedPrice.currency, locale)
     : "—";
   const active =
     membership.data?.membership.active ?? user?.membershipTier === "lifetime";
@@ -158,7 +158,7 @@ export function PricingPage() {
                       >
                         {data.prices.map((price) => (
                           <option key={price.currency} value={price.currency.toLowerCase()}>
-                            {price.currency.toUpperCase()} · {formatMembershipPrice(price.amount, price.currency, locale)}
+                            {price.currency.toUpperCase()} · {formatBillingPrice(price.amount, price.currency, locale)}
                           </option>
                         ))}
                       </select>
@@ -230,22 +230,44 @@ export function PricingPage() {
                 <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
                   {t.pricing.creditsDescription}
                 </p>
+                {data.prices.length > 1 && (
+                  <label className="mx-auto mt-5 block max-w-56 text-left text-xs" style={{ color: "var(--ink-mid)" }}>
+                    <span className="mb-1.5 block">{t.membership.currencyLabel}</span>
+                    <select
+                      value={selectedPrice?.currency.toLowerCase() ?? selectedCurrency}
+                      onChange={(event) => setSelectedCurrency(event.target.value)}
+                      disabled={creditCheckout.isPending}
+                      className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
+                      style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                    >
+                      {data.prices.map((price) => (
+                        <option key={price.currency} value={price.currency.toLowerCase()}>
+                          {price.currency.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
               <div className="mt-7 grid gap-4 sm:grid-cols-3">
                 {creditPacks.map((pack) => (
                   <CreditPackCard
                     key={pack.code}
                     pack={pack}
+                    currency={selectedPrice?.currency ?? selectedCurrency}
                     locale={locale}
                     action={active ? (
                       <button
                         type="button"
-                        onClick={() => creditCheckout.mutate(pack)}
+                        onClick={() => creditCheckout.mutate({
+                          pack,
+                          currency: selectedPrice?.currency ?? selectedCurrency,
+                        })}
                         disabled={!data.creditPurchaseEnabled || creditCheckout.isPending}
                         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition hover:bg-[var(--ink-wash)] disabled:cursor-not-allowed disabled:opacity-50"
                         style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                       >
-                        {creditCheckout.isPending && creditCheckout.variables?.code === pack.code && (
+                        {creditCheckout.isPending && creditCheckout.variables?.pack.code === pack.code && (
                           <LoaderCircle className="h-4 w-4 animate-spin" />
                         )}
                         {t.pricing.buyCredits}
@@ -291,10 +313,12 @@ export function PricingPage() {
 
 function CreditPackCard({
   pack,
+  currency,
   locale,
   action,
 }: {
   pack: AgentCreditPack;
+  currency: string;
   locale: string;
   action?: React.ReactNode;
 }) {
@@ -305,7 +329,7 @@ function CreditPackCard({
       </p>
       <p className="mt-1 text-sm font-medium" style={{ color: "var(--ink-mid)" }}>credits</p>
       <p className="mt-4 text-lg font-semibold" style={{ color: "var(--ink-strong)" }}>
-        {formatCreditPackPrice(pack, locale)}
+        {formatCreditPackPrice(pack, currency, locale)}
       </p>
       <div className="mt-auto">{action}</div>
     </PaperCard>

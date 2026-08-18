@@ -23,9 +23,20 @@ import (
 
 const (
 	creditPurchaseCode          = "credits"
-	creditCheckoutParamsVersion = "v1-credit-packs"
+	creditCheckoutParamsVersion = "v2-multi-currency"
 	creditTransactionListLimit  = 20
 )
+
+type creditPackPrice struct {
+	Amount   int64
+	Currency stripe.Currency
+}
+
+type creditPackDefinition struct {
+	Code    string
+	Credits int64
+	Prices  []creditPackPrice
+}
 
 type creditPackOption struct {
 	Code     string
@@ -34,19 +45,35 @@ type creditPackOption struct {
 	Currency stripe.Currency
 }
 
-var creditPackOptions = []creditPackOption{
-	{Code: "credits_3000", Credits: 3_000, Amount: 199, Currency: stripe.CurrencyUSD},
-	{Code: "credits_10000", Credits: 10_000, Amount: 499, Currency: stripe.CurrencyUSD},
-	{Code: "credits_30000", Credits: 30_000, Amount: 1_299, Currency: stripe.CurrencyUSD},
+var creditPackDefinitions = []creditPackDefinition{
+	{Code: "credits_3000", Credits: 3_000, Prices: []creditPackPrice{
+		{Amount: 199, Currency: stripe.CurrencyUSD},
+		{Amount: 1_400, Currency: stripe.CurrencyCNY},
+		{Amount: 199, Currency: stripe.CurrencyEUR},
+		{Amount: 300, Currency: stripe.CurrencyJPY},
+	}},
+	{Code: "credits_10000", Credits: 10_000, Prices: []creditPackPrice{
+		{Amount: 499, Currency: stripe.CurrencyUSD},
+		{Amount: 3_600, Currency: stripe.CurrencyCNY},
+		{Amount: 499, Currency: stripe.CurrencyEUR},
+		{Amount: 750, Currency: stripe.CurrencyJPY},
+	}},
+	{Code: "credits_30000", Credits: 30_000, Prices: []creditPackPrice{
+		{Amount: 1_299, Currency: stripe.CurrencyUSD},
+		{Amount: 9_400, Currency: stripe.CurrencyCNY},
+		{Amount: 1_299, Currency: stripe.CurrencyEUR},
+		{Amount: 1_950, Currency: stripe.CurrencyJPY},
+	}},
 }
 
 var errCreditPurchaseMembershipRequired = errors.New("lifetime membership is required to buy credits")
 
 type creditPackPayload struct {
-	Code     string `json:"code"`
-	Credits  int64  `json:"credits"`
-	Amount   int64  `json:"amount"`
-	Currency string `json:"currency"`
+	Code     string                `json:"code"`
+	Credits  int64                 `json:"credits"`
+	Amount   int64                 `json:"amount"`
+	Currency string                `json:"currency"`
+	Prices   []billingPricePayload `json:"prices"`
 }
 
 type creditTransactionView struct {
@@ -62,6 +89,7 @@ type creditCheckoutAttempt struct {
 	SessionID string
 	URL       string
 	PackCode  string
+	Currency  stripe.Currency
 	Client    string
 	ExpiresAt time.Time
 }
@@ -80,21 +108,47 @@ type creditGrantResult struct {
 	Applied bool
 }
 
-func creditPackFor(code string) (creditPackOption, bool) {
+func creditPackDefinitionFor(code string) (creditPackDefinition, bool) {
 	code = strings.ToLower(strings.TrimSpace(code))
-	for _, pack := range creditPackOptions {
-		if pack.Code == code {
-			return pack, true
+	for _, definition := range creditPackDefinitions {
+		if definition.Code == code {
+			return definition, true
+		}
+	}
+	return creditPackDefinition{}, false
+}
+
+func creditPackFor(code, rawCurrency string) (creditPackOption, bool) {
+	definition, ok := creditPackDefinitionFor(code)
+	if !ok {
+		return creditPackOption{}, false
+	}
+	currency := stripe.Currency(strings.ToLower(strings.TrimSpace(rawCurrency)))
+	if currency == "" {
+		currency = stripe.CurrencyUSD
+	}
+	for _, price := range definition.Prices {
+		if price.Currency == currency {
+			return creditPackOption{
+				Code: definition.Code, Credits: definition.Credits,
+				Amount: price.Amount, Currency: price.Currency,
+			}, true
 		}
 	}
 	return creditPackOption{}, false
 }
 
 func creditPacksPayload() []creditPackPayload {
-	result := make([]creditPackPayload, 0, len(creditPackOptions))
-	for _, pack := range creditPackOptions {
+	result := make([]creditPackPayload, 0, len(creditPackDefinitions))
+	for _, definition := range creditPackDefinitions {
+		prices := make([]billingPricePayload, 0, len(definition.Prices))
+		for _, price := range definition.Prices {
+			prices = append(prices, billingPricePayload{Amount: price.Amount, Currency: string(price.Currency)})
+		}
+		defaultPack, _ := creditPackFor(definition.Code, "")
 		result = append(result, creditPackPayload{
-			Code: pack.Code, Credits: pack.Credits, Amount: pack.Amount, Currency: string(pack.Currency),
+			Code: definition.Code, Credits: definition.Credits,
+			Amount: defaultPack.Amount, Currency: string(defaultPack.Currency), Prices: prices,
 		})
 	}
 	return result
@@ -174,6 +228,7 @@ func (a *App) agentCreditsCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		PackCode string `json:"packCode"`
+		Currency string `json:"currency"`
 		Client   string `json:"client"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, agentReviewRequestBytes))
@@ -182,9 +237,13 @@ func (a *App) agentCreditsCheckout(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid checkout request")
 		return
 	}
-	pack, ok := creditPackFor(body.PackCode)
-	if !ok {
+	if _, ok := creditPackDefinitionFor(body.PackCode); !ok {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_credit_pack", "Unsupported credit pack")
+		return
+	}
+	pack, ok := creditPackFor(body.PackCode, body.Currency)
+	if !ok {
+		httpx.ErrorCode(w, http.StatusBadRequest, "unsupported_currency", "Unsupported checkout currency")
 		return
 	}
 	client := strings.ToLower(strings.TrimSpace(body.Client))
@@ -316,10 +375,11 @@ func creditCheckoutParams(
 			"service": stripeServiceName, "koinote_purchase": creditPurchaseCode,
 			"koinote_pack": pack.Code, "koinote_credits": strconv.FormatInt(pack.Credits, 10),
 			"koinote_user_id": strconv.Itoa(user.ID), "koinote_auth_user_id": user.AuthUserID,
-			"koinote_client": client,
+			"koinote_currency": string(pack.Currency), "koinote_client": client,
 		},
 		PaymentIntentData: &stripe.CheckoutSessionCreatePaymentIntentDataParams{Metadata: map[string]string{
-			"service": stripeServiceName, "koinote_purchase": creditPurchaseCode, "koinote_pack": pack.Code,
+			"service": stripeServiceName, "koinote_purchase": creditPurchaseCode,
+			"koinote_pack": pack.Code, "koinote_currency": string(pack.Currency),
 		}},
 	}
 	params.SetIdempotencyKey(creditCheckoutIdempotencyKey(cfg, user, pack, attemptID, client))
@@ -359,15 +419,20 @@ func (a *App) createOrReuseCreditCheckout(
 	}
 
 	var existing creditCheckoutAttempt
+	var existingCurrency string
 	err = tx.QueryRow(ctx, `
-		SELECT checkout_session_id, checkout_url, pack_code, client, expires_at
+		SELECT checkout_session_id, checkout_url, pack_code, currency, client, expires_at
 		FROM stripe_credit_checkout_attempts
 		WHERE user_id = $1
-	`, userID).Scan(&existing.SessionID, &existing.URL, &existing.PackCode, &existing.Client, &existing.ExpiresAt)
+	`, userID).Scan(
+		&existing.SessionID, &existing.URL, &existing.PackCode,
+		&existingCurrency, &existing.Client, &existing.ExpiresAt,
+	)
+	existing.Currency = stripe.Currency(existingCurrency)
 	now := time.Now().UTC()
 	hadExisting := err == nil
 	if err == nil && existing.ExpiresAt.After(now) {
-		if existing.PackCode == pack.Code && existing.Client == client {
+		if existing.PackCode == pack.Code && existing.Currency == pack.Currency && existing.Client == client {
 			if err := tx.Commit(ctx); err != nil {
 				return creditCheckoutAttempt{}, err
 			}
@@ -409,21 +474,22 @@ func (a *App) createOrReuseCreditCheckout(
 		return creditCheckoutAttempt{}, errors.New("Stripe returned an incomplete credits checkout session")
 	}
 	created := creditCheckoutAttempt{
-		SessionID: session.ID, URL: session.URL, PackCode: pack.Code, Client: client,
+		SessionID: session.ID, URL: session.URL, PackCode: pack.Code, Currency: pack.Currency, Client: client,
 		ExpiresAt: checkoutExpiresAt(session, now),
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO stripe_credit_checkout_attempts (
-			user_id, checkout_session_id, checkout_url, pack_code, client, expires_at
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			user_id, checkout_session_id, checkout_url, pack_code, currency, client, expires_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id) DO UPDATE SET
 			checkout_session_id = EXCLUDED.checkout_session_id,
 			checkout_url = EXCLUDED.checkout_url,
 			pack_code = EXCLUDED.pack_code,
+			currency = EXCLUDED.currency,
 			client = EXCLUDED.client,
 			expires_at = EXCLUDED.expires_at,
 			updated_at = now()
-	`, userID, created.SessionID, created.URL, created.PackCode, created.Client, created.ExpiresAt); err != nil {
+	`, userID, created.SessionID, created.URL, created.PackCode, created.Currency, created.Client, created.ExpiresAt); err != nil {
 		_, _ = a.stripeCheckout.Expire(ctx, created.SessionID, &stripe.CheckoutSessionExpireParams{})
 		return creditCheckoutAttempt{}, err
 	}
@@ -444,7 +510,11 @@ func validateCreditCheckoutSession(session *stripe.CheckoutSession, configuredPr
 	if session.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
 		return validatedCreditCheckout{}, errCheckoutPending
 	}
-	pack, ok := creditPackFor(session.Metadata["koinote_pack"])
+	currency := session.Metadata["koinote_currency"]
+	if currency == "" {
+		currency = string(session.Currency)
+	}
+	pack, ok := creditPackFor(session.Metadata["koinote_pack"], currency)
 	if !ok || session.AmountTotal != pack.Amount || session.Currency != pack.Currency ||
 		session.Metadata["koinote_credits"] != strconv.FormatInt(pack.Credits, 10) {
 		return validatedCreditCheckout{}, fmt.Errorf("%w: unexpected credit pack", errCheckoutInvalid)

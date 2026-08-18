@@ -251,8 +251,8 @@ openclaw mcp doctor koinote --probe
 
 平台内置模型按响应报告的实际输入+输出 token 计费，每 2,000 token 消耗 1 credit，向上取整；
 模型调用失败或返回无效建议不会扣费。终生会员首次获得 1,000 credits，同一会员权益无论由
-webhook、成功页还是重试确认都只发一次。充值包固定为 3,000 credits / $1.99、10,000 / $4.99、
-30,000 / $12.99，金额和 credits 都由后端白名单及 Stripe 回调复核。
+webhook、成功页还是重试确认都只发一次。充值包固定为 3,000、10,000、30,000 credits 三档，
+与会员购买一致支持 USD、CNY、EUR、JPY；金额、币种和 credits 都由后端白名单及 Stripe 回调复核。
 
 会员也可在「AI 设置」配置自己的渠道：
 
@@ -317,7 +317,7 @@ npx wrangler dev --port 8788
 本地测试会员支付时，在 `.env` 填 Stripe test mode 的 `STRIPE_SECRET_KEY` 和
 `STRIPE_LIFETIME_PRODUCT_ID`。测试 Credits 充值时再创建一个 Product，并把公开的 `prod_...`
 填入 `STRIPE_CREDITS_PRODUCT_ID`；三档充值价格不需要在 Dashboard 另建 Price。后端会按白名单为 Credits Product 创建
-USD 3,000 credits / $1.99、10,000 / $4.99、30,000 / $12.99 的内联价格。成功回跳会主动确认并发放 credits；要同时测试 webhook，
+USD、CNY、EUR、JPY 内联价格，并让 Stripe 按所选币种动态展示银行卡、支付宝、微信支付等可用方式。成功回跳会主动确认并发放 credits；要同时测试 webhook，
 再安装 Stripe CLI 并运行：
 
 ```bash

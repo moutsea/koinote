@@ -10,7 +10,12 @@ import {
   getAgentCredits,
   type AgentCreditPack,
 } from "../api";
-import { isTerminalBillingHTTPStatus } from "../billingCore";
+import {
+  billingPriceFor,
+  DEFAULT_CURRENCY_BY_LOCALE,
+  formatBillingPrice,
+  isTerminalBillingHTTPStatus,
+} from "../billingCore";
 import { openMembershipCheckout } from "../externalNavigation";
 import { interpolate, useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
@@ -30,15 +35,20 @@ function clearCreditCheckoutQuery() {
   window.history.replaceState(null, "", url);
 }
 
-export function formatCreditPackPrice(pack: AgentCreditPack, locale: string): string {
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: pack.currency.toUpperCase(),
-    }).format(pack.amount / 100);
-  } catch {
-    return `${pack.currency.toUpperCase()} ${(pack.amount / 100).toFixed(2)}`;
-  }
+export function creditPackPriceFor(pack: AgentCreditPack, currency: string) {
+  return billingPriceFor(pack.prices, currency, {
+    amount: pack.amount,
+    currency: pack.currency,
+  });
+}
+
+export function formatCreditPackPrice(
+  pack: AgentCreditPack,
+  currency: string,
+  locale: string,
+): string {
+  const price = creditPackPriceFor(pack, currency);
+  return formatBillingPrice(price.amount, price.currency, locale);
 }
 
 export function AgentCreditsCard({ user }: { user: User }) {
@@ -46,6 +56,9 @@ export function AgentCreditsCard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const handledReturn = useRef(false);
   const [notice, setNotice] = useState<CreditCheckoutNotice>("none");
+  const [selectedCurrency, setSelectedCurrency] = useState(
+    () => DEFAULT_CURRENCY_BY_LOCALE[locale] ?? "usd",
+  );
   const member = user.membershipTier === "lifetime";
   const credits = useQuery({
     queryKey: AGENT_CREDITS_QUERY_KEY,
@@ -54,8 +67,8 @@ export function AgentCreditsCard({ user }: { user: User }) {
     retry: false,
   });
   const checkout = useMutation({
-    mutationFn: async (pack: AgentCreditPack) => {
-      const result = await createAgentCreditsCheckout(pack.code);
+    mutationFn: async ({ pack, currency }: { pack: AgentCreditPack; currency: string }) => {
+      const result = await createAgentCreditsCheckout(pack.code, currency);
       await openMembershipCheckout(result.url);
       return result;
     },
@@ -138,6 +151,15 @@ export function AgentCreditsCard({ user }: { user: User }) {
   }, [notice, queryClient]);
 
   const data = credits.data?.credits;
+  const currencyOptions = data?.packs[0]?.prices?.length
+    ? data.packs[0].prices
+    : data?.packs[0]
+      ? [{ amount: data.packs[0].amount, currency: data.packs[0].currency }]
+      : [];
+  const activeCurrency =
+    currencyOptions.find((price) => price.currency.toLowerCase() === selectedCurrency)?.currency ??
+    currencyOptions[0]?.currency ??
+    "usd";
   // A 409 checkout_in_progress response has no session_id in the URL and is
   // recoverable by opening the existing checkout again. Only lock the packs
   // while we are polling a concrete return-session, otherwise a transient
@@ -211,19 +233,41 @@ export function AgentCreditsCard({ user }: { user: User }) {
             <CreditMetric label={t.agentCredits.availableLabel} value={data.available} />
           </div>
 
+          {currencyOptions.length > 1 && (
+            <label className="mt-4 block max-w-56 text-xs" style={{ color: "var(--ink-mid)" }}>
+              <span className="mb-1.5 block">{t.membership.currencyLabel}</span>
+              <select
+                value={activeCurrency.toLowerCase()}
+                onChange={(event) => setSelectedCurrency(event.target.value)}
+                disabled={checkout.isPending || pollingCheckout}
+                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
+                style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+              >
+                {currencyOptions.map((price) => (
+                  <option key={price.currency} value={price.currency.toLowerCase()}>
+                    {price.currency.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1.5 block" style={{ color: "var(--ink-faint)" }}>
+                {t.membership.currencyHint}
+              </span>
+            </label>
+          )}
+
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {data.packs.map((pack) => (
               <button
                 key={pack.code}
                 type="button"
-                onClick={() => checkout.mutate(pack)}
+                onClick={() => checkout.mutate({ pack, currency: activeCurrency })}
                 disabled={!data.purchaseEnabled || checkout.isPending || pollingCheckout || notice === "delayed"}
                 className="flex min-h-20 flex-col items-start justify-center rounded-md border px-4 py-3 text-left transition hover:bg-[var(--ink-wash)] disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
               >
                 <span className="font-semibold">{pack.credits.toLocaleString(locale)} credits</span>
                 <span className="mt-1 text-sm" style={{ color: "var(--ink-mid)" }}>
-                  {formatCreditPackPrice(pack, locale)}
+                  {formatCreditPackPrice(pack, activeCurrency, locale)}
                 </span>
               </button>
             ))}

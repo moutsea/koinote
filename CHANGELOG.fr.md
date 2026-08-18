@@ -7,7 +7,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 ### Added
 
 - Ajout de l’optimisation IA réservée aux membres : diffs Git pour le titre et le corps, application ou rejet individuel et global, score du titre sur 100 et 2 à 3 alternatives sous 60. L’analyse sépare désormais le contenu de la structure, avec des modifications Markdown validées par AST et six scores pour la hiérarchie, la lisibilité, la mise en valeur, le rythme, les modules et le mobile.
-- L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000/$1,99, 10 000/$4,99 et 30 000/$12,99.
+- L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000, 10 000 et 30 000 credits.
 - Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.
 
 ### Fixed
@@ -16,6 +16,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - L’export PDF utilise désormais une seule action claire et ouvre la boîte de dialogue d’impression native sur le bureau, avec un texte sélectionnable et recherchable.
 - Correction du périmètre d’autorisation du client qui refusait les paramètres IA, les canaux de modèles, les credits, les analyses et l’achat de credits.
 - Le paiement des credits utilise désormais un Product Stripe en mode production, avec une validation au déploiement contre les mélanges test/production.
+- L’achat de credits prend désormais en charge les mêmes devises USD, CNY, EUR et JPY que l’adhésion, afin que Stripe puisse proposer les moyens locaux éligibles comme WeChat Pay en CNY.
 
 ## [0.6.0] - 2026-08-17
 

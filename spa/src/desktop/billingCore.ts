@@ -1,5 +1,10 @@
 import type { User } from "../api";
-export { isTerminalBillingHTTPStatus } from "../billingCore";
+export {
+  billingPriceFor,
+  DEFAULT_CURRENCY_BY_LOCALE,
+  formatBillingPrice,
+  isTerminalBillingHTTPStatus,
+} from "../billingCore";
 
 export const DESKTOP_BILLING_EVENT = "koinote:desktop-billing";
 

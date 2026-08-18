@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import {
+  billingPriceFor,
+  DEFAULT_CURRENCY_BY_LOCALE,
   desktopBillingDeepLink,
+  formatBillingPrice,
   isTerminalBillingHTTPStatus,
 } from "./_desktop_billing_core_bundle.mjs";
 
@@ -57,6 +60,15 @@ equal("401 是支付轮询终态", isTerminalBillingHTTPStatus(401), true);
 equal("403 是支付轮询终态", isTerminalBillingHTTPStatus(403), true);
 equal("500 是可重试故障", isTerminalBillingHTTPStatus(500), false);
 equal("429 是可重试限流", isTerminalBillingHTTPStatus(429), false);
+equal("中文默认人民币", DEFAULT_CURRENCY_BY_LOCALE.zh, "cny");
+const selectedCreditPrice = billingPriceFor(
+  [{ amount: 199, currency: "usd" }, { amount: 1_400, currency: "cny" }],
+  "CNY",
+  { amount: 199, currency: "usd" },
+);
+equal("Credits 与会员共用币种价格金额", selectedCreditPrice.amount, 1_400);
+equal("Credits 与会员共用币种价格代码", selectedCreditPrice.currency, "cny");
+equal("JPY 按零位小数格式化", formatBillingPrice(300, "jpy", "en-US"), "¥300");
 
 const auth = fs.readFileSync("spa/src/desktop/auth.ts", "utf8");
 const api = fs.readFileSync("spa/src/api.ts", "utf8");

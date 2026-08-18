@@ -452,9 +452,11 @@ export function confirmMembershipCheckout(sessionId: string) {
 export type AgentCreditPack = {
   code: "credits_3000" | "credits_10000" | "credits_30000";
   credits: number;
-  /** Stripe 最小货币单位 */
+  /** 旧客户端默认使用的 USD 价格，Stripe 最小货币单位 */
   amount: number;
   currency: string;
+  /** 与会员购买一致的可选币种价格；旧后端响应可能暂时缺少此字段 */
+  prices?: MembershipStatus["prices"];
 };
 
 export type AgentCreditTransaction = {
@@ -483,11 +485,15 @@ export function getAgentCredits() {
   return apiJson<{ credits: AgentCredits }>("/api/agent/credits");
 }
 
-export function createAgentCreditsCheckout(packCode: AgentCreditPack["code"]) {
+export function createAgentCreditsCheckout(
+  packCode: AgentCreditPack["code"],
+  currency: string,
+) {
   return apiJson<{ sessionId: string; url: string }>("/api/agent/credits/checkout", {
     method: "POST",
     body: JSON.stringify({
       packCode,
+      currency,
       client: isDesktopRuntime() ? "desktop" : "web",
     }),
   });

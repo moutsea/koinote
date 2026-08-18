@@ -292,9 +292,9 @@ text edit are excluded from the review queue.
 The built-in model is billed from the provider-reported actual input and output tokens at
 1 credit per 2,000 tokens, rounded up. Failed model calls and invalid review payloads are not
 charged. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives
-through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000 credits for
-$1.99, 10,000 for $4.99, and 30,000 for $12.99; both the amount and granted balance are checked
-against backend allowlists and the signed Stripe event.
+through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000, 10,000, or
+30,000 credits in the same USD, CNY, EUR, and JPY currencies as membership checkout; the amount,
+currency, and granted balance are checked against backend allowlists and the signed Stripe event.
 
 Members can instead configure their own provider under **AI settings**:
 
@@ -362,8 +362,9 @@ another port, override it with `--var BACKEND_URL:http://localhost:<port>`; chan
 To test membership locally, put a Stripe test-mode `STRIPE_SECRET_KEY` and
 `STRIPE_LIFETIME_PRODUCT_ID` in `.env`. To test credit purchases, create a second test-mode
 Product and set its public `prod_...` ID as `STRIPE_CREDITS_PRODUCT_ID`; no separate Prices are
-needed. The backend creates allowlisted inline prices for both membership and the three credit
-packs. The success return confirms and grants the entitlement directly. To test webhooks too,
+needed. The backend creates allowlisted USD, CNY, EUR, and JPY inline prices for both membership
+and the three credit packs, while Stripe dynamically shows eligible payment methods for the chosen
+currency. The success return confirms and grants the entitlement directly. To test webhooks too,
 install Stripe CLI:
 
 ```bash

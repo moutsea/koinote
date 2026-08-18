@@ -12,7 +12,11 @@ import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 import { STORAGE_USAGE_KEY } from "./StorageCard";
 import { openMembershipCheckout } from "../externalNavigation";
-import { isTerminalBillingHTTPStatus } from "../billingCore";
+import {
+  DEFAULT_CURRENCY_BY_LOCALE,
+  formatBillingPrice,
+  isTerminalBillingHTTPStatus,
+} from "../billingCore";
 
 export const MEMBERSHIP_STATUS_KEY = ["membership-status"] as const;
 
@@ -24,34 +28,11 @@ type CheckoutNotice =
   | "cancelled"
   | "failed";
 
-export const DEFAULT_CURRENCY_BY_LOCALE: Record<string, string> = {
-  zh: "cny",
-  ja: "jpy",
-  fr: "eur",
-  en: "usd",
-};
-
-const ZERO_DECIMAL_CURRENCIES = new Set(["jpy"]);
-
 function clearCheckoutQuery() {
   const url = new URL(window.location.href);
   url.searchParams.delete("checkout");
   url.searchParams.delete("session_id");
   window.history.replaceState(null, "", url);
-}
-
-export function formatMembershipPrice(amount: number, currency: string, locale: string) {
-  const normalizedCurrency = currency.toLowerCase();
-  const divisor = ZERO_DECIMAL_CURRENCIES.has(normalizedCurrency) ? 1 : 100;
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: normalizedCurrency.toUpperCase(),
-      currencyDisplay: "narrowSymbol",
-    }).format(amount / divisor);
-  } catch {
-    return `${normalizedCurrency.toUpperCase()} ${(amount / divisor).toFixed(divisor === 1 ? 0 : 2)}`;
-  }
 }
 
 export function MembershipCard({ user }: { user: User }) {
@@ -186,7 +167,7 @@ export function MembershipCard({ user }: { user: User }) {
     : [{ amount: membership?.priceAmount ?? 399, currency: membership?.priceCurrency ?? "usd" }];
   const selectedPrice =
     prices.find((option) => option.currency.toLowerCase() === selectedCurrency) ?? prices[0];
-  const price = formatMembershipPrice(selectedPrice.amount, selectedPrice.currency, locale);
+  const price = formatBillingPrice(selectedPrice.amount, selectedPrice.currency, locale);
   const checkoutUnresolved = notice === "pending" || notice === "delayed";
 
   const noticeText =
@@ -290,7 +271,7 @@ export function MembershipCard({ user }: { user: User }) {
                     >
                       {prices.map((option) => (
                         <option key={option.currency} value={option.currency.toLowerCase()}>
-                          {option.currency.toUpperCase()} · {formatMembershipPrice(option.amount, option.currency, locale)}
+                          {option.currency.toUpperCase()} · {formatBillingPrice(option.amount, option.currency, locale)}
                         </option>
                       ))}
                     </select>
