@@ -32,6 +32,7 @@ const (
 	documentSourceWeb     documentMutationSource = "web"
 	documentSourceMCP     documentMutationSource = "mcp"
 	documentSourceRestore documentMutationSource = "restore"
+	documentSourceAgent   documentMutationSource = "agent"
 )
 
 type createDocumentParams struct {
@@ -59,6 +60,13 @@ type storedDocument struct {
 	ID               int
 	Doc              model.Document
 	LastWebVersionAt *time.Time
+}
+
+type documentUpdateResult struct {
+	Document        model.Document
+	PreviousContent string
+	PrunedContents  []string
+	ContentChanged  bool
 }
 
 func (a *App) createDocument(ctx context.Context, params createDocumentParams) (model.Document, error) {
@@ -156,12 +164,24 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, params.User.ID); err != nil {
+	result, err := a.updateDocumentTx(ctx, tx, params)
+	if err != nil {
 		return model.Document{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return model.Document{}, err
+	}
+	a.finishDocumentUpdate(ctx, params.User, result)
+	return result.Document, nil
+}
+
+func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocumentParams) (documentUpdateResult, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, params.User.ID); err != nil {
+		return documentUpdateResult{}, err
 	}
 
 	var previous storedDocument
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		SELECT id, doc_id, title, theme, content, revision, created_at, updated_at,
 		       last_web_version_at
 		FROM documents
@@ -173,19 +193,19 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 		&previous.Doc.UpdatedAt, &previous.LastWebVersionAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.Document{}, errDocumentNotFound
+		return documentUpdateResult{}, errDocumentNotFound
 	}
 	if err != nil {
-		return model.Document{}, err
+		return documentUpdateResult{}, err
 	}
 	if previous.Doc.Revision != params.ExpectedRevision {
 		if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content {
-			return previous.Doc, nil
+			return documentUpdateResult{Document: previous.Doc}, nil
 		}
-		return model.Document{}, errDocumentRevisionConflict
+		return documentUpdateResult{}, errDocumentRevisionConflict
 	}
 	if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content {
-		return previous.Doc, nil
+		return documentUpdateResult{Document: previous.Doc}, nil
 	}
 
 	oldBytes := len(previous.Doc.Title) + len(previous.Doc.Content)
@@ -201,10 +221,10 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 				WHERE user_id = $1 AND purpose = 'persistent'
 			), 0) + $3::bigint <= $4::bigint
 		`, params.User.ID, previous.ID, newBytes, a.storageQuotaFor(params.User)).Scan(&fits); err != nil {
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 		if !fits {
-			return model.Document{}, errDocumentQuotaExceeded
+			return documentUpdateResult{}, errDocumentQuotaExceeded
 		}
 	}
 
@@ -212,7 +232,7 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 		previous.Doc.Theme != params.Theme || previous.Doc.Content != params.Content
 	historySettings, err := loadDocumentHistorySettings(ctx, tx, params.User.ID, params.User.MembershipTier)
 	if err != nil {
-		return model.Document{}, err
+		return documentUpdateResult{}, err
 	}
 	versionMode := documentVersionModeForMutation(
 		historySettings, params.Source, params.SourceTokenID != nil,
@@ -227,19 +247,19 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 			RETURNING content
 		`, previous.ID)
 		if err != nil {
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 		for rows.Next() {
 			var content string
 			if err := rows.Scan(&content); err != nil {
 				rows.Close()
-				return model.Document{}, err
+				return documentUpdateResult{}, err
 			}
 			prunedContents = append(prunedContents, content)
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 		rows.Close()
 	}
@@ -253,7 +273,7 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 		`, previous.ID, previous.Doc.Revision, previous.Doc.Title, previous.Doc.Theme,
 			previous.Doc.Content, string(params.Source), params.SourceTokenID,
 			versionMode == documentVersionSafety); err != nil {
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 	}
 
@@ -276,10 +296,10 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.Document{}, errDocumentRevisionConflict
+		return documentUpdateResult{}, errDocumentRevisionConflict
 	}
 	if err != nil {
-		return model.Document{}, err
+		return documentUpdateResult{}, err
 	}
 
 	if storeVersion {
@@ -303,40 +323,45 @@ func (a *App) updateDocument(ctx context.Context, params updateDocumentParams) (
 		`, previous.ID, historySettings.PerDocumentMax, params.User.ID,
 			userDocumentVersionLimit)
 		if err != nil {
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 		for rows.Next() {
 			var content string
 			if err := rows.Scan(&content); err != nil {
 				rows.Close()
-				return model.Document{}, err
+				return documentUpdateResult{}, err
 			}
 			prunedContents = append(prunedContents, content)
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			return model.Document{}, err
+			return documentUpdateResult{}, err
 		}
 		rows.Close()
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return model.Document{}, err
-	}
+	return documentUpdateResult{
+		Document:        doc,
+		PreviousContent: previous.Doc.Content,
+		PrunedContents:  prunedContents,
+		ContentChanged:  previous.Doc.Content != params.Content,
+	}, nil
+}
 
-	if previous.Doc.Content != params.Content || len(prunedContents) > 0 {
-		gcCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		ref := userRef{ID: params.User.ID, AuthUserID: params.User.AuthUserID}
-		if previous.Doc.Content != params.Content {
-			a.cancelPendingImageDeletions(gcCtx, ref, params.Content)
-			a.enqueueOrphanedImages(gcCtx, ref, previous.Doc.Content)
-		}
-		if len(prunedContents) > 0 {
-			a.enqueueOrphanedImages(gcCtx, ref, strings.Join(prunedContents, "\n"))
-		}
+func (a *App) finishDocumentUpdate(ctx context.Context, user model.User, result documentUpdateResult) {
+	if !result.ContentChanged && len(result.PrunedContents) == 0 {
+		return
 	}
-	return doc, nil
+	gcCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	ref := userRef{ID: user.ID, AuthUserID: user.AuthUserID}
+	if result.ContentChanged {
+		a.cancelPendingImageDeletions(gcCtx, ref, result.Document.Content)
+		a.enqueueOrphanedImages(gcCtx, ref, result.PreviousContent)
+	}
+	if len(result.PrunedContents) > 0 {
+		a.enqueueOrphanedImages(gcCtx, ref, strings.Join(result.PrunedContents, "\n"))
+	}
 }
 
 type documentVersionMode int
@@ -350,6 +375,12 @@ const (
 func documentVersionModeForMutation(settings documentHistorySettings, source documentMutationSource, mcpWrite bool, lastWebVersionAt *time.Time, now time.Time, force bool) documentVersionMode {
 	if !settings.Available {
 		return documentVersionNone
+	}
+	// Applying an Agent suggestion is an explicit, user-approved commit. Always
+	// retain its previous state so every accepted change remains reversible,
+	// even when routine history snapshots are disabled.
+	if source == documentSourceAgent {
+		return documentVersionFull
 	}
 	if isMCPDocumentMutation(source, mcpWrite) && (!settings.Enabled || !settings.MCPEnabled) {
 		return documentVersionSafety

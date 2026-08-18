@@ -57,6 +57,18 @@ ok("提醒可用关闭按钮、Escape 或遮罩本地关闭", dialog.includes("d
 ok("已读失败会显示错误而不是锁住页面", dialog.includes("markRead.isError") && dialog.includes("markReadFailed"));
 ok("管理员发布时提交原文语言和结构化内容", admin.includes("publishAdminAnnouncement") && admin.includes("sourceLocale"));
 ok("管理员界面明确展示 LLM 翻译状态", admin.includes("announcementTranslationFailed"));
+ok(
+  "提醒发布工作台展示四语言、长度和要点计数",
+  admin.includes("LOCALES.map") &&
+    admin.includes("[...title].length") &&
+    admin.includes("[...summary].length") &&
+    admin.includes("{lines.length} / 8"),
+);
+ok(
+  "提醒历史独立滚动并展示记录数量",
+  admin.includes('className="max-h-[44rem] overflow-y-auto"') &&
+    admin.includes("announcements.data?.announcements.length ?? 0"),
+);
 ok("管理员可软撤回提醒", api.includes("withdrawAdminAnnouncement") && admin.includes("announcementWithdrawConfirm"));
 ok("撤回提醒不会再进入未读列表", announcementServer.includes("announcement.withdrawn_at IS NULL"));
 ok("版本提醒导入失败不会终止服务", serverMain.includes("继续启动服务") && !serverMain.includes('log.Fatalf("导入版本提醒失败'));

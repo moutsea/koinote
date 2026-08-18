@@ -55,9 +55,15 @@ jobs:
           CF_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
+          LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
+          STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
+          AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
+          AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
+          AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
+          AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           ANNOUNCEMENT_LLM_API_KEY: ${{ secrets.ANNOUNCEMENT_LLM_API_KEY }}
@@ -68,7 +74,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -88,6 +94,15 @@ jobs:
           [ -n "$ANNOUNCEMENT_LLM_MODEL" ] && announcement_llm_count=$((announcement_llm_count + 1))
           if [ "$announcement_llm_count" -ne 0 ] && [ "$announcement_llm_count" -ne 3 ]; then
             echo "ANNOUNCEMENT_LLM_BASE_URL、ANNOUNCEMENT_LLM_API_KEY、ANNOUNCEMENT_LLM_MODEL 必须同时配置或同时留空"
+            exit 1
+          fi
+          agent_llm_count=0
+          [ -n "$AGENT_LLM_PROTOCOL" ] && agent_llm_count=$((agent_llm_count + 1))
+          [ -n "$AGENT_LLM_BASE_URL" ] && agent_llm_count=$((agent_llm_count + 1))
+          [ -n "$AGENT_LLM_API_KEY" ] && agent_llm_count=$((agent_llm_count + 1))
+          [ -n "$AGENT_LLM_MODEL" ] && agent_llm_count=$((agent_llm_count + 1))
+          if [ "$agent_llm_count" -ne 0 ] && [ "$agent_llm_count" -ne 4 ]; then
+            echo "AGENT_LLM_PROTOCOL、AGENT_LLM_BASE_URL、AGENT_LLM_API_KEY、AGENT_LLM_MODEL 必须同时配置或同时留空"
             exit 1
           fi
           echo "secret 齐全"
@@ -147,14 +162,20 @@ jobs:
 
       # 后端密钥通过 stdin 送到远端，不出现在 SSH 命令参数和日志里。
       # 远端用同目录临时文件原子替换，避免部署中断留下半行或空文件。
-      - name: 更新后端密钥、Stripe、飞书、提醒翻译与 Analytics 配置
+      - name: 更新后端密钥、Stripe、Agent、飞书、提醒翻译与 Analytics 配置
         env:
           HOST: ${{ secrets.VPS_HOST }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
+          LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
+          STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
+          AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
+          AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
+          AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
+          AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
@@ -163,27 +184,35 @@ jobs:
           ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
         run: |
-          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$EMAIL_VERIFICATION_SECRET" \
             "$MCP_TOKEN_ENCRYPTION_KEY" \
+            "$LLM_CREDENTIAL_ENCRYPTION_KEY" \
             "$STRIPE_SECRET_KEY" \
             "$STRIPE_WEBHOOK_SECRET" \
             "$STRIPE_LIFETIME_PRODUCT_ID" \
+            "$STRIPE_CREDITS_PRODUCT_ID" \
             "$BOT_WEBHOOK" \
             "$BOT_WEBHOOK_SECRET" \
             "$CLOUDFLARE_ZONE_ID" \
             "$CLOUDFLARE_ANALYTICS_TOKEN" \
             "$ANNOUNCEMENT_LLM_API_KEY" \
             "$ANNOUNCEMENT_LLM_BASE_URL" \
-            "$ANNOUNCEMENT_LLM_MODEL" | \
+            "$ANNOUNCEMENT_LLM_MODEL" \
+            "$AGENT_LLM_PROTOCOL" \
+            "$AGENT_LLM_BASE_URL" \
+            "$AGENT_LLM_API_KEY" \
+            "$AGENT_LLM_MODEL" | \
             ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
               "root@$HOST" '
                 set -eu
                 IFS= read -r email_verification_secret
                 IFS= read -r mcp_token_encryption_key
+                IFS= read -r llm_credential_encryption_key
                 IFS= read -r stripe_secret_key
                 IFS= read -r stripe_webhook_secret
                 IFS= read -r stripe_lifetime_product_id
+                IFS= read -r stripe_credits_product_id
                 IFS= read -r bot_webhook
                 IFS= read -r bot_webhook_secret
                 IFS= read -r cloudflare_zone_id
@@ -191,8 +220,13 @@ jobs:
                 IFS= read -r announcement_llm_api_key
                 IFS= read -r announcement_llm_base_url
                 IFS= read -r announcement_llm_model
+                IFS= read -r agent_llm_protocol
+                IFS= read -r agent_llm_base_url
+                IFS= read -r agent_llm_api_key
+                IFS= read -r agent_llm_model
                 test -n "$email_verification_secret"
                 test -n "$mcp_token_encryption_key"
+                test -n "$llm_credential_encryption_key"
                 test -n "$stripe_secret_key"
                 test -n "$stripe_webhook_secret"
                 test -n "$stripe_lifetime_product_id"
@@ -210,6 +244,15 @@ jobs:
                   echo "提醒翻译配置不完整"
                   exit 1
                 fi
+                agent_llm_count=0
+                [ -n "$agent_llm_protocol" ] && agent_llm_count=$((agent_llm_count + 1))
+                [ -n "$agent_llm_base_url" ] && agent_llm_count=$((agent_llm_count + 1))
+                [ -n "$agent_llm_api_key" ] && agent_llm_count=$((agent_llm_count + 1))
+                [ -n "$agent_llm_model" ] && agent_llm_count=$((agent_llm_count + 1))
+                if [ "$agent_llm_count" -ne 0 ] && [ "$agent_llm_count" -ne 4 ]; then
+                  echo "Agent 内置模型配置不完整"
+                  exit 1
+                fi
                 env_file=/opt/koinote/.env
                 test -f "$env_file"
                 temp_file=$(mktemp /opt/koinote/.env.XXXXXX)
@@ -220,10 +263,16 @@ jobs:
                 [ -n "$bot_webhook" ] && replace_bot=1
                 replace_announcement_llm=0
                 [ "$announcement_llm_count" -eq 3 ] && replace_announcement_llm=1
-                # Analytics、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
+                replace_stripe_credits=0
+                [ -n "$stripe_credits_product_id" ] && replace_stripe_credits=1
+                replace_agent_llm=0
+                [ "$agent_llm_count" -eq 4 ] && replace_agent_llm=1
+                # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
-                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" "
-                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" "
+                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                  replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
+                  replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
                   replace_analytics == 1 && /^CLOUDFLARE_ANALYTICS_TOKEN=/ { next }
                   replace_bot == 1 && /^(BOT_WEBHOOK|BOT_WEBHOOK_SECRET)=/ { next }
                   replace_announcement_llm == 1 && /^(ANNOUNCEMENT_LLM_BASE_URL|ANNOUNCEMENT_LLM_API_KEY|ANNOUNCEMENT_LLM_MODEL)=/ { next }
@@ -231,9 +280,13 @@ jobs:
                 " "$env_file" > "$temp_file"
                 printf "EMAIL_VERIFICATION_SECRET=%s\n" "$email_verification_secret" >> "$temp_file"
                 printf "MCP_TOKEN_ENCRYPTION_KEY=%s\n" "$mcp_token_encryption_key" >> "$temp_file"
+                printf "LLM_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$llm_credential_encryption_key" >> "$temp_file"
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"
                 printf "STRIPE_LIFETIME_PRODUCT_ID=%s\n" "$stripe_lifetime_product_id" >> "$temp_file"
+                if [ "$replace_stripe_credits" -eq 1 ]; then
+                  printf "STRIPE_CREDITS_PRODUCT_ID=%s\n" "$stripe_credits_product_id" >> "$temp_file"
+                fi
                 if [ -n "$bot_webhook" ]; then
                   printf "BOT_WEBHOOK=%s\n" "$bot_webhook" >> "$temp_file"
                   printf "BOT_WEBHOOK_SECRET=%s\n" "$bot_webhook_secret" >> "$temp_file"
@@ -247,6 +300,12 @@ jobs:
                   printf "ANNOUNCEMENT_LLM_BASE_URL=%s\n" "$announcement_llm_base_url" >> "$temp_file"
                   printf "ANNOUNCEMENT_LLM_API_KEY=%s\n" "$announcement_llm_api_key" >> "$temp_file"
                   printf "ANNOUNCEMENT_LLM_MODEL=%s\n" "$announcement_llm_model" >> "$temp_file"
+                fi
+                if [ "$replace_agent_llm" -eq 1 ]; then
+                  printf "AGENT_LLM_PROTOCOL=%s\n" "$agent_llm_protocol" >> "$temp_file"
+                  printf "AGENT_LLM_BASE_URL=%s\n" "$agent_llm_base_url" >> "$temp_file"
+                  printf "AGENT_LLM_API_KEY=%s\n" "$agent_llm_api_key" >> "$temp_file"
+                  printf "AGENT_LLM_MODEL=%s\n" "$agent_llm_model" >> "$temp_file"
                 fi
                 chmod --reference="$env_file" "$temp_file"
                 chown --reference="$env_file" "$temp_file"

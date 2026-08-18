@@ -39,7 +39,13 @@ func main() {
 	if cfg.IsProduction() && cfg.MCPTokenEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 MCP_TOKEN_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.LLMCredentialEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 LLM_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
 	if err := cfg.ValidateStripeConfig(); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.ValidateAgentLLMConfig(); err != nil {
 		log.Fatal(err)
 	}
 	if err := cfg.ValidateFeishuConfig(); err != nil {
@@ -56,6 +62,16 @@ func main() {
 		log.Printf("Stripe 终生会员购买已启用")
 	} else {
 		log.Printf("Stripe 未配置，会员购买功能关闭")
+	}
+	if cfg.StripeCreditsEnabled() {
+		log.Printf("Stripe Credits 购买已启用")
+	} else {
+		log.Printf("Stripe Credits 商品未配置，Credits 购买功能关闭")
+	}
+	if cfg.AgentLLMEnabled() {
+		log.Printf("AI 优化内置模型已启用（protocol=%s model=%s）", cfg.AgentLLMProtocol, cfg.AgentLLMModel)
+	} else {
+		log.Printf("AI 优化内置模型未配置，BYOK 渠道仍可使用")
 	}
 	if cfg.FeishuEnabled() {
 		log.Printf("飞书付款通知已启用")

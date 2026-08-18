@@ -24,7 +24,7 @@ This roadmap records the product and engineering directions currently worth the 
 
 ## P2: Later exploration
 
-- [ ] Controlled native AI that is explicitly invoked and exposes model, cost, and data boundaries.
+- [x] Controlled native AI that is explicitly invoked and exposes model, credit cost, and data boundaries, with BYOK support.
 - [ ] Publishing workflows for destination status, update history, and exports.
 - [ ] Complete offline and PWA support: cache desktop images and improve weak-network web drafts and installation.
 - [x] Readable line- or block-level diffs for document history.

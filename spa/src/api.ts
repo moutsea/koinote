@@ -395,9 +395,11 @@ export type MembershipStatus = {
 
 export type BillingPricing = {
   billingEnabled: boolean;
+  creditPurchaseEnabled?: boolean;
   freeStorageQuotaBytes: number;
   lifetimeStorageQuotaBytes: number;
   prices: MembershipStatus["prices"];
+  creditPacks?: AgentCreditPack[];
 };
 
 export function getBillingPricing() {
@@ -443,6 +445,240 @@ export function confirmMembershipCheckout(sessionId: string) {
     method: "POST",
     body: JSON.stringify({ sessionId }),
   });
+}
+
+// ---------- AI 优化 ----------
+
+export type AgentCreditPack = {
+  code: "credits_3000" | "credits_10000" | "credits_30000";
+  credits: number;
+  /** Stripe 最小货币单位 */
+  amount: number;
+  currency: string;
+};
+
+export type AgentCreditTransaction = {
+  entryId: string;
+  kind: "membership_grant" | "purchase" | "agent_usage" | "adjustment" | "refund";
+  amount: number;
+  balanceAfter: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AgentCredits = {
+  balance: number;
+  reserved: number;
+  available: number;
+  tokensPerCredit: number;
+  builtinEnabled: boolean;
+  purchaseEnabled: boolean;
+  packs: AgentCreditPack[];
+  transactions: AgentCreditTransaction[];
+};
+
+export const AGENT_CREDITS_QUERY_KEY = ["agent-credits"] as const;
+
+export function getAgentCredits() {
+  return apiJson<{ credits: AgentCredits }>("/api/agent/credits");
+}
+
+export function createAgentCreditsCheckout(packCode: AgentCreditPack["code"]) {
+  return apiJson<{ sessionId: string; url: string }>("/api/agent/credits/checkout", {
+    method: "POST",
+    body: JSON.stringify({
+      packCode,
+      client: isDesktopRuntime() ? "desktop" : "web",
+    }),
+  });
+}
+
+export function confirmAgentCreditsCheckout(sessionId: string) {
+  return apiJson<{
+    status: "active" | "pending";
+    credits?: Pick<AgentCredits, "balance" | "reserved" | "available">;
+  }>("/api/agent/credits/checkout/confirm", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
+  });
+}
+
+export type LLMChannel = {
+  channelId: string;
+  name: string;
+  protocol: "openai" | "anthropic";
+  baseUrl: string;
+  model: string;
+  apiKeyHint: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LLMChannelInput = {
+  name: string;
+  protocol: LLMChannel["protocol"];
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  isDefault: boolean;
+};
+
+export const LLM_CHANNELS_QUERY_KEY = ["llm-channels"] as const;
+
+export type AgentSettings = {
+  providerMode: "builtin" | "byok";
+  defaultChannel?: Pick<LLMChannel, "channelId" | "name" | "model"> | null;
+};
+
+export const AGENT_SETTINGS_QUERY_KEY = ["agent-settings"] as const;
+
+export function getAgentSettings() {
+  return apiJson<{ settings: AgentSettings }>("/api/agent/settings");
+}
+
+export function updateAgentSettings(providerMode: AgentSettings["providerMode"]) {
+  return apiJson<{ settings: AgentSettings }>("/api/agent/settings", {
+    method: "PUT",
+    body: JSON.stringify({ providerMode }),
+  });
+}
+
+export function listLLMChannels() {
+  return apiJson<{ channels: LLMChannel[] }>("/api/agent/channels");
+}
+
+export function createLLMChannel(input: LLMChannelInput) {
+  return apiJson<{ channel: LLMChannel }>("/api/agent/channels", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateLLMChannel(channelId: string, input: LLMChannelInput) {
+  return apiJson<{ channel: LLMChannel }>(
+    `/api/agent/channels/${encodeURIComponent(channelId)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+}
+
+export function deleteLLMChannel(channelId: string) {
+  return apiJson<{ success: boolean }>(
+    `/api/agent/channels/${encodeURIComponent(channelId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export type AgentReviewSuggestion = {
+  suggestionId: string;
+  ordinal: number;
+  target: "title" | "body";
+  kind: "content" | "layout";
+  category: string;
+  operation: "change_block_type" | "split_paragraph" | "convert_to_list" | "emphasize_block" | "insert_divider" | null;
+  before: string;
+  after: string;
+  reason: string;
+  status: "pending" | "applied" | "dismissed";
+  appliedAt?: string | null;
+};
+
+export type AgentReviewLayoutAssessment = {
+  id: "hierarchy" | "readability" | "emphasis" | "rhythm" | "modules" | "mobile";
+  label: string;
+  score: number;
+  summary: string;
+};
+
+export type AgentReview = {
+  reviewId: string;
+  documentId: string;
+  baseRevision: number;
+  currentRevision: number;
+  documentRevision: number;
+  providerMode: "builtin" | "byok";
+  providerProtocol: "openai" | "anthropic";
+  channelId?: string | null;
+  model: string;
+  status:
+    | "running"
+    | "ready"
+    | "partially_applied"
+    | "applied"
+    | "dismissed"
+    | "failed"
+    | "stale";
+  summary?: string | null;
+  titleScore?: number | null;
+  titleAssessment?: string | null;
+  layoutAssessment: AgentReviewLayoutAssessment[];
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  creditsCharged: number;
+  errorCode?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+  updatedAt: string;
+  suggestions?: AgentReviewSuggestion[];
+};
+
+export function createAgentReview(
+  docId: string,
+) {
+  return apiJson<{ review: AgentReview }>(
+    `/api/documents/${encodeURIComponent(docId)}/agent-reviews`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function listAgentReviews(docId: string) {
+  return apiJson<{ reviews: AgentReview[] }>(
+    `/api/documents/${encodeURIComponent(docId)}/agent-reviews`,
+  );
+}
+
+export function getAgentReview(reviewId: string) {
+  return apiJson<{ review: AgentReview }>(
+    `/api/agent/reviews/${encodeURIComponent(reviewId)}`,
+  );
+}
+
+export type AgentReviewMutation = {
+  review: AgentReview;
+  document: Document;
+};
+
+export function applyAgentReviewSuggestion(
+  reviewId: string,
+  suggestionId: string,
+  expectedRevision: number,
+) {
+  return apiJson<AgentReviewMutation>(
+    `/api/agent/reviews/${encodeURIComponent(reviewId)}/suggestions/${encodeURIComponent(suggestionId)}/apply`,
+    { method: "POST", body: JSON.stringify({ expectedRevision }) },
+  );
+}
+
+export function dismissAgentReviewSuggestion(reviewId: string, suggestionId: string) {
+  return apiJson<{ review: AgentReview }>(
+    `/api/agent/reviews/${encodeURIComponent(reviewId)}/suggestions/${encodeURIComponent(suggestionId)}/dismiss`,
+    { method: "POST" },
+  );
+}
+
+export function applyAllAgentReviewSuggestions(reviewId: string, expectedRevision: number) {
+  return apiJson<AgentReviewMutation>(
+    `/api/agent/reviews/${encodeURIComponent(reviewId)}/apply-all`,
+    { method: "POST", body: JSON.stringify({ expectedRevision }) },
+  );
+}
+
+export function dismissAgentReview(reviewId: string) {
+  return apiJson<{ review: AgentReview }>(
+    `/api/agent/reviews/${encodeURIComponent(reviewId)}/dismiss`,
+    { method: "POST" },
+  );
 }
 
 // ---------- 管理后台 ----------

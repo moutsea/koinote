@@ -20,6 +20,7 @@ import { PageContainer } from "../components/PageContainer";
 import { InkSeal } from "../components/Ink";
 import { useSession } from "../auth";
 import { copySharedDocument } from "../documentTransfer";
+import { normalizeLegacyImageAdjacentHeadings } from "../components/editor/markdownImage";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -172,6 +173,10 @@ function SharedView({ shared }: { shared: SharedDocument }) {
   const [copyError, setCopyError] = useState<string | null>(null);
 
   const extensions = useMemo(() => createEditorExtensions(""), []);
+  const normalizedContent = useMemo(
+    () => normalizeLegacyImageAdjacentHeadings(shared.content),
+    [shared.content],
+  );
 
   // 只读：editable 关掉，但仍用同一套扩展，
   // 这样代码高亮、公式、图片的呈现与编辑器完全一致。
@@ -179,7 +184,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     extensions,
     editable: false,
     immediatelyRender: false,
-    content: shared.content,
+    content: normalizedContent,
     editorProps: {
       attributes: { class: shareContentClass(shared.theme ?? "") },
     },
@@ -206,7 +211,10 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     setCopyError(null);
     setCopyNotice(null);
     try {
-      const result = await copySharedDocument(shared);
+      const result = await copySharedDocument({
+        ...shared,
+        content: normalizedContent,
+      });
       setCopyNotice(t.editor.copiedToMine);
       await navigate({
         to: "/editor/$docId",

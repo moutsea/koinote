@@ -33,6 +33,7 @@ export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   { prefix: "/editor", width: "full" },
   // 账户页：信息卡与列表都需要收窄，避免超宽屏上的行内元素离得太远
   { prefix: "/dashboard", width: "5xl" },
+  { prefix: "/ai-settings", width: "5xl" },
   { prefix: "/mcp/activity", width: "5xl" },
   { prefix: "/documents", width: "5xl" },
   { prefix: "/invitations", width: "5xl" },

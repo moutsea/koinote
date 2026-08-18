@@ -22,11 +22,14 @@ if (desktopRuntime) {
   void import("./desktop/auth").then(
     ({ DESKTOP_BILLING_EVENT, initializeDesktopAuth }) => {
       window.addEventListener(DESKTOP_BILLING_EVENT, (event) => {
-        const detail = (event as CustomEvent<{ user?: unknown }>).detail;
+        const detail = (event as CustomEvent<{ user?: unknown; kind?: "membership" | "credits" }>).detail;
         if (detail?.user) queryClient.setQueryData(["session"], { user: detail.user });
         void queryClient.invalidateQueries({ queryKey: ["session"] });
         void queryClient.invalidateQueries({ queryKey: ["membership-status"] });
         void queryClient.invalidateQueries({ queryKey: ["storage-usage"] });
+        if (detail?.kind === "credits") {
+          void queryClient.invalidateQueries({ queryKey: ["agent-credits"] });
+        }
       });
       void initializeDesktopAuth();
     },
@@ -148,6 +151,14 @@ const dashboardRoute = createRoute({
     "DashboardPage",
   ),
 });
+const aiSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ai-settings",
+  component: lazyRouteComponent(
+    () => import("./pages/AISettingsPage"),
+    "AISettingsPage",
+  ),
+});
 const mcpActivityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/activity",
@@ -220,6 +231,7 @@ const routeTree = rootRoute.addChildren([
   desktopBillingReturnRoute,
   registerRoute,
   dashboardRoute,
+  aiSettingsRoute,
   mcpActivityRoute,
   documentsRoute,
   trashRoute,

@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Added
+
+- Ajout de l’optimisation IA réservée aux membres : diffs Git pour le titre et le corps, application ou rejet individuel et global, score du titre sur 100 et 2 à 3 alternatives sous 60. L’analyse sépare désormais le contenu de la structure, avec des modifications Markdown validées par AST et six scores pour la hiérarchie, la lisibilité, la mise en valeur, le rythme, les modules et le mobile.
+- L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000/$1,99, 10 000/$4,99 et 30 000/$12,99.
+- Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.
+
+### Fixed
+
+- Les titres placés juste après une image de bloc restent séparés après plusieurs sauvegardes Markdown, et les anciens titres échappés sont réparés à l’ouverture.
+
 ## [0.6.0] - 2026-08-17
 
 ### Added

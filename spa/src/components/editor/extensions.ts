@@ -4,13 +4,13 @@ import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Typography from "@tiptap/extension-typography";
-import Image from "@tiptap/extension-image";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { InputRule } from "@tiptap/core";
 import { Markdown } from "tiptap-markdown";
 import { ImageNodeView } from "./ImageNodeView";
 import { lowlight } from "./lowlight";
+import { BlockMarkdownImage } from "./markdownImage";
 import { markdownMathPlugin } from "./markdownMath";
 
 /**
@@ -41,7 +41,7 @@ export function createEditorExtensions(placeholder: string) {
     //
     // 挂自定义 NodeView 实现 Typora 式交互：点击图片浮出 `![备注](url)` 源码可编辑。
     // 只影响编辑器内的呈现，序列化仍由 tiptap-markdown 输出标准 Markdown。
-    Image.configure({ allowBase64: false, inline: false }).extend({
+    BlockMarkdownImage.extend({
       addNodeView() {
         return ReactNodeViewRenderer(ImageNodeView);
       },

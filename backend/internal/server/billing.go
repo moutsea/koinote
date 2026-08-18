@@ -120,9 +120,11 @@ type billingStatusPayload struct {
 
 type billingPricingPayload struct {
 	BillingEnabled            bool                  `json:"billingEnabled"`
+	CreditPurchaseEnabled     bool                  `json:"creditPurchaseEnabled"`
 	FreeStorageQuotaBytes     int64                 `json:"freeStorageQuotaBytes"`
 	LifetimeStorageQuotaBytes int64                 `json:"lifetimeStorageQuotaBytes"`
 	Prices                    []billingPricePayload `json:"prices"`
+	CreditPacks               []creditPackPayload   `json:"creditPacks"`
 }
 
 func lifetimePriceFor(rawCurrency string) (lifetimePriceOption, bool) {
@@ -200,9 +202,11 @@ func (a *App) billingPricing(w http.ResponseWriter, _ *http.Request) {
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"pricing": billingPricingPayload{
 			BillingEnabled:            a.cfg.StripeEnabled(),
+			CreditPurchaseEnabled:     a.cfg.StripeCreditsEnabled(),
 			FreeStorageQuotaBytes:     a.imageQuota(),
 			LifetimeStorageQuotaBytes: lifetimeStorageQuotaBytes,
 			Prices:                    billingPricesPayload(),
+			CreditPacks:               creditPacksPayload(),
 		},
 	})
 }
@@ -690,6 +694,11 @@ func (a *App) grantLifetimeMembership(
 	if err != nil {
 		return membershipGrantResult{}, err
 	}
+	// 会员权益与初始 credits 必须同事务落地。Stripe webhook、成功页确认和
+	// 通知重试都可能重复走到这里，reference_key 保证只赠送一次。
+	if _, _, err := grantLifetimeMembershipCredits(ctx, tx, userID, "stripe_checkout"); err != nil {
+		return membershipGrantResult{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return membershipGrantResult{}, err
 	}
@@ -808,6 +817,10 @@ func (a *App) billingWebhook(w http.ResponseWriter, r *http.Request) {
 		// 这个 Stripe 账号由多个服务共用。签名正确但不属于 Koinote 的事件应当
 		// 正常确认接收，不能尝试履约，也不能用 4xx 触发 Stripe 反复重试。
 		httpx.JSON(w, http.StatusOK, map[string]any{"received": true, "ignored": true})
+		return
+	}
+	if eventSession.Metadata["koinote_purchase"] == creditPurchaseCode {
+		a.handleCreditCheckoutWebhook(w, r, event.ID, eventSession.ID)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)

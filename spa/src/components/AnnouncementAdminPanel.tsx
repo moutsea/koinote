@@ -17,6 +17,12 @@ import {
 import { PaperCard } from "./Ink";
 
 const ADMIN_ANNOUNCEMENTS_KEY = ["admin-announcements"] as const;
+const FIELD_CLASS =
+  "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-black/5 dark:focus:ring-white/10";
+const FIELD_STYLE = {
+  borderColor: "var(--ink-line)",
+  background: "var(--ink-paper)",
+};
 
 export function AnnouncementAdminPanel() {
   const { t, locale } = useI18n();
@@ -90,104 +96,180 @@ export function AnnouncementAdminPanel() {
     : "";
 
   return (
-    <section className="mt-8">
-      <div className="flex items-center gap-2" style={{ color: "var(--ink-strong)" }}>
-        <BellRing className="h-5 w-5" />
-        <h2 className="kn-heading-cn text-base font-semibold">
-          {t.admin.announcementsTitle}
-        </h2>
+    <section>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border"
+            style={{
+              borderColor: "var(--ink-line)",
+              background: "var(--ink-wash)",
+              color: "var(--cinnabar)",
+            }}
+          >
+            <BellRing className="h-5 w-5" />
+          </span>
+          <div>
+            <h2
+              className="kn-heading-cn text-lg font-semibold"
+              style={{ color: "var(--ink-black)" }}
+            >
+              {t.admin.announcementsTitle}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+              {t.admin.announcementsSubtitle}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5" aria-hidden="true">
+          {LOCALES.map((item) => (
+            <span
+              key={item}
+              className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-faint)" }}
+            >
+              {LOCALE_LABELS[item]}
+            </span>
+          ))}
+        </div>
       </div>
-      <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-        {t.admin.announcementsSubtitle}
-      </p>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
-        <PaperCard className="p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm" style={{ color: "var(--ink-strong)" }}>
-              <span className="mb-1.5 block text-xs font-medium">
-                {t.admin.announcementSourceLanguage}
+      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
+        <PaperCard className="overflow-hidden">
+          <div
+            className="flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6"
+            style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
+          >
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>
+                {t.admin.announcementKindManual}
+              </h3>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--ink-faint)" }}>
+                {t.admin.announcementTranslationNote}
+              </p>
+            </div>
+            <Languages className="h-5 w-5 shrink-0" style={{ color: "var(--ink-faint)" }} />
+          </div>
+
+          <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+              <label className="text-sm" style={{ color: "var(--ink-strong)" }}>
+                <span className="mb-2 block text-xs font-medium">
+                  {t.admin.announcementSourceLanguage}
+                </span>
+                <select
+                  value={sourceLocale}
+                  onChange={(event) => {
+                    setSuccess(false);
+                    setSourceLocale(event.target.value as Locale);
+                  }}
+                  className={FIELD_CLASS}
+                  style={FIELD_STYLE}
+                >
+                  {LOCALES.map((item) => (
+                    <option key={item} value={item}>
+                      {LOCALE_LABELS[item]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm" style={{ color: "var(--ink-strong)" }}>
+                <span className="mb-2 flex items-center justify-between gap-3 text-xs font-medium">
+                  {t.admin.announcementTitleLabel}
+                  <span className="font-normal tabular-nums" style={{ color: "var(--ink-faint)" }}>
+                    {[...title].length} / 160
+                  </span>
+                </span>
+                <input
+                  value={title}
+                  maxLength={160}
+                  onChange={(event) => {
+                    setSuccess(false);
+                    setTitle(event.target.value);
+                  }}
+                  className={FIELD_CLASS}
+                  style={FIELD_STYLE}
+                />
+              </label>
+            </div>
+
+            <label className="block text-sm" style={{ color: "var(--ink-strong)" }}>
+              <span className="mb-2 flex items-center justify-between gap-3 text-xs font-medium">
+                {t.admin.announcementSummaryLabel}
+                <span className="font-normal tabular-nums" style={{ color: "var(--ink-faint)" }}>
+                  {[...summary].length} / 600
+                </span>
               </span>
-              <select
-                value={sourceLocale}
-                onChange={(event) => setSourceLocale(event.target.value as Locale)}
-                className="w-full rounded-lg border bg-transparent px-3 py-2 outline-none"
-                style={{ borderColor: "var(--ink-line)" }}
-              >
-                {LOCALES.map((item) => (
-                  <option key={item} value={item}>
-                    {LOCALE_LABELS[item]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm" style={{ color: "var(--ink-strong)" }}>
-              <span className="mb-1.5 block text-xs font-medium">
-                {t.admin.announcementTitleLabel}
-              </span>
-              <input
-                value={title}
-                maxLength={160}
-                onChange={(event) => setTitle(event.target.value)}
-                className="w-full rounded-lg border bg-transparent px-3 py-2 outline-none"
-                style={{ borderColor: "var(--ink-line)" }}
+              <textarea
+                value={summary}
+                maxLength={600}
+                rows={4}
+                onChange={(event) => {
+                  setSuccess(false);
+                  setSummary(event.target.value);
+                }}
+                className={`${FIELD_CLASS} resize-y leading-6`}
+                style={FIELD_STYLE}
               />
             </label>
+
+            <label className="block text-sm" style={{ color: "var(--ink-strong)" }}>
+              <span className="mb-2 flex items-center justify-between gap-3 text-xs font-medium">
+                {t.admin.announcementHighlightsLabel}
+                <span
+                  className="font-normal tabular-nums"
+                  style={{ color: lines.length > 8 ? "var(--cinnabar)" : "var(--ink-faint)" }}
+                >
+                  {lines.length} / 8
+                </span>
+              </span>
+              <textarea
+                value={highlights}
+                rows={7}
+                onChange={(event) => {
+                  setSuccess(false);
+                  setHighlights(event.target.value);
+                }}
+                placeholder={t.admin.announcementHighlightsPlaceholder}
+                aria-invalid={hasOversizedHighlight || lines.length > 8}
+                className={`${FIELD_CLASS} resize-y leading-6`}
+                style={FIELD_STYLE}
+              />
+            </label>
+            {hasOversizedHighlight && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {t.admin.announcementHighlightTooLong}
+              </p>
+            )}
           </div>
-          <label className="mt-4 block text-sm" style={{ color: "var(--ink-strong)" }}>
-            <span className="mb-1.5 block text-xs font-medium">
-              {t.admin.announcementSummaryLabel}
-            </span>
-            <textarea
-              value={summary}
-              maxLength={600}
-              rows={3}
-              onChange={(event) => setSummary(event.target.value)}
-              className="w-full resize-y rounded-lg border bg-transparent px-3 py-2 outline-none"
-              style={{ borderColor: "var(--ink-line)" }}
-            />
-          </label>
-          <label className="mt-4 block text-sm" style={{ color: "var(--ink-strong)" }}>
-            <span className="mb-1.5 block text-xs font-medium">
-              {t.admin.announcementHighlightsLabel}
-            </span>
-            <textarea
-              value={highlights}
-              rows={5}
-              onChange={(event) => setHighlights(event.target.value)}
-              placeholder={t.admin.announcementHighlightsPlaceholder}
-              aria-invalid={hasOversizedHighlight}
-              className="w-full resize-y rounded-lg border bg-transparent px-3 py-2 outline-none"
-              style={{ borderColor: "var(--ink-line)" }}
-            />
-          </label>
-          {hasOversizedHighlight && (
-            <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-              {t.admin.announcementHighlightTooLong}
-            </p>
-          )}
-          <div className="mt-3 flex items-start gap-2 text-xs" style={{ color: "var(--ink-faint)" }}>
-            <Languages className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{t.admin.announcementTranslationNote}</span>
-          </div>
-          {announcements.data?.translationEnabled === false && (
-            <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
-              {t.admin.announcementTranslationUnavailable}
-            </p>
-          )}
-          {announcements.isError && (
-            <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-              {t.admin.announcementLoadFailed}
-            </p>
-          )}
-          {errorText && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{errorText}</p>}
-          {success && <p className="mt-3 text-xs text-green-700 dark:text-green-400">{t.admin.announcementPublishSuccess}</p>}
-          <div className="mt-4 flex justify-end">
+
+          <div
+            className="flex flex-col gap-4 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+            style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
+          >
+            <div className="min-h-5 text-xs" aria-live="polite">
+              {announcements.data?.translationEnabled === false && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {t.admin.announcementTranslationUnavailable}
+                </p>
+              )}
+              {announcements.isError && (
+                <p className="text-red-600 dark:text-red-400">
+                  {t.admin.announcementLoadFailed}
+                </p>
+              )}
+              {errorText && <p className="text-red-600 dark:text-red-400">{errorText}</p>}
+              {success && (
+                <p className="text-green-700 dark:text-green-400">
+                  {t.admin.announcementPublishSuccess}
+                </p>
+              )}
+            </div>
             <button
               type="button"
               disabled={!canPublish || publish.isPending}
               onClick={() => publish.mutate()}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
               style={{ background: "var(--cinnabar)" }}
             >
               <Send className="h-4 w-4" />
@@ -198,46 +280,71 @@ export function AnnouncementAdminPanel() {
           </div>
         </PaperCard>
 
-        <PaperCard className="p-5">
-          <h3 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>
-            {t.admin.announcementHistory}
-          </h3>
+        <PaperCard className="overflow-hidden">
+          <div
+            className="flex items-center justify-between gap-3 border-b px-5 py-4"
+            style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
+          >
+            <div className="flex items-center gap-2">
+              <BellRing className="h-4 w-4" style={{ color: "var(--ink-faint)" }} />
+              <h3 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>
+                {t.admin.announcementHistory}
+              </h3>
+            </div>
+            <span
+              className="rounded-full px-2 py-0.5 text-xs tabular-nums"
+              style={{ background: "var(--ink-wash-strong)", color: "var(--ink-mid)" }}
+            >
+              {announcements.data?.announcements.length ?? 0}
+            </span>
+          </div>
+
           {withdraw.isError && (
-            <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+            <p className="border-b px-5 py-3 text-xs text-red-600 dark:text-red-400" style={{ borderColor: "var(--ink-line)" }}>
               {t.admin.announcementWithdrawFailed}
             </p>
           )}
           {announcements.isLoading ? (
-            <p className="mt-4 text-xs" style={{ color: "var(--ink-faint)" }}>{t.admin.loading}</p>
+            <div className="flex min-h-48 items-center justify-center px-5 py-10 text-sm" style={{ color: "var(--ink-faint)" }}>
+              {t.admin.loading}
+            </div>
           ) : announcements.isError ? (
-            <p className="mt-4 text-xs text-red-600 dark:text-red-400">{t.admin.announcementLoadFailed}</p>
+            <div className="flex min-h-48 items-center justify-center px-5 py-10 text-sm text-red-600 dark:text-red-400">
+              {t.admin.announcementLoadFailed}
+            </div>
           ) : announcements.data?.announcements.length ? (
-            <div className="mt-4 max-h-[30rem] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[44rem] overflow-y-auto">
               {announcements.data.announcements.map((item) => {
                 const translation = item.translations[locale] ?? item.translations.en;
                 return (
                   <article
                     key={item.id}
-                    className="rounded-lg border p-3"
+                    className="border-b px-5 py-4 last:border-b-0"
                     style={{
                       borderColor: "var(--ink-line)",
-                      opacity: item.withdrawnAt ? 0.65 : 1,
+                      opacity: item.withdrawnAt ? 0.58 : 1,
                     }}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--cinnabar)" }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider"
+                        style={{
+                          background: item.withdrawnAt ? "var(--ink-wash-strong)" : "var(--cinnabar-soft)",
+                          color: item.withdrawnAt ? "var(--ink-faint)" : "var(--cinnabar)",
+                        }}
+                      >
                         {item.kind === "release"
                           ? `${t.admin.announcementKindRelease} ${item.version ?? ""}`
                           : t.admin.announcementKindManual}
                       </span>
-                      <time className="text-[11px]" style={{ color: "var(--ink-faint)" }}>
+                      <time className="shrink-0 text-[11px]" style={{ color: "var(--ink-faint)" }}>
                         {new Date(item.publishedAt).toLocaleString(locale)}
                       </time>
                     </div>
-                    <p className="mt-2 text-sm font-medium" style={{ color: "var(--ink-strong)" }}>
+                    <p className="mt-3 text-sm font-semibold leading-6" style={{ color: "var(--ink-strong)" }}>
                       {translation?.title}
                     </p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>
+                    <p className="mt-1 line-clamp-3 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>
                       {translation?.summary}
                     </p>
                     <div className="mt-3 flex justify-end">
@@ -266,7 +373,12 @@ export function AnnouncementAdminPanel() {
               })}
             </div>
           ) : (
-            <p className="mt-4 text-xs" style={{ color: "var(--ink-faint)" }}>{t.admin.announcementHistoryEmpty}</p>
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-5 py-10 text-center">
+              <BellOff className="h-6 w-6" style={{ color: "var(--ink-faint)" }} />
+              <p className="text-sm" style={{ color: "var(--ink-faint)" }}>
+                {t.admin.announcementHistoryEmpty}
+              </p>
+            </div>
           )}
         </PaperCard>
       </div>

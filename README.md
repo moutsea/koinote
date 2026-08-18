@@ -45,8 +45,8 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 从 `0.1.4` 起客户端会在启动后自动检查新版本，也可以在账户菜单中手动检查、下载并重启
 安装；更新包使用独立的 Tauri 签名验证，不依赖付费平台证书。
 
-> 当前开源版聚焦编辑、图床、导出、分享与账号闭环；面向用户的 AI 写作功能尚在规划中，
-> 终生会员已通过 Stripe Checkout 支持一次性付款。
+> 当前开源版包含完整的编辑、图床、导出、分享、MCP 与会员闭环；终生会员还可使用
+> AI 优化，逐条审阅并落实标题和正文建议。
 
 ## 功能
 
@@ -61,13 +61,15 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 - 自动保存（防抖），失败会明确告知而不是静默丢内容
 - revision 乐观锁检测网页与 Agent 的并发修改；冲突时保留本地草稿并提供合并界面
 - 终生会员可查看、逐行比较和恢复文档历史，并设置是否启用、每篇保留 1–100 版，以及 MCP 写入是否保留完整历史（即使关闭，Agent 写入仍保留最近 1 个安全快照；账号总计最多 100 版）
+- 会员可使用 AI 优化像代码审查一样查看标题与正文 Diff，逐条应用/忽略或一次处理全部；标题显示 0–100 吸引力评分，低于 60 时给出 2–3 个可替换标题
 
 **MCP 与会员**
 
 - 首页与独立 `/docs/mcp` 指南展示 MCP 的客户端配置、授权、并发保护与版本恢复机制，支持 Codex、Claude Code、OpenCode、OpenClaw 等 Streamable HTTP MCP 客户端
 - Dashboard 提供保留 180 天的 MCP 活动日志，展示工具、令牌、文档、结果与耗时，不记录正文或令牌内容
 - 独立 `/pricing` 页面公开对比免费版与终生会员权益，并从后端读取当前多币种 Stripe 价目表
-- 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史和后续 AI 功能使用资格
+- 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史、AI 优化和 1,000 credits
+- 内置模型每 2,000 个实际输入+输出 token 扣 1 credit（向上取整），可充值 3,000 / 10,000 / 30,000 credits；会员也可保存自己的 OpenAI 兼容或 Anthropic Messages 渠道，BYOK 不消耗 credits
 
 **账号安全**
 
@@ -167,9 +169,9 @@ PostgreSQL ──pg_dump / AES-256-GCM──▶ 私有备份 R2（每 6 小时�
 终生会员可以在 Dashboard 的「Agent 文档访问（MCP）」区域创建个人访问令牌（PAT），
 然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。站内的
 [MCP 接入指南](https://koinote.app/docs/mcp)汇总了 Codex、Claude Code、OpenCode、OpenClaw、
-WorkBuddy 与通用客户端的配置及版本控制说明。Koinote
-本身只负责鉴权、文档读写、版本控制与审计，**不会调用 LLM，也不需要 OpenAI、Anthropic
-或其他模型 API Key**；理解指令和选择工具的是 Codex、Claude Code 等客户端自身。
+WorkBuddy 与通用客户端的配置及版本控制说明。MCP 链路本身只负责鉴权、文档读写、版本控制
+与审计，**不会代替客户端调用 LLM，也不需要 OpenAI、Anthropic 或其他模型 API Key**；理解
+指令和选择工具的是 Codex、Claude Code 等客户端自身。
 
 PAT 支持只读或读写 scope、1–365 天或永久有效、创建后修改有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
 AES-GCM 加密保存可恢复副本；账号本人可按需再次查看，列表不会直接返回完整令牌。每次 MCP
@@ -235,6 +237,33 @@ openclaw mcp doctor koinote --probe
 网页回收站提供标题确认；普通删除保留 30 天。整篇更新、追加、移入回收站和恢复都要求最新 revision；网页端使用同一套乐观锁并在冲突时提供
 本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
 
+## AI 优化
+
+终生会员可以在编辑器工具栏打开「AI 优化」。开始前编辑器会先保存当前草稿，然后由模型
+返回一组可审阅的变更，而不是直接覆盖文章：每项建议都显示原因、删除内容和新增内容，可以
+单独应用或忽略，也可以一次应用/忽略全部。标题会获得 0–100 分；低于 60 分时，服务端强制模型
+给出 2–3 个互不相同的候选标题。正文修改必须以文档中唯一出现的原文为锚点，重叠或找不到原文的
+建议会被拒绝。应用时仍校验最新 revision，并为会员留下可恢复的历史版本。
+
+审阅分为「内容优化」和「结构排版」两层。结构排版会从层级、可读性、重点、节奏、模块和移动端
+六个维度评分，并基于 Markdown AST 给出可验证的标题层级调整、拆段、转列表、重点块和分隔线建议。
+结构操作由服务端生成确定性补丁，不能借排版之名改写原文；与文字修改重叠的排版建议不会进入待办列表。
+
+平台内置模型按响应报告的实际输入+输出 token 计费，每 2,000 token 消耗 1 credit，向上取整；
+模型调用失败或返回无效建议不会扣费。终生会员首次获得 1,000 credits，同一会员权益无论由
+webhook、成功页还是重试确认都只发一次。充值包固定为 3,000 credits / $1.99、10,000 / $4.99、
+30,000 / $12.99，金额和 credits 都由后端白名单及 Stripe 回调复核。
+
+会员也可在「AI 设置」配置自己的渠道：
+
+- `openai`：OpenAI-compatible Chat Completions，Base URL 通常以 `/v1` 结尾；
+- `anthropic`：Anthropic Messages，后端调用 `/v1/messages`。
+
+BYOK 调用不消耗 credits。API Key 使用独立的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 通过 AES-GCM
+加密，列表只返回掩码提示，创建后不会把明文返给浏览器；Base URL 在保存与调用时均做 HTTPS、
+私网/回环地址和重定向限制。需要注意：执行优化时，所选模型服务商会收到当前文章的标题与正文，
+因此只能配置你信任的渠道。
+
 ## 快速开始
 
 需要 Node 20.19+（或 22.12+）、Go 1.23+、Docker Compose。
@@ -286,8 +315,9 @@ npx wrangler dev --port 8788
 `--var BACKEND_URL:http://localhost:<端口>` 覆盖；只改 `.env` 不会自动传给 Wrangler。
 
 本地测试会员支付时，在 `.env` 填 Stripe test mode 的 `STRIPE_SECRET_KEY` 和
-`STRIPE_LIFETIME_PRODUCT_ID`。后端会按白名单为这个 Product 创建 USD 3.99、CNY 29、
-EUR 3.99 或 JPY 600 的内联价格。成功回跳会主动确认并发放权益；要同时测试 webhook，
+`STRIPE_LIFETIME_PRODUCT_ID`。测试 Credits 充值时再创建一个 Product，并把公开的 `prod_...`
+填入 `STRIPE_CREDITS_PRODUCT_ID`；三档充值价格不需要在 Dashboard 另建 Price。后端会按白名单为 Credits Product 创建
+USD 3,000 credits / $1.99、10,000 / $4.99、30,000 / $12.99 的内联价格。成功回跳会主动确认并发放 credits；要同时测试 webhook，
 再安装 Stripe CLI 并运行：
 
 ```bash
@@ -296,6 +326,10 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 
 把 CLI 输出的 `whsec_...` 填入 `STRIPE_WEBHOOK_SECRET` 后重启后端，支付可使用 Stripe
 测试卡 `4242 4242 4242 4242`（任意未来日期与 CVC）。
+
+本地测试 AI 优化时，先为 `LLM_CREDENTIAL_ENCRYPTION_KEY` 生成独立随机值。内置模型
+需要同时填写 `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_API_KEY`、
+`AGENT_LLM_MODEL`；四项全空时只关闭内置 credits 模式，会员配置的 BYOK 仍可用。
 
 详细步骤、端口冲突、全容器启动见[设计文档](docs/DESIGN.zh.md#本地开发)。
 
@@ -337,6 +371,14 @@ SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的�
 复用 `SESSION_SECRET`，这样轮换验证码密钥不会让所有会话失效，邮件链路泄露也不会
 扩大成会话伪造。
 
+**生产环境的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于会员 BYOK
+API Key 的 AES-GCM 加密，不能复用会话、MCP 或模型服务密钥。直接轮换会让既有渠道无法解密，
+轮换前必须先做密文迁移。
+
+**AI 优化内置模型是可选的完整配置组。** `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、
+`AGENT_LLM_API_KEY`、`AGENT_LLM_MODEL` 必须四项齐全或全部留空；生产只接受 HTTPS。
+BYOK 端点还会拒绝本机、私网、带用户信息的 URL 和重定向，但模型服务商仍会收到待审文章。
+
 **手动提醒翻译是可选的后端能力。** `ANNOUNCEMENT_LLM_BASE_URL`、
 `ANNOUNCEMENT_LLM_API_KEY`、`ANNOUNCEMENT_LLM_MODEL` 必须同时配置或同时留空；生产环境
 只接受 HTTPS。这里连接的是兼容 Anthropic Messages 的中转服务，端点运营者会收到 API Key
@@ -344,9 +386,10 @@ SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的�
 或图片，密钥也不会下发到 SPA、Worker 或客户端。不配置时版本提醒仍会正常导入，只是后台不能
 手动发布多语言提醒。
 
-**Stripe 生产配置必须完整。** `STRIPE_SECRET_KEY`、`STRIPE_WEBHOOK_SECRET`、
-`STRIPE_LIFETIME_PRODUCT_ID` 三项只要配置了一项，生产环境就要求全部齐全。支付成功后
-本站数据库里的会员等级才是权益真值；前端返回值不会直接授予 10 GB 配额。
+**Stripe 生产配置必须完整。** 启用任一商品时必须配置 `STRIPE_SECRET_KEY`，并至少配置
+`STRIPE_LIFETIME_PRODUCT_ID` 或 `STRIPE_CREDITS_PRODUCT_ID`；生产还必须配置
+`STRIPE_WEBHOOK_SECRET`。支付成功后本站数据库才是会员与 credits 的权益真值，前端返回值
+不会直接授予配额或余额。
 
 **`NODE_ENV` 决定 cookie 的 `Secure` 标志。** 生产必须是 `production`。
 
@@ -378,7 +421,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 `WORKER_URL` 以及会话/OAuth 凭据；如需后台手动发布提醒，还要设置三项
 `ANNOUNCEMENT_LLM_*` 后端变量。官方部署 workflow 把 API Key 放在 Actions Secret，
 把中转地址和模型名分别放在 Actions Variable `ANNOUNCEMENT_LLM_BASE_URL` 与
-`ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。仓库里的
+`ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。BYOK 需要独立的必填 Secret
+`LLM_CREDENTIAL_ENCRYPTION_KEY`；可选的 AI 优化内置模型同样把 API Key 放 Secret，把
+`AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_MODEL` 放 Actions Variables。
+四项全空时部署保留 VPS 已有值。仓库里的
 `koinote.app`、`api.koinote.app`、`img.koinote.app` 和 `verify@koinote.app` 是当前官方
 部署值，自建时要同步替换 `wrangler.jsonc`、`deploy/Caddyfile` 与 OAuth 回调配置。
 
@@ -514,9 +560,12 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用                                 |
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
+| `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |
 | `STRIPE_WEBHOOK_SECRET`        | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`）                                           |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |
+| `STRIPE_CREDITS_PRODUCT_ID`    | Credits 充值 Product ID（`prod_...`），三档 USD 价格由后端白名单生成                              |
+| `AGENT_LLM_API_KEY`            | 可选；平台 AI 优化内置模型密钥，须与三个 `AGENT_LLM_*` Actions Variables 同时配置                    |
 | `BOT_WEBHOOK`                  | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置                                                |
 | `BOT_WEBHOOK_SECRET`           | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置                                           |
 | `VPS_HOST`                     | 后端服务器地址                                                                                      |
@@ -529,10 +578,13 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
+openssl rand -base64 48 | tr -d '\n' | gh secret set LLM_CREDENTIAL_ENCRYPTION_KEY
 ```
 
-Stripe 三项可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
-和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史。
+Stripe 密钥可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
+和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史；Credits 的
+公开 Product ID 放在 Actions Variable `STRIPE_CREDITS_PRODUCT_ID`。AI 优化内置模型的 API Key
+放 Secret，其余协议、Base URL、模型放同名 Actions Variables；整组未设置时部署保留 VPS 已有值。
 飞书通知同理使用 `gh secret set BOT_WEBHOOK` 和 `gh secret set BOT_WEBHOOK_SECRET`；两项
 都未设置时，部署会保留 VPS `.env` 里已有的飞书配置。
 

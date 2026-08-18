@@ -124,17 +124,25 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
 
 async function handleDesktopBillingCallback(callback: URL): Promise<void> {
   const checkout = callback.searchParams.get("checkout")?.trim() ?? "";
+  const kind = callback.searchParams.get("purchase") === "credits"
+    ? "credits"
+    : "membership";
   if (checkout === "cancelled") {
-    publishDesktopBillingEvent({ status: "cancelled" });
+    publishDesktopBillingEvent({ status: "cancelled", kind });
     return;
   }
   const sessionId = callback.searchParams.get("session_id")?.trim() ?? "";
   if (checkout !== "success" || !sessionId.startsWith("cs_")) {
-    publishDesktopBillingEvent({ status: "failed" });
+    publishDesktopBillingEvent({ status: "failed", kind });
     return;
   }
 
-  publishDesktopBillingEvent({ status: "pending" });
+  if (kind === "credits") {
+    await handleDesktopCreditsCallback(sessionId);
+    return;
+  }
+
+  publishDesktopBillingEvent({ status: "pending", kind: "membership" });
   const {
     ApiError,
     confirmMembershipCheckout,
@@ -145,18 +153,67 @@ async function handleDesktopBillingCallback(callback: URL): Promise<void> {
     const result = await confirmMembershipCheckout(sessionId);
     if (result.status === "active") {
       if (result.user) await updateCachedDesktopUser(result.user);
-      publishDesktopBillingEvent({ status: "active", user: result.user });
+      publishDesktopBillingEvent({ status: "active", kind: "membership", user: result.user });
       return;
     }
 
     void pollDesktopMembership(getMembershipStatus, getSession, ApiError);
   } catch (error) {
     if (isTerminalDesktopBillingError(error, ApiError)) {
-      publishDesktopBillingEvent({ status: "failed" });
+      publishDesktopBillingEvent({ status: "failed", kind: "membership" });
       return;
     }
     void pollDesktopMembership(getMembershipStatus, getSession, ApiError);
   }
+}
+
+async function handleDesktopCreditsCallback(sessionId: string): Promise<void> {
+  publishDesktopBillingEvent({ status: "pending", kind: "credits" });
+  const { ApiError, confirmAgentCreditsCheckout } = await import("../api");
+  try {
+    const result = await confirmAgentCreditsCheckout(sessionId);
+    if (result.status === "active") {
+      publishDesktopBillingEvent({
+        status: "active",
+        kind: "credits",
+        credits: result.credits?.balance,
+      });
+      return;
+    }
+    void pollDesktopCredits(sessionId, confirmAgentCreditsCheckout, ApiError);
+  } catch (error) {
+    if (isTerminalDesktopBillingError(error, ApiError)) {
+      publishDesktopBillingEvent({ status: "failed", kind: "credits" });
+      return;
+    }
+    void pollDesktopCredits(sessionId, confirmAgentCreditsCheckout, ApiError);
+  }
+}
+
+async function pollDesktopCredits(
+  sessionId: string,
+  confirmCredits: typeof import("../api").confirmAgentCreditsCheckout,
+  ApiError: typeof import("../api").ApiError,
+): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await delay(2_000);
+    try {
+      const result = await confirmCredits(sessionId);
+      if (result.status !== "active") continue;
+      publishDesktopBillingEvent({
+        status: "active",
+        kind: "credits",
+        credits: result.credits?.balance,
+      });
+      return;
+    } catch (error) {
+      if (isTerminalDesktopBillingError(error, ApiError)) {
+        publishDesktopBillingEvent({ status: "failed", kind: "credits" });
+        return;
+      }
+    }
+  }
+  publishDesktopBillingEvent({ status: "delayed", kind: "credits" });
 }
 
 async function pollDesktopMembership(
@@ -172,17 +229,18 @@ async function pollDesktopMembership(
       const session = await getSession();
       publishDesktopBillingEvent({
         status: "active",
+        kind: "membership",
         user: session.user ?? undefined,
       });
       return;
     } catch (error) {
       if (isTerminalDesktopBillingError(error, ApiError)) {
-        publishDesktopBillingEvent({ status: "failed" });
+        publishDesktopBillingEvent({ status: "failed", kind: "membership" });
         return;
       }
     }
   }
-  publishDesktopBillingEvent({ status: "delayed" });
+  publishDesktopBillingEvent({ status: "delayed", kind: "membership" });
 }
 
 function isTerminalDesktopBillingError(

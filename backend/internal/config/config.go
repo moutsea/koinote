@@ -21,10 +21,13 @@ type Config struct {
 	// MCPTokenEncryptionKey 用于加密需要再次展示的 MCP 个人访问令牌。
 	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地启动。
 	MCPTokenEncryptionKey string
-	NodeEnv               string // "production" | "development"
-	AutoMigrate           bool
-	MigrationsDir         string
-	AllowedOrigins        []string
+	// LLMCredentialEncryptionKey 只用于加密会员保存的 BYOK API Key，不能与
+	// 会话、MCP token 或第三方服务密钥复用。
+	LLMCredentialEncryptionKey string
+	NodeEnv                    string // "production" | "development"
+	AutoMigrate                bool
+	MigrationsDir              string
+	AllowedOrigins             []string
 
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
@@ -51,10 +54,19 @@ type Config struct {
 	EmailVerificationSecret string
 	EnableMockEmail         bool
 
-	// Stripe Checkout：三项必须同时配置；全部留空时关闭会员购买，方便自部署。
+	// Stripe Checkout：Secret/Webhook 由会员和 Credits 商品共用；两个 Product
+	// 可分别留空以关闭对应购买入口。
 	StripeSecretKey         string
 	StripeWebhookSecret     string
 	StripeLifetimeProductID string
+	StripeCreditsProductID  string
+
+	// AI 优化的内置模型。四项齐全时启用平台 credits 调用；会员的
+	// BYOK 渠道不依赖这组配置。
+	AgentLLMProtocol string
+	AgentLLMBaseURL  string
+	AgentLLMAPIKey   string
+	AgentLLMModel    string
 
 	// 飞书付款通知沿用 Kimiseek 的机器人配置名。两项同时配置才启用；
 	// 生产环境只配置一项时拒绝启动，避免付款后静默漏通知。
@@ -114,10 +126,13 @@ func Load() Config {
 		InternalToken:         os.Getenv("BACKEND_INTERNAL_TOKEN"),
 		SessionSecret:         os.Getenv("SESSION_SECRET"),
 		MCPTokenEncryptionKey: strings.TrimSpace(os.Getenv("MCP_TOKEN_ENCRYPTION_KEY")),
-		NodeEnv:               nodeEnv,
-		AutoMigrate:           getenv("AUTO_MIGRATE", "true") == "true",
-		MigrationsDir:         getenv("MIGRATIONS_DIR", "migrations"),
-		WorkerURL:             strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
+		LLMCredentialEncryptionKey: strings.TrimSpace(
+			os.Getenv("LLM_CREDENTIAL_ENCRYPTION_KEY"),
+		),
+		NodeEnv:       nodeEnv,
+		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
+		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
+		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 
@@ -137,6 +152,12 @@ func Load() Config {
 		StripeSecretKey:         strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
 		StripeWebhookSecret:     strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeLifetimeProductID: strings.TrimSpace(os.Getenv("STRIPE_LIFETIME_PRODUCT_ID")),
+		StripeCreditsProductID:  strings.TrimSpace(os.Getenv("STRIPE_CREDITS_PRODUCT_ID")),
+
+		AgentLLMProtocol: strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_LLM_PROTOCOL"))),
+		AgentLLMBaseURL:  strings.TrimSpace(os.Getenv("AGENT_LLM_BASE_URL")),
+		AgentLLMAPIKey:   strings.TrimSpace(os.Getenv("AGENT_LLM_API_KEY")),
+		AgentLLMModel:    strings.TrimSpace(os.Getenv("AGENT_LLM_MODEL")),
 
 		BotWebhook:       strings.TrimSpace(os.Getenv("BOT_WEBHOOK")),
 		BotWebhookSecret: strings.TrimSpace(os.Getenv("BOT_WEBHOOK_SECRET")),
@@ -186,8 +207,46 @@ func (c Config) StripeEnabled() bool {
 	return c.StripeSecretKey != "" && c.StripeLifetimeProductID != ""
 }
 
+func (c Config) StripeCreditsEnabled() bool {
+	return c.StripeSecretKey != "" && c.StripeCreditsProductID != ""
+}
+
+func (c Config) StripeClientEnabled() bool {
+	return c.StripeEnabled() || c.StripeCreditsEnabled()
+}
+
 func (c Config) StripeWebhookEnabled() bool {
-	return c.StripeEnabled() && c.StripeWebhookSecret != ""
+	return c.StripeClientEnabled() && c.StripeWebhookSecret != ""
+}
+
+func (c Config) AgentLLMEnabled() bool {
+	return c.AgentLLMProtocol != "" && c.AgentLLMBaseURL != "" && c.AgentLLMAPIKey != "" && c.AgentLLMModel != ""
+}
+
+// ValidateAgentLLMConfig 让平台 credits 模式保持显式开关：全空即关闭，部分
+// 配置则拒绝启动。BYOK 渠道另行在请求边界做更严格的 SSRF 校验。
+func (c Config) ValidateAgentLLMConfig() error {
+	configured := 0
+	for _, value := range []string{c.AgentLLMProtocol, c.AgentLLMBaseURL, c.AgentLLMAPIKey, c.AgentLLMModel} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 {
+		return nil
+	}
+	if configured != 4 {
+		return fmt.Errorf("AGENT_LLM_PROTOCOL、AGENT_LLM_BASE_URL、AGENT_LLM_API_KEY、AGENT_LLM_MODEL 必须同时配置或同时留空")
+	}
+	if c.AgentLLMProtocol != "openai" && c.AgentLLMProtocol != "anthropic" {
+		return fmt.Errorf("AGENT_LLM_PROTOCOL 必须是 openai 或 anthropic")
+	}
+	parsed, err := url.Parse(c.AgentLLMBaseURL)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Scheme != "https" && (c.IsProduction() || parsed.Scheme != "http")) {
+		return fmt.Errorf("AGENT_LLM_BASE_URL 必须是合法的 HTTPS URL")
+	}
+	return nil
 }
 
 func (c Config) FeishuEnabled() bool {
@@ -205,16 +264,23 @@ func validBotWebhook(rawURL string) bool {
 // ValidateStripeConfig 在生产环境拒绝只配置一部分的状态。开发环境允许暂缺 webhook
 // secret，靠成功页确认即可本地走通；生产必须有 webhook 兜住用户未回跳的情况。
 func (c Config) ValidateStripeConfig() error {
-	configured := 0
-	for _, value := range []string{c.StripeSecretKey, c.StripeWebhookSecret, c.StripeLifetimeProductID} {
-		if value != "" {
-			configured++
-		}
-	}
-	if configured == 0 || configured == 3 || !c.IsProduction() {
+	productsConfigured := c.StripeLifetimeProductID != "" || c.StripeCreditsProductID != ""
+	if !productsConfigured && c.StripeSecretKey == "" && c.StripeWebhookSecret == "" {
 		return nil
 	}
-	return fmt.Errorf("STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_LIFETIME_PRODUCT_ID 必须同时配置或同时留空")
+	if productsConfigured && c.StripeSecretKey == "" {
+		return fmt.Errorf("配置 Stripe Product 时必须同时设置 STRIPE_SECRET_KEY")
+	}
+	if c.StripeSecretKey != "" && !productsConfigured {
+		return fmt.Errorf("STRIPE_LIFETIME_PRODUCT_ID、STRIPE_CREDITS_PRODUCT_ID 至少配置一个")
+	}
+	if c.StripeWebhookSecret != "" && c.StripeSecretKey == "" {
+		return fmt.Errorf("STRIPE_WEBHOOK_SECRET 不能脱离 STRIPE_SECRET_KEY 单独配置")
+	}
+	if c.IsProduction() && c.StripeWebhookSecret == "" {
+		return fmt.Errorf("生产环境启用 Stripe 时必须设置 STRIPE_WEBHOOK_SECRET")
+	}
+	return nil
 }
 
 // ValidateFeishuConfig 与 Kimiseek 一样只在生产环境发送通知。自部署可以把两项

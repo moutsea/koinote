@@ -734,6 +734,8 @@ export function EditorPage() {
             docId={liveId}
             remoteRevision={documents?.find((document) => document.docId === liveId)?.revision}
             historyAvailable={session.data?.user?.membershipTier === "lifetime"}
+            member={session.data?.user?.membershipTier === "lifetime"}
+            localMode={localMode}
             visible={
               liveId === tabState.activeDocId && !doc.isLoading && !doc.isError
             }

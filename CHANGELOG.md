@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and 2–3 alternatives when the score is below 60. Reviews now separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.
+- Lifetime membership now grants 1,000 credits. Built-in reviews cost 1 credit per 2,000 actual tokens, with Stripe packs of 3,000/$1.99, 10,000/$4.99, and 30,000/$12.99.
+- Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.
+
+### Fixed
+
+- Kept headings immediately after block images separate across repeated Markdown saves, and repaired legacy escaped headings when documents open.
+
 ## [0.6.0] - 2026-08-17
 
 ### Added

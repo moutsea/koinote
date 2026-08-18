@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History, RefreshCw } from "lucide-react";
+import { Bot, History, RefreshCw } from "lucide-react";
 import { getDocument } from "../../api";
 import { DESKTOP_SYNC_EVENT, isDesktopRuntime } from "../../desktop/runtime";
 import type { DesktopSyncSummary } from "../../desktop/offlineStore";
@@ -12,6 +12,7 @@ import { ConflictDialog } from "./ConflictDialog";
 import { VersionHistoryDialog } from "./VersionHistoryDialog";
 import { useI18n } from "../../i18n";
 import { decideRemoteDocumentUpdate } from "../../remoteUpdates";
+import { AgentReviewPanel } from "./AgentReviewPanel";
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -28,6 +29,8 @@ export function LiveEditor({
   remoteRevision,
   visible,
   historyAvailable,
+  member,
+  localMode,
   saver,
   onEditorReady,
   onTitleChange,
@@ -39,6 +42,8 @@ export function LiveEditor({
   remoteRevision?: number;
   visible: boolean;
   historyAvailable: boolean;
+  member: boolean;
+  localMode: boolean;
   saver: DocumentSaver;
   /** 只有当前实例上报，否则大纲会跟到后台的某篇上 */
   onEditorReady?: (editor: Editor | null) => void;
@@ -55,6 +60,7 @@ export function LiveEditor({
   const [editorGeneration, setEditorGeneration] = useState(0);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [agentReviewOpen, setAgentReviewOpen] = useState(false);
   const [seededDocId, setSeededDocId] = useState<string | null>(null);
   const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
   const [remoteUpdated, setRemoteUpdated] = useState(false);
@@ -186,6 +192,12 @@ export function LiveEditor({
     setHistoryOpen(true);
   }
 
+  async function prepareAgentReview() {
+    const saved = await saver.flush(docId);
+    if (!saved && saver.status(docId) === "conflict") setConflictOpen(true);
+    return saved;
+  }
+
   function acceptDocument(next: NonNullable<typeof merged>) {
     queryClient.setQueryData(["document", docId], next);
     onTitleChange?.(docId, next.title);
@@ -266,6 +278,16 @@ export function LiveEditor({
                 <span className="hidden sm:inline">{t.editor.history}</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setAgentReviewOpen(true)}
+              title={t.agentReview.button}
+              aria-label={t.agentReview.button}
+              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t.agentReview.button}</span>
+            </button>
             {trailingControls}
           </>
         }
@@ -302,6 +324,16 @@ export function LiveEditor({
             setHistoryOpen(false);
           }}
           onClose={() => setHistoryOpen(false)}
+        />
+      )}
+      {visible && agentReviewOpen && (
+        <AgentReviewPanel
+          docId={docId}
+          member={member}
+          localMode={localMode}
+          onPrepareReview={prepareAgentReview}
+          onAcceptDocument={acceptDocument}
+          onClose={() => setAgentReviewOpen(false)}
         />
       )}
     </div>

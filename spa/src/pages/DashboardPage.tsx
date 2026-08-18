@@ -13,7 +13,6 @@ import { PageContainer } from "../components/PageContainer";
 import { PaperCard } from "../components/Ink";
 import { StorageCard } from "../components/StorageCard";
 import { MembershipCard } from "../components/MembershipCard";
-import { MCPAccessCard } from "../components/MCPAccessCard";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
 import { AccountDeletionCard } from "../components/AccountDeletionCard";
@@ -135,10 +134,6 @@ export function DashboardPage() {
 
       <div id="history-settings" className="mt-4 scroll-mt-20">
         <DocumentHistorySettingsCard user={user} />
-      </div>
-
-      <div id="mcp" className="mt-4 scroll-mt-20">
-        <MCPAccessCard user={user} />
       </div>
 
       <div id="delete-account" className="mt-4 scroll-mt-20">

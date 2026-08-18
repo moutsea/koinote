@@ -7,6 +7,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.3.1
 	github.com/stripe/stripe-go/v82 v82.5.0
+	github.com/yuin/goldmark v1.7.13
 	golang.org/x/crypto v0.37.0
 )
 

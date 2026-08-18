@@ -19,8 +19,8 @@ const vite = readFileSync(
   new URL("../vite.config.ts", import.meta.url),
   "utf8",
 );
-const dashboard = readFileSync(
-  new URL("../spa/src/pages/DashboardPage.tsx", import.meta.url),
+const aiSettings = readFileSync(
+  new URL("../spa/src/pages/AISettingsPage.tsx", import.meta.url),
   "utf8",
 );
 const accessCard = readFileSync(
@@ -76,8 +76,8 @@ ok(
   "开发和生产预览必须与 Worker 使用同一条后端路径",
 );
 ok(
-  "账户页挂载 MCP 令牌入口",
-  /<MCPAccessCard\s+user=\{user\}/.test(dashboard),
+  "AI 设置页挂载 MCP 令牌入口",
+  /<MCPAccessCard\s+user=\{user\}/.test(aiSettings),
   "会员需要能生成和撤销个人访问令牌",
 );
 ok(

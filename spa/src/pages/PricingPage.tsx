@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, Crown, LoaderCircle } from "lucide-react";
+import { Check, Coins, Crown, LoaderCircle } from "lucide-react";
 import {
   ApiError,
+  createAgentCreditsCheckout,
   createMembershipCheckout,
   getBillingPricing,
   getMembershipStatus,
+  type AgentCreditPack,
 } from "../api";
 import { useCurrentUser } from "../auth";
 import { InkClouds, PaperCard } from "../components/Ink";
@@ -15,6 +17,7 @@ import {
   formatMembershipPrice,
 } from "../components/MembershipCard";
 import { PageContainer } from "../components/PageContainer";
+import { formatCreditPackPrice } from "../components/AgentCreditsCard";
 import { interpolate, useI18n } from "../i18n";
 import { formatBytes } from "../storage";
 import { openMembershipCheckout } from "../externalNavigation";
@@ -61,6 +64,13 @@ export function PricingPage() {
     refetchInterval: (query) =>
       checkoutInProgress && !query.state.data?.membership.active ? 2_000 : false,
   });
+  const creditCheckout = useMutation({
+    async mutationFn(pack: AgentCreditPack) {
+      const result = await createAgentCreditsCheckout(pack.code);
+      await openMembershipCheckout(result.url);
+      return result;
+    },
+  });
 
   const data = pricing.data?.pricing;
   const selectedPrice =
@@ -73,6 +83,7 @@ export function PricingPage() {
     : "—";
   const active =
     membership.data?.membership.active ?? user?.membershipTier === "lifetime";
+  const creditPacks = data?.creditPacks ?? [];
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -162,8 +173,7 @@ export function PricingPage() {
                 action={
                   active ? (
                     <Link
-                      to="/dashboard"
-                      hash="mcp"
+                      to="/ai-settings"
                       className="inline-flex w-full items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
                       style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                     >
@@ -211,6 +221,50 @@ export function PricingPage() {
               />
             </div>
 
+            {creditPacks.length > 0 && <section className="mx-auto mt-16 max-w-5xl">
+              <div className="mx-auto max-w-2xl text-center">
+                <Coins className="mx-auto h-6 w-6" style={{ color: "var(--ink-mid)" }} />
+                <h2 className="kn-heading-cn mt-3 text-2xl font-bold" style={{ color: "var(--ink-black)" }}>
+                  {t.pricing.creditsTitle}
+                </h2>
+                <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+                  {t.pricing.creditsDescription}
+                </p>
+              </div>
+              <div className="mt-7 grid gap-4 sm:grid-cols-3">
+                {creditPacks.map((pack) => (
+                  <CreditPackCard
+                    key={pack.code}
+                    pack={pack}
+                    locale={locale}
+                    action={active ? (
+                      <button
+                        type="button"
+                        onClick={() => creditCheckout.mutate(pack)}
+                        disabled={!data.creditPurchaseEnabled || creditCheckout.isPending}
+                        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition hover:bg-[var(--ink-wash)] disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                      >
+                        {creditCheckout.isPending && creditCheckout.variables?.code === pack.code && (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        )}
+                        {t.pricing.buyCredits}
+                      </button>
+                    ) : undefined}
+                  />
+                ))}
+              </div>
+              <p className="mt-4 text-center text-xs leading-5" style={{ color: creditCheckout.isError ? "var(--cinnabar)" : "var(--ink-faint)" }}>
+                {!active
+                  ? t.pricing.creditsMembersOnly
+                  : !data.creditPurchaseEnabled
+                    ? t.agentCredits.purchaseUnavailable
+                    : creditCheckout.isError
+                      ? t.agentCredits.checkoutFailed
+                      : t.pricing.creditsNote}
+              </p>
+            </section>}
+
             <section className="mx-auto mt-20 max-w-4xl">
               <h2 className="kn-heading-cn text-center text-2xl font-bold" style={{ color: "var(--ink-black)" }}>
                 {t.pricing.faqTitle}
@@ -232,6 +286,29 @@ export function PricingPage() {
         )}
       </PageContainer>
     </div>
+  );
+}
+
+function CreditPackCard({
+  pack,
+  locale,
+  action,
+}: {
+  pack: AgentCreditPack;
+  locale: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <PaperCard className="flex flex-col p-5 text-center sm:p-6">
+      <p className="text-2xl font-bold tabular-nums" style={{ color: "var(--ink-black)" }}>
+        {pack.credits.toLocaleString(locale)}
+      </p>
+      <p className="mt-1 text-sm font-medium" style={{ color: "var(--ink-mid)" }}>credits</p>
+      <p className="mt-4 text-lg font-semibold" style={{ color: "var(--ink-strong)" }}>
+        {formatCreditPackPrice(pack, locale)}
+      </p>
+      <div className="mt-auto">{action}</div>
+    </PaperCard>
   );
 }
 

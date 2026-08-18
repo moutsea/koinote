@@ -166,6 +166,9 @@ const LOCAL_IMPORT_FOLDER_BATCH_SIZE = 100;
 const LOCAL_IMPORT_DOCUMENT_BATCH_SIZE = 10;
 const IMAGE_MAINTENANCE_META_KEY = "image-maintenance-state";
 export const DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
+// 图片写入和文档自动保存不是一个原子操作。维护任务在两者之间运行时，
+// 不能把刚插入、尚未出现在文档正文里的图片误判成孤儿。
+const DESKTOP_OFFLINE_IMAGE_CLEANUP_GRACE_MS = 10 * 60 * 1000;
 const DESKTOP_IMAGE_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -263,6 +266,20 @@ function base64ToBytes(value: string): Uint8Array {
 
 function imageDataURL(row: OfflineImageRow): string {
   return `data:${row.content_type};base64,${row.base64_data}`;
+}
+
+function offlineImageCleanupCutoff(): string {
+  return new Date(Date.now() - DESKTOP_OFFLINE_IMAGE_CLEANUP_GRACE_MS).toISOString();
+}
+
+function isRecentOfflineImage(createdAt: string): boolean {
+  const timestamp = Date.parse(createdAt);
+  // Unknown timestamps are protected rather than deleted. All new writes use
+  // ISO timestamps, but this keeps an old/corrupt row recoverable.
+  return (
+    !Number.isFinite(timestamp) ||
+    Date.now() - timestamp < DESKTOP_OFFLINE_IMAGE_CLEANUP_GRACE_MS
+  );
 }
 
 function imageContentType(response: Response, objectKey: string): string | null {
@@ -560,7 +577,21 @@ async function uploadOfflineImage(
   row: OfflineImageRow,
 ): Promise<string> {
   if (row.remote_url) {
-    await applyUploadedImageMapping(account, row.image_id, row.remote_url);
+    const replacedDocuments = await applyUploadedImageMapping(
+      account,
+      row.image_id,
+      row.remote_url,
+    );
+    // Keep a recovered upload protected until its local placeholders have
+    // been replaced in SQLite. This also repairs rows left half-finished by a
+    // crash or a cache-clear action between the two writes.
+    if (replacedDocuments > 0) {
+      const db = await database();
+      await db.execute(`
+        UPDATE offline_images SET is_local_origin = 0, last_error = NULL
+        WHERE account_id = $1 AND image_id = $2
+      `, [account, row.image_id]);
+    }
     return row.remote_url;
   }
   const bytes = base64ToBytes(row.base64_data);
@@ -597,10 +628,24 @@ async function uploadOfflineImage(
   await db.execute(`
     UPDATE offline_images
     SET object_key = $3, remote_url = $4, last_error = NULL,
-        is_local_origin = 0
+        is_local_origin = 1
     WHERE account_id = $1 AND image_id = $2
   `, [account, row.image_id, result.image.key, result.image.url]);
-  await applyUploadedImageMapping(account, row.image_id, result.image.url);
+  const replacedDocuments = await applyUploadedImageMapping(
+    account,
+    row.image_id,
+    result.image.url,
+  );
+  // The editor can still have the image only in its in-memory document while
+  // the sync runs. Do not turn the only local copy into an evictable cache
+  // entry until at least one persisted document has had its placeholder
+  // replaced. The next sync will retry the mapping after the editor saves.
+  if (replacedDocuments > 0) {
+    await db.execute(`
+      UPDATE offline_images SET is_local_origin = 0
+      WHERE account_id = $1 AND image_id = $2
+    `, [account, row.image_id]);
+  }
   return result.image.url;
 }
 
@@ -608,10 +653,10 @@ async function applyUploadedImageMapping(
   account: string,
   imageID: string,
   remoteURL: string,
-): Promise<void> {
+): Promise<number> {
   const db = await database();
   const localURL = desktopLocalImageURL(imageID);
-  await db.execute(`
+  const result = await db.execute(`
     UPDATE offline_documents
     SET content = replace(content, $2, $3),
         sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
@@ -619,11 +664,12 @@ async function applyUploadedImageMapping(
         last_error = NULL
     WHERE account_id = $1 AND instr(content, $2) > 0
   `, [account, localURL, remoteURL]);
-  if (typeof window !== "undefined") {
+  if (result.rowsAffected > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
       detail: { localURL, remoteURL },
     }));
   }
+  return result.rowsAffected;
 }
 
 async function prepareDocumentContentForRemote(
@@ -748,14 +794,15 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
   )];
   if (imageIDs.length === 0) return;
   const db = await database();
+  const cutoff = offlineImageCleanupCutoff();
   if (isLocalAccount(account)) {
     const referenced = await localReferencedImageIDs(account);
     for (const imageID of imageIDs) {
       if (referenced.has(imageID)) continue;
       await db.execute(`
         DELETE FROM offline_images
-        WHERE account_id = $1 AND image_id = $2
-      `, [account, imageID]);
+        WHERE account_id = $1 AND image_id = $2 AND created_at < $3
+      `, [account, imageID, cutoff]);
     }
     return;
   }
@@ -763,12 +810,16 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
     await db.execute(`
       DELETE FROM offline_images
       WHERE account_id = $1 AND image_id = $2
+        AND created_at < $4
         AND NOT EXISTS (
           SELECT 1 FROM offline_documents d
           WHERE d.account_id = $1
-            AND instr(d.content, $3 || offline_images.image_id) > 0
+            AND (
+              instr(d.content, $3 || offline_images.image_id) > 0 OR
+              instr(d.remote_snapshot, $3 || offline_images.image_id) > 0
+            )
         )
-    `, [account, imageID, "koinote-local-image://"]);
+    `, [account, imageID, "koinote-local-image://", cutoff]);
   }
 }
 
@@ -791,15 +842,18 @@ async function localReferencedImageIDs(account: string): Promise<Set<string>> {
 
 async function cleanupUnusedOfflineImages(account: string): Promise<void> {
   const db = await database();
+  const cutoff = offlineImageCleanupCutoff();
   if (isLocalAccount(account)) {
     const [images, referenced] = await Promise.all([
-      db.select<OfflineImageIdentity[]>(`
-        SELECT image_id, object_key FROM offline_images WHERE account_id = $1
+      db.select<Array<OfflineImageIdentity & Pick<OfflineImageRow, "created_at">>>(`
+        SELECT image_id, object_key, created_at FROM offline_images WHERE account_id = $1
       `, [account]),
       localReferencedImageIDs(account),
     ]);
     for (const image of images) {
-      if (referenced.has(image.image_id)) continue;
+      if (referenced.has(image.image_id) || isRecentOfflineImage(image.created_at)) {
+        continue;
+      }
       await db.execute(`
         DELETE FROM offline_images WHERE account_id = $1 AND image_id = $2
       `, [account, image.image_id]);
@@ -809,6 +863,11 @@ async function cleanupUnusedOfflineImages(account: string): Promise<void> {
   const rows = await db.select<OfflineImageIdentity[]>(`
     SELECT i.image_id, i.object_key FROM offline_images i
     WHERE i.account_id = $1
+      -- Pending local-origin images are the only copy of the user's file.
+      -- Automatic cache maintenance must never reclaim them before the
+      -- document upload has a chance to finish.
+      AND i.is_local_origin = 0
+      AND i.created_at < $3
       AND NOT EXISTS (
         SELECT 1 FROM offline_documents d
         WHERE d.account_id = $1 AND (
@@ -820,22 +879,39 @@ async function cleanupUnusedOfflineImages(account: string): Promise<void> {
           ))
         )
       )
-  `, [account, "koinote-local-image://"]);
-  const remoteKeys = rows
-    .map((row) => row.object_key)
-    .filter((value): value is string => Boolean(value));
-  if (remoteKeys.length > 0 && !isLocalAccount(account)) {
+  `, [account, "koinote-local-image://", cutoff]);
+  const releasedKeys: string[] = [];
+  for (const row of rows) {
+    // The candidate SELECT and this DELETE are separated by arbitrary work
+    // (including the next candidate). Re-check references at deletion time so
+    // an editor save that races cleanup cannot lose its image row.
+    const result = await db.execute(`
+      DELETE FROM offline_images
+      WHERE account_id = $1 AND image_id = $2
+        AND is_local_origin = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM offline_documents d
+          WHERE d.account_id = $1 AND (
+            instr(d.content, $3 || offline_images.image_id) > 0 OR
+            instr(d.remote_snapshot, $3 || offline_images.image_id) > 0 OR
+            (offline_images.object_key IS NOT NULL AND (
+              instr(d.content, offline_images.object_key) > 0 OR
+              instr(d.remote_snapshot, offline_images.object_key) > 0
+            ))
+          )
+        )
+    `, [account, row.image_id, "koinote-local-image://"]);
+    if (result.rowsAffected === 1 && row.object_key) {
+      releasedKeys.push(row.object_key);
+    }
+  }
+  if (releasedKeys.length > 0) {
     await remoteJSON("/api/storage/release-images", {
       method: "POST",
-      body: JSON.stringify({ keys: remoteKeys }),
+      body: JSON.stringify({ keys: releasedKeys }),
     });
   }
-  if (rows.length > 0) {
-    for (const row of rows) {
-      await db.execute(`
-        DELETE FROM offline_images WHERE account_id = $1 AND image_id = $2
-      `, [account, row.image_id]);
-    }
+  if (releasedKeys.length > 0) {
     remoteCacheFullAccounts.delete(account);
   }
 }

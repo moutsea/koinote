@@ -34,6 +34,16 @@ equal(
   "koinote://billing?checkout=cancelled",
 );
 equal(
+  "Credits 成功页保留购买类型和 Session",
+  desktopBillingDeepLink("https://koinote.app/billing/desktop-return?checkout=success&purchase=credits&session_id=cs_test_credits"),
+  "koinote://billing?checkout=success&purchase=credits&session_id=cs_test_credits",
+);
+equal(
+  "Credits 取消页保留购买类型",
+  desktopBillingDeepLink("https://koinote.app/billing/desktop-return?checkout=cancelled&purchase=credits"),
+  "koinote://billing?checkout=cancelled&purchase=credits",
+);
+equal(
   "成功页拒绝缺失 Session",
   desktopBillingDeepLink("https://koinote.app/billing/desktop-return?checkout=success"),
   null,
@@ -59,11 +69,15 @@ const backendMain = fs.readFileSync("backend/cmd/server/main.go", "utf8");
 includes("客户端处理 billing deep link", auth, 'callback.hostname === "billing"');
 includes("客户端用自身会话确认支付", auth, "confirmMembershipCheckout(sessionId)");
 includes("客户端等待 webhook 履约", auth, "pollDesktopMembership");
+includes("客户端确认 Credits 支付", auth, "confirmAgentCreditsCheckout(sessionId)");
+includes("客户端等待 Credits webhook 履约", auth, "pollDesktopCredits");
+includes("Credits 回调保留独立事件类型", auth, 'kind: "credits"');
 includes("长时间处理进入明确终态", auth, 'status: "delayed"');
 includes("轮询单次故障不会退出循环", auth, "isTerminalDesktopBillingError(error, ApiError)");
 includes("Checkout 请求标记客户端来源", api, 'client: isDesktopRuntime() ? "desktop" : "web"');
 includes("桌面回跳页已注册", main, 'path: "/billing/desktop-return"');
 includes("回跳后刷新会员状态", main, '["membership-status"]');
+includes("Credits 回跳后刷新余额", main, '["agent-credits"]');
 includes("价格页读取权威会员状态", pricing, "getMembershipStatus");
 includes("价格页识别处理中 409", pricing, 'checkoutErrorCode === "checkout_in_progress"');
 includes("会员卡识别处理中 409", membership, 'error.code === "checkout_in_progress"');

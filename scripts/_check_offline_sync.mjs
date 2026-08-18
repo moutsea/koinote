@@ -526,6 +526,26 @@ assert.match(
   /SELECT i\.image_id, i\.object_key FROM offline_images i/,
   "清理本地附件时不能把无关图片的 base64 正文全部读入内存",
 );
+assert.match(
+  offlineStore,
+  /DESKTOP_OFFLINE_IMAGE_CLEANUP_GRACE_MS = 10 \* 60 \* 1000/,
+  "新写入的离线图片必须有清理保护窗口，避免先写图片后保存文档的竞态",
+);
+assert.match(
+  offlineStore,
+  /cleanupUnusedOfflineImages[\s\S]*?created_at < \$3/,
+  "后台孤儿图片清理必须跳过保护窗口内的新图片",
+);
+assert.match(
+  offlineStore,
+  /cleanupUnusedOfflineImages[\s\S]*?AND i\.is_local_origin = 0/,
+  "自动缓存清理不能回收仍是本地原件的待上传图片",
+);
+assert.match(
+  offlineStore,
+  /desktopReleaseUnusedImages[\s\S]*?created_at < \$3/,
+  "显式释放离线图片也不能删除刚写入、尚未完成文档保存的图片",
+);
 assert.match(offlineStore, /cacheAllDocumentImages\(account\)/);
 assert.match(offlineStore, /DELETE FROM offline_images WHERE account_id = \$1/);
 assert.match(apiSource, /purpose === "persistent"[\s\S]*?desktopStoreLocalImage/);
@@ -580,6 +600,11 @@ const cacheDocumentImagesSection = sourceBetween(
   offlineStore,
   "async function cacheDocumentImages",
   "async function cacheAllDocumentImages",
+);
+const uploadOfflineImageSection = sourceBetween(
+  offlineStore,
+  "async function uploadOfflineImage",
+  "async function applyUploadedImageMapping",
 );
 const pushDocumentsSection = sourceBetween(
   offlineStore,
@@ -639,8 +664,23 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /SET object_key = \$3, remote_url = \$4, last_error = NULL,\s*is_local_origin = 0/,
-  "本地图片上传成功后必须转为可清理的远端缓存",
+  /SET object_key = \$3, remote_url = \$4, last_error = NULL,\s*is_local_origin = 1/,
+  "图片上传完成但正文尚未替换时必须继续保护本地副本",
+);
+assert.match(
+  uploadOfflineImageSection,
+  /const replacedDocuments = await applyUploadedImageMapping\([\s\S]*?row\.image_id,[\s\S]*?result\.image\.url,[\s\S]*?if \(replacedDocuments > 0\)[\s\S]*?UPDATE offline_images SET is_local_origin = 0/,
+  "本地图片只有在所有占位地址替换完成后才能转为可清理的远端缓存",
+);
+assert.match(
+  uploadOfflineImageSection,
+  /if \(row\.remote_url\)[\s\S]*?const replacedDocuments = await applyUploadedImageMapping\([\s\S]*?row\.image_id,[\s\S]*?row\.remote_url,[\s\S]*?if \(replacedDocuments > 0\)/,
+  "恢复半完成上传时也必须等持久化正文完成占位地址替换",
+);
+assert.match(
+  offlineStore,
+  /applyUploadedImageMapping[\s\S]*?if \(result\.rowsAffected > 0 && typeof window !== "undefined"\)/,
+  "没有持久化正文被替换时不能提前广播图片已上传事件",
 );
 assert.match(
   offlineStore,
@@ -651,6 +691,11 @@ assert.match(
   offlineStore,
   /instr\(d\.remote_snapshot, i\.object_key\) > 0/,
   "冲突云端稿引用的图片不能被本地清理器误删",
+);
+assert.match(
+  offlineStore,
+  /desktopReleaseUnusedImages[\s\S]*?instr\(d\.remote_snapshot, \$3 \|\| offline_images\.image_id\) > 0/,
+  "显式释放图片时也必须保留冲突快照中的引用",
 );
 assert.match(
   editorSource,

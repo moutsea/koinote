@@ -187,16 +187,38 @@ func TestMockEmailCanOnlyBeEnabledOutsideProduction(t *testing.T) {
 }
 
 func TestStripeConfigurationMustBeComplete(t *testing.T) {
-	complete := Config{
+	membershipOnly := Config{
 		StripeSecretKey:         "sk_test_example",
 		StripeWebhookSecret:     "whsec_example",
 		StripeLifetimeProductID: "prod_example",
 	}
-	if err := complete.ValidateStripeConfig(); err != nil {
-		t.Fatalf("完整 Stripe 配置不应报错: %v", err)
+	if err := membershipOnly.ValidateStripeConfig(); err != nil {
+		t.Fatalf("仅会员商品的完整 Stripe 配置不应报错: %v", err)
 	}
-	if !complete.StripeEnabled() {
-		t.Fatal("三项齐全时应启用 Stripe")
+	if !membershipOnly.StripeEnabled() || !membershipOnly.StripeClientEnabled() || membershipOnly.StripeCreditsEnabled() {
+		t.Fatalf("仅会员商品的启用状态错误: %+v", membershipOnly)
+	}
+
+	creditsOnly := Config{
+		StripeSecretKey:        "sk_test_example",
+		StripeWebhookSecret:    "whsec_example",
+		StripeCreditsProductID: "prod_credits",
+	}
+	if err := creditsOnly.ValidateStripeConfig(); err != nil {
+		t.Fatalf("仅 Credits 商品的完整 Stripe 配置不应报错: %v", err)
+	}
+	if creditsOnly.StripeEnabled() || !creditsOnly.StripeCreditsEnabled() || !creditsOnly.StripeClientEnabled() {
+		t.Fatalf("仅 Credits 商品的启用状态错误: %+v", creditsOnly)
+	}
+
+	bothProducts := Config{
+		StripeSecretKey:         "sk_test_example",
+		StripeWebhookSecret:     "whsec_example",
+		StripeLifetimeProductID: "prod_membership",
+		StripeCreditsProductID:  "prod_credits",
+	}
+	if err := bothProducts.ValidateStripeConfig(); err != nil || !bothProducts.StripeWebhookEnabled() {
+		t.Fatalf("两个商品共用 Stripe 客户端和 webhook 失败: err=%v cfg=%+v", err, bothProducts)
 	}
 
 	disabled := Config{}
@@ -210,7 +232,9 @@ func TestStripeConfigurationMustBeComplete(t *testing.T) {
 	for _, cfg := range []Config{
 		{NodeEnv: "production", StripeSecretKey: "sk_test_example"},
 		{NodeEnv: "production", StripeSecretKey: "sk_test_example", StripeLifetimeProductID: "prod_example"},
+		{NodeEnv: "production", StripeSecretKey: "sk_test_example", StripeCreditsProductID: "prod_credits"},
 		{NodeEnv: "production", StripeWebhookSecret: "whsec_example", StripeLifetimeProductID: "prod_example"},
+		{NodeEnv: "production", StripeWebhookSecret: "whsec_example", StripeCreditsProductID: "prod_credits"},
 	} {
 		if err := cfg.ValidateStripeConfig(); err == nil {
 			t.Fatalf("部分 Stripe 配置应报错: %+v", cfg)
@@ -235,11 +259,63 @@ func TestLoadPopulatesStripeConfiguration(t *testing.T) {
 	t.Setenv("STRIPE_SECRET_KEY", "sk_test_example")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_example")
 	t.Setenv("STRIPE_LIFETIME_PRODUCT_ID", "prod_example")
+	t.Setenv("STRIPE_CREDITS_PRODUCT_ID", "prod_credits")
 
 	cfg := Load()
 	if cfg.StripeSecretKey != "sk_test_example" || cfg.StripeWebhookSecret != "whsec_example" ||
-		cfg.StripeLifetimeProductID != "prod_example" {
+		cfg.StripeLifetimeProductID != "prod_example" || cfg.StripeCreditsProductID != "prod_credits" {
 		t.Fatalf("Stripe 配置未完整加载: %+v", cfg)
+	}
+}
+
+func TestAgentLLMConfiguration(t *testing.T) {
+	complete := Config{
+		NodeEnv:          "production",
+		AgentLLMProtocol: "anthropic",
+		AgentLLMBaseURL:  "https://api.anthropic.com",
+		AgentLLMAPIKey:   "secret",
+		AgentLLMModel:    "claude-sonnet-5",
+	}
+	if err := complete.ValidateAgentLLMConfig(); err != nil || !complete.AgentLLMEnabled() {
+		t.Fatalf("完整 Agent LLM 配置未启用: err=%v cfg=%+v", err, complete)
+	}
+	for _, cfg := range []Config{
+		{AgentLLMProtocol: "openai"},
+		{AgentLLMBaseURL: "https://api.example.com"},
+		{AgentLLMAPIKey: "secret"},
+		{AgentLLMModel: "model"},
+		{AgentLLMProtocol: "unknown", AgentLLMBaseURL: "https://api.example.com", AgentLLMAPIKey: "secret", AgentLLMModel: "model"},
+		{NodeEnv: "production", AgentLLMProtocol: "openai", AgentLLMBaseURL: "http://api.example.com", AgentLLMAPIKey: "secret", AgentLLMModel: "model"},
+	} {
+		if err := cfg.ValidateAgentLLMConfig(); err == nil {
+			t.Fatalf("不完整或不安全的 Agent LLM 配置应报错: %+v", cfg)
+		}
+	}
+	local := Config{
+		NodeEnv:          "development",
+		AgentLLMProtocol: "openai",
+		AgentLLMBaseURL:  "http://127.0.0.1:11434/v1",
+		AgentLLMAPIKey:   "local",
+		AgentLLMModel:    "qwen",
+	}
+	if err := local.ValidateAgentLLMConfig(); err != nil || !local.AgentLLMEnabled() {
+		t.Fatalf("开发环境应允许本地 HTTP Agent LLM: err=%v", err)
+	}
+}
+
+func TestLoadPopulatesAgentLLMConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("LLM_CREDENTIAL_ENCRYPTION_KEY", " credential-key ")
+	t.Setenv("AGENT_LLM_PROTOCOL", " Anthropic ")
+	t.Setenv("AGENT_LLM_BASE_URL", " https://api.anthropic.com ")
+	t.Setenv("AGENT_LLM_API_KEY", " secret ")
+	t.Setenv("AGENT_LLM_MODEL", " claude-sonnet-5 ")
+	cfg := Load()
+	if cfg.LLMCredentialEncryptionKey != "credential-key" ||
+		cfg.AgentLLMProtocol != "anthropic" ||
+		cfg.AgentLLMBaseURL != "https://api.anthropic.com" ||
+		cfg.AgentLLMAPIKey != "secret" || cfg.AgentLLMModel != "claude-sonnet-5" {
+		t.Fatalf("Agent LLM 配置未完整加载: %+v", cfg)
 	}
 }
 

@@ -28,6 +28,7 @@ type App struct {
 	adminOverview          adminOverviewCache
 	productActivity        activityTracker
 	announcementTranslator announcementTranslator
+	agentLLMHTTPClient     *http.Client
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
@@ -40,7 +41,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		siteAnalytics:          newCloudflareAnalyticsClient(cfg),
 		announcementTranslator: newAnnouncementTranslator(cfg),
 	}
-	if cfg.StripeEnabled() {
+	if cfg.StripeClientEnabled() {
 		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions
 	}
 	return app
@@ -98,6 +99,22 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/mcp/tokens/{tokenId}/reveal", a.mcpTokenReveal)
 	mux.HandleFunc("DELETE /api/mcp/tokens/{tokenId}", a.mcpTokenRevoke)
 	mux.HandleFunc("GET /api/mcp/activity", a.mcpActivityList)
+	mux.HandleFunc("GET /api/agent/channels", a.llmChannelsList)
+	mux.HandleFunc("POST /api/agent/channels", a.llmChannelCreate)
+	mux.HandleFunc("PUT /api/agent/channels/{channelId}", a.llmChannelUpdate)
+	mux.HandleFunc("DELETE /api/agent/channels/{channelId}", a.llmChannelDelete)
+	mux.HandleFunc("GET /api/agent/settings", a.agentSettingsGet)
+	mux.HandleFunc("PUT /api/agent/settings", a.agentSettingsPut)
+	mux.HandleFunc("GET /api/agent/credits", a.agentCreditsGet)
+	mux.HandleFunc("POST /api/agent/credits/checkout", a.agentCreditsCheckout)
+	mux.HandleFunc("POST /api/agent/credits/checkout/confirm", a.agentCreditsCheckoutConfirm)
+	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
+	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
+	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)
+	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/apply", a.agentReviewSuggestionApply)
+	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/dismiss", a.agentReviewSuggestionDismiss)
+	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/apply-all", a.agentReviewApplyAll)
+	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/dismiss", a.agentReviewDismiss)
 	mux.HandleFunc("GET /api/settings/document-history", a.documentHistorySettingsGet)
 	mux.HandleFunc("PUT /api/settings/document-history", a.documentHistorySettingsPut)
 	mux.Handle("/mcp", a.mcpHandler())

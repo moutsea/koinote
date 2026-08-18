@@ -22,6 +22,7 @@ import {
 } from "../../desktop/offlineImagesCore";
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { isDesktopRuntime } from "../../desktop/runtime";
+import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
 
 /**
  * 没套主题时标题的排版。
@@ -372,7 +373,15 @@ export default function MarkdownEditor({
   // 重灌内容、光标跳回开头。
   useEffect(() => {
     if (!editor) return;
-    editor.commands.setContent(document.content);
+    const normalizedContent = normalizeLegacyImageAdjacentHeadings(
+      document.content,
+    );
+    editor.commands.setContent(normalizedContent);
+    if (normalizedContent !== document.content) {
+      // 让兼容恢复不只停留在当前 DOM：排入正常的 CAS 保存链，分享页和下一次
+      // 打开也会读到修复后的 Markdown。
+      onChange({ content: normalizedContent });
+    }
     setCharCount(editor.getText().length);
     setTitle(document.title);
     setThemeId(document.theme ?? "");

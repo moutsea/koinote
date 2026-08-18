@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   BarChart3,
+  BellRing,
   CheckCircle2,
   Coins,
   Eye,
@@ -32,9 +33,12 @@ const DATE_LOCALE: Record<Locale, string> = {
   ja: "ja-JP",
 };
 
+type AdminTab = "overview" | "growth" | "revenue" | "users" | "announcements";
+
 export function AdminPage() {
   const session = useSession();
   const { t, locale } = useI18n();
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const user = session.data?.user;
   const stats = useQuery({
     queryKey: ["admin-stats"],
@@ -93,47 +97,132 @@ export function AdminPage() {
             {t.admin.subtitle}
           </p>
         </div>
-        <button
-          type="button"
-          disabled={stats.isFetching}
-          onClick={() => void stats.refetch()}
-          className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
-          style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${stats.isFetching ? "animate-spin" : ""}`}
-          />
-          {t.admin.refresh}
-        </button>
+        {activeTab !== "announcements" && (
+          <button
+            type="button"
+            disabled={stats.isFetching}
+            onClick={() => void stats.refetch()}
+            className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${stats.isFetching ? "animate-spin" : ""}`}
+            />
+            {t.admin.refresh}
+          </button>
+        )}
       </div>
 
-      <AnnouncementAdminPanel />
+      <AdminTabs activeTab={activeTab} onChange={setActiveTab} />
 
-      {stats.isLoading ? (
-        <CenteredMessage>{t.admin.loading}</CenteredMessage>
-      ) : stats.isError || !stats.data ? (
-        <PaperCard className="mt-8 p-8 text-center">
-          <WifiOff
-            className="mx-auto h-8 w-8"
-            style={{ color: "var(--ink-faint)" }}
-          />
-          <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
-            {t.admin.loadFailed}
-          </p>
-        </PaperCard>
-      ) : (
-        <AdminContent stats={stats.data} locale={locale} />
-      )}
+      <div
+        id={`admin-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`admin-tab-${activeTab}`}
+        className="mt-6"
+      >
+        {activeTab === "announcements" ? (
+          <AnnouncementAdminPanel />
+        ) : stats.isLoading ? (
+          <CenteredMessage>{t.admin.loading}</CenteredMessage>
+        ) : stats.isError || !stats.data ? (
+          <PaperCard className="p-8 text-center">
+            <WifiOff
+              className="mx-auto h-8 w-8"
+              style={{ color: "var(--ink-faint)" }}
+            />
+            <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
+              {t.admin.loadFailed}
+            </p>
+          </PaperCard>
+        ) : (
+          <AdminContent stats={stats.data} locale={locale} activeTab={activeTab} />
+        )}
+      </div>
     </PageContainer>
+  );
+}
+
+function AdminTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: AdminTab;
+  onChange: (tab: AdminTab) => void;
+}) {
+  const { t } = useI18n();
+  const tabs = [
+    { id: "overview", label: t.admin.tabOverview, icon: <BarChart3 /> },
+    { id: "growth", label: t.admin.tabGrowth, icon: <MousePointerClick /> },
+    { id: "revenue", label: t.admin.tabRevenue, icon: <Coins /> },
+    { id: "users", label: t.admin.tabUsers, icon: <Users /> },
+    { id: "announcements", label: t.admin.tabAnnouncements, icon: <BellRing /> },
+  ] satisfies Array<{ id: AdminTab; label: string; icon: ReactNode }>;
+
+  return (
+    <div
+      className="mt-8 overflow-x-auto rounded-xl border p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
+    >
+      <div role="tablist" aria-label={t.admin.title} className="flex min-w-max gap-1">
+        {tabs.map((tab, index) => {
+          const active = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              id={`admin-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-controls={`admin-panel-${tab.id}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => onChange(tab.id)}
+              onKeyDown={(event) => {
+                let nextIndex = index;
+                if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+                else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+                else if (event.key === "Home") nextIndex = 0;
+                else if (event.key === "End") nextIndex = tabs.length - 1;
+                else return;
+                event.preventDefault();
+                const nextTab = tabs[nextIndex];
+                if (!nextTab) return;
+                onChange(nextTab.id);
+                const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                  '[role="tab"]',
+                );
+                buttons?.[nextIndex]?.focus();
+              }}
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition"
+              style={{
+                color: active ? "var(--ink-black)" : "var(--ink-mid)",
+                background: active ? "var(--ink-paper-soft)" : "transparent",
+                boxShadow: active ? "0 1px 3px rgba(31, 35, 40, 0.08)" : "none",
+              }}
+            >
+              <span
+                className="[&>svg]:h-4 [&>svg]:w-4"
+                style={{ color: active ? "var(--cinnabar)" : "var(--ink-faint)" }}
+              >
+                {tab.icon}
+              </span>
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
 function AdminContent({
   stats,
   locale,
+  activeTab,
 }: {
   stats: AdminStats;
   locale: Locale;
+  activeTab: Exclude<AdminTab, "announcements">;
 }) {
   const { t } = useI18n();
   const totalStorage = stats.overview.documentBytes + stats.overview.imageBytes;
@@ -142,212 +231,233 @@ function AdminContent({
     : 0;
 
   return (
-    <div className="mt-8 space-y-10">
-      <section>
-        <SectionTitle
-          icon={<Eye className="h-5 w-5" />}
-          title={t.admin.today}
-        />
-        {stats.traffic.available ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard
-              icon={<Eye />}
-              label={t.admin.pageViews}
-              value={formatNumber(stats.traffic.pageViews, locale)}
+    <div className="space-y-10">
+      {activeTab === "overview" && (
+        <>
+          <section>
+            <SectionTitle
+              icon={<Eye className="h-5 w-5" />}
+              title={t.admin.today}
             />
-            <MetricCard
-              icon={<Users />}
-              label={t.admin.uniqueVisitors}
-              value={formatNumber(stats.traffic.uniqueVisitors, locale)}
-            />
-            <MetricCard
-              icon={<MousePointerClick />}
-              label={t.admin.requests}
-              value={formatNumber(stats.traffic.requests, locale)}
-            />
-            <MetricCard
-              icon={<HardDrive />}
-              label={t.admin.bandwidth}
-              value={formatBytes(stats.traffic.bytes, DATE_LOCALE[locale])}
-            />
-          </div>
-        ) : (
-          <PaperCard className="mt-4 flex items-start gap-3 p-4">
-            <WifiOff
-              className="mt-0.5 h-5 w-5 shrink-0"
-              style={{ color: "var(--ink-faint)" }}
-            />
-            <div>
-              <p
-                className="text-sm font-medium"
-                style={{ color: "var(--ink-strong)" }}
-              >
-                {t.admin.trafficUnavailable}
-              </p>
-              <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-                {stats.traffic.reason === "not_configured"
-                  ? t.admin.trafficNotConfigured
-                  : t.admin.trafficUpstreamError}
-              </p>
-            </div>
-          </PaperCard>
-        )}
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <MetricCard
-            icon={<UserCheck />}
-            label={t.admin.newUsers}
-            value={formatNumber(stats.overview.todayNewUsers, locale)}
-          />
-          <MetricCard
-            icon={<ShieldCheck />}
-            label={t.admin.newMembers}
-            value={formatNumber(stats.overview.todayNewMembers, locale)}
-          />
-          <MetricCard
-            icon={<ShoppingBag />}
-            label={t.admin.orders}
-            value={formatNumber(stats.overview.todayOrders, locale)}
-          />
-        </div>
-        <p className="mt-3 text-xs" style={{ color: "var(--ink-faint)" }}>
-          {t.admin.trafficNote}
-        </p>
-      </section>
-
-      <section>
-        <SectionTitle
-          icon={<BarChart3 className="h-5 w-5" />}
-          title={t.admin.overview}
-        />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            icon={<Users />}
-            label={t.admin.totalUsers}
-            value={formatNumber(stats.overview.users, locale)}
-          />
-          <MetricCard
-            icon={<CheckCircle2 />}
-            label={t.admin.verifiedUsers}
-            value={formatNumber(stats.overview.verifiedUsers, locale)}
-          />
-          <MetricCard
-            icon={<ShieldCheck />}
-            label={t.admin.lifetimeMembers}
-            value={formatNumber(stats.overview.members, locale)}
-          />
-          <MetricCard
-            icon={<BarChart3 />}
-            label={t.admin.conversionRate}
-            value={formatPercent(conversion, locale)}
-          />
-          <MetricCard
-            icon={<FileText />}
-            label={t.admin.documents}
-            value={formatNumber(stats.overview.documents, locale)}
-          />
-          <MetricCard
-            icon={<Image />}
-            label={t.admin.images}
-            value={formatNumber(stats.overview.images, locale)}
-          />
-          <MetricCard
-            icon={<HardDrive />}
-            label={t.admin.storageUsed}
-            value={formatBytes(totalStorage, DATE_LOCALE[locale])}
-          />
-          <MetricCard
-            icon={<ShoppingBag />}
-            label={t.admin.totalOrders}
-            value={formatNumber(stats.overview.orders, locale)}
-          />
-        </div>
-      </section>
-
-      <section>
-        <SectionTitle
-          icon={<MousePointerClick className="h-5 w-5" />}
-          title={t.admin.funnel}
-        />
-        <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-          {t.admin.funnelHint}
-        </p>
-        <FunnelOverview stats={stats} locale={locale} />
-      </section>
-
-      <section>
-        <SectionTitle
-          icon={<UserCheck className="h-5 w-5" />}
-          title={t.admin.retention}
-        />
-        <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-          {t.admin.retentionHint}
-        </p>
-        <RetentionOverview stats={stats} locale={locale} />
-      </section>
-
-      <section>
-        <SectionTitle
-          icon={<Coins className="h-5 w-5" />}
-          title={t.admin.revenue}
-        />
-        {stats.revenue.length === 0 ? (
-          <EmptyCard>{t.admin.noRevenue}</EmptyCard>
-        ) : (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {stats.revenue.map((item) => (
-              <PaperCard key={item.currency} className="p-5">
-                <p
-                  className="text-xs font-semibold uppercase tracking-wider"
+            {stats.traffic.available ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
+                  icon={<Eye />}
+                  label={t.admin.pageViews}
+                  value={formatNumber(stats.traffic.pageViews, locale)}
+                />
+                <MetricCard
+                  icon={<Users />}
+                  label={t.admin.uniqueVisitors}
+                  value={formatNumber(stats.traffic.uniqueVisitors, locale)}
+                />
+                <MetricCard
+                  icon={<MousePointerClick />}
+                  label={t.admin.requests}
+                  value={formatNumber(stats.traffic.requests, locale)}
+                />
+                <MetricCard
+                  icon={<HardDrive />}
+                  label={t.admin.bandwidth}
+                  value={formatBytes(stats.traffic.bytes, DATE_LOCALE[locale])}
+                />
+              </div>
+            ) : (
+              <PaperCard className="mt-4 flex items-start gap-3 p-4">
+                <WifiOff
+                  className="mt-0.5 h-5 w-5 shrink-0"
                   style={{ color: "var(--ink-faint)" }}
-                >
-                  {item.currency}
-                </p>
-                <p
-                  className="mt-2 text-xl font-semibold"
-                  style={{ color: "var(--ink-black)" }}
-                >
-                  {formatMoney(item.totalAmount, item.currency, locale)}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: "var(--ink-mid)" }}>
-                  {interpolate(t.admin.orderCount, {
-                    count: formatNumber(item.totalOrders, locale),
-                  })}
-                </p>
-                <div
-                  className="mt-4 border-t pt-3"
-                  style={{ borderColor: "var(--ink-line)" }}
-                >
-                  <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                    {t.admin.todayRevenue}
-                  </p>
+                />
+                <div>
                   <p
-                    className="mt-1 text-sm font-medium"
+                    className="text-sm font-medium"
                     style={{ color: "var(--ink-strong)" }}
                   >
-                    {formatMoney(item.todayAmount, item.currency, locale)}
+                    {t.admin.trafficUnavailable}
+                  </p>
+                  <p
+                    className="mt-1 text-xs"
+                    style={{ color: "var(--ink-faint)" }}
+                  >
+                    {stats.traffic.reason === "not_configured"
+                      ? t.admin.trafficNotConfigured
+                      : t.admin.trafficUpstreamError}
                   </p>
                 </div>
               </PaperCard>
-            ))}
-          </div>
-        )}
-      </section>
+            )}
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <MetricCard
+                icon={<UserCheck />}
+                label={t.admin.newUsers}
+                value={formatNumber(stats.overview.todayNewUsers, locale)}
+              />
+              <MetricCard
+                icon={<ShieldCheck />}
+                label={t.admin.newMembers}
+                value={formatNumber(stats.overview.todayNewMembers, locale)}
+              />
+              <MetricCard
+                icon={<ShoppingBag />}
+                label={t.admin.orders}
+                value={formatNumber(stats.overview.todayOrders, locale)}
+              />
+            </div>
+            <p className="mt-3 text-xs" style={{ color: "var(--ink-faint)" }}>
+              {t.admin.trafficNote}
+            </p>
+          </section>
 
-      <section>
-        <SectionTitle
-          icon={<BarChart3 className="h-5 w-5" />}
-          title={t.admin.trend}
-        />
-        <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-          {t.admin.trendHint}
-        </p>
-        <TrendChart points={stats.trend} locale={locale} />
-      </section>
+          <section>
+            <SectionTitle
+              icon={<BarChart3 className="h-5 w-5" />}
+              title={t.admin.overview}
+            />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                icon={<Users />}
+                label={t.admin.totalUsers}
+                value={formatNumber(stats.overview.users, locale)}
+              />
+              <MetricCard
+                icon={<CheckCircle2 />}
+                label={t.admin.verifiedUsers}
+                value={formatNumber(stats.overview.verifiedUsers, locale)}
+              />
+              <MetricCard
+                icon={<ShieldCheck />}
+                label={t.admin.lifetimeMembers}
+                value={formatNumber(stats.overview.members, locale)}
+              />
+              <MetricCard
+                icon={<BarChart3 />}
+                label={t.admin.conversionRate}
+                value={formatPercent(conversion, locale)}
+              />
+              <MetricCard
+                icon={<FileText />}
+                label={t.admin.documents}
+                value={formatNumber(stats.overview.documents, locale)}
+              />
+              <MetricCard
+                icon={<Image />}
+                label={t.admin.images}
+                value={formatNumber(stats.overview.images, locale)}
+              />
+              <MetricCard
+                icon={<HardDrive />}
+                label={t.admin.storageUsed}
+                value={formatBytes(totalStorage, DATE_LOCALE[locale])}
+              />
+              <MetricCard
+                icon={<ShoppingBag />}
+                label={t.admin.totalOrders}
+                value={formatNumber(stats.overview.orders, locale)}
+              />
+            </div>
+          </section>
+        </>
+      )}
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      {activeTab === "growth" && (
+        <>
+          <section>
+            <SectionTitle
+              icon={<MousePointerClick className="h-5 w-5" />}
+              title={t.admin.funnel}
+            />
+            <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
+              {t.admin.funnelHint}
+            </p>
+            <FunnelOverview stats={stats} locale={locale} />
+          </section>
+
+          <section>
+            <SectionTitle
+              icon={<UserCheck className="h-5 w-5" />}
+              title={t.admin.retention}
+            />
+            <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
+              {t.admin.retentionHint}
+            </p>
+            <RetentionOverview stats={stats} locale={locale} />
+          </section>
+
+          <section>
+            <SectionTitle
+              icon={<BarChart3 className="h-5 w-5" />}
+              title={t.admin.trend}
+            />
+            <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
+              {t.admin.trendHint}
+            </p>
+            <TrendChart points={stats.trend} locale={locale} />
+          </section>
+        </>
+      )}
+
+      {activeTab === "revenue" && (
+        <>
+          <section>
+            <SectionTitle
+              icon={<Coins className="h-5 w-5" />}
+              title={t.admin.revenue}
+            />
+            {stats.revenue.length === 0 ? (
+              <EmptyCard>{t.admin.noRevenue}</EmptyCard>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {stats.revenue.map((item) => (
+                  <PaperCard key={item.currency} className="p-5">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: "var(--ink-faint)" }}
+                    >
+                      {item.currency}
+                    </p>
+                    <p
+                      className="mt-2 text-xl font-semibold"
+                      style={{ color: "var(--ink-black)" }}
+                    >
+                      {formatMoney(item.totalAmount, item.currency, locale)}
+                    </p>
+                    <p
+                      className="mt-1 text-xs"
+                      style={{ color: "var(--ink-mid)" }}
+                    >
+                      {interpolate(t.admin.orderCount, {
+                        count: formatNumber(item.totalOrders, locale),
+                      })}
+                    </p>
+                    <div
+                      className="mt-4 border-t pt-3"
+                      style={{ borderColor: "var(--ink-line)" }}
+                    >
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {t.admin.todayRevenue}
+                      </p>
+                      <p
+                        className="mt-1 text-sm font-medium"
+                        style={{ color: "var(--ink-strong)" }}
+                      >
+                        {formatMoney(item.todayAmount, item.currency, locale)}
+                      </p>
+                    </div>
+                  </PaperCard>
+                ))}
+              </div>
+            )}
+          </section>
+          <RecentPayments payments={stats.recentPayments} locale={locale} />
+        </>
+      )}
+
+      {activeTab === "users" && (
         <RecentUsers users={stats.recentUsers} locale={locale} />
-        <RecentPayments payments={stats.recentPayments} locale={locale} />
-      </div>
+      )}
 
       <p className="text-right text-xs" style={{ color: "var(--ink-faint)" }}>
         {interpolate(t.admin.generatedAt, {

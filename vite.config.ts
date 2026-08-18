@@ -48,6 +48,10 @@ export default defineConfig(({ mode }) => {
     env.BACKEND_URL ||
     env.VITE_BACKEND_URL ||
     `http://localhost:${env.BACKEND_PORT || "8080"}`;
+  // WORKER_URL belongs to the Go backend and may use host.docker.internal when
+  // that backend runs in Docker. Vite runs on the host, so it needs its own
+  // address; otherwise image requests are proxied to an unreachable hostname.
+  const workerURL = env.VITE_WORKER_URL || "http://localhost:8788";
   const internalToken = env.BACKEND_INTERNAL_TOKEN || "";
 
   // dev 时把 /api、/health 转发到本地 Go 后端；剥掉外部可伪造的鉴权头，
@@ -70,7 +74,7 @@ export default defineConfig(({ mode }) => {
   // 本地把 /api/images 与 /images 转给 wrangler dev，这样 5273 也能测上传，
   // 不必切到 8788 去换取 HMR。wrangler 没起时这两条会连接被拒。
   const workerProxy: ProxyOptions = {
-    target: env.WORKER_URL || "http://localhost:8788",
+    target: workerURL,
     changeOrigin: false,
   };
 

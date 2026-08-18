@@ -5,7 +5,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Moon,
   Sun,
@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Bot,
   CloudOff,
+  Coins,
   Crown,
   FileText,
   Gift,
@@ -28,6 +29,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { AGENT_CREDITS_QUERY_KEY, getAgentCredits } from "../api";
 import { useSession, useLogout } from "../auth";
 import { applyTheme, readStoredTheme, type Theme } from "../theme";
 import {
@@ -213,15 +215,25 @@ export function AppShell() {
   }
 
   const desktopBillingText = desktopBillingNotice
-    ? desktopBillingNotice.status === "active"
-      ? t.membership.checkoutSuccess
-      : desktopBillingNotice.status === "pending"
-        ? t.membership.checkoutPending
-        : desktopBillingNotice.status === "delayed"
-          ? t.membership.checkoutDelayed
-          : desktopBillingNotice.status === "cancelled"
-            ? t.membership.checkoutCancelled
-            : t.membership.checkoutFailed
+    ? desktopBillingNotice.kind === "credits"
+      ? desktopBillingNotice.status === "active"
+        ? t.agentCredits.checkoutSuccess
+        : desktopBillingNotice.status === "pending"
+          ? t.agentCredits.checkoutPending
+          : desktopBillingNotice.status === "delayed"
+            ? t.agentCredits.checkoutDelayed
+            : desktopBillingNotice.status === "cancelled"
+              ? t.agentCredits.checkoutCancelled
+              : t.agentCredits.checkoutFailed
+      : desktopBillingNotice.status === "active"
+        ? t.membership.checkoutSuccess
+        : desktopBillingNotice.status === "pending"
+          ? t.membership.checkoutPending
+          : desktopBillingNotice.status === "delayed"
+            ? t.membership.checkoutDelayed
+            : desktopBillingNotice.status === "cancelled"
+              ? t.membership.checkoutCancelled
+              : t.membership.checkoutFailed
     : "";
 
   return (
@@ -335,6 +347,7 @@ export function AppShell() {
                 membershipTier={user.membershipTier}
                 isAdmin={user.isAdmin}
                 dashboardActive={isUnder(pathname, "/dashboard")}
+                aiSettingsActive={isUnder(pathname, "/ai-settings")}
                 documentsActive={isUnder(pathname, "/documents")}
                 trashActive={isUnder(pathname, "/trash")}
                 invitationsActive={isUnder(pathname, "/invitations")}
@@ -453,6 +466,7 @@ function UserMenu({
   membershipTier,
   isAdmin,
   dashboardActive,
+  aiSettingsActive,
   documentsActive,
   trashActive,
   invitationsActive,
@@ -470,6 +484,7 @@ function UserMenu({
   membershipTier: "free" | "lifetime";
   isAdmin: boolean;
   dashboardActive: boolean;
+  aiSettingsActive: boolean;
   documentsActive: boolean;
   trashActive: boolean;
   invitationsActive: boolean;
@@ -484,6 +499,12 @@ function UserMenu({
   const [open, setOpen] = useState(false);
   const storage = useStorageUsage(open && !localMode);
   const membershipActive = membershipTier === "lifetime";
+  const credits = useQuery({
+    queryKey: AGENT_CREDITS_QUERY_KEY,
+    queryFn: getAgentCredits,
+    enabled: open && membershipActive && !localMode,
+    retry: false,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -612,6 +633,44 @@ function UserMenu({
             )}
           </div>}
 
+          {!localMode && membershipActive && (
+            <Link
+              to="/ai-settings"
+              hash="agent-credits"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between gap-3 border-b px-3 py-3 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <Coins className="h-4 w-4 shrink-0" style={{ color: "var(--ink-mid)" }} />
+                {t.agentCredits.title}
+              </span>
+              <span className="flex flex-col items-end text-xs tabular-nums" style={{ color: "var(--ink-faint)" }}>
+                {credits.isPending
+                  ? t.agentCredits.loading
+                  : credits.data?.credits
+                    ? (
+                        <>
+                          <span>
+                            {interpolate(t.agentCredits.available, {
+                              count: credits.data.credits.available.toLocaleString(locale),
+                            })}
+                          </span>
+                          {credits.data.credits.reserved > 0 && (
+                            <span className="mt-0.5">
+                              {interpolate(t.agentCredits.estimatedCharge, {
+                                count: credits.data.credits.reserved.toLocaleString(locale),
+                              })}
+                            </span>
+                          )}
+                        </>
+                      )
+                    : t.agentCredits.loadFailed}
+              </span>
+            </Link>
+          )}
+
           {!localMode && !membershipActive && (
             <Link
               to="/pricing"
@@ -640,6 +699,20 @@ function UserMenu({
           >
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             {t.nav.dashboard}
+          </Link>}
+
+          {!localMode && <Link
+            to="/ai-settings"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: aiSettingsActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: aiSettingsActive ? 500 : undefined,
+            }}
+          >
+            <Bot className="h-4 w-4 shrink-0" />
+            {t.nav.aiSettings}
           </Link>}
 
           <Link

@@ -32,6 +32,15 @@ assert.match(share, /copySharedDocument/);
 assert.match(share, /sharedViews/);
 assert.match(admin, /stats\.funnel/);
 assert.match(admin, /stats\.retention/);
+assert.match(admin, /role="tablist"/);
+assert.match(admin, /role="tab"/);
+assert.match(admin, /\[scrollbar-width:none\]/);
+for (const tab of ["overview", "growth", "revenue", "users", "announcements"]) {
+  assert.match(admin, new RegExp(`id: "${tab}"`));
+}
+assert.match(admin, /activeTab === "announcements"[\s\S]*?<AnnouncementAdminPanel \/>/);
+assert.match(admin, /event\.key === "ArrowRight"/);
+assert.match(admin, /event\.key === "Home"/);
 assert.match(home, /DESKTOP_DOWNLOAD_URL/);
 assert.match(
   worker,

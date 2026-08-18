@@ -291,6 +291,7 @@ func TestBillingPricingIsPublicAndUsesConfiguredQuota(t *testing.T) {
 		ImageQuotaBytes:         768 * 1024 * 1024,
 		StripeSecretKey:         "sk_test_example",
 		StripeLifetimeProductID: "prod_lifetime",
+		StripeCreditsProductID:  "prod_credits",
 	})
 	recorder := httptest.NewRecorder()
 	app.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/billing/pricing", nil))
@@ -306,8 +307,10 @@ func TestBillingPricingIsPublicAndUsesConfiguredQuota(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("解析公开价目表: %v", err)
 	}
-	if !response.Pricing.BillingEnabled || response.Pricing.FreeStorageQuotaBytes != 768*1024*1024 ||
-		response.Pricing.LifetimeStorageQuotaBytes != lifetimeStorageQuotaBytes || len(response.Pricing.Prices) != 4 {
+	if !response.Pricing.BillingEnabled || !response.Pricing.CreditPurchaseEnabled ||
+		response.Pricing.FreeStorageQuotaBytes != 768*1024*1024 ||
+		response.Pricing.LifetimeStorageQuotaBytes != lifetimeStorageQuotaBytes ||
+		len(response.Pricing.Prices) != 4 || len(response.Pricing.CreditPacks) != 3 {
 		t.Fatalf("公开价目表内容不正确: %+v", response.Pricing)
 	}
 }
@@ -708,6 +711,27 @@ func TestGrantLifetimeMembershipIsIdempotent(t *testing.T) {
 	}
 	if paymentCount != 1 {
 		t.Fatalf("重复确认后支付记录数 = %d，期望 1", paymentCount)
+	}
+	var creditBalance, creditReserved int64
+	var membershipGrantCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT balance, reserved FROM credit_accounts WHERE user_id = $1
+	`, userID).Scan(&creditBalance, &creditReserved); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM credit_transactions
+		WHERE user_id = $1 AND kind = 'membership_grant'
+	`, userID).Scan(&membershipGrantCount); err != nil {
+		t.Fatal(err)
+	}
+	if creditBalance != lifetimeMembershipGrantCredits || creditReserved != 0 || membershipGrantCount != 1 {
+		t.Fatalf(
+			"会员 credits 发放错误: balance=%d reserved=%d grants=%d",
+			creditBalance,
+			creditReserved,
+			membershipGrantCount,
+		)
 	}
 	var storedAmount int64
 	var storedCurrency string
