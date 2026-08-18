@@ -29,11 +29,13 @@ exports and shares in one click.
 A Typora-style Markdown editor in the browser: no split pane, no preview toggle —
 what you type turns into typeset text as you go.
 
-Four things set it apart from a local editor: **paste an image and it uploads**
+Five things set it apart from a local editor: **paste an image and it uploads**
 (to your own R2 bucket, so the document holds a clean URL rather than a wall of
 base64), **export to publishing platforms** (rich text for WeChat and Zhihu, Markdown
-for Juejin), and **documents live in the cloud** (multi-device, shareable), plus
-**safe MCP access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**.
+for Juejin), **documents live in the cloud** (multi-device, shareable), **safe MCP
+access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**, and
+**review-first AI optimization** for members: the model proposes title, body, and
+layout diffs, while the user decides which changes to apply.
 
 The repository also contains an alpha macOS / Windows client built with Tauri 2. It writes to
 local SQLite first and syncs when the network returns. Sign-in stays in the system browser and
@@ -44,9 +46,8 @@ which redirects to the latest GitHub Release. Releases include macOS Apple Silic
 and Windows x64 installers plus SHA-256 checksums. Alpha installers are currently unsigned, so the
 operating system will show a security warning on first launch.
 
-> The current open-source scope covers editing, image hosting, export, sharing,
-> and the account flow. User-facing AI writing features are still planned; a one-time
-> lifetime membership is available through Stripe Checkout.
+> The current open-source scope covers editing, image hosting, export, sharing, MCP,
+> membership, and review-first AI optimization for titles, body copy, and Markdown structure.
 
 ## Features
 
@@ -65,6 +66,9 @@ operating system will show a security warning on first launch.
   keep 1–100 versions per document, and choose whether MCP writes keep full history.
   Agent writes still retain the latest safety snapshot when full history is off
   (100 versions per account in total)
+- Lifetime members can review AI-proposed title and body diffs, apply or dismiss each
+  suggestion individually or in bulk, see a 0–100 title-attractiveness score, and choose
+  from 2–3 alternatives when the score is below 60
 
 **MCP and membership**
 
@@ -74,7 +78,10 @@ operating system will show a security warning on first launch.
 - A public `/pricing` page compares Free and Lifetime benefits and reads the current
   multi-currency Stripe price allowlist from the backend
 - Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
-  history, and eligibility for future AI capabilities
+  history, AI optimization, and 1,000 credits
+- The built-in model charges 1 credit per 2,000 actual input-plus-output tokens, rounded up,
+  with 3,000 / 10,000 / 30,000-credit packs. Members can also save OpenAI-compatible or
+  Anthropic Messages BYOK channels; BYOK reviews consume no credits
 
 **Account security**
 
@@ -264,6 +271,42 @@ revision; the browser editor uses the same optimistic lock and offers a local/re
 UI on conflict. See the [design notes](docs/DESIGN.en.md#mcp-document-access) for the
 trade-offs.
 
+## AI optimization
+
+Lifetime members can open **AI optimization** from the editor toolbar. The editor saves
+the current draft first, then asks the selected model for a reviewable change set instead
+of allowing it to overwrite the article. Every suggestion includes its rationale, removed
+text, and replacement text, and can be applied or dismissed on its own or together with the
+rest. Titles receive a 0–100 attractiveness score; scores below 60 require 2–3 distinct
+alternatives. Body edits must anchor to source text that appears exactly once in the document,
+so overlapping, stale, or ambiguous changes are rejected. Applying a suggestion still checks
+the latest revision and leaves a restorable history version.
+
+Reviews have two layers: **content optimization** and **structure & layout**. The layout pass
+scores hierarchy, readability, emphasis, rhythm, modularity, and mobile presentation. It uses
+the Markdown AST to propose verifiable heading-level fixes, paragraph splits, list conversion,
+callout emphasis, and dividers. The server builds these structural patches deterministically:
+layout operations cannot rewrite the original wording, and layout suggestions that overlap a
+text edit are excluded from the review queue.
+
+The built-in model is billed from the provider-reported actual input and output tokens at
+1 credit per 2,000 tokens, rounded up. Failed model calls and invalid review payloads are not
+charged. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives
+through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000 credits for
+$1.99, 10,000 for $4.99, and 30,000 for $12.99; both the amount and granted balance are checked
+against backend allowlists and the signed Stripe event.
+
+Members can instead configure their own provider under **AI settings**:
+
+- `openai`: OpenAI-compatible Chat Completions; the Base URL usually ends in `/v1`
+- `anthropic`: Anthropic Messages; the backend calls `/v1/messages`
+
+BYOK reviews consume no credits. API keys are encrypted with AES-GCM under the dedicated
+`LLM_CREDENTIAL_ENCRYPTION_KEY`; list responses expose only a masked hint and never return the
+plaintext after creation. Base URLs must use HTTPS in production and are checked again at call
+time against loopback/private networks, user-info URLs, and redirects. The selected provider
+receives the article title and body during a review, so only configure a provider you trust.
+
 ## Quick start
 
 You'll need Node 20.19+ (or 22.12+), Go 1.23+, and Docker Compose.
@@ -317,9 +360,11 @@ another port, override it with `--var BACKEND_URL:http://localhost:<port>`; chan
 `.env` alone does not pass the value to Wrangler.
 
 To test membership locally, put a Stripe test-mode `STRIPE_SECRET_KEY` and
-`STRIPE_LIFETIME_PRODUCT_ID` in `.env`. The backend creates an inline allowlisted
-price for that Product: USD 3.99, CNY 29, EUR 3.99, or JPY 600. The success return
-confirms and grants the entitlement directly. To test webhooks too, install Stripe CLI:
+`STRIPE_LIFETIME_PRODUCT_ID` in `.env`. To test credit purchases, create a second test-mode
+Product and set its public `prod_...` ID as `STRIPE_CREDITS_PRODUCT_ID`; no separate Prices are
+needed. The backend creates allowlisted inline prices for both membership and the three credit
+packs. The success return confirms and grants the entitlement directly. To test webhooks too,
+install Stripe CLI:
 
 ```bash
 stripe listen --forward-to localhost:8080/api/billing/webhook
@@ -327,6 +372,11 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 
 Copy its `whsec_...` value into `STRIPE_WEBHOOK_SECRET`, restart the backend, and use
 Stripe's test card `4242 4242 4242 4242` with any future expiry and CVC.
+
+For local AI optimization, generate a dedicated `LLM_CREDENTIAL_ENCRYPTION_KEY`. The built-in
+credit-backed provider requires all four values—`AGENT_LLM_PROTOCOL`, `AGENT_LLM_BASE_URL`,
+`AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL`—or none of them. Leaving the group empty disables only
+the built-in provider; member-managed BYOK channels remain available.
 
 For the full walkthrough, port conflicts, and all-in-Docker startup, see the
 [design notes](docs/DESIGN.en.md#local-development).
@@ -366,6 +416,16 @@ credential. `.env.example` deliberately leaves it blank.
 to reuse `SESSION_SECRET` in production, so rotating verification keys does not log
 everyone out and an email-path secret leak cannot become session forgery.
 
+**Production requires a separate, persistent `LLM_CREDENTIAL_ENCRYPTION_KEY`.** It encrypts
+member BYOK API keys and must not reuse session, MCP, or provider credentials. Rotating it
+without migrating stored ciphertext makes existing channels undecryptable.
+
+**The built-in AI provider is an optional all-or-nothing configuration group.**
+`AGENT_LLM_PROTOCOL`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL` must all
+be configured or all be empty; production accepts HTTPS only. BYOK endpoints also reject local,
+private-network, user-info, and redirecting URLs, but the configured provider still receives the
+article being reviewed.
+
 **Manual announcement translation is an optional backend-only capability.**
 `ANNOUNCEMENT_LLM_BASE_URL`, `ANNOUNCEMENT_LLM_API_KEY`, and
 `ANNOUNCEMENT_LLM_MODEL` must either all be configured or all be empty; production
@@ -375,10 +435,12 @@ relay you trust. Requests never include user accounts, documents, or images, and
 enters the SPA, Worker, or desktop client. Release announcements still import when this
 integration is disabled; only manual multilingual publishing becomes unavailable.
 
-**Production Stripe configuration must be complete.** If any of `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, or `STRIPE_LIFETIME_PRODUCT_ID` is set, all three are required.
-The database membership tier is the entitlement source of truth; no frontend response
-can grant the 10 GB quota directly.
+**Production Stripe configuration must be complete.** Enabling either product requires
+`STRIPE_SECRET_KEY` plus at least one of `STRIPE_LIFETIME_PRODUCT_ID` or
+`STRIPE_CREDITS_PRODUCT_ID`; production also requires `STRIPE_WEBHOOK_SECRET`. The deployment
+workflow verifies that configured Products are active objects in the same live-mode account.
+Database membership and credit ledgers remain the entitlement source of truth; frontend return
+values cannot grant storage or balance directly.
 
 **`NODE_ENV` controls the cookie's `Secure` flag.** It must be `production` in production.
 
@@ -567,9 +629,12 @@ Required repository secrets:
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | Optional; Analytics Read limited to the target zone, used for Admin UV/PV                                                   |
 | `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed                           |
+| `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated BYOK API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
 | `STRIPE_SECRET_KEY`            | Stripe server key; start with `sk_test_...`, switch to live mode before real charges                                        |
 | `STRIPE_WEBHOOK_SECRET`        | Signing secret for `/api/billing/webhook` (`whsec_...`)                                                                     |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist                                                   |
+| `STRIPE_CREDITS_PRODUCT_ID`    | Credits Product ID (`prod_...`); three USD pack prices come from the backend allowlist                                     |
+| `AGENT_LLM_API_KEY`            | Optional built-in AI provider key; configure it together with the three `AGENT_LLM_*` repository variables                 |
 | `BOT_WEBHOOK`                  | Optional Feishu group-bot webhook; uses the same variable name as Kimiseek                                                  |
 | `BOT_WEBHOOK_SECRET`           | Optional Feishu bot signing secret; must be configured together with `BOT_WEBHOOK`                                          |
 | `VPS_HOST`                     | Backend server address                                                                                                      |
@@ -582,11 +647,15 @@ To create or rotate the verification-code secret, run this from the repository:
 openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
+openssl rand -base64 48 | tr -d '\n' | gh secret set LLM_CREDENTIAL_ENCRYPTION_KEY
 ```
 
 Set the Stripe values interactively with `gh secret set STRIPE_SECRET_KEY`,
 `gh secret set STRIPE_WEBHOOK_SECRET`, and `gh secret set STRIPE_LIFETIME_PRODUCT_ID`
-so credentials do not enter shell history.
+so credentials do not enter shell history. Put the public Credits Product ID in the
+`STRIPE_CREDITS_PRODUCT_ID` Actions Variable. Store the built-in provider key as
+`AGENT_LLM_API_KEY`; configure its protocol, Base URL, and model through the matching Actions
+Variables. If the whole optional group is absent, deployments preserve any existing VPS values.
 Set Feishu notifications with `gh secret set BOT_WEBHOOK` and
 `gh secret set BOT_WEBHOOK_SECRET`. If both are absent, deployment preserves any existing
 Feishu settings in the VPS `.env`.
