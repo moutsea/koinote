@@ -6,6 +6,7 @@ export const en: Messages = {
     download: "Download",
     pricing: "Pricing",
     docs: "Docs",
+    docsHome: "Documentation home",
     mcpGuide: "MCP integration",
     versionHistoryGuide: "Version control",
     dashboard: "Dashboard",
@@ -243,6 +244,125 @@ export const en: Messages = {
     settingsCta: "Change history settings",
     mcpCta: "View MCP integration",
     pricingCta: "View membership benefits",
+  },
+  docsCenter: {
+    eyebrow: "Product documentation",
+    title: "From your first document to a complete writing workflow",
+    subtitle:
+      "Learn Koinote editing, migration, sharing, desktop workflows, AI optimization, and data safety in one place. MCP and version control have dedicated deep-dive guides.",
+    quickStartTitle: "Start writing in five minutes",
+    quickStartSteps: [
+      {
+        title: "Create or import content",
+        desc: "Start a blank document in the editor, or import .md files, folders, and Koinote ZIP migration archives from My documents.",
+      },
+      {
+        title: "Organize documents and folders",
+        desc: "Use the file tree, tabs, and folders to organize work. Press ⌘K / Ctrl+K to search every title and body.",
+      },
+      {
+        title: "Write and add images",
+        desc: "The editor renders as you type and saves automatically. Paste, drop, or select images to insert stable hosted links.",
+      },
+      {
+        title: "Share, export, or publish",
+        desc: "Create a read-only link, export Markdown, HTML, Word, or PDF, or prepare content for WeChat, Zhihu, and Juejin.",
+      },
+    ],
+    workflowsTitle: "Browse by workflow",
+    workflows: [
+      {
+        title: "Editing and organization",
+        desc: "A single-pane Markdown experience designed for long-form writing.",
+        items: [
+          "Live rendering, autosave, and a manual save shortcut",
+          "Folders, tabs, outline navigation, and drag-and-drop organization",
+          "Global title and body search with highlighted results",
+          "A 30-day trash with restore and permanent deletion",
+        ],
+      },
+      {
+        title: "Images and migration",
+        desc: "Move documents and their images in or out without lock-in.",
+        items: [
+          "Paste, drag, or choose image files to upload",
+          "Import .md files, folders, and ZIP archives with images",
+          "Compress large images in the browser before upload",
+          "Export every document and image as a migration ZIP",
+        ],
+      },
+      {
+        title: "Sharing and publishing",
+        desc: "Go from a private draft to public reading and media publishing.",
+        items: [
+          "Random share links or access passwords of six or more characters",
+          "Dynamic page titles, OpenGraph cards, and view counts",
+          "Let readers copy an independent document into their Koinote",
+          "Export for WeChat Official Accounts, Zhihu, and Juejin",
+        ],
+      },
+      {
+        title: "Desktop app",
+        desc: "Local editing, sync, and updates on macOS and Windows.",
+        items: [
+          "Apple Silicon, Intel Mac, and Windows x64 builds",
+          "Edit and paste images offline, then sync automatically online",
+          "Detect remote updates and ask which version to keep on conflict",
+          "Scheduled GitHub Releases checks with update prompts",
+        ],
+      },
+      {
+        title: "AI optimization",
+        desc: "Review an article like a code change, then choose what to apply.",
+        items: [
+          "Headline appeal score with two or three alternatives",
+          "Copy, structure, hierarchy, layout, and mobile readability checks",
+          "Apply individual suggestions, apply all, or dismiss them",
+          "Use built-in credits or your own OpenAI / Anthropic channel",
+        ],
+      },
+      {
+        title: "Account and data safety",
+        desc: "Control sessions, recover access, and move or delete your data.",
+        items: [
+          "Reset or change a password and sign out other devices",
+          "Configurable version history and conflict protection",
+          "Export a migration archive before deleting an account",
+          "Scope, expire, reveal, and revoke MCP tokens",
+        ],
+      },
+    ],
+    modesTitle: "Local mode is not offline mode",
+    modesSubtitle:
+      "Both let you write without a connection, but identity, network behavior, and data ownership are different.",
+    modes: [
+      {
+        title: "Offline mode",
+        desc: "You are signed in but temporarily disconnected. Documents and images stay on the device, then upload and sync when the connection returns.",
+      },
+      {
+        title: "Local mode",
+        desc: "No sign-in and no network requests. A local password encrypts documents, folder names, and images before they are stored in SQLite on this device.",
+      },
+      {
+        title: "Import local data",
+        desc: "After signing in, verify the local password to copy local-mode data into the account. The copies remain independent afterward.",
+      },
+    ],
+    deepDiveTitle: "Deep-dive guides",
+    mcpTitle: "Let agents work with Koinote documents",
+    mcpDescription:
+      "Configure Streamable HTTP MCP for Codex, Claude Code, OpenCode, OpenClaw, and other clients, with clear permissions and usage examples.",
+    versionTitle: "History, diffs, and recovery",
+    versionDescription:
+      "Understand retention limits, safety snapshots, revision conflicts, and how to compare or restore versions created by the web editor or agents.",
+    readGuide: "Read the guide",
+    safetyTitle: "Migration recommendation",
+    safetyBody:
+      "Cloud sync and version history are not a replacement for your own long-term backup. Export a ZIP with images from My documents regularly; local mode has no cloud copy, so backups matter even more.",
+    openEditor: "Open editor",
+    manageDocuments: "Manage and migrate documents",
+    downloadDesktop: "Download desktop app",
   },
   auth: {
     loginTitle: "Welcome back",
@@ -1157,6 +1277,7 @@ function hello(name) {
     download: "Download app",
     pricing: "Pricing",
     dashboard: "Dashboard",
+    docsCenter: "Documentation",
     mcpGuide: "MCP integration guide",
     versionHistoryGuide: "Version control guide",
     home: "Home",

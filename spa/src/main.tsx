@@ -63,6 +63,14 @@ const pricingRoute = createRoute({
     "PricingPage",
   ),
 });
+const docsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs",
+  component: lazyRouteComponent(
+    () => import("./pages/DocsPage"),
+    "DocsPage",
+  ),
+});
 const mcpGuideRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/docs/mcp",
@@ -221,6 +229,7 @@ const cookiesRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   pricingRoute,
+  docsRoute,
   mcpGuideRoute,
   versionHistoryGuideRoute,
   changelogRoute,

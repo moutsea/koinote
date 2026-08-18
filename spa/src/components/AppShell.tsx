@@ -284,6 +284,7 @@ export function AppShell() {
                 <HeaderDocsMenu
                   active={isUnder(pathname, "/docs")}
                   label={t.nav.docs}
+                  homeLabel={t.nav.docsHome}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
                 />
@@ -299,6 +300,7 @@ export function AppShell() {
                 <HeaderDocsMenu
                   active={isUnder(pathname, "/docs")}
                   label={t.nav.docs}
+                  homeLabel={t.nav.docsHome}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
                 />
@@ -984,11 +986,13 @@ function HeaderLink({
 function HeaderDocsMenu({
   active,
   label,
+  homeLabel,
   mcpLabel,
   versionLabel,
 }: {
   active: boolean;
   label: string;
+  homeLabel: string;
   mcpLabel: string;
   versionLabel: string;
 }) {
@@ -1045,6 +1049,13 @@ function HeaderDocsMenu({
           }}
         >
           <HeaderDocsMenuItem
+            to="/docs"
+            onSelect={() => setOpen(false)}
+            icon={<FileText className="h-4 w-4" />}
+          >
+            {homeLabel}
+          </HeaderDocsMenuItem>
+          <HeaderDocsMenuItem
             to="/docs/mcp"
             onSelect={() => setOpen(false)}
             icon={<Bot className="h-4 w-4" />}
@@ -1070,7 +1081,7 @@ function HeaderDocsMenuItem({
   icon,
   children,
 }: {
-  to: "/docs/mcp" | "/docs/version-history";
+  to: "/docs" | "/docs/mcp" | "/docs/version-history";
   onSelect: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;

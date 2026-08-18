@@ -115,6 +115,7 @@ export function AppFooter() {
                   {t.footer.download}
                 </FooterExternal>
                 <FooterRoute to="/pricing">{t.footer.pricing}</FooterRoute>
+                <FooterRoute to="/docs">{t.footer.docsCenter}</FooterRoute>
                 <FooterRoute to="/docs/mcp">{t.footer.mcpGuide}</FooterRoute>
                 <FooterRoute to="/docs/version-history">
                   {t.footer.versionHistoryGuide}

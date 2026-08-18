@@ -6,6 +6,7 @@ export const fr: Messages = {
     download: "Télécharger",
     pricing: "Tarifs",
     docs: "Documentation",
+    docsHome: "Centre de documentation",
     mcpGuide: "Intégration MCP",
     versionHistoryGuide: "Contrôle de version",
     dashboard: "Tableau de bord",
@@ -247,6 +248,125 @@ export const fr: Messages = {
     settingsCta: "Régler l’historique",
     mcpCta: "Voir l’intégration MCP",
     pricingCta: "Voir les avantages",
+  },
+  docsCenter: {
+    eyebrow: "Documentation produit",
+    title: "Du premier document à un flux de rédaction complet",
+    subtitle:
+      "Retrouvez l’édition, la migration, le partage, l’application de bureau, l’optimisation IA et la sécurité des données. MCP et le versionnage disposent de guides détaillés.",
+    quickStartTitle: "Commencer à écrire en cinq minutes",
+    quickStartSteps: [
+      {
+        title: "Créer ou importer du contenu",
+        desc: "Créez un document vide ou importez des fichiers .md, des dossiers et une archive ZIP Koinote depuis Mes documents.",
+      },
+      {
+        title: "Organiser documents et dossiers",
+        desc: "Utilisez l’arborescence, les onglets et les dossiers. Appuyez sur ⌘K / Ctrl+K pour rechercher dans tous les titres et contenus.",
+      },
+      {
+        title: "Rédiger et ajouter des images",
+        desc: "L’éditeur affiche le rendu et enregistre automatiquement. Collez, déposez ou choisissez une image pour insérer un lien hébergé stable.",
+      },
+      {
+        title: "Partager, exporter ou publier",
+        desc: "Créez un lien en lecture seule, exportez en Markdown, HTML, Word ou PDF, ou préparez le contenu pour WeChat, Zhihu et Juejin.",
+      },
+    ],
+    workflowsTitle: "Parcourir par flux de travail",
+    workflows: [
+      {
+        title: "Édition et organisation",
+        desc: "Une expérience Markdown à panneau unique pensée pour les textes longs.",
+        items: [
+          "Rendu direct, sauvegarde automatique et raccourci de sauvegarde",
+          "Dossiers, onglets, plan et organisation par glisser-déposer",
+          "Recherche globale dans les titres et le contenu avec surlignage",
+          "Corbeille de 30 jours avec restauration ou suppression définitive",
+        ],
+      },
+      {
+        title: "Images et migration",
+        desc: "Importez ou exportez les documents avec leurs images, sans verrouillage.",
+        items: [
+          "Coller, déposer ou sélectionner des images à envoyer",
+          "Importer des .md, dossiers et ZIP contenant des images",
+          "Compresser les grandes images dans le navigateur avant l’envoi",
+          "Exporter tous les documents et images dans un ZIP de migration",
+        ],
+      },
+      {
+        title: "Partage et publication",
+        desc: "Passez d’un brouillon privé à la lecture publique et à la diffusion.",
+        items: [
+          "Lien aléatoire ou mot de passe d’au moins six caractères",
+          "Titre dynamique, carte OpenGraph et compteur de lectures",
+          "Copie indépendante d’un document vers le Koinote du lecteur",
+          "Export adapté à WeChat Official Accounts, Zhihu et Juejin",
+        ],
+      },
+      {
+        title: "Application de bureau",
+        desc: "Édition locale, synchronisation et mises à jour sur macOS et Windows.",
+        items: [
+          "Versions Apple Silicon, Mac Intel et Windows x64",
+          "Édition et collage d’images hors ligne, puis synchronisation automatique",
+          "Détection des changements distants et choix de la version en cas de conflit",
+          "Vérification périodique des mises à jour GitHub Releases",
+        ],
+      },
+      {
+        title: "Optimisation IA",
+        desc: "Relisez un article comme une modification de code, puis choisissez les suggestions à appliquer.",
+        items: [
+          "Score d’attractivité du titre et deux ou trois alternatives",
+          "Contrôle du texte, de la structure, de la mise en page et de la lecture mobile",
+          "Application suggestion par suggestion, en bloc, ou rejet",
+          "Credits intégrés ou canal OpenAI / Anthropic personnel",
+        ],
+      },
+      {
+        title: "Compte et sécurité des données",
+        desc: "Contrôlez les sessions, récupérez l’accès et déplacez ou supprimez vos données.",
+        items: [
+          "Réinitialiser ou modifier le mot de passe et fermer les autres sessions",
+          "Historique configurable et protection contre les conflits",
+          "Exporter une archive avant de supprimer le compte",
+          "Limiter, expirer, afficher et révoquer les jetons MCP",
+        ],
+      },
+    ],
+    modesTitle: "Le mode local n’est pas le mode hors ligne",
+    modesSubtitle:
+      "Les deux permettent d’écrire sans connexion, mais l’identité, le réseau et la propriété des données diffèrent.",
+    modes: [
+      {
+        title: "Mode hors ligne",
+        desc: "Vous êtes connecté au compte mais sans réseau. Documents et images restent sur l’appareil, puis sont envoyés et synchronisés au retour de la connexion.",
+      },
+      {
+        title: "Mode local",
+        desc: "Aucune connexion au compte ni requête réseau. Un mot de passe local chiffre documents, noms de dossiers et images avant stockage dans SQLite.",
+      },
+      {
+        title: "Importer les données locales",
+        desc: "Après connexion, vérifiez le mot de passe local pour copier ces données dans le compte. Les deux ensembles restent ensuite indépendants.",
+      },
+    ],
+    deepDiveTitle: "Guides détaillés",
+    mcpTitle: "Autoriser les agents à utiliser les documents Koinote",
+    mcpDescription:
+      "Configurez MCP Streamable HTTP pour Codex, Claude Code, OpenCode, OpenClaw et d’autres clients, avec permissions et exemples d’utilisation.",
+    versionTitle: "Historique, différences et restauration",
+    versionDescription:
+      "Comprenez les limites, instantanés de sécurité, conflits de révision et la comparaison ou restauration des versions web et Agent.",
+    readGuide: "Lire le guide",
+    safetyTitle: "Conseil de migration",
+    safetyBody:
+      "La synchronisation et l’historique ne remplacent pas votre propre sauvegarde longue durée. Exportez régulièrement un ZIP avec les images ; le mode local n’ayant aucune copie cloud, cette précaution y est essentielle.",
+    openEditor: "Ouvrir l’éditeur",
+    manageDocuments: "Gérer et migrer les documents",
+    downloadDesktop: "Télécharger l’application",
   },
   auth: {
     loginTitle: "Bon retour",
@@ -1175,6 +1295,7 @@ function hello(name) {
     download: "Télécharger l’application",
     pricing: "Tarifs",
     dashboard: "Tableau de bord",
+    docsCenter: "Documentation",
     mcpGuide: "Guide MCP",
     versionHistoryGuide: "Guide du versionnage",
     home: "Accueil",

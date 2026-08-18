@@ -16,6 +16,7 @@ export interface Messages {
     download: string;
     pricing: string;
     docs: string;
+    docsHome: string;
     mcpGuide: string;
     versionHistoryGuide: string;
     dashboard: string;
@@ -116,6 +117,33 @@ export interface Messages {
     settingsCta: string;
     mcpCta: string;
     pricingCta: string;
+  };
+  docsCenter: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    quickStartTitle: string;
+    quickStartSteps: Array<{ title: string; desc: string }>;
+    workflowsTitle: string;
+    workflows: Array<{
+      title: string;
+      desc: string;
+      items: string[];
+    }>;
+    modesTitle: string;
+    modesSubtitle: string;
+    modes: Array<{ title: string; desc: string }>;
+    deepDiveTitle: string;
+    mcpTitle: string;
+    mcpDescription: string;
+    versionTitle: string;
+    versionDescription: string;
+    readGuide: string;
+    safetyTitle: string;
+    safetyBody: string;
+    openEditor: string;
+    manageDocuments: string;
+    downloadDesktop: string;
   };
   auth: {
     loginTitle: string;
@@ -940,6 +968,7 @@ export interface Messages {
     download: string;
     pricing: string;
     dashboard: string;
+    docsCenter: string;
     mcpGuide: string;
     versionHistoryGuide: string;
     home: string;

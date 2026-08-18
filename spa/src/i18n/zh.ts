@@ -6,6 +6,7 @@ export const zh: Messages = {
     download: "下载客户端",
     pricing: "价格",
     docs: "文档",
+    docsHome: "文档中心",
     mcpGuide: "MCP 接入",
     versionHistoryGuide: "版本控制",
     dashboard: "控制台",
@@ -240,6 +241,125 @@ export const zh: Messages = {
     settingsCta: "调整历史设置",
     mcpCta: "查看 MCP 接入",
     pricingCta: "查看会员权益",
+  },
+  docsCenter: {
+    eyebrow: "产品文档",
+    title: "从第一篇文档到完整创作工作流",
+    subtitle:
+      "集中了解 Koinote 的编辑、迁移、分享、桌面客户端、AI 优化与数据安全。MCP 和版本控制另有可深入查阅的专项指南。",
+    quickStartTitle: "五分钟开始写作",
+    quickStartSteps: [
+      {
+        title: "新建或导入内容",
+        desc: "从编辑器创建空白文档，或在“我的文档”导入 .md、文件夹和 Koinote ZIP 迁移包。",
+      },
+      {
+        title: "整理文档与文件夹",
+        desc: "使用文件树、标签页和文件夹管理内容；按 ⌘K / Ctrl+K 可搜索全部标题与正文。",
+      },
+      {
+        title: "写作并插入图片",
+        desc: "编辑器会边写边渲染并自动保存；粘贴、拖入或选择图片后会写入稳定的图片链接。",
+      },
+      {
+        title: "分享、导出或发布",
+        desc: "生成只读分享链接，或导出 Markdown、HTML、Word、PDF，并适配微信公众号、知乎和掘金。",
+      },
+    ],
+    workflowsTitle: "按工作流查阅",
+    workflows: [
+      {
+        title: "编辑与组织",
+        desc: "围绕长文写作设计的单栏 Markdown 编辑体验。",
+        items: [
+          "实时渲染、自动保存与手动保存快捷键",
+          "文件夹、标签页、大纲与文档拖放",
+          "标题和正文全局搜索及结果高亮",
+          "回收站保留 30 天，支持恢复或永久删除",
+        ],
+      },
+      {
+        title: "图片与迁移",
+        desc: "把文档和图片一起带入或带走，不锁定数据。",
+        items: [
+          "粘贴、拖拽与文件选择上传图片",
+          "导入 .md、文件夹和带图片的 ZIP",
+          "大图在浏览器内压缩后再上传",
+          "导出全部文档与图片为迁移 ZIP",
+        ],
+      },
+      {
+        title: "分享与发布",
+        desc: "从私密草稿到公开阅读和自媒体分发。",
+        items: [
+          "随机分享链接或至少 6 位访问口令",
+          "动态网页标题、OpenGraph 卡片和阅读次数",
+          "读者可复制一份到自己的 Koinote",
+          "导出到微信公众号、知乎与掘金",
+        ],
+      },
+      {
+        title: "桌面客户端",
+        desc: "macOS 与 Windows 上的本机编辑、同步和更新。",
+        items: [
+          "支持 Apple Silicon、Intel Mac 与 Windows x64",
+          "断网时继续编辑和粘贴图片，联网后自动同步",
+          "检测远端更新并在冲突时让用户选择版本",
+          "定时检查 GitHub Releases 并提示更新",
+        ],
+      },
+      {
+        title: "AI 优化",
+        desc: "像审查代码一样逐条审阅文章，再由你决定是否落实。",
+        items: [
+          "标题吸引力评分与 2–3 个候选标题",
+          "正文表达、结构层级、排版和移动端可读性检查",
+          "逐条落实、全部落实或忽略建议",
+          "使用内置 credits，或接入自己的 OpenAI / Anthropic 渠道",
+        ],
+      },
+      {
+        title: "账号与数据安全",
+        desc: "控制会话、恢复访问并随时迁移或删除数据。",
+        items: [
+          "找回密码、修改密码和退出其他设备",
+          "可配置历史版本与冲突保护",
+          "导出迁移包后可注销整个账号",
+          "MCP 令牌可设置权限、有效期并随时撤销",
+        ],
+      },
+    ],
+    modesTitle: "先分清本地模式与离线模式",
+    modesSubtitle:
+      "两者都能在断网时写作，但账号、联网行为和数据归属完全不同。",
+    modes: [
+      {
+        title: "离线模式",
+        desc: "已经登录账号，只是暂时没有网络。文档和图片保存在本机，恢复联网后会自动上传和同步。",
+      },
+      {
+        title: "本地模式",
+        desc: "无需登录且完全禁止网络请求。文档、文件夹名称和图片使用本地密码加密后存入本机 SQLite。",
+      },
+      {
+        title: "导入本地资料",
+        desc: "登录后验证本地密码，可把本地模式内容复制进账号。导入的是独立副本，之后两边修改互不可见。",
+      },
+    ],
+    deepDiveTitle: "专项指南",
+    mcpTitle: "让 Agent 操作 Koinote 文档",
+    mcpDescription:
+      "查看 Codex、Claude Code、OpenCode、OpenClaw 等客户端的 Streamable HTTP MCP 配置、权限边界与使用示例。",
+    versionTitle: "版本历史、差异与恢复",
+    versionDescription:
+      "了解保留上限、安全快照、revision 冲突检测，以及如何比较和恢复网页或 Agent 产生的历史版本。",
+    readGuide: "阅读指南",
+    safetyTitle: "迁移建议",
+    safetyBody:
+      "云端同步和版本历史不能替代你自己的长期备份。重要资料建议定期在“我的文档”导出包含图片的 ZIP；本地模式没有云端副本，更应主动备份。",
+    openEditor: "打开编辑器",
+    manageDocuments: "管理与迁移文档",
+    downloadDesktop: "下载桌面客户端",
   },
   auth: {
     loginTitle: "欢迎回来",
@@ -1114,6 +1234,7 @@ function hello(name) {
     download: "下载客户端",
     pricing: "价格",
     dashboard: "控制台",
+    docsCenter: "文档中心",
     mcpGuide: "MCP 接入指南",
     versionHistoryGuide: "版本控制指南",
     home: "首页",

@@ -188,8 +188,9 @@ ok(
   "版本策略和恢复方式需要有可直接访问的独立文档",
 );
 ok(
-  "顶部文档菜单可进入两篇指南",
+  "顶部文档菜单可进入索引与两篇指南",
   /<HeaderDocsMenu/.test(shell) &&
+    /to=["']\/docs["']/.test(shell) &&
     /to=["']\/docs\/mcp["']/.test(shell) &&
     /to=["']\/docs\/version-history["']/.test(shell),
   "公开文档不应只藏在首页或页脚",
