@@ -14,6 +14,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 - Les titres placés juste après une image de bloc restent séparés après plusieurs sauvegardes Markdown, et les anciens titres échappés sont réparés à l’ouverture.
 - L’export PDF utilise désormais une seule action claire et ouvre la boîte de dialogue d’impression native sur le bureau, avec un texte sélectionnable et recherchable.
+- Correction du périmètre d’autorisation du client qui refusait les paramètres IA, les canaux de modèles, les credits, les analyses et l’achat de credits.
 
 ## [0.6.0] - 2026-08-17
 

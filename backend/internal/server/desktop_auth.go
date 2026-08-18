@@ -433,6 +433,14 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/mcp/activity":
 		return method == http.MethodGet
+	case "/api/agent/channels":
+		return method == http.MethodGet || method == http.MethodPost
+	case "/api/agent/settings":
+		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/credits":
+		return method == http.MethodGet
+	case "/api/agent/credits/checkout", "/api/agent/credits/checkout/confirm":
+		return method == http.MethodPost
 	case "/api/analytics/events":
 		return method == http.MethodPost
 	case "/api/settings/document-history":
@@ -460,6 +468,23 @@ func desktopRequestAllowed(r *http.Request) bool {
 		}
 		return len(parts) == 2 && parts[0] != "" && parts[1] == "reveal" && method == http.MethodPost
 	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/channels/"); found {
+		return rest != "" && !strings.Contains(rest, "/") &&
+			(method == http.MethodPut || method == http.MethodDelete)
+	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/reviews/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && parts[0] != "" {
+			return method == http.MethodGet
+		}
+		if len(parts) == 2 && parts[0] != "" &&
+			(parts[1] == "apply-all" || parts[1] == "dismiss") {
+			return method == http.MethodPost
+		}
+		return len(parts) == 4 && parts[0] != "" && parts[1] == "suggestions" &&
+			parts[2] != "" && (parts[3] == "apply" || parts[3] == "dismiss") &&
+			method == http.MethodPost
+	}
 	if rest, found := strings.CutPrefix(path, "/api/admin/announcements/"); found {
 		return rest != "" && !strings.Contains(rest, "/") && method == http.MethodDelete
 	}
@@ -474,6 +499,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		}
 		if len(parts) == 2 && parts[0] != "" {
 			switch parts[1] {
+			case "agent-reviews":
+				return method == http.MethodGet || method == http.MethodPost
 			case "folder":
 				return method == http.MethodPut
 			case "permanent":
