@@ -107,6 +107,43 @@ jobs:
           fi
           echo "secret 齐全"
 
+      - name: 验证 Stripe 商品属于正式模式
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
+          STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
+        run: |
+          set -eu
+          validate_product() {
+            product_id="$1"
+            label="$2"
+            [ -n "$product_id" ] || return 0
+
+            response_file=$(mktemp)
+            status=$(curl --silent --show-error \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              --user "$STRIPE_SECRET_KEY:" \
+              "https://api.stripe.com/v1/products/$product_id")
+            if [ "$status" != "200" ]; then
+              message=$(jq -r '.error.message // "Stripe 商品读取失败"' "$response_file")
+              rm -f "$response_file"
+              echo "::error::$label 配置无效：$message"
+              exit 1
+            fi
+            if ! jq -e --arg product_id "$product_id" \
+              '.id == $product_id and .object == "product" and .livemode == true and .active == true' \
+              "$response_file" >/dev/null; then
+              rm -f "$response_file"
+              echo "::error::$label 必须是当前 Stripe 正式模式下的有效 Product"
+              exit 1
+            fi
+            rm -f "$response_file"
+          }
+
+          validate_product "$STRIPE_LIFETIME_PRODUCT_ID" "终身会员商品"
+          validate_product "$STRIPE_CREDITS_PRODUCT_ID" "Credits 商品"
+
       - run: npm ci
 
       # 重新构建而不是复用 CI 的产物：跨 workflow 传 artifact 要加

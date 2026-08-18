@@ -17,6 +17,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Kept headings immediately after block images separate across repeated Markdown saves, and repaired legacy escaped headings when documents open.
 - PDF export now uses one clear menu action and opens the native system print dialog on desktop, preserving selectable, searchable text instead of silently doing nothing in the embedded webview.
 - Desktop Bearer sessions can now load and manage AI settings, BYOK channels, credits, reviews, and credit checkout instead of being rejected by the desktop endpoint scope.
+- Credits checkout now uses a live-mode Stripe Product, and deployments reject test/live Product mismatches before they reach users.
 
 ## [0.6.0] - 2026-08-17
 
