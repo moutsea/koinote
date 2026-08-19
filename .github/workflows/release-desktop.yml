@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds nine localized Markdown templates, including three free offline-ready templates and six advanced templates for Lifetime members."
+          notes="Koinote Desktop $version adds 15 localized Markdown templates and background AI optimization notifications."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本新增 9 款四语 Markdown 文档模板：免费版可离线使用会议纪要、每日记录和周计划复盘，终生会员额外解锁文章策划、README、PRD、论文阅读、决策记录与技术方案。
+          此版本将四语 Markdown 文档模板扩展到 15 款：免费版新增任务清单和通用表格，终生会员新增日报、周报、OKR 与 KPI。AI 优化提交后会在后台运行，完成后通过站内通知返回结果，不会阻塞继续写作。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds nine localized Markdown document templates. Free includes offline-ready meeting notes, daily notes, and weekly planning/review; Lifetime adds article briefs, README, PRD, research, decision-record, and technical-design templates.
+          This release expands the localized Markdown catalog to 15 templates, adding free todo-list and flexible-table templates plus daily report, weekly report, OKR, and KPI templates for Lifetime members. AI optimization now runs in the background and notifies the user when results are ready.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
