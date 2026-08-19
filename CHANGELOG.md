@@ -13,7 +13,11 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.
 - Added smart date-based and activity-based organization for documents outside manually managed folders, with adaptive month/week grouping and confirmation before bulk moves.
 - Added an administrator server-status dashboard for host CPU, memory, load, disk, uptime, and network throughput, using read-only host metrics in production.
-- Added a localized document-template gallery when creating documents: three offline-ready templates are free, while Lifetime members unlock six advanced writing, product, research, and technical templates curated from permissively licensed GitHub patterns.
+- Added a localized 15-template gallery when creating documents: five offline-ready templates are free, including todo lists and flexible tables, while Lifetime members unlock ten advanced templates including daily and weekly reports, OKR, KPI, writing, product, research, and technical workflows.
+
+### Changed
+
+- AI optimization now closes after submission and continues as a persisted background task. In-app notifications report progress and completion, while one complete review still produces both editorial and structure/layout suggestions without duplicating the document input.
 
 ### Fixed
 

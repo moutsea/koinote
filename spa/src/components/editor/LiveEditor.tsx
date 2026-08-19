@@ -13,6 +13,10 @@ import { VersionHistoryDialog } from "./VersionHistoryDialog";
 import { useI18n } from "../../i18n";
 import { decideRemoteDocumentUpdate } from "../../remoteUpdates";
 import { AgentReviewPanel } from "./AgentReviewPanel";
+import {
+  AGENT_REVIEW_OPEN_EVENT,
+  consumeAgentReviewOpen,
+} from "../../agentReviewNotifications";
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -61,6 +65,7 @@ export function LiveEditor({
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [agentReviewOpen, setAgentReviewOpen] = useState(false);
+  const [requestedReviewId, setRequestedReviewId] = useState("");
   const [seededDocId, setSeededDocId] = useState<string | null>(null);
   const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
   const [remoteUpdated, setRemoteUpdated] = useState(false);
@@ -85,6 +90,20 @@ export function LiveEditor({
   useEffect(() => () => {
     if (remoteUpdatedTimer.current) clearTimeout(remoteUpdatedTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const openRequestedReview = () => {
+      const reviewId = consumeAgentReviewOpen(docId);
+      if (!reviewId) return;
+      setRequestedReviewId(reviewId);
+      setAgentReviewOpen(true);
+    };
+    openRequestedReview();
+    window.addEventListener(AGENT_REVIEW_OPEN_EVENT, openRequestedReview);
+    return () =>
+      window.removeEventListener(AGENT_REVIEW_OPEN_EVENT, openRequestedReview);
+  }, [docId, visible]);
 
   // 文档到手后铺一份基线。seed 内部对已有待存内容不覆盖 ——
   // 被淘汰又点回来时，本地未落库的改动比服务端那份新
@@ -282,7 +301,10 @@ export function LiveEditor({
             )}
             <button
               type="button"
-              onClick={() => setAgentReviewOpen(true)}
+              onClick={() => {
+                setRequestedReviewId("");
+                setAgentReviewOpen(true);
+              }}
               title={t.agentReview.button}
               aria-label={t.agentReview.button}
               className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
@@ -333,6 +355,7 @@ export function LiveEditor({
           docId={docId}
           member={member}
           localMode={localMode}
+          initialReviewId={requestedReviewId}
           onPrepareReview={prepareAgentReview}
           onAcceptDocument={acceptDocument}
           onClose={() => setAgentReviewOpen(false)}

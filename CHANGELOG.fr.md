@@ -11,7 +11,11 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.
 - Ajout du rangement intelligent par date et par activité pour les documents hors dossiers gérés manuellement, avec regroupement adaptatif par mois ou semaine et confirmation avant les déplacements en masse.
 - Ajout d’un tableau de bord administrateur pour le CPU, la mémoire, la charge, le disque, la durée de fonctionnement et le débit réseau de l’hôte, à partir de métriques montées en lecture seule en production.
-- Ajout d’une galerie multilingue à la création des documents : trois modèles hors ligne sont gratuits et six modèles avancés d’écriture, produit, recherche et technique sont réservés aux membres à vie, avec des structures réécrites d’après des projets GitHub bien notés et clairement licenciés.
+- Ajout d’une galerie multilingue de 15 modèles : cinq modèles hors ligne sont gratuits, dont la liste de tâches et le tableau polyvalent, tandis que les membres à vie disposent de dix modèles avancés avec rapports quotidien et hebdomadaire, OKR, KPI, écriture, produit, recherche et technique.
+
+### Changed
+
+- Après son lancement, l’optimisation IA ferme le panneau et continue comme tâche d’arrière-plan persistante entre les pages et les rechargements. Des notifications indiquent sa progression et sa fin, tandis qu’une revue complète produit les suggestions éditoriales et de structure sans envoyer deux fois le document.
 
 ### Fixed
 

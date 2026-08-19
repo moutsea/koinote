@@ -4,6 +4,12 @@ export const DOCUMENT_TEMPLATE_IDS = [
   "meeting-notes",
   "daily-note",
   "weekly-review",
+  "todo-list",
+  "table",
+  "daily-report",
+  "weekly-report",
+  "okr",
+  "kpi",
   "article-outline",
   "project-readme",
   "product-requirements",
@@ -16,6 +22,7 @@ export type DocumentTemplateId = (typeof DOCUMENT_TEMPLATE_IDS)[number];
 export type DocumentTemplateTier = "free" | "lifetime";
 export type DocumentTemplateCategory =
   | "everyday"
+  | "management"
   | "writing"
   | "product"
   | "technical";
@@ -30,6 +37,12 @@ export const DOCUMENT_TEMPLATES: readonly DocumentTemplateDefinition[] = [
   { id: "meeting-notes", tier: "free", category: "everyday" },
   { id: "daily-note", tier: "free", category: "everyday" },
   { id: "weekly-review", tier: "free", category: "everyday" },
+  { id: "todo-list", tier: "free", category: "everyday" },
+  { id: "table", tier: "free", category: "everyday" },
+  { id: "daily-report", tier: "lifetime", category: "management" },
+  { id: "weekly-report", tier: "lifetime", category: "management" },
+  { id: "okr", tier: "lifetime", category: "management" },
+  { id: "kpi", tier: "lifetime", category: "management" },
   { id: "article-outline", tier: "lifetime", category: "writing" },
   { id: "research-paper", tier: "lifetime", category: "writing" },
   { id: "project-readme", tier: "lifetime", category: "product" },
@@ -478,6 +491,1314 @@ Consignez les progrès, faits, observations et décisions provisoires.
 - Périodes de forte/faible énergie :
 - À poursuivre la semaine prochaine :
 - À arrêter :`,
+    },
+  },
+  "todo-list": {
+    zh: {
+      title: "待办清单 · {date}",
+      content: `# 待办清单
+
+> 更新于 {date}
+
+## 今天最重要的三件事
+
+- [ ] 第一优先事项 — 完成标准：
+- [ ] 第二优先事项 — 完成标准：
+- [ ] 第三优先事项 — 完成标准：
+
+## 收集箱
+
+先把所有念头放进来，再决定执行、委派、延后或删除。
+
+- [ ] …
+
+## 按场景执行
+
+### 深度工作
+
+- [ ] 需要连续专注 30 分钟以上的任务
+
+### 快速任务
+
+- [ ] 15 分钟内可以完成的任务
+
+### 沟通与行政
+
+- [ ] 需要回复、预约、提交或确认的任务
+
+## 等待与委派
+
+| 事项 | 对接人 | 发出日期 | 跟进日期 | 状态 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 稍后 / 也许
+
+- [ ] 不需要现在承诺，但值得保留的想法
+
+## 今日收尾
+
+- [ ] 完成项已勾选，未完成项已重新安排
+- [ ] 收集箱已清空
+- [ ] 明天的第一步已写清楚`,
+    },
+    en: {
+      title: "To-do List · {date}",
+      content: `# To-do list
+
+> Updated {date}
+
+## Today's three most important outcomes
+
+- [ ] First priority — definition of done:
+- [ ] Second priority — definition of done:
+- [ ] Third priority — definition of done:
+
+## Inbox
+
+Capture everything first, then decide whether to do, delegate, defer, or delete it.
+
+- [ ] …
+
+## Work by context
+
+### Deep work
+
+- [ ] Work that needs at least 30 uninterrupted minutes
+
+### Quick tasks
+
+- [ ] Work that can be finished in 15 minutes
+
+### Communication and admin
+
+- [ ] Replies, scheduling, submissions, or confirmations
+
+## Waiting and delegated
+
+| Item | Person | Sent | Follow up | Status |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Someday / maybe
+
+- [ ] Ideas worth keeping without committing now
+
+## End-of-day reset
+
+- [ ] Completed work is checked; unfinished work is rescheduled
+- [ ] Inbox is empty
+- [ ] Tomorrow's first action is explicit`,
+    },
+    ja: {
+      title: "ToDo リスト · {date}",
+      content: `# ToDo リスト
+
+> 更新日：{date}
+
+## 今日最も重要な三つの成果
+
+- [ ] 最優先 — 完了条件：
+- [ ] 二番目 — 完了条件：
+- [ ] 三番目 — 完了条件：
+
+## インボックス
+
+まず全部を書き出し、実行・委任・延期・削除を後から判断します。
+
+- [ ] …
+
+## 状況別に実行
+
+### 集中作業
+
+- [ ] 30 分以上の連続した集中が必要な作業
+
+### クイックタスク
+
+- [ ] 15 分以内に終えられる作業
+
+### 連絡・事務
+
+- [ ] 返信、予約、提出、確認が必要な作業
+
+## 待機・委任
+
+| 項目 | 相手 | 依頼日 | フォロー日 | 状態 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## いつか / たぶん
+
+- [ ] 今は約束しないが残しておきたいアイデア
+
+## 一日の終了処理
+
+- [ ] 完了を記録し、未完了を再配置した
+- [ ] インボックスを空にした
+- [ ] 明日の最初の行動を明確にした`,
+    },
+    fr: {
+      title: "Liste de tâches · {date}",
+      content: `# Liste de tâches
+
+> Mise à jour le {date}
+
+## Trois résultats essentiels aujourd'hui
+
+- [ ] Première priorité — critère de réussite :
+- [ ] Deuxième priorité — critère de réussite :
+- [ ] Troisième priorité — critère de réussite :
+
+## Boîte de réception
+
+Capturez tout, puis décidez de faire, déléguer, reporter ou supprimer.
+
+- [ ] …
+
+## Exécution par contexte
+
+### Travail concentré
+
+- [ ] Tâche demandant au moins 30 minutes sans interruption
+
+### Tâches rapides
+
+- [ ] Tâche réalisable en moins de 15 minutes
+
+### Communication et administration
+
+- [ ] Réponse, rendez-vous, envoi ou validation
+
+## En attente et délégué
+
+| Élément | Interlocuteur | Envoi | Relance | Statut |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Un jour / peut-être
+
+- [ ] Idée à conserver sans engagement immédiat
+
+## Clôture de la journée
+
+- [ ] Le travail terminé est coché et le reste replanifié
+- [ ] La boîte de réception est vide
+- [ ] La première action de demain est explicite`,
+    },
+  },
+  table: {
+    zh: {
+      title: "通用表格 · {date}",
+      content: `# 通用表格
+
+> 创建于 {date}
+
+## 使用说明
+
+1. 先定义每一列的含义和填写规则。
+2. 状态、优先级等字段尽量使用固定选项，便于筛选。
+3. 定期把关键数字汇总到下方，避免表格只增不复盘。
+
+## 字段定义
+
+| 字段 | 含义 | 允许值 / 格式 | 是否必填 |
+| --- | --- | --- | --- |
+| 状态 | 当前进度 | 未开始 / 进行中 / 已完成 / 阻塞 | 是 |
+| 优先级 | 处理顺序 | P0 / P1 / P2 / P3 | 是 |
+
+## 主表
+
+| ID | 项目 | 分类 | 状态 | 优先级 | 负责人 | 截止日期 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 001 |  |  | 未开始 | P2 |  |  |  |
+| 002 |  |  | 未开始 | P2 |  |  |  |
+
+## 常用视图
+
+- 需要立即处理：状态为“阻塞”或优先级为 P0
+- 本周到期：截止日期位于本周
+- 等待他人：负责人不是自己且状态未完成
+
+## 汇总
+
+| 指标 | 当前值 | 统计口径 | 更新时间 |
+| --- | ---: | --- | --- |
+| 总数 | 0 | 主表全部数据行 | {date} |
+| 已完成 | 0 | 状态为“已完成” | {date} |
+
+## 变更记录
+
+| 日期 | 修改人 | 变更 | 原因 |
+| --- | --- | --- | --- |
+| {date} |  | 创建表格 |  |`,
+    },
+    en: {
+      title: "General Table · {date}",
+      content: `# General table
+
+> Created {date}
+
+## How to use this table
+
+1. Define the meaning and input rules for every column.
+2. Use controlled values for status and priority so rows stay filterable.
+3. Review the summary regularly instead of letting the table only grow.
+
+## Field definitions
+
+| Field | Meaning | Allowed values / format | Required |
+| --- | --- | --- | --- |
+| Status | Current progress | Not started / In progress / Done / Blocked | Yes |
+| Priority | Order of attention | P0 / P1 / P2 / P3 | Yes |
+
+## Main table
+
+| ID | Item | Category | Status | Priority | Owner | Due date | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 001 |  |  | Not started | P2 |  |  |  |
+| 002 |  |  | Not started | P2 |  |  |  |
+
+## Useful views
+
+- Act now: status is Blocked or priority is P0
+- Due this week: due date falls in the current week
+- Waiting on others: owner is someone else and status is not Done
+
+## Summary
+
+| Metric | Current | Definition | Updated |
+| --- | ---: | --- | --- |
+| Total | 0 | All data rows in the main table | {date} |
+| Done | 0 | Rows whose status is Done | {date} |
+
+## Change log
+
+| Date | Editor | Change | Reason |
+| --- | --- | --- | --- |
+| {date} |  | Created table |  |`,
+    },
+    ja: {
+      title: "汎用テーブル · {date}",
+      content: `# 汎用テーブル
+
+> 作成日：{date}
+
+## 使い方
+
+1. 各列の意味と入力規則を先に定義します。
+2. 状態や優先度は固定値を使い、絞り込みやすくします。
+3. 表を増やすだけでなく、下の集計を定期的に見直します。
+
+## フィールド定義
+
+| フィールド | 意味 | 許可する値 / 形式 | 必須 |
+| --- | --- | --- | --- |
+| 状態 | 現在の進捗 | 未着手 / 進行中 / 完了 / ブロック | はい |
+| 優先度 | 対応順 | P0 / P1 / P2 / P3 | はい |
+
+## メインテーブル
+
+| ID | 項目 | 分類 | 状態 | 優先度 | 担当者 | 期限 | メモ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 001 |  |  | 未着手 | P2 |  |  |  |
+| 002 |  |  | 未着手 | P2 |  |  |  |
+
+## よく使うビュー
+
+- 即時対応：状態が「ブロック」または優先度が P0
+- 今週期限：期限が今週内
+- 他者待ち：自分以外が担当し、未完了
+
+## 集計
+
+| 指標 | 現在値 | 集計条件 | 更新日 |
+| --- | ---: | --- | --- |
+| 合計 | 0 | メインテーブルの全データ行 | {date} |
+| 完了 | 0 | 状態が「完了」 | {date} |
+
+## 変更履歴
+
+| 日付 | 編集者 | 変更 | 理由 |
+| --- | --- | --- | --- |
+| {date} |  | テーブル作成 |  |`,
+    },
+    fr: {
+      title: "Tableau générique · {date}",
+      content: `# Tableau générique
+
+> Créé le {date}
+
+## Mode d'emploi
+
+1. Définissez le sens et les règles de saisie de chaque colonne.
+2. Utilisez des valeurs contrôlées pour le statut et la priorité afin de faciliter les filtres.
+3. Revoyez régulièrement la synthèse au lieu de seulement ajouter des lignes.
+
+## Définition des champs
+
+| Champ | Signification | Valeurs / format autorisés | Obligatoire |
+| --- | --- | --- | --- |
+| Statut | Avancement actuel | Non commencé / En cours / Terminé / Bloqué | Oui |
+| Priorité | Ordre de traitement | P0 / P1 / P2 / P3 | Oui |
+
+## Tableau principal
+
+| ID | Élément | Catégorie | Statut | Priorité | Responsable | Échéance | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 001 |  |  | Non commencé | P2 |  |  |  |
+| 002 |  |  | Non commencé | P2 |  |  |  |
+
+## Vues utiles
+
+- Agir maintenant : statut Bloqué ou priorité P0
+- Échéance cette semaine : date située dans la semaine courante
+- En attente d'un tiers : responsable différent et statut non terminé
+
+## Synthèse
+
+| Indicateur | Valeur | Définition | Mise à jour |
+| --- | ---: | --- | --- |
+| Total | 0 | Toutes les lignes du tableau principal | {date} |
+| Terminé | 0 | Lignes dont le statut est Terminé | {date} |
+
+## Historique des modifications
+
+| Date | Éditeur | Modification | Raison |
+| --- | --- | --- | --- |
+| {date} |  | Création du tableau |  |`,
+    },
+  },
+  "daily-report": {
+    zh: {
+      title: "工作日报 · {date}",
+      content: `# 工作日报
+
+> 日期：{date}<br>
+> 姓名 / 团队：<br>
+> 今日状态：正常 / 有风险 / 阻塞
+
+## 一句话摘要
+
+用一句话说明今天最重要的结果，而不是罗列活动。
+
+## 今日完成
+
+| 计划事项 | 实际结果 | 证据 / 链接 | 状态 |
+| --- | --- | --- | --- |
+|  |  |  | 完成 / 部分完成 / 未完成 |
+
+## 关键数据
+
+| 指标 | 昨日 / 基线 | 今日 | 变化 | 说明 |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## 问题、风险与阻塞
+
+| 问题 | 影响 | 已采取措施 | 需要谁支持 | 截止时间 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 今日决策与重要信息
+
+- 决策：
+- 原因：
+- 影响范围：
+
+## 明日优先事项
+
+1. … — 完成标准：
+2. … — 完成标准：
+3. … — 完成标准：
+
+## 交接与提醒
+
+- 需要他人知晓：
+- 等待回复：
+- 相关文档：`,
+    },
+    en: {
+      title: "Daily Work Report · {date}",
+      content: `# Daily work report
+
+> Date: {date}<br>
+> Person / team:<br>
+> Overall status: On track / At risk / Blocked
+
+## One-sentence summary
+
+State the most important outcome of the day instead of listing activity.
+
+## Completed today
+
+| Planned work | Actual outcome | Evidence / link | Status |
+| --- | --- | --- | --- |
+|  |  |  | Done / Partial / Not done |
+
+## Key data
+
+| Metric | Yesterday / baseline | Today | Change | Explanation |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## Issues, risks, and blockers
+
+| Issue | Impact | Action taken | Support needed | Deadline |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Decisions and important information
+
+- Decision:
+- Rationale:
+- Affected scope:
+
+## Priorities for tomorrow
+
+1. … — definition of done:
+2. … — definition of done:
+3. … — definition of done:
+
+## Handoffs and reminders
+
+- Others need to know:
+- Waiting for:
+- Related documents:`,
+    },
+    ja: {
+      title: "業務日報 · {date}",
+      content: `# 業務日報
+
+> 日付：{date}<br>
+> 氏名 / チーム：<br>
+> 全体状況：順調 / リスクあり / ブロック
+
+## 一文サマリー
+
+活動の羅列ではなく、今日最も重要だった成果を一文で示します。
+
+## 本日の完了事項
+
+| 計画 | 実際の成果 | 根拠 / リンク | 状態 |
+| --- | --- | --- | --- |
+|  |  |  | 完了 / 一部完了 / 未完了 |
+
+## 主要データ
+
+| 指標 | 前日 / 基準 | 本日 | 変化 | 説明 |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## 問題・リスク・障害
+
+| 問題 | 影響 | 実施した対応 | 必要な支援 | 期限 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 本日の決定と重要情報
+
+- 決定：
+- 理由：
+- 影響範囲：
+
+## 明日の優先事項
+
+1. … — 完了条件：
+2. … — 完了条件：
+3. … — 完了条件：
+
+## 引き継ぎと注意事項
+
+- 共有が必要なこと：
+- 返信待ち：
+- 関連文書：`,
+    },
+    fr: {
+      title: "Rapport quotidien · {date}",
+      content: `# Rapport quotidien
+
+> Date : {date}<br>
+> Personne / équipe :<br>
+> Situation : Conforme / À risque / Bloquée
+
+## Résumé en une phrase
+
+Présentez le résultat le plus important de la journée plutôt qu'une liste d'activités.
+
+## Réalisé aujourd'hui
+
+| Travail prévu | Résultat obtenu | Preuve / lien | Statut |
+| --- | --- | --- | --- |
+|  |  |  | Terminé / Partiel / Non terminé |
+
+## Données clés
+
+| Indicateur | Hier / référence | Aujourd'hui | Évolution | Explication |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## Problèmes, risques et blocages
+
+| Problème | Impact | Action menée | Soutien requis | Échéance |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Décisions et informations importantes
+
+- Décision :
+- Justification :
+- Périmètre affecté :
+
+## Priorités de demain
+
+1. … — critère de réussite :
+2. … — critère de réussite :
+3. … — critère de réussite :
+
+## Transmissions et rappels
+
+- À communiquer :
+- En attente de :
+- Documents associés :`,
+    },
+  },
+  "weekly-report": {
+    zh: {
+      title: "工作周报 · {date}",
+      content: `# 工作周报
+
+> 周期：<br>
+> 姓名 / 团队：<br>
+> 更新时间：{date}<br>
+> 总体状态：正常 / 有风险 / 阻塞
+
+## 本周摘要
+
+用三句话回答：完成了什么、产生了什么价值、当前最大的风险是什么。
+
+## 关键成果
+
+1. **成果一** — 业务 / 用户价值：
+2. **成果二** — 业务 / 用户价值：
+3. **成果三** — 业务 / 用户价值：
+
+## 工作流进展
+
+| 工作流 / 项目 | 本周目标 | 实际进展 | 状态 | 下一里程碑 |
+| --- | --- | --- | --- | --- |
+|  |  |  | 正常 / 有风险 / 阻塞 |  |
+
+## 指标与趋势
+
+| 指标 | 上周 | 本周 | 目标 | 趋势与原因 |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## 偏差与未完成事项
+
+| 原计划 | 当前结果 | 偏差原因 | 调整方案 | 新日期 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 风险、依赖与所需支持
+
+- 风险：
+- 外部依赖：
+- 需要的决策 / 资源：
+
+## 下周三个优先结果
+
+1. … — 衡量标准：
+2. … — 衡量标准：
+3. … — 衡量标准：
+
+## 复盘
+
+- 应该继续：
+- 应该停止：
+- 应该开始：`,
+    },
+    en: {
+      title: "Weekly Work Report · {date}",
+      content: `# Weekly work report
+
+> Period:<br>
+> Person / team:<br>
+> Updated: {date}<br>
+> Overall status: On track / At risk / Blocked
+
+## Weekly summary
+
+Answer in three sentences: what was completed, what value it created, and the largest current risk.
+
+## Key outcomes
+
+1. **Outcome one** — business / user value:
+2. **Outcome two** — business / user value:
+3. **Outcome three** — business / user value:
+
+## Workstream progress
+
+| Workstream / project | Weekly goal | Actual progress | Status | Next milestone |
+| --- | --- | --- | --- | --- |
+|  |  |  | On track / At risk / Blocked |  |
+
+## Metrics and trends
+
+| Metric | Last week | This week | Target | Trend and reason |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## Variance and unfinished work
+
+| Original plan | Current result | Cause | Adjustment | New date |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Risks, dependencies, and support
+
+- Risk:
+- External dependency:
+- Decision / resource needed:
+
+## Three priority outcomes for next week
+
+1. … — measure of success:
+2. … — measure of success:
+3. … — measure of success:
+
+## Retrospective
+
+- Continue:
+- Stop:
+- Start:`,
+    },
+    ja: {
+      title: "業務週報 · {date}",
+      content: `# 業務週報
+
+> 対象期間：<br>
+> 氏名 / チーム：<br>
+> 更新日：{date}<br>
+> 全体状況：順調 / リスクあり / ブロック
+
+## 週間サマリー
+
+完了したこと、生み出した価値、現在最大のリスクを三文で説明します。
+
+## 主な成果
+
+1. **成果 1** — 事業 / ユーザーへの価値：
+2. **成果 2** — 事業 / ユーザーへの価値：
+3. **成果 3** — 事業 / ユーザーへの価値：
+
+## ワークストリームの進捗
+
+| 項目 / プロジェクト | 今週の目標 | 実際の進捗 | 状態 | 次のマイルストーン |
+| --- | --- | --- | --- | --- |
+|  |  |  | 順調 / リスクあり / ブロック |  |
+
+## 指標と傾向
+
+| 指標 | 先週 | 今週 | 目標 | 傾向と理由 |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## 予定との差と未完了事項
+
+| 当初計画 | 現在の結果 | 原因 | 調整 | 新しい日付 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## リスク・依存関係・必要な支援
+
+- リスク：
+- 外部依存：
+- 必要な意思決定 / リソース：
+
+## 来週の三つの優先成果
+
+1. … — 成功指標：
+2. … — 成功指標：
+3. … — 成功指標：
+
+## 振り返り
+
+- 続けること：
+- やめること：
+- 始めること：`,
+    },
+    fr: {
+      title: "Rapport hebdomadaire · {date}",
+      content: `# Rapport hebdomadaire
+
+> Période :<br>
+> Personne / équipe :<br>
+> Mise à jour : {date}<br>
+> Situation : Conforme / À risque / Bloquée
+
+## Résumé de la semaine
+
+Répondez en trois phrases : ce qui a été réalisé, la valeur créée et le principal risque actuel.
+
+## Résultats clés
+
+1. **Résultat 1** — valeur métier / utilisateur :
+2. **Résultat 2** — valeur métier / utilisateur :
+3. **Résultat 3** — valeur métier / utilisateur :
+
+## Avancement par chantier
+
+| Chantier / projet | Objectif de la semaine | Avancement réel | Statut | Prochain jalon |
+| --- | --- | --- | --- | --- |
+|  |  |  | Conforme / À risque / Bloqué |  |
+
+## Indicateurs et tendances
+
+| Indicateur | Semaine précédente | Cette semaine | Cible | Tendance et raison |
+| --- | ---: | ---: | ---: | --- |
+|  |  |  |  |  |
+
+## Écarts et travail non terminé
+
+| Plan initial | Résultat actuel | Cause | Ajustement | Nouvelle date |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Risques, dépendances et soutien
+
+- Risque :
+- Dépendance externe :
+- Décision / ressource nécessaire :
+
+## Trois résultats prioritaires la semaine prochaine
+
+1. … — mesure de réussite :
+2. … — mesure de réussite :
+3. … — mesure de réussite :
+
+## Rétrospective
+
+- Continuer :
+- Arrêter :
+- Commencer :`,
+    },
+  },
+  okr: {
+    zh: {
+      title: "OKR 规划与复盘 · {date}",
+      content: `# OKR 规划与复盘
+
+> 周期：<br>
+> 团队 / 负责人：<br>
+> 更新日期：{date}<br>
+> 状态：草案 / 已确认 / 执行中 / 已复盘
+
+## 战略背景
+
+- 当前最重要的问题或机会：
+- 本周期为什么必须解决：
+- 不做什么：
+
+## Objective
+
+**目标：** 用鼓舞人心、方向明确且不直接包含数字的一句话描述想实现的改变。
+
+### 目标质量检查
+
+- [ ] 与团队战略直接相关
+- [ ] 聚焦结果而非任务清单
+- [ ] 一个周期内具有挑战但可达成
+- [ ] 团队成员能用自己的话解释
+
+## Key Results
+
+| KR | 衡量指标与口径 | 基线 | 目标 | 当前值 | 负责人 | 置信度 |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| KR1 | 从……提升到…… |  |  |  |  | 50% |
+| KR2 | 将……降低到…… |  |  |  |  | 50% |
+| KR3 | 达到……且满足…… |  |  |  |  | 50% |
+
+## 关键举措
+
+举措是为了推动 KR 的假设和行动，不要把举措本身写成 KR。
+
+| 举措 | 关联 KR | 负责人 | 里程碑 | 状态 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 每周 Check-in
+
+| 日期 | KR 当前值 | 置信度 | 本周进展 | 风险 / 下一步 |
+| --- | --- | ---: | --- | --- |
+| {date} |  | 50% |  |  |
+
+## 依赖与风险
+
+- 关键依赖：
+- 最大风险：
+- 触发调整的信号：
+
+## 周期结束评分
+
+| KR | 完成度（0–1.0） | 结果解释 | 是否真正产生价值 |
+| --- | ---: | --- | --- |
+| KR1 |  |  |  |
+
+## 复盘
+
+- 最有效的假设：
+- 失效的假设：
+- 意外结果：
+- 下周期延续 / 停止 / 新增：`,
+    },
+    en: {
+      title: "OKR Planning & Review · {date}",
+      content: `# OKR planning and review
+
+> Cycle:<br>
+> Team / owner:<br>
+> Updated: {date}<br>
+> Status: Draft / Committed / In progress / Reviewed
+
+## Strategic context
+
+- Most important problem or opportunity:
+- Why it matters in this cycle:
+- Explicit non-goals:
+
+## Objective
+
+**Objective:** Describe the desired change in one directional, motivating sentence without turning it into a metric.
+
+### Objective quality check
+
+- [ ] Directly supports the team's strategy
+- [ ] Describes an outcome, not a task list
+- [ ] Ambitious but plausible within one cycle
+- [ ] Team members can explain it in their own words
+
+## Key results
+
+| KR | Metric and definition | Baseline | Target | Current | Owner | Confidence |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| KR1 | Increase … from … to … |  |  |  |  | 50% |
+| KR2 | Reduce … to … |  |  |  |  | 50% |
+| KR3 | Reach … while maintaining … |  |  |  |  | 50% |
+
+## Initiatives
+
+Initiatives are hypotheses and actions intended to move a KR; do not disguise activities as key results.
+
+| Initiative | Related KR | Owner | Milestone | Status |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Weekly check-in
+
+| Date | Current KR value | Confidence | Progress | Risk / next action |
+| --- | --- | ---: | --- | --- |
+| {date} |  | 50% |  |  |
+
+## Dependencies and risks
+
+- Critical dependency:
+- Largest risk:
+- Signal that should trigger an adjustment:
+
+## End-of-cycle scoring
+
+| KR | Score (0–1.0) | Explanation | Did it create real value? |
+| --- | ---: | --- | --- |
+| KR1 |  |  |  |
+
+## Retrospective
+
+- Most useful hypothesis:
+- Invalidated hypothesis:
+- Unexpected result:
+- Continue / stop / add next cycle:`,
+    },
+    ja: {
+      title: "OKR 計画と振り返り · {date}",
+      content: `# OKR 計画と振り返り
+
+> 期間：<br>
+> チーム / 責任者：<br>
+> 更新日：{date}<br>
+> 状態：草案 / 合意済み / 実行中 / 振り返り済み
+
+## 戦略的背景
+
+- 最も重要な問題または機会：
+- この期間に取り組む理由：
+- 明確に対象外とすること：
+
+## Objective
+
+**目標：** 数値そのものではなく、実現したい変化を方向性のある魅力的な一文で表します。
+
+### 目標の品質チェック
+
+- [ ] チーム戦略に直接つながっている
+- [ ] タスク一覧ではなく成果を示している
+- [ ] 一期間で挑戦的かつ現実的である
+- [ ] メンバーが自分の言葉で説明できる
+
+## Key Results
+
+| KR | 指標と定義 | 基準値 | 目標 | 現在値 | 担当者 | 確信度 |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| KR1 | …を…から…へ向上 |  |  |  |  | 50% |
+| KR2 | …を…まで削減 |  |  |  |  | 50% |
+| KR3 | …を維持しながら…を達成 |  |  |  |  | 50% |
+
+## 主要施策
+
+施策は KR を動かす仮説と行動です。活動自体を KR にしないようにします。
+
+| 施策 | 関連 KR | 担当者 | マイルストーン | 状態 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## 毎週のチェックイン
+
+| 日付 | KR 現在値 | 確信度 | 今週の進捗 | リスク / 次の行動 |
+| --- | --- | ---: | --- | --- |
+| {date} |  | 50% |  |  |
+
+## 依存関係とリスク
+
+- 重要な依存：
+- 最大のリスク：
+- 方針変更を判断するシグナル：
+
+## 期間終了時の採点
+
+| KR | 達成度（0–1.0） | 結果の説明 | 実際の価値を生んだか |
+| --- | ---: | --- | --- |
+| KR1 |  |  |  |
+
+## 振り返り
+
+- 最も有効だった仮説：
+- 無効と分かった仮説：
+- 予想外の結果：
+- 次期間に続ける / やめる / 追加すること：`,
+    },
+    fr: {
+      title: "Planification et bilan OKR · {date}",
+      content: `# Planification et bilan OKR
+
+> Cycle :<br>
+> Équipe / responsable :<br>
+> Mise à jour : {date}<br>
+> Statut : Brouillon / Validé / En cours / Analysé
+
+## Contexte stratégique
+
+- Problème ou opportunité prioritaire :
+- Pourquoi agir pendant ce cycle :
+- Éléments explicitement hors périmètre :
+
+## Objective
+
+**Objectif :** Décrivez le changement recherché en une phrase motivante et directionnelle, sans le réduire à un chiffre.
+
+### Contrôle qualité de l'objectif
+
+- [ ] Soutient directement la stratégie de l'équipe
+- [ ] Décrit un résultat plutôt qu'une liste de tâches
+- [ ] Ambitieux mais crédible sur un cycle
+- [ ] Chaque membre peut l'expliquer avec ses propres mots
+
+## Key Results
+
+| KR | Indicateur et définition | Référence | Cible | Actuel | Responsable | Confiance |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| KR1 | Faire progresser … de … à … |  |  |  |  | 50 % |
+| KR2 | Réduire … jusqu'à … |  |  |  |  | 50 % |
+| KR3 | Atteindre … tout en maintenant … |  |  |  |  | 50 % |
+
+## Initiatives
+
+Les initiatives sont des hypothèses et actions destinées à faire évoluer un KR ; ne transformez pas une activité en résultat clé.
+
+| Initiative | KR associé | Responsable | Jalon | Statut |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Suivi hebdomadaire
+
+| Date | Valeur actuelle du KR | Confiance | Progrès | Risque / prochaine action |
+| --- | --- | ---: | --- | --- |
+| {date} |  | 50 % |  |  |
+
+## Dépendances et risques
+
+- Dépendance critique :
+- Risque principal :
+- Signal devant déclencher un ajustement :
+
+## Évaluation de fin de cycle
+
+| KR | Score (0–1,0) | Explication | Valeur réellement créée ? |
+| --- | ---: | --- | --- |
+| KR1 |  |  |  |
+
+## Rétrospective
+
+- Hypothèse la plus utile :
+- Hypothèse invalidée :
+- Résultat inattendu :
+- Continuer / arrêter / ajouter au prochain cycle :`,
+    },
+  },
+  kpi: {
+    zh: {
+      title: "KPI 指标看板 · {date}",
+      content: `# KPI 指标看板
+
+> 统计周期：<br>
+> 团队 / 负责人：<br>
+> 更新时间：{date}
+
+## 业务目标与指标边界
+
+- KPI 服务的业务目标：
+- 适用范围：
+- 不应被该指标驱动的行为：
+
+## KPI 定义表
+
+| KPI | 业务含义 | 计算公式 | 数据源 | 基线 | 目标 | 当前值 | 频率 | 负责人 | 状态 |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- |
+|  |  |  |  |  |  |  | 日 / 周 / 月 |  | 正常 / 预警 / 异常 |
+
+## 护栏指标
+
+主指标变好时，下列指标不能明显恶化。
+
+| 护栏指标 | 可接受范围 | 当前值 | 状态 | 说明 |
+| --- | --- | ---: | --- | --- |
+|  |  |  |  |  |
+
+## 阈值与响应
+
+| 级别 | 触发条件 | 响应动作 | 负责人 | 响应时限 |
+| --- | --- | --- | --- | --- |
+| 预警 | 偏离目标 …% | 分析原因并记录 |  |  |
+| 异常 | 连续 … 个周期低于阈值 | 启动专项行动 |  |  |
+
+## 本期解读
+
+- 变化最大的指标及原因：
+- 一次性波动还是持续趋势：
+- 数据是否完整、延迟或存在偏差：
+- 与业务结果是否一致：
+
+## 行动计划
+
+| 行动 | 关联 KPI | 预期影响 | 负责人 | 截止日期 | 验证方式 |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
+
+## 数据质量检查
+
+- [ ] 公式、单位、时区与统计窗口明确
+- [ ] 数据源可追溯且刷新正常
+- [ ] 异常值、缺失值和口径变更已说明
+- [ ] 指标没有被重复计算或选择性呈现
+
+## 口径变更记录
+
+| 日期 | KPI | 旧口径 | 新口径 | 原因 | 影响 |
+| --- | --- | --- | --- | --- | --- |
+| {date} |  |  |  |  |  |`,
+    },
+    en: {
+      title: "KPI Dashboard · {date}",
+      content: `# KPI dashboard
+
+> Reporting period:<br>
+> Team / owner:<br>
+> Updated: {date}
+
+## Business goal and metric boundaries
+
+- Business goal supported by these KPIs:
+- Scope:
+- Behaviors this metric must not encourage:
+
+## KPI definitions
+
+| KPI | Business meaning | Formula | Data source | Baseline | Target | Current | Frequency | Owner | Status |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- |
+|  |  |  |  |  |  |  | Daily / Weekly / Monthly |  | Healthy / Warning / Critical |
+
+## Guardrail metrics
+
+The following metrics must not materially worsen while the primary KPI improves.
+
+| Guardrail | Acceptable range | Current | Status | Notes |
+| --- | --- | ---: | --- | --- |
+|  |  |  |  |  |
+
+## Thresholds and response
+
+| Level | Trigger | Response | Owner | Response time |
+| --- | --- | --- | --- | --- |
+| Warning | Deviation of …% from target | Analyze and document cause |  |  |
+| Critical | Below threshold for … periods | Start a focused action plan |  |  |
+
+## Period interpretation
+
+- Metric with the largest change and why:
+- One-off variation or sustained trend:
+- Data completeness, delay, or bias:
+- Alignment with the actual business outcome:
+
+## Action plan
+
+| Action | Related KPI | Expected impact | Owner | Due date | Validation |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
+
+## Data-quality checklist
+
+- [ ] Formula, unit, time zone, and reporting window are explicit
+- [ ] Data source is traceable and refreshing normally
+- [ ] Outliers, missing data, and definition changes are documented
+- [ ] Metrics are not double-counted or selectively presented
+
+## Definition change log
+
+| Date | KPI | Previous definition | New definition | Reason | Impact |
+| --- | --- | --- | --- | --- | --- |
+| {date} |  |  |  |  |  |`,
+    },
+    ja: {
+      title: "KPI ダッシュボード · {date}",
+      content: `# KPI ダッシュボード
+
+> 集計期間：<br>
+> チーム / 責任者：<br>
+> 更新日：{date}
+
+## 事業目標と指標の境界
+
+- KPI が支える事業目標：
+- 適用範囲：
+- この指標で促してはいけない行動：
+
+## KPI 定義
+
+| KPI | 事業上の意味 | 計算式 | データソース | 基準値 | 目標 | 現在値 | 頻度 | 担当者 | 状態 |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- |
+|  |  |  |  |  |  |  | 日次 / 週次 / 月次 |  | 正常 / 警告 / 異常 |
+
+## ガードレール指標
+
+主要 KPI が改善しても、次の指標を大きく悪化させてはいけません。
+
+| ガードレール | 許容範囲 | 現在値 | 状態 | メモ |
+| --- | --- | ---: | --- | --- |
+|  |  |  |  |  |
+
+## しきい値と対応
+
+| レベル | 発動条件 | 対応 | 担当者 | 対応期限 |
+| --- | --- | --- | --- | --- |
+| 警告 | 目標から …% 乖離 | 原因を分析し記録 |  |  |
+| 異常 | … 期間連続でしきい値未満 | 集中改善を開始 |  |  |
+
+## 今期の解釈
+
+- 最も変化した指標と理由：
+- 一時的な変動か継続的な傾向か：
+- データの欠損、遅延、偏り：
+- 実際の事業成果との整合性：
+
+## アクションプラン
+
+| 行動 | 関連 KPI | 期待効果 | 担当者 | 期限 | 検証方法 |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
+
+## データ品質チェック
+
+- [ ] 計算式、単位、タイムゾーン、集計期間が明確
+- [ ] データソースを追跡でき、正常に更新されている
+- [ ] 外れ値、欠損、定義変更を説明している
+- [ ] 二重計上や選択的な提示がない
+
+## 定義変更履歴
+
+| 日付 | KPI | 旧定義 | 新定義 | 理由 | 影響 |
+| --- | --- | --- | --- | --- | --- |
+| {date} |  |  |  |  |  |`,
+    },
+    fr: {
+      title: "Tableau de bord KPI · {date}",
+      content: `# Tableau de bord KPI
+
+> Période de mesure :<br>
+> Équipe / responsable :<br>
+> Mise à jour : {date}
+
+## Objectif métier et limites des indicateurs
+
+- Objectif métier soutenu par ces KPI :
+- Périmètre :
+- Comportements que l'indicateur ne doit pas encourager :
+
+## Définition des KPI
+
+| KPI | Sens métier | Formule | Source | Référence | Cible | Actuel | Fréquence | Responsable | Statut |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- |
+|  |  |  |  |  |  |  | Quotidienne / Hebdomadaire / Mensuelle |  | Normal / Alerte / Critique |
+
+## Indicateurs garde-fous
+
+Les indicateurs suivants ne doivent pas se dégrader sensiblement lorsque le KPI principal progresse.
+
+| Garde-fou | Plage acceptable | Actuel | Statut | Notes |
+| --- | --- | ---: | --- | --- |
+|  |  |  |  |  |
+
+## Seuils et réponses
+
+| Niveau | Déclencheur | Réponse | Responsable | Délai |
+| --- | --- | --- | --- | --- |
+| Alerte | Écart de … % à la cible | Analyser et documenter la cause |  |  |
+| Critique | Sous le seuil pendant … périodes | Lancer un plan d'action dédié |  |  |
+
+## Interprétation de la période
+
+- Indicateur ayant le plus évolué et pourquoi :
+- Variation ponctuelle ou tendance durable :
+- Complétude, retard ou biais des données :
+- Cohérence avec le résultat métier réel :
+
+## Plan d'action
+
+| Action | KPI associé | Impact attendu | Responsable | Échéance | Validation |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
+
+## Contrôle de qualité des données
+
+- [ ] Formule, unité, fuseau horaire et fenêtre de mesure explicites
+- [ ] Source traçable et correctement actualisée
+- [ ] Valeurs aberrantes, données manquantes et changements documentés
+- [ ] Aucun double comptage ni présentation sélective
+
+## Historique des définitions
+
+| Date | KPI | Ancienne définition | Nouvelle définition | Raison | Impact |
+| --- | --- | --- | --- | --- | --- |
+| {date} |  |  |  |  |  |`,
     },
   },
   "article-outline": {

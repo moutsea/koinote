@@ -54,6 +54,7 @@ import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
 import { AnnouncementDialog } from "./AnnouncementDialog";
+import { AgentReviewNotifications } from "./AgentReviewNotifications";
 import { confirmAction } from "../confirmAction";
 import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useStorageUsage } from "./StorageCard";
@@ -406,6 +407,12 @@ export function AppShell() {
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
       {user && !localMode && <AnnouncementDialog />}
+      {user?.membershipTier === "lifetime" && !localMode && (
+        <AgentReviewNotifications
+          key={user.authUserId}
+          accountKey={user.authUserId}
+        />
+      )}
       {desktopRuntime && !localMode && desktopBillingNotice && (
         <div
           className="fixed bottom-5 left-1/2 z-[70] flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg"

@@ -30,6 +30,25 @@ const (
 	agentReviewStaleAfter     = agentReviewReservationTTL
 )
 
+const expireStaleAgentReviewsSQL = `
+	UPDATE agent_reviews
+	SET status = 'failed', error_code = 'review_timeout',
+	    completed_at = now(), updated_at = now()
+	WHERE user_id = $1
+	  AND status = 'running'
+	  AND created_at < $2
+`
+
+const expireStaleAgentReviewSQL = `
+	UPDATE agent_reviews
+	SET status = 'failed', error_code = 'review_timeout',
+	    completed_at = now(), updated_at = now()
+	WHERE review_id = $1
+	  AND user_id = $2
+	  AND status = 'running'
+	  AND created_at < $3
+`
+
 var (
 	errAgentReviewNotFound     = errors.New("agent review not found")
 	errAgentReviewStale        = errors.New("agent review is stale")
@@ -356,10 +375,36 @@ func addAgentLLMUsage(target *agentLLMResult, previous agentLLMResult) error {
 	return nil
 }
 
+func (a *App) expireStaleAgentReviews(ctx context.Context, userID int) error {
+	_, err := a.db.Exec(
+		ctx,
+		expireStaleAgentReviewsSQL,
+		userID,
+		time.Now().UTC().Add(-agentReviewStaleAfter),
+	)
+	return err
+}
+
+func (a *App) expireStaleAgentReview(ctx context.Context, userID int, reviewID string) error {
+	_, err := a.db.Exec(
+		ctx,
+		expireStaleAgentReviewSQL,
+		strings.TrimSpace(reviewID),
+		userID,
+		time.Now().UTC().Add(-agentReviewStaleAfter),
+	)
+	return err
+}
+
 func (a *App) agentReviewsList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	user, ok := a.requireLifetimeMember(w, r)
 	if !ok {
+		return
+	}
+	if err := a.expireStaleAgentReviews(r.Context(), user.ID); err != nil {
+		log.Printf("agent review list expire stale: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
 	docID := strings.TrimSpace(r.PathValue("docId"))
@@ -429,7 +474,8 @@ func (a *App) agentReviewGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	review, err := a.loadAgentReview(r.Context(), user.ID, r.PathValue("reviewId"), true)
+	reviewID := r.PathValue("reviewId")
+	review, err := a.loadAgentReview(r.Context(), user.ID, reviewID, true)
 	if errors.Is(err, errAgentReviewNotFound) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Agent review not found")
 		return
@@ -438,6 +484,19 @@ func (a *App) agentReviewGet(w http.ResponseWriter, r *http.Request) {
 		log.Printf("agent review get: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
+	}
+	if review.Status == "running" && review.CreatedAt.Before(time.Now().UTC().Add(-agentReviewStaleAfter)) {
+		if err := a.expireStaleAgentReview(r.Context(), user.ID, reviewID); err != nil {
+			log.Printf("agent review get expire stale: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		review, err = a.loadAgentReview(r.Context(), user.ID, reviewID, true)
+		if err != nil {
+			log.Printf("agent review get expired result: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"review": review})
 }
@@ -605,15 +664,12 @@ func (a *App) insertRunningAgentReview(
 	// A process crash can leave the external LLM call without a handler to
 	// mark its row failed. Reclaim those orphaned slots once their matching
 	// credit reservation could no longer be active.
-	staleBefore := time.Now().UTC().Add(-agentReviewStaleAfter)
-	if _, err := tx.Exec(ctx, `
-		UPDATE agent_reviews
-		SET status = 'failed', error_code = 'review_timeout',
-		    completed_at = now(), updated_at = now()
-		WHERE user_id = $1
-		  AND status = 'running'
-		  AND created_at < $2
-	`, userID, staleBefore); err != nil {
+	if _, err := tx.Exec(
+		ctx,
+		expireStaleAgentReviewsSQL,
+		userID,
+		time.Now().UTC().Add(-agentReviewStaleAfter),
+	); err != nil {
 		return 0, err
 	}
 	var running int

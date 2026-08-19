@@ -137,10 +137,18 @@ func callOpenAIAgentLLM(
 	if err != nil {
 		return agentLLMResult{}, err
 	}
+	systemPrompt := prompt.System
+	if !provider.StrictOutput && len(prompt.Schema) > 0 {
+		schemaJSON, err := json.Marshal(prompt.Schema)
+		if err != nil {
+			return agentLLMResult{}, fmt.Errorf("encode OpenAI-compatible output schema: %w", err)
+		}
+		systemPrompt += "\n\nThe response must conform to this exact JSON Schema:\n" + string(schemaJSON)
+	}
 	payload := map[string]any{
 		"model": provider.Model,
 		"messages": []map[string]string{
-			{"role": "system", "content": prompt.System},
+			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": prompt.User},
 		},
 		"temperature": 0.2,

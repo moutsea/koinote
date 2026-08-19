@@ -26,20 +26,50 @@ function eq(label, actual, expected) {
 const locales = ["en", "zh", "ja", "fr"];
 const now = new Date("2026-08-19T12:00:00Z");
 
-eq("模板 ID 不重复", new Set(DOCUMENT_TEMPLATE_IDS).size, 9);
+eq("模板 ID 不重复", new Set(DOCUMENT_TEMPLATE_IDS).size, 15);
 eq("目录与 ID 数量一致", DOCUMENT_TEMPLATES.length, DOCUMENT_TEMPLATE_IDS.length);
 eq(
-  "免费用户只有三款基础模板",
+  "免费用户拥有五款基础模板",
   DOCUMENT_TEMPLATES.filter((template) => template.tier === "free").map(
     (template) => template.id,
   ),
-  ["meeting-notes", "daily-note", "weekly-review"],
+  ["meeting-notes", "daily-note", "weekly-review", "todo-list", "table"],
 );
 eq(
-  "会员拥有六款高级模板",
-  DOCUMENT_TEMPLATES.filter((template) => template.tier === "lifetime").length,
-  6,
+  "会员拥有十款高级模板",
+  DOCUMENT_TEMPLATES.filter((template) => template.tier === "lifetime").map(
+    (template) => template.id,
+  ),
+  [
+    "daily-report",
+    "weekly-report",
+    "okr",
+    "kpi",
+    "article-outline",
+    "research-paper",
+    "project-readme",
+    "product-requirements",
+    "decision-record",
+    "technical-design",
+  ],
 );
+
+const addedTemplateStructures = {
+  "todo-list": ["- [ ]", "## 等待与委派", "## 今日收尾"],
+  table: ["## 字段定义", "| ID | 项目 |", "## 变更记录"],
+  "daily-report": ["## 今日完成", "## 关键数据", "## 明日优先事项"],
+  "weekly-report": ["## 关键成果", "## 指标与趋势", "## 下周三个优先结果"],
+  okr: ["## Objective", "## Key Results", "## 每周 Check-in", "## 周期结束评分"],
+  kpi: ["## KPI 定义表", "## 护栏指标", "## 阈值与响应", "## 数据质量检查"],
+};
+
+for (const [templateId, markers] of Object.entries(addedTemplateStructures)) {
+  const copy = buildDocumentFromTemplate(templateId, "zh", now);
+  ok(
+    `${templateId} 包含完整业务结构`,
+    markers.every((marker) => copy.content.includes(marker)),
+  );
+}
 
 for (const template of DOCUMENT_TEMPLATES) {
   ok(

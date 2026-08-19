@@ -220,6 +220,55 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 	})
 }
 
+func TestAgentReviewGetExpiresOrphanedRunningReview(t *testing.T) {
+	app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
+		SessionSecret: "agent-review-expiry-test",
+	})
+	ctx := context.Background()
+	insertRunning := func(createdAt time.Time) string {
+		t.Helper()
+		reviewID, err := randomUUID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO agent_reviews (
+				review_id, user_id, document_id, base_revision, current_revision,
+				provider_mode, provider_protocol, model, status, created_at, updated_at
+			)
+			SELECT $1, $2, id, $3, $3, 'byok', 'anthropic', 'test-model',
+			       'running', $4, $4
+			FROM documents WHERE doc_id = $5 AND user_id = $2
+		`, reviewID, user.ID, document.Revision, createdAt, document.DocID); err != nil {
+			t.Fatal(err)
+		}
+		return reviewID
+	}
+
+	staleReviewID := insertRunning(time.Now().UTC().Add(-agentReviewStaleAfter - time.Minute))
+	freshReviewID := insertRunning(time.Now().UTC())
+	request := httptest.NewRequest(http.MethodGet, "/api/agent/reviews/"+staleReviewID, nil)
+	request.AddCookie(sessionCookieFor(t, app, user.AuthUserID, user.SessionVersion))
+	response := httptest.NewRecorder()
+	app.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expired review get status=%d body=%s", response.Code, response.Body.String())
+	}
+	review := decodeAgentReviewResponse(t, response)
+	if review.Status != "failed" || review.ErrorCode == nil || *review.ErrorCode != "review_timeout" || review.CompletedAt == nil {
+		t.Fatalf("expired review was not reclaimed: %+v", review)
+	}
+	var freshStatus string
+	if err := pool.QueryRow(ctx, `
+		SELECT status FROM agent_reviews WHERE review_id = $1 AND user_id = $2
+	`, freshReviewID, user.ID).Scan(&freshStatus); err != nil {
+		t.Fatal(err)
+	}
+	if freshStatus != "running" {
+		t.Fatalf("fresh review status=%q, want running", freshStatus)
+	}
+}
+
 func newAgentReviewCreateTest(
 	t *testing.T,
 	cfg config.Config,

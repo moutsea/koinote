@@ -364,6 +364,15 @@ export interface Messages {
     availableCredits: string;
     start: string;
     running: string;
+    backgroundRunning: string;
+    backgroundRunningDescription: string;
+    backgroundReady: string;
+    backgroundReadyDescription: string;
+    backgroundFailed: string;
+    backgroundFailedDescription: string;
+    backgroundTimeoutDescription: string;
+    viewBackgroundResult: string;
+    dismissNotification: string;
     saveFailed: string;
     loading: string;
     loadFailed: string;
@@ -720,11 +729,20 @@ export interface Messages {
     localModeLocked: string;
     sourceNote: string;
     createFailed: string;
-    categories: Record<"everyday" | "writing" | "product" | "technical", string>;
+    categories: Record<
+      "everyday" | "management" | "writing" | "product" | "technical",
+      string
+    >;
     templates: Record<
       | "meeting-notes"
       | "daily-note"
       | "weekly-review"
+      | "todo-list"
+      | "table"
+      | "daily-report"
+      | "weekly-report"
+      | "okr"
+      | "kpi"
       | "article-outline"
       | "project-readme"
       | "product-requirements"

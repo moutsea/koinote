@@ -19,10 +19,12 @@ product. No upstream template is copied verbatim. This avoids pulling third-part
 branding, assumptions, or license text into every document a user creates while
 still preserving the strongest structural ideas found during research.
 
-The in-product catalog currently contains:
+The in-product catalog currently contains 15 templates:
 
-- Free: meeting notes, daily note, weekly plan and review.
-- Lifetime: article brief, project README, product requirements, research paper
+- Free: meeting notes, daily note, weekly plan and review, todo list, and a
+  flexible table.
+- Lifetime: daily work report, weekly work report, OKR plan and review, KPI
+  tracker, article brief, project README, product requirements, research paper
   notes, decision record, and technical design.
 
 The catalog is bundled with the SPA and desktop client so free templates remain

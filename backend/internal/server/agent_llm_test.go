@@ -123,14 +123,29 @@ func TestCallOpenAIAgentLLMUsesStrictStructuredOutput(t *testing.T) {
 
 func TestCallOpenAICompatibleAgentLLMUsesJSONMode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&payload)
-		responseFormat, _ := payload["response_format"].(map[string]any)
-		if responseFormat["type"] != "json_object" {
-			t.Errorf("compatible response format = %#v", responseFormat)
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+			ResponseFormat map[string]any `json:"response_format"`
+			MaxTokens      int            `json:"max_tokens"`
 		}
-		if _, exists := payload["max_tokens"]; !exists {
-			t.Errorf("compatible request did not use max_tokens: %#v", payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if payload.ResponseFormat["type"] != "json_object" {
+			t.Errorf("compatible response format = %#v", payload.ResponseFormat)
+		}
+		if payload.MaxTokens == 0 {
+			t.Errorf("compatible request did not use max_tokens: %#v", payload.MaxTokens)
+		}
+		system := ""
+		for _, message := range payload.Messages {
+			if message.Role == "system" {
+				system = message.Content
+			}
+		}
+		if !strings.Contains(system, `"bodySuggestions"`) || !strings.Contains(system, `"additionalProperties":false`) {
+			t.Errorf("compatible system prompt is missing the output schema")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{{

@@ -30,6 +30,7 @@ import {
 } from "../../api";
 import { confirmAction } from "../../confirmAction";
 import { interpolate, useI18n } from "../../i18n";
+import { publishAgentReviewStarted } from "../../agentReviewNotifications";
 import {
   agentReviewAccess,
   canStartAgentReview,
@@ -40,6 +41,7 @@ export function AgentReviewPanel({
   docId,
   member,
   localMode,
+  initialReviewId,
   onPrepareReview,
   onAcceptDocument,
   onClose,
@@ -47,6 +49,7 @@ export function AgentReviewPanel({
   docId: string;
   member: boolean;
   localMode: boolean;
+  initialReviewId?: string;
   onPrepareReview: () => Promise<boolean>;
   onAcceptDocument: (document: Document) => void;
   onClose: () => void;
@@ -55,7 +58,9 @@ export function AgentReviewPanel({
   const queryClient = useQueryClient();
   const access = agentReviewAccess(member, localMode);
   const remoteEnabled = access === "ready";
-  const [selectedReviewId, setSelectedReviewId] = useState("");
+  const [selectedReviewId, setSelectedReviewId] = useState(
+    initialReviewId ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const settings = useQuery({
@@ -87,6 +92,11 @@ export function AgentReviewPanel({
   });
 
   useEffect(() => {
+    if (!initialReviewId) return;
+    setSelectedReviewId(initialReviewId);
+  }, [initialReviewId]);
+
+  useEffect(() => {
     if (selectedReviewId || !reviews.data?.reviews.length) return;
     setSelectedReviewId(reviews.data.reviews[0].reviewId);
   }, [reviews.data?.reviews, selectedReviewId]);
@@ -112,11 +122,17 @@ export function AgentReviewPanel({
       if (!(await onPrepareReview())) throw new Error("document_save_failed");
       return createAgentReview(docId);
     },
-    async onSuccess(result) {
+    onSuccess(result) {
       setError(null);
       setSelectedReviewId(result.review.reviewId);
       queryClient.setQueryData(["agent-review", result.review.reviewId], result);
-      await Promise.all([
+      publishAgentReviewStarted({
+        reviewId: result.review.reviewId,
+        documentId: result.review.documentId,
+        createdAt: result.review.createdAt,
+      });
+      onClose();
+      void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["agent-reviews", docId] }),
         queryClient.invalidateQueries({ queryKey: AGENT_CREDITS_QUERY_KEY }),
       ]);
@@ -406,7 +422,9 @@ function ReviewDetail({
     return <StatusBlock icon={<Clock3 className="h-5 w-5" />} title={t.agentReview.staleTitle} body={t.agentReview.staleDescription} />;
   }
   if (review.status === "failed") {
-    const message = reviewFailureStatusText(review.errorCode, t.errors, t.agentReview.failedTitle);
+    const message = review.errorCode === "review_timeout"
+      ? t.agentReview.backgroundTimeoutDescription
+      : reviewFailureStatusText(review.errorCode, t.errors, t.agentReview.failedTitle);
     return <StatusBlock icon={<AlertCircle className="h-5 w-5" />} title={t.agentReview.failedTitle} body={message} />;
   }
 
