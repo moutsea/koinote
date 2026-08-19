@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds 15 localized Markdown templates and background AI optimization notifications."
+          notes="Koinote Desktop $version runs AI optimization as parallel title, body, and layout subtasks with durable progress and partial results."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本将四语 Markdown 文档模板扩展到 15 款：免费版新增任务清单和通用表格，终生会员新增日报、周报、OKR 与 KPI。AI 优化提交后会在后台运行，完成后通过站内通知返回结果，不会阻塞继续写作。
+          此版本将 AI 优化拆分为标题、正文分段和结构排版子任务，最多三路并行执行；进度与已完成的部分结果会持久化，单个子任务校验失败时只重试对应任务，长文审阅更快也更稳定。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release expands the localized Markdown catalog to 15 templates, adding free todo-list and flexible-table templates plus daily report, weekly report, OKR, and KPI templates for Lifetime members. AI optimization now runs in the background and notifies the user when results are ready.
+          This release splits AI optimization into title, body-section, and structure/layout subtasks with up to three concurrent model calls. Progress and completed partial results are durable, and validation retries only the affected subtask for faster, more reliable long-form reviews.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
