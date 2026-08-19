@@ -247,18 +247,24 @@ ok("确实检查了若干裸绑", checked > 0, String(checked));
     match ? match[1] : "未找到",
   );
 
-  // 与实参方对齐：handleCreate 才是真正决定 body 长什么样的那一端
+  // 与实参方对齐：handleCreate 先保存目标目录，选择模板后再组装请求体。
   const page = stripComments(readFileSync(`${root}/pages/EditorPage.tsx`, "utf8"));
   ok(
     "EditorPage.handleCreate 收 folderId",
     /handleCreate\s*=\s*useCallback\(\s*\(\s*folderId\?/.test(page),
     "签名变了就要同步改 TabBar 的 prop 类型",
   );
-  // 它把 folderId 原样放进请求体 —— 这就是事件对象能一路走到 JSON.stringify 的通道
+  // folderId 必须原样进入模板请求状态，并在真正创建时进入请求体。
+  // 这仍然钉住了事件对象可能一路走到 JSON.stringify 的完整通道。
   ok(
-    "handleCreate 把 folderId 直接放进 mutate",
-    /create\.mutate\(\s*\{\s*folderId:/.test(page),
-    page.slice(0, 0),
+    "handleCreate 把 folderId 保存到模板请求",
+    /setTemplateRequest\(\{\s*folderId:\s*folderId\s*\?\?\s*null,\s*fromRoute:\s*false\s*\}\)/.test(page),
+    "新建流程改动时要保留 folderId 的显式传递",
+  );
+  ok(
+    "模板创建把保存的 folderId 放进 mutate",
+    /create\.mutate\(\s*\{\s*\.\.\.copy,\s*folderId:\s*templateRequest\.folderId\s*\}/.test(page),
+    "模板选择后必须在目标文件夹内直接创建",
   );
 }
 

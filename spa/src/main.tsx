@@ -97,9 +97,19 @@ const changelogRoute = createRoute({
 });
 // /editor 不带 id：跳最近编辑的一篇，没有则新建
 // /editor/$docId：打开指定文档
+function parseEditorSearch(
+  search: Record<string, unknown>,
+): { create?: true } {
+  return {
+    create:
+      search.create === true || search.create === "1" ? true : undefined,
+  };
+}
+
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor",
+  validateSearch: parseEditorSearch,
   component: lazyRouteComponent(
     () => import("./pages/EditorPage"),
     "EditorPage",
@@ -108,6 +118,7 @@ const editorRoute = createRoute({
 const editorDocRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor/$docId",
+  validateSearch: parseEditorSearch,
   component: lazyRouteComponent(
     () => import("./pages/EditorPage"),
     "EditorPage",

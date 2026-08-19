@@ -707,6 +707,33 @@ export interface Messages {
     close: string;
     markReadFailed: string;
   };
+  documentTemplates: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    close: string;
+    blankTitle: string;
+    blankDescription: string;
+    freeBadge: string;
+    memberBadge: string;
+    upgradeHint: string;
+    localModeLocked: string;
+    sourceNote: string;
+    createFailed: string;
+    categories: Record<"everyday" | "writing" | "product" | "technical", string>;
+    templates: Record<
+      | "meeting-notes"
+      | "daily-note"
+      | "weekly-review"
+      | "article-outline"
+      | "project-readme"
+      | "product-requirements"
+      | "research-paper"
+      | "decision-record"
+      | "technical-design",
+      { name: string; description: string }
+    >;
+  };
   editor: {
     placeholder: string;
     saving: string;

@@ -57,6 +57,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 - 代码高亮 37 种语言（highlight.js common 集）
 - LaTeX 公式，行内 `$…$` 与块级 `$$…$$`，点击可回到源码
 - 多标签同时开多篇、大纲导航、文件夹树、拖拽移动
+- 新建文档可从空白或 9 款四语 Markdown 模板开始；免费版提供会议纪要、每日记录和周复盘，会员解锁文章策划、README、PRD、论文阅读、决策记录与技术方案
 - 移动端使用文档抽屉切换文章，桌面端保留可调宽度文件树
 - 全局搜索标题与 Markdown 正文，`⌘K` / `Ctrl+K` 唤起并高亮命中位置
 - 自动保存（防抖），失败会明确告知而不是静默丢内容
@@ -69,7 +70,7 @@ Release 中的 SHA-256，再运行 `xattr -dr com.apple.quarantine /Applications
 - 首页与独立 `/docs/mcp` 指南展示 MCP 的客户端配置、授权、并发保护与版本恢复机制，支持 Codex、Claude Code、OpenCode、OpenClaw 等 Streamable HTTP MCP 客户端
 - Dashboard 提供保留 180 天的 MCP 活动日志，展示工具、令牌、文档、结果与耗时，不记录正文或令牌内容
 - 独立 `/pricing` 页面公开对比免费版与终生会员权益，并从后端读取当前多币种 Stripe 价目表
-- 免费版默认提供 500 MB 云端空间；终生会员一次付费获得 10 GB、MCP、版本历史、AI 优化和 1,000 credits
+- 免费版默认提供 500 MB 云端空间和 3 款基础模板；终生会员一次付费获得 10 GB、6 款高级模板、MCP、版本历史、AI 优化和 1,000 credits
 - 内置模型每 2,000 个实际输入+输出 token 扣 1 credit（向上取整），可充值 3,000 / 10,000 / 30,000 credits；会员也可保存自己的 OpenAI 兼容或 Anthropic Messages 渠道，BYOK 不消耗 credits
 
 **账号安全**

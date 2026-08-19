@@ -57,6 +57,7 @@ operating system will show a security warning on first launch.
 - Syntax highlighting for 37 languages (highlight.js `common` set)
 - LaTeX via KaTeX — inline `$…$` and block `$$…$$`, click a formula to edit its source
 - Tabs for several open documents, outline navigation, folder tree, drag to move
+- Start new documents from a blank page or nine localized Markdown templates; Free includes meeting notes, daily notes, and weekly reviews, while Lifetime adds article, README, PRD, research, decision, and technical-design templates
 - A mobile document drawer, while desktop keeps the resizable document tree
 - Global title and Markdown-body search with `⌘K` / `Ctrl+K` and highlighted matches
 - Debounced autosave that reports failures instead of silently dropping content
@@ -77,8 +78,8 @@ operating system will show a security warning on first launch.
 - Dashboard exposes 180-day MCP activity logs with tool, token, document, result, and duration metadata, never document or token contents
 - A public `/pricing` page compares Free and Lifetime benefits and reads the current
   multi-currency Stripe price allowlist from the backend
-- Free includes 500 MB by default; one-time Lifetime access adds 10 GB, MCP, version
-  history, AI optimization, and 1,000 credits
+- Free includes 500 MB and three basic templates by default; one-time Lifetime access adds
+  10 GB, six advanced templates, MCP, version history, AI optimization, and 1,000 credits
 - The built-in model charges 1 credit per 2,000 actual input-plus-output tokens, rounded up,
   with 3,000 / 10,000 / 30,000-credit packs. Members can also save OpenAI-compatible or
   Anthropic Messages BYOK channels; BYOK reviews consume no credits

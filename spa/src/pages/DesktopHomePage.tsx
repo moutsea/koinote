@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "../auth";
 import { DesktopSyncStatus } from "../components/DesktopSyncStatus";
 import { DesktopLocalImportCard } from "../components/DesktopLocalImportCard";
+import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
 import { PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useCreateDocument, useDocumentList } from "../documents";
@@ -32,6 +33,12 @@ import {
 } from "../desktop/offlineStore";
 import { interpolate, type Locale, useI18n } from "../i18n";
 import { formatBytes } from "../storage";
+import {
+  buildDocumentFromTemplate,
+  canUseDocumentTemplate,
+  documentTemplateById,
+  type DocumentTemplateId,
+} from "../documentTemplates";
 import { DesktopLoginPage } from "./DesktopLoginPage";
 
 const DATE_LOCALE: Record<Locale, string> = {
@@ -56,6 +63,7 @@ export function DesktopHomePage() {
   const [imageCache, setImageCache] = useState<DesktopImageCacheSummary | null>(null);
   const [clearingImageCache, setClearingImageCache] = useState(false);
   const [imageCacheNotice, setImageCacheNotice] = useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -84,6 +92,7 @@ export function DesktopHomePage() {
 
   if (!user) return <DesktopLoginPage />;
 
+  const membershipTier = user.membershipTier;
   const allDocuments = documents.data ?? [];
   const continueDocument = allDocuments[0];
   const recentDocuments = allDocuments.slice(1, 6);
@@ -91,9 +100,29 @@ export function DesktopHomePage() {
     ? t.desktopLocalMode.badge
     : user.nickname || user.username || user.email;
 
-  function createDocument() {
-    create.mutate(undefined, {
+  function openTemplates() {
+    create.reset();
+    setTemplatesOpen(true);
+  }
+
+  function createDocument(templateId: DocumentTemplateId | null) {
+    if (templateId) {
+      const template = documentTemplateById(templateId);
+      if (
+        !canUseDocumentTemplate(
+          template,
+          membershipTier,
+          localMode,
+        )
+      )
+        return;
+    }
+    const copy = templateId
+      ? buildDocumentFromTemplate(templateId, locale)
+      : { title: "", content: "" };
+    create.mutate(copy, {
       onSuccess: ({ document }) => {
+        setTemplatesOpen(false);
         void navigate({
           to: "/editor/$docId",
           params: { docId: document.docId },
@@ -194,7 +223,7 @@ export function DesktopHomePage() {
             <button
               type="button"
               disabled={create.isPending}
-              onClick={createDocument}
+              onClick={openTemplates}
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               style={{ background: "var(--cinnabar)" }}
             >
@@ -302,7 +331,7 @@ export function DesktopHomePage() {
                 <button
                   type="button"
                   disabled={create.isPending}
-                  onClick={createDocument}
+                  onClick={openTemplates}
                   className="mt-5 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                   style={{ background: "var(--cinnabar)" }}
                 >
@@ -393,6 +422,20 @@ export function DesktopHomePage() {
           </aside>
         </div>
       </PageContainer>
+      {templatesOpen && (
+        <DocumentTemplateDialog
+          membershipTier={membershipTier}
+          localMode={localMode}
+          creating={create.isPending}
+          createFailed={create.isError}
+          onCreate={createDocument}
+          onUpgrade={() => void navigate({ to: "/pricing" })}
+          onClose={() => {
+            create.reset();
+            setTemplatesOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

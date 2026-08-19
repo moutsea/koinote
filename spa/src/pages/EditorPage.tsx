@@ -1,9 +1,10 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { FolderTree, ListTree, Share2 } from "lucide-react";
 import { LiveEditor } from "../components/editor/LiveEditor";
+import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
 import { DocumentList } from "../components/editor/DocumentList";
 import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
 import { OutlinePanel } from "../components/editor/OutlinePanel";
@@ -53,18 +54,26 @@ import {
   type ApplyDocumentOrganizationResult,
 } from "../documentOrganizer";
 import type { DocumentOrganizationPlan } from "../components/editor/documentOrganizerCore";
+import {
+  buildDocumentFromTemplate,
+  canUseDocumentTemplate,
+  documentTemplateById,
+  type DocumentTemplateId,
+} from "../documentTemplates";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
 const LEGACY_STORAGE_KEY = "koinote:document";
 
 export function EditorPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const session = useSession();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { docId?: string };
+  const search = useSearch({ strict: false }) as { create?: boolean };
   const activeDocId = params.docId;
+  const createFromRoute = search.create === true;
 
   const loggedIn = Boolean(session.data?.user);
   const localMode = Boolean(session.data?.user?.isLocalMode);
@@ -92,6 +101,12 @@ export function EditorPage() {
     error: boolean;
     message: string;
   } | null>(null);
+  const [templateRequest, setTemplateRequest] = useState<{
+    folderId: string | null;
+    fromRoute: boolean;
+  } | null>(() =>
+    createFromRoute ? { folderId: null, fromRoute: true } : null,
+  );
   const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
   const saver = useDocumentSaver(refreshList);
   const serverTabs = useEditorTabs(loggedIn);
@@ -143,9 +158,22 @@ export function EditorPage() {
 
   const documents = list.data;
 
+  useEffect(() => {
+    if (!createFromRoute) return;
+    create.reset();
+    setTemplateRequest({ folderId: null, fromRoute: true });
+  }, [createFromRoute]);
+
   // 无 docId 时：跳最近编辑的一篇；一篇都没有则新建（顺带导入本地遗留草稿）
   useEffect(() => {
-    if (!loggedIn || activeDocId || !documents || bootstrapped.current) return;
+    if (
+      !loggedIn ||
+      activeDocId ||
+      createFromRoute ||
+      !documents ||
+      bootstrapped.current
+    )
+      return;
     if (create.isPending) return;
 
     if (documents.length > 0) {
@@ -187,6 +215,7 @@ export function EditorPage() {
   }, [
     loggedIn,
     activeDocId,
+    createFromRoute,
     documents,
     create,
     navigate,
@@ -427,13 +456,37 @@ export function EditorPage() {
 
   const handleCreate = useCallback(
     (folderId?: string | null) => {
-      // folderId 直接进 POST，不走「先建到根下再移动」：那样新文档会在根下闪一下，
-      // 且移动失败时它就留在根下了
+      create.reset();
+      setTemplateRequest({ folderId: folderId ?? null, fromRoute: false });
+    },
+    [create],
+  );
+
+  const handleTemplateCreate = useCallback(
+    (templateId: DocumentTemplateId | null) => {
+      if (!templateRequest) return;
+      const user = session.data?.user;
+      if (!user) return;
+      if (templateId) {
+        const template = documentTemplateById(templateId);
+        if (
+          !canUseDocumentTemplate(
+            template,
+            user.membershipTier,
+            Boolean(user.isLocalMode),
+          )
+        )
+          return;
+      }
+      const copy = templateId
+        ? buildDocumentFromTemplate(templateId, locale)
+        : { title: "", content: "" };
       create.mutate(
-        { folderId: folderId ?? null },
+        { ...copy, folderId: templateRequest.folderId },
         {
           onSuccess: ({ document }) => {
             createdHere.current.add(document.docId);
+            setTemplateRequest(null);
             void navigate({
               to: "/editor/$docId",
               params: { docId: document.docId },
@@ -442,8 +495,17 @@ export function EditorPage() {
         },
       );
     },
-    [create, navigate],
+    [create, locale, navigate, session.data?.user, templateRequest],
   );
+
+  const handleTemplateClose = useCallback(() => {
+    const openedFromRoute = templateRequest?.fromRoute ?? false;
+    setTemplateRequest(null);
+    create.reset();
+    if (!openedFromRoute) return;
+    bootstrapped.current = false;
+    void navigate({ to: "/editor", search: {}, replace: true });
+  }, [create, navigate, templateRequest?.fromRoute]);
 
   const handleDelete = useCallback(
     async (docId: string, title: string) => {
@@ -872,6 +934,18 @@ export function EditorPage() {
           docId={doc.data.docId}
           share={doc.data.share}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {templateRequest && session.data?.user && (
+        <DocumentTemplateDialog
+          membershipTier={session.data.user.membershipTier}
+          localMode={Boolean(session.data.user.isLocalMode)}
+          creating={create.isPending}
+          createFailed={create.isError}
+          onCreate={handleTemplateCreate}
+          onUpgrade={() => void navigate({ to: "/pricing" })}
+          onClose={handleTemplateClose}
         />
       )}
 

@@ -222,6 +222,7 @@ export function DocumentsPage() {
           </Link>
           <Link
             to="/editor"
+            search={{ create: true }}
             className="inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "var(--cinnabar)" }}
           >
@@ -382,6 +383,7 @@ export function DocumentsPage() {
             </button>
             <Link
               to="/editor"
+              search={{ create: true }}
               className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ background: "var(--cinnabar)" }}
             >
