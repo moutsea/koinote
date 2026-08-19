@@ -596,6 +596,18 @@ export type AgentReviewLayoutAssessment = {
   summary: string;
 };
 
+export type AgentReviewTaskProgress = {
+  completedTasks: number;
+  totalTasks: number;
+  stages: Array<{
+    id: "title" | "body" | "layout";
+    status: "pending" | "running" | "completed" | "failed";
+    completedTasks: number;
+    totalTasks: number;
+    durationMs: number;
+  }>;
+};
+
 export type AgentReview = {
   reviewId: string;
   documentId: string;
@@ -618,6 +630,7 @@ export type AgentReview = {
   titleScore?: number | null;
   titleAssessment?: string | null;
   layoutAssessment: AgentReviewLayoutAssessment[];
+  taskProgress: AgentReviewTaskProgress;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;

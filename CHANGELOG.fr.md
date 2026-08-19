@@ -15,7 +15,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Changed
 
-- Après son lancement, l’optimisation IA ferme le panneau et continue comme tâche d’arrière-plan persistante entre les pages et les rechargements. Des notifications indiquent sa progression et sa fin, tandis qu’une revue complète produit les suggestions éditoriales et de structure sans envoyer deux fois le document.
+- Après son lancement, l’optimisation IA ferme le panneau et continue comme tâche d’arrière-plan persistante. Le titre et l’introduction, les sections du corps et la mise en page deviennent des sous-tâches à concurrence limitée ; chaque étape conserve sa progression et ses résultats partiels, et seule la sous-tâche invalide est relancée.
 
 ### Fixed
 

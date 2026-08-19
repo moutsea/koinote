@@ -39,9 +39,10 @@ type agentLLMProvider struct {
 }
 
 type agentLLMPrompt struct {
-	System string
-	User   string
-	Schema map[string]any
+	System          string
+	User            string
+	Schema          map[string]any
+	MaxOutputTokens int
 }
 
 type agentLLMResult struct {
@@ -145,6 +146,7 @@ func callOpenAIAgentLLM(
 		}
 		systemPrompt += "\n\nThe response must conform to this exact JSON Schema:\n" + string(schemaJSON)
 	}
+	maxOutputTokens := agentLLMPromptOutputLimit(prompt, agentLLMMaxOutputTokens)
 	payload := map[string]any{
 		"model": provider.Model,
 		"messages": []map[string]string{
@@ -154,7 +156,7 @@ func callOpenAIAgentLLM(
 		"temperature": 0.2,
 	}
 	if provider.StrictOutput {
-		payload["max_completion_tokens"] = agentLLMMaxOutputTokens
+		payload["max_completion_tokens"] = maxOutputTokens
 		payload["response_format"] = map[string]any{
 			"type": "json_schema",
 			"json_schema": map[string]any{
@@ -164,7 +166,7 @@ func callOpenAIAgentLLM(
 			},
 		}
 	} else {
-		payload["max_tokens"] = agentLLMMaxOutputTokens
+		payload["max_tokens"] = maxOutputTokens
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
 
@@ -242,9 +244,10 @@ func callAnthropicAgentLLM(
 		}
 		systemPrompt += "\n\nThe response must conform to this exact JSON Schema:\n" + string(schemaJSON)
 	}
+	maxOutputTokens := agentLLMPromptOutputLimit(prompt, agentLLMAnthropicMaxOutputTokens)
 	payload := map[string]any{
 		"model":       provider.Model,
-		"max_tokens":  agentLLMAnthropicMaxOutputTokens,
+		"max_tokens":  maxOutputTokens,
 		"stream":      true,
 		"temperature": 0.2,
 		"system":      systemPrompt,
@@ -319,6 +322,13 @@ func callAnthropicAgentLLM(
 		OutputTokens: maxInt(outputTokens, response.Usage.OutputTokens),
 		TotalTokens:  maxInt(inputTokens, response.Usage.InputTokens) + maxInt(outputTokens, response.Usage.OutputTokens),
 	}, nil
+}
+
+func agentLLMPromptOutputLimit(prompt agentLLMPrompt, fallback int) int {
+	if prompt.MaxOutputTokens > 0 && prompt.MaxOutputTokens < fallback {
+		return prompt.MaxOutputTokens
+	}
+	return fallback
 }
 
 type anthropicStreamResult struct {

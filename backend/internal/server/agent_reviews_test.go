@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 			if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer builtin-test-key" {
 				t.Fatalf("unexpected built-in provider request: path=%q authorization=%q", r.URL.Path, r.Header.Get("Authorization"))
 			}
-			writeOpenAIAgentReviewResponse(t, w, "Ordinary title", "The first paragraph is too long.", 2_800, 1_200)
+			writeOpenAIAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 2_800, 1_200)
 		}))
 		defer provider.Close()
 
@@ -45,18 +46,27 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 			t.Fatalf("initial built-in review status=%q, want running", initial.Status)
 		}
 		review := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
-		if review.Status != "ready" || review.CreditsCharged != 2 || review.TotalTokens != 4_000 {
+		if review.Status != "ready" || review.CreditsCharged != 6 || review.TotalTokens != 12_000 {
 			t.Fatalf("unexpected built-in review: %+v", review)
 		}
 		if review.TitleScore == nil || *review.TitleScore != 55 || len(review.Suggestions) != 3 {
 			t.Fatalf("title score or suggestions missing: %+v", review)
 		}
+		if review.TaskProgress.CompletedTasks != 3 || review.TaskProgress.TotalTasks != 3 ||
+			len(review.TaskProgress.Stages) != 3 {
+			t.Fatalf("task progress missing from completed review: %+v", review.TaskProgress)
+		}
+		for _, stage := range review.TaskProgress.Stages {
+			if stage.Status != "completed" || stage.CompletedTasks != stage.TotalTasks {
+				t.Fatalf("incomplete task stage after ready: %+v", stage)
+			}
+		}
 		balance, err := app.loadCreditBalance(context.Background(), user.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if balance != (creditAccountBalance{Balance: 18, Reserved: 0, Available: 18}) {
-			t.Fatalf("built-in balance=%+v, want 18 available and no reservation", balance)
+		if balance != (creditAccountBalance{Balance: 14, Reserved: 0, Available: 14}) {
+			t.Fatalf("built-in balance=%+v, want 14 available and no reservation", balance)
 		}
 	})
 
@@ -65,7 +75,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 			if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != "byok-test-key" {
 				t.Fatalf("unexpected BYOK provider request: path=%q api-key=%q", r.URL.Path, r.Header.Get("x-api-key"))
 			}
-			writeAnthropicAgentReviewResponse(t, w, "Ordinary title", "The first paragraph is too long.", 1_500, 600)
+			writeAnthropicAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_500, 600)
 		}))
 		defer provider.Close()
 
@@ -90,7 +100,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		initial := decodeAgentReviewResponse(t, response)
 		review := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
 		if review.Status != "ready" || review.ProviderProtocol != "anthropic" ||
-			review.CreditsCharged != 0 || review.TotalTokens != 2_100 {
+			review.CreditsCharged != 0 || review.TotalTokens != 6_300 {
 			t.Fatalf("unexpected BYOK review: %+v", review)
 		}
 		if review.ChannelID == nil || *review.ChannelID != channelID {
@@ -170,10 +180,11 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 	t.Run("document change during provider call marks review stale", func(t *testing.T) {
 		requestStarted := make(chan struct{})
 		releaseResponse := make(chan struct{})
-		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			close(requestStarted)
+		var startedOnce sync.Once
+		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			startedOnce.Do(func() { close(requestStarted) })
 			<-releaseResponse
-			writeOpenAIAgentReviewResponse(t, w, "Ordinary title", "The first paragraph is too long.", 1_400, 600)
+			writeOpenAIAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_400, 600)
 		}))
 		defer provider.Close()
 
@@ -214,7 +225,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if balance != (creditAccountBalance{Balance: 19, Reserved: 0, Available: 19}) {
+		if balance != (creditAccountBalance{Balance: 17, Reserved: 0, Available: 17}) {
 			t.Fatalf("completed stale review charge mismatch: %+v", balance)
 		}
 	})
@@ -247,6 +258,20 @@ func TestAgentReviewGetExpiresOrphanedRunningReview(t *testing.T) {
 
 	staleReviewID := insertRunning(time.Now().UTC().Add(-agentReviewStaleAfter - time.Minute))
 	freshReviewID := insertRunning(time.Now().UTC())
+	staleSuggestionID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_review_suggestions (
+			suggestion_id, review_id, ordinal, target, suggestion_kind,
+			category, before_text, after_text, reason
+		)
+		SELECT $1, id, 0, 'body', 'content', 'clarity', 'before', 'after', 'reason'
+		FROM agent_reviews WHERE review_id = $2
+	`, staleSuggestionID, staleReviewID); err != nil {
+		t.Fatal(err)
+	}
 	request := httptest.NewRequest(http.MethodGet, "/api/agent/reviews/"+staleReviewID, nil)
 	request.AddCookie(sessionCookieFor(t, app, user.AuthUserID, user.SessionVersion))
 	response := httptest.NewRecorder()
@@ -258,6 +283,15 @@ func TestAgentReviewGetExpiresOrphanedRunningReview(t *testing.T) {
 	if review.Status != "failed" || review.ErrorCode == nil || *review.ErrorCode != "review_timeout" || review.CompletedAt == nil {
 		t.Fatalf("expired review was not reclaimed: %+v", review)
 	}
+	var staleSuggestions int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM agent_review_suggestions WHERE suggestion_id = $1
+	`, staleSuggestionID).Scan(&staleSuggestions); err != nil {
+		t.Fatal(err)
+	}
+	if staleSuggestions != 0 {
+		t.Fatalf("expired review retained %d partial suggestions", staleSuggestions)
+	}
 	var freshStatus string
 	if err := pool.QueryRow(ctx, `
 		SELECT status FROM agent_reviews WHERE review_id = $1 AND user_id = $2
@@ -266,6 +300,51 @@ func TestAgentReviewGetExpiresOrphanedRunningReview(t *testing.T) {
 	}
 	if freshStatus != "running" {
 		t.Fatalf("fresh review status=%q, want running", freshStatus)
+	}
+}
+
+func TestFailAgentReviewDeletesPartialSuggestions(t *testing.T) {
+	app, pool, user, document := newAgentReviewCreateTest(t, config.Config{SessionSecret: "agent-review-fail-cleanup-test"})
+	ctx := context.Background()
+	reviewID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reviewDatabaseID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_reviews (
+			review_id, user_id, document_id, base_revision, current_revision,
+			provider_mode, provider_protocol, model, status
+		)
+		SELECT $1, $2, id, $3, $3, 'byok', 'anthropic', 'test-model', 'running'
+		FROM documents WHERE doc_id = $4 AND user_id = $2
+		RETURNING id
+	`, reviewID, user.ID, document.Revision, document.DocID).Scan(&reviewDatabaseID); err != nil {
+		t.Fatal(err)
+	}
+	suggestionID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_review_suggestions (
+			suggestion_id, review_id, ordinal, target, suggestion_kind,
+			category, before_text, after_text, reason
+		) VALUES ($1, $2, 0, 'body', 'content', 'clarity', 'before', 'after', 'reason')
+	`, suggestionID, reviewDatabaseID); err != nil {
+		t.Fatal(err)
+	}
+	app.failAgentReview(ctx, user.ID, reviewDatabaseID, "provider_http_error", "")
+	var status string
+	var suggestions int
+	if err := pool.QueryRow(ctx, `SELECT status FROM agent_reviews WHERE id = $1`, reviewDatabaseID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM agent_review_suggestions WHERE review_id = $1`, reviewDatabaseID).Scan(&suggestions); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || suggestions != 0 {
+		t.Fatalf("failed review status=%q partial suggestions=%d", status, suggestions)
 	}
 }
 
@@ -381,6 +460,37 @@ func waitForAgentReviewStatus(
 	return agentReviewView{}
 }
 
+func agentReviewTaskJSONForTest(system, title, bodyBefore string) string {
+	if strings.Contains(system, `"titleScore"`) {
+		encoded, _ := json.Marshal(map[string]any{
+			"summary":         "The article can be clearer and more specific.",
+			"titleScore":      55,
+			"titleAssessment": "The title is understandable but not specific enough.",
+			"titleSuggestions": []map[string]string{
+				{"after": "A specific and credible title", "reason": "It states the concrete value."},
+				{"after": "A clearer alternative title", "reason": "It helps the target reader understand the topic."},
+			},
+		})
+		return string(encoded)
+	}
+	if strings.Contains(system, `"bodySuggestions"`) {
+		encoded, _ := json.Marshal(map[string]any{
+			"bodySuggestions": []map[string]string{{
+				"category": "clarity", "before": bodyBefore, "after": "The first paragraph is concise.",
+				"reason": "This removes unnecessary wording without changing the claim.",
+			}},
+		})
+		return string(encoded)
+	}
+	if strings.Contains(system, `"layoutAssessment"`) {
+		encoded, _ := json.Marshal(map[string]any{
+			"layoutAssessment": testWritingLayoutAssessment(), "layoutSuggestions": []any{},
+		})
+		return string(encoded)
+	}
+	return agentReviewJSONForTest(title, bodyBefore)
+}
+
 func agentReviewJSONForTest(title, bodyBefore string) string {
 	encoded, _ := json.Marshal(map[string]any{
 		"summary":         "The article can be clearer and more specific.",
@@ -418,17 +528,35 @@ func testWritingLayoutAssessment() []map[string]any {
 func writeOpenAIAgentReviewResponse(
 	t *testing.T,
 	w http.ResponseWriter,
+	r *http.Request,
 	title string,
 	bodyBefore string,
 	inputTokens int,
 	outputTokens int,
 ) {
 	t.Helper()
+	var request struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		ResponseFormat json.RawMessage `json:"response_format"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		t.Errorf("decode OpenAI task request: %v", err)
+	}
+	system := ""
+	for _, message := range request.Messages {
+		if message.Role == "system" {
+			system = message.Content
+		}
+	}
+	system += string(request.ResponseFormat)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"choices": []map[string]any{
 			{
-				"message":       map[string]string{"content": agentReviewJSONForTest(title, bodyBefore)},
+				"message":       map[string]string{"content": agentReviewTaskJSONForTest(system, title, bodyBefore)},
 				"finish_reason": "stop",
 			},
 		},
@@ -445,16 +573,23 @@ func writeOpenAIAgentReviewResponse(
 func writeAnthropicAgentReviewResponse(
 	t *testing.T,
 	w http.ResponseWriter,
+	r *http.Request,
 	title string,
 	bodyBefore string,
 	inputTokens int,
 	outputTokens int,
 ) {
 	t.Helper()
+	var request struct {
+		System string `json:"system"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		t.Errorf("decode Anthropic task request: %v", err)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"content": []map[string]string{
-			{"type": "text", "text": agentReviewJSONForTest(title, bodyBefore)},
+			{"type": "text", "text": agentReviewTaskJSONForTest(request.System, title, bodyBefore)},
 		},
 		"stop_reason": "end_turn",
 		"usage": map[string]int{

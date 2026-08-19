@@ -53,6 +53,7 @@ const api = fs.readFileSync("spa/src/api.ts", "utf8");
 const backend = fs.readFileSync("backend/internal/server/agent_reviews.go", "utf8");
 const llm = fs.readFileSync("backend/internal/server/agent_llm.go", "utf8");
 const prompt = fs.readFileSync("backend/internal/server/writing_review_prompt.go", "utf8");
+const tasks = fs.readFileSync("backend/internal/server/writing_review_tasks.go", "utf8");
 const layout = fs.readFileSync("backend/internal/server/markdown_structure_review.go", "utf8");
 
 function includes(label, source, fragment) {
@@ -86,6 +87,8 @@ assert.ok(!panel.includes("listLLMChannels"), "AI 优化不应直接管理模型
 includes("中文按钮统一使用 AI 优化", zh, 'button: "AI 优化"');
 includes("中文弹窗标题统一使用 AI 优化", zh, 'title: "AI 优化"');
 includes("运行中的审阅由前端轮询", panel, 'query.state.data?.review.status === "running" ? 2_000 : false');
+includes("运行中展示子任务进度", panel, "<AgentReviewProgress review={review} />");
+includes("运行中展示部分结果", panel, "<PartialAgentReviewResult review={review} />");
 includes("后台完成后刷新 credits", panel, "selectedReviewStatus === \"running\"");
 includes("运行中的审阅禁用重复提交", panel, "create.isPending || reviewRunning");
 includes("用量文案只展示 credits", panel, "interpolate(t.agentReview.usage, { credits: review.creditsCharged })");
@@ -117,9 +120,16 @@ includes("内置模型预留 credits", backend, "reserveCredits(");
 includes("BYOK 渠道不走 credits 预留", backend, 'if provider.Mode == "builtin"');
 includes("创建审阅立即返回运行状态", backend, "http.StatusAccepted");
 includes("耗时审阅在后台执行", backend, "go a.runAgentReview(");
-includes("单路审阅只构建一份完整提示词", backend, "prompt, err := buildWritingReviewPrompt(");
-assert.ok(!backend.includes("buildParallelWritingReviewPrompts("), "AI 优化不应重复发送整篇正文");
-assert.ok(!backend.includes('go run("editorial"'), "AI 优化不应启动双路模型调用");
+includes("审阅构建并行任务计划", backend, "buildWritingReviewTaskPlan(document.Title, document.Content)");
+includes("审阅执行并行任务计划", backend, "executeWritingReviewTaskPlan(");
+includes("子任务全局并发限制为三路", tasks, "agentReviewTaskConcurrency       = 3");
+includes("正文按块动态拆分", tasks, "agentReviewMaxBodyTasks          = 12");
+includes("标题正文排版使用独立提示词", tasks, "buildWritingReviewTitlePrompt");
+includes("标题正文排版使用独立提示词", tasks, "buildWritingReviewBodyPrompt");
+includes("标题正文排版使用独立提示词", tasks, "buildWritingReviewLayoutPrompt");
+includes("只重试校验失败的子任务", tasks, "The previous response for this task was rejected");
+includes("子任务进度持久化", backend, "storeAgentReviewTaskOutcome(");
+includes("内置模型按所有子任务预留", backend, "estimateAgentReviewPlanReservation(plan)");
 includes("Anthropic 能看到完整输出 schema", llm, "The response must conform to this exact JSON Schema");
 includes("低分标题必须给出 2 或 3 个候选", prompt, "low-scoring title requires 2 or 3 alternatives");
 includes("正文建议使用唯一精确锚点", prompt, "body anchor is not exact and unique");

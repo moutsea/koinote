@@ -291,6 +291,15 @@ callout emphasis, and dividers. The server builds these structural patches deter
 layout operations cannot rewrite the original wording, and layout suggestions that overlap a
 text edit are excluded from the review queue.
 
+After submission, title/opening, body sections, and structure/layout run as separate bounded
+background subtasks. Long bodies are divided further along Markdown blocks, while at most three
+model calls run at once. Progress and completed partial suggestions are durable across navigation
+and reloads. If validation rejects one response, only that subtask is retried; partial suggestions
+remain read-only until every track finishes so later results cannot target an already-edited draft.
+To bound cost on very long documents, the layout track receives at most 32 KiB of actual block text
+and 400 block metadata entries sampled from the opening, ending, and middle; sectioned body review
+still covers the full document.
+
 The built-in model is billed from the provider-reported actual input and output tokens at
 1 credit per 2,000 tokens, rounded up. Failed model calls and invalid review payloads are not
 charged. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives

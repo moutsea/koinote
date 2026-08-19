@@ -364,6 +364,11 @@ export interface Messages {
     availableCredits: string;
     start: string;
     running: string;
+    progress: string;
+    partialResults: string;
+    stageTitle: string;
+    stageBody: string;
+    stageLayout: string;
     backgroundRunning: string;
     backgroundRunningDescription: string;
     backgroundReady: string;

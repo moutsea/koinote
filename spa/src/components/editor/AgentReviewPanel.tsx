@@ -416,7 +416,13 @@ function ReviewDetail({
   const layoutAssessment = review.layoutAssessment ?? [];
 
   if (review.status === "running") {
-    return <StatusBlock icon={<LoaderCircle className="h-5 w-5 animate-spin" />} title={t.agentReview.running} />;
+    return (
+      <div>
+        <StatusBlock icon={<LoaderCircle className="h-5 w-5 animate-spin" />} title={t.agentReview.running} />
+        <AgentReviewProgress review={review} />
+        <PartialAgentReviewResult review={review} />
+      </div>
+    );
   }
   if (review.status === "stale") {
     return <StatusBlock icon={<Clock3 className="h-5 w-5" />} title={t.agentReview.staleTitle} body={t.agentReview.staleDescription} />;
@@ -541,6 +547,69 @@ function ReviewDetail({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function AgentReviewProgress({ review }: { review: AgentReview }) {
+  const { t } = useI18n();
+  const progress = review.taskProgress;
+  if (!progress || progress.totalTasks <= 0) return null;
+  const percentage = Math.round((progress.completedTasks / progress.totalTasks) * 100);
+  const labels = {
+    title: t.agentReview.stageTitle,
+    body: t.agentReview.stageBody,
+    layout: t.agentReview.stageLayout,
+  };
+  return (
+    <div className="mt-4 rounded-md border p-3" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+      <div className="flex items-center justify-between gap-3 text-xs" style={{ color: "var(--ink-mid)" }}>
+        <span>{interpolate(t.agentReview.progress, { completed: progress.completedTasks, total: progress.totalTasks })}</span>
+        <span className="tabular-nums">{percentage}%</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--ink-line)" }}>
+        <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${percentage}%`, background: "var(--cinnabar)" }} />
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {progress.stages.map((stage) => (
+          <div key={stage.id} className="flex items-center gap-2 text-xs" style={{ color: stage.status === "completed" ? "var(--ink-strong)" : "var(--ink-faint)" }}>
+            {stage.status === "completed" ? <Check className="h-3.5 w-3.5" /> : <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+            <span>{labels[stage.id]}</span>
+            {stage.totalTasks > 1 && <span className="tabular-nums">{stage.completedTasks}/{stage.totalTasks}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PartialAgentReviewResult({ review }: { review: AgentReview }) {
+  const { t } = useI18n();
+  const suggestions = review.suggestions ?? [];
+  const hasTitleResult = review.titleScore !== null && review.titleScore !== undefined;
+  if (!hasTitleResult && suggestions.length === 0 && (review.layoutAssessment?.length ?? 0) === 0) return null;
+  return (
+    <div className="mt-4 border-l-2 pl-3" style={{ borderColor: "var(--ink-line)" }}>
+      <p className="text-xs" style={{ color: "var(--ink-faint)" }}>{t.agentReview.partialResults}</p>
+      {hasTitleResult && (
+        <div className="mt-3">
+          <p className="text-sm font-semibold tabular-nums" style={{ color: titleScoreNeedsAlternatives(review.titleScore ?? 100) ? "var(--cinnabar)" : "var(--ink-strong)" }}>
+            {interpolate(t.agentReview.titleScore, { score: review.titleScore ?? 0 })}
+          </p>
+          {review.titleAssessment && <p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{review.titleAssessment}</p>}
+        </div>
+      )}
+      {suggestions.slice(0, 4).map((suggestion) => (
+        <article key={suggestion.suggestionId} className="mt-3 rounded-md border p-3" style={{ borderColor: "var(--ink-line)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--ink-mid)" }}>
+            {t.agentReview.categories[suggestion.category as keyof typeof t.agentReview.categories] ?? suggestion.category}
+          </p>
+          <div className="mt-2 space-y-2">
+            <DiffBlock sign="-" label={t.agentReview.before} value={suggestion.before} tone="remove" />
+            <DiffBlock sign="+" label={t.agentReview.after} value={suggestion.after} tone="add" />
+          </div>
+        </article>
+      ))}
     </div>
   );
 }

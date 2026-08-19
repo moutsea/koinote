@@ -31,22 +31,34 @@ const (
 )
 
 const expireStaleAgentReviewsSQL = `
-	UPDATE agent_reviews
-	SET status = 'failed', error_code = 'review_timeout',
-	    completed_at = now(), updated_at = now()
-	WHERE user_id = $1
-	  AND status = 'running'
-	  AND created_at < $2
+	WITH expired AS (
+		UPDATE agent_reviews
+		SET status = 'failed', error_code = 'review_timeout',
+		    completed_at = now(), updated_at = now()
+		WHERE user_id = $1
+		  AND status = 'running'
+		  AND created_at < $2
+		RETURNING id
+	)
+	DELETE FROM agent_review_suggestions suggestion
+	USING expired
+	WHERE suggestion.review_id = expired.id
 `
 
 const expireStaleAgentReviewSQL = `
-	UPDATE agent_reviews
-	SET status = 'failed', error_code = 'review_timeout',
-	    completed_at = now(), updated_at = now()
-	WHERE review_id = $1
-	  AND user_id = $2
-	  AND status = 'running'
-	  AND created_at < $3
+	WITH expired AS (
+		UPDATE agent_reviews
+		SET status = 'failed', error_code = 'review_timeout',
+		    completed_at = now(), updated_at = now()
+		WHERE review_id = $1
+		  AND user_id = $2
+		  AND status = 'running'
+		  AND created_at < $3
+		RETURNING id
+	)
+	DELETE FROM agent_review_suggestions suggestion
+	USING expired
+	WHERE suggestion.review_id = expired.id
 `
 
 var (
@@ -73,6 +85,7 @@ type agentReviewView struct {
 	TitleScore       *int                        `json:"titleScore"`
 	TitleAssessment  *string                     `json:"titleAssessment"`
 	LayoutAssessment []writingReviewDimension    `json:"layoutAssessment"`
+	TaskProgress     agentReviewTaskProgress     `json:"taskProgress"`
 	InputTokens      int                         `json:"inputTokens"`
 	OutputTokens     int                         `json:"outputTokens"`
 	TotalTokens      int                         `json:"totalTokens"`
@@ -82,6 +95,20 @@ type agentReviewView struct {
 	CompletedAt      *time.Time                  `json:"completedAt"`
 	UpdatedAt        time.Time                   `json:"updatedAt"`
 	Suggestions      []agentReviewSuggestionView `json:"suggestions,omitempty"`
+}
+
+type agentReviewTaskProgress struct {
+	CompletedTasks int                        `json:"completedTasks"`
+	TotalTasks     int                        `json:"totalTasks"`
+	Stages         []agentReviewStageProgress `json:"stages"`
+}
+
+type agentReviewStageProgress struct {
+	ID             agentReviewTaskStage `json:"id"`
+	Status         string               `json:"status"`
+	CompletedTasks int                  `json:"completedTasks"`
+	TotalTasks     int                  `json:"totalTasks"`
+	DurationMS     int64                `json:"durationMs"`
 }
 
 type agentReviewSuggestionView struct {
@@ -198,9 +225,9 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 		a.writeAgentProviderResolveError(w, err)
 		return
 	}
-	prompt, err := buildWritingReviewPrompt(document.Title, document.Content)
+	plan, err := buildWritingReviewTaskPlan(document.Title, document.Content)
 	if err != nil {
-		log.Printf("agent review build prompt: %v", err)
+		log.Printf("agent review build task plan: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
@@ -217,6 +244,7 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 		reviewID,
 		provider,
 		channelDatabaseID,
+		newAgentReviewTaskProgress(plan),
 	)
 	if errors.Is(err, errAgentReviewClosed) {
 		httpx.ErrorCode(w, http.StatusConflict, "agent_review_in_progress", "Wait for an active review to finish")
@@ -230,7 +258,7 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 
 	reservationID := ""
 	if provider.Mode == "builtin" {
-		reservationCredits := estimateAgentReviewReservation(prompt)
+		reservationCredits := estimateAgentReviewPlanReservation(plan)
 		reservation, err := a.reserveCredits(
 			r.Context(),
 			user.ID,
@@ -258,7 +286,7 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	go a.runAgentReview(user.ID, reviewDatabaseID, reviewID, document, provider, reservationID, prompt)
+	go a.runAgentReview(user.ID, reviewDatabaseID, reviewID, document, provider, reservationID, plan)
 	httpx.JSON(w, http.StatusAccepted, map[string]any{"review": view})
 }
 
@@ -269,7 +297,7 @@ func (a *App) runAgentReview(
 	document agentReviewDocument,
 	provider agentLLMProvider,
 	reservationID string,
-	prompt agentLLMPrompt,
+	plan writingReviewTaskPlan,
 ) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -279,13 +307,31 @@ func (a *App) runAgentReview(
 	}()
 
 	requestCtx, cancel := context.WithTimeout(context.Background(), agentReviewRunLimit)
-	result, validated, callErr := generateValidatedWritingReview(
+	progress := newAgentReviewTaskProgress(plan)
+	for index := range progress.Stages {
+		progress.Stages[index].Status = "running"
+	}
+	if err := a.storeAgentReviewTaskProgress(requestCtx, userID, reviewDatabaseID, progress); err != nil {
+		cancel()
+		a.failAgentReview(context.Background(), userID, reviewDatabaseID, "server_error", reservationID)
+		log.Printf("agent review initialize progress review=%s: %v", reviewID, err)
+		return
+	}
+	result, validated, callErr := executeWritingReviewTaskPlan(
 		requestCtx,
 		a.agentLLMHTTPClient,
 		provider,
-		prompt,
+		plan,
 		document.Title,
 		document.Content,
+		func(outcome writingReviewTaskOutcome) error {
+			progress.record(outcome)
+			persistCtx, persistCancel := context.WithTimeout(context.Background(), agentReviewFinalizeLimit)
+			defer persistCancel()
+			return a.storeAgentReviewTaskOutcome(
+				persistCtx, userID, reviewDatabaseID, progress, outcome,
+			)
+		},
 	)
 	cancel()
 	if callErr != nil {
@@ -652,6 +698,7 @@ func (a *App) insertRunningAgentReview(
 	reviewID string,
 	provider agentLLMProvider,
 	channelDatabaseID *int64,
+	progress agentReviewTaskProgress,
 ) (int64, error) {
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
@@ -682,16 +729,20 @@ func (a *App) insertRunningAgentReview(
 	if running >= agentReviewMaxRunning {
 		return 0, errAgentReviewClosed
 	}
+	progressJSON, err := json.Marshal(progress)
+	if err != nil {
+		return 0, err
+	}
 	var databaseID int64
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO agent_reviews (
 			review_id, user_id, document_id, base_revision, current_revision,
-			provider_mode, provider_protocol, channel_id, model, status
+			provider_mode, provider_protocol, channel_id, model, status, task_progress
 		)
-		VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, 'running')
+		VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, 'running', $9::jsonb)
 		RETURNING id
 	`, reviewID, userID, document.DatabaseID, document.Revision, provider.Mode,
-		provider.Protocol, channelDatabaseID, provider.Model).Scan(&databaseID); err != nil {
+		provider.Protocol, channelDatabaseID, provider.Model, string(progressJSON)).Scan(&databaseID); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -704,13 +755,164 @@ func estimateAgentReviewReservation(prompt agentLLMPrompt) int64 {
 	// BPE token count cannot exceed the UTF-8 byte count by more than small
 	// message framing overhead. Reserving bytes is intentionally conservative;
 	// only provider-reported usage is charged after a successful call.
-	schemaBytes, _ := json.Marshal(prompt.Schema)
-	upperBoundTokens := len(prompt.System) + len(prompt.User) + len(schemaBytes) + agentLLMMaxOutputTokens + 512
-	credits := creditsForTokens(upperBoundTokens)
+	credits := creditsForTokens(agentReviewPromptTokenUpperBound(prompt))
 	if credits < 1 {
 		return 1
 	}
 	return credits
+}
+
+func agentReviewPromptTokenUpperBound(prompt agentLLMPrompt) int {
+	schemaBytes, _ := json.Marshal(prompt.Schema)
+	return len(prompt.System) + len(prompt.User) + len(schemaBytes) +
+		agentLLMPromptOutputLimit(prompt, agentLLMMaxOutputTokens) + 512
+}
+
+func estimateAgentReviewPlanReservation(plan writingReviewTaskPlan) int64 {
+	totalTokens := 0
+	for _, task := range plan.Tasks {
+		totalTokens += agentReviewPromptTokenUpperBound(task.Prompt)
+	}
+	return max(1, creditsForTokens(totalTokens))
+}
+
+func newAgentReviewTaskProgress(plan writingReviewTaskPlan) agentReviewTaskProgress {
+	progress := agentReviewTaskProgress{TotalTasks: len(plan.Tasks)}
+	for _, stage := range []agentReviewTaskStage{agentReviewTaskTitle, agentReviewTaskBody, agentReviewTaskLayout} {
+		total := 0
+		for _, task := range plan.Tasks {
+			if task.Stage == stage {
+				total++
+			}
+		}
+		if total > 0 {
+			progress.Stages = append(progress.Stages, agentReviewStageProgress{
+				ID: stage, Status: "pending", TotalTasks: total,
+			})
+		}
+	}
+	return progress
+}
+
+func (progress *agentReviewTaskProgress) record(outcome writingReviewTaskOutcome) {
+	for index := range progress.Stages {
+		stage := &progress.Stages[index]
+		if stage.ID != outcome.Result.Task.Stage {
+			continue
+		}
+		stage.DurationMS += max(0, outcome.Result.Duration.Milliseconds())
+		if outcome.Err != nil {
+			stage.Status = "failed"
+			return
+		}
+		stage.CompletedTasks++
+		progress.CompletedTasks++
+		if stage.CompletedTasks >= stage.TotalTasks {
+			stage.Status = "completed"
+		} else {
+			stage.Status = "running"
+		}
+		return
+	}
+}
+
+func (a *App) storeAgentReviewTaskProgress(
+	ctx context.Context,
+	userID int,
+	reviewDatabaseID int64,
+	progress agentReviewTaskProgress,
+) error {
+	progressJSON, err := json.Marshal(progress)
+	if err != nil {
+		return err
+	}
+	_, err = a.db.Exec(ctx, `
+		UPDATE agent_reviews
+		SET task_progress = $3::jsonb, updated_at = now()
+		WHERE id = $1 AND user_id = $2 AND status = 'running'
+	`, reviewDatabaseID, userID, string(progressJSON))
+	return err
+}
+
+func (a *App) storeAgentReviewTaskOutcome(
+	ctx context.Context,
+	userID int,
+	reviewDatabaseID int64,
+	progress agentReviewTaskProgress,
+	outcome writingReviewTaskOutcome,
+) error {
+	if outcome.Err != nil {
+		return a.storeAgentReviewTaskProgress(ctx, userID, reviewDatabaseID, progress)
+	}
+	prepared := make([]preparedAgentReviewSuggestion, 0, len(outcome.Result.Validated.Suggestions))
+	for _, suggestion := range outcome.Result.Validated.Suggestions {
+		suggestionID, err := randomUUID()
+		if err != nil {
+			return err
+		}
+		prepared = append(prepared, preparedAgentReviewSuggestion{
+			ID: suggestionID, validatedWritingSuggestion: suggestion,
+		})
+	}
+	progressJSON, err := json.Marshal(progress)
+	if err != nil {
+		return err
+	}
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck -- commit below owns the successful path
+	command, err := tx.Exec(ctx, `
+		UPDATE agent_reviews
+		SET task_progress = $3::jsonb, updated_at = now()
+		WHERE id = $1 AND user_id = $2 AND status = 'running'
+	`, reviewDatabaseID, userID, string(progressJSON))
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return fmt.Errorf("agent review is no longer running")
+	}
+	switch outcome.Result.Task.Stage {
+	case agentReviewTaskTitle:
+		if _, err := tx.Exec(ctx, `
+			UPDATE agent_reviews
+			SET summary = $2, title_score = $3, title_assessment = $4
+			WHERE id = $1
+		`, reviewDatabaseID, outcome.Result.Validated.Summary,
+			outcome.Result.Validated.TitleScore, outcome.Result.Validated.TitleAssessment); err != nil {
+			return err
+		}
+	case agentReviewTaskLayout:
+		assessmentJSON, err := json.Marshal(outcome.Result.Validated.LayoutAssessment)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE agent_reviews SET layout_assessment = $2::jsonb WHERE id = $1
+		`, reviewDatabaseID, string(assessmentJSON)); err != nil {
+			return err
+		}
+	}
+	for index, suggestion := range prepared {
+		var operation any
+		if suggestion.Operation != "" {
+			operation = suggestion.Operation
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO agent_review_suggestions (
+				suggestion_id, review_id, ordinal, target, suggestion_kind,
+				category, operation, before_text, after_text, reason
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, suggestion.ID, reviewDatabaseID, outcome.Result.Task.OrdinalBase+index,
+			suggestion.Target, suggestion.Kind, suggestion.Category, operation,
+			suggestion.Before, suggestion.After, suggestion.Reason); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (a *App) finalizeAgentReview(
@@ -770,6 +972,9 @@ func (a *App) finalizeAgentReview(
 		if err != nil {
 			return agentReviewView{}, err
 		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM agent_review_suggestions WHERE review_id = $1`, reviewDatabaseID); err != nil {
+		return agentReviewView{}, err
 	}
 	for ordinal, suggestion := range prepared {
 		var operation any
@@ -836,9 +1041,15 @@ func (a *App) failAgentReview(
 		}
 	}
 	if _, err := a.db.Exec(cleanupCtx, `
-		UPDATE agent_reviews
-		SET status = 'failed', error_code = $2, completed_at = now(), updated_at = now()
-		WHERE id = $1 AND user_id = $3 AND status = 'running'
+		WITH failed AS (
+			UPDATE agent_reviews
+			SET status = 'failed', error_code = $2, completed_at = now(), updated_at = now()
+			WHERE id = $1 AND user_id = $3 AND status = 'running'
+			RETURNING id
+		)
+		DELETE FROM agent_review_suggestions suggestion
+		USING failed
+		WHERE suggestion.review_id = failed.id
 	`, reviewDatabaseID, errorCode, userID); err != nil {
 		log.Printf("agent review mark failed: %v", err)
 	}
@@ -852,12 +1063,13 @@ func (a *App) loadAgentReview(
 ) (agentReviewView, error) {
 	var review agentReviewView
 	var layoutAssessmentJSON []byte
+	var taskProgressJSON []byte
 	err := a.db.QueryRow(ctx, `
 		SELECT review.review_id, document.doc_id, review.base_revision,
 		       review.current_revision, document.revision, review.provider_mode,
 		       review.provider_protocol, channel.channel_id, review.model,
 		       review.status, review.summary, review.title_score,
-		       review.title_assessment, review.layout_assessment,
+		       review.title_assessment, review.layout_assessment, review.task_progress,
 		       review.input_tokens, review.output_tokens,
 		       review.total_tokens, review.credits_charged, review.error_code,
 		       review.created_at, review.completed_at, review.updated_at
@@ -880,6 +1092,7 @@ func (a *App) loadAgentReview(
 		&review.TitleScore,
 		&review.TitleAssessment,
 		&layoutAssessmentJSON,
+		&taskProgressJSON,
 		&review.InputTokens,
 		&review.OutputTokens,
 		&review.TotalTokens,
@@ -900,6 +1113,12 @@ func (a *App) loadAgentReview(
 	}
 	if review.LayoutAssessment == nil {
 		review.LayoutAssessment = make([]writingReviewDimension, 0)
+	}
+	if err := json.Unmarshal(taskProgressJSON, &review.TaskProgress); err != nil {
+		return agentReviewView{}, fmt.Errorf("decode agent review task progress: %w", err)
+	}
+	if review.TaskProgress.Stages == nil {
+		review.TaskProgress.Stages = make([]agentReviewStageProgress, 0)
 	}
 	if (review.Status == "ready" || review.Status == "partially_applied") &&
 		review.DocumentRevision != review.CurrentRevision {

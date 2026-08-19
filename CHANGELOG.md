@@ -17,7 +17,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
-- AI optimization now closes after submission and continues as a persisted background task. In-app notifications report progress and completion, while one complete review still produces both editorial and structure/layout suggestions without duplicating the document input.
+- AI optimization now closes after submission and continues as a persisted background task. Title/opening, body sections, and structure/layout run as bounded parallel subtasks; each stage persists progress and partial results, and validation retries only the failed subtask instead of regenerating the whole review.
 
 ### Fixed
 

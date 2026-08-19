@@ -245,6 +245,16 @@ func parseAndValidateWritingReview(
 	title string,
 	content string,
 ) (validatedWritingReview, error) {
+	return parseAndValidateWritingReviewWithLayoutScope(raw, title, content, nil, false)
+}
+
+func parseAndValidateWritingReviewWithLayoutScope(
+	raw []byte,
+	title string,
+	content string,
+	allowedLayoutBlockIDs map[string]struct{},
+	dropOversizeSuggestions bool,
+) (validatedWritingReview, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	var generated generatedWritingReview
@@ -372,6 +382,11 @@ func parseAndValidateWritingReview(
 			utf8.RuneCountInString(suggestion.Reason) > 2_000 {
 			continue
 		}
+		if allowedLayoutBlockIDs != nil {
+			if _, allowed := allowedLayoutBlockIDs[suggestion.BlockID]; !allowed {
+				continue
+			}
+		}
 		if suggestion.Operation == "change_block_type" {
 			if suggestion.AfterType == "" || len(suggestion.Segments) != 0 {
 				continue
@@ -418,20 +433,32 @@ func parseAndValidateWritingReview(
 	}
 
 	finalContentBytes := len(content)
+	boundedBodyRanges := make([]validatedWritingSuggestion, 0, len(bodyRanges))
 	for _, suggestion := range bodyRanges {
-		finalContentBytes += len(suggestion.After) - len(suggestion.Before)
-		if finalContentBytes > maxContentBytes {
+		nextContentBytes := finalContentBytes + len(suggestion.After) - len(suggestion.Before)
+		if nextContentBytes > maxContentBytes {
+			if dropOversizeSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: body suggestions exceed document size limit", errAgentLLMInvalidResponse)
 		}
+		finalContentBytes = nextContentBytes
+		boundedBodyRanges = append(boundedBodyRanges, suggestion)
 	}
+	boundedLayoutRanges := make([]validatedWritingSuggestion, 0, len(layoutRanges))
 	for _, suggestion := range layoutRanges {
-		finalContentBytes += len(suggestion.After) - len(suggestion.Before)
-		if finalContentBytes > maxContentBytes {
+		nextContentBytes := finalContentBytes + len(suggestion.After) - len(suggestion.Before)
+		if nextContentBytes > maxContentBytes {
+			if dropOversizeSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: layout suggestions exceed document size limit", errAgentLLMInvalidResponse)
 		}
+		finalContentBytes = nextContentBytes
+		boundedLayoutRanges = append(boundedLayoutRanges, suggestion)
 	}
-	validated.Suggestions = append(validated.Suggestions, bodyRanges...)
-	validated.Suggestions = append(validated.Suggestions, layoutRanges...)
+	validated.Suggestions = append(validated.Suggestions, boundedBodyRanges...)
+	validated.Suggestions = append(validated.Suggestions, boundedLayoutRanges...)
 	return validated, nil
 }
 
