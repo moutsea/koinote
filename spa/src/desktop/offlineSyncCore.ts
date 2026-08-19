@@ -26,12 +26,14 @@ export type RemoteDocumentDecision =
 export type OfflineFolderSnapshot = {
   name: string;
   parentFolderId: string | null;
+  organizerKind: "smart" | "activity" | null;
   syncState: "clean" | "create" | "update" | "delete" | "conflict";
 };
 
 export type RemoteFolderSnapshot = {
   name: string;
   parentFolderId: string | null;
+  organizerKind: "smart" | "activity" | null;
 };
 
 export type RemoteFolderDecision =
@@ -118,6 +120,12 @@ export function pulledLocalRevision(
   return Math.max(localRevision + 1, remoteRevision);
 }
 
+export function canRunRemoteDocumentMutation(
+  local: Pick<OfflineDocumentSnapshot, "baseRevision" | "syncState">,
+): boolean {
+  return local.syncState === "clean" && local.baseRevision > 0;
+}
+
 export function decideRemoteDocument(
   local: OfflineDocumentSnapshot,
   remote: RemoteDocumentSnapshot,
@@ -142,10 +150,13 @@ export function decideRemoteFolder(
   local: OfflineFolderSnapshot,
   remote: RemoteFolderSnapshot,
 ): RemoteFolderDecision {
-  if (local.syncState === "conflict") return "unchanged";
+  if (local.syncState === "conflict" || local.syncState === "delete") {
+    return "unchanged";
+  }
   const matches =
     local.name === remote.name &&
-    local.parentFolderId === remote.parentFolderId;
+    local.parentFolderId === remote.parentFolderId &&
+    local.organizerKind === remote.organizerKind;
   if (local.syncState === "clean") {
     return matches ? "unchanged" : "replace-clean";
   }

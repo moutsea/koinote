@@ -88,6 +88,12 @@ type Config struct {
 	// 构建阶段从四语 Changelog 生成的版本提醒。文件不存在时只跳过自动导入，
 	// 不影响手动提醒和服务启动。
 	ReleaseAnnouncementPath string
+
+	// Admin 服务器监控从只读的 proc 文件和文件系统探针读取宿主机指标。
+	// 生产容器通过 compose 把所需文件单独挂载到这两个路径；本机 Linux
+	// 开发默认直接读取 /proc 和 /。
+	HostMetricsProcPath       string
+	HostMetricsFilesystemPath string
 }
 
 // dotenvCandidates 是相对工作目录向上查找 .env 的顺序。
@@ -174,6 +180,8 @@ func Load() Config {
 			"RELEASE_ANNOUNCEMENT_PATH",
 			"release-announcement.json",
 		)),
+		HostMetricsProcPath:       strings.TrimSpace(getenv("HOST_METRICS_PROC_PATH", "/proc")),
+		HostMetricsFilesystemPath: strings.TrimSpace(getenv("HOST_METRICS_FILESYSTEM_PATH", "/")),
 	}
 
 	if cfg.CloudflareAnalyticsHost == "" {

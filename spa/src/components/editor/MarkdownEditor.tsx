@@ -338,11 +338,26 @@ export default function MarkdownEditor({
         changed = true;
       });
       if (changed) {
+        const scrollContainer = scrollContainerRef?.current;
+        const scrollTop = scrollContainer?.scrollTop;
+        const scrollLeft = scrollContainer?.scrollLeft;
         editor.view.dispatch(
           transaction
             .setMeta("addToHistory", false)
             .setMeta(DESKTOP_IMAGE_MAPPING_META, true),
         );
+        // 图片上传完成只是把本地占位地址换成图床地址，不是用户主动导航。
+        // ProseMirror 更新图片节点时可能把当前选区滚回可视区，React NodeView
+        // 随后更新又可能触发一次浏览器滚动锚定；同步恢复并在下一帧再校正一次，
+        // 保住用户正在阅读的位置，同时不改选区、不抢焦点。
+        if (scrollContainer && scrollTop !== undefined && scrollLeft !== undefined) {
+          const restoreScrollPosition = () => {
+            scrollContainer.scrollTop = scrollTop;
+            scrollContainer.scrollLeft = scrollLeft;
+          };
+          restoreScrollPosition();
+          window.requestAnimationFrame(restoreScrollPosition);
+        }
       }
     };
     window.addEventListener(DESKTOP_IMAGE_UPLOADED_EVENT, replaceUploadedImage);
@@ -351,7 +366,7 @@ export default function MarkdownEditor({
         DESKTOP_IMAGE_UPLOADED_EVENT,
         replaceUploadedImage,
       );
-  }, [editor]);
+  }, [editor, scrollContainerRef]);
 
   // editorProps 只在 useEditor 初始化时读一次，换主题必须显式改写。
   // 切的是 prose 的有无：套主题时 prose 会用 code::before 给行内代码补反引号，

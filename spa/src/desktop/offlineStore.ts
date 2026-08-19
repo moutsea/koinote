@@ -28,6 +28,7 @@ import {
 } from "./localMode";
 import {
   acknowledgedLocalRevision,
+  canRunRemoteDocumentMutation,
   createAsyncSerialQueue,
   desktopMaintenanceBackoff,
   decideRemoteDocument,
@@ -73,6 +74,7 @@ type FolderRow = {
   folder_id: string;
   name: string;
   parent_folder_id: string | null;
+  organizer_kind: Folder["organizerKind"];
   sync_state: FolderSyncState;
   change_seq: number;
   remote_snapshot: string | null;
@@ -133,6 +135,7 @@ type DesktopLocalImportBatch = {
     folderId: string;
     name: string;
     parentFolderId: string | null;
+    organizerKind: Folder["organizerKind"];
   }>;
   images: Array<{
     imageId: string;
@@ -942,6 +945,7 @@ export async function desktopListDocuments(): Promise<{ documents: DocumentSumma
       title: row.title,
       folderId: row.folder_id,
       revision: row.local_revision,
+      createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
   };
@@ -1094,7 +1098,11 @@ export async function desktopUpdateDocument(
           remote_snapshot = NULL,
           last_error = NULL
       WHERE account_id = $1 AND doc_id = $2
-        AND local_revision = $7 AND sync_state <> 'trash'
+        AND (
+          local_revision = $7
+          OR (sync_state = 'clean' AND base_revision = $7 AND base_revision > 0)
+        )
+        AND sync_state <> 'trash'
     `, [
       account, docId, storedTitle, storedContent, storedTheme, now,
       params.expectedRevision, local ? 1 : 0,
@@ -1104,6 +1112,49 @@ export async function desktopUpdateDocument(
     if (!row) throw new Error("Document not found");
     if (!local) scheduleSync();
     return { document: rowToDocument(row) };
+  });
+}
+
+export async function desktopPrepareDocumentForRemoteMutation(docId: string): Promise<boolean> {
+  if (isDesktopLocalModeSelected()) return false;
+  await syncDesktopNow({ silent: true });
+  const account = await accountID();
+  const row = await selectDocument(account, docId);
+  return Boolean(row && canRunRemoteDocumentMutation({
+    baseRevision: row.base_revision,
+    syncState: row.sync_state,
+  }));
+}
+
+export async function desktopAcceptRemoteDocumentMutation(
+  document: Document,
+): Promise<{ document: Document }> {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    if (isLocalAccount(account)) throw new Error("local_mode_network_disabled");
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const local = await selectDocument(account, document.docId);
+      if (!local) throw new Error("Document not found");
+      const matchesRemote =
+        local.base_revision === document.revision &&
+        local.title === document.title &&
+        local.theme === document.theme &&
+        local.content === document.content;
+      if (matchesRemote) return { document: rowToDocument(local) };
+      if (!canRunRemoteDocumentMutation({
+        baseRevision: local.base_revision,
+        syncState: local.sync_state,
+      })) {
+        throw new Error("document_revision_conflict");
+      }
+      if (await replaceDocumentFromRemote(account, local, document, local.folder_id)) {
+        const accepted = await selectDocument(account, document.docId);
+        if (!accepted) throw new Error("Document not found");
+        return { document: rowToDocument(accepted) };
+      }
+    }
+    throw new Error("document_revision_conflict");
   });
 }
 
@@ -1298,6 +1349,7 @@ export async function desktopImportLocalMode(
             parentFolderId: folder.parent_folder_id
               ? folderIDs.get(folder.parent_folder_id) ?? null
               : null,
+            organizerKind: folder.organizer_kind,
           });
         }
         const batch: DesktopLocalImportBatch = {
@@ -1410,6 +1462,7 @@ export async function desktopListFolders(): Promise<{ folders: Folder[] }> {
 export async function desktopCreateFolder(params: {
   name: string;
   parentFolderId: string | null;
+  organizerKind?: Folder["organizerKind"];
 }): Promise<{ folder: Folder }> {
   return serializeMutation(async () => {
     const account = await accountID();
@@ -1419,14 +1472,17 @@ export async function desktopCreateFolder(params: {
       folderId: crypto.randomUUID(),
       name: params.name.trim(),
       parentFolderId: params.parentFolderId,
+      organizerKind: params.organizerKind ?? null,
     };
     const storedName = await storedLocalValue(account, folder.name);
     await db.execute(`
       INSERT INTO offline_folders (
-        account_id, folder_id, name, parent_folder_id, sync_state, change_seq
-      ) VALUES ($1, $2, $3, $4, $5, 1)
+        account_id, folder_id, name, parent_folder_id, organizer_kind,
+        sync_state, change_seq
+      ) VALUES ($1, $2, $3, $4, $5, $6, 1)
     `, [
       account, folder.folderId, storedName, folder.parentFolderId,
+      folder.organizerKind,
       local ? "clean" : "create",
     ]);
     if (!local) scheduleSync();
@@ -1504,6 +1560,67 @@ export async function desktopDeleteFolder(folderId: string) {
     }
     if (!local) scheduleSync();
     return { ok: true };
+  });
+}
+
+export async function desktopDeleteEmptyOrganizerFolder(folderId: string) {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const local = isLocalAccount(account);
+    const rows = await db.select<FolderRow[]>(`
+      SELECT * FROM offline_folders
+      WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'delete'
+    `, [account, folderId]);
+    const folder = rows[0];
+    if (!folder?.organizer_kind) return { deleted: false };
+
+    const occupied = await db.select<Array<{ occupied: number }>>(`
+      SELECT EXISTS (
+        SELECT 1 FROM offline_folders
+        WHERE account_id = $1 AND parent_folder_id = $2 AND sync_state <> 'delete'
+        UNION ALL
+        SELECT 1 FROM offline_documents
+        WHERE account_id = $1 AND folder_id = $2
+      ) AS occupied
+    `, [account, folderId]);
+    if (Number(occupied[0]?.occupied ?? 0) !== 0) return { deleted: false };
+
+    if (local || folder.sync_state === "create") {
+      const result = await db.execute(`
+        DELETE FROM offline_folders
+        WHERE account_id = $1 AND folder_id = $2 AND organizer_kind IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM offline_folders child
+            WHERE child.account_id = $1 AND child.parent_folder_id = $2
+              AND child.sync_state <> 'delete'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM offline_documents document
+            WHERE document.account_id = $1 AND document.folder_id = $2
+          )
+      `, [account, folderId]);
+      return { deleted: result.rowsAffected === 1 };
+    }
+
+    const result = await db.execute(`
+      UPDATE offline_folders
+      SET sync_state = 'delete', change_seq = change_seq + 1,
+          last_error = 'organizer_empty_delete'
+      WHERE account_id = $1 AND folder_id = $2
+        AND organizer_kind IS NOT NULL AND sync_state <> 'delete'
+        AND NOT EXISTS (
+          SELECT 1 FROM offline_folders child
+          WHERE child.account_id = $1 AND child.parent_folder_id = $2
+            AND child.sync_state <> 'delete'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM offline_documents document
+          WHERE document.account_id = $1 AND document.folder_id = $2
+        )
+    `, [account, folderId]);
+    if (result.rowsAffected === 1) scheduleSync();
+    return { deleted: result.rowsAffected === 1 };
   });
 }
 
@@ -1754,7 +1871,12 @@ async function pushFolders(account: string) {
     for (const row of ready) {
       const result = await remoteJSON<{ folder: Folder }>("/api/folders", {
         method: "POST",
-        body: JSON.stringify({ folderId: row.folder_id, name: row.name, parentFolderId: row.parent_folder_id }),
+        body: JSON.stringify({
+          folderId: row.folder_id,
+          name: row.name,
+          parentFolderId: row.parent_folder_id,
+          organizerKind: row.organizer_kind,
+        }),
       });
       await acknowledgeFolder(account, row, result.folder);
     }
@@ -1781,7 +1903,15 @@ async function pushFolders(account: string) {
   `, [account]);
   for (const row of deletions) {
     try {
-      await remoteJSON(`/api/folders/${encodeURIComponent(row.folder_id)}`, { method: "DELETE" });
+      if (row.last_error === "organizer_empty_delete") {
+        const result = await remoteJSON<{ deleted: boolean }>(
+          `/api/folders/${encodeURIComponent(row.folder_id)}/empty`,
+          { method: "DELETE" },
+        );
+        if (!result.deleted) continue;
+      } else {
+        await remoteJSON(`/api/folders/${encodeURIComponent(row.folder_id)}`, { method: "DELETE" });
+      }
     } catch (error) {
       if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
     }
@@ -2028,26 +2158,39 @@ async function pullRemoteSnapshot(account: string) {
       {
         name: local.name,
         parentFolderId: local.parent_folder_id,
+        organizerKind: local.organizer_kind,
         syncState: local.sync_state,
       },
-      { name: remote.name, parentFolderId: remote.parentFolderId },
+      {
+        name: remote.name,
+        parentFolderId: remote.parentFolderId,
+        organizerKind: remote.organizerKind ?? null,
+      },
     );
     if (decision === "replace-clean") {
       await db.execute(`
         UPDATE offline_folders
-        SET name = $3, parent_folder_id = $4, change_seq = change_seq + 1,
+        SET name = $3, parent_folder_id = $4, organizer_kind = $5,
+            change_seq = change_seq + 1,
             remote_snapshot = NULL, last_error = NULL
         WHERE account_id = $1 AND folder_id = $2
-          AND sync_state = 'clean' AND change_seq = $5
-      `, [account, remote.folderId, remote.name, remote.parentFolderId, local.change_seq]);
+          AND sync_state = 'clean' AND change_seq = $6
+      `, [
+        account, remote.folderId, remote.name, remote.parentFolderId,
+        remote.organizerKind ?? null, local.change_seq,
+      ]);
     } else if (decision === "acknowledge-local") {
       await db.execute(`
         UPDATE offline_folders
-        SET name = $3, parent_folder_id = $4, sync_state = 'clean',
+        SET name = $3, parent_folder_id = $4, organizer_kind = $5,
+            sync_state = 'clean',
             remote_snapshot = NULL, last_error = NULL
         WHERE account_id = $1 AND folder_id = $2
-          AND sync_state = $5 AND change_seq = $6
-      `, [account, remote.folderId, remote.name, remote.parentFolderId, local.sync_state, local.change_seq]);
+          AND sync_state = $6 AND change_seq = $7
+      `, [
+        account, remote.folderId, remote.name, remote.parentFolderId,
+        remote.organizerKind ?? null, local.sync_state, local.change_seq,
+      ]);
     } else if (decision === "keep-local") {
       // 文件夹没有 revision。若推送和拉取之间另一端又改了它，保留本地待同步
       // 状态，下一轮再写入；文档正文才进入需要人工选择的冲突流程。
@@ -2118,6 +2261,7 @@ async function acknowledgeFolder(account: string, sent: FolderRow, remote: Folde
     UPDATE offline_folders
     SET name = CASE WHEN change_seq = $3 THEN $4 ELSE name END,
         parent_folder_id = CASE WHEN change_seq = $3 THEN $5 ELSE parent_folder_id END,
+        organizer_kind = CASE WHEN change_seq = $3 THEN $6 ELSE organizer_kind END,
         sync_state = CASE
           WHEN change_seq = $3 THEN 'clean'
           WHEN sync_state = 'delete' THEN 'delete'
@@ -2125,7 +2269,10 @@ async function acknowledgeFolder(account: string, sent: FolderRow, remote: Folde
         END,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND folder_id = $2
-  `, [account, sent.folder_id, sent.change_seq, remote.name, remote.parentFolderId]);
+  `, [
+    account, sent.folder_id, sent.change_seq, remote.name,
+    remote.parentFolderId, remote.organizerKind ?? null,
+  ]);
 }
 
 async function insertRemoteDocument(account: string, document: Document, folderID: string | null) {
@@ -2150,7 +2297,7 @@ async function replaceDocumentFromRemote(
   local: DocumentRow,
   document: Document,
   folderID: string | null,
-) {
+): Promise<boolean> {
   await cacheDocumentImages(account, document.content);
   const db = await database();
   const [baseRevision, syncState, changeSeq] = snapshotGuard({
@@ -2158,7 +2305,7 @@ async function replaceDocumentFromRemote(
     syncState: local.sync_state,
     changeSeq: local.change_seq,
   });
-  await db.execute(`
+  const result = await db.execute(`
     UPDATE offline_documents
     SET title = $3, theme = $4, content = $5, folder_id = $6,
         local_revision = $7, base_revision = $8,
@@ -2174,6 +2321,7 @@ async function replaceDocumentFromRemote(
     document.share ? JSON.stringify(document.share) : null,
     baseRevision, syncState, changeSeq,
   ]);
+  return result.rowsAffected === 1;
 }
 
 async function acknowledgeMatchingRemoteDocument(
@@ -2211,10 +2359,14 @@ async function insertRemoteFolder(account: string, folder: Folder) {
   const db = await database();
   await db.execute(`
     INSERT INTO offline_folders (
-      account_id, folder_id, name, parent_folder_id, sync_state, change_seq
-    ) VALUES ($1, $2, $3, $4, 'clean', 0)
+      account_id, folder_id, name, parent_folder_id, organizer_kind,
+      sync_state, change_seq
+    ) VALUES ($1, $2, $3, $4, $5, 'clean', 0)
     ON CONFLICT (account_id, folder_id) DO NOTHING
-  `, [account, folder.folderId, folder.name, folder.parentFolderId]);
+  `, [
+    account, folder.folderId, folder.name, folder.parentFolderId,
+    folder.organizerKind ?? null,
+  ]);
 }
 
 async function selectDocument(account: string, docID: string): Promise<DocumentRow | null> {
@@ -2247,7 +2399,12 @@ function rowToDocument(row: DocumentRow): Document {
 }
 
 function rowToFolder(row: FolderRow): Folder {
-  return { folderId: row.folder_id, name: row.name, parentFolderId: row.parent_folder_id };
+  return {
+    folderId: row.folder_id,
+    name: row.name,
+    parentFolderId: row.parent_folder_id,
+    organizerKind: row.organizer_kind ?? null,
+  };
 }
 
 async function calculateSummary(

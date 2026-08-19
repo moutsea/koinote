@@ -12,6 +12,7 @@ function sourceBetween(source, startMarker, endMarker) {
 
 const {
   acknowledgedLocalRevision,
+  canRunRemoteDocumentMutation,
   DESKTOP_IMAGE_MAPPING_META,
   DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
   DESKTOP_IMAGE_UPLOADED_EVENT,
@@ -306,6 +307,14 @@ assert.equal(acknowledgedLocalRevision(8, 6), 8, "云端确认不能让本地 re
 assert.equal(acknowledgedLocalRevision(5, 6), 6);
 assert.equal(pulledLocalRevision(8, 6), 9, "远端替换必须让已打开编辑器的旧 revision 失效");
 assert.equal(pulledLocalRevision(2, 9), 9);
+assert.equal(
+  canRunRemoteDocumentMutation({ baseRevision: 5, syncState: "clean" }),
+  true,
+  "AI 等远端写操作只能在桌面文档已同步后开始",
+);
+assert.equal(canRunRemoteDocumentMutation({ baseRevision: 0, syncState: "clean" }), false);
+assert.equal(canRunRemoteDocumentMutation({ baseRevision: 5, syncState: "update" }), false);
+assert.equal(canRunRemoteDocumentMutation({ baseRevision: 5, syncState: "conflict" }), false);
 
 assert.equal(
   decideRemoteDocument(local, {
@@ -351,33 +360,55 @@ assert.deepEqual(snapshotGuard(local), [5, "update", 12]);
 const cleanFolder = {
   name: "写作",
   parentFolderId: null,
+  organizerKind: null,
   syncState: "clean",
 };
 assert.equal(
   decideRemoteFolder(cleanFolder, {
     name: cleanFolder.name,
     parentFolderId: cleanFolder.parentFolderId,
+    organizerKind: cleanFolder.organizerKind,
   }),
   "unchanged",
   "完全相同的 clean 文件夹不能被误标成待同步",
 );
 assert.equal(
-  decideRemoteFolder(cleanFolder, { name: "云端改名", parentFolderId: null }),
+  decideRemoteFolder(cleanFolder, {
+    name: "云端改名",
+    parentFolderId: null,
+    organizerKind: null,
+  }),
   "replace-clean",
 );
 assert.equal(
   decideRemoteFolder(
     { ...cleanFolder, syncState: "update" },
-    { name: cleanFolder.name, parentFolderId: cleanFolder.parentFolderId },
+    {
+      name: cleanFolder.name,
+      parentFolderId: cleanFolder.parentFolderId,
+      organizerKind: cleanFolder.organizerKind,
+    },
   ),
   "acknowledge-local",
 );
 assert.equal(
   decideRemoteFolder(
     { ...cleanFolder, syncState: "update" },
-    { name: "另一端改名", parentFolderId: null },
+    { name: "另一端改名", parentFolderId: null, organizerKind: null },
   ),
   "keep-local",
+);
+assert.equal(
+  decideRemoteFolder(
+    { ...cleanFolder, syncState: "delete" },
+    {
+      name: cleanFolder.name,
+      parentFolderId: cleanFolder.parentFolderId,
+      organizerKind: cleanFolder.organizerKind,
+    },
+  ),
+  "unchanged",
+  "远端暂时非空时，待删除自动目录不能被拉取流程恢复为 clean",
 );
 
 const offlineStore = readFileSync(
@@ -564,6 +595,11 @@ assert.match(
   /DESKTOP_IMAGE_UPLOADED_EVENT[\s\S]*?DESKTOP_IMAGE_MAPPING_META/,
   "编辑器必须接收上传映射且避免把内部替换当成用户编辑",
 );
+assert.match(
+  editorSource,
+  /const scrollTop = scrollContainer\?\.scrollTop[\s\S]*?editor\.view\.dispatch[\s\S]*?restoreScrollPosition\(\)[\s\S]*?requestAnimationFrame\(restoreScrollPosition\)/,
+  "上传完成替换图床地址时必须跨节点更新保住正文滚动位置",
+);
 assert.match(imageNodeSource, /desktopResolveImageSource\(src\)/);
 assert.match(
   imageNodeSource,
@@ -709,6 +745,11 @@ assert.match(
 );
 assert.match(
   offlineStore,
+  /local_revision = \$7\s*OR \(sync_state = 'clean' AND base_revision = \$7 AND base_revision > 0\)/,
+  "AI 等远端写入遗留的服务端 revision 必须能在干净文档上自愈，不能永久卡住保存与同步",
+);
+assert.match(
+  offlineStore,
   /snapshotInitializations\s*=\s*new Map<string, Promise<void>>[\s\S]*?ensureInitialSnapshot[\s\S]*?snapshotInitializations\.get\(account\)[\s\S]*?return existing[\s\S]*?snapshotInitializations\.set\(account, initialization\)/,
   "首次快照初始化必须按账号去重，列表刷新不能反复触发同步",
 );
@@ -838,6 +879,16 @@ assert.match(
   liveEditor,
   /decideRemoteDocumentUpdate[\s\S]*?latestDecision === "prompt"[\s\S]*?setRemoteUpdateAvailable\(true\)[\s\S]*?latestDecision === "apply"[\s\S]*?acceptLatestDocument/,
   "网页编辑器必须自动应用干净远端更新，并保护本地草稿",
+);
+assert.match(
+  liveEditor,
+  /prepareAgentReview[\s\S]*?desktopPrepareDocumentForRemoteMutation\(docId\)/,
+  "桌面 AI 审阅开始和落实前必须先把目标文档同步到远端",
+);
+assert.match(
+  apiSource,
+  /reconcileDesktopAgentReviewMutation[\s\S]*?desktopAcceptRemoteDocumentMutation\(result\.document\)/,
+  "桌面 AI 落实成功后必须先把远端 revision 接回 SQLite",
 );
 
 const desktopNetwork = readFileSync(

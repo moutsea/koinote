@@ -12,6 +12,7 @@ const share = read("spa/src/pages/SharePage.tsx");
 const admin = read("spa/src/pages/AdminPage.tsx");
 const home = read("spa/src/pages/HomePage.tsx");
 const worker = read("worker/index.ts");
+const productionCompose = read("docker-compose.prod.yml");
 
 assert.match(shell, /<GlobalSearch\s*\/>/);
 assert.match(search, /event\.metaKey \|\| event\.ctrlKey/);
@@ -35,12 +36,25 @@ assert.match(admin, /stats\.retention/);
 assert.match(admin, /role="tablist"/);
 assert.match(admin, /role="tab"/);
 assert.match(admin, /\[scrollbar-width:none\]/);
-for (const tab of ["overview", "growth", "revenue", "users", "announcements"]) {
+for (const tab of ["overview", "growth", "revenue", "users", "server", "announcements"]) {
   assert.match(admin, new RegExp(`id: "${tab}"`));
 }
 assert.match(admin, /activeTab === "announcements"[\s\S]*?<AnnouncementAdminPanel \/>/);
+assert.match(admin, /queryFn: getAdminServerStatus/);
+assert.match(admin, /staleTime: 10_000/);
+assert.match(
+  admin,
+  /refetchInterval: \(query\)[\s\S]*?current\?\.available && current\.cpu\.usagePercent == null[\s\S]*?\? 5_000[\s\S]*?: 30_000/,
+);
+assert.match(admin, /activeTab === "server"[\s\S]*?<ServerMonitorPanel/);
 assert.match(admin, /event\.key === "ArrowRight"/);
 assert.match(admin, /event\.key === "Home"/);
+for (const hostMetric of ["stat", "meminfo", "uptime", "loadavg", "net/dev"]) {
+  assert.match(productionCompose, new RegExp(`/proc/${hostMetric.replace("/", "\\/")}:`));
+}
+assert.doesNotMatch(productionCompose, /- \/proc:\/host\/proc/);
+assert.doesNotMatch(productionCompose, /- \/:\/host/);
+assert.match(productionCompose, /host-metrics\/filesystem-probe:\/host\/filesystem-probe:ro/);
 assert.match(home, /DESKTOP_DOWNLOAD_URL/);
 assert.match(
   worker,

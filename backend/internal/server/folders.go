@@ -25,6 +25,11 @@ const maxFolderNameRunes = 60
 // 侧栏宽度有限，深到一定程度就没法看了。
 const maxFolderDepth = 8
 
+const (
+	folderOrganizerSmart    = "smart"
+	folderOrganizerActivity = "activity"
+)
+
 func (a *App) foldersList(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -32,7 +37,7 @@ func (a *App) foldersList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := a.db.Query(r.Context(), `
-		SELECT f.folder_id, f.name, COALESCE(p.folder_id, '')
+		SELECT f.folder_id, f.name, COALESCE(p.folder_id, ''), f.organizer_kind
 		FROM folders f
 		LEFT JOIN folders p ON p.id = f.parent_id
 		WHERE f.user_id = $1
@@ -49,7 +54,7 @@ func (a *App) foldersList(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var f model.Folder
 		var parent string
-		if err := rows.Scan(&f.FolderID, &f.Name, &parent); err != nil {
+		if err := rows.Scan(&f.FolderID, &f.Name, &parent, &f.OrganizerKind); err != nil {
 			log.Printf("folders scan: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return
@@ -80,6 +85,7 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		FolderID       string  `json:"folderId"`
 		Name           string  `json:"name"`
 		ParentFolderID *string `json:"parentFolderId"`
+		OrganizerKind  *string `json:"organizerKind"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
@@ -88,6 +94,10 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	body.FolderID = strings.TrimSpace(body.FolderID)
 	if body.FolderID != "" && (!strings.HasPrefix(bearerToken(r), desktopAccessTokenPrefix) || !validUUID(body.FolderID)) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_folder_id", "Invalid folder id")
+		return
+	}
+	if !validFolderOrganizerKind(body.OrganizerKind) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_organizer_kind", "Invalid organizer kind")
 		return
 	}
 
@@ -145,29 +155,29 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	var parent string
 	err = a.db.QueryRow(r.Context(), `
 		WITH ins AS (
-			INSERT INTO folders (folder_id, user_id, parent_id, name)
+			INSERT INTO folders (folder_id, user_id, parent_id, name, organizer_kind)
 			VALUES (
 				$1, $2,
 				(SELECT id FROM folders WHERE folder_id = $3 AND user_id = $2),
-				$4
+				$4, $5
 			)
-			RETURNING folder_id, name, parent_id
+			RETURNING folder_id, name, parent_id, organizer_kind
 		)
-		SELECT ins.folder_id, ins.name, COALESCE(p.folder_id, '')
+		SELECT ins.folder_id, ins.name, COALESCE(p.folder_id, ''), ins.organizer_kind
 		FROM ins LEFT JOIN folders p ON p.id = ins.parent_id
-	`, folderID, user.ID, derefOrEmpty(body.ParentFolderID), name).
-		Scan(&created.FolderID, &created.Name, &parent)
+	`, folderID, user.ID, derefOrEmpty(body.ParentFolderID), name, body.OrganizerKind).
+		Scan(&created.FolderID, &created.Name, &parent, &created.OrganizerKind)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if body.FolderID != "" && errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			var existing model.Folder
 			var existingParent string
 			lookupErr := a.db.QueryRow(r.Context(), `
-				SELECT f.folder_id, f.name, COALESCE(p.folder_id, '')
+				SELECT f.folder_id, f.name, COALESCE(p.folder_id, ''), f.organizer_kind
 				FROM folders f LEFT JOIN folders p ON p.id = f.parent_id
 				WHERE f.folder_id = $1 AND f.user_id = $2
-			`, folderID, user.ID).Scan(&existing.FolderID, &existing.Name, &existingParent)
-			if lookupErr == nil && existing.Name == name && existingParent == derefOrEmpty(body.ParentFolderID) {
+			`, folderID, user.ID).Scan(&existing.FolderID, &existing.Name, &existingParent, &existing.OrganizerKind)
+			if lookupErr == nil && existing.Name == name && existingParent == derefOrEmpty(body.ParentFolderID) && equalOptionalString(existing.OrganizerKind, body.OrganizerKind) {
 				if existingParent != "" {
 					existing.ParentFolderID = &existingParent
 				}
@@ -220,11 +230,11 @@ func (a *App) folderRename(w http.ResponseWriter, r *http.Request) {
 		WITH upd AS (
 			UPDATE folders SET name = $3, updated_at = now()
 			WHERE folder_id = $1 AND user_id = $2
-			RETURNING folder_id, name, parent_id
+			RETURNING folder_id, name, parent_id, organizer_kind
 		)
-		SELECT upd.folder_id, upd.name, COALESCE(p.folder_id, '')
+		SELECT upd.folder_id, upd.name, COALESCE(p.folder_id, ''), upd.organizer_kind
 		FROM upd LEFT JOIN folders p ON p.id = upd.parent_id
-	`, folderID, user.ID, name).Scan(&updated.FolderID, &updated.Name, &parent)
+	`, folderID, user.ID, name).Scan(&updated.FolderID, &updated.Name, &parent, &updated.OrganizerKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Folder not found")
 		return
@@ -315,6 +325,39 @@ func (a *App) folderDelete(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// folderDeleteEmptyOrganizer 只删除已经为空的自动整理目录。
+// 与普通删除不同，它不会提升任何子项；并发产生新内容时条件删除会安全地返回 false。
+func (a *App) folderDeleteEmptyOrganizer(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireUser(w, r)
+	if !ok {
+		return
+	}
+	folderID := strings.TrimSpace(r.PathValue("folderId"))
+	if folderID == "" {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Folder not found")
+		return
+	}
+
+	var deleted bool
+	err := a.db.QueryRow(r.Context(), `
+		WITH deleted AS (
+			DELETE FROM folders f
+			WHERE f.folder_id = $1 AND f.user_id = $2
+			  AND f.organizer_kind IS NOT NULL
+			  AND NOT EXISTS (SELECT 1 FROM folders child WHERE child.parent_id = f.id)
+			  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.folder_id = f.id)
+			RETURNING 1
+		)
+		SELECT EXISTS (SELECT 1 FROM deleted)
+	`, folderID, user.ID).Scan(&deleted)
+	if err != nil {
+		log.Printf("folder delete empty organizer: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"deleted": deleted})
+}
+
 func validateFolderName(raw string) (string, error) {
 	name := strings.TrimSpace(raw)
 	if utf8.RuneCountInString(name) > maxFolderNameRunes {
@@ -328,4 +371,15 @@ func derefOrEmpty(s *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*s)
+}
+
+func validFolderOrganizerKind(kind *string) bool {
+	return kind == nil || *kind == folderOrganizerSmart || *kind == folderOrganizerActivity
+}
+
+func equalOptionalString(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }

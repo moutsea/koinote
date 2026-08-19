@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version fixes AI settings and credits checkout, and adds USD, CNY, EUR, and JPY credit purchases with eligible local payment methods."
+          notes="Koinote Desktop $version adds smart document organization and fixes desktop sync reconciliation after AI optimization and editor scroll jumps after image uploads."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本修复客户端 AI 设置、模型渠道、credits 读取与充值，并让 Credits 与会员购买一致支持 USD、CNY、EUR、JPY；选择人民币时，Stripe 可展示支付宝和微信支付等符合条件的本地方式。
+          此版本新增智能整理与活跃度整理，可按文档数量自适应采用月份或周分组；同时修复 AI 优化应用后内容已上传却显示同步失败，以及图片上传替换地址时编辑器向上跳动的问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release fixes desktop AI settings, model channels, credits loading, and credit checkout. Credit packs now support the same USD, CNY, EUR, and JPY choices as membership, allowing Stripe to offer eligible local methods such as Alipay and WeChat Pay for CNY.
+          This release adds smart date-based and activity-based document organization. It also fixes false sync errors after applying AI optimizations and preserves the editor scroll position when uploaded images are replaced with remote URLs.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

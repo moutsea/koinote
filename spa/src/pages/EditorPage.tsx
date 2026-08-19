@@ -48,6 +48,11 @@ import {
   getImportErrorMessage,
   importDocumentsFromFiles,
 } from "../documentTransfer";
+import {
+  applyDocumentOrganization,
+  type ApplyDocumentOrganizationResult,
+} from "../documentOrganizer";
+import type { DocumentOrganizationPlan } from "../components/editor/documentOrganizerCore";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -80,6 +85,10 @@ export function EditorPage() {
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importNotice, setImportNotice] = useState<{
+    error: boolean;
+    message: string;
+  } | null>(null);
+  const [organizationNotice, setOrganizationNotice] = useState<{
     error: boolean;
     message: string;
   } | null>(null);
@@ -122,6 +131,12 @@ export function EditorPage() {
     const timer = window.setTimeout(() => setImportNotice(null), 5_000);
     return () => window.clearTimeout(timer);
   }, [importNotice]);
+
+  useEffect(() => {
+    if (!organizationNotice) return;
+    const timer = window.setTimeout(() => setOrganizationNotice(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [organizationNotice]);
 
   // 自动落地逻辑只跑一次，避免重复建文档
   const bootstrapped = useRef(false);
@@ -531,6 +546,7 @@ export function EditorPage() {
     async (files: File[]) => {
       setImporting(true);
       setImportNotice(null);
+      setOrganizationNotice(null);
       try {
         const result = await importDocumentsFromFiles(files);
         const success = interpolate(t.transfer.importSuccess, {
@@ -560,6 +576,45 @@ export function EditorPage() {
       }
     },
     [queryClient, t.transfer],
+  );
+
+  const handleOrganize = useCallback(
+    async (
+      plan: DocumentOrganizationPlan,
+    ): Promise<ApplyDocumentOrganizationResult> => {
+      setImportNotice(null);
+      setOrganizationNotice(null);
+      try {
+        const result = await applyDocumentOrganization(plan);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["documents"] }),
+          queryClient.invalidateQueries({ queryKey: ["folders"] }),
+        ]);
+        setOrganizationNotice({
+          error: result.failed > 0,
+          message:
+            result.failed > 0
+              ? interpolate(t.editor.organizer.partial, {
+                  moved: result.moved,
+                  failed: result.failed,
+                })
+              : result.moved === 0
+                ? t.editor.organizer.upToDate
+                : interpolate(t.editor.organizer.success, {
+                    count: result.moved,
+                  }),
+        });
+        return result;
+      } catch (error) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["documents"] }),
+          queryClient.invalidateQueries({ queryKey: ["folders"] }),
+        ]);
+        setOrganizationNotice({ error: true, message: t.editor.organizer.failed });
+        throw error;
+      }
+    },
+    [queryClient, t.editor.organizer],
   );
 
   /**
@@ -667,8 +722,20 @@ export function EditorPage() {
             onCollapse={() => setDocsOpen(false)}
             importing={importing}
             onImport={(files) => void handleImport(files)}
-            notice={importNotice?.error ? null : importNotice?.message}
-            error={importNotice?.error ? importNotice.message : folderError}
+            notice={
+              organizationNotice?.error
+                ? null
+                : organizationNotice?.message ??
+                  (importNotice?.error ? null : importNotice?.message)
+            }
+            error={
+              organizationNotice?.error
+                ? organizationNotice.message
+                : importNotice?.error
+                  ? importNotice.message
+                  : folderError
+            }
+            onOrganize={handleOrganize}
             autoEditFolderId={autoEditFolderId}
             onAutoEditDone={() => setAutoEditFolderId(null)}
           />
@@ -846,8 +913,20 @@ export function EditorPage() {
               onCollapse={() => setMobileDocsOpen(false)}
               importing={importing}
               onImport={(files) => void handleImport(files)}
-              notice={importNotice?.error ? null : importNotice?.message}
-              error={importNotice?.error ? importNotice.message : folderError}
+              notice={
+                organizationNotice?.error
+                  ? null
+                  : organizationNotice?.message ??
+                    (importNotice?.error ? null : importNotice?.message)
+              }
+              error={
+                organizationNotice?.error
+                  ? organizationNotice.message
+                  : importNotice?.error
+                    ? importNotice.message
+                    : folderError
+              }
+              onOrganize={handleOrganize}
               autoEditFolderId={autoEditFolderId}
               onAutoEditDone={() => setAutoEditFolderId(null)}
             />

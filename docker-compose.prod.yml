@@ -33,6 +33,17 @@ services:
     # "${BACKEND_PORT:-8080}:8080"。生产设 BACKEND_PORT=127.0.0.1:8080。
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      HOST_METRICS_PROC_PATH: /host/proc
+      HOST_METRICS_FILESYSTEM_PATH: /host/filesystem-probe
+    # Admin 服务器监控只读这些无敏感正文的宿主机指标文件。
+    # 不挂整个 /proc、Docker socket 或宿主机根目录，避免后端容器获得不必要的读取面。
+    volumes:
+      - /proc/stat:/host/proc/stat:ro
+      - /proc/meminfo:/host/proc/meminfo:ro
+      - /proc/uptime:/host/proc/uptime:ro
+      - /proc/loadavg:/host/proc/loadavg:ro
+      - /proc/net/dev:/host/proc/net/dev:ro
+      - ./deploy/host-metrics/filesystem-probe:/host/filesystem-probe:ro
 
   database-backup:
     profiles: ["backup"]

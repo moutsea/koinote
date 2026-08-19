@@ -1,7 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
+  CalendarRange,
   ChevronLeft,
   FilePlus,
+  FolderCog,
   FolderPlus,
   LoaderCircle,
   Pencil,
@@ -9,10 +12,17 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useI18n } from "../../i18n";
+import type { ApplyDocumentOrganizationResult } from "../../documentOrganizer";
+import { interpolate, useI18n } from "../../i18n";
 import type { DocumentSummary, Folder } from "../../documents";
 import { IMPORT_FILE_ACCEPT } from "../../documentTransferCore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import {
+  buildDocumentOrganizationPlan,
+  countDocumentOrganizationMoves,
+  type DocumentOrganizationPlan,
+  type DocumentOrganizerStrategy,
+} from "./documentOrganizerCore";
 import { buildTree, canCreateSubfolder, canDropDoc, canDropFolder } from "./tree";
 import {
   FolderRow,
@@ -50,6 +60,7 @@ export function DocumentList({
   onImport,
   notice,
   error,
+  onOrganize,
   autoEditFolderId,
   onAutoEditDone,
 }: {
@@ -75,9 +86,13 @@ export function DocumentList({
   importing: boolean;
   onImport: (files: File[]) => void;
   notice?: string | null;
+  onOrganize: (
+    plan: DocumentOrganizationPlan,
+  ) => Promise<ApplyDocumentOrganizationResult>;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const organizerMenuRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [rootOver, setRootOver] = useState(false);
@@ -92,8 +107,100 @@ export function DocumentList({
    * 会变成两套编辑入口。
    */
   const [renameRequestId, setRenameRequestId] = useState<string | null>(null);
+  const [organizerMenuOpen, setOrganizerMenuOpen] = useState(false);
+  const [pendingOrganizerStrategy, setPendingOrganizerStrategy] =
+    useState<DocumentOrganizerStrategy | null>(null);
+  const [organizingStrategy, setOrganizingStrategy] =
+    useState<DocumentOrganizerStrategy | null>(null);
 
   const tree = useMemo(() => buildTree(folders, documents), [folders, documents]);
+  const organizerPlans = useMemo(() => {
+    const labels = t.editor.organizer;
+    const sharedLabels = {
+      unknownDate: labels.unknownDate,
+      weekOfMonth: labels.weekOfMonth,
+      activityRecent7: labels.activityRecent7,
+      activityRecent30: labels.activityRecent30,
+      activityRecent90: labels.activityRecent90,
+      activityInactive: labels.activityInactive,
+      activityArchive: labels.activityArchive,
+    };
+    const now = new Date();
+    return {
+      smart: buildDocumentOrganizationPlan(
+        documents,
+        folders,
+        "smart",
+        locale,
+        sharedLabels,
+        now,
+      ),
+      activity: buildDocumentOrganizationPlan(
+        documents,
+        folders,
+        "activity",
+        locale,
+        sharedLabels,
+        now,
+      ),
+    };
+  }, [documents, folders, locale, t.editor.organizer]);
+  const organizerMoveCounts = useMemo(
+    () => ({
+      smart: countDocumentOrganizationMoves(
+        organizerPlans.smart,
+        documents,
+        folders,
+      ),
+      activity: countDocumentOrganizationMoves(
+        organizerPlans.activity,
+        documents,
+        folders,
+      ),
+    }),
+    [documents, folders, organizerPlans],
+  );
+
+  const closeOrganizerMenu = useCallback(() => {
+    setOrganizerMenuOpen(false);
+    setPendingOrganizerStrategy(null);
+  }, []);
+
+  useEffect(() => {
+    if (!organizerMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!organizerMenuRef.current?.contains(event.target as Node)) {
+        closeOrganizerMenu();
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeOrganizerMenu();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [closeOrganizerMenu, organizerMenuOpen]);
+
+  const organize = useCallback(
+    async (strategy: DocumentOrganizerStrategy) => {
+      if (organizingStrategy) return;
+      const plan = organizerPlans[strategy];
+      if (plan.documentCount === 0) return;
+      closeOrganizerMenu();
+      setOrganizingStrategy(strategy);
+      try {
+        await onOrganize(plan);
+      } catch {
+        // EditorPage 已负责显示具体失败提示。
+      } finally {
+        setOrganizingStrategy(null);
+      }
+    },
+    [closeOrganizerMenu, onOrganize, organizerPlans, organizingStrategy],
+  );
 
   const onToggle = useCallback((folderId: string) => {
     setExpanded((prev) => {
@@ -372,6 +479,77 @@ export function DocumentList({
         )}
       </div>
 
+      <div
+        ref={organizerMenuRef}
+        className="relative border-t border-black/5 p-2 dark:border-white/10"
+      >
+        {organizerMenuOpen && (
+          <div
+            role="menu"
+            aria-label={t.editor.organizer.button}
+            className="absolute bottom-full left-2 right-2 z-30 mb-2 space-y-1 rounded-xl border border-black/10 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-neutral-900"
+          >
+            {pendingOrganizerStrategy ? (
+              <OrganizerConfirmation
+                title={
+                  pendingOrganizerStrategy === "smart"
+                    ? t.editor.organizer.smartTitle
+                    : t.editor.organizer.activityTitle
+                }
+                summary={interpolate(t.editor.organizer.confirmSummary, {
+                  documents: organizerMoveCounts[pendingOrganizerStrategy],
+                  folders: organizerPlans[pendingOrganizerStrategy].folderCount,
+                })}
+                note={t.editor.organizer.rootOnly}
+                upToDate={t.editor.organizer.upToDate}
+                moveCount={organizerMoveCounts[pendingOrganizerStrategy]}
+                cancelLabel={t.editor.organizer.cancel}
+                applyLabel={t.editor.organizer.apply}
+                onCancel={() => setPendingOrganizerStrategy(null)}
+                onConfirm={() => void organize(pendingOrganizerStrategy)}
+              />
+            ) : (
+              <>
+                <OrganizerMenuItem
+                  icon={<CalendarRange className="h-4 w-4" />}
+                  title={t.editor.organizer.smartTitle}
+                  description={t.editor.organizer.smartDescription}
+                  disabled={organizerPlans.smart.documentCount === 0}
+                  onSelect={() => setPendingOrganizerStrategy("smart")}
+                />
+                <OrganizerMenuItem
+                  icon={<Activity className="h-4 w-4" />}
+                  title={t.editor.organizer.activityTitle}
+                  description={t.editor.organizer.activityDescription}
+                  disabled={organizerPlans.activity.documentCount === 0}
+                  onSelect={() => setPendingOrganizerStrategy("activity")}
+                />
+              </>
+            )}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (organizerMenuOpen) closeOrganizerMenu();
+            else setOrganizerMenuOpen(true);
+          }}
+          disabled={loading || organizerPlans.smart.documentCount === 0 || Boolean(organizingStrategy)}
+          aria-haspopup="menu"
+          aria-expanded={organizerMenuOpen}
+          className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-900 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white"
+        >
+          {organizingStrategy ? (
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FolderCog className="h-3.5 w-3.5" />
+          )}
+          {organizingStrategy
+            ? t.editor.organizer.organizing
+            : t.editor.organizer.button}
+        </button>
+      </div>
+
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -381,6 +559,100 @@ export function DocumentList({
           ariaLabel={t.editor.treeMenu}
         />
       )}
+    </div>
+  );
+}
+
+function OrganizerMenuItem({
+  icon,
+  title,
+  description,
+  disabled,
+  onSelect,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={() => onSelect()}
+      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10"
+    >
+      <span className="mt-0.5 text-neutral-500 dark:text-neutral-400">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-neutral-800 dark:text-neutral-100">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-4 text-neutral-500">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function OrganizerConfirmation({
+  title,
+  summary,
+  note,
+  upToDate,
+  moveCount,
+  cancelLabel,
+  applyLabel,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  summary: string;
+  note: string;
+  upToDate: string;
+  moveCount: number;
+  cancelLabel: string;
+  applyLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="px-2 py-1.5">
+      <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-100">
+        {title}
+      </p>
+      <p className="mt-1 text-[11px] leading-4 text-neutral-500">
+        {moveCount > 0 ? summary : upToDate}
+      </p>
+      {moveCount > 0 && (
+        <p className="mt-2 rounded-lg bg-black/[0.03] px-2 py-1.5 text-[10px] leading-4 text-neutral-500 dark:bg-white/[0.05]">
+          {note}
+        </p>
+      )}
+      <div className="mt-2 flex justify-end gap-1.5">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onCancel}
+          className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-neutral-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          {cancelLabel}
+        </button>
+        {moveCount > 0 && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={onConfirm}
+            className="rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
+          >
+            {applyLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

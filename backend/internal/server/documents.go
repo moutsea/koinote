@@ -31,7 +31,7 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := a.db.Query(r.Context(), `
-		SELECT d.doc_id, d.title, d.updated_at, COALESCE(f.folder_id, ''), d.revision
+		SELECT d.doc_id, d.title, d.created_at, d.updated_at, COALESCE(f.folder_id, ''), d.revision
 		FROM documents d
 		LEFT JOIN folders f ON f.id = d.folder_id
 		WHERE d.user_id = $1 AND d.trashed_at IS NULL
@@ -49,7 +49,7 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d model.DocumentSummary
 		var folder string
-		if err := rows.Scan(&d.DocID, &d.Title, &d.UpdatedAt, &folder, &d.Revision); err != nil {
+		if err := rows.Scan(&d.DocID, &d.Title, &d.CreatedAt, &d.UpdatedAt, &folder, &d.Revision); err != nil {
 			log.Printf("documents scan: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return

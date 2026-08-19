@@ -22,6 +22,7 @@ func TestFolderEndpointsRequireAuth(t *testing.T) {
 		{http.MethodPost, "/api/folders"},
 		{http.MethodPut, "/api/folders/some-folder-id"},
 		{http.MethodDelete, "/api/folders/some-folder-id"},
+		{http.MethodDelete, "/api/folders/some-folder-id/empty"},
 		{http.MethodPut, "/api/folders/some-folder-id/parent"},
 		{http.MethodPut, "/api/documents/some-doc-id/folder"},
 	}
@@ -40,6 +41,18 @@ func TestFolderEndpointsRequireAuth(t *testing.T) {
 				t.Fatalf("期望错误码 unauthorized，实际 %q", code)
 			}
 		})
+	}
+}
+
+func TestValidFolderOrganizerKind(t *testing.T) {
+	smart := folderOrganizerSmart
+	activity := folderOrganizerActivity
+	invalid := "manual"
+	if !validFolderOrganizerKind(nil) || !validFolderOrganizerKind(&smart) || !validFolderOrganizerKind(&activity) {
+		t.Fatal("nil、smart、activity 都应是合法来源")
+	}
+	if validFolderOrganizerKind(&invalid) {
+		t.Fatal("未知整理来源必须被拒绝")
 	}
 }
 

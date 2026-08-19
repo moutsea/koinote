@@ -166,6 +166,17 @@ func TestLoadImageQuotaDefaultsWhenUnset(t *testing.T) {
 	}
 }
 
+func TestLoadPopulatesHostMetricsPaths(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("HOST_METRICS_PROC_PATH", "/host/proc")
+	t.Setenv("HOST_METRICS_FILESYSTEM_PATH", "/host/rootfs")
+
+	cfg := Load()
+	if cfg.HostMetricsProcPath != "/host/proc" || cfg.HostMetricsFilesystemPath != "/host/rootfs" {
+		t.Fatalf("宿主机监控路径未进入配置: %+v", cfg)
+	}
+}
+
 func TestMockEmailCanOnlyBeEnabledOutsideProduction(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

@@ -34,6 +34,14 @@ func TestAdminStatsRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestAdminServerStatusRequiresAuthentication(t *testing.T) {
+	app := newTestApp(config.Config{SessionSecret: "secret"})
+	rec := doRequest(app, http.MethodGet, "/api/admin/server-status")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("未登录期望 401，实际 %d", rec.Code)
+	}
+}
+
 func TestAdminOverviewCacheUsesOneMinuteSnapshot(t *testing.T) {
 	var cache adminOverviewCache
 	start := time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)
@@ -116,6 +124,10 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	if normal.Code != http.StatusForbidden || !strings.Contains(normal.Body.String(), "admin_required") {
 		t.Fatalf("普通用户期望 403 admin_required，实际 %d %s", normal.Code, normal.Body.String())
 	}
+	normalServerStatus := adminRequestPath(app, normalID, "/api/admin/server-status")
+	if normalServerStatus.Code != http.StatusForbidden || !strings.Contains(normalServerStatus.Body.String(), "admin_required") {
+		t.Fatalf("普通用户访问服务器监控期望 403 admin_required，实际 %d %s", normalServerStatus.Code, normalServerStatus.Body.String())
+	}
 
 	withoutAnalytics := adminRequest(app, adminID)
 	if withoutAnalytics.Code != http.StatusOK {
@@ -143,11 +155,27 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	if !second.Traffic.Available || second.Traffic.PageViews != 21 || second.Traffic.UniqueVisitors != 8 {
 		t.Fatalf("流量统计不符: %+v", second.Traffic)
 	}
+
+	serverStatusRecorder := adminRequestPath(app, adminID, "/api/admin/server-status")
+	if serverStatusRecorder.Code != http.StatusOK {
+		t.Fatalf("管理员服务器监控期望 200，实际 %d: %s", serverStatusRecorder.Code, serverStatusRecorder.Body.String())
+	}
+	var serverStatus adminServerStatusResponse
+	if err := json.Unmarshal(serverStatusRecorder.Body.Bytes(), &serverStatus); err != nil {
+		t.Fatalf("解析服务器监控响应: %v", err)
+	}
+	if serverStatus.GeneratedAt.IsZero() {
+		t.Fatalf("服务器监控缺少采集时间: %+v", serverStatus)
+	}
 }
 
 func adminRequest(app *App, authUserID string) *httptest.ResponseRecorder {
+	return adminRequestPath(app, authUserID, "/api/admin/stats")
+}
+
+func adminRequestPath(app *App, authUserID string, path string) *httptest.ResponseRecorder {
 	token, _ := app.signSession(authUserID, 1)
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
 	rec := httptest.NewRecorder()
 	app.Routes().ServeHTTP(rec, req)

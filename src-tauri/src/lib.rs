@@ -32,6 +32,7 @@ struct LocalImportFolder {
     folder_id: String,
     name: String,
     parent_folder_id: Option<String>,
+    organizer_kind: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,13 +146,15 @@ async fn import_local_mode_batch(
     for folder in batch.folders {
         sqlx::query(
             "INSERT INTO offline_folders (
-                account_id, folder_id, name, parent_folder_id, sync_state, change_seq
-             ) VALUES (?, ?, ?, ?, 'create', 1)",
+                account_id, folder_id, name, parent_folder_id, organizer_kind,
+                sync_state, change_seq
+             ) VALUES (?, ?, ?, ?, ?, 'create', 1)",
         )
         .bind(&batch.staging_account)
         .bind(folder.folder_id)
         .bind(folder.name)
         .bind(folder.parent_folder_id)
+        .bind(folder.organizer_kind)
         .execute(&mut *transaction)
         .await?;
     }
@@ -338,6 +341,12 @@ pub fn run() {
             sql: include_str!("../migrations/0004_local_mode.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "mark_document_organizer_folders",
+            sql: include_str!("../migrations/0005_document_organizer.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -409,6 +418,14 @@ mod tests {
             .execute(&pool)
             .await
             .expect("extend image table");
+        sqlx::query(include_str!("../migrations/0004_local_mode.sql"))
+            .execute(&pool)
+            .await
+            .expect("create local mode config");
+        sqlx::query(include_str!("../migrations/0005_document_organizer.sql"))
+            .execute(&pool)
+            .await
+            .expect("extend folder table");
         pool
     }
 
@@ -419,6 +436,7 @@ mod tests {
                 folder_id: "folder-1".to_string(),
                 name: "Folder".to_string(),
                 parent_folder_id: None,
+                organizer_kind: Some("activity".to_string()),
             }],
             images: vec![LocalImportImage {
                 image_id: "image-1".to_string(),
@@ -479,6 +497,14 @@ mod tests {
             .await
             .expect("load counts");
             assert_eq!(counts, (1, 1, 2));
+            let organizer_kind: Option<String> = sqlx::query_scalar(
+                "SELECT organizer_kind FROM offline_folders
+                 WHERE account_id = 'account-1' AND folder_id = 'folder-1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("load imported organizer kind");
+            assert_eq!(organizer_kind.as_deref(), Some("activity"));
         });
     }
 

@@ -66,6 +66,7 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodPost, "/api/folders", true},
 		{http.MethodPut, "/api/folders/folder-id", true},
 		{http.MethodDelete, "/api/folders/folder-id", true},
+		{http.MethodDelete, "/api/folders/folder-id/empty", true},
 		{http.MethodPut, "/api/folders/folder-id/parent", true},
 		{http.MethodGet, "/api/editor/tabs", true},
 		{http.MethodPut, "/api/editor/tabs", true},
@@ -110,6 +111,8 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodGet, "/api/agent/reviews/review-id/suggestions/suggestion-id/apply", false},
 		{http.MethodGet, "/api/admin/stats", true},
 		{http.MethodPost, "/api/admin/stats", false},
+		{http.MethodGet, "/api/admin/server-status", true},
+		{http.MethodPost, "/api/admin/server-status", false},
 		{http.MethodGet, "/api/admin/announcements", true},
 		{http.MethodPost, "/api/admin/announcements", true},
 		{http.MethodDelete, "/api/admin/announcements/42", true},
@@ -279,6 +282,7 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	}
 	for _, allowedPath := range []string{
 		"/api/admin/stats",
+		"/api/admin/server-status",
 		"/api/billing/pricing",
 		"/api/mcp/tokens",
 		"/api/agent/settings",
@@ -345,12 +349,19 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	folderBody := `{"folderId":"` + folderID + `","name":"Offline"}`
+	folderBody := `{"folderId":"` + folderID + `","name":"Offline","organizerKind":"smart"}`
 	for attempt := 1; attempt <= 2; attempt++ {
 		rec := authenticatedJSON(pair2.AccessToken, http.MethodPost, "/api/folders", folderBody)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("idempotent folder create attempt %d status=%d body=%s", attempt, rec.Code, rec.Body.String())
 		}
+	}
+	var storedOrganizerKind string
+	if err := pool.QueryRow(ctx, `SELECT organizer_kind FROM folders WHERE folder_id = $1`, folderID).Scan(&storedOrganizerKind); err != nil {
+		t.Fatal(err)
+	}
+	if storedOrganizerKind != folderOrganizerSmart {
+		t.Fatalf("desktop-created folder organizer kind=%q", storedOrganizerKind)
 	}
 	docID, err := randomUUID()
 	if err != nil {
@@ -362,6 +373,17 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("idempotent document create attempt %d status=%d body=%s", attempt, rec.Code, rec.Body.String())
 		}
+	}
+	occupiedDelete := authenticatedJSON(pair2.AccessToken, http.MethodDelete, "/api/folders/"+folderID+"/empty", "")
+	if occupiedDelete.Code != http.StatusOK {
+		t.Fatalf("occupied organizer folder delete status=%d body=%s", occupiedDelete.Code, occupiedDelete.Body.String())
+	}
+	var occupiedFolderExists bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM folders WHERE folder_id = $1)`, folderID).Scan(&occupiedFolderExists); err != nil {
+		t.Fatal(err)
+	}
+	if !occupiedFolderExists {
+		t.Fatal("empty-only deletion removed an occupied organizer folder")
 	}
 	var storedTheme string
 	if err := pool.QueryRow(ctx, `SELECT theme FROM documents WHERE doc_id = $1`, docID).Scan(&storedTheme); err != nil {
@@ -389,6 +411,17 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	}
 	if purgedDocumentExists {
 		t.Fatal("desktop permanent deletion left the document in the database")
+	}
+	emptyDelete := authenticatedJSON(pair2.AccessToken, http.MethodDelete, "/api/folders/"+folderID+"/empty", "")
+	if emptyDelete.Code != http.StatusOK {
+		t.Fatalf("empty organizer folder delete status=%d body=%s", emptyDelete.Code, emptyDelete.Body.String())
+	}
+	var emptyFolderExists bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM folders WHERE folder_id = $1)`, folderID).Scan(&emptyFolderExists); err != nil {
+		t.Fatal(err)
+	}
+	if emptyFolderExists {
+		t.Fatal("empty organizer folder was not deleted")
 	}
 	cookieOnly := httptest.NewRequest(http.MethodPost, "/api/documents", strings.NewReader(
 		`{"docId":"`+docID+`","title":"Cookie cannot choose IDs"}`,

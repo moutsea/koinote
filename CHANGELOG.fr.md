@@ -9,6 +9,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout de l’optimisation IA réservée aux membres : diffs Git pour le titre et le corps, application ou rejet individuel et global, score du titre sur 100 et 2 à 3 alternatives sous 60. L’analyse sépare désormais le contenu de la structure, avec des modifications Markdown validées par AST et six scores pour la hiérarchie, la lisibilité, la mise en valeur, le rythme, les modules et le mobile.
 - L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000, 10 000 et 30 000 credits.
 - Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.
+- Ajout du rangement intelligent par date et par activité pour les documents hors dossiers gérés manuellement, avec regroupement adaptatif par mois ou semaine et confirmation avant les déplacements en masse.
+- Ajout d’un tableau de bord administrateur pour le CPU, la mémoire, la charge, le disque, la durée de fonctionnement et le débit réseau de l’hôte, à partir de métriques montées en lecture seule en production.
 
 ### Fixed
 
@@ -17,6 +19,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Correction du périmètre d’autorisation du client qui refusait les paramètres IA, les canaux de modèles, les credits, les analyses et l’achat de credits.
 - Le paiement des credits utilise désormais un Product Stripe en mode production, avec une validation au déploiement contre les mélanges test/production.
 - L’achat de credits prend désormais en charge les mêmes devises USD, CNY, EUR et JPY que l’adhésion, afin que Stripe puisse proposer les moyens locaux éligibles comme WeChat Pay en CNY.
+- Après application d’une optimisation IA, le client aligne désormais sa révision et son instantané distant, évitant un faux échec de synchronisation alors que le contenu a bien été envoyé.
+- Le remplacement d’une image locale par son URL après téléversement conserve désormais la position de défilement de l’éditeur.
 
 ## [0.6.0] - 2026-08-17
 

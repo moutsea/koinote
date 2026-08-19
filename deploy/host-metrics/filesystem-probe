@@ -1,0 +1,1 @@
+This file is bind-mounted read-only so statfs reports the host filesystem capacity.

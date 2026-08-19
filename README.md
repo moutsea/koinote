@@ -428,6 +428,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 `koinote.app`、`api.koinote.app`、`img.koinote.app` 和 `verify@koinote.app` 是当前官方
 部署值，自建时要同步替换 `wrangler.jsonc`、`deploy/Caddyfile` 与 OAuth 回调配置。
 
+Admin 的“服务监控”读取整台 Linux 服务器的 CPU、Load Average、内存、Swap、磁盘、
+主网卡流量和开机时长。production compose 只读挂载所需的五个 `/proc` 指标文件，
+并用 `deploy/host-metrics/filesystem-probe` 单文件只读挂载探测其所在文件系统容量；
+不会挂载 Docker socket、完整 `/proc` 或宿主机根目录，也不依赖宿主机目录 UID
+与容器进程一致。使用自定义容器编排时，需要为
+`HOST_METRICS_PROC_PATH` 和 `HOST_METRICS_FILESYSTEM_PATH` 提供等价的只读挂载。
+
 production Worker 要设的 secret：
 
 ```bash

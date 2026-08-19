@@ -195,7 +195,9 @@ export function LiveEditor({
   async function prepareAgentReview() {
     const saved = await saver.flush(docId);
     if (!saved && saver.status(docId) === "conflict") setConflictOpen(true);
-    return saved;
+    if (!saved || !isDesktopRuntime()) return saved;
+    const { desktopPrepareDocumentForRemoteMutation } = await import("../../desktop/offlineStore");
+    return desktopPrepareDocumentForRemoteMutation(docId);
   }
 
   function acceptDocument(next: NonNullable<typeof merged>) {

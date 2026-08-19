@@ -6,19 +6,31 @@ import {
   BellRing,
   CheckCircle2,
   Coins,
+  Cpu,
+  Download,
   Eye,
   FileText,
+  Gauge,
   HardDrive,
   Image,
+  MemoryStick,
   MousePointerClick,
   RefreshCw,
+  Server,
   ShieldCheck,
   ShoppingBag,
+  Timer,
+  Upload,
   UserCheck,
   Users,
   WifiOff,
 } from "lucide-react";
-import { getAdminStats, type AdminStats } from "../api";
+import {
+  getAdminServerStatus,
+  getAdminStats,
+  type AdminServerStatus,
+  type AdminStats,
+} from "../api";
 import { useSession } from "../auth";
 import { PaperCard } from "../components/Ink";
 import { AnnouncementAdminPanel } from "../components/AnnouncementAdminPanel";
@@ -33,7 +45,13 @@ const DATE_LOCALE: Record<Locale, string> = {
   ja: "ja-JP",
 };
 
-type AdminTab = "overview" | "growth" | "revenue" | "users" | "announcements";
+type AdminTab =
+  | "overview"
+  | "growth"
+  | "revenue"
+  | "users"
+  | "server"
+  | "announcements";
 
 export function AdminPage() {
   const session = useSession();
@@ -47,6 +65,21 @@ export function AdminPage() {
     staleTime: 30_000,
     retry: false,
   });
+  const serverStatus = useQuery({
+    queryKey: ["admin-server-status"],
+    queryFn: getAdminServerStatus,
+    enabled: Boolean(user?.isAdmin && activeTab === "server"),
+    staleTime: 10_000,
+    refetchInterval: (query) => {
+      if (activeTab !== "server") return false;
+      const current = query.state.data;
+      return current?.available && current.cpu.usagePercent == null
+        ? 5_000
+        : 30_000;
+    },
+    retry: false,
+  });
+  const refreshQuery = activeTab === "server" ? serverStatus : stats;
 
   if (session.isLoading) {
     return <CenteredMessage>{t.admin.loading}</CenteredMessage>;
@@ -100,13 +133,13 @@ export function AdminPage() {
         {activeTab !== "announcements" && (
           <button
             type="button"
-            disabled={stats.isFetching}
-            onClick={() => void stats.refetch()}
+            disabled={refreshQuery.isFetching}
+            onClick={() => void refreshQuery.refetch()}
             className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
             style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
           >
             <RefreshCw
-              className={`h-4 w-4 ${stats.isFetching ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${refreshQuery.isFetching ? "animate-spin" : ""}`}
             />
             {t.admin.refresh}
           </button>
@@ -123,6 +156,13 @@ export function AdminPage() {
       >
         {activeTab === "announcements" ? (
           <AnnouncementAdminPanel />
+        ) : activeTab === "server" ? (
+          <ServerMonitorPanel
+            status={serverStatus.data}
+            isLoading={serverStatus.isLoading}
+            isError={serverStatus.isError}
+            locale={locale}
+          />
         ) : stats.isLoading ? (
           <CenteredMessage>{t.admin.loading}</CenteredMessage>
         ) : stats.isError || !stats.data ? (
@@ -156,6 +196,7 @@ function AdminTabs({
     { id: "growth", label: t.admin.tabGrowth, icon: <MousePointerClick /> },
     { id: "revenue", label: t.admin.tabRevenue, icon: <Coins /> },
     { id: "users", label: t.admin.tabUsers, icon: <Users /> },
+    { id: "server", label: t.admin.tabServer, icon: <Server /> },
     { id: "announcements", label: t.admin.tabAnnouncements, icon: <BellRing /> },
   ] satisfies Array<{ id: AdminTab; label: string; icon: ReactNode }>;
 
@@ -222,7 +263,7 @@ function AdminContent({
 }: {
   stats: AdminStats;
   locale: Locale;
-  activeTab: Exclude<AdminTab, "announcements">;
+  activeTab: Exclude<AdminTab, "announcements" | "server">;
 }) {
   const { t } = useI18n();
   const totalStorage = stats.overview.documentBytes + stats.overview.imageBytes;
@@ -463,6 +504,248 @@ function AdminContent({
         {interpolate(t.admin.generatedAt, {
           time: formatDateTime(stats.generatedAt, locale),
           timeZone: stats.timeZone,
+        })}
+      </p>
+    </div>
+  );
+}
+
+function ServerMonitorPanel({
+  status,
+  isLoading,
+  isError,
+  locale,
+}: {
+  status: AdminServerStatus | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  locale: Locale;
+}) {
+  const { t } = useI18n();
+  if (isLoading) {
+    return <CenteredMessage>{t.admin.serverStatusLoading}</CenteredMessage>;
+  }
+  if (isError || !status) {
+    return (
+      <PaperCard className="p-8 text-center">
+        <WifiOff
+          className="mx-auto h-8 w-8"
+          style={{ color: "var(--ink-faint)" }}
+        />
+        <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
+          {t.admin.serverStatusLoadFailed}
+        </p>
+      </PaperCard>
+    );
+  }
+  if (!status.available) {
+    return (
+      <PaperCard className="p-8 text-center">
+        <Server
+          className="mx-auto h-8 w-8"
+          style={{ color: "var(--ink-faint)" }}
+        />
+        <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
+          {t.admin.serverStatusUnavailable}
+        </p>
+      </PaperCard>
+    );
+  }
+
+  const memoryUsage = usageRatio(
+    status.memory.usedBytes,
+    status.memory.totalBytes,
+  );
+  const diskUsage = usageRatio(status.disk.usedBytes, status.disk.totalBytes);
+  return (
+    <div className="space-y-8">
+      <div>
+        <SectionTitle
+          icon={<Server className="h-5 w-5" />}
+          title={t.admin.serverStatusTitle}
+        />
+        <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
+          {t.admin.serverStatusSubtitle} · {t.admin.serverStatusAutoRefresh}
+        </p>
+      </div>
+
+      <section>
+        <SectionTitle
+          icon={<Gauge className="h-5 w-5" />}
+          title={t.admin.serverResources}
+        />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            icon={<Cpu />}
+            label={t.admin.serverCPU}
+            value={
+              status.cpu.usagePercent == null
+                ? t.admin.notAvailable
+                : formatPercent(status.cpu.usagePercent / 100, locale)
+            }
+          />
+          <MetricCard
+            icon={<MemoryStick />}
+            label={t.admin.serverMemoryUsage}
+            value={formatPercent(memoryUsage, locale)}
+          />
+          <MetricCard
+            icon={<HardDrive />}
+            label={t.admin.serverDiskUsage}
+            value={
+              status.disk.available
+                ? formatPercent(diskUsage, locale)
+                : t.admin.notAvailable
+            }
+          />
+          <MetricCard
+            icon={<Timer />}
+            label={t.admin.serverUptime}
+            value={formatUptime(
+              status.uptimeSeconds,
+              locale,
+              t.admin.uptimeValue,
+            )}
+          />
+        </div>
+        <p className="mt-3 text-xs" style={{ color: "var(--ink-faint)" }}>
+          {t.admin.serverCPUHint}
+        </p>
+      </section>
+
+      <section>
+        <SectionTitle
+          icon={<Cpu className="h-5 w-5" />}
+          title={t.admin.serverLoad}
+        />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            icon={<Cpu />}
+            label={t.admin.logicalCPUs}
+            value={formatNumber(status.cpu.logicalCPUs, locale)}
+          />
+          <MetricCard
+            icon={<Gauge />}
+            label={t.admin.load1}
+            value={formatDecimal(status.cpu.load1, locale)}
+          />
+          <MetricCard
+            icon={<Gauge />}
+            label={t.admin.load5}
+            value={formatDecimal(status.cpu.load5, locale)}
+          />
+          <MetricCard
+            icon={<Gauge />}
+            label={t.admin.load15}
+            value={formatDecimal(status.cpu.load15, locale)}
+          />
+        </div>
+        <p className="mt-3 text-xs" style={{ color: "var(--ink-faint)" }}>
+          {t.admin.loadHint}
+        </p>
+      </section>
+
+      <section>
+        <SectionTitle
+          icon={<MemoryStick className="h-5 w-5" />}
+          title={t.admin.serverMemoryStorage}
+        />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            icon={<MemoryStick />}
+            label={t.admin.memoryTotal}
+            value={formatBytes(status.memory.totalBytes, DATE_LOCALE[locale])}
+          />
+          <MetricCard
+            icon={<MemoryStick />}
+            label={t.admin.memoryAvailable}
+            value={formatBytes(
+              status.memory.availableBytes,
+              DATE_LOCALE[locale],
+            )}
+          />
+          <MetricCard
+            icon={<HardDrive />}
+            label={t.admin.swapUsage}
+            value={formatByteUsage(
+              status.memory.swapUsedBytes,
+              status.memory.swapTotalBytes,
+              locale,
+              t.admin.notConfigured,
+            )}
+          />
+          <MetricCard
+            icon={<HardDrive />}
+            label={t.admin.diskAvailable}
+            value={
+              status.disk.available
+                ? formatBytes(
+                    status.disk.availableBytes,
+                    DATE_LOCALE[locale],
+                  )
+                : t.admin.notAvailable
+            }
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle
+          icon={<Download className="h-5 w-5" />}
+          title={t.admin.serverNetwork}
+        />
+        {status.network.available ? (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                icon={<Download />}
+                label={t.admin.downloadRate}
+                value={formatByteRate(
+                  status.network.receiveBytesPerSecond,
+                  locale,
+                  t.admin.notAvailable,
+                )}
+              />
+              <MetricCard
+                icon={<Upload />}
+                label={t.admin.uploadRate}
+                value={formatByteRate(
+                  status.network.transmitBytesPerSecond,
+                  locale,
+                  t.admin.notAvailable,
+                )}
+              />
+              <MetricCard
+                icon={<Download />}
+                label={t.admin.receivedTotal}
+                value={formatBytes(
+                  status.network.receiveBytes,
+                  DATE_LOCALE[locale],
+                )}
+              />
+              <MetricCard
+                icon={<Upload />}
+                label={t.admin.sentTotal}
+                value={formatBytes(
+                  status.network.transmitBytes,
+                  DATE_LOCALE[locale],
+                )}
+              />
+            </div>
+            <p className="mt-3 text-xs" style={{ color: "var(--ink-faint)" }}>
+              {interpolate(t.admin.networkInterface, {
+                interface: status.network.interfaceName,
+              })}
+            </p>
+          </>
+        ) : (
+          <EmptyCard>{t.admin.networkUnavailable}</EmptyCard>
+        )}
+      </section>
+
+      <p className="text-right text-xs" style={{ color: "var(--ink-faint)" }}>
+        {interpolate(t.admin.serverGeneratedAt, {
+          time: formatDateTime(status.generatedAt, locale),
         })}
       </p>
     </div>
@@ -915,6 +1198,46 @@ function formatPercent(value: number, locale: Locale) {
     style: "percent",
     maximumFractionDigits: 1,
   }).format(value);
+}
+function formatDecimal(value: number, locale: Locale) {
+  return new Intl.NumberFormat(DATE_LOCALE[locale], {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+function usageRatio(used: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.min(1, Math.max(0, used / total));
+}
+function formatByteUsage(
+  used: number,
+  total: number,
+  locale: Locale,
+  fallback: string,
+) {
+  if (total <= 0) return fallback;
+  return `${formatBytes(used, DATE_LOCALE[locale])} / ${formatBytes(
+    total,
+    DATE_LOCALE[locale],
+  )}`;
+}
+function formatByteRate(
+  value: number | null,
+  locale: Locale,
+  fallback: string,
+) {
+  if (value == null) return fallback;
+  return `${formatBytes(value, DATE_LOCALE[locale])}/s`;
+}
+function formatUptime(value: number, locale: Locale, template: string) {
+  const totalMinutes = Math.max(0, Math.floor(value / 60));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  return interpolate(template, {
+    days: formatNumber(days, locale),
+    hours: formatNumber(hours, locale),
+    minutes: formatNumber(minutes, locale),
+  });
 }
 function formatMoney(amount: number, currency: string, locale: Locale) {
   try {

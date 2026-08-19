@@ -655,15 +655,25 @@ export type AgentReviewMutation = {
   document: Document;
 };
 
-export function applyAgentReviewSuggestion(
+async function reconcileDesktopAgentReviewMutation(
+  result: AgentReviewMutation,
+): Promise<AgentReviewMutation> {
+  if (!isDesktopRuntime()) return result;
+  const { desktopAcceptRemoteDocumentMutation } = await import("./desktop/offlineStore");
+  const accepted = await desktopAcceptRemoteDocumentMutation(result.document);
+  return { ...result, document: accepted.document };
+}
+
+export async function applyAgentReviewSuggestion(
   reviewId: string,
   suggestionId: string,
   expectedRevision: number,
 ) {
-  return apiJson<AgentReviewMutation>(
+  const result = await apiJson<AgentReviewMutation>(
     `/api/agent/reviews/${encodeURIComponent(reviewId)}/suggestions/${encodeURIComponent(suggestionId)}/apply`,
     { method: "POST", body: JSON.stringify({ expectedRevision }) },
   );
+  return reconcileDesktopAgentReviewMutation(result);
 }
 
 export function dismissAgentReviewSuggestion(reviewId: string, suggestionId: string) {
@@ -673,11 +683,12 @@ export function dismissAgentReviewSuggestion(reviewId: string, suggestionId: str
   );
 }
 
-export function applyAllAgentReviewSuggestions(reviewId: string, expectedRevision: number) {
-  return apiJson<AgentReviewMutation>(
+export async function applyAllAgentReviewSuggestions(reviewId: string, expectedRevision: number) {
+  const result = await apiJson<AgentReviewMutation>(
     `/api/agent/reviews/${encodeURIComponent(reviewId)}/apply-all`,
     { method: "POST", body: JSON.stringify({ expectedRevision }) },
   );
+  return reconcileDesktopAgentReviewMutation(result);
 }
 
 export function dismissAgentReview(reviewId: string) {
@@ -762,6 +773,44 @@ export type AdminStats = {
 
 export function getAdminStats() {
   return apiJson<AdminStats>("/api/admin/stats");
+}
+
+export type AdminServerStatus = {
+  available: boolean;
+  generatedAt: string;
+  uptimeSeconds: number;
+  cpu: {
+    usagePercent: number | null;
+    logicalCPUs: number;
+    load1: number;
+    load5: number;
+    load15: number;
+  };
+  memory: {
+    totalBytes: number;
+    usedBytes: number;
+    availableBytes: number;
+    swapTotalBytes: number;
+    swapUsedBytes: number;
+  };
+  disk: {
+    available: boolean;
+    totalBytes: number;
+    usedBytes: number;
+    availableBytes: number;
+  };
+  network: {
+    available: boolean;
+    interfaceName: string;
+    receiveBytes: number;
+    transmitBytes: number;
+    receiveBytesPerSecond: number | null;
+    transmitBytesPerSecond: number | null;
+  };
+};
+
+export function getAdminServerStatus() {
+  return apiJson<AdminServerStatus>("/api/admin/server-status");
 }
 
 export type AnnouncementTranslation = {
@@ -874,6 +923,7 @@ export type DocumentSummary = {
   /** null 表示在根下 */
   folderId: string | null;
   revision: number;
+  createdAt?: string | null;
   updatedAt?: string | null;
 };
 
@@ -1076,6 +1126,8 @@ export type Folder = {
   name: string;
   /** null 表示在根下 */
   parentFolderId: string | null;
+  /** null 表示用户手动创建或导入的目录。 */
+  organizerKind: "smart" | "activity" | null;
 };
 
 export function listFolders() {
@@ -1090,6 +1142,7 @@ export function listFolders() {
 export function createFolder(params: {
   name: string;
   parentFolderId: string | null;
+  organizerKind?: Folder["organizerKind"];
 }) {
   if (isDesktopRuntime()) {
     return import("./desktop/offlineStore").then(({ desktopCreateFolder }) =>
@@ -1100,6 +1153,19 @@ export function createFolder(params: {
     method: "POST",
     body: JSON.stringify(params),
   });
+}
+
+export function deleteEmptyOrganizerFolder(folderId: string) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(
+      ({ desktopDeleteEmptyOrganizerFolder }) =>
+        desktopDeleteEmptyOrganizerFolder(folderId),
+    );
+  }
+  return apiJson<{ deleted: boolean }>(
+    `/api/folders/${encodeURIComponent(folderId)}/empty`,
+    { method: "DELETE" },
+  );
 }
 
 export function renameFolder(folderId: string, name: string) {

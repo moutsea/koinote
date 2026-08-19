@@ -60,6 +60,11 @@ includes("支持逐条应用", panel, "applyAgentReviewSuggestion(");
 includes("支持逐条忽略", panel, "dismissAgentReviewSuggestion(");
 includes("支持全部应用", panel, "applyAllAgentReviewSuggestions(");
 includes("支持全部忽略", panel, "dismissAgentReview(");
+assert.equal(
+  panel.match(/await onPrepareReview\(\)/g)?.length,
+  3,
+  "创建审阅、逐条落实和全部落实前都必须经过保存/同步屏障",
+);
 includes("内容与排版使用独立标签", panel, '(["content", "layout"] as const)');
 includes("内容建议单独分组", panel, 'item.kind !== "layout"');
 includes("排版建议单独分组", panel, 'item.kind === "layout"');
@@ -68,6 +73,7 @@ includes("逐条或全部应用后接收服务端文档", panel, "onAcceptDocume
 includes("接收文档后刷新编辑器缓存", liveEditor, 'queryClient.setQueryData(["document", docId], next)');
 includes("Agent 写入前先落盘当前草稿", liveEditor, "onPrepareReview={prepareAgentReview}");
 includes("前端创建 review 端点", api, "/agent-reviews`");
+includes("桌面落实结果写回 SQLite", api, "desktopAcceptRemoteDocumentMutation(result.document)");
 includes("后端所有 review 操作要求终生会员", backend, "requireLifetimeMember(w, r)");
 includes("内置模型预留 credits", backend, "reserveCredits(");
 includes("BYOK 渠道不走 credits 预留", backend, 'if provider.Mode == "builtin"');

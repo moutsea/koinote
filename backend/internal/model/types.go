@@ -24,6 +24,8 @@ type Folder struct {
 	Name     string `json:"name"`
 	// nil 表示在根下
 	ParentFolderID *string `json:"parentFolderId"`
+	// nil 表示用户手动创建或导入；非 nil 表示由文档整理器创建。
+	OrganizerKind *string `json:"organizerKind"`
 }
 
 // DocumentShare 是分享状态。不含 password_hash——那东西永不出后端。
@@ -41,6 +43,7 @@ type DocumentSummary struct {
 	// nil 表示在根下
 	FolderID  *string    `json:"folderId"`
 	Revision  int64      `json:"revision"`
+	CreatedAt *time.Time `json:"createdAt"`
 	UpdatedAt *time.Time `json:"updatedAt"`
 }
 

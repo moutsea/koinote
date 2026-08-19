@@ -29,6 +29,8 @@ type App struct {
 	productActivity        activityTracker
 	announcementTranslator announcementTranslator
 	agentLLMHTTPClient     *http.Client
+	serverStatus           *serverStatusMonitor
+	serverStatusOnce       sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
@@ -40,6 +42,10 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		paymentNotifier:        newPaymentNotifier(cfg),
 		siteAnalytics:          newCloudflareAnalyticsClient(cfg),
 		announcementTranslator: newAnnouncementTranslator(cfg),
+		serverStatus: newServerStatusMonitor(
+			cfg.HostMetricsProcPath,
+			cfg.HostMetricsFilesystemPath,
+		),
 	}
 	if cfg.StripeClientEnabled() {
 		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions
@@ -86,6 +92,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/billing/checkout/confirm", a.billingCheckoutConfirm)
 	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
+	mux.HandleFunc("GET /api/admin/server-status", a.adminServerStatus)
 	mux.HandleFunc("GET /api/admin/announcements", a.adminAnnouncementsList)
 	mux.HandleFunc("POST /api/admin/announcements", a.adminAnnouncementPublish)
 	mux.HandleFunc("DELETE /api/admin/announcements/{announcementId}", a.adminAnnouncementWithdraw)
@@ -123,6 +130,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/folders", a.folderCreate)
 	mux.HandleFunc("PUT /api/folders/{folderId}", a.folderRename)
 	mux.HandleFunc("DELETE /api/folders/{folderId}", a.folderDelete)
+	mux.HandleFunc("DELETE /api/folders/{folderId}/empty", a.folderDeleteEmptyOrganizer)
 	mux.HandleFunc("PUT /api/folders/{folderId}/parent", a.folderMove)
 	mux.HandleFunc("PUT /api/documents/{docId}/folder", a.documentMove)
 
@@ -159,6 +167,18 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/share/{token}/meta", a.shareMeta)
 
 	return a.withCORS(mux)
+}
+
+func (a *App) serverStatusMonitor() *serverStatusMonitor {
+	a.serverStatusOnce.Do(func() {
+		if a.serverStatus == nil {
+			a.serverStatus = newServerStatusMonitor(
+				a.cfg.HostMetricsProcPath,
+				a.cfg.HostMetricsFilesystemPath,
+			)
+		}
+	})
+	return a.serverStatus
 }
 
 func (a *App) health(w http.ResponseWriter, _ *http.Request) {

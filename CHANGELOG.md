@@ -11,6 +11,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and 2–3 alternatives when the score is below 60. Reviews now separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.
 - Lifetime membership now grants 1,000 credits. Built-in reviews cost 1 credit per 2,000 actual tokens, with Stripe packs of 3,000, 10,000, and 30,000 credits.
 - Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.
+- Added smart date-based and activity-based organization for documents outside manually managed folders, with adaptive month/week grouping and confirmation before bulk moves.
+- Added an administrator server-status dashboard for host CPU, memory, load, disk, uptime, and network throughput, using read-only host metrics in production.
 
 ### Fixed
 
@@ -19,6 +21,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Desktop Bearer sessions can now load and manage AI settings, BYOK channels, credits, reviews, and credit checkout instead of being rejected by the desktop endpoint scope.
 - Credits checkout now uses a live-mode Stripe Product, and deployments reject test/live Product mismatches before they reach users.
 - Credits checkout now supports the same USD, CNY, EUR, and JPY choices as membership, allowing Stripe to expose eligible local methods such as WeChat Pay for CNY.
+- AI optimization changes now reconcile the desktop revision and remote snapshot after apply, preventing a successful review from leaving the client in a false sync-error state.
+- Replacing a pending desktop image with its uploaded URL now preserves the editor scroll position instead of jumping upward.
 
 ## [0.6.0] - 2026-08-17
 

@@ -131,15 +131,21 @@ export function AgentReviewPanel({
   });
 
   const applyOne = useMutation({
-    mutationFn: ({ current, suggestion }: { current: AgentReview; suggestion: AgentReviewSuggestion }) =>
-      applyAgentReviewSuggestion(current.reviewId, suggestion.suggestionId, current.currentRevision),
+    mutationFn: async ({ current, suggestion }: { current: AgentReview; suggestion: AgentReviewSuggestion }) => {
+      if (!(await onPrepareReview())) throw new Error("document_save_failed");
+      return applyAgentReviewSuggestion(current.reviewId, suggestion.suggestionId, current.currentRevision);
+    },
     async onSuccess(result) {
       setError(null);
       onAcceptDocument(result.document);
       await refreshReviewQueries(result.review);
     },
     async onError(value) {
-      setError(agentReviewErrorText(value, t.auth.requestFailed, t.errors));
+      setError(
+        value instanceof Error && value.message === "document_save_failed"
+          ? t.agentReview.saveFailed
+          : agentReviewErrorText(value, t.auth.requestFailed, t.errors),
+      );
       await review.refetch();
     },
   });
@@ -157,15 +163,21 @@ export function AgentReviewPanel({
   });
 
   const applyAll = useMutation({
-    mutationFn: (current: AgentReview) =>
-      applyAllAgentReviewSuggestions(current.reviewId, current.currentRevision),
+    mutationFn: async (current: AgentReview) => {
+      if (!(await onPrepareReview())) throw new Error("document_save_failed");
+      return applyAllAgentReviewSuggestions(current.reviewId, current.currentRevision);
+    },
     async onSuccess(result) {
       setError(null);
       onAcceptDocument(result.document);
       await refreshReviewQueries(result.review);
     },
     async onError(value) {
-      setError(agentReviewErrorText(value, t.auth.requestFailed, t.errors));
+      setError(
+        value instanceof Error && value.message === "document_save_failed"
+          ? t.agentReview.saveFailed
+          : agentReviewErrorText(value, t.auth.requestFailed, t.errors),
+      );
       await review.refetch();
     },
   });

@@ -423,7 +423,7 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
 		return method == http.MethodPost
-	case "/api/admin/stats":
+	case "/api/admin/stats", "/api/admin/server-status":
 		return method == http.MethodGet
 	case "/api/admin/announcements":
 		return method == http.MethodGet || method == http.MethodPost
@@ -459,7 +459,9 @@ func desktopRequestAllowed(r *http.Request) bool {
 		if len(parts) == 1 && parts[0] != "" {
 			return method == http.MethodPut || method == http.MethodDelete
 		}
-		return len(parts) == 2 && parts[0] != "" && parts[1] == "parent" && method == http.MethodPut
+		return len(parts) == 2 && parts[0] != "" &&
+			((parts[1] == "parent" && method == http.MethodPut) ||
+				(parts[1] == "empty" && method == http.MethodDelete))
 	}
 	if rest, found := strings.CutPrefix(path, "/api/mcp/tokens/"); found {
 		parts := strings.Split(rest, "/")
