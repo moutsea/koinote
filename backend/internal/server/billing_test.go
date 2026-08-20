@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -589,49 +590,76 @@ func TestBillingWebhookRejectsInvalidSignature(t *testing.T) {
 
 func TestBillingWebhookIgnoresOtherService(t *testing.T) {
 	const webhookSecret = "whsec_shared_account"
-	payload, err := json.Marshal(map[string]any{
-		"id":          "evt_other_service",
-		"object":      "event",
-		"api_version": stripe.APIVersion,
-		"type":        "checkout.session.completed",
-		"data": map[string]any{
-			"object": map[string]any{
-				"id":       "cs_test_other_service",
-				"object":   "checkout.session",
-				"metadata": map[string]string{"service": "another-service"},
+	cases := []struct {
+		name       string
+		apiVersion string
+		metadata   map[string]string
+	}{
+		{
+			name:       "其他 service",
+			apiVersion: stripe.APIVersion,
+			metadata:   map[string]string{"service": "another-service"},
+		},
+		{
+			name:       "不同 API 版本且无 Koinote 标记",
+			apiVersion: "2026-04-22.dahlia",
+			metadata: map[string]string{
+				"orderNo":   "GH-20260820-69984CBC",
+				"productId": "prod_e014e15956a84e4681c6f8b2",
+				"site":      "gpthubs",
+				"orderId":   "ord_2086a38baff545729cceee17",
 			},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
-	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
-		Payload: payload,
-		Secret:  webhookSecret,
-	})
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(map[string]any{
+				"id":          fmt.Sprintf("evt_other_service_%d", index),
+				"object":      "event",
+				"api_version": tc.apiVersion,
+				"type":        "checkout.session.completed",
+				"data": map[string]any{
+					"object": map[string]any{
+						"id":       fmt.Sprintf("cs_live_other_service_%d", index),
+						"object":   "checkout.session",
+						"metadata": tc.metadata,
+					},
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+				Payload: payload,
+				Secret:  webhookSecret,
+			})
 
-	app := newTestApp(config.Config{
-		StripeSecretKey:         "sk_test_shared_account",
-		StripeWebhookSecret:     webhookSecret,
-		StripeLifetimeProductID: "prod_koinote",
-	})
-	app.stripeCheckout = &fakeStripeCheckoutClient{}
-	req := httptest.NewRequest(http.MethodPost, "/api/billing/webhook", strings.NewReader(string(payload)))
-	req.Header.Set("Stripe-Signature", signed.Header)
-	rec := httptest.NewRecorder()
-	app.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("其他服务事件期望 200，实际 %d: %s", rec.Code, rec.Body.String())
-	}
-	var body struct {
-		Received bool `json:"received"`
-		Ignored  bool `json:"ignored"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if !body.Received || !body.Ignored {
-		t.Fatalf("其他服务事件未被安全忽略: %+v", body)
+			app := newTestApp(config.Config{
+				StripeSecretKey:         "sk_test_shared_account",
+				StripeWebhookSecret:     webhookSecret,
+				StripeLifetimeProductID: "prod_koinote",
+			})
+			app.stripeCheckout = &fakeStripeCheckoutClient{
+				retrieveErr: errors.New("其他服务的 Session 不应向 Stripe 发起二次查询"),
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/billing/webhook", strings.NewReader(string(payload)))
+			req.Header.Set("Stripe-Signature", signed.Header)
+			rec := httptest.NewRecorder()
+			app.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("其他服务事件期望 200，实际 %d: %s", rec.Code, rec.Body.String())
+			}
+			var body struct {
+				Received bool `json:"received"`
+				Ignored  bool `json:"ignored"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if !body.Received || !body.Ignored {
+				t.Fatalf("其他服务事件未被安全忽略: %+v", body)
+			}
+		})
 	}
 }
 

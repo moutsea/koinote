@@ -21,6 +21,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Stripe webhooks now acknowledge events belonging to other applications on a shared account, including events created with a different Stripe API release train, while preserving strict Koinote checkout verification.
+- Improved Word export with explicit A4 typography, heading hierarchy, nested lists, real hyperlinks, styled quotes and code blocks, bounded images with captions, stable tables, and page numbers instead of relying on Word defaults.
 - Kept headings immediately after block images separate across repeated Markdown saves, and repaired legacy escaped headings when documents open.
 - PDF export now uses one clear menu action and opens the native system print dialog on desktop, preserving selectable, searchable text instead of silently doing nothing in the embedded webview.
 - Desktop Bearer sessions can now load and manage AI settings, BYOK channels, credits, reviews, and credit checkout instead of being rejected by the desktop endpoint scope.

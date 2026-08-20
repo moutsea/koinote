@@ -798,7 +798,16 @@ func (a *App) billingWebhook(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "bad_request", "Webhook payload is too large")
 		return
 	}
-	event, err := webhook.ConstructEvent(payload, r.Header.Get("Stripe-Signature"), a.cfg.StripeWebhookSecret)
+	// 同一个 Stripe 账号会向这个 endpoint 投递多个应用、多个 API release train
+	// 的事件。这里仍严格校验签名和时间窗，只跳过 SDK 的版本一致性检查；真正
+	// 属于 Koinote 的 Checkout Session 会在下方按本服务的 API 版本重新拉取并
+	// 完整校验，不能直接信任这个可能来自不同版本的 webhook 对象。
+	event, err := webhook.ConstructEventWithOptions(
+		payload,
+		r.Header.Get("Stripe-Signature"),
+		a.cfg.StripeWebhookSecret,
+		webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true},
+	)
 	if err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_signature", "Invalid webhook signature")
 		return

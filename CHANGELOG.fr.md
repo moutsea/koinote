@@ -19,6 +19,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- Les webhooks Stripe provenant d’autres applications sur le compte partagé sont désormais acquittés et ignorés, y compris avec une autre version d’API Stripe, tout en conservant la validation stricte des paiements Koinote.
+- Amélioration de l’export Word avec une mise en page A4 explicite, une hiérarchie de titres, des listes imbriquées, de vrais hyperliens et des styles cohérents pour citations, code, légendes d’images, tableaux et numéros de page.
 - Les titres placés juste après une image de bloc restent séparés après plusieurs sauvegardes Markdown, et les anciens titres échappés sont réparés à l’ouverture.
 - L’export PDF utilise désormais une seule action claire et ouvre la boîte de dialogue d’impression native sur le bureau, avec un texte sélectionnable et recherchable.
 - Correction du périmètre d’autorisation du client qui refusait les paramètres IA, les canaux de modèles, les credits, les analyses et l’achat de credits.
