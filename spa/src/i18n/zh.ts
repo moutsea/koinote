@@ -1061,6 +1061,7 @@ export const zh: Messages = {
     sharePasswordPlaceholder: "设置访问口令",
     shareEnable: "开启分享",
     shareUpdate: "更新设置",
+    shareSaving: "处理中…",
     shareRevoke: "停止分享",
     shareRevokeConfirm:
       "停止分享后现有链接立即失效，重新开启会生成新链接。确定吗？",
@@ -1646,6 +1647,10 @@ function hello(name) {
     share_not_found: "链接无效或已被撤销",
     share_access_invalid: "分享权限设置无效",
     share_password_too_short: "口令至少 6 位",
+    desktop_share_sync_required:
+      "文档需要先完成同步才能分享，请检查同步状态后重试",
+    desktop_share_cache_failed:
+      "分享已在云端生效，但客户端未能保存本地状态，请稍后重新打开分享设置并再次应用",
     share_password_invalid: "口令不正确",
     too_many_requests: "尝试过于频繁，请稍后再试",
     insufficient_credits: "可用 credits 不足，请购买 credits 或改用自己的 LLM 渠道",

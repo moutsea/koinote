@@ -1260,21 +1260,75 @@ export function putEditorTabs(params: EditorTabs) {
 
 // ---------- 分享 ----------
 
-export function createShare(
+export async function createShare(
   docId: string,
   params: { access: ShareAccess; password?: string },
 ) {
-  return apiJson<{ share: DocumentShare }>(
+  const desktopStore = isDesktopRuntime()
+    ? await import("./desktop/offlineStore")
+    : null;
+  if (
+    desktopStore &&
+    !(await desktopStore.desktopPrepareDocumentForRemoteMutation(docId))
+  ) {
+    throw new ApiError(
+      409,
+      "Document must finish syncing before it can be shared",
+      "desktop_share_sync_required",
+    );
+  }
+  const result = await apiJson<{ share: DocumentShare }>(
     `/api/documents/${encodeURIComponent(docId)}/share`,
     { method: "POST", body: JSON.stringify(params) },
   );
+  if (desktopStore) {
+    await desktopStore.desktopAcceptDocumentShare(docId, result.share).catch(
+      (error) => {
+        console.warn("Desktop share state could not be cached", error);
+        void desktopStore.desktopReportSyncError("desktop_share_cache_failed").catch(
+          (reportError) =>
+            console.warn(
+              "Desktop share cache failure could not be reported",
+              reportError,
+            ),
+        );
+      },
+    );
+  }
+  return result;
 }
 
-export function revokeShare(docId: string) {
-  return apiJson<{ success: boolean }>(
+export async function revokeShare(docId: string) {
+  const desktopStore = isDesktopRuntime()
+    ? await import("./desktop/offlineStore")
+    : null;
+  if (
+    desktopStore &&
+    !(await desktopStore.desktopPrepareDocumentForRemoteMutation(docId))
+  ) {
+    throw new ApiError(
+      409,
+      "Document must finish syncing before sharing can be changed",
+      "desktop_share_sync_required",
+    );
+  }
+  const result = await apiJson<{ success: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}/share`,
     { method: "DELETE" },
   );
+  if (desktopStore) {
+    await desktopStore.desktopAcceptDocumentShare(docId, null).catch((error) => {
+      console.warn("Desktop share state could not be cleared", error);
+      void desktopStore.desktopReportSyncError("desktop_share_cache_failed").catch(
+        (reportError) =>
+          console.warn(
+            "Desktop share cache failure could not be reported",
+            reportError,
+          ),
+      );
+    });
+  }
+  return result;
 }
 
 /** 公开读取。口令档时返回 { requiresPassword: true }，不含正文。 */

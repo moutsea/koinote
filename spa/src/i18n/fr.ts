@@ -1118,6 +1118,7 @@ export const fr: Messages = {
     sharePasswordPlaceholder: "Définir un mot de passe d'accès",
     shareEnable: "Activer le partage",
     shareUpdate: "Mettre à jour",
+    shareSaving: "Traitement…",
     shareRevoke: "Arrêter le partage",
     shareRevokeConfirm:
       "Les liens existants cesseront immédiatement de fonctionner et une réactivation en créera un nouveau. Continuer ?",
@@ -1739,6 +1740,10 @@ function hello(name) {
     share_access_invalid: "Niveau de partage invalide",
     share_password_too_short:
       "Le mot de passe doit comporter au moins 6 caractères",
+    desktop_share_sync_required:
+      "Le document doit finir sa synchronisation avant le partage. Vérifiez l’état de synchronisation puis réessayez",
+    desktop_share_cache_failed:
+      "Le partage est actif en ligne, mais son état local n’a pas pu être enregistré. Réappliquez les réglages de partage plus tard",
     share_password_invalid: "Mot de passe incorrect",
     too_many_requests: "Trop de tentatives — veuillez réessayer plus tard",
     insufficient_credits: "Credits insuffisants. Achetez-en ou utilisez votre propre canal LLM",

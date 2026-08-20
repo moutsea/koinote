@@ -1096,6 +1096,7 @@ export const ja: Messages = {
     sharePasswordPlaceholder: "アクセスパスワードを設定",
     shareEnable: "共有を開始",
     shareUpdate: "設定を更新",
+    shareSaving: "処理中…",
     shareRevoke: "共有を停止",
     shareRevokeConfirm:
       "既存のリンクは即座に無効になり、再開すると新しいリンクが生成されます。続けますか？",
@@ -1708,6 +1709,10 @@ function hello(name) {
     share_access_invalid: "共有権限の設定が無効です",
     share_password_invalid: "パスワードが正しくありません",
     share_password_too_short: "パスワードは 6 文字以上必要です",
+    desktop_share_sync_required:
+      "共有する前に文書の同期を完了してください。同期状態を確認して再試行してください",
+    desktop_share_cache_failed:
+      "共有はオンラインで有効になりましたが、ローカル状態を保存できませんでした。後でもう一度共有設定を適用してください",
     too_many_requests: "試行回数が多すぎます — しばらくしてからお試しください",
     insufficient_credits: "Credits が不足しています。購入するか、自分の LLM チャネルを使用してください",
     agent_llm_not_configured: "内蔵 AI モデルが設定されていません",

@@ -24,6 +24,7 @@ const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
 const dashboard = fs.readFileSync("spa/src/pages/DashboardPage.tsx", "utf8");
 const aiSettings = fs.readFileSync("spa/src/pages/AISettingsPage.tsx", "utf8");
 const documents = fs.readFileSync("spa/src/pages/DocumentsPage.tsx", "utf8");
+const documentHooks = fs.readFileSync("spa/src/documents.ts", "utf8");
 const invitations = fs.readFileSync("spa/src/pages/InvitationsPage.tsx", "utf8");
 const invitationCard = fs.readFileSync("spa/src/components/InvitationCard.tsx", "utf8");
 const shareDialog = fs.readFileSync("spa/src/components/editor/ShareDialog.tsx", "utf8");
@@ -71,6 +72,9 @@ includes("邀请链接使用站点公开域名", invitationCard, "koinoteWebURL(
 excludes("邀请链接不使用 Tauri 本地域名", invitationCard, "window.location.origin");
 includes("分享链接使用站点公开域名", shareDialog, "koinoteWebURL(");
 excludes("分享链接不使用 Tauri 本地域名", shareDialog, "window.location.origin");
+includes("分享请求期间显示进度", shareDialog, "t.editor.shareSaving");
+includes("分享成功后立即更新当前文档", documentHooks, "{ ...document, share }");
+includes("撤销分享后立即清除当前文档状态", documentHooks, "{ ...document, share: null }");
 includes("价格页读取公开价目表", pricing, "getBillingPricing");
 includes("价格页登录用户可直接结账", pricing, "createMembershipCheckout");
 includes("价格页展示 credits 套餐", pricing, "creditPacks.map");

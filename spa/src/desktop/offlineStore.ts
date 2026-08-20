@@ -1126,6 +1126,31 @@ export async function desktopPrepareDocumentForRemoteMutation(docId: string): Pr
   }));
 }
 
+export async function desktopAcceptDocumentShare(
+  docId: string,
+  share: NonNullable<Document["share"]> | null,
+): Promise<void> {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    if (isLocalAccount(account)) throw new Error("local_mode_network_disabled");
+    const persistedShare = share
+      ? {
+          token: share.token,
+          access: share.access,
+          requiresPassword: share.requiresPassword,
+          viewCount: share.viewCount,
+        }
+      : null;
+    const db = await database();
+    const result = await db.execute(`
+      UPDATE offline_documents
+      SET share_json = $3, change_seq = change_seq + 1
+      WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+    `, [account, docId, persistedShare ? JSON.stringify(persistedShare) : null]);
+    if (result.rowsAffected !== 1) throw new Error("Document not found");
+  });
+}
+
 export async function desktopAcceptRemoteDocumentMutation(
   document: Document,
 ): Promise<{ document: Document }> {
@@ -1690,6 +1715,11 @@ export async function desktopSyncSummary(): Promise<DesktopSyncSummary> {
   }
   const summary = await calculateSummary(account, "idle");
   return summary.message ? { ...summary, state: "error" } : summary;
+}
+
+export async function desktopReportSyncError(message: string): Promise<void> {
+  const account = await accountID();
+  notify(await calculateSummary(account, "error", message));
 }
 
 export async function desktopListConflicts(): Promise<DesktopConflict[]> {

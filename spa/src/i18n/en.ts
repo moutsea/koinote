@@ -1101,6 +1101,7 @@ export const en: Messages = {
     sharePasswordPlaceholder: "Set an access password",
     shareEnable: "Enable sharing",
     shareUpdate: "Update settings",
+    shareSaving: "Working…",
     shareRevoke: "Stop sharing",
     shareRevokeConfirm:
       "Existing links stop working immediately, and re-enabling creates a new one. Continue?",
@@ -1705,6 +1706,10 @@ function hello(name) {
     share_not_found: "This link is invalid or has been revoked",
     share_access_invalid: "Invalid share access level",
     share_password_too_short: "Password must be at least 6 characters",
+    desktop_share_sync_required:
+      "This document must finish syncing before it can be shared. Check sync status and try again",
+    desktop_share_cache_failed:
+      "Sharing succeeded online, but the app could not save its local state. Open sharing and apply it again later",
     share_password_invalid: "Incorrect password",
     too_many_requests: "Too many attempts — please try again later",
     insufficient_credits: "Not enough credits. Purchase credits or use your own LLM channel",

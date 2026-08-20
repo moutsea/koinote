@@ -276,9 +276,10 @@ export function useCreateShare() {
       access: ShareAccess;
       password?: string;
     }) => createShare(docId, { access, password }),
-    onSuccess: (_result, { docId }) => {
-      // 分享状态挂在单篇文档上，刷它以拿到最新 token
-      void queryClient.invalidateQueries({ queryKey: docKey(docId) });
+    onSuccess: ({ share }, { docId }) => {
+      queryClient.setQueryData<Document>(docKey(docId), (document) =>
+        document ? { ...document, share } : document,
+      );
     },
   });
 }
@@ -288,7 +289,9 @@ export function useRevokeShare() {
   return useMutation({
     mutationFn: (docId: string) => revokeShare(docId),
     onSuccess: (_result, docId) => {
-      void queryClient.invalidateQueries({ queryKey: docKey(docId) });
+      queryClient.setQueryData<Document>(docKey(docId), (document) =>
+        document ? { ...document, share: null } : document,
+      );
     },
   });
 }

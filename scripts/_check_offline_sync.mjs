@@ -521,6 +521,31 @@ assert.match(
   /permanentlyDeleteDocument[\s\S]*?isDesktopRuntime\(\)[\s\S]*?desktopPermanentlyDeleteDocument/,
   "桌面永久删除必须通过本地协调层处理",
 );
+assert.match(
+  apiSource,
+  /createShare[\s\S]*?desktopPrepareDocumentForRemoteMutation[\s\S]*?desktopAcceptDocumentShare/,
+  "桌面开启分享前必须同步当前文档，并把服务端分享状态写回本地",
+);
+assert.match(
+  apiSource,
+  /revokeShare[\s\S]*?desktopPrepareDocumentForRemoteMutation[\s\S]*?desktopAcceptDocumentShare\(docId, null\)/,
+  "桌面撤销分享前必须同步当前文档，并清除本地分享状态",
+);
+assert.match(
+  offlineStore,
+  /desktopAcceptDocumentShare[\s\S]*?UPDATE offline_documents[\s\S]*?SET share_json = \$3, change_seq = change_seq \+ 1/,
+  "桌面分享结果必须持久化到 SQLite，并阻止在途的过期拉取覆盖它",
+);
+assert.match(
+  apiSource,
+  /desktopAcceptDocumentShare[\s\S]*?catch[\s\S]*?desktopReportSyncError\("desktop_share_cache_failed"\)/,
+  "本地分享状态写入失败后必须触发用户可见的同步错误，不能只写控制台",
+);
+assert.match(
+  offlineStore,
+  /desktopReportSyncError[\s\S]*?notify\(await calculateSummary\(account, "error", message\)\)/,
+  "桌面缓存失败必须复用同步状态事件通道",
+);
 assert.match(offlineStore, /desktopStoreLocalImage[\s\S]*?INSERT INTO offline_images/);
 assert.match(
   offlineStore,

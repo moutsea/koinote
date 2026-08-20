@@ -26,6 +26,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - L’achat de credits prend désormais en charge les mêmes devises USD, CNY, EUR et JPY que l’adhésion, afin que Stripe puisse proposer les moyens locaux éligibles comme WeChat Pay en CNY.
 - Après application d’une optimisation IA, le client aligne désormais sa révision et son instantané distant, évitant un faux échec de synchronisation alors que le contenu a bien été envoyé.
 - Le remplacement d’une image locale par son URL après téléversement conserve désormais la position de défilement de l’éditeur.
+- Le partage sur ordinateur synchronise d’abord le brouillon courant puis conserve immédiatement son état localement, afin que l’activation ou la révocation ne semble plus sans effet.
 
 ## [0.6.0] - 2026-08-17
 

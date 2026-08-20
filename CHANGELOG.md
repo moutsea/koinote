@@ -28,6 +28,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Credits checkout now supports the same USD, CNY, EUR, and JPY choices as membership, allowing Stripe to expose eligible local methods such as WeChat Pay for CNY.
 - AI optimization changes now reconcile the desktop revision and remote snapshot after apply, preventing a successful review from leaving the client in a false sync-error state.
 - Replacing a pending desktop image with its uploaded URL now preserves the editor scroll position instead of jumping upward.
+- Desktop sharing now syncs the current draft first and immediately persists the returned share state locally, so enabling or revoking a share no longer appears to do nothing.
 
 ## [0.6.0] - 2026-08-17
 

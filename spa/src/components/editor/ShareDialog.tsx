@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Eye, Link2, Lock, X } from "lucide-react";
+import { Check, Copy, Eye, Link2, LoaderCircle, Lock, X } from "lucide-react";
 import { ApiError } from "../../api";
 import {
   useCreateShare,
@@ -219,7 +219,12 @@ export function ShareDialog({
             disabled={busy}
             className="rounded-full bg-cinnabar-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-cinnabar-500 disabled:opacity-60"
           >
-            {share ? t.editor.shareUpdate : t.editor.shareEnable}
+            {create.isPending ? (
+              <span className="inline-flex items-center gap-1.5">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                {t.editor.shareSaving}
+              </span>
+            ) : share ? t.editor.shareUpdate : t.editor.shareEnable}
           </button>
           {share && (
             <button
@@ -228,7 +233,7 @@ export function ShareDialog({
               disabled={busy}
               className="rounded-full px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-950/40"
             >
-              {t.editor.shareRevoke}
+              {revoke.isPending ? t.editor.shareSaving : t.editor.shareRevoke}
             </button>
           )}
         </div>

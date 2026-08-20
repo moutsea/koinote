@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version runs AI optimization as parallel title, body, and layout subtasks with durable progress and partial results."
+          notes="Koinote Desktop $version fixes document sharing by syncing drafts first and persisting share state locally without stale pull races."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本将 AI 优化拆分为标题、正文分段和结构排版子任务，最多三路并行执行；进度与已完成的部分结果会持久化，单个子任务校验失败时只重试对应任务，长文审阅更快也更稳定。
+          此版本修复客户端分享文档点击后无反应的问题：分享前会先同步当前草稿，成功后立即更新并持久化本地分享状态，同时避免并发拉取把新状态覆盖回旧值。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release splits AI optimization into title, body-section, and structure/layout subtasks with up to three concurrent model calls. Progress and completed partial results are durable, and validation retries only the affected subtask for faster, more reliable long-form reviews.
+          This release fixes document sharing appearing unresponsive in the desktop client. Drafts are synchronized before sharing, returned share state is persisted immediately, and stale concurrent pulls can no longer overwrite the new state.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

@@ -832,6 +832,7 @@ export interface Messages {
     sharePasswordPlaceholder: string;
     shareEnable: string;
     shareUpdate: string;
+    shareSaving: string;
     shareRevoke: string;
     shareRevokeConfirm: string;
     shareCopyLink: string;
