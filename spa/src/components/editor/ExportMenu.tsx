@@ -13,11 +13,25 @@ import {
   downloadBlob,
   exportHTML,
   exportMarkdown,
-  exportPrint,
+  exportPDF,
   safeFilename,
 } from "./exportDocument";
 import { MediaExportDialog } from "./WechatDialog";
 import { trackProductEvent } from "../../api";
+
+function exportErrorText(
+  error: unknown,
+  fallback: string,
+  errors: Record<string, string>,
+): string {
+  const code =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : "";
+  return (code && errors[code]) || fallback;
+}
 
 export function ExportMenu({
   editor,
@@ -53,16 +67,21 @@ export function ExportMenu({
     };
   }, [open]);
 
-  async function run(kind: string, action: () => void | Promise<void>) {
+  async function run(
+    kind: string,
+    action: () => void | boolean | Promise<void | boolean>,
+  ) {
     setError(null);
     setBusy(kind);
     try {
-      await action();
-      void trackProductEvent("first_export").catch(() => undefined);
+      const completed = await action();
+      if (completed !== false) {
+        void trackProductEvent("first_export").catch(() => undefined);
+      }
       setOpen(false);
-    } catch {
+    } catch (caught) {
       // 导出失败必须显形，静默失败会让用户以为文件已经下载了
-      setError(t.editor.exportFailed);
+      setError(exportErrorText(caught, t.editor.exportFailed, t.errors));
     } finally {
       setBusy(null);
     }
@@ -135,7 +154,7 @@ export function ExportMenu({
             hint={t.editor.exportPrintHint}
             busy={busy === "pdf"}
             onClick={() =>
-              run("pdf", () => exportPrint(title, t.editor.untitled))
+              run("pdf", () => exportPDF(title, t.editor.untitled))
             }
           />
           <Item

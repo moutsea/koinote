@@ -21,6 +21,8 @@
 /build
 # Vite 构建产物（由 npm run build 生成，不入版本控制）
 /spa/dist
+# 本地导出与视觉验收产物
+/output/
 # wrangler dev 的本地状态：含本地模拟的 R2 对象与缓存
 /.wrangler
 

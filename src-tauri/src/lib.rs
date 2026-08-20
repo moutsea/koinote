@@ -4,6 +4,8 @@ use sqlx::SqlitePool;
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+mod pdf_export;
+
 const KEYRING_SERVICE: &str = "app.koinote.desktop";
 const SESSION_ENTRY: &str = "session";
 const PENDING_AUTH_ENTRY: &str = "pending-auth";
@@ -302,16 +304,8 @@ async fn desktop_abort_local_mode_import(
 }
 
 #[tauri::command]
-fn desktop_print(window: tauri::WebviewWindow) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        return window.print().map_err(|error| error.to_string());
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    window
-        .eval("window.print()")
-        .map_err(|error| error.to_string())
+async fn desktop_export_pdf(window: tauri::WebviewWindow, path: String) -> Result<(), String> {
+    pdf_export::export_pdf(window, path).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -389,7 +383,7 @@ pub fn run() {
             desktop_import_local_mode,
             desktop_finalize_local_mode_import,
             desktop_abort_local_mode_import,
-            desktop_print,
+            desktop_export_pdf,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Koinote");

@@ -1,6 +1,6 @@
 [package]
 name = "koinote-desktop"
-version = "0.1.19"
+version = "0.1.20"
 description = "Koinote offline desktop client"
 authors = ["Koinote contributors"]
 license = "MIT"
@@ -33,3 +33,13 @@ tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
 tauri-plugin-updater = "2.10.1"
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native"] }
+tokio = { version = "1", features = ["time"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSPrintInfo", "NSPrintOperation", "NSResponder", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSDictionary", "NSString", "NSURL"] }
+objc2-web-kit = { version = "0.3.2", default-features = false, features = ["WKWebView", "objc2-app-kit"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+webview2-com = "0.38.2"
+windows = "0.61.3"

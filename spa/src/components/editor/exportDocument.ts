@@ -4,7 +4,7 @@ import { highlightCodeBlocks } from "./highlightCode";
 import { renderMathInHTML } from "./renderMath";
 import { isDesktopRuntime } from "../../desktop/runtime";
 
-/** 文档导出。PDF 统一走系统打印管道，保留可选择、可搜索的矢量文字。 */
+/** 文档导出。PDF 走原生打印引擎，保留可选择、可搜索的矢量文字。 */
 
 /** 字符串进、字符串出地补高亮。HTML 导出走的是字符串拼接，不经过 DOM 舞台。 */
 function withHighlightedCode(html: string): string {
@@ -100,12 +100,47 @@ export function exportHTML(editor: Editor, title: string, fallback: string) {
 
 // ---------- PDF ----------
 
+function ensurePdfExtension(path: string): string {
+  return path.toLowerCase().endsWith(".pdf") ? path : `${path}.pdf`;
+}
+
+async function settlePrintableLayout() {
+  await document.fonts?.ready.catch(() => undefined);
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+  });
+}
+
 /**
- * 走浏览器打印管道。文字是矢量的，可选可搜可复制，但用户要在对话框里
- * 选「另存为 PDF」—— 浏览器不提供绕过对话框直接产出矢量 PDF 的接口。
- * 打印样式见 globals.css 的 @media print 段。
+ * 桌面端直接让 WebKit / WebView2 将当前打印布局写成 PDF；网页端受浏览器
+ * 权限限制，仍使用系统打印对话框。两条路径都保留矢量文字与 @media print
+ * 的分页样式。
  */
-export async function exportPrint(title: string, fallback: string) {
+export async function exportPDF(title: string, fallback: string): Promise<boolean> {
+  const filename = `${safeFilename(title, fallback)}.pdf`;
+
+  if (isDesktopRuntime()) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const selectedPath = await save({
+      defaultPath: filename,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (!selectedPath) return false;
+
+    const root = document.body;
+    root.classList.add("koinote-printing");
+    try {
+      await settlePrintableLayout();
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("desktop_export_pdf", {
+        path: ensurePdfExtension(selectedPath),
+      });
+    } finally {
+      root.classList.remove("koinote-printing");
+    }
+    return true;
+  }
+
   const root = document.body;
   root.classList.add("koinote-printing");
 
@@ -122,14 +157,6 @@ export async function exportPrint(title: string, fallback: string) {
   // 部分浏览器不触发 afterprint，兜一个超时避免类名与标题残留
   window.setTimeout(cleanup, 60_000);
 
-  if (isDesktopRuntime()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    try {
-      await invoke("desktop_print");
-    } finally {
-      cleanup();
-    }
-    return;
-  }
   window.print();
+  return true;
 }
