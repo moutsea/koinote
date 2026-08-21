@@ -215,7 +215,7 @@ ok(
 // 标题左边缘就比正文往外凸。
 ok(
   "内缩挂在外层容器上，不在 .kn-doc-title 上",
-  /className="px-2"/.test(tsx),
+  /className="[^"]*\bpx-2\b[^"]*"/.test(tsx),
   "与 editorContentClass 的 px-2 对齐",
 );
 {

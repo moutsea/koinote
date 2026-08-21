@@ -153,9 +153,15 @@ export function ExportMenu({
             label={t.editor.exportPDF}
             hint={t.editor.exportPrintHint}
             busy={busy === "pdf"}
-            onClick={() =>
-              run("pdf", () => exportPDF(title, t.editor.untitled))
-            }
+            onClick={() => {
+              const printSource = containerRef.current
+                ?.closest<HTMLElement>("[data-koinote-editor-instance]")
+                ?.querySelector<HTMLElement>("[data-koinote-print-source]");
+              void run("pdf", () => {
+                if (!printSource) throw new Error("pdf_export_source_missing");
+                return exportPDF(printSource, title, t.editor.untitled);
+              });
+            }}
           />
           <Item
             icon={<MessageSquare className="h-3.5 w-3.5" />}

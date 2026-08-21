@@ -15,6 +15,9 @@ function ok(label, condition, detail) {
 const menu = readFileSync(new URL("../spa/src/components/editor/ExportMenu.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../spa/src/components/editor/WechatDialog.tsx", import.meta.url), "utf8");
 const exportDocument = readFileSync(new URL("../spa/src/components/editor/exportDocument.ts", import.meta.url), "utf8");
+const markdownEditor = readFileSync(new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url), "utf8");
+const docTitle = readFileSync(new URL("../spa/src/components/editor/DocTitle.tsx", import.meta.url), "utf8");
+const globals = readFileSync(new URL("../spa/src/globals.css", import.meta.url), "utf8");
 const desktopLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const desktopPdf = readFileSync(new URL("../src-tauri/src/pdf_export.rs", import.meta.url), "utf8");
 
@@ -65,7 +68,43 @@ ok(
 );
 ok(
   "PDF 统一走可搜索文字的原生管道",
-  /label=\{t\.editor\.exportPDF\}[\s\S]*?exportPDF\(title, t\.editor\.untitled\)/.test(menu),
+  /label=\{t\.editor\.exportPDF\}[\s\S]*?exportPDF\(printSource, title, t\.editor\.untitled\)/.test(menu),
+);
+ok(
+  "PDF 从当前文档生成独立打印快照",
+  /data-koinote-editor-instance/.test(markdownEditor) &&
+    /data-koinote-print-source/.test(markdownEditor) &&
+    /koinote-doc-title-wrap/.test(docTitle) &&
+    /source\.cloneNode\(true\)/.test(exportDocument) &&
+    /className\.startsWith\("dark:"\)/.test(exportDocument) &&
+    /replaceAll\([\s\S]*?\\\.dark\(\?=\[\\s\.:#\\\[\]\)/.test(exportDocument) &&
+    /PRINT_ROOT_ID = "koinote-print-root"/.test(exportDocument),
+  "不能直接打印带固定高度和滚动容器的编辑器界面",
+);
+ok(
+  "网页 PDF 布局失败也清理打印快照",
+  /const root = createPrintableSnapshot\(source\);[\s\S]*?try \{[\s\S]*?await settlePrintableLayout\(root\);[\s\S]*?\} catch \(error\) \{[\s\S]*?cleanup\(\);[\s\S]*?throw error;/.test(
+    exportDocument,
+  ),
+  "布局、标题和打印调用必须共用异常清理路径",
+);
+ok(
+  "PDF 打印解除视口高度锁并隐藏应用外壳",
+  /html\.koinote-printing,[\s\S]*?height: auto !important;[\s\S]*?overflow: visible !important;/.test(globals) &&
+    /body > #root \{[\s\S]*?display: none !important;/.test(globals) &&
+    /\.koinote-print-document \{[\s\S]*?max-width: none !important;/.test(globals),
+  "长文必须由打印引擎跨页排版，不能裁在第一屏",
+);
+ok(
+  "PDF 快照保留图片但移除图片编辑按钮",
+  /querySelectorAll<HTMLElement>\("figure > button"\)/.test(exportDocument) &&
+    /button\.replaceWith\(image\)/.test(exportDocument),
+);
+ok(
+  "PDF 快照清除页内搜索高亮",
+  /\.kn-page-search-match, \.kn-page-search-current/.test(exportDocument) &&
+    /removeAttribute\("data-page-search-index"\)/.test(exportDocument),
+  "临时查找标记不应出现在导出的 PDF 中",
 );
 ok(
   "Tauri 注册桌面 PDF 命令",

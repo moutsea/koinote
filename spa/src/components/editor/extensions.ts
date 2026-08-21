@@ -12,6 +12,7 @@ import { ImageNodeView } from "./ImageNodeView";
 import { lowlight } from "./lowlight";
 import { BlockMarkdownImage } from "./markdownImage";
 import { markdownMathPlugin } from "./markdownMath";
+import { PageSearchExtension } from "./pageSearch";
 
 /**
  * TipTap 扩展集合 —— Typora 式所见即所得的地基。
@@ -30,6 +31,7 @@ export function createEditorExtensions(placeholder: string) {
       // 用带高亮的代码块替换 StarterKit 内置的
       codeBlock: false,
     }),
+    PageSearchExtension,
     CodeBlockLowlight.configure({
       lowlight,
       defaultLanguage: "plaintext",

@@ -1146,6 +1146,15 @@ export const fr: Messages = {
     exportDOCX: "Word (.docx)",
     exportPrintHint:
       "Enregistrement direct sur ordinateur, texte sélectionnable et recherchable",
+    find: {
+      button: "Rechercher",
+      placeholder: "Rechercher dans ce document…",
+      previous: "Résultat précédent",
+      next: "Résultat suivant",
+      close: "Fermer la recherche",
+      noResults: "Aucun résultat",
+      resultCount: "{current} / {total}",
+    },
     mediaExport: "Exporter vers les médias",
     mediaExportHint: "Adapté à WeChat, Zhihu et Juejin",
     mediaTitle: "Exporter vers une plateforme",

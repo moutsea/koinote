@@ -325,41 +325,120 @@ body {
   opacity: 1;
 }
 
+/* ---------- 当前文档查找 ---------- */
+.kn-page-search-match {
+  border-radius: 0.15em;
+  background: #fde68a;
+  color: #1f2328;
+  box-shadow: inset 0 -1px 0 #d97706;
+}
+
+.kn-page-search-current {
+  background: #fb923c;
+  color: #111827;
+  box-shadow: 0 0 0 2px rgb(234 88 12 / 0.28);
+}
+
+.kn-page-search-title-match {
+  border-radius: 0.25rem;
+  background: rgb(253 230 138 / 0.62);
+}
+
+.kn-page-search-title-current {
+  background: rgb(251 146 60 / 0.72);
+  box-shadow: 0 0 0 2px rgb(234 88 12 / 0.25);
+}
+
+#koinote-print-root {
+  display: none;
+}
+
 /* ---------- 打印（PDF 导出走这条路） ----------
    走系统原生 PDF 引擎而非前端生成库：后者要嵌 CJK 字体才能显示中文，
    常见变通是把文字栅格化成图片，那样文字不可选、不可搜、体积大。
    打印路径下文字可选、CJK 正常，KaTeX 与代码高亮直接复用现有样式。 */
 @media print {
-  /* 页面 chrome 一律不印：导航、侧边栏、工具栏、按钮 */
-  body.koinote-printing header,
-  body.koinote-printing aside,
-  body.koinote-printing [role="toolbar"],
-  body.koinote-printing button {
+  /* 编辑器平时把根节点锁在一屏高，直接打印会只得到当前视口。打印时解除
+     高度和 overflow 限制，并只展示导出前生成的静态文档快照。 */
+  html.koinote-printing,
+  html.koinote-printing body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  html.koinote-printing body > #root {
     display: none !important;
   }
-
-  /* 正文铺满纸张，去掉滚动容器的高度限制 */
-  body.koinote-printing,
-  body.koinote-printing .ProseMirror {
+  html.koinote-printing #koinote-print-root {
+    --background: #fff;
+    --foreground: #1f2328;
+    --ink-paper: #fff;
+    --ink-paper-soft: #fff;
+    --ink-black: #1f2328;
+    --ink-strong: #34383f;
+    --ink-mid: #626872;
+    --ink-faint: #949aa3;
+    --ink-line: #ddd8cb;
+    --ink-wash: rgba(142, 116, 70, 0.055);
+    --ink-wash-strong: rgba(142, 116, 70, 0.1);
+    --cinnabar: #b93b28;
+    --cinnabar-soft: rgba(185, 59, 40, 0.14);
+    display: block !important;
+    width: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     background: #fff !important;
     color: #000 !important;
   }
-  body.koinote-printing .overflow-y-auto {
-    overflow: visible !important;
-    max-height: none !important;
+  html.koinote-printing .koinote-print-document {
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  body.koinote-printing .prose {
+  html.koinote-printing .koinote-print-document > :first-child {
+    margin-top: 0 !important;
+  }
+  html.koinote-printing .koinote-print-title-text {
+    font: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  html.koinote-printing .koinote-doc-title-wrap {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+  html.koinote-printing .koinote-print-image {
+    display: block;
+    width: 100%;
+  }
+
+  /* 正文铺满纸张，去掉编辑态的最小高度和内边距 */
+  html.koinote-printing .ProseMirror {
+    background: #fff !important;
+    color: #000 !important;
+    min-height: 0 !important;
+    padding: 1rem 0 0 !important;
+  }
+  html.koinote-printing .prose {
     max-width: none !important;
   }
 
   /* 标题不要孤零零落在页尾 */
-  h1, h2, h3, h4 {
+  h1, h2, h3, h4,
+  .kn-doc-title {
     break-after: avoid;
     page-break-after: avoid;
   }
   /* 代码块、表格、图片、公式尽量不跨页断开 */
   pre,
   table,
+  figure,
   img,
   [data-type="block-math"] {
     break-inside: avoid;
@@ -381,7 +460,7 @@ body {
     color: #1f2328 !important;
   }
   /* 链接打印出地址，纸上才知道指向哪里 */
-  .ProseMirror a::after {
+  #koinote-print-root .ProseMirror a::after {
     content: " (" attr(href) ")";
     font-size: 0.85em;
     color: #57606a;

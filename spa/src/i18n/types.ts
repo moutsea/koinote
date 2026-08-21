@@ -860,6 +860,15 @@ export interface Messages {
     exportPDF: string;
     exportDOCX: string;
     exportPrintHint: string;
+    find: {
+      button: string;
+      placeholder: string;
+      previous: string;
+      next: string;
+      close: string;
+      noResults: string;
+      resultCount: string;
+    };
     mediaExport: string;
     mediaExportHint: string;
     mediaTitle: string;

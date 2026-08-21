@@ -23,6 +23,7 @@ import {
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { isDesktopRuntime } from "../../desktop/runtime";
 import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
+import { DocumentFindBar } from "./DocumentFindBar";
 
 /**
  * 没套主题时标题的排版。
@@ -84,6 +85,7 @@ export default function MarkdownEditor({
   const [uploading, setUploading] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const editorRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!uploadNotice) return;
@@ -435,7 +437,11 @@ export default function MarkdownEditor({
           : "";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      ref={editorRootRef}
+      data-koinote-editor-instance
+      className="relative flex min-h-0 flex-1 flex-col"
+    >
       {/* 控件栏不再放标题输入框 —— 标题挪到正文列里了（见下方 DocTitle）。
           这一行现在只承载状态与操作，所以留一个 flex-1 的空位把右侧控件推到边上 */}
       <div className="flex items-center gap-3 border-b border-black/5 px-4 py-2 dark:border-white/10">
@@ -480,6 +486,11 @@ export default function MarkdownEditor({
             {statusText}
           </span>
         )}
+        <DocumentFindBar
+          editor={editor}
+          title={title}
+          editorRootRef={editorRootRef}
+        />
         <ThemePicker value={themeId} onChange={changeTheme} />
         {trailingControls}
       </div>
@@ -494,8 +505,9 @@ export default function MarkdownEditor({
           <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
             {/* 主题 CSS 随文档走，挂在作用域容器上。空串时 themeCSS 是空的，
                 editorContentClass 会把 prose 加回来，观感回到没有主题的样子 */}
-            {themeCSS && <style>{themeCSS}</style>}
+            {themeCSS && <style data-koinote-document-theme>{themeCSS}</style>}
             <div
+              data-koinote-print-source
               className={`mx-auto w-full max-w-3xl px-4 ${themeId ? THEME_SCOPE : ""}`}
             >
               {/* 标题在作用域容器内、正文之前：这样它拿得到主题的 h1 规则，

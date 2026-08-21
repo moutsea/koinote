@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds one-click PDF export that saves a paginated, searchable file directly without opening the system print dialog."
+          notes="Koinote Desktop $version adds in-document search with Cmd/Ctrl+F and improves direct PDF export for long documents, themes, and reliable print cleanup."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本新增 PDF 一键导出：选择保存位置后直接生成分页且可搜索的 PDF，不再跳转系统打印面板。
+          此版本新增当前文档页内搜索，支持 Cmd/Ctrl+F、关键词高亮、结果计数与循环切换；同时完善 PDF 一键导出，修复长文只导出一页、主题样式泄漏与异常后打印状态残留的问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds one-click PDF export. Choose a destination and the desktop app saves a paginated, searchable PDF directly without opening the system print dialog.
+          This release adds in-document search with Cmd/Ctrl+F, highlighted matches, result counts, and wraparound navigation. Direct PDF export now handles long documents, theme isolation, and failure cleanup more reliably.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

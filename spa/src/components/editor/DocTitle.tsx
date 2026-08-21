@@ -34,7 +34,7 @@ export function DocTitle({
     // 不能把内缩写在 .kn-doc-title 上：主题的 h1 规则里带 padding（popart 是
     // 18px 16px），选择器权重比 Tailwind 的类高，会把内缩顶掉，标题左边缘
     // 就比正文往外凸 8px。
-    <div className="px-2">
+    <div className="koinote-doc-title-wrap px-2">
       {/*
         data-title 供 ::after 镜像读取。镜像量出行数，网格行高随之变化，
         textarea 被拉伸填满 —— 所以它永远刚好装下全部文本。

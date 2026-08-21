@@ -14,6 +14,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added smart date-based and activity-based organization for documents outside manually managed folders, with adaptive month/week grouping and confirmation before bulk moves.
 - Added an administrator server-status dashboard for host CPU, memory, load, disk, uptime, and network throughput, using read-only host metrics in production.
 - Added a localized 15-template gallery when creating documents: five offline-ready templates are free, including todo lists and flexible tables, while Lifetime members unlock ten advanced templates including daily and weekly reports, OKR, KPI, writing, product, research, and technical workflows.
+- Added in-document search with `Cmd+F` on macOS and `Ctrl+F` on Windows/Linux, highlighted matches, result counts, and wraparound previous/next navigation.
 
 ### Changed
 
@@ -24,7 +25,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Stripe webhooks now acknowledge events belonging to other applications on a shared account, including events created with a different Stripe API release train, while preserving strict Koinote checkout verification.
 - Improved Word export with explicit A4 typography, heading hierarchy, nested lists, real hyperlinks, styled quotes and code blocks, bounded images with captions, stable tables, and page numbers instead of relying on Word defaults.
 - Kept headings immediately after block images separate across repeated Markdown saves, and repaired legacy escaped headings when documents open.
-- PDF export now uses one clear action and saves a paginated, searchable PDF directly to the chosen file on desktop instead of opening the system print dialog.
+- PDF export now uses one clear action and saves a paginated, searchable PDF directly to the chosen file on desktop; a dedicated print snapshot prevents long documents from being clipped to the editor viewport and keeps document layout separate from application chrome.
 - Desktop Bearer sessions can now load and manage AI settings, BYOK channels, credits, reviews, and credit checkout instead of being rejected by the desktop endpoint scope.
 - Credits checkout now uses a live-mode Stripe Product, and deployments reject test/live Product mismatches before they reach users.
 - Credits checkout now supports the same USD, CNY, EUR, and JPY choices as membership, allowing Stripe to expose eligible local methods such as WeChat Pay for CNY.
