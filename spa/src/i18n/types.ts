@@ -540,11 +540,46 @@ export interface Messages {
     title: string;
     placeholder: string;
     hint: string;
+    quickOpenTitle: string;
+    quickOpenPlaceholder: string;
+    quickOpenHint: string;
+    quickOpenEmpty: string;
+    quickOpenMore: string;
     startTyping: string;
     noResults: string;
     loadFailed: string;
     titleMatch: string;
     contentMatch: string;
+  };
+  keyboardShortcuts: {
+    title: string;
+    description: string;
+    close: string;
+    or: string;
+    searchAndNavigation: string;
+    documents: string;
+    panels: string;
+    editing: string;
+    panelHint: string;
+    actions: {
+      showKeyboardShortcuts: string;
+      searchDocuments: string;
+      quickOpen: string;
+      searchAllDocuments: string;
+      findInDocument: string;
+      previousDocument: string;
+      nextDocument: string;
+      selectTab: string;
+      newDocument: string;
+      saveDocument: string;
+      closeDocument: string;
+      toggleDocumentsPanel: string;
+      toggleOutlinePanel: string;
+      undo: string;
+      redo: string;
+      bold: string;
+      italic: string;
+    };
   };
   transfer: {
     importButton: string;

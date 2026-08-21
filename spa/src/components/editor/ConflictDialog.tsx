@@ -3,6 +3,7 @@ import { LoaderCircle, X } from "lucide-react";
 import { getDocument, type Document } from "../../api";
 import type { DocumentSnapshot } from "./useDocumentSaver";
 import { useI18n } from "../../i18n";
+import { pushModal } from "../../modalStack";
 import { findWechatTheme } from "./wechatThemes";
 
 export function ConflictDialog({
@@ -27,6 +28,8 @@ export function ConflictDialog({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+
+  useEffect(() => pushModal(), []);
 
   useEffect(() => {
     let active = true;

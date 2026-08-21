@@ -15,6 +15,7 @@ import {
 } from "../desktop/updaterSchedule";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopLocalModeSelected } from "../desktop/localMode";
+import { pushModal } from "../modalStack";
 
 type UpdatePhase =
   | "idle"
@@ -35,6 +36,7 @@ export function DesktopUpdater() {
   const availableUpdateRef = useRef<Update | null>(null);
   const contentLengthRef = useRef<number | null>(null);
   const nextScheduledCheckAtRef = useRef<number | null>(null);
+  const modalVisible = phase !== "idle";
 
   const runCheck = useCallback(async (interactive: boolean) => {
     if (isDesktopLocalModeSelected()) return;
@@ -91,6 +93,11 @@ export function DesktopUpdater() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [runCheck]);
+
+  useEffect(() => {
+    if (!modalVisible) return;
+    return pushModal();
+  }, [modalVisible]);
 
   function dismiss() {
     if (phase === "installing") return;

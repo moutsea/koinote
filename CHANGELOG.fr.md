@@ -13,6 +13,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout d’un tableau de bord administrateur pour le CPU, la mémoire, la charge, le disque, la durée de fonctionnement et le débit réseau de l’hôte, à partir de métriques montées en lecture seule en production.
 - Ajout d’une galerie multilingue de 15 modèles : cinq modèles hors ligne sont gratuits, dont la liste de tâches et le tableau polyvalent, tandis que les membres à vie disposent de dix modèles avancés avec rapports quotidien et hebdomadaire, OKR, KPI, écriture, produit, recherche et technique.
 - Ajout de la recherche dans le document avec `Cmd+F` sur macOS et `Ctrl+F` sur Windows/Linux, mise en évidence des résultats, compteur et navigation précédente/suivante en boucle.
+- Ajout de menus natifs localisés et d’un aide-mémoire des raccourcis sur ordinateur, avec ouverture rapide, recherche globale, navigation entre onglets, sélection numérotée, création/fermeture de documents, enregistrement manuel et bascule des panneaux.
 
 ### Changed
 
@@ -30,6 +31,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Après application d’une optimisation IA, le client aligne désormais sa révision et son instantané distant, évitant un faux échec de synchronisation alors que le contenu a bien été envoyé.
 - Le remplacement d’une image locale par son URL après téléversement conserve désormais la position de défilement de l’éditeur.
 - Le partage sur ordinateur synchronise d’abord le brouillon courant puis conserve immédiatement son état localement, afin que l’activation ou la révocation ne semble plus sans effet.
+- Les raccourcis et accélérateurs des menus natifs n’agissent plus sur le document derrière une fenêtre modale ; un conflit pendant l’optimisation IA remplace désormais le panneau par le résolveur de conflit visible.
+- Les modifications effectuées pendant une synchronisation d’images déclenchent désormais de façon fiable une synchronisation suivante, évitant les faux retards d’enregistrement ou de synchronisation après un téléversement réussi.
 
 ## [0.6.0] - 2026-08-17
 

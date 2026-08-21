@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { interpolate, useI18n } from "../../i18n";
+import { useDesktopMenuActions } from "../../desktop/menu";
+import { isModalOpen } from "../../modalStack";
 import {
   activateDocumentSearchMatch,
   clearDocumentSearch,
@@ -89,15 +91,32 @@ export function DocumentFindBar({
     if (editor) clearDocumentSearch(editor);
   }, [editor, syncTitleHighlight]);
 
+  const openFind = useCallback(() => {
+    if (!editorRootRef.current?.getClientRects().length) return;
+    setOpen(true);
+    window.setTimeout(() => inputRef.current?.select(), 0);
+  }, [editorRootRef]);
+
+  useDesktopMenuActions((action) => {
+    if (action === "find-in-document") openFind();
+  });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isPageSearchShortcut(event)) {
+      const pageSearchShortcut = isPageSearchShortcut(event);
+      if (isModalOpen()) {
+        if (pageSearchShortcut) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+      if (pageSearchShortcut) {
         // 多标签编辑器会保留隐藏实例，只让当前真正可见的实例接管浏览器查找。
         if (!editorRootRef.current?.getClientRects().length) return;
         event.preventDefault();
         event.stopPropagation();
-        setOpen(true);
-        window.setTimeout(() => inputRef.current?.select(), 0);
+        openFind();
         return;
       }
       if (open && event.key === "Escape") {
@@ -108,7 +127,7 @@ export function DocumentFindBar({
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [close, editorRootRef, open]);
+  }, [close, editorRootRef, open, openFind]);
 
   useEffect(() => {
     if (!open) return;

@@ -29,6 +29,7 @@ import {
   type DocumentTemplateId,
 } from "../documentTemplates";
 import { useI18n } from "../i18n";
+import { pushModal } from "../modalStack";
 
 const CATEGORY_ORDER: readonly DocumentTemplateCategory[] = [
   "everyday",
@@ -88,6 +89,7 @@ export function DocumentTemplateDialog({
   );
 
   useEffect(() => {
+    const releaseModal = pushModal();
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -101,6 +103,7 @@ export function DocumentTemplateDialog({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
+      releaseModal();
       previousFocusRef.current?.focus();
     };
   }, [creating, onClose]);

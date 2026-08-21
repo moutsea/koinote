@@ -184,6 +184,7 @@ const serializeMutation = createAsyncSerialQueue();
 const serializeImageCacheMutation = createAsyncSerialQueue();
 let syncPromise: Promise<DesktopSyncSummary> | null = null;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let syncQueuedAfterCurrent = false;
 const snapshotInitializations = new Map<string, Promise<void>>();
 const remoteCacheFullAccounts = new Set<string>();
 
@@ -1704,6 +1705,10 @@ export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<Desk
   if (syncPromise) return syncPromise;
   syncPromise = performPreparedSync(options).finally(() => {
     syncPromise = null;
+    if (syncQueuedAfterCurrent) {
+      syncQueuedAfterCurrent = false;
+      scheduleSync(0);
+    }
   });
   return syncPromise;
 }
@@ -1787,8 +1792,14 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
     clearTimeout(syncTimer);
     syncTimer = null;
   }
+  syncQueuedAfterCurrent = false;
   const activeSync = syncPromise;
   if (activeSync) await activeSync.catch(() => undefined);
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  syncQueuedAfterCurrent = false;
   const db = await database();
   await db.execute(`DELETE FROM offline_documents WHERE account_id = $1`, [account]);
   await db.execute(`DELETE FROM offline_folders WHERE account_id = $1`, [account]);
@@ -1833,6 +1844,13 @@ function scheduleSync(delay = 1500) {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     syncTimer = null;
+    // 图片上传会让一轮同步持续数秒。期间若用户继续编辑，保存完成后安排的
+    // 下一轮定时器可能先到；直接调用 syncDesktopNow 只会拿到旧 Promise，
+    // 这次新改动便失去唤醒，只能等周期轮询或用户手动重试。
+    if (syncPromise) {
+      syncQueuedAfterCurrent = true;
+      return;
+    }
     void syncDesktopNow();
   }, delay);
 }

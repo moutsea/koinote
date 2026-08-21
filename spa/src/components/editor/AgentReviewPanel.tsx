@@ -31,6 +31,7 @@ import {
 import { confirmAction } from "../../confirmAction";
 import { interpolate, useI18n } from "../../i18n";
 import { publishAgentReviewStarted } from "../../agentReviewNotifications";
+import { pushModal } from "../../modalStack";
 import {
   agentReviewAccess,
   canStartAgentReview,
@@ -62,6 +63,20 @@ export function AgentReviewPanel({
     initialReviewId ?? "",
   );
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const releaseModal = pushModal();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      releaseModal();
+    };
+  }, [onClose]);
 
   const settings = useQuery({
     queryKey: AGENT_SETTINGS_QUERY_KEY,
@@ -245,6 +260,8 @@ export function AgentReviewPanel({
         className="fixed inset-0 top-14 z-[55] bg-black/20 backdrop-blur-[1px]"
       />
       <aside
+        role="dialog"
+        aria-modal="true"
         aria-label={t.agentReview.title}
         className="fixed inset-y-14 right-0 z-[60] flex w-full flex-col border-l shadow-2xl sm:max-w-[36rem]"
         style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)", color: "var(--ink-black)" }}

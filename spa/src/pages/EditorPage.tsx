@@ -31,6 +31,15 @@ import { TabBar } from "../components/editor/TabBar";
 import { useDocumentSaver } from "../components/editor/useDocumentSaver";
 import { isSaveShortcut } from "../components/editor/saveShortcut";
 import {
+  adjacentTabId,
+  detectEditorShortcutPlatform,
+  editorShortcutAction,
+  isEditorShortcutInputContext,
+  numberedTabId,
+  shouldBlockEditorShortcutInInputContext,
+  shouldPreserveInputShortcut,
+} from "../components/editor/editorShortcuts";
+import {
   EMPTY_TABS,
   activate,
   close,
@@ -43,6 +52,7 @@ import { useSession } from "../auth";
 import { ApiError } from "../api";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopRuntime } from "../desktop/runtime";
+import { useDesktopMenuActions } from "../desktop/menu";
 import { registerDesktopSyncPreparation } from "../desktop/logoutGuard";
 import { confirmAction } from "../confirmAction";
 import {
@@ -60,6 +70,7 @@ import {
   documentTemplateById,
   type DocumentTemplateId,
 } from "../documentTemplates";
+import { isModalOpen, pushModal } from "../modalStack";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -129,6 +140,7 @@ export function EditorPage() {
 
   useEffect(() => {
     if (!mobileDocsOpen) return;
+    const releaseModal = pushModal();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -138,6 +150,7 @@ export function EditorPage() {
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
+      releaseModal();
     };
   }, [mobileDocsOpen]);
 
@@ -369,6 +382,7 @@ export function EditorPage() {
       if (!isSaveShortcut(e)) return;
       // 一定要拦掉，否则浏览器弹「保存网页」
       e.preventDefault();
+      if (isModalOpen()) return;
       const docId = activeDocId;
       if (!docId) return;
       // flush 内部对「没有待存改动」是空操作，所以重复按不会产生多余请求
@@ -461,6 +475,111 @@ export function EditorPage() {
     },
     [create],
   );
+
+  useDesktopMenuActions((action) => {
+    const current = tabStateRef.current;
+    if (action === "new-document") {
+      handleCreate(null);
+      return;
+    }
+    if (action === "save-document") {
+      if (current.activeDocId) void saver.flush(current.activeDocId);
+      return;
+    }
+    if (action === "close-document") {
+      if (current.activeDocId) handleCloseTab(current.activeDocId);
+      return;
+    }
+    if (action === "previous-document" || action === "next-document") {
+      const target = adjacentTabId(
+        current.openTabs,
+        current.activeDocId,
+        action === "next-document" ? 1 : -1,
+      );
+      if (target && target !== current.activeDocId) handleSelect(target);
+      return;
+    }
+    if (action === "toggle-documents-panel") {
+      setDocsOpen(!docsOpen);
+      return;
+    }
+    if (action === "toggle-outline-panel") {
+      setOutlineOpen(!outlineOpen);
+      return;
+    }
+    if (action === "share-document" && !localMode && doc.data) {
+      setShareOpen(true);
+    }
+  });
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    const platform = detectEditorShortcutPlatform(
+      navigator.platform,
+      navigator.userAgent,
+    );
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = editorShortcutAction(event, platform);
+      if (!action) return;
+      if (isModalOpen()) {
+        event.preventDefault();
+        return;
+      }
+
+      const inputContext = isEditorShortcutInputContext(
+        event.target as HTMLElement | null,
+      );
+      if (shouldPreserveInputShortcut(action, inputContext)) return;
+      if (shouldBlockEditorShortcutInInputContext(action, inputContext)) {
+        // 不执行应用动作，也不能交还给 WebView：否则 Cmd+W 可能关闭整个窗口。
+        event.preventDefault();
+        return;
+      }
+
+      const current = tabStateRef.current;
+      if (action === "next-tab" || action === "previous-tab") {
+        const target = adjacentTabId(
+          current.openTabs,
+          current.activeDocId,
+          action === "next-tab" ? 1 : -1,
+        );
+        if (target && target !== current.activeDocId) handleSelect(target);
+        return;
+      }
+      if (action.startsWith("select-tab-")) {
+        const target = numberedTabId(
+          current.openTabs,
+          Number(action.slice("select-tab-".length)),
+        );
+        if (target && target !== current.activeDocId) handleSelect(target);
+        return;
+      }
+      if (action === "close-tab") {
+        if (current.activeDocId) handleCloseTab(current.activeDocId);
+        return;
+      }
+      if (action === "toggle-documents-panel") {
+        setDocsOpen(!docsOpen);
+        return;
+      }
+      if (action === "toggle-outline-panel") {
+        setOutlineOpen(!outlineOpen);
+        return;
+      }
+      if (action === "new-document") handleCreate(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    docsOpen,
+    handleCloseTab,
+    handleCreate,
+    handleSelect,
+    outlineOpen,
+    setDocsOpen,
+    setOutlineOpen,
+  ]);
 
   const handleTemplateCreate = useCallback(
     (templateId: DocumentTemplateId | null) => {
@@ -837,6 +956,7 @@ export function EditorPage() {
           onClose={handleCloseTab}
           onCreate={handleCreate}
           creating={create.isPending}
+          desktopShortcuts={isDesktopRuntime()}
         />
 
         {/* 加载与错误态盖在池子上方，池子本身继续挂着 ——

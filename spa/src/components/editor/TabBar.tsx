@@ -21,6 +21,7 @@ export function TabBar({
   onClose,
   onCreate,
   creating,
+  desktopShortcuts,
 }: {
   tabs: string[];
   activeDocId: string | null;
@@ -37,8 +38,15 @@ export function TabBar({
    */
   onCreate: (folderId?: string | null) => void;
   creating: boolean;
+  desktopShortcuts: boolean;
 }) {
   const { t } = useI18n();
+  const closeLabel = desktopShortcuts
+    ? `${t.editor.closeTab} (⌘W / Ctrl+W)`
+    : t.editor.closeTab;
+  const newDocumentLabel = desktopShortcuts
+    ? `${t.editor.newDocument} (⌘N / Ctrl+N)`
+    : t.editor.newDocument;
 
   if (tabs.length === 0) return null;
 
@@ -104,8 +112,9 @@ export function TabBar({
                 e.stopPropagation(); // 否则会连带触发标签的 onSelect
                 onClose(docId);
               }}
-              aria-label={t.editor.closeTab}
-              title={t.editor.closeTab}
+              aria-label={closeLabel}
+              aria-keyshortcuts={desktopShortcuts ? "Meta+W Control+W" : undefined}
+              title={closeLabel}
               className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-400 opacity-0 transition group-hover:opacity-100 hover:bg-black/10 hover:text-neutral-700 focus-visible:opacity-100 dark:hover:bg-white/15 dark:hover:text-neutral-200"
             >
               <X className="h-3 w-3" />
@@ -121,8 +130,9 @@ export function TabBar({
         // JSON.stringify 直接抛 TypeError —— 请求根本发不出去，只剩一句「请求失败」
         onClick={() => onCreate(null)}
         disabled={creating}
-        aria-label={t.editor.newDocument}
-        title={t.editor.newDocument}
+        aria-label={newDocumentLabel}
+        aria-keyshortcuts={desktopShortcuts ? "Meta+N Control+N" : undefined}
+        title={newDocumentLabel}
         className="my-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-neutral-200"
       >
         <Plus className="h-3.5 w-3.5" />

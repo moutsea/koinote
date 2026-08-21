@@ -9,6 +9,7 @@ import {
   type DocumentVersion,
 } from "../../api";
 import { interpolate, useI18n } from "../../i18n";
+import { pushModal } from "../../modalStack";
 import { buildVersionDiff } from "./versionDiff";
 
 type Comparison = {
@@ -44,6 +45,8 @@ export function VersionHistoryDialog({
     [selected?.content, comparison.content],
   );
   const titleChanged = selected !== null && selected.title !== comparison.title;
+
+  useEffect(() => pushModal(), []);
 
   useEffect(() => {
     let active = true;

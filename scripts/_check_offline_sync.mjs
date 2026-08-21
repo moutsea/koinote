@@ -710,6 +710,16 @@ assert.match(
 assert.match(offlineStore, /runDesktopSyncSequence\(\{/);
 assert.match(
   offlineStore,
+  /let syncQueuedAfterCurrent = false[\s\S]*?function scheduleSync[\s\S]*?if \(syncPromise\) \{\s*syncQueuedAfterCurrent = true;\s*return;/,
+  "同步期间到期的后续保存必须排队，不能复用旧 Promise 后丢失唤醒",
+);
+assert.match(
+  offlineStore,
+  /syncPromise = performPreparedSync\(options\)\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
+  "当前同步结束后必须立即补跑期间积累的新改动",
+);
+assert.match(
+  offlineStore,
   /IMAGE_MAINTENANCE_META_KEY[\s\S]*?desktopMaintenanceBackoff\(attempts\)/,
   "图片维护失败必须持久化并按退避时间重试",
 );

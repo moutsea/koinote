@@ -12,6 +12,7 @@ import { zh } from "./zh";
 import { fr } from "./fr";
 import { ja } from "./ja";
 import { LOCALES, type Locale, type Messages } from "./types";
+import { syncDesktopMenuLocale } from "../desktop/menu";
 
 export { LOCALES, LOCALE_LABELS } from "./types";
 export type { Locale, Messages } from "./types";
@@ -57,6 +58,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   // 挂载时同步 <html lang>，与初始检测到的语言对齐（index.html 里的静态值可能不符）。
   useEffect(() => {
     document.documentElement.lang = locale;
+    void syncDesktopMenuLocale(locale).catch((error) =>
+      console.warn("Desktop menu locale sync failed", error),
+    );
   }, [locale]);
 
   const value = useMemo<I18nContextValue>(

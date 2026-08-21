@@ -8,6 +8,7 @@ import {
   type Announcement,
 } from "../api";
 import { useI18n, interpolate, type Locale } from "../i18n";
+import { pushModal } from "../modalStack";
 
 function announcementQueryKey(locale: Locale) {
   return ["announcements", "unread", locale] as const;
@@ -58,13 +59,17 @@ export function AnnouncementDialog() {
 
   useEffect(() => {
     if (!current) return;
+    const releaseModal = pushModal();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       dismissCurrent();
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      releaseModal();
+    };
   }, [current?.id]);
 
   if (!current) return null;

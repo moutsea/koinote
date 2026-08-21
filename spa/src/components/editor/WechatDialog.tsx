@@ -10,6 +10,7 @@ import {
 import { findWechatTheme } from "./wechatThemes";
 import { trackProductEvent } from "../../api";
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
+import { pushModal } from "../../modalStack";
 
 /**
  * 导出到自媒体平台。
@@ -41,12 +42,16 @@ export function MediaExportDialog({
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const releaseModal = pushModal();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     dialogRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      releaseModal();
+    };
   }, [onClose]);
 
   async function run() {

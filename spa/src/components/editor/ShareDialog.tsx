@@ -10,6 +10,7 @@ import {
 import { useI18n } from "../../i18n";
 import { confirmAction } from "../../confirmAction";
 import { koinoteWebURL } from "../../externalNavigation";
+import { pushModal } from "../../modalStack";
 
 export function ShareDialog({
   docId,
@@ -37,12 +38,16 @@ export function ShareDialog({
 
   // Esc 关闭 + 打开时焦点进入对话框，避免焦点留在背后的编辑器里
   useEffect(() => {
+    const releaseModal = pushModal();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     dialogRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      releaseModal();
+    };
   }, [onClose]);
 
   function translateError(err: unknown): string {

@@ -17,6 +17,7 @@ import {
   AGENT_REVIEW_OPEN_EVENT,
   consumeAgentReviewOpen,
 } from "../../agentReviewNotifications";
+import { useDesktopMenuActions } from "../../desktop/menu";
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -70,6 +71,17 @@ export function LiveEditor({
   const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
   const [remoteUpdated, setRemoteUpdated] = useState(false);
   const remoteUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useDesktopMenuActions((action) => {
+    if (!visible) return;
+    if (action === "ai-optimize") {
+      setRequestedReviewId("");
+      setAgentReviewOpen(true);
+    }
+    if (action === "version-history" && historyAvailable) {
+      void openHistory();
+    }
+  });
 
   const acceptLatestDocument = useCallback((document: NonNullable<typeof doc.data>) => {
     saver.acceptRemote(docId, {
@@ -213,7 +225,10 @@ export function LiveEditor({
 
   async function prepareAgentReview() {
     const saved = await saver.flush(docId);
-    if (!saved && saver.status(docId) === "conflict") setConflictOpen(true);
+    if (!saved && saver.status(docId) === "conflict") {
+      setAgentReviewOpen(false);
+      setConflictOpen(true);
+    }
     if (!saved || !isDesktopRuntime()) return saved;
     const { desktopPrepareDocumentForRemoteMutation } = await import("../../desktop/offlineStore");
     return desktopPrepareDocumentForRemoteMutation(docId);
@@ -350,7 +365,7 @@ export function LiveEditor({
           onClose={() => setHistoryOpen(false)}
         />
       )}
-      {visible && agentReviewOpen && (
+      {visible && agentReviewOpen && !conflictOpen && (
         <AgentReviewPanel
           docId={docId}
           member={member}

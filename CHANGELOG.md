@@ -15,6 +15,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added an administrator server-status dashboard for host CPU, memory, load, disk, uptime, and network throughput, using read-only host metrics in production.
 - Added a localized 15-template gallery when creating documents: five offline-ready templates are free, including todo lists and flexible tables, while Lifetime members unlock ten advanced templates including daily and weekly reports, OKR, KPI, writing, product, research, and technical workflows.
 - Added in-document search with `Cmd+F` on macOS and `Ctrl+F` on Windows/Linux, highlighted matches, result counts, and wraparound previous/next navigation.
+- Added localized native desktop menus, a shortcut reference dialog, quick document opening, global search, tab navigation, numbered tab selection, document creation/closing, manual save, and panel toggles.
 
 ### Changed
 
@@ -32,6 +33,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - AI optimization changes now reconcile the desktop revision and remote snapshot after apply, preventing a successful review from leaving the client in a false sync-error state.
 - Replacing a pending desktop image with its uploaded URL now preserves the editor scroll position instead of jumping upward.
 - Desktop sharing now syncs the current draft first and immediately persists the returned share state locally, so enabling or revoking a share no longer appears to do nothing.
+- Desktop shortcuts and native menu accelerators no longer act on documents behind modal dialogs; save conflicts now replace the AI optimization panel with the visible conflict resolver.
+- Desktop sync now queues a follow-up pass when edits arrive during an active image-upload sync, avoiding delayed save or sync errors after successful uploads.
 
 ## [0.6.0] - 2026-08-17
 

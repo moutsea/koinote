@@ -18,6 +18,7 @@ import {
 } from "./exportDocument";
 import { MediaExportDialog } from "./WechatDialog";
 import { trackProductEvent } from "../../api";
+import { useDesktopMenuActions } from "../../desktop/menu";
 
 function exportErrorText(
   error: unknown,
@@ -49,6 +50,10 @@ export function ExportMenu({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useDesktopMenuActions((action) => {
+    if (action === "export-document" && editor) setOpen(true);
+  });
 
   // 点外部或按 Esc 关闭
   useEffect(() => {

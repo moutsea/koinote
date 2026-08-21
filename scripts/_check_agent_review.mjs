@@ -113,6 +113,16 @@ includes("展示六维结构评分", panel, "review.layoutAssessment ?? []");
 includes("逐条或全部应用后接收服务端文档", panel, "onAcceptDocument(result.document)");
 includes("接收文档后刷新编辑器缓存", liveEditor, 'queryClient.setQueryData(["document", docId], next)');
 includes("Agent 写入前先落盘当前草稿", liveEditor, "onPrepareReview={prepareAgentReview}");
+assert.match(
+  liveEditor,
+  /prepareAgentReview[\s\S]*?setAgentReviewOpen\(false\)[\s\S]*?setConflictOpen\(true\)/,
+  "AI 操作保存冲突时必须关闭优化面板并展示冲突处理",
+);
+includes(
+  "冲突处理优先于 AI 优化面板",
+  liveEditor,
+  "agentReviewOpen && !conflictOpen",
+);
 includes("前端创建 review 端点", api, "/agent-reviews`");
 includes("桌面落实结果写回 SQLite", api, "desktopAcceptRemoteDocumentMutation(result.document)");
 includes("后端所有 review 操作要求终生会员", backend, "requireLifetimeMember(w, r)");

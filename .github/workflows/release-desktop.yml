@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds in-document search with Cmd/Ctrl+F and improves direct PDF export for long documents, themes, and reliable print cleanup."
+          notes="Koinote Desktop $version adds localized native menus, a shortcut reference, quick document navigation, modal-safe shortcuts, and reliable follow-up sync after image uploads."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本新增当前文档页内搜索，支持 Cmd/Ctrl+F、关键词高亮、结果计数与循环切换；同时完善 PDF 一键导出，修复长文只导出一页、主题样式泄漏与异常后打印状态残留的问题。
+          此版本新增本地化原生菜单和快捷键速查；桌面端可使用 Cmd/Ctrl+P 快速打开、Cmd/Ctrl+Shift+F 全局搜索、Ctrl+Tab 与数字键切换标签。弹窗打开时快捷键不再穿透，图片上传期间产生的新改动也会可靠触发下一轮同步。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release adds in-document search with Cmd/Ctrl+F, highlighted matches, result counts, and wraparound navigation. Direct PDF export now handles long documents, theme isolation, and failure cleanup more reliably.
+          This release adds localized native menus and a shortcut reference, with Cmd/Ctrl+P quick open, Cmd/Ctrl+Shift+F global search, Ctrl+Tab navigation, and numbered tab selection. Shortcuts no longer pass through modal dialogs, and edits made during image uploads reliably trigger a follow-up sync.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

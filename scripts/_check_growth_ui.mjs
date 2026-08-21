@@ -15,7 +15,7 @@ const worker = read("worker/index.ts");
 const productionCompose = read("docker-compose.prod.yml");
 
 assert.match(shell, /<GlobalSearch\s*\/>/);
-assert.match(search, /event\.metaKey \|\| event\.ctrlKey/);
+assert.match(search, /globalSearchShortcutMode\(event, platform, desktop\)/);
 assert.match(search, /<mark/);
 assert.match(documents, /importDocumentsFromFiles/);
 assert.match(documents, /exportDocumentsArchive/);

@@ -8,6 +8,7 @@ import {
 } from "../api";
 import { useI18n, interpolate } from "../i18n";
 import { formatBytes } from "../storage";
+import { pushModal } from "../modalStack";
 import { STORAGE_USAGE_KEY } from "./StorageCard";
 
 /**
@@ -39,11 +40,15 @@ export function QuotaDialog() {
 
   useEffect(() => {
     if (!detail) return;
+    const releaseModal = pushModal();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setDetail(null);
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      releaseModal();
+    };
   }, [detail]);
 
   if (!detail) return null;

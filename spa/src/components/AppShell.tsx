@@ -4,7 +4,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Moon,
@@ -20,6 +20,7 @@ import {
   Gift,
   HardDrive,
   History,
+  Keyboard,
   LayoutDashboard,
   Laptop,
   LogOut,
@@ -72,6 +73,17 @@ import {
   isDesktopLocalModeSelected,
   lockDesktopLocalMode,
 } from "../desktop/localMode";
+import {
+  desktopMenuEnabledActions,
+  syncDesktopMenuEnabled,
+  useDesktopMenuActions,
+} from "../desktop/menu";
+import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import {
+  detectEditorShortcutPlatform,
+  isKeyboardShortcutsShortcut,
+} from "./editor/editorShortcuts";
+import { isModalOpen } from "../modalStack";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
@@ -88,6 +100,8 @@ const DesktopUpdater = lazy(() =>
 export function AppShell() {
   const session = useSession();
   const user = session.data?.user;
+  const desktopMenuAuthenticated = Boolean(user);
+  const desktopMenuHistoryAvailable = user?.membershipTier === "lifetime";
   const desktopRuntime = isDesktopRuntime();
   const localMode = desktopRuntime && (
     Boolean(user?.isLocalMode) || isDesktopLocalModeSelected()
@@ -102,6 +116,57 @@ export function AppShell() {
     useState<DesktopBillingEventDetail | null>(() =>
       desktopRuntime ? getLatestDesktopBillingEvent() : null,
     );
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+  const closeKeyboardShortcuts = useCallback(
+    () => setKeyboardShortcutsOpen(false),
+    [],
+  );
+
+  useDesktopMenuActions((action) => {
+    if (action === "open-documentation") {
+      void navigate({ to: "/docs" });
+    }
+    if (action === "check-updates" && desktopRuntime && !localMode) {
+      requestDesktopUpdateCheck();
+    }
+    if (action === "show-keyboard-shortcuts") {
+      setKeyboardShortcutsOpen(true);
+    }
+  });
+
+  useEffect(() => {
+    if (!desktopRuntime) return;
+    const enabledActions = desktopMenuEnabledActions({
+      editorRoute: isUnder(pathname, "/editor"),
+      authenticated: desktopMenuAuthenticated,
+      localMode,
+      historyAvailable: desktopMenuHistoryAvailable,
+    });
+    void syncDesktopMenuEnabled(enabledActions).catch((error) =>
+      console.warn("Desktop menu availability sync failed", error),
+    );
+  }, [
+    desktopMenuAuthenticated,
+    desktopMenuHistoryAvailable,
+    desktopRuntime,
+    localMode,
+    pathname,
+  ]);
+
+  useEffect(() => {
+    const platform = detectEditorShortcutPlatform(
+      navigator.platform,
+      navigator.userAgent,
+    );
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isKeyboardShortcutsShortcut(event, platform)) return;
+      event.preventDefault();
+      if (isModalOpen()) return;
+      setKeyboardShortcutsOpen(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!desktopRuntime) return;
@@ -360,6 +425,7 @@ export function AppShell() {
                 onLogout={() => handleLogout()}
                 onSwitchLocal={() => handleLogout(true)}
                 onUseAccount={handleUseAccount}
+                onShowKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
               />
             ) : (
               // 主行动按钮走朱砂，全站唯一的高饱和色留给它
@@ -406,6 +472,9 @@ export function AppShell() {
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
           而那条路不只在编辑器页面触发 */}
       <QuotaDialog />
+      {keyboardShortcutsOpen && (
+        <KeyboardShortcutsDialog onClose={closeKeyboardShortcuts} />
+      )}
       {user && !localMode && <AnnouncementDialog />}
       {user?.membershipTier === "lifetime" && !localMode && (
         <AgentReviewNotifications
@@ -485,6 +554,7 @@ function UserMenu({
   onLogout,
   onSwitchLocal,
   onUseAccount,
+  onShowKeyboardShortcuts,
 }: {
   name: string;
   email: string;
@@ -503,6 +573,7 @@ function UserMenu({
   onLogout: () => void | Promise<void>;
   onSwitchLocal: () => void | Promise<void>;
   onUseAccount: () => void | Promise<void>;
+  onShowKeyboardShortcuts: () => void;
 }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
@@ -831,6 +902,25 @@ function UserMenu({
               {t.desktopLocalMode.useAccount}
             </button>
           )}
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onShowKeyboardShortcuts();
+            }}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{ color: "var(--ink-strong)" }}
+          >
+            <span className="flex items-center gap-2">
+              <Keyboard className="h-4 w-4 shrink-0" />
+              {t.keyboardShortcuts.title}
+            </span>
+            <span className="text-xs" style={{ color: "var(--ink-faint)" }}>
+              ⌘/Ctrl+/
+            </span>
+          </button>
 
           <button
             type="button"

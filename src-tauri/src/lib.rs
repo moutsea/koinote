@@ -1,7 +1,14 @@
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tauri::Manager;
+#[cfg(desktop)]
+use std::{collections::HashSet, sync::Mutex};
+#[cfg(desktop)]
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID},
+    Runtime,
+};
+use tauri::{Emitter, Manager};
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
 mod pdf_export;
@@ -10,6 +17,552 @@ const KEYRING_SERVICE: &str = "app.koinote.desktop";
 const SESSION_ENTRY: &str = "session";
 const PENDING_AUTH_ENTRY: &str = "pending-auth";
 const DATABASE_URL: &str = "sqlite:koinote-offline.db";
+const DESKTOP_MENU_EVENT: &str = "koinote:desktop-menu-action";
+const DESKTOP_MENU_PREFIX: &str = "koinote.";
+const DESKTOP_CLOSE_WINDOW_ACTION: &str = "close-window";
+
+#[cfg(desktop)]
+const DESKTOP_MENU_ACTIONS: [&str; 17] = [
+    "new-document",
+    "save-document",
+    "close-document",
+    "export-document",
+    "share-document",
+    "quick-open",
+    "find-in-document",
+    "search-all-documents",
+    "previous-document",
+    "next-document",
+    "toggle-documents-panel",
+    "toggle-outline-panel",
+    "ai-optimize",
+    "version-history",
+    "open-documentation",
+    "show-keyboard-shortcuts",
+    "check-updates",
+];
+
+#[cfg(desktop)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DesktopMenuLocale {
+    En,
+    Zh,
+    Fr,
+    Ja,
+}
+
+#[cfg(desktop)]
+impl DesktopMenuLocale {
+    fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "en" => Some(Self::En),
+            "zh" => Some(Self::Zh),
+            "fr" => Some(Self::Fr),
+            "ja" => Some(Self::Ja),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(desktop)]
+struct DesktopMenuState(Mutex<DesktopMenuSettings>);
+
+#[cfg(desktop)]
+struct DesktopMenuSettings {
+    locale: DesktopMenuLocale,
+    enabled_actions: HashSet<String>,
+}
+
+#[cfg(desktop)]
+impl Default for DesktopMenuSettings {
+    fn default() -> Self {
+        Self {
+            locale: DesktopMenuLocale::En,
+            enabled_actions: [
+                "open-documentation",
+                "show-keyboard-shortcuts",
+                "check-updates",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        }
+    }
+}
+
+#[cfg(desktop)]
+struct DesktopMenuCopy {
+    file: &'static str,
+    edit: &'static str,
+    view: &'static str,
+    navigate: &'static str,
+    tools: &'static str,
+    window: &'static str,
+    help: &'static str,
+    new_document: &'static str,
+    save_document: &'static str,
+    close_document: &'static str,
+    export_document: &'static str,
+    share_document: &'static str,
+    toggle_documents: &'static str,
+    toggle_outline: &'static str,
+    quick_open: &'static str,
+    find_document: &'static str,
+    search_all: &'static str,
+    previous_document: &'static str,
+    next_document: &'static str,
+    ai_optimize: &'static str,
+    version_history: &'static str,
+    check_updates: &'static str,
+    documentation: &'static str,
+    keyboard_shortcuts: &'static str,
+    close_window: &'static str,
+}
+
+#[cfg(desktop)]
+fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
+    match locale {
+        DesktopMenuLocale::En => DesktopMenuCopy {
+            file: "File",
+            edit: "Edit",
+            view: "View",
+            navigate: "Navigate",
+            tools: "Tools",
+            window: "Window",
+            help: "Help",
+            new_document: "New Document",
+            save_document: "Save Document",
+            close_document: "Close Document",
+            export_document: "Export Document…",
+            share_document: "Share Document…",
+            toggle_documents: "Toggle Document Sidebar",
+            toggle_outline: "Toggle Outline",
+            quick_open: "Quick Open Document…",
+            find_document: "Find in Document…",
+            search_all: "Search All Documents…",
+            previous_document: "Previous Document",
+            next_document: "Next Document",
+            ai_optimize: "AI Optimization…",
+            version_history: "Version History…",
+            check_updates: "Check for Updates…",
+            documentation: "Koinote Documentation",
+            keyboard_shortcuts: "Keyboard Shortcuts…",
+            close_window: "Close Window",
+        },
+        DesktopMenuLocale::Zh => DesktopMenuCopy {
+            file: "文件",
+            edit: "编辑",
+            view: "视图",
+            navigate: "导航",
+            tools: "工具",
+            window: "窗口",
+            help: "帮助",
+            new_document: "新建文档",
+            save_document: "保存文档",
+            close_document: "关闭文档",
+            export_document: "导出文档…",
+            share_document: "分享文档…",
+            toggle_documents: "显示或隐藏文档栏",
+            toggle_outline: "显示或隐藏大纲",
+            quick_open: "快速打开文档…",
+            find_document: "在文档中查找…",
+            search_all: "搜索全部文档…",
+            previous_document: "上一个文档",
+            next_document: "下一个文档",
+            ai_optimize: "AI 优化…",
+            version_history: "版本历史…",
+            check_updates: "检查更新…",
+            documentation: "Koinote 文档中心",
+            keyboard_shortcuts: "键盘快捷键…",
+            close_window: "关闭窗口",
+        },
+        DesktopMenuLocale::Fr => DesktopMenuCopy {
+            file: "Fichier",
+            edit: "Édition",
+            view: "Affichage",
+            navigate: "Navigation",
+            tools: "Outils",
+            window: "Fenêtre",
+            help: "Aide",
+            new_document: "Nouveau document",
+            save_document: "Enregistrer le document",
+            close_document: "Fermer le document",
+            export_document: "Exporter le document…",
+            share_document: "Partager le document…",
+            toggle_documents: "Afficher ou masquer les documents",
+            toggle_outline: "Afficher ou masquer le plan",
+            quick_open: "Ouvrir rapidement un document…",
+            find_document: "Rechercher dans le document…",
+            search_all: "Rechercher dans tous les documents…",
+            previous_document: "Document précédent",
+            next_document: "Document suivant",
+            ai_optimize: "Optimisation par IA…",
+            version_history: "Historique des versions…",
+            check_updates: "Rechercher des mises à jour…",
+            documentation: "Documentation Koinote",
+            keyboard_shortcuts: "Raccourcis clavier…",
+            close_window: "Fermer la fenêtre",
+        },
+        DesktopMenuLocale::Ja => DesktopMenuCopy {
+            file: "ファイル",
+            edit: "編集",
+            view: "表示",
+            navigate: "移動",
+            tools: "ツール",
+            window: "ウインドウ",
+            help: "ヘルプ",
+            new_document: "新規ドキュメント",
+            save_document: "ドキュメントを保存",
+            close_document: "ドキュメントを閉じる",
+            export_document: "ドキュメントを書き出す…",
+            share_document: "ドキュメントを共有…",
+            toggle_documents: "ドキュメント欄を表示／非表示",
+            toggle_outline: "アウトラインを表示／非表示",
+            quick_open: "ドキュメントをすばやく開く…",
+            find_document: "ドキュメント内を検索…",
+            search_all: "すべてのドキュメントを検索…",
+            previous_document: "前のドキュメント",
+            next_document: "次のドキュメント",
+            ai_optimize: "AI 最適化…",
+            version_history: "バージョン履歴…",
+            check_updates: "アップデートを確認…",
+            documentation: "Koinote ドキュメント",
+            keyboard_shortcuts: "キーボードショートカット…",
+            close_window: "ウインドウを閉じる",
+        },
+    }
+}
+
+#[cfg(desktop)]
+fn desktop_menu_item<R: Runtime, M: Manager<R>>(
+    manager: &M,
+    action: &str,
+    text: &str,
+    accelerator: Option<&str>,
+    enabled_actions: &HashSet<String>,
+) -> tauri::Result<tauri::menu::MenuItem<R>> {
+    let builder = MenuItemBuilder::with_id(format!("{DESKTOP_MENU_PREFIX}{action}"), text)
+        .enabled(enabled_actions.contains(action));
+    match accelerator {
+        Some(accelerator) => builder.accelerator(accelerator).build(manager),
+        None => builder.build(manager),
+    }
+}
+
+#[cfg(desktop)]
+fn build_desktop_menu<R: Runtime, M: Manager<R>>(
+    handle: &M,
+    locale: DesktopMenuLocale,
+    enabled_actions: &HashSet<String>,
+) -> tauri::Result<tauri::menu::Menu<R>> {
+    let copy = desktop_menu_copy(locale);
+
+    let new_document = desktop_menu_item(
+        handle,
+        "new-document",
+        copy.new_document,
+        None,
+        enabled_actions,
+    )?;
+    let save_document = desktop_menu_item(
+        handle,
+        "save-document",
+        copy.save_document,
+        Some("CmdOrCtrl+S"),
+        enabled_actions,
+    )?;
+    let close_document = desktop_menu_item(
+        handle,
+        "close-document",
+        copy.close_document,
+        None,
+        enabled_actions,
+    )?;
+    let export_document = desktop_menu_item(
+        handle,
+        "export-document",
+        copy.export_document,
+        None,
+        enabled_actions,
+    )?;
+    let share_document = desktop_menu_item(
+        handle,
+        "share-document",
+        copy.share_document,
+        None,
+        enabled_actions,
+    )?;
+
+    let file_builder = SubmenuBuilder::new(handle, copy.file)
+        .items(&[&new_document, &save_document, &close_document])
+        .separator()
+        .items(&[&export_document, &share_document]);
+    #[cfg(not(target_os = "macos"))]
+    let file_builder = file_builder.separator().quit();
+    let file_menu = file_builder.build()?;
+
+    let edit_menu = SubmenuBuilder::new(handle, copy.edit)
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+
+    let toggle_documents = desktop_menu_item(
+        handle,
+        "toggle-documents-panel",
+        copy.toggle_documents,
+        None,
+        enabled_actions,
+    )?;
+    let toggle_outline = desktop_menu_item(
+        handle,
+        "toggle-outline-panel",
+        copy.toggle_outline,
+        None,
+        enabled_actions,
+    )?;
+    let view_builder =
+        SubmenuBuilder::new(handle, copy.view).items(&[&toggle_documents, &toggle_outline]);
+    #[cfg(target_os = "macos")]
+    let view_builder = view_builder.separator().fullscreen();
+    let view_menu = view_builder.build()?;
+
+    let quick_open = desktop_menu_item(
+        handle,
+        "quick-open",
+        copy.quick_open,
+        Some("CmdOrCtrl+P"),
+        enabled_actions,
+    )?;
+    let find_document = desktop_menu_item(
+        handle,
+        "find-in-document",
+        copy.find_document,
+        Some("CmdOrCtrl+F"),
+        enabled_actions,
+    )?;
+    let search_all = desktop_menu_item(
+        handle,
+        "search-all-documents",
+        copy.search_all,
+        Some("CmdOrCtrl+Shift+F"),
+        enabled_actions,
+    )?;
+    let previous_document = desktop_menu_item(
+        handle,
+        "previous-document",
+        copy.previous_document,
+        None,
+        enabled_actions,
+    )?;
+    let next_document = desktop_menu_item(
+        handle,
+        "next-document",
+        copy.next_document,
+        None,
+        enabled_actions,
+    )?;
+    let navigate_menu = SubmenuBuilder::new(handle, copy.navigate)
+        .items(&[&quick_open, &find_document, &search_all])
+        .separator()
+        .items(&[&previous_document, &next_document])
+        .build()?;
+
+    let ai_optimize = desktop_menu_item(
+        handle,
+        "ai-optimize",
+        copy.ai_optimize,
+        None,
+        enabled_actions,
+    )?;
+    let version_history = desktop_menu_item(
+        handle,
+        "version-history",
+        copy.version_history,
+        None,
+        enabled_actions,
+    )?;
+    let check_updates = desktop_menu_item(
+        handle,
+        "check-updates",
+        copy.check_updates,
+        None,
+        enabled_actions,
+    )?;
+    let tools_menu = SubmenuBuilder::new(handle, copy.tools)
+        .items(&[&ai_optimize, &version_history])
+        .separator()
+        .item(&check_updates)
+        .build()?;
+
+    let documentation = desktop_menu_item(
+        handle,
+        "open-documentation",
+        copy.documentation,
+        None,
+        enabled_actions,
+    )?;
+    let keyboard_shortcuts = desktop_menu_item(
+        handle,
+        "show-keyboard-shortcuts",
+        copy.keyboard_shortcuts,
+        None,
+        enabled_actions,
+    )?;
+    let help_builder = SubmenuBuilder::with_id(handle, HELP_SUBMENU_ID, copy.help)
+        .items(&[&documentation, &keyboard_shortcuts]);
+    #[cfg(not(target_os = "macos"))]
+    let help_builder = help_builder.separator().about(None);
+    let help_menu = help_builder.build()?;
+
+    let close_window = MenuItemBuilder::with_id(
+        format!("{DESKTOP_MENU_PREFIX}{DESKTOP_CLOSE_WINDOW_ACTION}"),
+        copy.close_window,
+    )
+    .build(handle)?;
+    let window_menu = SubmenuBuilder::with_id(handle, WINDOW_SUBMENU_ID, copy.window)
+        .minimize()
+        .maximize()
+        .separator()
+        .item(&close_window)
+        .build()?;
+
+    let menu_builder = MenuBuilder::new(handle);
+    #[cfg(target_os = "macos")]
+    let menu_builder = {
+        let app_menu = SubmenuBuilder::new(handle, "Koinote")
+            .about(None)
+            .separator()
+            .services()
+            .separator()
+            .hide()
+            .hide_others()
+            .show_all()
+            .separator()
+            .quit()
+            .build()?;
+        menu_builder.item(&app_menu)
+    };
+    menu_builder
+        .items(&[
+            &file_menu,
+            &edit_menu,
+            &view_menu,
+            &navigate_menu,
+            &tools_menu,
+            &window_menu,
+            &help_menu,
+        ])
+        .build()
+}
+
+#[cfg(desktop)]
+fn install_desktop_menu<R: Runtime>(
+    app: &mut tauri::App<R>,
+    settings: &DesktopMenuSettings,
+) -> tauri::Result<()> {
+    let menu = build_desktop_menu(app.handle(), settings.locale, &settings.enabled_actions)?;
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn apply_desktop_menu_enabled<R: Runtime>(
+    menu: &tauri::menu::Menu<R>,
+    enabled_actions: &HashSet<String>,
+) -> tauri::Result<()> {
+    let top_level_items = menu.items()?;
+    for action in DESKTOP_MENU_ACTIONS {
+        let id = format!("{DESKTOP_MENU_PREFIX}{action}");
+        let item = top_level_items
+            .iter()
+            .filter_map(|item| item.as_submenu())
+            .find_map(|submenu| submenu.get(id.as_str()))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("desktop_menu_item_missing:{action}"),
+                )
+            })?;
+        let menu_item = item.as_menuitem().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("desktop_menu_item_invalid:{action}"),
+            )
+        })?;
+        menu_item.set_enabled(enabled_actions.contains(action))?;
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_set_menu_locale(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DesktopMenuState>,
+    locale: String,
+) -> Result<bool, String> {
+    let next = DesktopMenuLocale::from_code(&locale)
+        .ok_or_else(|| format!("unsupported_desktop_menu_locale:{locale}"))?;
+    let mut settings = state
+        .0
+        .lock()
+        .map_err(|_| "desktop_menu_locale_lock_failed".to_string())?;
+    if settings.locale == next {
+        return Ok(false);
+    }
+    let menu = build_desktop_menu(&app, next, &settings.enabled_actions)
+        .map_err(|error| error.to_string())?;
+    app.set_menu(menu).map_err(|error| error.to_string())?;
+    settings.locale = next;
+    Ok(true)
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+fn desktop_set_menu_locale(_locale: String) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_set_menu_enabled(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DesktopMenuState>,
+    enabled_actions: Vec<String>,
+) -> Result<bool, String> {
+    let next = enabled_actions.into_iter().collect::<HashSet<_>>();
+    if let Some(action) = next
+        .iter()
+        .find(|action| !DESKTOP_MENU_ACTIONS.contains(&action.as_str()))
+    {
+        return Err(format!("unsupported_desktop_menu_action:{action}"));
+    }
+
+    let mut settings = state
+        .0
+        .lock()
+        .map_err(|_| "desktop_menu_enabled_lock_failed".to_string())?;
+    if settings.enabled_actions == next {
+        return Ok(false);
+    }
+    let menu = app
+        .menu()
+        .ok_or_else(|| "desktop_menu_missing".to_string())?;
+    apply_desktop_menu_enabled(&menu, &next).map_err(|error| error.to_string())?;
+    settings.enabled_actions = next;
+    Ok(true)
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+fn desktop_set_menu_enabled(_enabled_actions: Vec<String>) -> Result<bool, String> {
+    Ok(false)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -362,6 +915,23 @@ pub fn run() {
         )
         .setup(|app| {
             #[cfg(desktop)]
+            {
+                let menu_settings = DesktopMenuSettings::default();
+                install_desktop_menu(app, &menu_settings)?;
+                app.manage(DesktopMenuState(Mutex::new(menu_settings)));
+                app.on_menu_event(|app, event| {
+                    if let Some(action) = event.id().as_ref().strip_prefix(DESKTOP_MENU_PREFIX) {
+                        if action == DESKTOP_CLOSE_WINDOW_ACTION {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.close();
+                            }
+                            return;
+                        }
+                        let _ = app.emit(DESKTOP_MENU_EVENT, action);
+                    }
+                });
+            }
+            #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
             if cfg!(debug_assertions) {
@@ -384,6 +954,8 @@ pub fn run() {
             desktop_finalize_local_mode_import,
             desktop_abort_local_mode_import,
             desktop_export_pdf,
+            desktop_set_menu_locale,
+            desktop_set_menu_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Koinote");
@@ -393,6 +965,49 @@ pub fn run() {
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    #[cfg(desktop)]
+    #[test]
+    fn desktop_menu_locales_are_complete_and_distinct() {
+        assert_eq!(
+            DesktopMenuLocale::from_code("en"),
+            Some(DesktopMenuLocale::En)
+        );
+        assert_eq!(
+            DesktopMenuLocale::from_code("zh"),
+            Some(DesktopMenuLocale::Zh)
+        );
+        assert_eq!(
+            DesktopMenuLocale::from_code("fr"),
+            Some(DesktopMenuLocale::Fr)
+        );
+        assert_eq!(
+            DesktopMenuLocale::from_code("ja"),
+            Some(DesktopMenuLocale::Ja)
+        );
+        assert_eq!(DesktopMenuLocale::from_code("de"), None);
+
+        let en = desktop_menu_copy(DesktopMenuLocale::En);
+        let zh = desktop_menu_copy(DesktopMenuLocale::Zh);
+        let fr = desktop_menu_copy(DesktopMenuLocale::Fr);
+        let ja = desktop_menu_copy(DesktopMenuLocale::Ja);
+        assert_eq!(en.file, "File");
+        assert_eq!(zh.file, "文件");
+        assert_eq!(fr.file, "Fichier");
+        assert_eq!(ja.file, "ファイル");
+        assert_eq!(en.keyboard_shortcuts, "Keyboard Shortcuts…");
+        assert_eq!(zh.keyboard_shortcuts, "键盘快捷键…");
+        assert_eq!(fr.keyboard_shortcuts, "Raccourcis clavier…");
+        assert_eq!(ja.keyboard_shortcuts, "キーボードショートカット…");
+        assert_eq!(en.close_window, "Close Window");
+        assert_eq!(zh.close_window, "关闭窗口");
+
+        let settings = DesktopMenuSettings::default();
+        assert!(settings.enabled_actions.contains("open-documentation"));
+        assert!(settings.enabled_actions.contains("show-keyboard-shortcuts"));
+        assert!(settings.enabled_actions.contains("check-updates"));
+        assert!(!settings.enabled_actions.contains("save-document"));
+    }
 
     async fn import_test_pool() -> SqlitePool {
         let pool = SqlitePoolOptions::new()

@@ -13,6 +13,7 @@ import {
   type DesktopSyncSummary,
 } from "../desktop/offlineStore";
 import { useI18n } from "../i18n";
+import { pushModal } from "../modalStack";
 import { PaperCard } from "./Ink";
 
 const INITIAL: DesktopSyncSummary = {
@@ -90,6 +91,11 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    return pushModal();
+  }, [dialogOpen]);
 
   if (!isDesktopRuntime()) return null;
 
