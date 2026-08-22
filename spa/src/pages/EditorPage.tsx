@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import type { EditorEvents } from "@tiptap/core";
 import { FolderTree, ListTree, Share2 } from "lucide-react";
 import { LiveEditor } from "../components/editor/LiveEditor";
 import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
@@ -71,10 +72,22 @@ import {
   type DocumentTemplateId,
 } from "../documentTemplates";
 import { isModalOpen, pushModal } from "../modalStack";
+import {
+  captureEditorTabSelection,
+  EDITOR_TAB_SELECTION_RESTORE_META,
+  restoreEditorTabSelection,
+  shouldPreserveEditorFocusAfterBlur,
+  type EditorTabSelection,
+} from "../components/editor/editorTabSelection";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
 const LEGACY_STORAGE_KEY = "koinote:document";
+
+type ActiveEditor = {
+  docId: string;
+  editor: Editor;
+};
 
 export function EditorPage() {
   const { locale, t } = useI18n();
@@ -100,7 +113,12 @@ export function EditorPage() {
   const refreshList = useRefreshDocumentList();
   const confirmDelete = useDeleteConfirm();
 
-  const [editor, setEditor] = useState<Editor | null>(null);
+  const [activeEditor, setActiveEditor] = useState<ActiveEditor | null>(null);
+  const editorSelections = useRef<Map<string, EditorTabSelection>>(new Map());
+  const editor =
+    activeEditor && activeEditor.docId === activeDocId
+      ? activeEditor.editor
+      : null;
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -119,6 +137,8 @@ export function EditorPage() {
     createFromRoute ? { folderId: null, fromRoute: true } : null,
   );
   const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
+  const tabStateRef = useRef(tabState);
+  tabStateRef.current = tabState;
   const saver = useDocumentSaver(refreshList);
   const serverTabs = useEditorTabs(loggedIn);
   const syncTabs = useSyncEditorTabs();
@@ -132,6 +152,85 @@ export function EditorPage() {
     true,
   );
   const outline = useOutline(editor);
+
+  const handleEditorReady = useCallback(
+    (docId: string, nextEditor: Editor | null) => {
+      setActiveEditor((current) => {
+        if (!nextEditor) {
+          return current?.docId === docId ? null : current;
+        }
+        if (current?.docId === docId && current.editor === nextEditor) {
+          return current;
+        }
+        return { docId, editor: nextEditor };
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (
+      !activeEditor ||
+      activeEditor.docId !== activeDocId ||
+      activeEditor.editor.isDestroyed
+    )
+      return;
+    const { docId, editor: currentEditor } = activeEditor;
+    const rememberSelection = (focused = currentEditor.isFocused) => {
+      if (currentEditor.isDestroyed) return;
+      editorSelections.current.set(
+        docId,
+        captureEditorTabSelection(currentEditor, focused),
+      );
+    };
+    const forgetClosedSelection = () => {
+      if (tabStateRef.current.openTabs.includes(docId)) return false;
+      editorSelections.current.delete(docId);
+      return true;
+    };
+    const rememberBlur = () => {
+      queueMicrotask(() => {
+        if (forgetClosedSelection()) return;
+        if (
+          shouldPreserveEditorFocusAfterBlur(
+            document.activeElement,
+            document.body,
+          )
+        )
+          return;
+        rememberSelection(false);
+      });
+    };
+
+    const rememberCurrentSelection = ({
+      transaction,
+    }: EditorEvents["selectionUpdate"]) => {
+      if (transaction.getMeta(EDITOR_TAB_SELECTION_RESTORE_META)) return;
+      rememberSelection();
+    };
+    const rememberFocus = () => rememberSelection(true);
+    currentEditor.on("selectionUpdate", rememberCurrentSelection);
+    currentEditor.on("focus", rememberFocus);
+    currentEditor.on("blur", rememberBlur);
+    const remembered = editorSelections.current.get(docId);
+    if (remembered) {
+      restoreEditorTabSelection(currentEditor, remembered);
+    } else {
+      rememberSelection();
+    }
+
+    return () => {
+      if (!forgetClosedSelection()) {
+        rememberSelection(
+          editorSelections.current.get(docId)?.focused ??
+            currentEditor.isFocused,
+        );
+      }
+      currentEditor.off("selectionUpdate", rememberCurrentSelection);
+      currentEditor.off("focus", rememberFocus);
+      currentEditor.off("blur", rememberBlur);
+    };
+  }, [activeDocId, activeEditor]);
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
@@ -263,10 +362,6 @@ export function EditorPage() {
    */
   const justClosed = useRef<string | null>(null);
 
-  // handleCloseTab 要在 updater 外面读当前标签状态
-  const tabStateRef = useRef(tabState);
-  tabStateRef.current = tabState;
-
   /**
    * 本次会话里由「+」新建的 docId。
    *
@@ -294,6 +389,7 @@ export function EditorPage() {
     for (const id of removed) {
       saverRef.current.drop(id);
       createdHere.current.delete(id);
+      editorSelections.current.delete(id);
     }
     setTabState(next);
 
@@ -417,6 +513,7 @@ export function EditorPage() {
 
   const handleCloseTab = useCallback(
     (docId: string) => {
+      editorSelections.current.delete(docId);
       /**
        * 点「+」会立刻 POST 建一篇真文档，所以关标签只摘标签的话，一篇没动过的空
        * 文档会永久留在侧栏里。这里把它删掉。
@@ -651,6 +748,7 @@ export function EditorPage() {
           // 那个 PUT 必然 404 —— 白发一次请求，还会把保存状态标成失败。
           // 上面已经 flush 过，这里只需丢掉本地记录。
           saver.drop(docId);
+          editorSelections.current.delete(docId);
           // 标签也要摘掉。数据库那边有外键 CASCADE 兜底，但本地状态得立刻反映
           setTabState((prev) => removeDeleted(prev, docId).next);
 
@@ -989,7 +1087,7 @@ export function EditorPage() {
               liveId === tabState.activeDocId && !doc.isLoading && !doc.isError
             }
             saver={saver}
-            onEditorReady={setEditor}
+            onEditorReady={handleEditorReady}
             onTitleChange={handleTitleChange}
             leadingControls={
               (!docsOpen || !outlineOpen) && (

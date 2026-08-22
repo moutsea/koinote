@@ -58,7 +58,8 @@ export function TabBar({
     >
       {tabs.map((docId) => {
         const active = docId === activeDocId;
-        const failed = ["failed", "conflict"].includes(statusOf(docId));
+        const status = statusOf(docId);
+        const failed = ["failed", "backed-up", "conflict"].includes(status);
         return (
           <div
             key={docId}
@@ -86,13 +87,21 @@ export function TabBar({
             }`}
           >
             <span
-              className={`min-w-0 truncate ${failed ? "text-red-600 dark:text-red-400" : ""}`}
-              title={
-                statusOf(docId) === "conflict"
-                  ? t.editor.resolveConflict
+              className={`min-w-0 truncate ${
+                status === "backed-up"
+                  ? "text-amber-700 dark:text-amber-400"
                   : failed
-                    ? t.editor.saveFailed
-                    : titleOf(docId)
+                    ? "text-red-600 dark:text-red-400"
+                    : ""
+              }`}
+              title={
+                status === "conflict"
+                  ? t.editor.resolveConflict
+                  : status === "backed-up"
+                    ? `${t.editor.saveFailed} · ${t.editor.saveFailedBackedUp}`
+                    : failed
+                      ? `${t.editor.saveFailed} · ${t.editor.saveBackupFailed}`
+                      : titleOf(docId)
               }
             >
               {titleOf(docId) || t.editor.untitled}
@@ -103,7 +112,13 @@ export function TabBar({
               {dirtyOf(docId) && !failed && (
                 <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
               )}
-              {failed && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
+              {failed && (
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    status === "backed-up" ? "bg-amber-700" : "bg-red-500"
+                  }`}
+                />
+              )}
             </span>
 
             <button

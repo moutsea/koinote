@@ -5,6 +5,7 @@ import {
   editorShortcutAction,
   isEditorShortcutInputContext,
   isKeyboardShortcutsShortcut,
+  keyboardShortcutsOpenAfterShortcut,
   numberedTabId,
   shouldBlockEditorShortcutInInputContext,
   shouldPreserveInputShortcut,
@@ -128,6 +129,26 @@ eq(
     "mac",
   ),
   false,
+);
+eq(
+  "快捷键表关闭且没有其他弹窗时打开",
+  keyboardShortcutsOpenAfterShortcut(false, false, false),
+  true,
+);
+eq(
+  "快捷键表打开时再次按下快捷键关闭",
+  keyboardShortcutsOpenAfterShortcut(true, true, true),
+  false,
+);
+eq(
+  "其他弹窗打开时不穿透",
+  keyboardShortcutsOpenAfterShortcut(false, true, true),
+  false,
+);
+eq(
+  "快捷键表上方还有弹窗时不关闭底层弹窗",
+  keyboardShortcutsOpenAfterShortcut(true, true, false),
+  true,
 );
 
 eq(

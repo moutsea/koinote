@@ -50,9 +50,17 @@ export function ExportMenu({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const busyRef = useRef(false);
 
   useDesktopMenuActions((action) => {
-    if (action === "export-document" && editor) setOpen(true);
+    if (action === "export-markdown") runMarkdownExport();
+    if (action === "export-html") runHTMLExport();
+    if (action === "export-docx") runDOCXExport();
+    if (action === "export-pdf") runPDFExport();
+    if (action === "export-media" && editor && !busyRef.current) {
+      setOpen(false);
+      setMediaOpen(true);
+    }
   });
 
   // 点外部或按 Esc 关闭
@@ -77,6 +85,8 @@ export function ExportMenu({
     action: () => void | boolean | Promise<void | boolean>,
   ) {
     setError(null);
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(kind);
     try {
       const completed = await action();
@@ -88,8 +98,44 @@ export function ExportMenu({
       // 导出失败必须显形，静默失败会让用户以为文件已经下载了
       setError(exportErrorText(caught, t.editor.exportFailed, t.errors));
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
+  }
+
+  function runMarkdownExport() {
+    if (!editor) return;
+    void run("md", () => exportMarkdown(editor, title, t.editor.untitled));
+  }
+
+  function runHTMLExport() {
+    if (!editor) return;
+    void run("html", () => exportHTML(editor, title, t.editor.untitled));
+  }
+
+  function runDOCXExport() {
+    if (!editor) return;
+    void run("docx", async () => {
+      // 只动态引入 exportDocx（docx 库约 1 MB，不该压在编辑器首屏）。
+      // exportDocument 已静态引入，再动态引一次拆不出 chunk，只会让
+      // Rollup 报警。
+      const { buildDocx } = await import("./exportDocx");
+      const blob = await buildDocx(editor, title, {
+        imageFailed: t.editor.exportFailed,
+      });
+      downloadBlob(blob, `${safeFilename(title, t.editor.untitled)}.docx`);
+    });
+  }
+
+  function runPDFExport() {
+    if (!editor) return;
+    const printSource = containerRef.current
+      ?.closest<HTMLElement>("[data-koinote-editor-instance]")
+      ?.querySelector<HTMLElement>("[data-koinote-print-source]");
+    void run("pdf", () => {
+      if (!printSource) throw new Error("pdf_export_source_missing");
+      return exportPDF(printSource, title, t.editor.untitled);
+    });
   }
 
   if (!editor) return null;
@@ -121,57 +167,36 @@ export function ExportMenu({
             icon={<FileText className="h-3.5 w-3.5" />}
             label={t.editor.exportMarkdown}
             busy={busy === "md"}
-            onClick={() =>
-              run("md", () => exportMarkdown(editor, title, t.editor.untitled))
-            }
+            disabled={busy !== null}
+            onClick={runMarkdownExport}
           />
           <Item
             icon={<Code2 className="h-3.5 w-3.5" />}
             label={t.editor.exportHTML}
             busy={busy === "html"}
-            onClick={() =>
-              run("html", () => exportHTML(editor, title, t.editor.untitled))
-            }
+            disabled={busy !== null}
+            onClick={runHTMLExport}
           />
           <Item
             icon={<FileType className="h-3.5 w-3.5" />}
             label={t.editor.exportDOCX}
             busy={busy === "docx"}
-            onClick={() =>
-              run("docx", async () => {
-                // 只动态引入 exportDocx（docx 库约 1 MB，不该压在编辑器首屏）。
-                // exportDocument 已静态引入，再动态引一次拆不出 chunk，只会让
-                // Rollup 报警。
-                const { buildDocx } = await import("./exportDocx");
-                const blob = await buildDocx(editor, title, {
-                  imageFailed: t.editor.exportFailed,
-                });
-                downloadBlob(
-                  blob,
-                  `${safeFilename(title, t.editor.untitled)}.docx`,
-                );
-              })
-            }
+            disabled={busy !== null}
+            onClick={runDOCXExport}
           />
           <Item
             icon={<FileDown className="h-3.5 w-3.5" />}
             label={t.editor.exportPDF}
             hint={t.editor.exportPrintHint}
             busy={busy === "pdf"}
-            onClick={() => {
-              const printSource = containerRef.current
-                ?.closest<HTMLElement>("[data-koinote-editor-instance]")
-                ?.querySelector<HTMLElement>("[data-koinote-print-source]");
-              void run("pdf", () => {
-                if (!printSource) throw new Error("pdf_export_source_missing");
-                return exportPDF(printSource, title, t.editor.untitled);
-              });
-            }}
+            disabled={busy !== null}
+            onClick={runPDFExport}
           />
           <Item
             icon={<MessageSquare className="h-3.5 w-3.5" />}
             label={t.editor.mediaExport}
             hint={t.editor.mediaExportHint}
+            disabled={busy !== null}
             onClick={() => {
               setOpen(false);
               setMediaOpen(true);
@@ -206,12 +231,14 @@ function Item({
   label,
   hint,
   busy,
+  disabled,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   hint?: string;
   busy?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   const { t } = useI18n();
@@ -219,7 +246,7 @@ function Item({
     <button
       type="button"
       role="menuitem"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={onClick}
       className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
     >

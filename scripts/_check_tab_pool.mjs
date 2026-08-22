@@ -1,4 +1,5 @@
 // 标签池的迁移规则校验。边界情形靠手点覆盖不全，尤其淘汰时序与关闭当前标签。
+import { readFileSync } from "node:fs";
 import {
   EMPTY_TABS,
   LIVE_LIMIT,
@@ -200,6 +201,80 @@ for (const [tabs, active] of [
   const only = close({ openTabs: ["a"], liveIds: ["a"], activeDocId: "a" }, "a").next;
   ok("关掉唯一标签后当前为 null", only.activeDocId === null);
   ok("关掉唯一标签后池子为空", only.liveIds.length === 0);
+}
+
+// ---------- 页面接线 ----------
+
+{
+  const page = readFileSync(
+    new URL("../spa/src/pages/EditorPage.tsx", import.meta.url),
+    "utf8",
+  );
+  const liveEditor = readFileSync(
+    new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),
+    "utf8",
+  );
+  ok(
+    "活动编辑器与文档 id 绑定",
+    /activeEditor\.docId\s*===\s*activeDocId/.test(page) &&
+      /return \{ docId, editor: nextEditor \}/.test(page) &&
+      /activeEditor\.docId\s*!==\s*activeDocId/.test(page),
+  );
+  ok(
+    "每篇文档单独记忆选区",
+    /useRef<Map<string, EditorTabSelection>>\(new Map\(\)\)/.test(page),
+  );
+  ok(
+    "活动编辑器持续监听并注销选区变化",
+    /currentEditor\.on\("selectionUpdate", rememberCurrentSelection\)/.test(
+      page,
+    ) &&
+      /currentEditor\.off\("selectionUpdate", rememberCurrentSelection\)/.test(
+        page,
+      ) &&
+      /currentEditor\.on\("blur", rememberBlur\)/.test(page) &&
+      /currentEditor\.off\("blur", rememberBlur\)/.test(page) &&
+      /queueMicrotask\([\s\S]*?shouldPreserveEditorFocusAfterBlur[\s\S]*?rememberSelection\(false\)/.test(
+        page,
+      ),
+  );
+  ok(
+    "内部恢复事务不会回写选区记忆",
+    /transaction\.getMeta\(EDITOR_TAB_SELECTION_RESTORE_META\)[\s\S]*?return;[\s\S]*?rememberSelection\(\)/.test(
+      page,
+    ),
+  );
+  const rememberSelectionBody =
+    /const rememberSelection = \([^)]*\) => \{([\s\S]*?)\n    \};/.exec(
+      page,
+    )?.[1] ?? "";
+  ok(
+    "逐键选区记忆不扫描标签数组",
+    rememberSelectionBody.length > 0 &&
+      !/openTabs\.includes/.test(rememberSelectionBody),
+    rememberSelectionBody,
+  );
+  ok(
+    "LiveEditor 上报编辑器时携带 docId",
+    /onEditorReady\?\.\(docId, editor\)/.test(liveEditor) &&
+      /onEditorReady=\{handleEditorReady\}/.test(page),
+  );
+  ok(
+    "关闭或删除文档会清理选区记忆",
+    [...page.matchAll(/editorSelections\.current\.delete\(docId\)/g)].length >=
+      2 &&
+      /const forgetClosedSelection[\s\S]*?tabStateRef\.current\.openTabs\.includes\(docId\)/.test(
+        page,
+      ) &&
+      !/discardedEditorSelections/.test(page),
+  );
+  ok(
+    "选区只由页面层恢复",
+    /restoreEditorTabSelection\(currentEditor, remembered\)/.test(page) &&
+      !/TextSelection|setSelection\(selection\)|editor\.view\.focus\(\)/.test(
+        liveEditor,
+      ),
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -82,8 +82,9 @@ import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import {
   detectEditorShortcutPlatform,
   isKeyboardShortcutsShortcut,
+  keyboardShortcutsOpenAfterShortcut,
 } from "./editor/editorShortcuts";
-import { isModalOpen } from "../modalStack";
+import { isModalOpen, isOnlyModalOpen } from "../modalStack";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
@@ -161,8 +162,15 @@ export function AppShell() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isKeyboardShortcutsShortcut(event, platform)) return;
       event.preventDefault();
-      if (isModalOpen()) return;
-      setKeyboardShortcutsOpen(true);
+      const modalOpen = isModalOpen();
+      const onlyModalOpen = isOnlyModalOpen();
+      setKeyboardShortcutsOpen((dialogOpen) =>
+        keyboardShortcutsOpenAfterShortcut(
+          dialogOpen,
+          modalOpen,
+          onlyModalOpen,
+        ),
+      );
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { conflictDraftKey } from "../../conflictDrafts";
+import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { useSaveDocument } from "../../documents";
 
 /**
@@ -17,7 +18,13 @@ import { useSaveDocument } from "../../documents";
 
 export const SAVE_DEBOUNCE_MS = 800;
 
-export type SaveStatus = "idle" | "saving" | "saved" | "failed" | "conflict";
+export type SaveStatus =
+  | "idle"
+  | "saving"
+  | "saved"
+  | "failed"
+  | "backed-up"
+  | "conflict";
 
 export type DocPatch = Partial<{
   title: string;
@@ -31,6 +38,10 @@ export type DocumentSnapshot = {
   content: string;
   theme: string;
   revision: number;
+};
+
+type StoredDocumentDraft = DocumentSnapshot & {
+  conflict: boolean;
 };
 
 type Entry = {
@@ -57,6 +68,8 @@ export type DocumentSaver = {
   flushAll: () => Promise<boolean>;
   /** 读当前待存内容，不触发渲染。用于把未存改动合进传给编辑器的 document */
   peek: (docId: string) => DocumentSnapshot | null;
+  /** 同步 SQLite 已完成的图片地址替换，不把内部映射误记成一次用户编辑。 */
+  applyImageMapping: (docId: string, localURL: string, remoteURL: string) => boolean;
   status: (docId: string) => SaveStatus;
   isDirty: (docId: string) => boolean;
   /** 关标签时调用：先存，再丢掉记录 */
@@ -78,13 +91,24 @@ export type DocumentSaver = {
   acceptRemote: (docId: string, snapshot: DocumentSnapshot) => void;
 };
 
-function storeConflictDraft(docId: string, snapshot: DocumentSnapshot) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(conflictDraftKey(docId), JSON.stringify(snapshot));
-  } catch {
-    // localStorage 可能被禁用或已满；保存请求的错误语义不能因此被改写成异常。
-  }
+function sameStoredDraft(
+  left: StoredDocumentDraft,
+  right: StoredDocumentDraft,
+): boolean {
+  return (
+    left.title === right.title &&
+    left.content === right.content &&
+    left.theme === right.theme &&
+    left.revision === right.revision &&
+    left.conflict === right.conflict
+  );
+}
+
+function isDocumentRevisionConflict(error: unknown): boolean {
+  return (
+    (error instanceof ApiError && error.code === "document_revision_conflict") ||
+    (error instanceof Error && error.message === "document_revision_conflict")
+  );
 }
 
 function clearConflictDraft(docId: string) {
@@ -98,6 +122,7 @@ function clearConflictDraft(docId: string) {
 
 export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   const entries = useRef<Map<string, Entry>>(new Map());
+  const lastStoredDrafts = useRef<Map<string, StoredDocumentDraft>>(new Map());
   // 状态要驱动标签栏渲染，所以进 state；待存内容留在 ref，避免每次打字都渲染
   const [statuses, setStatuses] = useState<Record<string, SaveStatus>>({});
 
@@ -114,6 +139,37 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     setStatuses((prev) =>
       prev[docId] === status ? prev : { ...prev, [docId]: status },
     );
+  }, []);
+
+  const storeConflictDraft = useCallback(
+    (docId: string, snapshot: DocumentSnapshot, conflict: boolean): boolean => {
+      if (typeof window === "undefined") return false;
+      const draft = { ...snapshot, conflict };
+      const key = conflictDraftKey(docId);
+      const previous = lastStoredDrafts.current.get(docId);
+      if (previous && sameStoredDraft(previous, draft)) {
+        try {
+          if (window.localStorage.getItem(key) !== null) return true;
+        } catch {
+          // 继续走写入分支，由统一的失败处理清掉内存记录和可能过期的旧草稿。
+        }
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify(draft));
+        lastStoredDrafts.current.set(docId, draft);
+        return true;
+      } catch {
+        lastStoredDrafts.current.delete(docId);
+        clearConflictDraft(docId);
+        return false;
+      }
+    },
+    [],
+  );
+
+  const clearStoredDraft = useCallback((docId: string) => {
+    lastStoredDrafts.current.delete(docId);
+    clearConflictDraft(docId);
   }, []);
 
   const doSave = useCallback(
@@ -154,15 +210,20 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
           } catch (error) {
             // dirty 保持 true：待存内容留着，下次 flush 会重试。
             if (entries.current.has(docId)) {
+              const revisionConflict = isDocumentRevisionConflict(error);
+              const backedUp = storeConflictDraft(
+                docId,
+                current.pending,
+                revisionConflict,
+              );
               setStatus(
                 docId,
-                error instanceof ApiError && error.code === "document_revision_conflict"
+                revisionConflict
                   ? "conflict"
-                  : "failed",
+                  : backedUp
+                    ? "backed-up"
+                    : "failed",
               );
-              if (error instanceof ApiError && error.code === "document_revision_conflict") {
-                storeConflictDraft(docId, current.pending);
-              }
             }
             return false;
           }
@@ -181,7 +242,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
 
           now.dirty = false;
           now.titleDirty = false;
-          clearConflictDraft(docId);
+          clearStoredDraft(docId);
           setStatus(docId, "saved");
           if (titleCommittedNeeded) titleCommitted.current?.();
           return true;
@@ -195,26 +256,46 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       });
       return run;
     },
-    [setStatus],
+    [clearStoredDraft, setStatus, storeConflictDraft],
   );
 
   const seed = useCallback((docId: string, snapshot: DocumentSnapshot) => {
-    if (entries.current.has(docId)) return;
+    const existing = entries.current.get(docId);
+    if (existing) {
+      if (!existing.dirty && !existing.inFlight) {
+        existing.pending = { ...snapshot };
+        existing.forceVersion = false;
+      }
+      return;
+    }
     let pending = snapshot;
+    let recovered = false;
     let conflicted = false;
     if (typeof window !== "undefined") {
       try {
         const stored = window.localStorage.getItem(conflictDraftKey(docId));
         if (stored) {
-          const parsed = JSON.parse(stored) as Partial<DocumentSnapshot>;
+          const parsed = JSON.parse(stored) as Partial<StoredDocumentDraft>;
           if (
             typeof parsed.title === "string" &&
             typeof parsed.content === "string" &&
             typeof parsed.theme === "string" &&
             typeof parsed.revision === "number"
           ) {
-            pending = parsed as DocumentSnapshot;
-            conflicted = true;
+            pending = {
+              title: parsed.title,
+              content: parsed.content,
+              theme: parsed.theme,
+              revision: parsed.revision,
+            };
+            recovered = true;
+            // 旧版本只在真实 revision 冲突时写这份草稿，因此缺少字段要按冲突兼容；
+            // 新版本会为普通保存失败显式写 conflict:false。
+            conflicted = parsed.conflict !== false;
+            lastStoredDrafts.current.set(docId, {
+              ...pending,
+              conflict: conflicted,
+            });
           }
         }
       } catch {
@@ -225,11 +306,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       pending: { ...pending },
       timer: null,
       titleDirty: false,
-      dirty: conflicted,
+      dirty: recovered,
       inFlight: null,
       forceVersion: false,
     });
-    if (conflicted) setStatus(docId, "conflict");
+    if (recovered) setStatus(docId, conflicted ? "conflict" : "backed-up");
   }, [setStatus]);
 
   const queue = useCallback(
@@ -288,14 +369,14 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     const entry = entries.current.get(docId);
     if (entry?.timer) clearTimeout(entry.timer);
     entries.current.delete(docId);
-    clearConflictDraft(docId);
+    clearStoredDraft(docId);
     setStatuses((prev) => {
       if (!(docId in prev)) return prev;
       const next = { ...prev };
       delete next[docId];
       return next;
     });
-  }, []);
+  }, [clearStoredDraft]);
 
   const overwrite = useCallback(
     (docId: string, remoteRevision: number, patch?: DocPatch) => {
@@ -331,14 +412,29 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
         inFlight: null,
         forceVersion: false,
       });
-      clearConflictDraft(docId);
+      clearStoredDraft(docId);
       setStatus(docId, "saved");
     },
-    [setStatus],
+    [clearStoredDraft, setStatus],
   );
 
   const peek = useCallback(
     (docId: string) => entries.current.get(docId)?.pending ?? null,
+    [],
+  );
+
+  const applyImageMapping = useCallback(
+    (docId: string, localURL: string, remoteURL: string) => {
+      const entry = entries.current.get(docId);
+      if (!entry) return false;
+      const content = replaceDesktopLocalImageURLs(
+        entry.pending.content,
+        new Map([[localURL, remoteURL]]),
+      );
+      if (content === entry.pending.content) return false;
+      entry.pending = { ...entry.pending, content };
+      return true;
+    },
     [],
   );
 
@@ -374,6 +470,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       flush,
       flushAll,
       peek,
+      applyImageMapping,
       status,
       isDirty,
       forget,
@@ -387,6 +484,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       flush,
       flushAll,
       peek,
+      applyImageMapping,
       status,
       isDirty,
       forget,

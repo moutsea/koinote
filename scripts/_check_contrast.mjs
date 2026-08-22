@@ -6,6 +6,8 @@
 //
 // WCAG 2.1 的门槛：正文 4.5:1，大字（>=18.66px 粗体或 24px）3:1，非文字（图标、边框）3:1。
 
+import { readFileSync } from "node:fs";
+
 const SCALE = {
   50: "#fdf4f2",
   100: "#fbe7e3",
@@ -24,6 +26,8 @@ const SCALE = {
 const PAPER_LIGHT = "#f6f4ee";
 const PAPER_DARK = "#14130f";
 const WHITE = "#ffffff";
+const AMBER_400 = "#fbbf24";
+const AMBER_700 = "#b45309";
 
 let pass = 0;
 let fail = 0;
@@ -107,6 +111,34 @@ atLeast("cinnabar-200 on cinnabar-950", SCALE[200], SCALE[950], 4.5);
 //
 // 「去编辑器」这类行内链接用 600，压在宣纸上
 atLeast("cinnabar-600 on 宣纸", SCALE[600], PAPER_LIGHT, 4.5);
+
+// ---------- 保存失败备份态 ----------
+//
+// 浅色模式必须使用 amber-700：600 的文字只有约 2.9:1，500 的状态圆点更低。
+atLeast("amber-700 保存状态 on 宣纸", AMBER_700, PAPER_LIGHT, 4.5);
+atLeast("amber-700 状态圆点 on 宣纸", AMBER_700, PAPER_LIGHT, 3);
+atLeast("amber-400 保存状态 on 玄墨", AMBER_400, PAPER_DARK, 4.5);
+atLeast("amber-700 状态圆点 on 玄墨", AMBER_700, PAPER_DARK, 3);
+
+const markdownEditor = readFileSync(
+  new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
+  "utf8",
+);
+const tabBar = readFileSync(
+  new URL("../spa/src/components/editor/TabBar.tsx", import.meta.url),
+  "utf8",
+);
+for (const [label, source, token] of [
+  ["编辑器备份状态文字", markdownEditor, "text-amber-700 dark:text-amber-400"],
+  ["标签备份状态文字", tabBar, "text-amber-700 dark:text-amber-400"],
+  ["标签备份状态圆点", tabBar, "bg-amber-700"],
+]) {
+  if (source.includes(token)) pass += 1;
+  else {
+    fail += 1;
+    console.error(`FAIL  ${label}必须使用 ${token}`);
+  }
+}
 
 // ---------- 非文字元素 ----------
 //

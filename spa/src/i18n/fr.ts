@@ -1072,6 +1072,9 @@ export const fr: Messages = {
     saved: "Enregistré",
     charCount: "{n} caractères",
     saveFailed: "Échec de l'enregistrement",
+    saveFailedBackedUp: "Brouillon sauvegardé",
+    saveBackupFailed: "Sauvegarde impossible ; copiez le texte immédiatement",
+    retrySave: "Réessayer",
     remoteUpdated: "Les dernières modifications d’un autre appareil ont été appliquées",
     remoteUpdateAvailable: "Une version cloud plus récente est disponible. Votre brouillon local ne sera pas écrasé.",
     reviewRemoteUpdate: "Examiner les modifications",
@@ -1783,6 +1786,8 @@ function hello(name) {
       "Stockage d'images plein — supprimez définitivement les documents inutiles depuis la corbeille",
     image_upload_failed:
       "Impossible de synchroniser l’image locale. Vérifiez la connexion puis réessayez.",
+    document_save_pending:
+      "Le brouillon n’est pas encore dans le stockage des documents. Réessayez d’abord de l’enregistrer.",
     image_cache_full:
       "Le cache d’images local est plein. Videz-le depuis l’accueil de l’application.",
     local_image_missing:

@@ -1858,7 +1858,7 @@ function scheduleSync(delay = 1500) {
 async function performPreparedSync(options: { silent?: boolean }): Promise<DesktopSyncSummary> {
   const account = await accountID();
   if (!(await prepareDesktopSync())) {
-    const summary = await calculateSummary(account, "error", "Local edits could not be saved before sync");
+    const summary = await calculateSummary(account, "error", "document_save_pending");
     notify(summary);
     return summary;
   }
@@ -2099,7 +2099,7 @@ async function pullRemoteSnapshot(account: string) {
     remoteJSON<{ folders: Folder[] }>("/api/folders"),
   ]);
   if (!(await prepareDesktopSync())) {
-    throw new Error("Local edits could not be saved before applying remote updates");
+    throw new Error("document_save_pending");
   }
   const db = await database();
   const localDocuments = await db.select<DocumentRow[]>(`

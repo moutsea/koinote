@@ -68,7 +68,13 @@ ok(
 );
 ok(
   "PDF 统一走可搜索文字的原生管道",
-  /label=\{t\.editor\.exportPDF\}[\s\S]*?exportPDF\(printSource, title, t\.editor\.untitled\)/.test(menu),
+  /function runPDFExport\(\)[\s\S]*?exportPDF\(printSource, title, t\.editor\.untitled\)/.test(menu) &&
+    /label=\{t\.editor\.exportPDF\}[\s\S]*?onClick=\{runPDFExport\}/.test(menu),
+);
+ok(
+  "忽略并发导出前会清理旧错误",
+  /setError\(null\);\s*if \(busyRef\.current\) return;/.test(menu),
+  "旧错误不能因为本次点击被 busy 守卫忽略而继续显示",
 );
 ok(
   "PDF 从当前文档生成独立打印快照",

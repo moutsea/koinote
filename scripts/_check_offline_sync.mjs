@@ -622,8 +622,16 @@ assert.match(
 );
 assert.match(
   editorSource,
-  /const scrollTop = scrollContainer\?\.scrollTop[\s\S]*?editor\.view\.dispatch[\s\S]*?restoreScrollPosition\(\)[\s\S]*?requestAnimationFrame\(restoreScrollPosition\)/,
-  "上传完成替换图床地址时必须跨节点更新保住正文滚动位置",
+  /const scrollTop = scrollContainer\?\.scrollTop[\s\S]*?applyUploadedImageMappingToEditor[\s\S]*?onImageSourceMapped\?\.[\s\S]*?restoreScrollPosition\(\)[\s\S]*?requestAnimationFrame\(restoreScrollPosition\)/,
+  "上传完成必须局部替换图片、同步保存器并保住正文滚动位置",
+);
+assert.match(
+  readFileSync(
+    new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),
+    "utf8",
+  ),
+  /const handleImageSourceMapped = useCallback\([\s\S]*?replaceDesktopLocalImageURLs[\s\S]*?saver\.applyImageMapping\(docId, localURL, remoteURL\)[\s\S]*?onImageSourceMapped=\{handleImageSourceMapped\}/,
+  "图片映射必须同步保存器基线，避免下一轮同步重建整篇编辑器",
 );
 assert.match(imageNodeSource, /desktopResolveImageSource\(src\)/);
 assert.match(
@@ -800,7 +808,12 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /remoteJSON<\{ documents:[\s\S]*?remoteJSON<\{ folders:[\s\S]*?prepareDesktopSync\(\)[\s\S]*?SELECT \* FROM offline_documents/,
+  /performPreparedSync[\s\S]*?prepareDesktopSync\(\)[\s\S]*?calculateSummary\(account, ["']error["'], ["']document_save_pending["']\)/,
+  "保存屏障失败必须显示可翻译的恢复指引，不能暴露内部英文异常",
+);
+assert.match(
+  offlineStore,
+  /remoteJSON<\{ documents:[\s\S]*?remoteJSON<\{ folders:[\s\S]*?prepareDesktopSync\(\)[\s\S]*?document_save_pending[\s\S]*?SELECT \* FROM offline_documents/,
   "远端列表请求期间产生的新编辑也必须在应用远端内容前落盘",
 );
 
@@ -914,6 +927,41 @@ assert.match(
   liveEditor,
   /decideRemoteDocumentUpdate[\s\S]*?latestDecision === "prompt"[\s\S]*?setRemoteUpdateAvailable\(true\)[\s\S]*?latestDecision === "apply"[\s\S]*?acceptLatestDocument/,
   "网页编辑器必须自动应用干净远端更新，并保护本地草稿",
+);
+assert.match(
+  liveEditor,
+  /const normalizedContent = normalizeLegacyImageAdjacentHeadings[\s\S]*?editorContentRef\.current !== normalizedContent[\s\S]*?if \(contentChanged\)[\s\S]*?editorViewportRestorePoint\.current[\s\S]*?setEditorGeneration/,
+  "仅 revision 或同步元数据变化时不能重建编辑器",
+);
+assert.match(
+  liveEditor,
+  /onContentLoaded=\{handleContentLoaded\}/,
+  "同步比较必须使用真正喂给编辑器的 Markdown 基线",
+);
+assert.match(
+  editorSource,
+  /const onContentLoadedRef = useRef\(onContentLoaded\)[\s\S]*?onContentLoadedRef\.current\?\.\(normalizedContent\)[\s\S]*?\}, \[editor, document\.docId\]\)/,
+  "内容加载回调身份变化不能触发 setContent 重灌正文",
+);
+assert.match(
+  editorPage,
+  /transaction\.getMeta\(EDITOR_TAB_SELECTION_RESTORE_META\)[\s\S]*?currentEditor\.on\("selectionUpdate", rememberCurrentSelection\)[\s\S]*?currentEditor\.on\("blur", rememberBlur\)[\s\S]*?restoreEditorTabSelection\(currentEditor, remembered\)/,
+  "光标与焦点必须由页面层按文档统一恢复",
+);
+assert.match(
+  liveEditor,
+  /editorViewportRestorePoint\.current[\s\S]*?scrollTop = restorePoint\.scrollTop[\s\S]*?requestAnimationFrame\(restoreViewport\)/,
+  "真正的远端正文更新必须恢复滚动位置",
+);
+assert.doesNotMatch(
+  liveEditor,
+  /TextSelection|setSelection\(selection\)|editor\.view\.focus\(\)/,
+  "LiveEditor 不应再与页面层重复恢复选区和焦点",
+);
+assert.match(
+  editorSource,
+  /useEffect\(\(\) => setTitle\(document\.title\)[\s\S]*?useEffect\([\s\S]*?setThemeId\(document\.theme \?\? ""\)/,
+  "同步标题和主题不应依赖整篇编辑器重建",
 );
 assert.match(
   liveEditor,

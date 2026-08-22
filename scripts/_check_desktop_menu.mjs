@@ -12,6 +12,7 @@ const read = (path) => readFileSync(path, "utf8");
 const rust = read("src-tauri/src/lib.rs");
 
 assert.equal(DESKTOP_MENU_EVENT, "koinote:desktop-menu-action");
+assert.equal(DESKTOP_MENU_ACTIONS.includes("export-document"), false);
 for (const action of DESKTOP_MENU_ACTIONS) {
   assert.equal(isDesktopMenuAction(action), true, `recognize ${action}`);
 }
@@ -75,6 +76,11 @@ for (const submenu of ["file", "edit", "view", "navigate", "tools"]) {
 }
 assert.match(
   rust,
+  /SubmenuBuilder::with_id\(handle, DESKTOP_EXPORT_SUBMENU_ID, copy\.export_document\)[\s\S]*?\.enabled\(desktop_export_enabled\(enabled_actions\)\)[\s\S]*?\.items\(&\[&export_markdown, &export_html, &export_docx, &export_pdf\]\)[\s\S]*?\.item\(&export_media\)/,
+  "export document must be a native submenu with direct format actions",
+);
+assert.match(
+  rust,
   /SubmenuBuilder::with_id\(handle, WINDOW_SUBMENU_ID, copy\.window\)/,
 );
 assert.match(
@@ -131,7 +137,16 @@ const wiring = [
     ],
   ],
   ["spa/src/components/editor/DocumentFindBar.tsx", ["find-in-document"]],
-  ["spa/src/components/editor/ExportMenu.tsx", ["export-document"]],
+  [
+    "spa/src/components/editor/ExportMenu.tsx",
+    [
+      "export-markdown",
+      "export-html",
+      "export-docx",
+      "export-pdf",
+      "export-media",
+    ],
+  ],
   ["spa/src/components/editor/LiveEditor.tsx", ["ai-optimize", "version-history"]],
   [
     "spa/src/components/AppShell.tsx",
@@ -171,6 +186,40 @@ assert.match(
   "editor menu availability must use the shared action list",
 );
 
+const exportMenuSource = read("spa/src/components/editor/ExportMenu.tsx");
+assert.doesNotMatch(
+  exportMenuSource,
+  /action === "export-[^"]+"[^\n]*setOpen\(true\)/,
+  "native export actions must not open the toolbar popover",
+);
+for (const [action, handler] of [
+  ["export-markdown", "runMarkdownExport"],
+  ["export-html", "runHTMLExport"],
+  ["export-docx", "runDOCXExport"],
+  ["export-pdf", "runPDFExport"],
+]) {
+  assert.match(
+    exportMenuSource,
+    new RegExp(`action === "${action}"\\) ${handler}\\(\\)`),
+    `${action} must call ${handler} directly`,
+  );
+}
+assert.match(
+  exportMenuSource,
+  /function runPDFExport\(\)\s*\{\s*if \(!editor\) return;/,
+  "PDF export must share the other formats' editor guard",
+);
+assert.match(
+  exportMenuSource,
+  /if \(busyRef\.current\) return;[\s\S]*?busyRef\.current = true[\s\S]*?finally[\s\S]*?busyRef\.current = false/,
+  "native menu exports must not run concurrently",
+);
+assert.match(
+  exportMenuSource,
+  /setError\(null\);\s*if \(busyRef\.current\) return;/,
+  "an ignored concurrent export click must still dismiss stale errors",
+);
+
 const appShell = read("spa/src/components/AppShell.tsx");
 assert.match(appShell, /syncDesktopMenuEnabled\(enabledActions\)/);
 assert.match(appShell, /isKeyboardShortcutsShortcut/);
@@ -188,6 +237,21 @@ assert.match(rust, /if settings\.locale == next\s*\{\s*return Ok\(false\)/);
 assert.match(rust, /desktop_set_menu_locale/);
 assert.match(rust, /desktop_set_menu_enabled/);
 assert.match(rust, /apply_desktop_menu_enabled/);
+assert.match(
+  rust,
+  /fn collect_desktop_menu_entries[\s\S]*?submenu\.items\(\)\?[\s\S]*?collect_desktop_menu_entries\(&children, menu_items, export_submenu\)\?/,
+  "menu availability must collect nested actions in one recursive traversal",
+);
+assert.match(
+  rust,
+  /fn desktop_export_enabled[\s\S]*?any\(\|action\| action\.starts_with\("export-"\)\)[\s\S]*?export_submenu\.set_enabled\(desktop_export_enabled\(enabled_actions\)\)/,
+  "the export parent must follow any enabled export action",
+);
+assert.doesNotMatch(
+  rust,
+  /fn find_desktop_(?:menu_item|submenu)/,
+  "menu availability must not traverse the full tree once per action",
+);
 assert.match(rust, /\.enabled\(enabled_actions\.contains\(action\)\)/);
 assert.match(rust, /menu_item\.set_enabled\(enabled_actions\.contains\(action\)\)/);
 const installMenuSource = rust.slice(

@@ -23,6 +23,7 @@ import {
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { isDesktopRuntime } from "../../desktop/runtime";
 import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
+import { applyUploadedImageMappingToEditor } from "./imageUploadMapping";
 import { DocumentFindBar } from "./DocumentFindBar";
 
 /**
@@ -52,6 +53,8 @@ export default function MarkdownEditor({
   document,
   status,
   onChange,
+  onContentLoaded,
+  onImageSourceMapped,
   onFlush,
   onEditorReady,
   scrollContainerRef,
@@ -63,6 +66,9 @@ export default function MarkdownEditor({
   /** 保存状态由页面给 —— 待存内容不再随实例存亡，见 useDocumentSaver */
   status: SaveStatus;
   onChange: (patch: DocPatch) => void;
+  /** 记录真正喂给编辑器的 Markdown，供同步判断是否需要重建实例。 */
+  onContentLoaded?: (content: string) => void;
+  onImageSourceMapped?: (localURL: string, remoteURL: string) => void;
   /** 立刻存。换主题时用：那是一次显式动作，等防抖没意义 */
   onFlush: () => void;
   onEditorReady?: (editor: Editor | null) => void;
@@ -86,6 +92,8 @@ export default function MarkdownEditor({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const editorRootRef = useRef<HTMLDivElement | null>(null);
+  const onContentLoadedRef = useRef(onContentLoaded);
+  onContentLoadedRef.current = onContentLoaded;
 
   useEffect(() => {
     if (!uploadNotice) return;
@@ -329,25 +337,17 @@ export default function MarkdownEditor({
         remoteURL?: string;
       }>).detail;
       if (!detail?.localURL || !detail.remoteURL) return;
-      const transaction = editor.state.tr;
-      let changed = false;
-      editor.state.doc.descendants((node, position) => {
-        if (node.type.name !== "image" || node.attrs.src !== detail.localURL) return;
-        transaction.setNodeMarkup(position, undefined, {
-          ...node.attrs,
-          src: detail.remoteURL,
-        });
-        changed = true;
-      });
-      if (changed) {
-        const scrollContainer = scrollContainerRef?.current;
-        const scrollTop = scrollContainer?.scrollTop;
-        const scrollLeft = scrollContainer?.scrollLeft;
-        editor.view.dispatch(
-          transaction
-            .setMeta("addToHistory", false)
-            .setMeta(DESKTOP_IMAGE_MAPPING_META, true),
-        );
+      const scrollContainer = scrollContainerRef?.current;
+      const scrollTop = scrollContainer?.scrollTop;
+      const scrollLeft = scrollContainer?.scrollLeft;
+      if (
+        applyUploadedImageMappingToEditor(
+          editor,
+          detail.localURL,
+          detail.remoteURL,
+        )
+      ) {
+        onImageSourceMapped?.(detail.localURL, detail.remoteURL);
         // 图片上传完成只是把本地占位地址换成图床地址，不是用户主动导航。
         // ProseMirror 更新图片节点时可能把当前选区滚回可视区，React NodeView
         // 随后更新又可能触发一次浏览器滚动锚定；同步恢复并在下一帧再校正一次，
@@ -368,7 +368,7 @@ export default function MarkdownEditor({
         DESKTOP_IMAGE_UPLOADED_EVENT,
         replaceUploadedImage,
       );
-  }, [editor, scrollContainerRef]);
+  }, [editor, onImageSourceMapped, scrollContainerRef]);
 
   // editorProps 只在 useEditor 初始化时读一次，换主题必须显式改写。
   // 切的是 prose 的有无：套主题时 prose 会用 code::before 给行内代码补反引号，
@@ -384,26 +384,33 @@ export default function MarkdownEditor({
   //
   // document 由页面传下来，已经把未落库的待存改动合并进去了（见 EditorPage 的
   // peek 合并）—— 所以被 LRU 淘汰又点回来的标签会恢复到离开时的文字，而不是
-  // 退回服务端那份。撕销历史与光标位置恢复不了，那是 3 个活实例上限的代价。
+  // 退回服务端那份。撤销历史仍是 3 个活实例上限的代价；光标位置由页面层按
+  // docId 记录，即使实例被淘汰，重新挂载后也会恢复。
   //
   // 只依赖 docId：document 对象本身会因保存而变新引用，依赖它会导致每次保存后
-  // 重灌内容、光标跳回开头。
+  // 重灌内容、光标跳回开头。onContentLoaded 经 ref 读取，调用方身份变化也不能让
+  // 这个 effect 重跑。
   useEffect(() => {
     if (!editor) return;
     const normalizedContent = normalizeLegacyImageAdjacentHeadings(
       document.content,
     );
     editor.commands.setContent(normalizedContent);
+    onContentLoadedRef.current?.(normalizedContent);
     if (normalizedContent !== document.content) {
       // 让兼容恢复不只停留在当前 DOM：排入正常的 CAS 保存链，分享页和下一次
       // 打开也会读到修复后的 Markdown。
       onChange({ content: normalizedContent });
     }
     setCharCount(editor.getText().length);
-    setTitle(document.title);
-    setThemeId(document.theme ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, document.docId]);
+
+  useEffect(() => setTitle(document.title), [document.docId, document.title]);
+  useEffect(
+    () => setThemeId(document.theme ?? ""),
+    [document.docId, document.theme],
+  );
 
   function handleTitleChange(next: string) {
     setTitle(next);
@@ -430,11 +437,14 @@ export default function MarkdownEditor({
       ? t.editor.saving
       : status === "saved"
         ? t.editor.saved
-        : status === "failed"
-          ? t.editor.saveFailed
-          : status === "conflict"
-            ? t.editor.resolveConflict
-          : "";
+        : status === "backed-up"
+          ? `${t.editor.saveFailed} · ${t.editor.saveFailedBackedUp}`
+          : status === "failed"
+            ? `${t.editor.saveFailed} · ${t.editor.saveBackupFailed}`
+            : status === "conflict"
+              ? t.editor.resolveConflict
+              : "";
+  const retryableSave = status === "backed-up" || status === "failed";
 
   return (
     <div
@@ -475,17 +485,31 @@ export default function MarkdownEditor({
             {uploadNotice}
           </button>
         )}
-        {statusText && (
-          <span
-            className={`shrink-0 text-xs ${
-              status === "failed" || status === "conflict"
-                ? "text-red-600 dark:text-red-400"
-                : "text-neutral-400"
-            }`}
-          >
-            {statusText}
-          </span>
-        )}
+        {statusText &&
+          (retryableSave ? (
+            <button
+              type="button"
+              onClick={onFlush}
+              title={`${statusText} · ${t.editor.retrySave}`}
+              className={`min-w-0 max-w-[16rem] truncate text-xs hover:underline ${
+                status === "backed-up"
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {statusText} · {t.editor.retrySave}
+            </button>
+          ) : (
+            <span
+              className={`shrink-0 text-xs ${
+                status === "conflict"
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-neutral-400"
+              }`}
+            >
+              {statusText}
+            </span>
+          ))}
         <DocumentFindBar
           editor={editor}
           title={title}

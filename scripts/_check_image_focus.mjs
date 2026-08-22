@@ -13,6 +13,7 @@
 // 判据：失焦路径不许把焦点/滚动收回编辑器；键盘路径（Enter/Esc/删图）必须收回。
 // 这两件事没有类型能表达，只能读源码断言。
 import { readFileSync } from "node:fs";
+import { parseHTML } from "linkedom";
 import {
   imageURLForAttempt,
   sameOriginImageURL,
@@ -36,6 +37,180 @@ const src = readFileSync(
 
 // 去掉注释再扫：注释里正解释着这个 bug，会把讲解当成代码
 const bare = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+const originalWindow = globalThis.window;
+const originalDocument = globalThis.document;
+const originalNode = globalThis.Node;
+
+// ---------- 图床地址替换必须是局部事务 ----------
+//
+// SQLite 把本地占位 URL 换成远端 URL 后，编辑器只应修改对应图片节点。
+// 如果重灌整篇文档，ProseMirror selection 会回到开头；如果只改 NodeView
+// 却没同步页面级保存器，下一轮同步仍会把它误判成远端全文更新并重建编辑器。
+{
+  const { window: testWindow } = parseHTML(
+    "<html><head></head><body></body></html>",
+  );
+  globalThis.window = testWindow;
+  globalThis.document = testWindow.document;
+  globalThis.Node = testWindow.Node;
+
+  const [
+    { Editor },
+    { default: StarterKit },
+    { default: Image },
+    mapping,
+    tabSelection,
+  ] =
+    await Promise.all([
+      import("@tiptap/core"),
+      import("@tiptap/starter-kit"),
+      import("@tiptap/extension-image"),
+      import("./_image_upload_mapping_bundle.mjs"),
+      import("./_editor_tab_selection_bundle.mjs"),
+    ]);
+  const localURL = "koinote-local-image://550e8400-e29b-41d4-a716-446655440000";
+  const remoteURL = "https://img.koinote.app/u/me/abcdef1234567890.png";
+  const editorElement = testWindow.document.createElement("div");
+  testWindow.document.body.append(editorElement);
+  const editor = new Editor({
+    element: editorElement,
+    extensions: [StarterKit, Image.configure({ inline: false })],
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "文档开头" }] },
+        { type: "image", attrs: { src: localURL } },
+        { type: "paragraph", content: [{ type: "text", text: "光标留在这里" }] },
+      ],
+    },
+  });
+  let cursorPosition = 0;
+  editor.state.doc.descendants((node, position) => {
+    if (node.isText && node.text?.includes("光标留在这里")) {
+      cursorPosition = position + 4;
+    }
+  });
+  editor.commands.setTextSelection(cursorPosition);
+  const selectionBefore = {
+    from: editor.state.selection.from,
+    to: editor.state.selection.to,
+  };
+  let mappingTransaction = null;
+  editor.on("transaction", ({ transaction }) => {
+    if (transaction.getMeta("koinote:desktop-image-mapping")) {
+      mappingTransaction = transaction;
+    }
+  });
+
+  ok(
+    "上传完成只替换对应图片节点",
+    mapping.applyUploadedImageMappingToEditor(editor, localURL, remoteURL) &&
+      editor.getJSON().content[1].attrs.src === remoteURL,
+    JSON.stringify(editor.getJSON()),
+  );
+  ok(
+    "图片 URL 替换后光标位置不变",
+    editor.state.selection.from === selectionBefore.from &&
+      editor.state.selection.to === selectionBefore.to,
+    `${selectionBefore.from}-${selectionBefore.to} → ${editor.state.selection.from}-${editor.state.selection.to}`,
+  );
+  ok(
+    "内部图片映射不进入撤销历史",
+    mappingTransaction?.getMeta("addToHistory") === false,
+    String(mappingTransaction?.getMeta("addToHistory")),
+  );
+
+  // 标签页切换在页面层记住每篇文档的选区，所以即使超过挂载池上限、原编辑器
+  // 被销毁，重新创建的实例也能回到离开前的位置。
+  const remembered = tabSelection.captureEditorTabSelection(editor, true);
+  const remountedElement = testWindow.document.createElement("div");
+  testWindow.document.body.append(remountedElement);
+  const remountedEditor = new Editor({
+    element: remountedElement,
+    extensions: [StarterKit, Image.configure({ inline: false })],
+    content: editor.getJSON(),
+  });
+  remountedEditor.commands.setTextSelection(1);
+  let restoreTransaction = null;
+  remountedEditor.on("transaction", ({ transaction }) => {
+    if (
+      transaction.getMeta(tabSelection.EDITOR_TAB_SELECTION_RESTORE_META)
+    ) {
+      restoreTransaction = transaction;
+    }
+  });
+  ok(
+    "标签切回后恢复原光标位置",
+    tabSelection.restoreEditorTabSelection(remountedEditor, remembered) &&
+      remountedEditor.state.selection.anchor === remembered.anchor &&
+      remountedEditor.state.selection.head === remembered.head,
+    `${remembered.anchor}-${remembered.head} → ${remountedEditor.state.selection.anchor}-${remountedEditor.state.selection.head}`,
+  );
+  ok(
+    "标签光标恢复不进入撤销历史",
+    restoreTransaction?.getMeta("addToHistory") === false,
+    String(restoreTransaction?.getMeta("addToHistory")),
+  );
+  ok(
+    "焦点状态可以从 true 变回 false",
+    !tabSelection.captureEditorTabSelection(remountedEditor, false).focused,
+    "点标题或工具栏后不能继续把正文标成已聚焦",
+  );
+  const titleInput = testWindow.document.createElement("textarea");
+  const tabButton = testWindow.document.createElement("button");
+  ok(
+    "display:none 导致焦点退回 body 时保留正文焦点",
+    tabSelection.shouldPreserveEditorFocusAfterBlur(
+      testWindow.document.body,
+      testWindow.document.body,
+    ) &&
+      tabSelection.shouldPreserveEditorFocusAfterBlur(
+        null,
+        testWindow.document.body,
+      ),
+  );
+  ok(
+    "点标题或标签时不保留正文焦点",
+    !tabSelection.shouldPreserveEditorFocusAfterBlur(
+      titleInput,
+      testWindow.document.body,
+    ) &&
+      !tabSelection.shouldPreserveEditorFocusAfterBlur(
+        tabButton,
+        testWindow.document.body,
+      ),
+    "鼠标切标签后焦点应留在标签按钮，不能抢回正文",
+  );
+  let clamped = false;
+  try {
+    clamped = tabSelection.restoreEditorTabSelection(remountedEditor, {
+      anchor: Number.MAX_SAFE_INTEGER,
+      head: -100,
+      focused: false,
+    });
+  } catch {
+    clamped = false;
+  }
+  ok(
+    "正文变化后恢复位置会安全钳制",
+    clamped &&
+      remountedEditor.state.selection.from >= 0 &&
+      remountedEditor.state.selection.to <= remountedEditor.state.doc.content.size,
+    `${remountedEditor.state.selection.from}-${remountedEditor.state.selection.to}/${remountedEditor.state.doc.content.size}`,
+  );
+  editor.destroy();
+  ok(
+    "已销毁编辑器不会再恢复选区",
+    !tabSelection.restoreEditorTabSelection(editor, remembered),
+  );
+  remountedEditor.destroy();
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+  if (originalNode === undefined) delete globalThis.Node;
+  else globalThis.Node = originalNode;
+}
 
 // ---------- 失焦路径不能抢焦点 ----------
 //

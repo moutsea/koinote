@@ -2,10 +2,16 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 #[cfg(desktop)]
-use std::{collections::HashSet, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 #[cfg(desktop)]
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID},
+    menu::{
+        MenuBuilder, MenuItem, MenuItemBuilder, MenuItemKind, Submenu, SubmenuBuilder,
+        HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
+    },
     Runtime,
 };
 use tauri::{Emitter, Manager};
@@ -20,13 +26,19 @@ const DATABASE_URL: &str = "sqlite:koinote-offline.db";
 const DESKTOP_MENU_EVENT: &str = "koinote:desktop-menu-action";
 const DESKTOP_MENU_PREFIX: &str = "koinote.";
 const DESKTOP_CLOSE_WINDOW_ACTION: &str = "close-window";
+#[cfg(desktop)]
+const DESKTOP_EXPORT_SUBMENU_ID: &str = "koinote.export-document";
 
 #[cfg(desktop)]
-const DESKTOP_MENU_ACTIONS: [&str; 17] = [
+const DESKTOP_MENU_ACTIONS: [&str; 21] = [
     "new-document",
     "save-document",
     "close-document",
-    "export-document",
+    "export-markdown",
+    "export-html",
+    "export-docx",
+    "export-pdf",
+    "export-media",
     "share-document",
     "quick-open",
     "find-in-document",
@@ -103,6 +115,11 @@ struct DesktopMenuCopy {
     save_document: &'static str,
     close_document: &'static str,
     export_document: &'static str,
+    export_markdown: &'static str,
+    export_html: &'static str,
+    export_docx: &'static str,
+    export_pdf: &'static str,
+    export_media: &'static str,
     share_document: &'static str,
     toggle_documents: &'static str,
     toggle_outline: &'static str,
@@ -133,7 +150,12 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             new_document: "New Document",
             save_document: "Save Document",
             close_document: "Close Document",
-            export_document: "Export Document…",
+            export_document: "Export Document",
+            export_markdown: "Markdown (.md)",
+            export_html: "Web Page (.html)",
+            export_docx: "Word (.docx)",
+            export_pdf: "PDF",
+            export_media: "Publishing Platforms…",
             share_document: "Share Document…",
             toggle_documents: "Toggle Document Sidebar",
             toggle_outline: "Toggle Outline",
@@ -160,7 +182,12 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             new_document: "新建文档",
             save_document: "保存文档",
             close_document: "关闭文档",
-            export_document: "导出文档…",
+            export_document: "导出文档",
+            export_markdown: "Markdown (.md)",
+            export_html: "网页 (.html)",
+            export_docx: "Word (.docx)",
+            export_pdf: "PDF",
+            export_media: "导出到自媒体…",
             share_document: "分享文档…",
             toggle_documents: "显示或隐藏文档栏",
             toggle_outline: "显示或隐藏大纲",
@@ -187,7 +214,12 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             new_document: "Nouveau document",
             save_document: "Enregistrer le document",
             close_document: "Fermer le document",
-            export_document: "Exporter le document…",
+            export_document: "Exporter le document",
+            export_markdown: "Markdown (.md)",
+            export_html: "Page web (.html)",
+            export_docx: "Word (.docx)",
+            export_pdf: "PDF",
+            export_media: "Plateformes de publication…",
             share_document: "Partager le document…",
             toggle_documents: "Afficher ou masquer les documents",
             toggle_outline: "Afficher ou masquer le plan",
@@ -214,7 +246,12 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             new_document: "新規ドキュメント",
             save_document: "ドキュメントを保存",
             close_document: "ドキュメントを閉じる",
-            export_document: "ドキュメントを書き出す…",
+            export_document: "ドキュメントを書き出す",
+            export_markdown: "Markdown (.md)",
+            export_html: "ウェブページ (.html)",
+            export_docx: "Word (.docx)",
+            export_pdf: "PDF",
+            export_media: "投稿プラットフォーム…",
             share_document: "ドキュメントを共有…",
             toggle_documents: "ドキュメント欄を表示／非表示",
             toggle_outline: "アウトラインを表示／非表示",
@@ -250,6 +287,13 @@ fn desktop_menu_item<R: Runtime, M: Manager<R>>(
 }
 
 #[cfg(desktop)]
+fn desktop_export_enabled(enabled_actions: &HashSet<String>) -> bool {
+    enabled_actions
+        .iter()
+        .any(|action| action.starts_with("export-"))
+}
+
+#[cfg(desktop)]
 fn build_desktop_menu<R: Runtime, M: Manager<R>>(
     handle: &M,
     locale: DesktopMenuLocale,
@@ -278,13 +322,48 @@ fn build_desktop_menu<R: Runtime, M: Manager<R>>(
         None,
         enabled_actions,
     )?;
-    let export_document = desktop_menu_item(
+    let export_markdown = desktop_menu_item(
         handle,
-        "export-document",
-        copy.export_document,
+        "export-markdown",
+        copy.export_markdown,
         None,
         enabled_actions,
     )?;
+    let export_html = desktop_menu_item(
+        handle,
+        "export-html",
+        copy.export_html,
+        None,
+        enabled_actions,
+    )?;
+    let export_docx = desktop_menu_item(
+        handle,
+        "export-docx",
+        copy.export_docx,
+        None,
+        enabled_actions,
+    )?;
+    let export_pdf = desktop_menu_item(
+        handle,
+        "export-pdf",
+        copy.export_pdf,
+        None,
+        enabled_actions,
+    )?;
+    let export_media = desktop_menu_item(
+        handle,
+        "export-media",
+        copy.export_media,
+        None,
+        enabled_actions,
+    )?;
+    let export_document =
+        SubmenuBuilder::with_id(handle, DESKTOP_EXPORT_SUBMENU_ID, copy.export_document)
+            .enabled(desktop_export_enabled(enabled_actions))
+            .items(&[&export_markdown, &export_html, &export_docx, &export_pdf])
+            .separator()
+            .item(&export_media)
+            .build()?;
     let share_document = desktop_menu_item(
         handle,
         "share-document",
@@ -471,31 +550,59 @@ fn install_desktop_menu<R: Runtime>(
 }
 
 #[cfg(desktop)]
+fn collect_desktop_menu_entries<R: Runtime>(
+    items: &[MenuItemKind<R>],
+    menu_items: &mut HashMap<String, MenuItem<R>>,
+    export_submenu: &mut Option<Submenu<R>>,
+) -> tauri::Result<()> {
+    for item in items {
+        let id = item.id().as_ref();
+        if id == DESKTOP_EXPORT_SUBMENU_ID {
+            *export_submenu = item.as_submenu().cloned();
+        } else if let Some(action) = id.strip_prefix(DESKTOP_MENU_PREFIX) {
+            if DESKTOP_MENU_ACTIONS.contains(&action) {
+                if let Some(menu_item) = item.as_menuitem() {
+                    menu_items.insert(action.to_string(), menu_item.clone());
+                }
+            }
+        }
+        if let Some(submenu) = item.as_submenu() {
+            let children = submenu.items()?;
+            collect_desktop_menu_entries(&children, menu_items, export_submenu)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
 fn apply_desktop_menu_enabled<R: Runtime>(
     menu: &tauri::menu::Menu<R>,
     enabled_actions: &HashSet<String>,
 ) -> tauri::Result<()> {
     let top_level_items = menu.items()?;
+    let mut menu_items = HashMap::new();
+    let mut export_submenu = None;
+    collect_desktop_menu_entries(
+        &top_level_items,
+        &mut menu_items,
+        &mut export_submenu,
+    )?;
     for action in DESKTOP_MENU_ACTIONS {
-        let id = format!("{DESKTOP_MENU_PREFIX}{action}");
-        let item = top_level_items
-            .iter()
-            .filter_map(|item| item.as_submenu())
-            .find_map(|submenu| submenu.get(id.as_str()))
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("desktop_menu_item_missing:{action}"),
-                )
-            })?;
-        let menu_item = item.as_menuitem().ok_or_else(|| {
+        let menu_item = menu_items.get(action).ok_or_else(|| {
             std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("desktop_menu_item_invalid:{action}"),
+                std::io::ErrorKind::NotFound,
+                format!("desktop_menu_item_missing:{action}"),
             )
         })?;
         menu_item.set_enabled(enabled_actions.contains(action))?;
     }
+    let export_submenu = export_submenu.ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "desktop_export_submenu_missing",
+            )
+        })?;
+    export_submenu.set_enabled(desktop_export_enabled(enabled_actions))?;
     Ok(())
 }
 
@@ -999,6 +1106,10 @@ mod tests {
         assert_eq!(zh.keyboard_shortcuts, "键盘快捷键…");
         assert_eq!(fr.keyboard_shortcuts, "Raccourcis clavier…");
         assert_eq!(ja.keyboard_shortcuts, "キーボードショートカット…");
+        assert_eq!(en.export_document, "Export Document");
+        assert_eq!(zh.export_html, "网页 (.html)");
+        assert_eq!(fr.export_media, "Plateformes de publication…");
+        assert_eq!(ja.export_pdf, "PDF");
         assert_eq!(en.close_window, "Close Window");
         assert_eq!(zh.close_window, "关闭窗口");
 

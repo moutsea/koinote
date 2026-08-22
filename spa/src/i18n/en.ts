@@ -1060,6 +1060,9 @@ export const en: Messages = {
     saved: "Saved",
     charCount: "{n} chars",
     saveFailed: "Save failed",
+    saveFailedBackedUp: "Draft backed up",
+    saveBackupFailed: "Backup failed; copy the document now",
+    retrySave: "Retry",
     remoteUpdated: "Updated with the latest changes from another device",
     remoteUpdateAvailable: "A newer cloud version is available. Your local draft will not be overwritten.",
     reviewRemoteUpdate: "Review changes",
@@ -1749,6 +1752,8 @@ function hello(name) {
       "Image storage is full — permanently delete unneeded documents from Trash",
     image_upload_failed:
       "The local image could not be synced. Check your connection and try again.",
+    document_save_pending:
+      "The current draft is not in the document store yet. Retry saving it first.",
     image_cache_full:
       "The local image cache is full. Clear it from the desktop home page.",
     local_image_missing:

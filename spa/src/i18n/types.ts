@@ -797,6 +797,9 @@ export interface Messages {
     saving: string;
     saved: string;
     saveFailed: string;
+    saveFailedBackedUp: string;
+    saveBackupFailed: string;
+    retrySave: string;
     remoteUpdated: string;
     remoteUpdateAvailable: string;
     reviewRemoteUpdate: string;

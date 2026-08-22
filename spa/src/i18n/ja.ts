@@ -1056,6 +1056,9 @@ export const ja: Messages = {
     saved: "保存しました",
     charCount: "{n} 文字",
     saveFailed: "保存に失敗しました",
+    saveFailedBackedUp: "下書きをバックアップ済み",
+    saveBackupFailed: "バックアップできません。今すぐ本文をコピーしてください",
+    retrySave: "再試行",
     remoteUpdated: "別のデバイスでの最新変更を反映しました",
     remoteUpdateAvailable: "クラウドに新しい版があります。ローカル下書きは自動で上書きされません。",
     reviewRemoteUpdate: "変更を確認",
@@ -1751,6 +1754,8 @@ function hello(name) {
       "画像ストレージがいっぱいです。ゴミ箱から不要なドキュメントを完全に削除してください",
     image_upload_failed:
       "ローカル画像を同期できませんでした。接続を確認して再試行してください",
+    document_save_pending:
+      "現在の下書きはまだ文書ストアに保存されていません。先に保存を再試行してください",
     image_cache_full:
       "ローカル画像キャッシュがいっぱいです。デスクトップのホーム画面から消去してください",
     local_image_missing:

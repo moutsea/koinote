@@ -18,6 +18,13 @@ import {
   consumeAgentReviewOpen,
 } from "../../agentReviewNotifications";
 import { useDesktopMenuActions } from "../../desktop/menu";
+import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
+import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
+
+type EditorViewportRestorePoint = {
+  scrollTop: number;
+  scrollLeft: number;
+};
 
 /**
  * 挂载池里的一个编辑器实例。
@@ -51,7 +58,7 @@ export function LiveEditor({
   localMode: boolean;
   saver: DocumentSaver;
   /** 只有当前实例上报，否则大纲会跟到后台的某篇上 */
-  onEditorReady?: (editor: Editor | null) => void;
+  onEditorReady?: (docId: string, editor: Editor | null) => void;
   onTitleChange?: (docId: string, title: string) => void;
   leadingControls?: React.ReactNode;
   trailingControls?: React.ReactNode;
@@ -62,6 +69,10 @@ export function LiveEditor({
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTop = useRef(0);
+  const editorContentRef = useRef<string | null>(null);
+  const editorViewportRestorePoint =
+    useRef<EditorViewportRestorePoint | null>(null);
+  const conflictPromptedRef = useRef(false);
   const [editorGeneration, setEditorGeneration] = useState(0);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -83,7 +94,40 @@ export function LiveEditor({
     }
   });
 
+  const handleEditorReady = useCallback(
+    (editor: Editor | null) => {
+      if (visible) onEditorReady?.(docId, editor);
+      const restorePoint = editorViewportRestorePoint.current;
+      if (!editor || !restorePoint) return;
+      editorViewportRestorePoint.current = null;
+      window.requestAnimationFrame(() => {
+        if (editor.isDestroyed) return;
+        const restoreViewport = () => {
+          const scrollContainer = scrollRef.current;
+          if (!scrollContainer) return;
+          scrollContainer.scrollTop = restorePoint.scrollTop;
+          scrollContainer.scrollLeft = restorePoint.scrollLeft;
+        };
+        restoreViewport();
+        window.requestAnimationFrame(restoreViewport);
+      });
+    },
+    [docId, onEditorReady, visible],
+  );
+
   const acceptLatestDocument = useCallback((document: NonNullable<typeof doc.data>) => {
+    const normalizedContent = normalizeLegacyImageAdjacentHeadings(
+      document.content,
+    );
+    const contentChanged =
+      editorContentRef.current === null ||
+      editorContentRef.current !== normalizedContent;
+    if (contentChanged) {
+      editorViewportRestorePoint.current = {
+        scrollTop: scrollRef.current?.scrollTop ?? 0,
+        scrollLeft: scrollRef.current?.scrollLeft ?? 0,
+      };
+    }
     saver.acceptRemote(docId, {
       title: document.title,
       content: document.content,
@@ -93,11 +137,42 @@ export function LiveEditor({
     queryClient.setQueryData(["document", docId], document);
     onTitleChange?.(docId, document.title);
     setRemoteUpdateAvailable(false);
-    setRemoteUpdated(true);
     if (remoteUpdatedTimer.current) clearTimeout(remoteUpdatedTimer.current);
-    remoteUpdatedTimer.current = setTimeout(() => setRemoteUpdated(false), 4_000);
-    setEditorGeneration((value) => value + 1);
+    if (contentChanged) {
+      setRemoteUpdated(true);
+      remoteUpdatedTimer.current = setTimeout(() => setRemoteUpdated(false), 4_000);
+      setEditorGeneration((value) => value + 1);
+    } else {
+      setRemoteUpdated(false);
+    }
   }, [docId, onTitleChange, queryClient, saver]);
+
+  const handleEditorChange = useCallback(
+    (patch: DocPatch) => {
+      if (patch.content !== undefined) editorContentRef.current = patch.content;
+      saver.queue(docId, patch);
+      if (patch.title !== undefined) onTitleChange?.(docId, patch.title);
+    },
+    [docId, onTitleChange, saver.queue],
+  );
+
+  const handleContentLoaded = useCallback((content: string) => {
+    editorContentRef.current = content;
+  }, []);
+
+  const handleImageSourceMapped = useCallback(
+    (localURL: string, remoteURL: string) => {
+      const currentContent = editorContentRef.current;
+      if (currentContent !== null) {
+        editorContentRef.current = replaceDesktopLocalImageURLs(
+          currentContent,
+          new Map([[localURL, remoteURL]]),
+        );
+      }
+      saver.applyImageMapping(docId, localURL, remoteURL);
+    },
+    [docId, saver.applyImageMapping],
+  );
 
   useEffect(() => () => {
     if (remoteUpdatedTimer.current) clearTimeout(remoteUpdatedTimer.current);
@@ -203,6 +278,16 @@ export function LiveEditor({
   // 不能只按 doc.data 做 memo：刷新后 seed 从 localStorage 恢复冲突草稿时，
   // 远端 query 不会变化，memo 会把草稿一直挡在编辑器外面。
   const pending = saver.peek(docId);
+  const status = saver.status(docId);
+  useEffect(() => {
+    if (status !== "conflict") {
+      conflictPromptedRef.current = false;
+      return;
+    }
+    if (!visible || conflictPromptedRef.current) return;
+    conflictPromptedRef.current = true;
+    setConflictOpen(true);
+  }, [status, visible]);
   const merged =
     doc.data && seededDocId === docId
       ? pending
@@ -211,8 +296,6 @@ export function LiveEditor({
       : null;
 
   if (!merged) return null;
-
-  const status = saver.status(docId);
 
   async function openHistory() {
     const saved = await saver.flush(docId);
@@ -283,12 +366,11 @@ export function LiveEditor({
         key={`${docId}:${editorGeneration}`}
         document={merged}
         status={status}
-        onChange={(patch: DocPatch) => {
-          saver.queue(docId, patch);
-          if (patch.title !== undefined) onTitleChange?.(docId, patch.title);
-        }}
+        onChange={handleEditorChange}
+        onContentLoaded={handleContentLoaded}
+        onImageSourceMapped={handleImageSourceMapped}
         onFlush={() => void saver.flush(docId)}
-        onEditorReady={visible ? onEditorReady : undefined}
+        onEditorReady={handleEditorReady}
         scrollContainerRef={scrollRef}
         leadingControls={leadingControls}
         trailingControls={

@@ -45,6 +45,14 @@ export function isKeyboardShortcutsShortcut(
   );
 }
 
+export function keyboardShortcutsOpenAfterShortcut(
+  dialogOpen: boolean,
+  modalOpen: boolean,
+  onlyModalOpen: boolean,
+): boolean {
+  return dialogOpen ? !onlyModalOpen : !modalOpen;
+}
+
 export type EditorShortcutTarget = {
   tagName?: string;
   isContentEditable?: boolean;
