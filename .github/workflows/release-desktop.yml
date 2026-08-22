@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version hardens offline draft recovery, preserves cursor and scroll positions across sync, image uploads, and tabs, and runs native export actions directly."
+          notes="Koinote Desktop $version adds deeper staged AI document reviews, focused structural analysis, and improved cursor restoration across document tabs."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本修复离线保存失败被误判为冲突、草稿恢复后无法重试的问题，并避免旧备份覆盖较新的编辑。同步、图片上传和标签切换会保留光标与滚动位置；原生导出菜单会直接执行所选格式，Cmd/Ctrl+/ 也可再次关闭快捷键速查。
+          此版本升级 AI 优化流程：先并行完成标题与六维结构诊断，再执行全文级编辑和正文分块审阅，并可针对单个结构维度发起深入分析。后台任务会持续保存进度和部分结果，文档标签切换时也会继续恢复各自的光标与滚动位置。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release fixes offline save failures being misclassified as conflicts, restores retryable drafts without falling back to stale backups, and preserves cursor and scroll positions across sync, image uploads, and tab switches. Native export menu actions now run the selected format directly, and Cmd/Ctrl+/ toggles the shortcut reference closed as expected.
+          This release upgrades AI optimization with parallel title and six-dimension structural diagnosis, followed by whole-document developmental editing and chunked body review. Focused deep analysis is available for each structural dimension, progress and partial results persist in the background, and document tabs continue restoring their own cursor and scroll positions.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
