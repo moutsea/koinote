@@ -33,6 +33,9 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Le partage sur ordinateur synchronise d’abord le brouillon courant puis conserve immédiatement son état localement, afin que l’activation ou la révocation ne semble plus sans effet.
 - Les raccourcis et accélérateurs des menus natifs n’agissent plus sur le document derrière une fenêtre modale ; un conflit pendant l’optimisation IA remplace désormais le panneau par le résolveur de conflit visible.
 - Les modifications effectuées pendant une synchronisation d’images déclenchent désormais de façon fiable une synchronisation suivante, évitant les faux retards d’enregistrement ou de synchronisation après un téléversement réussi.
+- Les échecs d’enregistrement distinguent désormais les conflits de révision des erreurs hors ligne ou réseau, conservent un brouillon réessayable sans restaurer silencieusement une ancienne sauvegarde et affichent un état plus clair et accessible.
+- Les synchronisations, téléversements d’images et changements d’onglet conservent désormais le curseur et le défilement, même après le remontage d’un éditeur évincé du cache.
+- Les actions d’export du menu natif exécutent directement le format choisi, et `Cmd/Ctrl+/` referme désormais correctement l’aide-mémoire des raccourcis.
 
 ## [0.6.0] - 2026-08-17
 

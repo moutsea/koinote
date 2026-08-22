@@ -35,6 +35,9 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Desktop sharing now syncs the current draft first and immediately persists the returned share state locally, so enabling or revoking a share no longer appears to do nothing.
 - Desktop shortcuts and native menu accelerators no longer act on documents behind modal dialogs; save conflicts now replace the AI optimization panel with the visible conflict resolver.
 - Desktop sync now queues a follow-up pass when edits arrive during an active image-upload sync, avoiding delayed save or sync errors after successful uploads.
+- Desktop save failures now distinguish revision conflicts from offline or network errors, retain retryable drafts without silently restoring stale backups, and expose clearer accessible status feedback.
+- Sync updates, image uploads, and tab switches now preserve cursor and scroll positions without rebuilding unaffected editor content, including after an editor tab is remounted.
+- Native export menu actions now run the selected format directly, and `Cmd/Ctrl+/` toggles the shortcut reference closed instead of only opening it.
 
 ## [0.6.0] - 2026-08-17
 
