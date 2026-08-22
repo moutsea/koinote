@@ -157,7 +157,11 @@ const originalNode = globalThis.Node;
     "点标题或工具栏后不能继续把正文标成已聚焦",
   );
   const titleInput = testWindow.document.createElement("textarea");
-  const tabButton = testWindow.document.createElement("button");
+  const toolbarButton = testWindow.document.createElement("button");
+  const tab = testWindow.document.createElement("div");
+  tab.setAttribute("data-koinote-editor-tab", "");
+  const tabCloseButton = testWindow.document.createElement("button");
+  tab.append(tabCloseButton);
   ok(
     "display:none 导致焦点退回 body 时保留正文焦点",
     tabSelection.shouldPreserveEditorFocusAfterBlur(
@@ -170,16 +174,28 @@ const originalNode = globalThis.Node;
       ),
   );
   ok(
-    "点标题或标签时不保留正文焦点",
+    "点标题或工具栏时不保留正文焦点",
     !tabSelection.shouldPreserveEditorFocusAfterBlur(
       titleInput,
       testWindow.document.body,
     ) &&
       !tabSelection.shouldPreserveEditorFocusAfterBlur(
-        tabButton,
+        toolbarButton,
         testWindow.document.body,
       ),
-    "鼠标切标签后焦点应留在标签按钮，不能抢回正文",
+    "普通控件获得焦点后不能抢回正文",
+  );
+  ok(
+    "鼠标切标签时保留正文焦点意图",
+    tabSelection.shouldPreserveEditorFocusAfterBlur(
+      tab,
+      testWindow.document.body,
+    ) &&
+      tabSelection.shouldPreserveEditorFocusAfterBlur(
+        tabCloseButton,
+        testWindow.document.body,
+      ),
+    "切换或关闭标签后应在目标文档的原光标位置继续输入",
   );
   let clamped = false;
   try {

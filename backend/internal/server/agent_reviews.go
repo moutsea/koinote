@@ -24,7 +24,7 @@ const (
 	agentReviewRateWindow     = 5 * time.Minute
 	agentReviewMaxRunning     = 3
 	agentReviewListLimit      = 20
-	agentReviewRunLimit       = 10 * time.Minute
+	agentReviewRunLimit       = 15 * time.Minute
 	agentReviewReservationTTL = agentReviewRunLimit + 2*time.Minute
 	agentReviewFinalizeLimit  = 20 * time.Second
 	agentReviewStaleAfter     = agentReviewReservationTTL
@@ -65,6 +65,7 @@ var (
 	errAgentReviewNotFound     = errors.New("agent review not found")
 	errAgentReviewStale        = errors.New("agent review is stale")
 	errAgentReviewClosed       = errors.New("agent review is closed")
+	errAgentReviewPersistence  = errors.New("agent review persistence failed")
 	errAgentSuggestionNotFound = errors.New("agent suggestion not found")
 	errAgentSuggestionClosed   = errors.New("agent suggestion is closed")
 	errAgentSuggestionConflict = errors.New("agent suggestion no longer matches the document")
@@ -98,6 +99,8 @@ type agentReviewView struct {
 }
 
 type agentReviewTaskProgress struct {
+	Mode           string                     `json:"mode,omitempty"`
+	FocusDimension string                     `json:"focusDimension,omitempty"`
 	CompletedTasks int                        `json:"completedTasks"`
 	TotalTasks     int                        `json:"totalTasks"`
 	Stages         []agentReviewStageProgress `json:"stages"`
@@ -180,8 +183,11 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		ProviderMode string `json:"providerMode"`
-		ChannelID    string `json:"channelId"`
+		ProviderMode   string `json:"providerMode"`
+		ChannelID      string `json:"channelId"`
+		Depth          string `json:"depth"`
+		FocusDimension string `json:"focusDimension"`
+		SourceReviewID string `json:"sourceReviewId"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentReviewRequestBytes)
 	decoder := json.NewDecoder(r.Body)
@@ -192,6 +198,32 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	input.ProviderMode = strings.ToLower(strings.TrimSpace(input.ProviderMode))
 	input.ChannelID = strings.TrimSpace(input.ChannelID)
+	input.Depth = strings.ToLower(strings.TrimSpace(input.Depth))
+	input.FocusDimension = strings.ToLower(strings.TrimSpace(input.FocusDimension))
+	input.SourceReviewID = strings.TrimSpace(input.SourceReviewID)
+	if input.Depth == "" {
+		input.Depth = agentReviewModeStandard
+	}
+	if input.Depth != agentReviewModeStandard && input.Depth != agentReviewModeDeep {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_depth", "Review depth must be standard or deep")
+		return
+	}
+	if input.Depth == agentReviewModeDeep && !writingReviewDimensionExists(input.FocusDimension) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_focus", "Deep review requires a valid focus dimension")
+		return
+	}
+	if input.Depth == agentReviewModeDeep && input.SourceReviewID == "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Deep review requires a source review")
+		return
+	}
+	if input.Depth == agentReviewModeStandard && input.FocusDimension != "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_focus", "Standard review cannot set a focus dimension")
+		return
+	}
+	if input.Depth == agentReviewModeStandard && input.SourceReviewID != "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Standard review cannot set a source review")
+		return
+	}
 	if input.ProviderMode == "" {
 		mode, err := a.loadAgentProviderMode(r.Context(), user.ID)
 		if err != nil {
@@ -220,12 +252,38 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	deepContext := writingReviewDeepContext{}
+	if input.Depth == agentReviewModeDeep {
+		sourceReview, err := a.loadAgentReview(r.Context(), user.ID, input.SourceReviewID, true)
+		if errors.Is(err, errAgentReviewNotFound) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Source review is not available for deep analysis")
+			return
+		}
+		if err != nil {
+			log.Printf("agent review load deep analysis source: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if sourceReview.DocumentID != document.DocID || sourceReview.CurrentRevision != document.Revision ||
+			sourceReview.Status == "running" || sourceReview.Status == "failed" || sourceReview.Status == "stale" {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Source review is not available for deep analysis")
+			return
+		}
+		deepContext = writingReviewDeepContextFromReview(sourceReview, input.FocusDimension)
+	}
 	provider, channelDatabaseID, err := a.resolveAgentLLMProvider(r.Context(), user, input.ProviderMode, input.ChannelID)
 	if err != nil {
 		a.writeAgentProviderResolveError(w, err)
 		return
 	}
-	plan, err := buildWritingReviewTaskPlan(document.Title, document.Content)
+	var plan writingReviewTaskPlan
+	if input.Depth == agentReviewModeDeep {
+		plan, err = buildDeepWritingReviewTaskPlan(
+			document.Title, document.Content, input.FocusDimension, deepContext,
+		)
+	} else {
+		plan, err = buildWritingReviewTaskPlan(document.Title, document.Content)
+	}
 	if err != nil {
 		log.Printf("agent review build task plan: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
@@ -290,6 +348,131 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusAccepted, map[string]any{"review": view})
 }
 
+func writingReviewDeepContextFromReview(
+	review agentReviewView,
+	focusDimension string,
+) writingReviewDeepContext {
+	context := writingReviewDeepContext{Suggestions: make([]writingReviewDeepPriorSuggestion, 0)}
+	sourceIsDifferentDeepFocus := review.TaskProgress.Mode == agentReviewModeDeep &&
+		review.TaskProgress.FocusDimension != focusDimension
+	if review.Summary != nil && !sourceIsDifferentDeepFocus {
+		context.Summary = truncateWritingReviewContext(
+			*review.Summary, agentReviewDeepContextSummaryBytes, false,
+		)
+	}
+	for _, dimension := range review.LayoutAssessment {
+		if dimension.ID != focusDimension {
+			continue
+		}
+		value := dimension
+		value.Label = truncateWritingReviewContext(value.Label, agentReviewDeepContextDimensionBytes, false)
+		value.Summary = truncateWritingReviewContext(value.Summary, agentReviewDeepContextDimensionBytes, false)
+		context.Dimension = &value
+		if sourceIsDifferentDeepFocus {
+			context.Summary = value.Summary
+		}
+		break
+	}
+	for _, suggestion := range writingReviewDeepContextSuggestions(review.Suggestions, focusDimension) {
+		if len(context.Suggestions) >= agentReviewDeepContextSuggestionLimit {
+			break
+		}
+		operation := ""
+		if suggestion.Operation != nil {
+			operation = *suggestion.Operation
+		}
+		candidate := writingReviewDeepPriorSuggestion{
+			Kind:      suggestion.Kind,
+			Category:  suggestion.Category,
+			Operation: operation,
+			Before: truncateWritingReviewContext(
+				suggestion.Before, agentReviewDeepContextPatchBytes, false,
+			),
+			After: truncateWritingReviewContext(
+				suggestion.After, agentReviewDeepContextPatchBytes, false,
+			),
+			Reason: truncateWritingReviewContext(
+				suggestion.Reason, agentReviewDeepContextReasonBytes, false,
+			),
+			Status: suggestion.Status,
+		}
+		context.Suggestions = append(context.Suggestions, candidate)
+		if writingReviewDeepContextEncodedBytes(context) > agentReviewDeepContextBytes {
+			context.Suggestions = context.Suggestions[:len(context.Suggestions)-1]
+		}
+	}
+	if writingReviewDeepContextEncodedBytes(context) > agentReviewDeepContextBytes {
+		context.Dimension = nil
+	}
+	if writingReviewDeepContextEncodedBytes(context) > agentReviewDeepContextBytes {
+		context.Summary = ""
+	}
+	return context
+}
+
+func writingReviewDeepContextEncodedBytes(context writingReviewDeepContext) int {
+	encoded, err := json.Marshal(context)
+	if err != nil {
+		return agentReviewDeepContextBytes + 1
+	}
+	return len(encoded)
+}
+
+func writingReviewDeepContextSuggestions(
+	suggestions []agentReviewSuggestionView,
+	focusDimension string,
+) []agentReviewSuggestionView {
+	layout := make([]agentReviewSuggestionView, 0)
+	content := make([]agentReviewSuggestionView, 0)
+	for _, suggestion := range suggestions {
+		if !writingReviewSuggestionSupportsDimension(suggestion, focusDimension) {
+			continue
+		}
+		if suggestion.Kind == "layout" {
+			layout = append(layout, suggestion)
+		} else {
+			content = append(content, suggestion)
+		}
+	}
+	ordered := make([]agentReviewSuggestionView, 0, len(layout)+len(content))
+	for index := 0; index < max(len(layout), len(content)); index++ {
+		if index < len(layout) {
+			ordered = append(ordered, layout[index])
+		}
+		if index < len(content) {
+			ordered = append(ordered, content[index])
+		}
+	}
+	return ordered
+}
+
+func writingReviewSuggestionSupportsDimension(suggestion agentReviewSuggestionView, focusDimension string) bool {
+	if suggestion.Kind == "layout" {
+		return suggestion.Category == focusDimension
+	}
+	if suggestion.Kind != "content" || suggestion.Target != "body" {
+		return false
+	}
+	if suggestion.Category == focusDimension {
+		return true
+	}
+	for _, category := range writingReviewDimensionBodyCategories[focusDimension] {
+		if suggestion.Category == category {
+			return true
+		}
+	}
+	return false
+}
+
+var writingReviewDimensionBodyCategories = map[string][]string{
+	"hierarchy":   {"structure"},
+	"readability": {"clarity", "style"},
+	"emphasis":    {"engagement", "conversion", "structure"},
+	"rhythm":      {"style", "clarity"},
+	"modules":     {"structure"},
+	"mobile":      {"clarity", "structure", "style"},
+}
+
 func (a *App) runAgentReview(
 	userID int,
 	reviewDatabaseID int64,
@@ -308,15 +491,6 @@ func (a *App) runAgentReview(
 
 	requestCtx, cancel := context.WithTimeout(context.Background(), agentReviewRunLimit)
 	progress := newAgentReviewTaskProgress(plan)
-	for index := range progress.Stages {
-		progress.Stages[index].Status = "running"
-	}
-	if err := a.storeAgentReviewTaskProgress(requestCtx, userID, reviewDatabaseID, progress); err != nil {
-		cancel()
-		a.failAgentReview(context.Background(), userID, reviewDatabaseID, "server_error", reservationID)
-		log.Printf("agent review initialize progress review=%s: %v", reviewID, err)
-		return
-	}
 	result, validated, callErr := executeWritingReviewTaskPlan(
 		requestCtx,
 		a.agentLLMHTTPClient,
@@ -324,20 +498,34 @@ func (a *App) runAgentReview(
 		plan,
 		document.Title,
 		document.Content,
+		func(tasks []writingReviewTaskSpec) error {
+			progress.start(tasks)
+			persistCtx, persistCancel := context.WithTimeout(context.Background(), agentReviewFinalizeLimit)
+			defer persistCancel()
+			if err := a.storeAgentReviewTaskProgress(
+				persistCtx, userID, reviewDatabaseID, progress,
+			); err != nil {
+				return fmt.Errorf("%w: store task progress: %w", errAgentReviewPersistence, err)
+			}
+			return nil
+		},
 		func(outcome writingReviewTaskOutcome) error {
 			progress.record(outcome)
 			persistCtx, persistCancel := context.WithTimeout(context.Background(), agentReviewFinalizeLimit)
 			defer persistCancel()
-			return a.storeAgentReviewTaskOutcome(
+			if err := a.storeAgentReviewTaskOutcome(
 				persistCtx, userID, reviewDatabaseID, progress, outcome,
-			)
+			); err != nil {
+				return fmt.Errorf("%w: store task outcome: %w", errAgentReviewPersistence, err)
+			}
+			return nil
 		},
 	)
 	cancel()
 	if callErr != nil {
 		errorCode := classifyAgentReviewFailure(callErr)
 		a.failAgentReview(context.Background(), userID, reviewDatabaseID, errorCode, reservationID)
-		log.Printf("agent review provider failed review=%s code=%s: %v", reviewID, errorCode, callErr)
+		log.Printf("agent review execution failed review=%s code=%s: %v", reviewID, errorCode, callErr)
 		return
 	}
 
@@ -720,13 +908,15 @@ func (a *App) insertRunningAgentReview(
 		return 0, err
 	}
 	var running int
+	var sameDocumentRevisionRunning bool
 	if err := tx.QueryRow(ctx, `
-		SELECT count(*) FROM agent_reviews
+		SELECT count(*), COALESCE(bool_or(document_id = $2 AND base_revision = $3), false)
+		FROM agent_reviews
 		WHERE user_id = $1 AND status = 'running'
-	`, userID).Scan(&running); err != nil {
+	`, userID, document.DatabaseID, document.Revision).Scan(&running, &sameDocumentRevisionRunning); err != nil {
 		return 0, err
 	}
-	if running >= agentReviewMaxRunning {
+	if sameDocumentRevisionRunning || running >= agentReviewMaxRunning {
 		return 0, errAgentReviewClosed
 	}
 	progressJSON, err := json.Marshal(progress)
@@ -772,13 +962,21 @@ func estimateAgentReviewPlanReservation(plan writingReviewTaskPlan) int64 {
 	totalTokens := 0
 	for _, task := range plan.Tasks {
 		totalTokens += agentReviewPromptTokenUpperBound(task.Prompt)
+		if task.WantsPriorFindings {
+			// 首轮诊断是执行时才拼进提示词的，预留时提示词里还没有它
+			totalTokens += agentReviewPriorFindingsTokens
+		}
 	}
 	return max(1, creditsForTokens(totalTokens))
 }
 
 func newAgentReviewTaskProgress(plan writingReviewTaskPlan) agentReviewTaskProgress {
-	progress := agentReviewTaskProgress{TotalTasks: len(plan.Tasks)}
-	for _, stage := range []agentReviewTaskStage{agentReviewTaskTitle, agentReviewTaskBody, agentReviewTaskLayout} {
+	progress := agentReviewTaskProgress{
+		Mode: plan.Mode, FocusDimension: plan.FocusDimension, TotalTasks: len(plan.Tasks),
+	}
+	for _, stage := range []agentReviewTaskStage{
+		agentReviewTaskTitle, agentReviewTaskLayout, agentReviewTaskDocument, agentReviewTaskBody,
+	} {
 		total := 0
 		for _, task := range plan.Tasks {
 			if task.Stage == stage {
@@ -792,6 +990,19 @@ func newAgentReviewTaskProgress(plan writingReviewTaskPlan) agentReviewTaskProgr
 		}
 	}
 	return progress
+}
+
+func (progress *agentReviewTaskProgress) start(tasks []writingReviewTaskSpec) {
+	stages := make(map[agentReviewTaskStage]struct{}, len(tasks))
+	for _, task := range tasks {
+		stages[task.Stage] = struct{}{}
+	}
+	for index := range progress.Stages {
+		stage := &progress.Stages[index]
+		if _, ok := stages[stage.ID]; ok && stage.Status == "pending" {
+			stage.Status = "running"
+		}
+	}
 }
 
 func (progress *agentReviewTaskProgress) record(outcome writingReviewTaskOutcome) {
@@ -1000,6 +1211,12 @@ func (a *App) finalizeAgentReview(
 	if documentRevision != document.Revision {
 		status = "stale"
 	}
+	var titleScore any
+	var titleAssessment any
+	if validated.HasTitleReview {
+		titleScore = validated.TitleScore
+		titleAssessment = validated.TitleAssessment
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE agent_reviews
 		SET status = $2,
@@ -1014,8 +1231,8 @@ func (a *App) finalizeAgentReview(
 		    completed_at = now(),
 		    updated_at = now()
 		WHERE id = $1
-	`, reviewDatabaseID, status, validated.Summary, validated.TitleScore,
-		validated.TitleAssessment, string(layoutAssessmentJSON), result.InputTokens, result.OutputTokens,
+	`, reviewDatabaseID, status, validated.Summary, titleScore,
+		titleAssessment, string(layoutAssessmentJSON), result.InputTokens, result.OutputTokens,
 		result.TotalTokens, creditsCharged); err != nil {
 		return agentReviewView{}, err
 	}
@@ -1723,6 +1940,10 @@ func (a *App) writeAgentReviewMutationError(w http.ResponseWriter, err error) {
 func classifyAgentReviewFailure(err error) string {
 	var httpError *agentLLMHTTPError
 	switch {
+	case errors.Is(err, errAgentReviewPersistence):
+		return "server_error"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "review_timeout"
 	case errors.Is(err, errAgentLLMUsageMissing):
 		return "usage_missing"
 	case errors.Is(err, errAgentLLMUsageInvalid):
@@ -1730,6 +1951,11 @@ func classifyAgentReviewFailure(err error) string {
 	case errors.Is(err, errAgentLLMInvalidResponse):
 		return "invalid_response"
 	case errors.As(err, &httpError):
+		if httpError.Status == http.StatusRequestTimeout ||
+			httpError.Status == http.StatusTooManyRequests ||
+			httpError.Status >= http.StatusInternalServerError {
+			return "provider_unavailable"
+		}
 		return "provider_http_error"
 	default:
 		return "provider_unavailable"

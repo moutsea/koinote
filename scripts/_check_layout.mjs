@@ -48,6 +48,7 @@ eq("控制台收到 5xl", contentWidthFor("/dashboard"), "5xl");
 eq("文档页收到 5xl", contentWidthFor("/documents"), "5xl");
 eq("邀请页收到 5xl", contentWidthFor("/invitations"), "5xl");
 eq("文档中心收到 6xl", contentWidthFor("/docs"), "6xl");
+eq("AI 优化指南收到 6xl", contentWidthFor("/docs/ai-optimization"), "6xl");
 eq("MCP 指南收到 6xl", contentWidthFor("/docs/mcp"), "6xl");
 eq("版本控制指南收到 6xl", contentWidthFor("/docs/version-history"), "6xl");
 eq("分享页收到 3xl", contentWidthFor("/share/tok3n"), "3xl");

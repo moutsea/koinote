@@ -597,15 +597,23 @@ export type AgentReviewLayoutAssessment = {
 };
 
 export type AgentReviewTaskProgress = {
+  mode?: "standard" | "deep";
+  focusDimension?: AgentReviewLayoutAssessment["id"] | null;
   completedTasks: number;
   totalTasks: number;
   stages: Array<{
-    id: "title" | "body" | "layout";
+    id: "title" | "document" | "body" | "layout";
     status: "pending" | "running" | "completed" | "failed";
     completedTasks: number;
     totalTasks: number;
     durationMs: number;
   }>;
+};
+
+export type AgentReviewCreateInput = {
+  depth?: "deep";
+  focusDimension?: AgentReviewLayoutAssessment["id"];
+  sourceReviewId?: string;
 };
 
 export type AgentReview = {
@@ -644,10 +652,11 @@ export type AgentReview = {
 
 export function createAgentReview(
   docId: string,
+  input: AgentReviewCreateInput = {},
 ) {
   return apiJson<{ review: AgentReview }>(
     `/api/documents/${encodeURIComponent(docId)}/agent-reviews`,
-    { method: "POST", body: "{}" },
+    { method: "POST", body: JSON.stringify(input) },
   );
 }
 

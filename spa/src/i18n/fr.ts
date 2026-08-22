@@ -7,6 +7,7 @@ export const fr: Messages = {
     pricing: "Tarifs",
     docs: "Documentation",
     docsHome: "Centre de documentation",
+    aiGuide: "Optimisation IA",
     mcpGuide: "Intégration MCP",
     versionHistoryGuide: "Contrôle de version",
     dashboard: "Tableau de bord",
@@ -250,6 +251,153 @@ export const fr: Messages = {
     mcpCta: "Voir l’intégration MCP",
     pricingCta: "Voir les avantages",
   },
+  aiGuide: {
+    eyebrow: "Guide de l’optimisation IA",
+    title: "Un éditeur IA relit votre texte et détaille chaque suggestion",
+    subtitle:
+      "L’IA relit automatiquement le titre, le texte, la structure et la mise en page, puis présente des modifications vérifiables comme une revue de code.",
+    checks: [
+      {
+        title: "Force du titre",
+        desc: "Évalue clarté, précision, crédibilité et curiosité ; sous 60 points, le modèle est invité à proposer deux ou trois alternatives.",
+      },
+      {
+        title: "Qualité du texte",
+        desc: "Repère les longueurs, références ambiguës, ruptures de ton, détails typographiques et problèmes de rythme sur mobile, avec une raison pour chaque correction.",
+      },
+      {
+        title: "Structure et mise en page",
+        desc: "Évalue hiérarchie, lisibilité, emphase, rythme, modularité et lecture mobile, puis suggère titres, séparateurs, listes ou citations.",
+      },
+      {
+        title: "Application contrôlée",
+        desc: "Chaque proposition montre l’original et la version suggérée. Appliquez-la seule, en lot, ou ignorez-la : rien ne change en arrière-plan sans accord.",
+      },
+    ],
+    caseEyebrow: "Une revue réelle",
+    caseTitle: "Cas réel : « L’éditeur Markdown à 1 000 $ devient open source »",
+    caseIntro:
+      "Cet article d’annonce produit contenait 18 paragraphes. La revue a conservé sa voix personnelle et son message central, corrigé quelques détails d’expression et ajouté la hiérarchie qui manquait. Les chiffres et exemples suivants proviennent d’une revue réelle effectuée le 19 août 2026.",
+    caseSourceCta: "Lire l’original avant la revue",
+    caseCarouselLabel: "Cas de revue réel",
+    casePrevious: "Afficher la dimension précédente",
+    caseNext: "Afficher la dimension suivante",
+    caseFacts: [
+      { label: "Force du titre", value: "76 / 100" },
+      { label: "Suggestions de texte", value: "3" },
+      { label: "Suggestions de structure", value: "6" },
+      { label: "Coût réel", value: "3 credits" },
+    ],
+    caseTitleReviewTitle: "76 points : précis, intrigant et confirmé par l’article",
+    caseTitleReviewBody:
+      "Le chiffre concret de 1 000 $ crée une forte curiosité et l’article explique réellement cette dépense en tokens, sans exagération. « Open source » ajoute un second bénéfice. Ne pas nommer directement l’IA conserve un suspense raisonnable : le titre reste clair, précis et crédible sans nécessiter de réécriture forcée.",
+    caseContentTitle: "Suggestion de texte : alléger une phrase surchargée",
+    caseContentBody:
+      "La phrase initiale relie par des virgules trois idées : pourquoi le service est gratuit, l’absence de frais de bande passante et la capacité de stockage qui en résulte. Couper après les frais de bande passante clarifie le lien de cause à effet sur mobile sans changer les mots de l’auteur.",
+    beforeLabel: "Original",
+    afterLabel: "Suggestion",
+    caseBefore:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费，让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseAfter:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费。这让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseStructureTitle: "Suggestion de structure : diagnostiquer avant de hiérarchiser",
+    caseStructureBody:
+      "Les 18 paragraphes étaient initialement au même niveau. L’analyse en six dimensions a identifié la hiérarchie et l’emphase comme points les plus faibles, puis proposé des sections distinctes pour le lancement, l’open source et la suite.",
+    caseDimensions: [
+      { label: "Hiérarchie", score: 30 },
+      { label: "Lisibilité", score: 68 },
+      { label: "Emphase", score: 40 },
+      { label: "Rythme", score: 58 },
+      { label: "Modularité", score: 55 },
+      { label: "Mobile", score: 72 },
+    ],
+    caseChangesTitle: "Suggestions concrètes et différences Markdown",
+    caseChanges: [
+      {
+        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason: "Cette phrase est le cœur de l’annonce de la version 1.0. La transformer en H2 permet de repérer immédiatement le début de la section de lancement.",
+      },
+      {
+        before: "并且完整的代码库也都开源了：",
+        after: "### 并且完整的代码库也都开源了：",
+        reason: "Le dépôt est un sous-thème de l’annonce. Un H3 le place sous la section 1.0 et rend la hiérarchie parent-enfant explicite.",
+      },
+      {
+        before: "欢迎各位大佬多提 issue 和 PR。",
+        after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
+        reason: "L’invitation à contribuer se termine ici et le paragraphe suivant passe au bilan des coûts. Un séparateur marque clairement ce changement de sujet.",
+      },
+      {
+        before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason: "Le texte passe de l’état actuel du produit aux projets d’adhésion et d’IA. Un H2 sépare la feuille de route de la présentation précédente.",
+      },
+      {
+        before: "关于 AI 这块，不知道大家都有哪些点子呢？",
+        after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
+        reason: "C’est la question la plus directe de l’article. Une citation mise en valeur évite qu’elle disparaisse lors d’une lecture rapide et encourage les réponses.",
+      },
+      {
+        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason: "Cette dernière phrase est le véritable appel à l’action. L’isoler transforme une explication ordinaire en demande finale claire.",
+      },
+    ],
+    caseSafetyTitle: "Les neuf suggestions ont été appliquées après confirmation",
+    caseSafetyBody:
+      "La revue a produit trois suggestions de texte et six de structure. Koinote a conservé le résultat sans modifier le brouillon avant la confirmation de l’auteur ; les neuf suggestions ont finalement été appliquées pour 3 credits.",
+    caseSafetyItems: [
+      "Chaque proposition montre l’original, la modification et sa raison, sans changement silencieux.",
+      "Si le document évolue après la revue, l’ancien résultat expire au lieu d’écraser le nouveau contenu.",
+      "L’application des changements IA crée un point de récupération complet pour comparer ou restaurer.",
+      "L’historique garde le résumé, les notes, l’état des suggestions et les credits réellement consommés.",
+    ],
+    caseOriginalEyebrow: "Article source de l’optimisation IA",
+    caseOriginalTitle: "烧了一千刀的在线 markdown，开源了",
+    caseOriginalDescription:
+      "L’article source est en chinois. Voici la version enregistrée juste avant la revue IA du 19 août 2026. Hiérarchie, espaces, séparateurs et mises en valeur sont conservés afin de comparer chaque proposition du guide.",
+    caseOriginalBack: "Retour au guide d’optimisation IA",
+    faqTitle: "Questions fréquentes",
+    faqs: [
+      {
+        question: "L’optimisation IA réécrit-elle directement tout l’article ?",
+        answer:
+          "Non. Le titre, le corps et la mise en page sont analysés par étapes en arrière-plan, puis Koinote fournit un résumé, des scores, les raisons et une comparaison avant/après. Seules les suggestions approuvées modifient le document.",
+      },
+      {
+        question: "L’IA vérifie-t-elle les faits et préserve-t-elle totalement mon style ?",
+        answer:
+          "L’IA repère les problèmes d’écriture, mais ne vérifie pas les faits, chiffres ni sources citées. Les suggestions cherchent à préserver votre voix ; vérifiez néanmoins chacune d’elles par rapport à votre intention.",
+      },
+      {
+        question: "Une ancienne revue peut-elle écraser des changements plus récents ?",
+        answer:
+          "Non. Les contrôles de revision et de conflit protègent chaque application. Si le document change après le début de la revue, l’ancien résultat expire au lieu d’écraser le nouveau contenu.",
+      },
+      {
+        question: "Puis-je annuler les changements et que conserve l’historique ?",
+        answer:
+          "Oui. L’application des suggestions crée un point de récupération complet pour comparer ou restaurer la version précédente. L’historique conserve aussi les résumés, notes, états des suggestions et credits réellement consommés.",
+      },
+      {
+        question: "Qui peut l’utiliser et comment le modèle intégré est-il facturé ?",
+        answer:
+          "L’optimisation IA est réservée aux membres à vie, qui reçoivent 1 000 credits lors du passage à cette offre. Le modèle intégré consomme des credits selon l’utilisation réelle de la revue.",
+      },
+      {
+        question: "Puis-je utiliser mon propre canal de modèle ?",
+        answer:
+          "Oui. Connectez un canal compatible OpenAI ou Anthropic Messages dans les paramètres IA pour utiliser votre propre service sans consommer de credits Koinote. Le contenu relu est envoyé à ce service ; vérifiez donc la politique de données du fournisseur.",
+      },
+      {
+        question: "La fonction marche-t-elle en mode local ou dans l’application ?",
+        answer:
+          "Le mode local bloque tout accès réseau et ne peut donc pas l’utiliser. L’application de bureau connectée à un compte y accède normalement lorsqu’elle est en ligne.",
+      },
+    ],
+    pricingCta: "Voir l’offre et les credits",
+  },
   docsCenter: {
     eyebrow: "Documentation produit",
     title: "Du premier document à un flux de rédaction complet",
@@ -320,7 +468,7 @@ export const fr: Messages = {
         title: "Optimisation IA",
         desc: "Relisez un article comme une modification de code, puis choisissez les suggestions à appliquer.",
         items: [
-          "Score d’attractivité du titre et deux ou trois alternatives",
+          "Score d’attractivité du titre et alternatives générées par le modèle",
           "Contrôle du texte, de la structure, de la mise en page et de la lecture mobile",
           "Application suggestion par suggestion, en bloc, ou rejet",
           "Credits intégrés ou canal OpenAI / Anthropic personnel",
@@ -355,6 +503,9 @@ export const fr: Messages = {
       },
     ],
     deepDiveTitle: "Guides détaillés",
+    aiTitle: "Relire un article avec l’optimisation IA",
+    aiDescription:
+      "Découvrez, à partir d’une revue réelle, la note du titre, les suggestions de texte, l’analyse structurelle en six dimensions, les tâches de fond, les credits et votre propre canal de modèle.",
     mcpTitle: "Autoriser les agents à utiliser les documents Koinote",
     mcpDescription:
       "Configurez MCP Streamable HTTP pour Codex, Claude Code, OpenCode, OpenClaw et d’autres clients, avec permissions et exemples d’utilisation.",
@@ -604,6 +755,7 @@ export const fr: Messages = {
     progress: "{completed}/{total} sous-tâches terminées",
     partialResults: "Des résultats partiels sont disponibles. Les modifications pourront être appliquées à la fin.",
     stageTitle: "Titre et introduction",
+    stageDocument: "Révision globale",
     stageBody: "Analyse du contenu",
     stageLayout: "Structure et mise en page",
     backgroundRunning: "L’optimisation IA s’exécute en arrière-plan",
@@ -622,9 +774,17 @@ export const fr: Messages = {
     previousReviews: "Analyses précédentes",
     newReview: "Nouvelle analyse",
     summary: "Résumé de l’analyse",
-    contentReview: "Optimisation du contenu",
+    titleReview: "Suggestions de titre",
+    contentReview: "Expression du texte",
     layoutReview: "Structure et mise en page",
-    layoutAssessment: "Évaluation structurelle en six dimensions",
+    layoutAssessment: "Radar à six dimensions",
+    layoutShowCards: "Tout déployer",
+    layoutShowRadar: "Afficher le radar",
+    layoutRadarHint: "Survolez une dimension pour l’examiner. Cliquez pour filtrer les suggestions, puis recliquez pour annuler.",
+    deepAnalysis: "Analyse approfondie",
+    deepAnalysisTarget: "Cible de l’analyse approfondie",
+    deepAnalysisStarting: "Démarrage…",
+    deepReviewBadge: "Analyse approfondie · {dimension}",
     titleScore: "Attractivité du titre : {score}/100",
     suggestions: "Modifications proposées",
     before: "Avant",
@@ -643,8 +803,11 @@ export const fr: Messages = {
     failedTitle: "L’IA n’a pas pu terminer l’analyse",
     retry: "Relancer l’analyse",
     noSuggestions: "L’article est en bon état ; aucune modification n’est proposée.",
+    noTitleSuggestions: "Aucune alternative assez fiable pour remplacer le titre actuel n’a été trouvée.",
+    noTitleSuggestionsLowScore: "Le titre obtient une note faible, mais aucune alternative étayée n’a été trouvée : l’article ne porte pas encore de promesse plus forte. Ajoutez un résultat ou un public concret, puis relancez la revue.",
     noContentSuggestions: "Le texte est déjà solide. Aucune modification éditoriale n’est nécessaire.",
     noLayoutSuggestions: "La structure actuelle fonctionne déjà. Aucun changement de mise en page sûr n’est nécessaire.",
+    noFilteredLayoutSuggestions: "Cette analyse ne contient aucun changement pour « {dimension} ». Lancez une analyse approfondie ciblée.",
     usage: "{credits} credits consommés",
     close: "Fermer",
     categories: {
@@ -1455,6 +1618,7 @@ function hello(name) {
     pricing: "Tarifs",
     dashboard: "Tableau de bord",
     docsCenter: "Documentation",
+    aiGuide: "Guide d’optimisation IA",
     mcpGuide: "Guide MCP",
     versionHistoryGuide: "Guide du versionnage",
     home: "Accueil",
@@ -1813,6 +1977,7 @@ function hello(name) {
     agent_review_stale: "Le document a changé. Lancez une nouvelle analyse",
     agent_review_closed: "Cette analyse est déjà fermée",
     agent_review_in_progress: "Une autre analyse est en cours. Patientez",
+    invalid_agent_review_source: "Le document ou l’analyse source a changé. Relancez d’abord une analyse standard",
     invalid_agent_provider: "Fournisseur de modèle IA invalide",
     invalid_llm_channel_name: "Nom de canal invalide",
     invalid_llm_channel_url: "L’URL de base du canal est invalide ou non sûre",

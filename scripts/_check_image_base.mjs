@@ -75,14 +75,17 @@ check(
 }
 
 const imageKey = "u/alice/aaaaaaaa11111111.png";
-const deleteRequest = () =>
+const publicAliasPath = "cases/ai-optimization/reader-response.png";
+const publicImageKey = "public/cases/ai-optimization/reader-response.png";
+const publicLegacyKey = "u/google_104742467398561921274/78b22503abbb4824b837fe21ff7ab072.png";
+const deleteRequest = (keys = [imageKey]) =>
   new Request("https://app.example.com/api/images/delete", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-koinote-internal-token": "internal",
     },
-    body: JSON.stringify({ keys: [imageKey] }),
+    body: JSON.stringify({ keys }),
   });
 
 {
@@ -343,6 +346,35 @@ for (const quotaCase of [
     check("回源沿用原请求方法", fetchedMethod, "GET");
 
     fetchedURL = "";
+    const aliased = await handleImageGet(
+      new Request(`http://localhost:8788/images/${publicAliasPath}`),
+      {
+        IMAGE_READ_FALLBACK_BASE: "https://img.koinote.app",
+        IMAGES: {
+          head: async () => null,
+          get: async () => null,
+        },
+      },
+    );
+    check("公开案例图片别名可读取", aliased.status, 200);
+    check(
+      "公开案例图片别名解析到既有对象",
+      fetchedURL,
+      `https://img.koinote.app/${publicLegacyKey}`,
+    );
+
+    fetchedURL = "";
+    const prototypeKey = await handleImageGet(
+      new Request("http://localhost:8788/images/constructor"),
+      {
+        IMAGE_READ_FALLBACK_BASE: "https://img.koinote.app",
+        IMAGES: { get: async () => null },
+      },
+    );
+    check("图片别名查表不命中对象原型链", prototypeKey.status, 404);
+    check("对象原型名称不会触发回源", fetchedURL, "");
+
+    fetchedURL = "";
     const rejected = await handleImageGet(
       new Request("http://localhost:8788/images/not-an-owned-image.png"),
       {
@@ -355,6 +387,84 @@ for (const quotaCase of [
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
+
+{
+  const operations = [];
+  const imageObject = (key) => ({
+    key,
+    size: 4,
+    httpEtag: '"etag"',
+    httpMetadata: {
+      contentType: "image/png",
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([137, 80, 78, 71]));
+        controller.close();
+      },
+    }),
+    writeHttpMetadata(headers) {
+      headers.set("content-type", "image/png");
+      headers.set("cache-control", "public, max-age=31536000, immutable");
+    },
+  });
+  let publicStored = false;
+  const bucket = {
+    head: async (key) => publicStored && key === publicImageKey ? imageObject(key) : null,
+    get: async (key) => {
+      if (key === publicLegacyKey) return imageObject(key);
+      if (publicStored && key === publicImageKey) return imageObject(key);
+      return null;
+    },
+    put: async (key) => {
+      operations.push(`put:${key}`);
+      publicStored = true;
+    },
+    delete: async (keys) => {
+      operations.push(`delete:${Array.isArray(keys) ? keys.join(",") : keys}`);
+    },
+  };
+
+  const read = await handleImageGet(
+    new Request(`http://localhost:8788/images/${publicAliasPath}`),
+    { IMAGES: bucket },
+  );
+  check("公开案例首次读取迁移到公共对象", read.status, 200);
+  check("公开案例写入稳定公共 key", operations[0], `put:${publicImageKey}`);
+
+  publicStored = false;
+  operations.length = 0;
+  const removed = await handleImageDelete(deleteRequest([publicLegacyKey]), {
+    BACKEND_INTERNAL_TOKEN: "internal",
+    IMAGES: bucket,
+  });
+  check("旧用户图片删除前先保存公共副本", removed.status, 200);
+  check("删除前公共副本先写入", operations[0], `put:${publicImageKey}`);
+  check("公共副本写入后才删除旧对象", operations[1], `delete:${publicLegacyKey}`);
+}
+
+{
+  let deleted = 0;
+  const response = await handleImageDelete(deleteRequest([publicLegacyKey]), {
+    BACKEND_INTERNAL_TOKEN: "internal",
+    IMAGES: {
+      head: async () => null,
+      get: async () => ({
+        body: new ReadableStream(),
+        httpMetadata: { contentType: "image/png" },
+      }),
+      put: async () => {
+        throw new Error("R2 write failed");
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+    },
+  });
+  check("公共副本迁移失败时删除返回 503", response.status, 503);
+  check("公共副本迁移失败时保留旧对象", deleted, 0);
 }
 
 {

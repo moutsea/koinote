@@ -432,14 +432,21 @@ func TestParseAndValidateWritingReviewRejectsUnsafePatches(t *testing.T) {
 		content string
 	}{
 		{
-			name: "low title score without alternatives",
+			// 分数低却不给备选不再判错——那条规则等于告诉模型"打 60 分零备选最安全"。
+			// 但备选数量的上限仍然要守住。
+			name: "too many title alternatives",
 			raw: strings.Replace(
 				validAgentReviewJSON,
 				`"titleSuggestions": [
     {"after": "24 小时部署 Qwen：从本地到公网的完整记录", "reason": "补足时间、对象和结果。"},
     {"after": "一张 4090 跑 Qwen：下载、体验与公网部署", "reason": "直接点出读者最关心的硬件与路径。"}
   ]`,
-				`"titleSuggestions": []`,
+				`"titleSuggestions": [
+    {"after": "备选一", "reason": "理由一。"},
+    {"after": "备选二", "reason": "理由二。"},
+    {"after": "备选三", "reason": "理由三。"},
+    {"after": "备选四", "reason": "理由四。"}
+  ]`,
 				1,
 			),
 			content: "这是原始句子。",

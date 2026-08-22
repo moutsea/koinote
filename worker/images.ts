@@ -24,6 +24,35 @@ export type ImagesEnv = {
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
 const IMAGE_PURPOSE_HEADER = "x-koinote-image-purpose";
+type PublicImageAlias = {
+  key: string;
+  legacyKey: string;
+};
+const PUBLIC_IMAGE_ALIASES: ReadonlyMap<string, PublicImageAlias> = new Map([
+  ["cases/ai-optimization/reader-response.png", {
+    key: "public/cases/ai-optimization/reader-response.png",
+    legacyKey: "u/google_104742467398561921274/78b22503abbb4824b837fe21ff7ab072.png",
+  }],
+  ["cases/ai-optimization/koinote-home.png", {
+    key: "public/cases/ai-optimization/koinote-home.png",
+    legacyKey: "u/google_104742467398561921274/73c20cac633f9f1abe13f5b6ca32361b.png",
+  }],
+  ["cases/ai-optimization/github-repository.png", {
+    key: "public/cases/ai-optimization/github-repository.png",
+    legacyKey: "u/google_104742467398561921274/239d538323f99a4571a98d040456be5a.png",
+  }],
+  ["cases/ai-optimization/claude-cost.png", {
+    key: "public/cases/ai-optimization/claude-cost.png",
+    legacyKey: "u/google_104742467398561921274/fe7aac190260234e06bdc2f219bff7cf.png",
+  }],
+  ["cases/ai-optimization/editor-themes.png", {
+    key: "public/cases/ai-optimization/editor-themes.png",
+    legacyKey: "u/google_104742467398561921274/d0380da652d912c5e7c767384367ad69.png",
+  }],
+]);
+const PUBLIC_IMAGE_ALIASES_BY_LEGACY_KEY: ReadonlyMap<string, PublicImageAlias> = new Map(
+  [...PUBLIC_IMAGE_ALIASES.values()].map((alias) => [alias.legacyKey, alias]),
+);
 type ImagePurpose = "persistent" | "wechat-export";
 type QuotaErrorCode =
   | "image_quota_exceeded"
@@ -648,6 +677,68 @@ async function purgeImageCache(keys: string[], env: ImagesEnv): Promise<boolean>
   }
 }
 
+type PublicImageAliasState = "ready" | "source_missing" | "error";
+
+async function ensurePublicImageAlias(
+  alias: PublicImageAlias,
+  env: ImagesEnv,
+): Promise<PublicImageAliasState> {
+  try {
+    if (await env.IMAGES.head(alias.key)) return "ready";
+    const source = await env.IMAGES.get(alias.legacyKey);
+    if (!source) return "source_missing";
+    await env.IMAGES.put(alias.key, source.body, {
+      httpMetadata: source.httpMetadata,
+      customMetadata: { purpose: "public-case" },
+    });
+    return "ready";
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "images: public image migration failed",
+      publicKey: alias.key,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return "error";
+  }
+}
+
+async function resolvePublicImageKey(
+  alias: PublicImageAlias,
+  env: ImagesEnv,
+): Promise<string> {
+  return await ensurePublicImageAlias(alias, env) === "ready"
+    ? alias.key
+    : alias.legacyKey;
+}
+
+async function getPublicImageAlias(
+  alias: PublicImageAlias,
+  env: ImagesEnv,
+): Promise<R2ObjectBody | null> {
+  try {
+    const existing = await env.IMAGES.get(alias.key);
+    if (existing) return existing;
+    const source = await env.IMAGES.get(alias.legacyKey);
+    if (!source) return null;
+    await env.IMAGES.put(alias.key, source.body, {
+      httpMetadata: source.httpMetadata,
+      customMetadata: { purpose: "public-case" },
+    });
+    return await env.IMAGES.get(alias.key);
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "images: public image read migration failed",
+      publicKey: alias.key,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    try {
+      return await env.IMAGES.get(alias.legacyKey);
+    } catch {
+      return null;
+    }
+  }
+}
+
 /** 图片对外 URL：配了自定义域名走 CDN，否则回落到 Worker 代理 */
 function publicURL(key: string, env: ImagesEnv): string {
   const base = normalizeImageBase(env.IMAGE_PUBLIC_BASE);
@@ -730,6 +821,14 @@ export async function handleImageDelete(
     if (typeof raw !== "string" || !isSafeImageKey(raw)) {
       rejected.push(String(raw));
       continue;
+    }
+    const publicAlias = PUBLIC_IMAGE_ALIASES_BY_LEGACY_KEY.get(raw);
+    if (publicAlias && await ensurePublicImageAlias(publicAlias, env) === "error") {
+      return errorCode(
+        503,
+        "public_image_migration_failed",
+        "Could not preserve a public image before deletion",
+      );
     }
     deleted.push(raw);
   }
@@ -814,13 +913,15 @@ export async function handleImageGet(
   env: ImagesEnv,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const key = decodeURIComponent(url.pathname.replace(/^\/images\//, ""));
-  if (!key || key.includes("..")) {
+  const requestedKey = decodeURIComponent(url.pathname.replace(/^\/images\//, ""));
+  if (!requestedKey || requestedKey.includes("..")) {
     return new Response("Not found", { status: 404 });
   }
+  const alias = PUBLIC_IMAGE_ALIASES.get(requestedKey);
 
   // HEAD 只需要元数据，不必把对象体拉出来
   if (request.method === "HEAD") {
+    const key = alias ? await resolvePublicImageKey(alias, env) : requestedKey;
     const head = await env.IMAGES.head(key);
     if (!head) {
       return (
@@ -839,10 +940,12 @@ export async function handleImageGet(
     return new Response(null, { headers });
   }
 
-  const object = await env.IMAGES.get(key);
+  const object = alias
+    ? await getPublicImageAlias(alias, env)
+    : await env.IMAGES.get(requestedKey);
   if (!object) {
     return (
-      (await readImageFallback(request, key, env)) ??
+      (await readImageFallback(request, alias?.legacyKey ?? requestedKey, env)) ??
       new Response("Not found", { status: 404 })
     );
   }

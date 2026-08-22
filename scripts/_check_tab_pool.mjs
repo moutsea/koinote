@@ -259,6 +259,14 @@ for (const [tabs, active] of [
     /onEditorReady\?\.\(docId, editor\)/.test(liveEditor) &&
       /onEditorReady=\{handleEditorReady\}/.test(page),
   );
+  const tabBar = readFileSync(
+    new URL("../spa/src/components/editor/TabBar.tsx", import.meta.url),
+    "utf8",
+  );
+  ok(
+    "标签切换目标会保留正文焦点意图",
+    /role="tab"[\s\S]*?data-koinote-editor-tab/.test(tabBar),
+  );
   ok(
     "关闭或删除文档会清理选区记忆",
     [...page.matchAll(/editorSelections\.current\.delete\(docId\)/g)].length >=

@@ -37,6 +37,7 @@ type markdownReviewBlock struct {
 	End      int    `json:"-"`
 	Text     string `json:"-"`
 	NextKind string `json:"-"`
+	GapAfter string `json:"-"`
 }
 
 func parseMarkdownReviewBlocks(content string) []markdownReviewBlock {
@@ -79,6 +80,9 @@ func parseMarkdownReviewBlocks(content string) []markdownReviewBlock {
 	for index := range blocks {
 		if index+1 < len(blocks) {
 			blocks[index].NextKind = blocks[index+1].Kind
+			if blocks[index].End <= blocks[index+1].Start {
+				blocks[index].GapAfter = string(source[blocks[index].End:blocks[index+1].Start])
+			}
 		}
 	}
 	return blocks

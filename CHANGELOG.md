@@ -8,7 +8,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
-- Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and 2–3 alternatives when the score is below 60. Reviews now separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.
+- Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and model-requested alternatives when the score is below 60. Reviews separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.
 - Lifetime membership now grants 1,000 credits. Built-in reviews cost 1 credit per 2,000 actual tokens, with Stripe packs of 3,000, 10,000, and 30,000 credits.
 - Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.
 - Added smart date-based and activity-based organization for documents outside manually managed folders, with adaptive month/week grouping and confirmation before bulk moves.
@@ -19,7 +19,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
-- AI optimization now closes after submission and continues as a persisted background task. Title/opening, body sections, and structure/layout run as bounded parallel subtasks; each stage persists progress and partial results, and validation retries only the failed subtask instead of regenerating the whole review.
+- AI optimization now closes after submission and continues as a persisted background task. A title and six-dimension diagnosis wave feeds a second wave of whole-document developmental editing and body-chunk review, with at most three concurrent model calls. Each stage persists progress and partial results, validation retries only the failed subtask, and users can run a focused second-pass deep analysis for any structural dimension. The added whole-document context can increase built-in-model input-token usage compared with the previous review pipeline; charges continue to use provider-reported actual tokens.
 
 ### Fixed
 

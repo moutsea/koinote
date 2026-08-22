@@ -56,6 +56,29 @@ export function DocsPage() {
           >
             {t.docsCenter.subtitle}
           </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/editor"
+              className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
+              style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+            >
+              {t.docsCenter.openEditor}
+            </Link>
+            <Link
+              to="/documents"
+              className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            >
+              {t.docsCenter.manageDocuments}
+            </Link>
+            <a
+              href={DESKTOP_DOWNLOAD_URL}
+              className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            >
+              {t.docsCenter.downloadDesktop}
+            </a>
+          </div>
         </header>
 
         <section className="mx-auto mt-12 max-w-5xl">
@@ -166,7 +189,14 @@ export function DocsPage() {
           >
             {t.docsCenter.deepDiveTitle}
           </h2>
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <GuideCard
+              icon={<Sparkles className="h-5 w-5" />}
+              title={t.docsCenter.aiTitle}
+              description={t.docsCenter.aiDescription}
+              to="/docs/ai-optimization"
+              action={t.docsCenter.readGuide}
+            />
             <GuideCard
               icon={<Bot className="h-5 w-5" />}
               title={t.docsCenter.mcpTitle}
@@ -201,29 +231,6 @@ export function DocsPage() {
           </div>
         </section>
 
-        <div className="mx-auto mt-12 flex max-w-5xl flex-wrap gap-3">
-          <Link
-            to="/editor"
-            className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
-            style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
-          >
-            {t.docsCenter.openEditor}
-          </Link>
-          <Link
-            to="/documents"
-            className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
-            style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
-          >
-            {t.docsCenter.manageDocuments}
-          </Link>
-          <a
-            href={DESKTOP_DOWNLOAD_URL}
-            className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
-            style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
-          >
-            {t.docsCenter.downloadDesktop}
-          </a>
-        </div>
       </PageContainer>
     </div>
   );
@@ -239,7 +246,7 @@ function GuideCard({
   icon: React.ReactNode;
   title: string;
   description: string;
-  to: "/docs/mcp" | "/docs/version-history";
+  to: "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history";
   action: string;
 }) {
   return (

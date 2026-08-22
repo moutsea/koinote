@@ -7,7 +7,10 @@ import {
   Check,
   CheckCheck,
   Clock3,
+  LayoutList,
   LoaderCircle,
+  Pencil,
+  Radar,
   Sparkles,
   X,
 } from "lucide-react";
@@ -25,6 +28,8 @@ import {
   getAgentReview,
   listAgentReviews,
   type AgentReview,
+  type AgentReviewCreateInput,
+  type AgentReviewLayoutAssessment,
   type AgentReviewSuggestion,
   type Document,
 } from "../../api";
@@ -34,7 +39,10 @@ import { publishAgentReviewStarted } from "../../agentReviewNotifications";
 import { pushModal } from "../../modalStack";
 import {
   agentReviewAccess,
+  agentReviewFailureTranslationCode,
   canStartAgentReview,
+  filterAgentReviewDimensionSuggestions,
+  hasRunningAgentReviewForCurrentRevision,
   titleScoreNeedsAlternatives,
 } from "./agentReviewCore";
 
@@ -84,11 +92,12 @@ export function AgentReviewPanel({
     enabled: remoteEnabled,
     retry: false,
   });
-  const providerMode = settings.data?.settings.providerMode ?? "builtin";
+  const configuredProviderMode = settings.data?.settings.providerMode;
+  const providerMode = configuredProviderMode ?? "builtin";
   const credits = useQuery({
     queryKey: AGENT_CREDITS_QUERY_KEY,
     queryFn: getAgentCredits,
-    enabled: remoteEnabled && providerMode === "builtin",
+    enabled: remoteEnabled && configuredProviderMode === "builtin",
     retry: false,
   });
   const reviews = useQuery({
@@ -133,9 +142,9 @@ export function AgentReviewPanel({
   };
 
   const create = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: AgentReviewCreateInput = {}) => {
       if (!(await onPrepareReview())) throw new Error("document_save_failed");
-      return createAgentReview(docId);
+      return createAgentReview(docId, input);
     },
     onSuccess(result) {
       setError(null);
@@ -145,6 +154,7 @@ export function AgentReviewPanel({
         reviewId: result.review.reviewId,
         documentId: result.review.documentId,
         createdAt: result.review.createdAt,
+        providerMode: result.review.providerMode,
       });
       onClose();
       void Promise.all([
@@ -225,7 +235,12 @@ export function AgentReviewPanel({
   });
 
   const current = review.data?.review;
-  const reviewRunning = current?.status === "running";
+  const currentRevisionReviewRunning = hasRunningAgentReviewForCurrentRevision(
+    [
+      ...(reviews.data?.reviews ?? []),
+      ...(current ? [current] : []),
+    ],
+  );
   const mutating = applyOne.isPending || dismissOne.isPending || applyAll.isPending || dismissAll.isPending;
   const builtinEnabled = credits.data?.credits.builtinEnabled ?? false;
   const canStart = canStartAgentReview(
@@ -233,8 +248,11 @@ export function AgentReviewPanel({
     builtinEnabled,
     settings.data?.settings.defaultChannel?.channelId ?? "",
   );
+  const builtinCreditsUnavailable = providerMode === "builtin" && (credits.isLoading || credits.isError);
+  const reviewStartDisabled = create.isPending || mutating || currentRevisionReviewRunning || builtinCreditsUnavailable ||
+    settings.isLoading || settings.isError || reviews.isLoading || reviews.isError;
 
-  function startReview() {
+  function startReview(input: AgentReviewCreateInput = {}) {
     if (!canStart) {
       setError(
         providerMode === "builtin"
@@ -243,7 +261,7 @@ export function AgentReviewPanel({
       );
       return;
     }
-    create.mutate();
+    create.mutate(input);
   }
 
   async function ignoreAll() {
@@ -263,7 +281,7 @@ export function AgentReviewPanel({
         role="dialog"
         aria-modal="true"
         aria-label={t.agentReview.title}
-        className="fixed inset-y-14 right-0 z-[60] flex w-full flex-col border-l shadow-2xl sm:max-w-[36rem]"
+        className="fixed bottom-0 right-0 top-14 z-[60] flex w-full flex-col border-l shadow-2xl sm:max-w-[36rem]"
         style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)", color: "var(--ink-black)" }}
       >
         <header className="flex shrink-0 items-start gap-3 border-b px-4 py-4 sm:px-5" style={{ borderColor: "var(--ink-line)" }}>
@@ -335,13 +353,13 @@ export function AgentReviewPanel({
                 )}
                 <button
                   type="button"
-                  onClick={startReview}
-                  disabled={create.isPending || reviewRunning || credits.isLoading || credits.isError || settings.isLoading || settings.isError}
+                  onClick={() => startReview()}
+                  disabled={reviewStartDisabled}
                   className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                 >
-                  {create.isPending || reviewRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {create.isPending || reviewRunning ? t.agentReview.running : t.agentReview.start}
+                  {create.isPending || currentRevisionReviewRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {create.isPending || currentRevisionReviewRunning ? t.agentReview.running : t.agentReview.start}
                 </button>
               </section>
 
@@ -386,13 +404,21 @@ export function AgentReviewPanel({
                   </p>
                 ) : (
                   <ReviewDetail
+                    key={current.reviewId}
                     review={current}
                     mutating={mutating}
+                    deepAnalyzing={create.isPending}
+                    deepAnalysisDisabled={reviewStartDisabled}
                     applyingId={applyOne.variables?.suggestion.suggestionId}
                     onApply={(suggestion) => applyOne.mutate({ current, suggestion })}
                     onDismiss={(suggestion) => dismissOne.mutate({ current, suggestion })}
                     onApplyAll={() => applyAll.mutate(current)}
                     onDismissAll={() => void ignoreAll()}
+                    onDeepAnalyze={(focusDimension) => startReview({
+                      depth: "deep",
+                      focusDimension,
+                      sourceReviewId: current.reviewId,
+                    })}
                   />
                 )}
               </section>
@@ -407,30 +433,60 @@ export function AgentReviewPanel({
 function ReviewDetail({
   review,
   mutating,
+  deepAnalyzing,
+  deepAnalysisDisabled,
   applyingId,
   onApply,
   onDismiss,
   onApplyAll,
   onDismissAll,
+  onDeepAnalyze,
 }: {
   review: AgentReview;
   mutating: boolean;
+  deepAnalyzing: boolean;
+  deepAnalysisDisabled: boolean;
   applyingId?: string;
   onApply: (suggestion: AgentReviewSuggestion) => void;
   onDismiss: (suggestion: AgentReviewSuggestion) => void;
   onApplyAll: () => void;
   onDismissAll: () => void;
+  onDeepAnalyze: (dimensionId: AgentReviewLayoutAssessment["id"]) => void;
 }) {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<"content" | "layout">("content");
+  const deepReview = review.taskProgress?.mode === "deep";
+  const deepFocusDimension = review.taskProgress?.focusDimension ?? null;
+  const layoutAssessment = review.layoutAssessment ?? [];
+  const defaultDeepAnalysisDimension = deepFocusDimension ?? layoutAssessment.reduce<AgentReviewLayoutAssessment | null>(
+    (lowest, dimension) => !lowest || dimension.score < lowest.score ? dimension : lowest,
+    null,
+  )?.id ?? null;
+  const [activeTab, setActiveTab] = useState<"title" | "content" | "layout">(
+    deepReview ? "layout" : "title",
+  );
+  const [selectedLayoutDimensionId, setSelectedLayoutDimensionId] = useState<AgentReviewLayoutAssessment["id"] | null>(
+    deepFocusDimension,
+  );
+  const [deepAnalysisDimensionId, setDeepAnalysisDimensionId] = useState<AgentReviewLayoutAssessment["id"] | null>(
+    defaultDeepAnalysisDimension,
+  );
+  const deepAnalysisTargetId = deepAnalysisDimensionId ?? defaultDeepAnalysisDimension;
+  const deepAnalysisTargetLabel = layoutAssessment.find((item) => item.id === deepAnalysisTargetId)?.label;
   const actionable = review.status === "ready" || review.status === "partially_applied";
   // The list endpoint omits suggestions; tolerate that shape while the detail
   // request is loading or when an older response is still in the cache.
   const suggestions = review.suggestions ?? [];
   const pending = suggestions.filter((item) => item.status === "pending");
-  const contentSuggestions = suggestions.filter((item) => item.kind !== "layout");
-  const layoutSuggestions = suggestions.filter((item) => item.kind === "layout");
-  const layoutAssessment = review.layoutAssessment ?? [];
+  const titleSuggestions = suggestions.filter((item) => item.target === "title");
+  const contentSuggestions = suggestions.filter((item) => item.target === "body" && item.kind !== "layout");
+  const structuralSuggestions = deepReview
+    ? suggestions.filter((item) => item.target === "body")
+    : suggestions.filter((item) => item.kind === "layout");
+  const dimensionSuggestions = filterAgentReviewDimensionSuggestions(
+    structuralSuggestions,
+    selectedLayoutDimensionId,
+  );
+  const controlsDisabled = mutating || deepAnalyzing;
 
   if (review.status === "running") {
     return (
@@ -447,7 +503,7 @@ function ReviewDetail({
   if (review.status === "failed") {
     const message = review.errorCode === "review_timeout"
       ? t.agentReview.backgroundTimeoutDescription
-      : reviewFailureStatusText(review.errorCode, t.errors, t.agentReview.failedTitle);
+      : reviewFailureStatusText(review.errorCode, review.providerMode, t.errors, t.agentReview.failedTitle);
     return <StatusBlock icon={<AlertCircle className="h-5 w-5" />} title={t.agentReview.failedTitle} body={message} />;
   }
 
@@ -477,7 +533,7 @@ function ReviewDetail({
           <button
             type="button"
             onClick={onDismissAll}
-            disabled={mutating}
+            disabled={controlsDisabled}
             className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-semibold disabled:opacity-50"
             style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
           >
@@ -487,7 +543,7 @@ function ReviewDetail({
           <button
             type="button"
             onClick={onApplyAll}
-            disabled={mutating}
+            disabled={controlsDisabled}
             className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold disabled:opacity-50"
             style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
           >
@@ -497,26 +553,41 @@ function ReviewDetail({
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 rounded-md border p-1" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}>
-        {(["content", "layout"] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className="min-h-9 rounded px-3 text-xs font-semibold transition"
-            style={{
-              background: activeTab === tab ? "var(--ink-paper)" : "transparent",
-              color: activeTab === tab ? "var(--ink-strong)" : "var(--ink-mid)",
-              boxShadow: activeTab === tab ? "0 1px 2px rgb(0 0 0 / 0.06)" : "none",
-            }}
-          >
-            {tab === "content" ? t.agentReview.contentReview : t.agentReview.layoutReview}
-          </button>
-        ))}
-      </div>
+      {deepReview ? (
+        <div className="mt-6 flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)", color: "var(--ink-strong)" }}>
+          <Pencil className="h-3.5 w-3.5" style={{ color: "var(--cinnabar)" }} />
+          {interpolate(t.agentReview.deepReviewBadge, {
+            dimension: layoutAssessment.find((item) => item.id === deepFocusDimension)?.label ?? t.agentReview.layoutReview,
+          })}
+        </div>
+      ) : (
+        <div role="tablist" className="mt-6 grid grid-cols-3 rounded-md border p-1" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}>
+          {(["title", "content", "layout"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+              className="min-h-9 rounded px-3 text-xs font-semibold transition"
+              style={{
+                background: activeTab === tab ? "var(--ink-paper)" : "transparent",
+                color: activeTab === tab ? "var(--ink-strong)" : "var(--ink-mid)",
+                boxShadow: activeTab === tab ? "0 1px 2px rgb(0 0 0 / 0.06)" : "none",
+              }}
+            >
+              {tab === "title"
+                ? t.agentReview.titleReview
+                : tab === "content"
+                  ? t.agentReview.contentReview
+                  : t.agentReview.layoutReview}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {activeTab === "content" ? (
-        <div>
+      {activeTab === "title" ? (
+        <div role="tabpanel">
           {review.titleScore !== null && review.titleScore !== undefined && (
             <p className="mt-5 text-sm font-semibold tabular-nums" style={{ color: titleScoreNeedsAlternatives(review.titleScore) ? "var(--cinnabar)" : "var(--ink-strong)" }}>
               {interpolate(t.agentReview.titleScore, { score: review.titleScore })}
@@ -528,43 +599,310 @@ function ReviewDetail({
             </p>
           )}
           <SuggestionCollection
+            suggestions={titleSuggestions}
+            // 低分却没给备选时不能说"标题已经足够好"，那会和上面的分数直接打架
+            emptyText={titleScoreNeedsAlternatives(review.titleScore ?? 100)
+              ? t.agentReview.noTitleSuggestionsLowScore
+              : t.agentReview.noTitleSuggestions}
+            mutating={controlsDisabled}
+            applyingId={applyingId}
+            onApply={onApply}
+            onDismiss={onDismiss}
+          />
+        </div>
+      ) : activeTab === "content" ? (
+        <div role="tabpanel">
+          <SuggestionCollection
             suggestions={contentSuggestions}
             emptyText={t.agentReview.noContentSuggestions}
-            mutating={mutating}
+            mutating={controlsDisabled}
             applyingId={applyingId}
             onApply={onApply}
             onDismiss={onDismiss}
           />
         </div>
       ) : (
-        <div>
-          <h4 className="mt-5 text-sm font-semibold">{t.agentReview.layoutAssessment}</h4>
-          {layoutAssessment.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {layoutAssessment.map((dimension) => (
-                <article key={dimension.id} className="rounded-md border p-3" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold">{dimension.label}</span>
-                    <span className="text-xs font-semibold tabular-nums" style={{ color: dimension.score < 60 ? "var(--cinnabar)" : "var(--ink-mid)" }}>
-                      {dimension.score}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{dimension.summary}</p>
-                </article>
-              ))}
-            </div>
-          )}
+        <div role="tabpanel">
+          <LayoutAssessmentView
+            assessment={layoutAssessment}
+            selectedDimensionId={selectedLayoutDimensionId}
+            onSelectDimension={setSelectedLayoutDimensionId}
+          />
           <SuggestionCollection
-            suggestions={layoutSuggestions}
-            emptyText={t.agentReview.noLayoutSuggestions}
-            mutating={mutating}
+            suggestions={dimensionSuggestions}
+            emptyText={selectedLayoutDimensionId
+              ? interpolate(t.agentReview.noFilteredLayoutSuggestions, {
+                  dimension: layoutAssessment.find((item) => item.id === selectedLayoutDimensionId)?.label ?? selectedLayoutDimensionId,
+                })
+              : deepReview ? t.agentReview.noSuggestions : t.agentReview.noLayoutSuggestions}
+            mutating={controlsDisabled}
             applyingId={applyingId}
             onApply={onApply}
             onDismiss={onDismiss}
           />
+          {layoutAssessment.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold" style={{ color: "var(--ink-mid)" }}>
+                {t.agentReview.deepAnalysisTarget}
+              </p>
+              <div
+                role="group"
+                aria-label={t.agentReview.deepAnalysisTarget}
+                className="mt-2 grid grid-cols-3 gap-1.5"
+              >
+                {layoutAssessment.map((dimension) => (
+                  <button
+                    key={dimension.id}
+                    type="button"
+                    aria-pressed={deepAnalysisTargetId === dimension.id}
+                    onClick={() => setDeepAnalysisDimensionId(dimension.id)}
+                    className="min-h-8 rounded-md border px-2 text-xs font-medium transition"
+                    style={{
+                      borderColor: deepAnalysisTargetId === dimension.id ? "var(--cinnabar)" : "var(--ink-line)",
+                      background: deepAnalysisTargetId === dimension.id ? "var(--cinnabar-soft)" : "transparent",
+                      color: deepAnalysisTargetId === dimension.id ? "var(--cinnabar)" : "var(--ink-mid)",
+                    }}
+                  >
+                    {dimension.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={!deepAnalysisTargetId || deepAnalyzing || deepAnalysisDisabled}
+            onClick={() => deepAnalysisTargetId && onDeepAnalyze(deepAnalysisTargetId)}
+            className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
+            style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+          >
+            {deepAnalyzing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+            {deepAnalyzing
+              ? t.agentReview.deepAnalysisStarting
+              : deepAnalysisTargetLabel
+                ? `${t.agentReview.deepAnalysis} · ${deepAnalysisTargetLabel}`
+                : t.agentReview.deepAnalysis}
+          </button>
         </div>
       )}
     </div>
+  );
+}
+
+const RADAR_CENTER_X = 230;
+const RADAR_CENTER_Y = 132;
+const RADAR_RADIUS = 88;
+const RADAR_LABEL_RADIUS = 116;
+const RADAR_RING_LEVELS = [0.2, 0.4, 0.6, 0.8, 1] as const;
+
+function radarPoint(index: number, total: number, radius: number) {
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(total, 1);
+  return {
+    x: RADAR_CENTER_X + Math.cos(angle) * radius,
+    y: RADAR_CENTER_Y + Math.sin(angle) * radius,
+  };
+}
+
+function radarPoints(total: number, radiusForIndex: (index: number) => number) {
+  return Array.from({ length: total }, (_, index) => {
+    const point = radarPoint(index, total, radiusForIndex(index));
+    return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+  }).join(" ");
+}
+
+function LayoutAssessmentView({
+  assessment,
+  selectedDimensionId,
+  onSelectDimension,
+}: {
+  assessment: AgentReview["layoutAssessment"];
+  selectedDimensionId: AgentReviewLayoutAssessment["id"] | null;
+  onSelectDimension: (dimensionId: AgentReviewLayoutAssessment["id"] | null) => void;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const [previewDimensionId, setPreviewDimensionId] = useState<AgentReviewLayoutAssessment["id"] | null>(
+    selectedDimensionId ?? assessment[0]?.id ?? null,
+  );
+
+  useEffect(() => {
+    if (selectedDimensionId && assessment.some((dimension) => dimension.id === selectedDimensionId)) {
+      setPreviewDimensionId(selectedDimensionId);
+      return;
+    }
+    setPreviewDimensionId((current) => (
+      assessment.some((dimension) => dimension.id === current)
+        ? current
+        : assessment[0]?.id ?? null
+    ));
+  }, [assessment, selectedDimensionId]);
+
+  if (assessment.length === 0) return null;
+  const activeDimension =
+    assessment.find((dimension) => dimension.id === previewDimensionId) ??
+    assessment[0];
+  const scorePolygon = radarPoints(assessment.length, (index) => {
+    const score = Math.max(0, Math.min(100, assessment[index]?.score ?? 0));
+    return (RADAR_RADIUS * score) / 100;
+  });
+
+  return (
+    <section className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold">{t.agentReview.layoutAssessment}</h4>
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          aria-pressed={expanded}
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition hover:bg-[var(--ink-wash)]"
+          style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+        >
+          {expanded ? <Radar className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
+          {expanded ? t.agentReview.layoutShowRadar : t.agentReview.layoutShowCards}
+        </button>
+      </div>
+
+      {expanded ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {assessment.map((dimension) => (
+            <button
+              key={dimension.id}
+              type="button"
+              aria-pressed={selectedDimensionId === dimension.id}
+              onMouseEnter={() => setPreviewDimensionId(dimension.id)}
+              onFocus={() => setPreviewDimensionId(dimension.id)}
+              onClick={() => onSelectDimension(selectedDimensionId === dimension.id ? null : dimension.id)}
+              className="rounded-md border p-3 text-left transition hover:bg-[var(--ink-wash)]"
+              style={{
+                borderColor: selectedDimensionId === dimension.id ? "var(--cinnabar)" : "var(--ink-line)",
+                background: selectedDimensionId === dimension.id ? "var(--cinnabar-soft)" : "var(--ink-paper-soft)",
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold">{dimension.label}</span>
+                <span className="text-xs font-semibold tabular-nums" style={{ color: dimension.score < 60 ? "var(--cinnabar)" : "var(--ink-mid)" }}>
+                  {dimension.score}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{dimension.summary}</p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md border p-3" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+          <p className="text-center text-[11px]" style={{ color: "var(--ink-faint)" }}>
+            {t.agentReview.layoutRadarHint}
+          </p>
+          <svg
+            viewBox="0 0 460 270"
+            className="mx-auto mt-1 block w-full max-w-[29rem] overflow-visible"
+            role="img"
+            aria-label={t.agentReview.layoutAssessment}
+          >
+            {RADAR_RING_LEVELS.map((level) => (
+              <polygon
+                key={level}
+                points={radarPoints(assessment.length, () => RADAR_RADIUS * level)}
+                fill={level === 1 ? "var(--ink-wash)" : "none"}
+                stroke="var(--ink-line)"
+                strokeWidth="1"
+              />
+            ))}
+            {assessment.map((dimension, index) => {
+              const outerPoint = radarPoint(index, assessment.length, RADAR_RADIUS);
+              return (
+                <line
+                  key={dimension.id}
+                  x1={RADAR_CENTER_X}
+                  y1={RADAR_CENTER_Y}
+                  x2={outerPoint.x}
+                  y2={outerPoint.y}
+                  stroke="var(--ink-line)"
+                  strokeWidth="1"
+                />
+              );
+            })}
+            <polygon
+              points={scorePolygon}
+              fill="var(--cinnabar-soft)"
+              stroke="var(--cinnabar)"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            {assessment.map((dimension, index) => {
+              const score = Math.max(0, Math.min(100, dimension.score));
+              const scorePoint = radarPoint(index, assessment.length, (RADAR_RADIUS * score) / 100);
+              const labelPoint = radarPoint(index, assessment.length, RADAR_LABEL_RADIUS);
+              const active = dimension.id === activeDimension?.id;
+              const selected = dimension.id === selectedDimensionId;
+              const textAnchor = labelPoint.x < RADAR_CENTER_X - 8
+                ? "end"
+                : labelPoint.x > RADAR_CENTER_X + 8
+                  ? "start"
+                  : "middle";
+              const labelOffset = labelPoint.y < RADAR_CENTER_Y - 8
+                ? -4
+                : labelPoint.y > RADAR_CENTER_Y + 8
+                  ? 11
+                  : 4;
+              return (
+                <g
+                  key={dimension.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${dimension.label} ${dimension.score}/100`}
+                  aria-pressed={selected}
+                  onMouseEnter={() => setPreviewDimensionId(dimension.id)}
+                  onFocus={() => setPreviewDimensionId(dimension.id)}
+                  onClick={() => onSelectDimension(selectedDimensionId === dimension.id ? null : dimension.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    onSelectDimension(selectedDimensionId === dimension.id ? null : dimension.id);
+                  }}
+                  className="cursor-pointer outline-none"
+                >
+                  <title>{dimension.summary}</title>
+                  <circle cx={labelPoint.x} cy={labelPoint.y} r="24" fill="transparent" />
+                  <circle
+                    cx={scorePoint.x}
+                    cy={scorePoint.y}
+                    r={selected ? 6 : active ? 5 : 3.5}
+                    fill="var(--cinnabar)"
+                    stroke="var(--ink-paper-soft)"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={labelPoint.x}
+                    y={labelPoint.y + labelOffset}
+                    textAnchor={textAnchor}
+                    fontSize="11"
+                    fontWeight={selected || active ? 700 : 600}
+                    fill={selected || active ? "var(--cinnabar)" : "var(--ink-mid)"}
+                  >
+                    {dimension.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {activeDimension && (
+            <div className="rounded-md border px-3 py-2.5" aria-live="polite" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)" }}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold">{activeDimension.label}</span>
+                <span className="text-xs font-semibold tabular-nums" style={{ color: activeDimension.score < 60 ? "var(--cinnabar)" : "var(--ink-mid)" }}>
+                  {activeDimension.score}/100
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>
+                {activeDimension.summary}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+    </section>
   );
 }
 
@@ -575,6 +913,7 @@ function AgentReviewProgress({ review }: { review: AgentReview }) {
   const percentage = Math.round((progress.completedTasks / progress.totalTasks) * 100);
   const labels = {
     title: t.agentReview.stageTitle,
+    document: t.agentReview.stageDocument,
     body: t.agentReview.stageBody,
     layout: t.agentReview.stageLayout,
   };
@@ -587,10 +926,18 @@ function AgentReviewProgress({ review }: { review: AgentReview }) {
       <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--ink-line)" }}>
         <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${percentage}%`, background: "var(--cinnabar)" }} />
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {progress.stages.map((stage) => (
           <div key={stage.id} className="flex items-center gap-2 text-xs" style={{ color: stage.status === "completed" ? "var(--ink-strong)" : "var(--ink-faint)" }}>
-            {stage.status === "completed" ? <Check className="h-3.5 w-3.5" /> : <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+            {stage.status === "completed" ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : stage.status === "running" ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            ) : stage.status === "failed" ? (
+              <AlertCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock3 className="h-3.5 w-3.5" />
+            )}
             <span>{labels[stage.id]}</span>
             {stage.totalTasks > 1 && <span className="tabular-nums">{stage.completedTasks}/{stage.totalTasks}</span>}
           </div>
@@ -774,13 +1121,12 @@ function agentReviewErrorText(error: unknown, fallback: string, errors: Record<s
 
 function reviewFailureStatusText(
   errorCode: string | null | undefined,
+  providerMode: AgentReview["providerMode"],
   errors: Record<string, string>,
   fallback: string,
 ): string {
-  if (errorCode && errors[errorCode]) return errors[errorCode];
-  if (errorCode === "usage_missing" || errorCode === "usage_invalid") {
-    return errors.agent_invalid_response ?? fallback;
-  }
+  const translatedCode = agentReviewFailureTranslationCode(errorCode, providerMode);
+  if (translatedCode && errors[translatedCode]) return errors[translatedCode];
   return fallback;
 }
 

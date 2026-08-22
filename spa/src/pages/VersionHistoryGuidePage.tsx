@@ -23,6 +23,11 @@ export function VersionHistoryGuidePage() {
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7" style={{ color: "var(--ink-mid)" }}>
             {t.versionGuide.subtitle}
           </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link to="/dashboard" hash="history-settings" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.versionGuide.settingsCta}</Link>
+            <Link to="/docs/mcp" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.mcpCta}</Link>
+            <Link to="/pricing" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.pricingCta}</Link>
+          </div>
         </header>
 
         <section className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-[1.1fr_1fr]">
@@ -83,11 +88,6 @@ export function VersionHistoryGuidePage() {
           </div>
         </section>
 
-        <div className="mx-auto mt-12 flex max-w-5xl flex-wrap gap-3">
-          <Link to="/dashboard" hash="history-settings" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.versionGuide.settingsCta}</Link>
-          <Link to="/docs/mcp" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.mcpCta}</Link>
-          <Link to="/pricing" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.pricingCta}</Link>
-        </div>
       </PageContainer>
     </div>
   );

@@ -17,6 +17,7 @@ export interface Messages {
     pricing: string;
     docs: string;
     docsHome: string;
+    aiGuide: string;
     mcpGuide: string;
     versionHistoryGuide: string;
     dashboard: string;
@@ -118,6 +119,60 @@ export interface Messages {
     mcpCta: string;
     pricingCta: string;
   };
+  aiGuide: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    checks: [
+      { title: string; desc: string },
+      { title: string; desc: string },
+      { title: string; desc: string },
+      { title: string; desc: string },
+    ];
+    caseEyebrow: string;
+    caseTitle: string;
+    caseIntro: string;
+    caseSourceCta: string;
+    caseCarouselLabel: string;
+    casePrevious: string;
+    caseNext: string;
+    caseFacts: [
+      { label: string; value: string },
+      { label: string; value: string },
+      { label: string; value: string },
+      { label: string; value: string },
+    ];
+    caseTitleReviewTitle: string;
+    caseTitleReviewBody: string;
+    caseContentTitle: string;
+    caseContentBody: string;
+    beforeLabel: string;
+    afterLabel: string;
+    caseBefore: string;
+    caseAfter: string;
+    caseStructureTitle: string;
+    caseStructureBody: string;
+    caseDimensions: Array<{ label: string; score: number }>;
+    caseChangesTitle: string;
+    caseChanges: [
+      { before: string; after: string; reason: string },
+      { before: string; after: string; reason: string },
+      { before: string; after: string; reason: string },
+      { before: string; after: string; reason: string },
+      { before: string; after: string; reason: string },
+      { before: string; after: string; reason: string },
+    ];
+    caseSafetyTitle: string;
+    caseSafetyBody: string;
+    caseSafetyItems: string[];
+    caseOriginalEyebrow: string;
+    caseOriginalTitle: string;
+    caseOriginalDescription: string;
+    caseOriginalBack: string;
+    faqTitle: string;
+    faqs: Array<{ question: string; answer: string }>;
+    pricingCta: string;
+  };
   docsCenter: {
     eyebrow: string;
     title: string;
@@ -134,6 +189,8 @@ export interface Messages {
     modesSubtitle: string;
     modes: Array<{ title: string; desc: string }>;
     deepDiveTitle: string;
+    aiTitle: string;
+    aiDescription: string;
     mcpTitle: string;
     mcpDescription: string;
     versionTitle: string;
@@ -367,6 +424,7 @@ export interface Messages {
     progress: string;
     partialResults: string;
     stageTitle: string;
+    stageDocument: string;
     stageBody: string;
     stageLayout: string;
     backgroundRunning: string;
@@ -385,9 +443,17 @@ export interface Messages {
     previousReviews: string;
     newReview: string;
     summary: string;
+    titleReview: string;
     contentReview: string;
     layoutReview: string;
     layoutAssessment: string;
+    layoutShowCards: string;
+    layoutShowRadar: string;
+    layoutRadarHint: string;
+    deepAnalysis: string;
+    deepAnalysisTarget: string;
+    deepAnalysisStarting: string;
+    deepReviewBadge: string;
     titleScore: string;
     suggestions: string;
     before: string;
@@ -406,8 +472,11 @@ export interface Messages {
     failedTitle: string;
     retry: string;
     noSuggestions: string;
+    noTitleSuggestions: string;
+    noTitleSuggestionsLowScore: string;
     noContentSuggestions: string;
     noLayoutSuggestions: string;
+    noFilteredLayoutSuggestions: string;
     usage: string;
     close: string;
     categories: {
@@ -1125,6 +1194,7 @@ export interface Messages {
     pricing: string;
     dashboard: string;
     docsCenter: string;
+    aiGuide: string;
     mcpGuide: string;
     versionHistoryGuide: string;
     home: string;

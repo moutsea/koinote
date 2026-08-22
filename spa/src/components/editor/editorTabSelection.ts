@@ -3,6 +3,7 @@ import { TextSelection } from "@tiptap/pm/state";
 
 export const EDITOR_TAB_SELECTION_RESTORE_META =
   "koinote:tab-selection-restore";
+export const EDITOR_TAB_FOCUS_TARGET = "[data-koinote-editor-tab]";
 
 export type EditorTabSelection = {
   anchor: number;
@@ -26,7 +27,11 @@ export function shouldPreserveEditorFocusAfterBlur(
   activeElement: Element | null,
   body: HTMLElement | null,
 ): boolean {
-  return activeElement === null || activeElement === body;
+  return (
+    activeElement === null ||
+    activeElement === body ||
+    activeElement.closest(EDITOR_TAB_FOCUS_TARGET) !== null
+  );
 }
 
 export function restoreEditorTabSelection(

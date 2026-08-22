@@ -1,5 +1,27 @@
 export type AgentReviewProviderMode = "builtin" | "byok";
 
+const AGENT_REVIEW_FAILURE_TRANSLATIONS: Record<string, string> = {
+  usage_missing: "agent_invalid_response",
+  usage_invalid: "agent_invalid_response",
+  invalid_response: "agent_invalid_response",
+  provider_unavailable: "agent_provider_unavailable",
+  finalize_failed: "server_error",
+  credit_reservation_failed: "server_error",
+};
+
+export function agentReviewFailureTranslationCode(
+  errorCode: string | null | undefined,
+  providerMode?: AgentReviewProviderMode,
+): string | null {
+  if (!errorCode) return null;
+  if (errorCode === "provider_http_error") {
+    return providerMode === "byok"
+      ? "agent_provider_error"
+      : "agent_provider_unavailable";
+  }
+  return AGENT_REVIEW_FAILURE_TRANSLATIONS[errorCode] ?? errorCode;
+}
+
 export const AGENT_REVIEW_BACKGROUND_TIMEOUT_MS = 15 * 60 * 1_000;
 
 export type AgentReviewAccess =
@@ -25,8 +47,33 @@ export function canStartAgentReview(
     : channelId.trim() !== "";
 }
 
+export function hasRunningAgentReviewForCurrentRevision(
+  reviews: Array<{
+    status: string;
+    baseRevision: number;
+    documentRevision: number;
+  }>,
+): boolean {
+  return reviews.some(
+    (review) =>
+      review.status === "running" &&
+      review.baseRevision === review.documentRevision,
+  );
+}
+
 export function titleScoreNeedsAlternatives(score: number): boolean {
   return score < 60;
+}
+
+export function filterAgentReviewDimensionSuggestions<
+  Suggestion extends { kind: string; category: string },
+>(suggestions: Suggestion[], dimensionId: string | null): Suggestion[] {
+  if (!dimensionId) return suggestions;
+  return suggestions.filter(
+    (item) =>
+      item.category === dimensionId &&
+      (item.kind === "layout" || item.kind === "content"),
+  );
 }
 
 export function agentReviewTaskExpired(

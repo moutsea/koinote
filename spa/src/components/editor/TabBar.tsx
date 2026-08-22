@@ -64,6 +64,7 @@ export function TabBar({
           <div
             key={docId}
             role="tab"
+            data-koinote-editor-tab
             aria-selected={active}
             tabIndex={active ? 0 : -1}
             onClick={() => onSelect(docId)}

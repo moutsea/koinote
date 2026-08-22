@@ -87,6 +87,22 @@ const versionHistoryGuideRoute = createRoute({
     "VersionHistoryGuidePage",
   ),
 });
+const aiOptimizationGuideRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/ai-optimization",
+  component: lazyRouteComponent(
+    () => import("./pages/AIOptimizationGuidePage"),
+    "AIOptimizationGuidePage",
+  ),
+});
+const aiOptimizationCaseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/ai-optimization/case",
+  component: lazyRouteComponent(
+    () => import("./pages/AIOptimizationCasePage"),
+    "AIOptimizationCasePage",
+  ),
+});
 const changelogRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/changelog",
@@ -243,6 +259,8 @@ const routeTree = rootRoute.addChildren([
   docsRoute,
   mcpGuideRoute,
   versionHistoryGuideRoute,
+  aiOptimizationGuideRoute,
+  aiOptimizationCaseRoute,
   changelogRoute,
   editorRoute,
   editorDocRoute,

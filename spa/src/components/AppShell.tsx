@@ -27,6 +27,7 @@ import {
   LockKeyhole,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -359,6 +360,7 @@ export function AppShell() {
                   active={isUnder(pathname, "/docs")}
                   label={t.nav.docs}
                   homeLabel={t.nav.docsHome}
+                  aiLabel={t.nav.aiGuide}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
                 />
@@ -375,6 +377,7 @@ export function AppShell() {
                   active={isUnder(pathname, "/docs")}
                   label={t.nav.docs}
                   homeLabel={t.nav.docsHome}
+                  aiLabel={t.nav.aiGuide}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
                 />
@@ -1092,12 +1095,14 @@ function HeaderDocsMenu({
   active,
   label,
   homeLabel,
+  aiLabel,
   mcpLabel,
   versionLabel,
 }: {
   active: boolean;
   label: string;
   homeLabel: string;
+  aiLabel: string;
   mcpLabel: string;
   versionLabel: string;
 }) {
@@ -1161,6 +1166,13 @@ function HeaderDocsMenu({
             {homeLabel}
           </HeaderDocsMenuItem>
           <HeaderDocsMenuItem
+            to="/docs/ai-optimization"
+            onSelect={() => setOpen(false)}
+            icon={<Sparkles className="h-4 w-4" />}
+          >
+            {aiLabel}
+          </HeaderDocsMenuItem>
+          <HeaderDocsMenuItem
             to="/docs/mcp"
             onSelect={() => setOpen(false)}
             icon={<Bot className="h-4 w-4" />}
@@ -1186,7 +1198,11 @@ function HeaderDocsMenuItem({
   icon,
   children,
 }: {
-  to: "/docs" | "/docs/mcp" | "/docs/version-history";
+  to:
+    | "/docs"
+    | "/docs/ai-optimization"
+    | "/docs/mcp"
+    | "/docs/version-history";
   onSelect: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;

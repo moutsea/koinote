@@ -43,6 +43,18 @@ type agentLLMPrompt struct {
 	User            string
 	Schema          map[string]any
 	MaxOutputTokens int
+	// 0 表示沿用默认。打分要稳定所以低温，提改写建议是发散任务，低温会让模型
+	// 反复落到同一批最安全的改法上；锚点出错由逐条丢弃的校验兜住。
+	Temperature float64
+}
+
+const agentLLMDefaultTemperature = 0.2
+
+func agentLLMTemperature(prompt agentLLMPrompt) float64 {
+	if prompt.Temperature > 0 {
+		return prompt.Temperature
+	}
+	return agentLLMDefaultTemperature
 }
 
 type agentLLMResult struct {
@@ -153,7 +165,7 @@ func callOpenAIAgentLLM(
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": prompt.User},
 		},
-		"temperature": 0.2,
+		"temperature": agentLLMTemperature(prompt),
 	}
 	if provider.StrictOutput {
 		payload["max_completion_tokens"] = maxOutputTokens
@@ -249,7 +261,7 @@ func callAnthropicAgentLLM(
 		"model":       provider.Model,
 		"max_tokens":  maxOutputTokens,
 		"stream":      true,
-		"temperature": 0.2,
+		"temperature": agentLLMTemperature(prompt),
 		"system":      systemPrompt,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt.User},

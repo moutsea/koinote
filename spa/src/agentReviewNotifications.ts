@@ -14,11 +14,12 @@ export type AgentReviewTask = {
   createdAt: string;
   expiresAt?: string;
   errorCode?: string | null;
+  providerMode?: "builtin" | "byok";
 };
 
 export type AgentReviewStartedDetail = Pick<
   AgentReviewTask,
-  "reviewId" | "documentId" | "createdAt"
+  "reviewId" | "documentId" | "createdAt" | "providerMode"
 >;
 
 export function publishAgentReviewStarted(
@@ -108,6 +109,7 @@ function isAgentReviewTask(value: unknown): value is AgentReviewTask {
     typeof task.documentId === "string" &&
     typeof task.createdAt === "string" &&
     (task.expiresAt === undefined || typeof task.expiresAt === "string") &&
+    (task.providerMode === undefined || task.providerMode === "builtin" || task.providerMode === "byok") &&
     (task.status === "running" ||
       task.status === "ready" ||
       task.status === "failed" ||

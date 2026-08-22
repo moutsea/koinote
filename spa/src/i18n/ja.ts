@@ -7,6 +7,7 @@ export const ja: Messages = {
     pricing: "料金",
     docs: "ドキュメント",
     docsHome: "ドキュメント一覧",
+    aiGuide: "AI 最適化",
     mcpGuide: "MCP 接続",
     versionHistoryGuide: "バージョン管理",
     dashboard: "ダッシュボード",
@@ -244,6 +245,153 @@ export const ja: Messages = {
     mcpCta: "MCP 接続を見る",
     pricingCta: "会員特典を見る",
   },
+  aiGuide: {
+    eyebrow: "AI 最適化ガイド",
+    title: "AI 編集者が原稿を確認し、修正案を一つずつ提示",
+    subtitle:
+      "AI がタイトル、本文表現、構成とレイアウトを自動で確認し、コードレビューのように検証できる変更案を提示します。",
+    checks: [
+      {
+        title: "タイトルの訴求力",
+        desc: "明確さ、具体性、信頼性、好奇心を評価し、60 点未満ならモデルに 2〜3 個の代替案を求めます。",
+      },
+      {
+        title: "本文表現",
+        desc: "冗長な文、不明確な指示、語調の変化、組版の細部、モバイルでの読みやすさを理由付きで確認します。",
+      },
+      {
+        title: "構成とレイアウト",
+        desc: "階層、可読性、強調、リズム、モジュール性、モバイル適合を評価し、見出し、区切り線、リスト、引用を提案します。",
+      },
+      {
+        title: "安全な反映",
+        desc: "各提案で原文と変更案を比較できます。個別反映、一括反映、無視を選べ、バックグラウンドで勝手に変更しません。",
+      },
+    ],
+    caseEyebrow: "実際のレビュー記録",
+    caseTitle: "事例：『1,000 ドル使ったオンライン Markdown をオープンソース化』",
+    caseIntro:
+      "この製品公開記事は 18 段落で構成されていました。レビューは個人的な語り口と中心メッセージを残し、少数の表現を整えながら不足していた階層を追加しました。以下は 2026 年 8 月 19 日に実施したレビューの結果です。",
+    caseSourceCta: "レビュー前の原文を見る",
+    caseCarouselLabel: "実際のレビュー事例",
+    casePrevious: "前のレビュー項目を見る",
+    caseNext: "次のレビュー項目を見る",
+    caseFacts: [
+      { label: "タイトル訴求力", value: "76 / 100" },
+      { label: "本文提案", value: "3 件" },
+      { label: "構成提案", value: "6 件" },
+      { label: "実際の消費", value: "3 credits" },
+    ],
+    caseTitleReviewTitle: "76 点：具体的で興味を引き、本文でも約束を満たす",
+    caseTitleReviewBody:
+      "「一千刀」という具体的な数字が好奇心を生み、本文も実際の token 消費を説明しているため誇張ではありません。「オープンソース化」という二つ目の価値もあります。AI を直接書かない余白は自然な引きになっており、明確さ、具体性、信頼性が十分なので無理に変更する必要はないと判断されました。",
+    caseContentTitle: "表現提案：情報が詰まった長文を分ける",
+    caseContentBody:
+      "元の文は、無料である理由、通信料がかからないこと、ストレージ容量という三つの情報を読点だけでつないでいます。「免流量费」の後で文を分けると、作者の言葉を変えずに因果関係とモバイルでの読みやすさを改善できます。",
+    beforeLabel: "原文",
+    afterLabel: "提案",
+    caseBefore:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费，让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseAfter:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费。这让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseStructureTitle: "構成提案：診断してから階層を整える",
+    caseStructureBody:
+      "元の 18 段落はすべて同じ階層でした。6 指標の評価で階層と強調が最も弱かったため、公開、オープンソース化、今後の計画を明確なセクションに分けました。",
+    caseDimensions: [
+      { label: "階層", score: 30 },
+      { label: "可読性", score: 68 },
+      { label: "強調", score: 40 },
+      { label: "リズム", score: 58 },
+      { label: "モジュール性", score: 55 },
+      { label: "モバイル", score: 72 },
+    ],
+    caseChangesTitle: "具体的な構成提案と Markdown の差分",
+    caseChanges: [
+      {
+        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason: "全文で 1.0 公開を正式に伝える中心部分です。H2 にすると、読者が公開セクションの開始位置をすぐ見つけられます。",
+      },
+      {
+        before: "并且完整的代码库也都开源了：",
+        after: "### 并且完整的代码库也都开源了：",
+        reason: "コードリポジトリは公開告知の子トピックです。H3 にすることで 1.0 セクションの下に入り、親子階層が明確になります。",
+      },
+      {
+        before: "欢迎各位大佬多提 issue 和 PR。",
+        after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
+        reason: "ここでオープンソースへの招待が終わり、次の段落から開発コストの振り返りに移ります。区切り線で話題の切り替えを明示します。",
+      },
+      {
+        before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason: "製品の現状から会員機能と AI の今後へ切り替わる箇所です。H2 にすると前の製品紹介とロードマップを分離できます。",
+      },
+      {
+        before: "关于 AI 这块，不知道大家都有哪些点子呢？",
+        after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
+        reason: "全文で最も直接的な問いかけです。引用として強調すれば、流し読みでも見落とされにくくなり、回答を促せます。",
+      },
+      {
+        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason: "記事末尾の行動喚起です。通常の説明から切り離して強調することで、機能募集を明確な締めくくりにします。",
+      },
+    ],
+    caseSafetyTitle: "9 件すべてをユーザー確認後に反映",
+    caseSafetyBody:
+      "このレビューでは本文 3 件、構成 6 件の提案が生成されました。作者が一つずつ確認するまでは文書を変更せず、最終的にすべてを反映して 3 credits を消費しました。",
+    caseSafetyItems: [
+      "各提案で原文、変更案、理由を表示し、バックグラウンドで勝手に変更しません。",
+      "レビュー後に文書が変わると古い結果は期限切れになり、新しい内容を上書きしません。",
+      "AI の変更を反映すると完全な復元ポイントを作り、履歴から比較・復元できます。",
+      "履歴には要約、スコア、提案の状態、実際の credits 消費が残ります。",
+    ],
+    caseOriginalEyebrow: "AI 最適化事例の原文",
+    caseOriginalTitle: "烧了一千刀的在线 markdown，开源了",
+    caseOriginalDescription:
+      "原文は中国語です。2026 年 8 月 19 日に AI レビューを始める直前の文書で、当時の階層、空白、区切り線、引用強調をそのまま残し、ガイドの提案と比較できるようにしています。",
+    caseOriginalBack: "AI 最適化ガイドに戻る",
+    faqTitle: "よくある質問",
+    faqs: [
+      {
+        question: "AI 最適化は文書全体を直接書き換えますか？",
+        answer:
+          "いいえ。タイトル、本文、構成をバックグラウンドで段階的に確認し、要約、スコア、理由、変更前後の比較を返します。文書に反映されるのは承認した提案だけです。",
+      },
+      {
+        question: "AI は事実を検証し、書き手の表現を完全に保ちますか？",
+        answer:
+          "AI は文章上の問題を見つけますが、事実、数値、引用元の正しさは検証しません。提案は書き手の語り口を残すよう努めますが、自分の意図に合うかを一つずつ確認してください。",
+      },
+      {
+        question: "レビュー中の変更を古い結果が上書きすることはありますか？",
+        answer:
+          "ありません。反映時は revision と保存競合を検証し、レビュー開始後に文書が変わると古い結果は期限切れになるため、新しい内容を上書きできません。",
+      },
+      {
+        question: "反映後に元へ戻せますか？履歴には何が残りますか？",
+        answer:
+          "戻せます。AI 提案の反映時には完全な復元ポイントが保存され、バージョン履歴から比較・復元できます。レビュー履歴には要約、スコア、提案の状態、実際の credits 消費も残ります。",
+      },
+      {
+        question: "誰が利用でき、内蔵モデルはどのように課金されますか？",
+        answer:
+          "AI 最適化は永久会員向け機能で、アップグレード時に 1,000 credits が付与されます。内蔵モデルはレビューの実際の利用量に応じて credits を消費します。",
+      },
+      {
+        question: "自分のモデルチャネルを利用できますか？",
+        answer:
+          "はい。AI 設定で OpenAI 互換または Anthropic Messages チャネルを接続すると、自分のモデルサービスを Koinote credits の消費なしで利用できます。確認対象の内容は設定したサービスへ送信されるため、提供元のデータ方針を確認してください。",
+      },
+      {
+        question: "ローカルモードやデスクトップ版でも使えますか？",
+        answer:
+          "ローカルモードは通信を完全に遮断するため利用できません。アカウントにログインしたデスクトップ版ではオンライン時に通常どおり利用できます。",
+      },
+    ],
+    pricingCta: "会員と credits を見る",
+  },
   docsCenter: {
     eyebrow: "製品ドキュメント",
     title: "最初の文書から完全な執筆ワークフローへ",
@@ -314,7 +462,7 @@ export const ja: Messages = {
         title: "AI 最適化",
         desc: "コードレビューのように記事を確認し、採用する提案を自分で選びます。",
         items: [
-          "タイトル魅力度スコアと 2〜3 件の候補",
+          "タイトル魅力度スコアとモデル生成の候補",
           "本文、構造、階層、レイアウト、モバイル可読性の確認",
           "提案ごとの適用、一括適用、または無視",
           "内蔵 credits または独自 OpenAI / Anthropic チャネル",
@@ -349,6 +497,9 @@ export const ja: Messages = {
       },
     ],
     deepDiveTitle: "詳細ガイド",
+    aiTitle: "AI 最適化で記事をレビューする",
+    aiDescription:
+      "実際のレビュー事例を通して、タイトル評価、本文提案、構成の 6 指標、バックグラウンド処理、credits、自分のモデルチャネルを説明します。",
     mcpTitle: "Agent から Koinote 文書を操作する",
     mcpDescription:
       "Codex、Claude Code、OpenCode、OpenClaw などで Streamable HTTP MCP を設定し、権限と使用例を確認します。",
@@ -594,6 +745,7 @@ export const ja: Messages = {
     progress: "{total} 個中 {completed} 個のサブタスクが完了",
     partialResults: "一部の結果を確認できます。すべて完了すると変更を反映できます。",
     stageTitle: "タイトルと導入",
+    stageDocument: "記事全体の編集",
     stageBody: "本文レビュー",
     stageLayout: "構成とレイアウト",
     backgroundRunning: "AI 最適化をバックグラウンドで実行中",
@@ -612,9 +764,17 @@ export const ja: Messages = {
     previousReviews: "過去のレビュー",
     newReview: "新しいレビュー",
     summary: "レビュー概要",
-    contentReview: "内容の最適化",
+    titleReview: "タイトル提案",
+    contentReview: "本文表現",
     layoutReview: "構成とレイアウト",
-    layoutAssessment: "6 項目の構成評価",
+    layoutAssessment: "6 項目のレーダーチャート",
+    layoutShowCards: "すべて展開",
+    layoutShowRadar: "チャート表示",
+    layoutRadarHint: "項目にマウスを重ねて評価を確認し、クリックして下の提案を絞り込みます。再クリックで解除できます。",
+    deepAnalysis: "詳細分析",
+    deepAnalysisTarget: "詳細分析の対象",
+    deepAnalysisStarting: "開始中…",
+    deepReviewBadge: "詳細分析 · {dimension}",
     titleScore: "タイトル魅力度 {score}/100",
     suggestions: "変更提案",
     before: "変更前",
@@ -633,8 +793,11 @@ export const ja: Messages = {
     failedTitle: "AI がレビューを完了できませんでした",
     retry: "もう一度レビュー",
     noSuggestions: "文章は良好です。今回反映する変更はありません。",
+    noTitleSuggestions: "現在のタイトルを置き換えるに値する、根拠のある代案は見つかりませんでした。",
+    noTitleSuggestionsLowScore: "タイトルの評点は低いものの、根拠のある代案は見つかりませんでした。具体的な成果や読者像を本文に補ってから、もう一度実行してください。",
     noContentSuggestions: "文章表現は良好です。内容の修正提案はありません。",
     noLayoutSuggestions: "現在の構成は適切です。安全に適用できるレイアウト変更はありません。",
+    noFilteredLayoutSuggestions: "今回のレビューには「{dimension}」の変更提案がありません。詳細分析で再確認できます。",
     usage: "{credits} credits を消費",
     close: "閉じる",
     categories: {
@@ -1431,6 +1594,7 @@ function hello(name) {
     pricing: "料金",
     dashboard: "ダッシュボード",
     docsCenter: "ドキュメント一覧",
+    aiGuide: "AI 最適化ガイド",
     mcpGuide: "MCP 接続ガイド",
     versionHistoryGuide: "バージョン管理ガイド",
     home: "ホーム",
@@ -1780,6 +1944,7 @@ function hello(name) {
     agent_review_stale: "文書が変更されました。新しいレビューを開始してください",
     agent_review_closed: "このレビューはすでに終了しています",
     agent_review_in_progress: "別のレビューが進行中です。しばらくお待ちください",
+    invalid_agent_review_source: "文書または元のレビューが変更されています。先に標準レビューをやり直してください",
     invalid_agent_provider: "AI モデルプロバイダが無効です",
     invalid_llm_channel_name: "チャネル名が無効です",
     invalid_llm_channel_url: "チャネルの Base URL が無効または安全ではありません",

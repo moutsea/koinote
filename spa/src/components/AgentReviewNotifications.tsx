@@ -23,6 +23,7 @@ import {
 import { useI18n } from "../i18n";
 import {
   AGENT_REVIEW_BACKGROUND_TIMEOUT_MS,
+  agentReviewFailureTranslationCode,
   agentReviewTaskExpired,
 } from "./editor/agentReviewCore";
 
@@ -68,6 +69,7 @@ export function AgentReviewNotifications({
             Date.now() + AGENT_REVIEW_BACKGROUND_TIMEOUT_MS,
           ).toISOString(),
           status: "running" as const,
+          providerMode: detail.providerMode,
         },
         ...current.filter((task) => task.reviewId !== detail.reviewId),
       ].slice(0, MAX_STORED_REVIEW_TASKS));
@@ -169,6 +171,7 @@ export function AgentReviewNotifications({
           createdAt: review.createdAt,
           status,
           errorCode: review.errorCode,
+          providerMode: review.providerMode,
         });
         queryClient.setQueryData(["agent-review", review.reviewId], result.value);
         void queryClient.invalidateQueries({
@@ -210,6 +213,10 @@ export function AgentReviewNotifications({
         const running = task.status === "running";
         const ready = task.status === "ready";
         const stale = task.status === "stale";
+        const failureCode = agentReviewFailureTranslationCode(task.errorCode, task.providerMode);
+        const failureDescription = failureCode
+          ? (t.errors as Record<string, string>)[failureCode]
+          : undefined;
         return (
           <section
             key={task.reviewId}
@@ -248,7 +255,7 @@ export function AgentReviewNotifications({
                         ? t.agentReview.staleDescription
                         : task.errorCode === "review_timeout"
                           ? t.agentReview.backgroundTimeoutDescription
-                          : t.agentReview.backgroundFailedDescription}
+                          : failureDescription ?? t.agentReview.backgroundFailedDescription}
                 </p>
                 {ready && (
                   <button

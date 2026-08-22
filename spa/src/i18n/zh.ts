@@ -7,6 +7,7 @@ export const zh: Messages = {
     pricing: "价格",
     docs: "文档",
     docsHome: "文档中心",
+    aiGuide: "AI 优化",
     mcpGuide: "MCP 接入",
     versionHistoryGuide: "版本控制",
     dashboard: "控制台",
@@ -243,6 +244,153 @@ export const zh: Messages = {
     mcpCta: "查看 MCP 接入",
     pricingCta: "查看会员权益",
   },
+  aiGuide: {
+    eyebrow: "AI 优化指南",
+    title: "AI 编辑帮你审稿，逐条列出修改建议",
+    subtitle:
+      "AI 自动审阅标题、正文表达和结构排版，像 code review 一样列出可核对的改动。",
+    checks: [
+      {
+        title: "标题吸引力",
+        desc: "按清晰度、具体性、可信度与好奇缺口评分；低于 60 分时会要求模型给出 2–3 个候选标题。",
+      },
+      {
+        title: "正文表达",
+        desc: "检查冗长句、指代不清、语气跳变、排版细节与移动端阅读节奏，并说明修改理由。",
+      },
+      {
+        title: "结构排版",
+        desc: "评估层级、可读性、重点、节奏、模块化和移动端适配，建议标题、分隔线、列表或引用块。",
+      },
+      {
+        title: "安全落实",
+        desc: "每条建议都展示原文与建议；可逐条落实、全部落实或忽略，不会在后台静默改稿。",
+      },
+    ],
+    caseEyebrow: "真实审阅记录",
+    caseTitle: "案例：《烧了一千刀的在线 markdown，开源了》",
+    caseIntro:
+      "这篇产品发布文章共有 18 个段落。审阅认为个人化语气和核心信息都值得保留，重点修正少量表达细节，并补齐原本缺失的文章层级。以下数据与示例来自 2026 年 8 月 19 日的一次实际审阅。",
+    caseSourceCta: "查看审阅前原文",
+    caseCarouselLabel: "真实审阅案例",
+    casePrevious: "查看上一个审阅维度",
+    caseNext: "查看下一个审阅维度",
+    caseFacts: [
+      { label: "标题吸引力", value: "76 / 100" },
+      { label: "正文建议", value: "3 条" },
+      { label: "结构建议", value: "6 条" },
+      { label: "实际消耗", value: "3 credits" },
+    ],
+    caseTitleReviewTitle: "76 分：具体、有悬念，也兑现了正文承诺",
+    caseTitleReviewBody:
+      "“一千刀”制造了明确的好奇缺口，正文也确实解释了这笔 token 花费，没有夸大或捏造；“开源了”又补充了第二个价值点。标题虽然没有直接点出 AI，但这种留白本身构成了合理悬念，整体清晰、具体且可信，因此不需要强行改标题。",
+    caseContentTitle: "表达建议：把拥挤的长句拆开",
+    caseContentBody:
+      "原句用逗号串联了免费原因、免流量费和容量结果三层信息，手机上阅读时不容易换气。建议在“免流量费”后断句，保留原意和作者用词，同时让因果关系更清楚。",
+    beforeLabel: "原文",
+    afterLabel: "建议",
+    caseBefore:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费，让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseAfter:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费。这让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseStructureTitle: "结构建议：先诊断，再调整层级",
+    caseStructureBody:
+      "原文 18 个段落全部是平级正文。六维评估指出层级结构和重点强调最弱，因此建议把发布、开源与下一步计划拆成清楚的模块。",
+    caseDimensions: [
+      { label: "层级结构", score: 30 },
+      { label: "可读性", score: 68 },
+      { label: "重点强调", score: 40 },
+      { label: "节奏感", score: 58 },
+      { label: "模块化", score: 55 },
+      { label: "移动端", score: 72 },
+    ],
+    caseChangesTitle: "具体结构建议：直接对照 Markdown 改动",
+    caseChanges: [
+      {
+        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason: "这是全文正式宣布 1.0 上线的核心节点，改为二级标题后，读者可以一眼定位发布公告的起点。",
+      },
+      {
+        before: "并且完整的代码库也都开源了：",
+        after: "### 并且完整的代码库也都开源了：",
+        reason: "开源代码库是发布公告下的子话题，三级标题能把它归入 1.0 上线模块，同时形成清楚的父子层级。",
+      },
+      {
+        before: "欢迎各位大佬多提 issue 和 PR。",
+        after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
+        reason: "这一段结束开源邀请，下一段转入开发成本复盘；中间加入分隔线可以明确话题切换，避免两个模块粘在一起。",
+      },
+      {
+        before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason: "这里从产品现状转向后续计划和 AI 方向，改为二级标题能把文章的结尾规划与前文介绍分开。",
+      },
+      {
+        before: "关于 AI 这块，不知道大家都有哪些点子呢？",
+        after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
+        reason: "这是全文互动性最强的提问。改为引用强调后，它不容易被快速阅读的读者跳过，也更能引导留言。",
+      },
+      {
+        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason: "这是文章最后的行动号召。单独强调能让功能征集从普通说明中脱离出来，形成明确的收尾。",
+      },
+    ],
+    caseSafetyTitle: "9 条建议全部由用户确认后落实",
+    caseSafetyBody:
+      "这次审阅生成 3 条正文建议和 6 条结构建议。系统只保存审阅结果，直到作者逐条确认后才修改文档；最终全部建议均已落实，并消耗 3 credits。",
+    caseSafetyItems: [
+      "每条建议都展示原文、建议和理由，不在后台静默改稿。",
+      "文档若在审阅后发生变化，旧审阅会过期，避免覆盖新内容。",
+      "落实 AI 修改时保存完整恢复点，可以通过版本历史比较或撤销。",
+      "审阅记录保留摘要、评分、建议状态和实际 credits 消耗。",
+    ],
+    caseOriginalEyebrow: "AI 优化案例原文",
+    caseOriginalTitle: "烧了一千刀的在线 markdown，开源了",
+    caseOriginalDescription:
+      "这是 2026 年 8 月 19 日发起 AI 审阅前保存的文档版本。空格、标题层级、分隔线与引用强调均保持当时原样，便于和指南中的建议逐项对照。",
+    caseOriginalBack: "返回 AI 优化指南",
+    faqTitle: "常见问题",
+    faqs: [
+      {
+        question: "AI 优化会直接修改整篇文章吗？",
+        answer:
+          "不会。系统会在后台分阶段审阅标题、正文与结构，返回审阅摘要、评分、修改理由和原文/建议对比；只有你确认的建议才会写入文档。",
+      },
+      {
+        question: "AI 会核验事实，并完全保留我的表达吗？",
+        answer:
+          "AI 负责发现写作问题，不负责核验文章中的事实、数据和引用来源。建议会尽量保留作者语气，但仍应逐条检查是否符合你的表达意图。",
+      },
+      {
+        question: "审阅期间文档发生变化，会覆盖新内容吗？",
+        answer:
+          "不会。落实前后都会经过 revision 与保存冲突保护；文档在审阅后发生变化时，旧审阅会过期，不能覆盖后来新增或修改的内容。",
+      },
+      {
+        question: "落实后可以撤销吗？审阅记录会保留什么？",
+        answer:
+          "可以。AI 修改会保存完整恢复点，可通过版本历史比较或恢复；历史审阅也会保留摘要、评分、建议状态和实际 credits 消耗。",
+      },
+      {
+        question: "谁可以使用 AI 优化？内置模型如何计费？",
+        answer:
+          "AI 优化是终生会员权益，升级时赠送 1,000 credits。使用内置模型会按本次审阅的实际用量扣除 credits。",
+      },
+      {
+        question: "可以使用自己的模型渠道吗？",
+        answer:
+          "可以。在“AI 设置”中接入 OpenAI 兼容或 Anthropic Messages 渠道后，可直接使用自己的模型服务，并且不会消耗 Koinote credits。待审阅内容会发送到你配置的模型服务，请自行确认服务商的数据政策。",
+      },
+      {
+        question: "本地模式和桌面客户端能使用吗？",
+        answer:
+          "本地模式严格禁止联网，因此不能运行 AI 优化；已登录账号的桌面客户端可以在联网时正常使用。",
+      },
+    ],
+    pricingCta: "查看会员与 credits",
+  },
   docsCenter: {
     eyebrow: "产品文档",
     title: "从第一篇文档到完整创作工作流",
@@ -313,7 +461,7 @@ export const zh: Messages = {
         title: "AI 优化",
         desc: "像审查代码一样逐条审阅文章，再由你决定是否落实。",
         items: [
-          "标题吸引力评分与 2–3 个候选标题",
+          "标题吸引力评分与模型生成的候选标题",
           "正文表达、结构层级、排版和移动端可读性检查",
           "逐条落实、全部落实或忽略建议",
           "使用内置 credits，或接入自己的 OpenAI / Anthropic 渠道",
@@ -348,6 +496,9 @@ export const zh: Messages = {
       },
     ],
     deepDiveTitle: "专项指南",
+    aiTitle: "AI 优化：像审查代码一样改文章",
+    aiDescription:
+      "了解标题评分、正文与六维结构审阅、后台任务、逐条落实，以及一篇真实文章从诊断到完成修改的全过程。",
     mcpTitle: "让 Agent 操作 Koinote 文档",
     mcpDescription:
       "查看 Codex、Claude Code、OpenCode、OpenClaw 等客户端的 Streamable HTTP MCP 配置、权限边界与使用示例。",
@@ -584,6 +735,7 @@ export const zh: Messages = {
     progress: "已完成 {completed}/{total} 个子任务",
     partialResults: "已完成部分审阅，全部结束后即可落实改动。",
     stageTitle: "标题与开头",
+    stageDocument: "全文审阅",
     stageBody: "正文审阅",
     stageLayout: "结构排版",
     backgroundRunning: "AI 优化正在后台运行",
@@ -602,9 +754,17 @@ export const zh: Messages = {
     previousReviews: "历史审阅",
     newReview: "新建审阅",
     summary: "审阅摘要",
-    contentReview: "内容优化",
+    titleReview: "标题建议",
+    contentReview: "正文表达",
     layoutReview: "结构排版",
-    layoutAssessment: "六维结构评估",
+    layoutAssessment: "六维能力图",
+    layoutShowCards: "铺平展示",
+    layoutShowRadar: "能力图展示",
+    layoutRadarHint: "悬停查看评估，点击维度筛选下方建议；再次点击可取消筛选。",
+    deepAnalysis: "深入分析",
+    deepAnalysisTarget: "深入分析目标",
+    deepAnalysisStarting: "正在启动…",
+    deepReviewBadge: "深入分析 · {dimension}",
     titleScore: "标题吸引力 {score}/100",
     suggestions: "改动建议",
     before: "原文",
@@ -623,8 +783,11 @@ export const zh: Messages = {
     failedTitle: "AI 未能完成审阅",
     retry: "重新审阅",
     noSuggestions: "文章状态不错，本次没有需要落实的改动。",
+    noTitleSuggestions: "本次没有找到可靠且值得替换的标题建议。",
+    noTitleSuggestionsLowScore: "标题分数偏低，但本次没有给出可靠的备选——现有内容还撑不起更强的承诺。可以先补上具体结果或对象，再重新优化。",
     noContentSuggestions: "内容表达状态不错，本次没有文字改动建议。",
     noLayoutSuggestions: "当前结构和排版已经合理，本次没有安全的排版改动。",
+    noFilteredLayoutSuggestions: "当前没有「{dimension}」维度的改动建议，可以点击深入分析进行第二轮检查。",
     usage: "消耗 {credits} credits",
     close: "关闭",
     categories: {
@@ -1394,6 +1557,7 @@ function hello(name) {
     pricing: "价格",
     dashboard: "控制台",
     docsCenter: "文档中心",
+    aiGuide: "AI 优化指南",
     mcpGuide: "MCP 接入指南",
     versionHistoryGuide: "版本控制指南",
     home: "首页",
@@ -1719,6 +1883,7 @@ function hello(name) {
     agent_review_stale: "文档已经变化，请重新发起审阅",
     agent_review_closed: "这份审阅已经关闭",
     agent_review_in_progress: "已有审阅正在进行，请稍候",
+    invalid_agent_review_source: "文档或来源审阅已经变化，请先重新发起一次标准审阅",
     invalid_agent_provider: "AI 模型渠道无效",
     invalid_llm_channel_name: "渠道名称无效",
     invalid_llm_channel_url: "渠道 Base URL 无效或不安全",

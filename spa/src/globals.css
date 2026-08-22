@@ -198,6 +198,17 @@ body {
   }
 }
 
+@keyframes kn-case-slide {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .kn-ink-bloom {
   animation: kn-ink-bloom 1.1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
@@ -209,6 +220,9 @@ body {
 }
 .kn-ink-drift {
   animation: kn-ink-drift 14s ease-in-out infinite;
+}
+.kn-case-slide {
+  animation: kn-case-slide 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 /* 页脚固定深底，不随主题翻转：卷末压一道墨。
@@ -229,7 +243,8 @@ body {
   .kn-ink-bloom,
   .kn-scroll-unfurl,
   .kn-seal-stamp,
-  .kn-ink-drift {
+  .kn-ink-drift,
+  .kn-case-slide {
     animation: none;
   }
 }

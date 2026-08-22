@@ -117,6 +117,7 @@ type validatedWritingSuggestion struct {
 
 type validatedWritingReview struct {
 	Summary          string
+	HasTitleReview   bool
 	TitleScore       int
 	TitleAssessment  string
 	LayoutAssessment []writingReviewDimension
@@ -245,15 +246,20 @@ func parseAndValidateWritingReview(
 	title string,
 	content string,
 ) (validatedWritingReview, error) {
-	return parseAndValidateWritingReviewWithLayoutScope(raw, title, content, nil, false)
+	return parseAndValidateWritingReviewWithScopes(raw, title, content, true, nil, nil, nil, nil, nil, false)
 }
 
-func parseAndValidateWritingReviewWithLayoutScope(
+func parseAndValidateWritingReviewWithScopes(
 	raw []byte,
 	title string,
 	content string,
+	hasTitleReview bool,
+	allowedBodyCategories map[string]struct{},
+	allowedBodyBlockIDs map[string]struct{},
+	allowedBodyBlockRanges map[string][]writingReviewByteRange,
+	allowedBodyRange *writingReviewByteRange,
 	allowedLayoutBlockIDs map[string]struct{},
-	dropOversizeSuggestions bool,
+	dropRejectedSuggestions bool,
 ) (validatedWritingReview, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
@@ -271,9 +277,13 @@ func parseAndValidateWritingReviewWithLayoutScope(
 	if generated.Summary == "" || utf8.RuneCountInString(generated.Summary) > 2_000 {
 		return validatedWritingReview{}, fmt.Errorf("%w: invalid review summary", errAgentLLMInvalidResponse)
 	}
-	if generated.TitleScore < 0 || generated.TitleScore > 100 || generated.TitleAssessment == "" ||
-		utf8.RuneCountInString(generated.TitleAssessment) > 2_000 {
-		return validatedWritingReview{}, fmt.Errorf("%w: invalid title assessment", errAgentLLMInvalidResponse)
+	if hasTitleReview {
+		if generated.TitleScore < 0 || generated.TitleScore > 100 || generated.TitleAssessment == "" ||
+			utf8.RuneCountInString(generated.TitleAssessment) > 2_000 {
+			return validatedWritingReview{}, fmt.Errorf("%w: invalid title assessment", errAgentLLMInvalidResponse)
+		}
+	} else if len(generated.TitleSuggestions) > 0 {
+		return validatedWritingReview{}, fmt.Errorf("%w: title suggestions are outside this review scope", errAgentLLMInvalidResponse)
 	}
 	if len(generated.BodySuggestions) > 0 && len(generated.BodyPatches) > 0 {
 		return validatedWritingReview{}, fmt.Errorf("%w: review contains both bodySuggestions and bodyPatches", errAgentLLMInvalidResponse)
@@ -281,8 +291,10 @@ func parseAndValidateWritingReviewWithLayoutScope(
 	if len(generated.BodySuggestions) == 0 {
 		generated.BodySuggestions = generated.BodyPatches
 	}
-	if len(generated.TitleSuggestions) > 3 || (generated.TitleScore < 60 && len(generated.TitleSuggestions) < 2) {
-		return validatedWritingReview{}, fmt.Errorf("%w: low-scoring title requires 2 or 3 alternatives", errAgentLLMInvalidResponse)
+	// 只限上限，不再因为"低分却给得太少"整任务作废。那条规则给模型留了一条捷径：
+	// 打 60 分零备选永远安全，于是绝大多数文章都拿不到备选标题。
+	if len(generated.TitleSuggestions) > 3 {
+		return validatedWritingReview{}, fmt.Errorf("%w: too many title suggestions", errAgentLLMInvalidResponse)
 	}
 	if len(generated.BodySuggestions) > maxAgentBodySuggestions {
 		return validatedWritingReview{}, fmt.Errorf("%w: too many body suggestions", errAgentLLMInvalidResponse)
@@ -297,10 +309,13 @@ func parseAndValidateWritingReviewWithLayoutScope(
 
 	validated := validatedWritingReview{
 		Summary:          generated.Summary,
-		TitleScore:       generated.TitleScore,
-		TitleAssessment:  generated.TitleAssessment,
+		HasTitleReview:   hasTitleReview,
 		LayoutAssessment: layoutAssessment,
 		Suggestions:      make([]validatedWritingSuggestion, 0, len(generated.TitleSuggestions)+len(generated.BodySuggestions)+len(generated.LayoutSuggestions)),
+	}
+	if hasTitleReview {
+		validated.TitleScore = generated.TitleScore
+		validated.TitleAssessment = generated.TitleAssessment
 	}
 	seenTitles := make(map[string]struct{}, len(generated.TitleSuggestions))
 	for _, suggestion := range generated.TitleSuggestions {
@@ -329,25 +344,48 @@ func parseAndValidateWritingReviewWithLayoutScope(
 		})
 	}
 
+	blocks := parseMarkdownReviewBlocks(content)
 	bodyRanges := make([]validatedWritingSuggestion, 0, len(generated.BodySuggestions))
 	seenBefore := make(map[string]struct{}, len(generated.BodySuggestions))
 	for _, suggestion := range generated.BodySuggestions {
 		category := strings.ToLower(strings.TrimSpace(suggestion.Category))
 		reason := strings.TrimSpace(suggestion.Reason)
-		if _, ok := writingSuggestionCategories[category]; !ok {
+		_, defaultCategory := writingSuggestionCategories[category]
+		_, focusedCategory := allowedBodyCategories[category]
+		if (allowedBodyCategories == nil && !defaultCategory) ||
+			(allowedBodyCategories != nil && !focusedCategory) {
+			if dropRejectedSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: invalid body suggestion category", errAgentLLMInvalidResponse)
 		}
 		if suggestion.Before == "" || suggestion.Before == suggestion.After ||
 			len(suggestion.Before) > maxAgentPatchTextBytes || len(suggestion.After) > maxAgentPatchTextBytes ||
 			reason == "" ||
 			utf8.RuneCountInString(reason) > 2_000 {
+			if dropRejectedSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: invalid body suggestion", errAgentLLMInvalidResponse)
 		}
 		if _, exists := seenBefore[suggestion.Before]; exists || countOverlappingOccurrences(content, suggestion.Before) != 1 {
+			if dropRejectedSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: body anchor is not exact and unique", errAgentLLMInvalidResponse)
 		}
-		seenBefore[suggestion.Before] = struct{}{}
 		start := strings.Index(content, suggestion.Before)
+		end := start + len(suggestion.Before)
+		if !allowedBodyRange.contains(start, end) ||
+			!writingSuggestionRangeAllowedByBlocks(
+				start, end, blocks, allowedBodyBlockIDs, allowedBodyBlockRanges,
+			) {
+			if dropRejectedSuggestions {
+				continue
+			}
+			return validatedWritingReview{}, fmt.Errorf("%w: body suggestion uses content outside its prompt scope", errAgentLLMInvalidResponse)
+		}
+		seenBefore[suggestion.Before] = struct{}{}
 		bodyRanges = append(bodyRanges, validatedWritingSuggestion{
 			Target:   "body",
 			Kind:     "content",
@@ -356,17 +394,23 @@ func parseAndValidateWritingReviewWithLayoutScope(
 			After:    suggestion.After,
 			Reason:   reason,
 			Start:    start,
-			End:      start + len(suggestion.Before),
+			End:      end,
 		})
 	}
-	sort.Slice(bodyRanges, func(i, j int) bool { return bodyRanges[i].Start < bodyRanges[j].Start })
-	for index := 1; index < len(bodyRanges); index++ {
-		if bodyRanges[index].Start < bodyRanges[index-1].End {
+	// 输入顺序即优先级：全文级建议由 merge 排在最前，重叠时保它、丢掉后面的局部润色。
+	acceptedBody := make([]validatedWritingSuggestion, 0, len(bodyRanges))
+	for _, candidate := range bodyRanges {
+		if writingSuggestionOverlapsAny(candidate, acceptedBody) {
+			if dropRejectedSuggestions {
+				continue
+			}
 			return validatedWritingReview{}, fmt.Errorf("%w: body suggestions overlap", errAgentLLMInvalidResponse)
 		}
+		acceptedBody = append(acceptedBody, candidate)
 	}
+	bodyRanges = acceptedBody
+	sort.Slice(bodyRanges, func(i, j int) bool { return bodyRanges[i].Start < bodyRanges[j].Start })
 	layoutRanges := make([]validatedWritingSuggestion, 0, len(generated.LayoutSuggestions))
-	blocks := parseMarkdownReviewBlocks(content)
 	blockByID := make(map[string]markdownReviewBlock, len(blocks))
 	for _, block := range blocks {
 		blockByID[block.ID] = block
@@ -437,7 +481,7 @@ func parseAndValidateWritingReviewWithLayoutScope(
 	for _, suggestion := range bodyRanges {
 		nextContentBytes := finalContentBytes + len(suggestion.After) - len(suggestion.Before)
 		if nextContentBytes > maxContentBytes {
-			if dropOversizeSuggestions {
+			if dropRejectedSuggestions {
 				continue
 			}
 			return validatedWritingReview{}, fmt.Errorf("%w: body suggestions exceed document size limit", errAgentLLMInvalidResponse)
@@ -449,7 +493,7 @@ func parseAndValidateWritingReviewWithLayoutScope(
 	for _, suggestion := range layoutRanges {
 		nextContentBytes := finalContentBytes + len(suggestion.After) - len(suggestion.Before)
 		if nextContentBytes > maxContentBytes {
-			if dropOversizeSuggestions {
+			if dropRejectedSuggestions {
 				continue
 			}
 			return validatedWritingReview{}, fmt.Errorf("%w: layout suggestions exceed document size limit", errAgentLLMInvalidResponse)
@@ -460,6 +504,78 @@ func parseAndValidateWritingReviewWithLayoutScope(
 	validated.Suggestions = append(validated.Suggestions, boundedBodyRanges...)
 	validated.Suggestions = append(validated.Suggestions, boundedLayoutRanges...)
 	return validated, nil
+}
+
+func writingSuggestionRangeAllowedByBlocks(
+	start int,
+	end int,
+	blocks []markdownReviewBlock,
+	allowedBlockIDs map[string]struct{},
+	allowedBlockRanges map[string][]writingReviewByteRange,
+) bool {
+	if allowedBlockIDs == nil && allowedBlockRanges == nil {
+		return true
+	}
+	overlapped := false
+	for _, block := range blocks {
+		if start >= block.End || block.Start >= end {
+			continue
+		}
+		overlapped = true
+		if allowedBlockIDs != nil {
+			if _, allowed := allowedBlockIDs[block.ID]; !allowed {
+				return false
+			}
+		}
+		if allowedBlockRanges == nil {
+			continue
+		}
+		overlapStart := max(start, block.Start)
+		overlapEnd := min(end, block.End)
+		covered := false
+		for _, allowedRange := range allowedBlockRanges[block.ID] {
+			if allowedRange.contains(overlapStart, overlapEnd) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return false
+		}
+	}
+	if !overlapped {
+		return false
+	}
+	if allowedBlockRanges == nil {
+		return true
+	}
+	return writingReviewRangesCover(start, end, allowedBlockRanges)
+}
+
+func writingReviewRangesCover(
+	start int,
+	end int,
+	allowed map[string][]writingReviewByteRange,
+) bool {
+	if start < 0 || end <= start {
+		return false
+	}
+	cursor := start
+	for cursor < end {
+		next := cursor
+		for _, ranges := range allowed {
+			for _, value := range ranges {
+				if value.Start <= cursor && value.End > next {
+					next = value.End
+				}
+			}
+		}
+		if next == cursor {
+			return false
+		}
+		cursor = next
+	}
+	return true
 }
 
 func writingSuggestionOverlapsAny(candidate validatedWritingSuggestion, values []validatedWritingSuggestion) bool {

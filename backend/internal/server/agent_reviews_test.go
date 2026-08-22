@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,39 @@ import (
 	"koinote/backend/internal/config"
 	"koinote/backend/internal/model"
 )
+
+func TestAgentReviewTimingLimits(t *testing.T) {
+	if agentReviewRunLimit != 15*time.Minute {
+		t.Fatalf("agentReviewRunLimit=%s, want 15m", agentReviewRunLimit)
+	}
+	if agentReviewReservationTTL != 17*time.Minute {
+		t.Fatalf("agentReviewReservationTTL=%s, want 17m", agentReviewReservationTTL)
+	}
+	if agentReviewStaleAfter != agentReviewReservationTTL {
+		t.Fatalf("agentReviewStaleAfter=%s, want %s", agentReviewStaleAfter, agentReviewReservationTTL)
+	}
+}
+
+func TestClassifyAgentReviewFailureDistinguishesPersistenceErrors(t *testing.T) {
+	persistenceErr := fmt.Errorf("%w: write progress: %w", errAgentReviewPersistence, errors.New("database unavailable"))
+	if code := classifyAgentReviewFailure(persistenceErr); code != "server_error" {
+		t.Fatalf("persistence failure code=%q, want server_error", code)
+	}
+	if code := classifyAgentReviewFailure(fmt.Errorf("request stopped: %w", context.DeadlineExceeded)); code != "review_timeout" {
+		t.Fatalf("deadline failure code=%q, want review_timeout", code)
+	}
+	if code := classifyAgentReviewFailure(&agentLLMHTTPError{Status: http.StatusUnauthorized}); code != "provider_http_error" {
+		t.Fatalf("provider authentication code=%q, want provider_http_error", code)
+	}
+	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusBadGateway} {
+		if code := classifyAgentReviewFailure(&agentLLMHTTPError{Status: status}); code != "provider_unavailable" {
+			t.Fatalf("temporary provider HTTP %d code=%q, want provider_unavailable", status, code)
+		}
+	}
+	if code := classifyAgentReviewFailure(errors.New("connection refused")); code != "provider_unavailable" {
+		t.Fatalf("provider failure code=%q, want provider_unavailable", code)
+	}
+}
 
 func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 	t.Run("built-in provider charges reported token usage", func(t *testing.T) {
@@ -46,14 +80,14 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 			t.Fatalf("initial built-in review status=%q, want running", initial.Status)
 		}
 		review := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
-		if review.Status != "ready" || review.CreditsCharged != 6 || review.TotalTokens != 12_000 {
+		if review.Status != "ready" || review.CreditsCharged != 8 || review.TotalTokens != 16_000 {
 			t.Fatalf("unexpected built-in review: %+v", review)
 		}
 		if review.TitleScore == nil || *review.TitleScore != 55 || len(review.Suggestions) != 3 {
 			t.Fatalf("title score or suggestions missing: %+v", review)
 		}
-		if review.TaskProgress.CompletedTasks != 3 || review.TaskProgress.TotalTasks != 3 ||
-			len(review.TaskProgress.Stages) != 3 {
+		if review.TaskProgress.CompletedTasks != 4 || review.TaskProgress.TotalTasks != 4 ||
+			len(review.TaskProgress.Stages) != 4 {
 			t.Fatalf("task progress missing from completed review: %+v", review.TaskProgress)
 		}
 		for _, stage := range review.TaskProgress.Stages {
@@ -65,8 +99,8 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if balance != (creditAccountBalance{Balance: 14, Reserved: 0, Available: 14}) {
-			t.Fatalf("built-in balance=%+v, want 14 available and no reservation", balance)
+		if balance != (creditAccountBalance{Balance: 12, Reserved: 0, Available: 12}) {
+			t.Fatalf("built-in balance=%+v, want 12 available and no reservation", balance)
 		}
 	})
 
@@ -100,7 +134,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		initial := decodeAgentReviewResponse(t, response)
 		review := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
 		if review.Status != "ready" || review.ProviderProtocol != "anthropic" ||
-			review.CreditsCharged != 0 || review.TotalTokens != 6_300 {
+			review.CreditsCharged != 0 || review.TotalTokens != 8_400 {
 			t.Fatalf("unexpected BYOK review: %+v", review)
 		}
 		if review.ChannelID == nil || *review.ChannelID != channelID {
@@ -123,6 +157,89 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		}
 		if reservations != 0 {
 			t.Fatalf("BYOK created %d credit reservations", reservations)
+		}
+	})
+
+	t.Run("deep review rejects source from older document revision", func(t *testing.T) {
+		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeOpenAIAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_400, 600)
+		}))
+		defer provider.Close()
+
+		app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
+			SessionSecret:    "agent-review-deep-source-test",
+			AgentLLMProtocol: "openai",
+			AgentLLMBaseURL:  provider.URL,
+			AgentLLMAPIKey:   "builtin-test-key",
+			AgentLLMModel:    "test-openai-model",
+		})
+		app.agentLLMHTTPClient = provider.Client()
+		grantCreditsForTest(t, pool, user.ID, 20, "agent-review-deep-source")
+
+		response := requestAgentReviewCreate(t, app, user, document.DocID, `{"providerMode":"builtin"}`)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("source review create status=%d body=%s", response.Code, response.Body.String())
+		}
+		source := waitForAgentReviewStatus(
+			t, app, user.ID, decodeAgentReviewResponse(t, response).ReviewID, "ready",
+		)
+		if _, err := app.updateDocument(context.Background(), updateDocumentParams{
+			User: user, DocID: document.DocID, Title: document.Title, Theme: document.Theme,
+			Content:          document.Content + "\n\nA new paragraph invalidates the earlier review.",
+			ExpectedRevision: document.Revision, Source: documentSourceWeb,
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		deepResponse := requestAgentReviewCreate(
+			t, app, user, document.DocID,
+			`{"providerMode":"builtin","depth":"deep","focusDimension":"hierarchy","sourceReviewId":"`+source.ReviewID+`"}`,
+		)
+		if deepResponse.Code != http.StatusBadRequest || decodeErrorCode(t, deepResponse) != "invalid_agent_review_source" {
+			t.Fatalf("stale deep source status=%d body=%s", deepResponse.Code, deepResponse.Body.String())
+		}
+	})
+
+	t.Run("deep review completes without inventing a title assessment", func(t *testing.T) {
+		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeOpenAIAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_400, 600)
+		}))
+		defer provider.Close()
+
+		app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
+			SessionSecret:    "agent-review-deep-success-test",
+			AgentLLMProtocol: "openai",
+			AgentLLMBaseURL:  provider.URL,
+			AgentLLMAPIKey:   "builtin-test-key",
+			AgentLLMModel:    "test-openai-model",
+		})
+		app.agentLLMHTTPClient = provider.Client()
+		grantCreditsForTest(t, pool, user.ID, 20, "agent-review-deep-success")
+
+		response := requestAgentReviewCreate(t, app, user, document.DocID, `{"providerMode":"builtin"}`)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("source review create status=%d body=%s", response.Code, response.Body.String())
+		}
+		source := waitForAgentReviewStatus(
+			t, app, user.ID, decodeAgentReviewResponse(t, response).ReviewID, "ready",
+		)
+		deepResponse := requestAgentReviewCreate(
+			t, app, user, document.DocID,
+			`{"providerMode":"builtin","depth":"deep","focusDimension":"hierarchy","sourceReviewId":"`+source.ReviewID+`"}`,
+		)
+		if deepResponse.Code != http.StatusAccepted {
+			t.Fatalf("deep review create status=%d body=%s", deepResponse.Code, deepResponse.Body.String())
+		}
+		deep := waitForAgentReviewStatus(
+			t, app, user.ID, decodeAgentReviewResponse(t, deepResponse).ReviewID, "ready",
+		)
+		if deep.TaskProgress.Mode != agentReviewModeDeep || deep.TaskProgress.FocusDimension != "hierarchy" ||
+			deep.TitleScore != nil || deep.TitleAssessment != nil || deep.CreditsCharged != 1 {
+			t.Fatalf("unexpected completed deep review: %+v", deep)
+		}
+		if len(deep.LayoutAssessment) != len(writingReviewDimensionIDs) || len(deep.Suggestions) != 1 ||
+			deep.Suggestions[0].Target != "body" || deep.Suggestions[0].Category != "hierarchy" {
+			t.Fatalf("deep review output was not persisted: %+v", deep)
 		}
 	})
 
@@ -150,7 +267,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		}
 		initial := decodeAgentReviewResponse(t, response)
 		failed := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "failed")
-		if failed.ErrorCode == nil || *failed.ErrorCode != "provider_http_error" {
+		if failed.ErrorCode == nil || *failed.ErrorCode != "provider_unavailable" {
 			t.Fatalf("provider failure review=%+v", failed)
 		}
 		balance, err := app.loadCreditBalance(context.Background(), user.ID)
@@ -172,7 +289,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		`, document.DocID).Scan(&status, &errorCode, &activeReservations); err != nil {
 			t.Fatal(err)
 		}
-		if status != "failed" || errorCode != "provider_http_error" || activeReservations != 0 {
+		if status != "failed" || errorCode != "provider_unavailable" || activeReservations != 0 {
 			t.Fatalf("failed review status=%q code=%q active reservations=%d", status, errorCode, activeReservations)
 		}
 	})
@@ -225,7 +342,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if balance != (creditAccountBalance{Balance: 17, Reserved: 0, Available: 17}) {
+		if balance != (creditAccountBalance{Balance: 16, Reserved: 0, Available: 16}) {
 			t.Fatalf("completed stale review charge mismatch: %+v", balance)
 		}
 	})
@@ -300,6 +417,37 @@ func TestAgentReviewGetExpiresOrphanedRunningReview(t *testing.T) {
 	}
 	if freshStatus != "running" {
 		t.Fatalf("fresh review status=%q, want running", freshStatus)
+	}
+}
+
+func TestInsertRunningAgentReviewRejectsSameDocumentRevision(t *testing.T) {
+	app, _, user, document := newAgentReviewCreateTest(t, config.Config{
+		SessionSecret: "agent-review-duplicate-test",
+	})
+	provider := agentLLMProvider{
+		Mode: "byok", Protocol: "openai", BaseURL: "https://example.com", Model: "test-model",
+	}
+	reviewDocument, err := app.loadAgentReviewDocument(context.Background(), user.ID, document.DocID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstReviewID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.insertRunningAgentReview(
+		context.Background(), user.ID, reviewDocument, firstReviewID, provider, nil, agentReviewTaskProgress{},
+	); err != nil {
+		t.Fatalf("insert first running review: %v", err)
+	}
+	secondReviewID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.insertRunningAgentReview(
+		context.Background(), user.ID, reviewDocument, secondReviewID, provider, nil, agentReviewTaskProgress{},
+	); !errors.Is(err, errAgentReviewClosed) {
+		t.Fatalf("duplicate running review error=%v, want errAgentReviewClosed", err)
 	}
 }
 
@@ -470,6 +618,17 @@ func agentReviewTaskJSONForTest(system, title, bodyBefore string) string {
 				{"after": "A specific and credible title", "reason": "It states the concrete value."},
 				{"after": "A clearer alternative title", "reason": "It helps the target reader understand the topic."},
 			},
+		})
+		return string(encoded)
+	}
+	if strings.Contains(system, `"bodySuggestions"`) && strings.Contains(system, `"layoutAssessment"`) {
+		encoded, _ := json.Marshal(map[string]any{
+			"bodySuggestions": []map[string]string{{
+				"category": "hierarchy", "before": bodyBefore, "after": "The key point comes first.",
+				"reason": "This foregrounds the article's governing point for the reader.",
+			}},
+			"layoutAssessment":  testWritingLayoutAssessment(),
+			"layoutSuggestions": []any{},
 		})
 		return string(encoded)
 	}

@@ -7,6 +7,7 @@ export const en: Messages = {
     pricing: "Pricing",
     docs: "Docs",
     docsHome: "Documentation home",
+    aiGuide: "AI optimization",
     mcpGuide: "MCP integration",
     versionHistoryGuide: "Version control",
     dashboard: "Dashboard",
@@ -246,6 +247,153 @@ export const en: Messages = {
     mcpCta: "View MCP integration",
     pricingCta: "View membership benefits",
   },
+  aiGuide: {
+    eyebrow: "AI optimization guide",
+    title: "Let an AI editor review your draft, suggestion by suggestion",
+    subtitle:
+      "AI automatically reviews your title, prose, structure, and layout, then presents verifiable changes like a code review.",
+    checks: [
+      {
+        title: "Title appeal",
+        desc: "Scores clarity, specificity, credibility, and curiosity. Below 60, the model is asked for two or three alternatives.",
+      },
+      {
+        title: "Body copy",
+        desc: "Flags wordy sentences, unclear references, tone shifts, typography details, and mobile reading rhythm, with a reason for each change.",
+      },
+      {
+        title: "Structure and layout",
+        desc: "Evaluates hierarchy, readability, emphasis, rhythm, modularity, and mobile fit, then suggests headings, dividers, lists, or callouts.",
+      },
+      {
+        title: "Safe application",
+        desc: "Every suggestion shows the original and proposed text. Apply one, apply all, or ignore it—nothing changes silently in the background.",
+      },
+    ],
+    caseEyebrow: "A real review record",
+    caseTitle: "Case study: “The $1,000 online Markdown editor is now open source”",
+    caseIntro:
+      "This product announcement contained 18 paragraphs. The review preserved its personal voice and core message, corrected a few presentation details, and added the hierarchy the draft lacked. The following figures and examples come from an actual review completed on August 19, 2026.",
+    caseSourceCta: "Read the pre-review original",
+    caseCarouselLabel: "Real review case",
+    casePrevious: "Show the previous review area",
+    caseNext: "Show the next review area",
+    caseFacts: [
+      { label: "Title appeal", value: "76 / 100" },
+      { label: "Body suggestions", value: "3" },
+      { label: "Layout suggestions", value: "6" },
+      { label: "Actual cost", value: "3 credits" },
+    ],
+    caseTitleReviewTitle: "76 points: specific, intriguing, and supported by the article",
+    caseTitleReviewBody:
+      "The concrete $1,000 figure creates a strong curiosity gap, and the article genuinely explains that token spend rather than exaggerating it. “Open source” adds a second value point. Not naming AI directly leaves a reasonable amount of suspense, so the title remains clear, specific, and credible without needing a forced rewrite.",
+    caseContentTitle: "Copy suggestion: split an overloaded sentence",
+    caseContentBody:
+      "The original joins three ideas—the reason the service is free, waived bandwidth fees, and the resulting storage allowance—with commas. Breaking after the bandwidth point makes the causal chain easier to follow on mobile without changing the author's wording.",
+    beforeLabel: "Before",
+    afterLabel: "Suggestion",
+    caseBefore:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费，让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseAfter:
+      "所以目前是完全免费的，感谢赛博菩萨 cloudflare 低廉的存储价格，并且还免流量费。这让我能为每个用户设置 500MB 的存储空间，对于大多数轻量级用户来说，这个容量应该完全够用了。",
+    caseStructureTitle: "Layout suggestion: diagnose before changing hierarchy",
+    caseStructureBody:
+      "All 18 paragraphs were originally at the same level. The six-part assessment found hierarchy and emphasis weakest, so it proposed distinct sections for the launch, open-source release, and next steps.",
+    caseDimensions: [
+      { label: "Hierarchy", score: 30 },
+      { label: "Readability", score: 68 },
+      { label: "Emphasis", score: 40 },
+      { label: "Rhythm", score: 58 },
+      { label: "Modularity", score: 55 },
+      { label: "Mobile", score: 72 },
+    ],
+    caseChangesTitle: "Concrete layout suggestions with Markdown diffs",
+    caseChanges: [
+      {
+        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason: "This sentence is the article's central launch announcement. Turning it into an H2 lets readers locate the beginning of the release section immediately.",
+      },
+      {
+        before: "并且完整的代码库也都开源了：",
+        after: "### 并且完整的代码库也都开源了：",
+        reason: "The repository is a subtopic of the launch announcement. An H3 places it under the 1.0 section and makes the parent-child hierarchy explicit.",
+      },
+      {
+        before: "欢迎各位大佬多提 issue 和 PR。",
+        after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
+        reason: "The open-source invitation ends here and the next paragraph begins a cost retrospective. A divider marks that topic change instead of letting the modules run together.",
+      },
+      {
+        before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason: "The article shifts from the current product to membership and AI plans here. An H2 separates the roadmap from the preceding product overview.",
+      },
+      {
+        before: "关于 AI 这块，不知道大家都有哪些点子呢？",
+        after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
+        reason: "This is the article's strongest direct question. A blockquote callout prevents it from disappearing during a quick scan and encourages replies.",
+      },
+      {
+        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason: "This closing sentence is the real call to action. Isolating it as a callout turns a regular explanation into a clear final request.",
+      },
+    ],
+    caseSafetyTitle: "All nine suggestions were applied only after confirmation",
+    caseSafetyBody:
+      "The review produced three copy suggestions and six layout suggestions. Koinote stored the review without changing the draft until the author confirmed each item; all suggestions were eventually applied for a total of 3 credits.",
+    caseSafetyItems: [
+      "Every suggestion shows the original, proposed text, and reason instead of editing silently.",
+      "If the document changes after review, the old review expires rather than overwriting newer work.",
+      "Applying AI changes creates a complete recovery point for comparison or restoration in version history.",
+      "Review history retains the summary, scores, suggestion states, and actual credit usage.",
+    ],
+    caseOriginalEyebrow: "AI optimization source article",
+    caseOriginalTitle: "烧了一千刀的在线 markdown，开源了",
+    caseOriginalDescription:
+      "The source article is in Chinese. This is the document version saved immediately before the AI review on August 19, 2026. Its original hierarchy, spacing, dividers, and callouts are preserved so you can compare them with every suggestion in the guide.",
+    caseOriginalBack: "Back to the AI optimization guide",
+    faqTitle: "Frequently asked questions",
+    faqs: [
+      {
+        question: "Does AI optimization rewrite the entire article?",
+        answer:
+          "No. It reviews the title, body, and layout in background stages, then returns a summary, scores, reasons, and before-and-after comparisons. Only suggestions you approve are written back to the document.",
+      },
+      {
+        question: "Does AI verify facts and fully preserve my voice?",
+        answer:
+          "AI identifies writing issues but does not verify factual claims, figures, or cited sources. Suggestions aim to preserve your voice, but you should still confirm that each one matches your intent.",
+      },
+      {
+        question: "Can an old review overwrite changes made while it was running?",
+        answer:
+          "No. Revision and save-conflict checks protect every application. If the document changes after review begins, the old review expires instead of overwriting newer content.",
+      },
+      {
+        question: "Can I undo applied changes, and what does review history retain?",
+        answer:
+          "Yes. Applying AI suggestions creates a complete recovery point for comparison or restoration in version history. Review history also retains summaries, scores, suggestion states, and actual credit usage.",
+      },
+      {
+        question: "Who can use AI optimization, and how is the built-in model charged?",
+        answer:
+          "AI optimization is a Lifetime benefit, with 1,000 credits included when you upgrade. The built-in model uses credits based on the review's actual usage.",
+      },
+      {
+        question: "Can I use my own model endpoint?",
+        answer:
+          "Yes. Connect an OpenAI-compatible or Anthropic Messages endpoint in AI settings to use your own model service without consuming Koinote credits. Reviewed content is sent to that service, so check the provider's data policy.",
+      },
+      {
+        question: "Does it work in local mode or the desktop app?",
+        answer:
+          "Local mode blocks all network access, so AI optimization is unavailable there. A signed-in desktop client can use it normally while online.",
+      },
+    ],
+    pricingCta: "View membership and credits",
+  },
   docsCenter: {
     eyebrow: "Product documentation",
     title: "From your first document to a complete writing workflow",
@@ -316,7 +464,7 @@ export const en: Messages = {
         title: "AI optimization",
         desc: "Review an article like a code change, then choose what to apply.",
         items: [
-          "Headline appeal score with two or three alternatives",
+          "Headline appeal score with model-generated alternatives",
           "Copy, structure, hierarchy, layout, and mobile readability checks",
           "Apply individual suggestions, apply all, or dismiss them",
           "Use built-in credits or your own OpenAI / Anthropic channel",
@@ -351,6 +499,9 @@ export const en: Messages = {
       },
     ],
     deepDiveTitle: "Deep-dive guides",
+    aiTitle: "Review an article with AI optimization",
+    aiDescription:
+      "See how title scoring, body suggestions, six-part layout analysis, background tasks, credits, and your own model channel work through a real review.",
     mcpTitle: "Let agents work with Koinote documents",
     mcpDescription:
       "Configure Streamable HTTP MCP for Codex, Claude Code, OpenCode, OpenClaw, and other clients, with clear permissions and usage examples.",
@@ -598,6 +749,7 @@ export const en: Messages = {
     progress: "{completed}/{total} subtasks complete",
     partialResults: "Partial results are ready. Changes can be applied after every task finishes.",
     stageTitle: "Title & opening",
+    stageDocument: "Whole-article edit",
     stageBody: "Body review",
     stageLayout: "Structure & layout",
     backgroundRunning: "AI optimization is running in the background",
@@ -616,9 +768,17 @@ export const en: Messages = {
     previousReviews: "Previous reviews",
     newReview: "New review",
     summary: "Review summary",
-    contentReview: "Content",
+    titleReview: "Title suggestions",
+    contentReview: "Body copy",
     layoutReview: "Structure & layout",
-    layoutAssessment: "Six-dimension structure assessment",
+    layoutAssessment: "Six-dimension radar",
+    layoutShowCards: "Show all details",
+    layoutShowRadar: "Show radar",
+    layoutRadarHint: "Hover to inspect a dimension. Click it to filter suggestions below; click again to clear.",
+    deepAnalysis: "Deep analysis",
+    deepAnalysisTarget: "Deep analysis target",
+    deepAnalysisStarting: "Starting…",
+    deepReviewBadge: "Deep analysis · {dimension}",
     titleScore: "Title appeal {score}/100",
     suggestions: "Suggested changes",
     before: "Before",
@@ -637,8 +797,11 @@ export const en: Messages = {
     failedTitle: "AI could not complete this review",
     retry: "Review again",
     noSuggestions: "The article is in good shape; this review has no changes to apply.",
+    noTitleSuggestions: "No reliable title alternative worth replacing the current title was found.",
+    noTitleSuggestionsLowScore: "The title scored low, but no supported alternative was found — the article does not yet carry a stronger promise. Add a concrete result or audience first, then review again.",
     noContentSuggestions: "The writing is in good shape. No editorial changes are needed.",
     noLayoutSuggestions: "The current structure already works. No safe layout changes are needed.",
+    noFilteredLayoutSuggestions: "There are no {dimension} changes in this review. Run deep analysis for a focused second pass.",
     usage: "Used {credits} credits",
     close: "Close",
     categories: {
@@ -1436,6 +1599,7 @@ function hello(name) {
     pricing: "Pricing",
     dashboard: "Dashboard",
     docsCenter: "Documentation",
+    aiGuide: "AI optimization guide",
     mcpGuide: "MCP integration guide",
     versionHistoryGuide: "Version control guide",
     home: "Home",
@@ -1778,6 +1942,7 @@ function hello(name) {
     agent_review_stale: "The document changed. Start a new review",
     agent_review_closed: "This review is already closed",
     agent_review_in_progress: "Another review is still running. Please wait",
+    invalid_agent_review_source: "The document or source review changed. Start a new standard review first",
     invalid_agent_provider: "Invalid AI model provider",
     invalid_llm_channel_name: "Invalid channel name",
     invalid_llm_channel_url: "The channel Base URL is invalid or unsafe",
