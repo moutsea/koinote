@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Koinote",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "identifier": "app.koinote.desktop",
   "build": {
     "frontendDist": "../spa/dist",
@@ -19,6 +19,7 @@
         "minWidth": 900,
         "minHeight": 640,
         "resizable": true,
+        "dragDropEnabled": false,
         "fullscreen": false,
         "center": true
       }

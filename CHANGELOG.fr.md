@@ -39,7 +39,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Les échecs d’enregistrement distinguent désormais les conflits de révision des erreurs hors ligne ou réseau, conservent un brouillon réessayable sans restaurer silencieusement une ancienne sauvegarde et affichent un état plus clair et accessible.
 - Les synchronisations, téléversements d’images et changements d’onglet conservent désormais le curseur et le défilement, même après le remontage d’un éditeur évincé du cache.
 - Les actions d’export du menu natif exécutent directement le format choisi, et `Cmd/Ctrl+/` referme désormais correctement l’aide-mémoire des raccourcis.
-- Le glisser-déposer des dossiers fonctionne désormais de manière fiable dans WKWebView, refuse les charges inconnues avant tout déplacement et supprime les surbrillances résiduelles après une annulation.
+- Le glisser-déposer des documents et dossiers fonctionne désormais dans WKWebView et WebView2 : le gestionnaire natif de fichiers de Tauri, qui interceptait les événements HTML5 des cibles, est désactivé. Les charges inconnues sont refusées avant tout déplacement et les annulations ne laissent plus de surbrillance résiduelle.
 - `Cmd/Ctrl+W` et le raccourci de création fonctionnent lorsque le corps de l’éditeur est actif, tout en restant bloqués dans les champs de formulaire et derrière les fenêtres modales.
 
 ## [0.6.0] - 2026-08-17

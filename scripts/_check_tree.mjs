@@ -145,6 +145,17 @@ for (const [name, value] of [
       documentListSource,
     ),
   );
+
+  const tauriConfig = JSON.parse(
+    readFileSync(
+      new URL("../src-tauri/tauri.conf.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  ok(
+    "客户端关闭 Tauri 原生拖放处理器以保留 HTML5 文件树拖放",
+    tauriConfig.app.windows.every((window) => window.dragDropEnabled === false),
+  );
 }
 
 // ---------- buildTree ----------

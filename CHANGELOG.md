@@ -41,7 +41,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Desktop save failures now distinguish revision conflicts from offline or network errors, retain retryable drafts without silently restoring stale backups, and expose clearer accessible status feedback.
 - Sync updates, image uploads, and tab switches now preserve cursor and scroll positions without rebuilding unaffected editor content, including after an editor tab is remounted.
 - Native export menu actions now run the selected format directly, and `Cmd/Ctrl+/` toggles the shortcut reference closed instead of only opening it.
-- Desktop folder drag-and-drop now works reliably in WKWebView, rejects unknown payloads before moving anything, and clears stale drop highlights after cancelled drags.
+- Desktop document and folder drag-and-drop now works across WKWebView and WebView2 by disabling Tauri's native file-drop handler that intercepted HTML5 target events; unknown payloads are rejected before moving anything and cancelled drags no longer leave stale highlights.
 - `Cmd/Ctrl+W` and new-document shortcuts now work while the editor body is focused without firing inside form fields or through modal dialogs.
 
 ## [0.6.0] - 2026-08-17
