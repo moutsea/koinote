@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds deeper staged AI document reviews, focused structural analysis, and improved cursor restoration across document tabs."
+          notes="Koinote Desktop $version preserves cursor positions during keyboard tab navigation and reports the active client type for administrators."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本升级 AI 优化流程：先并行完成标题与六维结构诊断，再执行全文级编辑和正文分块审阅，并可针对单个结构维度发起深入分析。后台任务会持续保存进度和部分结果，文档标签切换时也会继续恢复各自的光标与滚动位置。
+          此版本修复了通过 Ctrl/Cmd+Tab 或数字快捷键切换文档时光标位置丢失的问题，并在管理后台展示用户最近使用的是 Web 端还是桌面客户端。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release upgrades AI optimization with parallel title and six-dimension structural diagnosis, followed by whole-document developmental editing and chunked body review. Focused deep analysis is available for each structural dimension, progress and partial results persist in the background, and document tabs continue restoring their own cursor and scroll positions.
+          This release fixes cursor position loss when switching documents with Ctrl/Cmd+Tab or numbered shortcuts, and shows administrators whether each user most recently used the Web or desktop client.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
