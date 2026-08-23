@@ -295,6 +295,48 @@ for (const [label, source] of [
   eq(label, editorPage.includes(source), true);
 }
 
+const tabShortcutBranch = editorPage.slice(
+  editorPage.indexOf('if (action === "next-tab" || action === "previous-tab")'),
+  editorPage.indexOf('if (action.startsWith("select-tab-"))'),
+);
+const tabRememberIndex = tabShortcutBranch.indexOf(
+  "rememberActiveEditorSelection()",
+);
+const tabSelectIndex = tabShortcutBranch.indexOf("handleSelect(target)");
+eq(
+  "Ctrl+Tab 在导航前保存当前选区",
+  tabRememberIndex !== -1 &&
+    tabSelectIndex !== -1 &&
+    tabRememberIndex < tabSelectIndex,
+  true,
+);
+eq(
+  "Ctrl+Tab 阻止 WebView 默认焦点导航",
+  tabShortcutBranch.includes("event.preventDefault()"),
+  true,
+);
+
+const numberedTabBranch = editorPage.slice(
+  editorPage.indexOf('if (action.startsWith("select-tab-"))'),
+  editorPage.indexOf('if (action === "close-tab")'),
+);
+const numberedRememberIndex = numberedTabBranch.indexOf(
+  "rememberActiveEditorSelection()",
+);
+const numberedSelectIndex = numberedTabBranch.indexOf("handleSelect(target)");
+eq(
+  "数字标签快捷键同样在导航前保存选区",
+  numberedRememberIndex !== -1 &&
+    numberedSelectIndex !== -1 &&
+    numberedRememberIndex < numberedSelectIndex,
+  true,
+);
+eq(
+  "数字标签快捷键阻止默认行为",
+  numberedTabBranch.includes("event.preventDefault()"),
+  true,
+);
+
 const tabBar = readFileSync("spa/src/components/editor/TabBar.tsx", "utf8");
 for (const [label, source] of [
   ["关闭按钮读出快捷键", "aria-label={closeLabel}"],

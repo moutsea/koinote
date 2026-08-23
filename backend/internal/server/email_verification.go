@@ -381,6 +381,7 @@ func (a *App) authVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	limiter.reset(ipKey)
 	limiter.reset(accountKey)
+	a.noteUserClient(user.ID, userClientWeb)
 	a.setSessionCookie(w, rec.AuthUserID, user.SessionVersion)
 	httpx.JSON(w, http.StatusOK, map[string]any{"user": user})
 }

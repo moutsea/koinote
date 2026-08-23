@@ -27,6 +27,7 @@ type App struct {
 	siteAnalytics          siteAnalyticsClient
 	adminOverview          adminOverviewCache
 	productActivity        activityTracker
+	clientActivity         clientActivityTracker
 	announcementTranslator announcementTranslator
 	agentLLMHTTPClient     *http.Client
 	serverStatus           *serverStatusMonitor

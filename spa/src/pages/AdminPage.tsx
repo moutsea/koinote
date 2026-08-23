@@ -1004,7 +1004,7 @@ function RecentUsers({
       ) : (
         <PaperCard className="mt-4 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[540px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead
                 style={{
                   background: "var(--ink-wash)",
@@ -1014,6 +1014,7 @@ function RecentUsers({
                 <tr>
                   <TableHead>{t.admin.user}</TableHead>
                   <TableHead>{t.admin.status}</TableHead>
+                  <TableHead>{t.admin.client}</TableHead>
                   <TableHead>{t.admin.joinedAt}</TableHead>
                 </tr>
               </thead>
@@ -1055,6 +1056,29 @@ function RecentUsers({
                           ? t.admin.verified
                           : t.admin.unverified}
                       </p>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                          user.lastClient === "desktop"
+                            ? "bg-cinnabar-50 text-cinnabar-700 dark:bg-cinnabar-950/40 dark:text-cinnabar-400"
+                            : "bg-black/5 text-neutral-700 dark:bg-white/10 dark:text-neutral-200"
+                        }`}
+                      >
+                        {user.lastClient === "desktop"
+                          ? t.admin.desktopClient
+                          : user.lastClient === "web"
+                            ? t.admin.webClient
+                            : t.admin.clientUnknown}
+                      </span>
+                      {user.lastClientAt && (
+                        <p
+                          className="mt-1 text-xs"
+                          style={{ color: "var(--ink-faint)" }}
+                        >
+                          {formatDateTime(user.lastClientAt, locale)}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       {formatDateTime(user.createdAt, locale)}

@@ -225,6 +225,12 @@ for (const [tabs, active] of [
     /useRef<Map<string, EditorTabSelection>>\(new Map\(\)\)/.test(page),
   );
   ok(
+    "快捷键导航前同步保存当前选区",
+    /const rememberActiveEditorSelection = useCallback[\s\S]*?activeEditor\.docId !== activeDocId[\s\S]*?captureEditorTabSelection[\s\S]*?if \(action === "next-tab" \|\| action === "previous-tab"\)[\s\S]*?event\.preventDefault\(\);[\s\S]*?rememberActiveEditorSelection\(\);[\s\S]*?handleSelect\(target\)/.test(
+      page,
+    ),
+  );
+  ok(
     "活动编辑器持续监听并注销选区变化",
     /currentEditor\.on\("selectionUpdate", rememberCurrentSelection\)/.test(
       page,

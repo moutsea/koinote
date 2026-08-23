@@ -78,12 +78,14 @@ type adminTrendPoint struct {
 }
 
 type adminRecentUser struct {
-	ID             int       `json:"id"`
-	Name           string    `json:"name"`
-	Email          string    `json:"email"`
-	IsVerified     bool      `json:"isVerified"`
-	MembershipTier string    `json:"membershipTier"`
-	CreatedAt      time.Time `json:"createdAt"`
+	ID             int        `json:"id"`
+	Name           string     `json:"name"`
+	Email          string     `json:"email"`
+	IsVerified     bool       `json:"isVerified"`
+	MembershipTier string     `json:"membershipTier"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	LastClient     *string    `json:"lastClient"`
+	LastClientAt   *time.Time `json:"lastClientAt"`
 }
 
 type adminRecentPayment struct {
@@ -491,7 +493,9 @@ func (a *App) loadAdminRecentUsers(ctx context.Context) ([]adminRecentUser, erro
 			email,
 			is_verified,
 			membership_tier,
-			created_at
+			created_at,
+			last_client,
+			last_client_at
 		FROM users
 		ORDER BY created_at DESC
 		LIMIT 10
@@ -511,6 +515,8 @@ func (a *App) loadAdminRecentUsers(ctx context.Context) ([]adminRecentUser, erro
 			&user.IsVerified,
 			&user.MembershipTier,
 			&user.CreatedAt,
+			&user.LastClient,
+			&user.LastClientAt,
 		); err != nil {
 			return nil, err
 		}

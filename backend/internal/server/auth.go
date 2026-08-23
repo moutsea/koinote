@@ -250,6 +250,7 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	a.recordProductMilestone(r.Context(), user.ID, milestoneRegistered)
 	a.noteUserActivity(user.ID)
+	a.noteUserClient(user.ID, userClientWeb)
 
 	// 注册成功直接签发会话，免去再登录一次
 	a.setSessionCookie(w, newAuthUserID, user.SessionVersion)
@@ -319,6 +320,7 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 	limiter.reset(ipKey)
 	limiter.reset(accountKey)
 	a.noteUserActivity(user.ID)
+	a.noteUserClient(user.ID, userClientWeb)
 
 	a.setSessionCookie(w, rec.AuthUserID, user.SessionVersion)
 	httpx.JSON(w, http.StatusOK, map[string]any{"user": user})

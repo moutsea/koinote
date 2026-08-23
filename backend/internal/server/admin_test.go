@@ -101,7 +101,8 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	}()
 	if _, err := pool.Exec(ctx, `
 		UPDATE users
-		SET membership_tier = 'lifetime', membership_granted_at = now()
+		SET membership_tier = 'lifetime',
+		    membership_granted_at = now()
 		WHERE auth_user_id = $1
 	`, normalID); err != nil {
 		t.Fatalf("设置测试会员: %v", err)
@@ -128,6 +129,13 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	if normalServerStatus.Code != http.StatusForbidden || !strings.Contains(normalServerStatus.Body.String(), "admin_required") {
 		t.Fatalf("普通用户访问服务器监控期望 403 admin_required，实际 %d %s", normalServerStatus.Code, normalServerStatus.Body.String())
 	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE users
+		SET last_client = 'desktop', last_client_at = now()
+		WHERE auth_user_id = $1
+	`, normalID); err != nil {
+		t.Fatalf("设置测试客户端: %v", err)
+	}
 
 	withoutAnalytics := adminRequest(app, adminID)
 	if withoutAnalytics.Code != http.StatusOK {
@@ -142,6 +150,16 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	}
 	if first.Overview.Users < 2 || first.Overview.Members < 1 || len(first.Trend) != adminTrendDays {
 		t.Fatalf("业务统计不完整: overview=%+v trend=%d", first.Overview, len(first.Trend))
+	}
+	var recentNormal *adminRecentUser
+	for index := range first.RecentUsers {
+		if first.RecentUsers[index].Email == normalID+"@example.com" {
+			recentNormal = &first.RecentUsers[index]
+			break
+		}
+	}
+	if recentNormal == nil || recentNormal.LastClient == nil || *recentNormal.LastClient != "desktop" || recentNormal.LastClientAt == nil {
+		t.Fatalf("最近用户应返回客户端与使用时间: %+v", recentNormal)
 	}
 
 	app.siteAnalytics = staticSiteAnalytics{traffic: siteTraffic{

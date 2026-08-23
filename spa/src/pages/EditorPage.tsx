@@ -460,6 +460,22 @@ export function EditorPage() {
     [navigate],
   );
 
+  const rememberActiveEditorSelection = useCallback(() => {
+    if (
+      !activeEditor ||
+      activeEditor.docId !== activeDocId ||
+      activeEditor.editor.isDestroyed
+    )
+      return;
+    editorSelections.current.set(
+      activeEditor.docId,
+      captureEditorTabSelection(
+        activeEditor.editor,
+        activeEditor.editor.isFocused,
+      ),
+    );
+  }, [activeDocId, activeEditor]);
+
   /**
    * Ctrl+S / Cmd+S 立刻保存当前文档。
    *
@@ -635,6 +651,10 @@ export function EditorPage() {
 
       const current = tabStateRef.current;
       if (action === "next-tab" || action === "previous-tab") {
+        // Ctrl+Tab 仍交给 WebView 会在路由切换前执行 Tab 的默认焦点导航，
+        // 选区可能因此被改写。先同步记住当前 ProseMirror 选区，再消费按键。
+        event.preventDefault();
+        rememberActiveEditorSelection();
         const target = adjacentTabId(
           current.openTabs,
           current.activeDocId,
@@ -644,6 +664,8 @@ export function EditorPage() {
         return;
       }
       if (action.startsWith("select-tab-")) {
+        event.preventDefault();
+        rememberActiveEditorSelection();
         const target = numberedTabId(
           current.openTabs,
           Number(action.slice("select-tab-".length)),
@@ -674,6 +696,7 @@ export function EditorPage() {
     handleCreate,
     handleSelect,
     outlineOpen,
+    rememberActiveEditorSelection,
     setDocsOpen,
     setOutlineOpen,
   ]);

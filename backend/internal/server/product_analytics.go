@@ -30,6 +30,40 @@ type activityTracker struct {
 	seen map[int]struct{}
 }
 
+type userClient string
+
+const (
+	userClientWeb     userClient = "web"
+	userClientDesktop userClient = "desktop"
+)
+
+type clientActivityTracker struct {
+	mu   sync.Mutex
+	hour string
+	seen map[clientActivityKey]struct{}
+}
+
+type clientActivityKey struct {
+	userID int
+	client userClient
+}
+
+func (t *clientActivityTracker) shouldRecord(userID int, client userClient, now time.Time) bool {
+	hour := now.UTC().Format("2006-01-02T15")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.hour != hour {
+		t.hour = hour
+		t.seen = make(map[clientActivityKey]struct{})
+	}
+	key := clientActivityKey{userID: userID, client: client}
+	if _, ok := t.seen[key]; ok {
+		return false
+	}
+	t.seen[key] = struct{}{}
+	return true
+}
+
 func (t *activityTracker) firstToday(userID int, now time.Time) bool {
 	day := now.UTC().Format("2006-01-02")
 	t.mu.Lock()
@@ -87,6 +121,28 @@ func (a *App) noteUserActivity(userID int) {
 			log.Printf("daily activity: %v", err)
 		}
 	}(now)
+}
+
+func (a *App) noteUserClient(userID int, client userClient) {
+	if a.db == nil || userID <= 0 {
+		return
+	}
+	observedAt := time.Now().UTC()
+	if !a.clientActivity.shouldRecord(userID, client, observedAt) {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if _, err := a.db.Exec(ctx, `
+			UPDATE users
+			SET last_client = $2, last_client_at = $3
+			WHERE id = $1
+			  AND (last_client_at IS NULL OR last_client_at <= $3)
+		`, userID, string(client), observedAt); err != nil {
+			log.Printf("user client activity: %v", err)
+		}
+	}()
 }
 
 // analyticsEvent 只接受前端才能确知完成时机的首次导出。其余里程碑全部由后端业务

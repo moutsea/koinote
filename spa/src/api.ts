@@ -758,6 +758,8 @@ export type AdminStats = {
     isVerified: boolean;
     membershipTier: "free" | "lifetime";
     createdAt: string;
+    lastClient: "web" | "desktop" | null;
+    lastClientAt: string | null;
   }>;
   recentPayments: Array<{
     userName: string | null;

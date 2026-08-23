@@ -768,6 +768,10 @@ export interface Messages {
     deletedAccount: string;
     user: string;
     status: string;
+    client: string;
+    webClient: string;
+    desktopClient: string;
+    clientUnknown: string;
     joinedAt: string;
     verified: string;
     unverified: string;

@@ -184,6 +184,7 @@ func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, b
 				return model.User{}, false
 			}
 			a.noteUserActivity(user.ID)
+			a.noteUserClient(user.ID, userClientDesktop)
 			return user, true
 		}
 		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
@@ -213,5 +214,6 @@ func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, b
 		return model.User{}, false
 	}
 	a.noteUserActivity(user.ID)
+	a.noteUserClient(user.ID, userClientWeb)
 	return user, true
 }

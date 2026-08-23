@@ -197,6 +197,7 @@ func (a *App) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.noteUserActivity(user.ID)
+	a.noteUserClient(user.ID, userClientWeb)
 
 	a.setSessionCookie(w, user.AuthUserID, user.SessionVersion)
 	http.Redirect(w, r, sanitizeRedirectPath(statePayload.RedirectTo), http.StatusFound)
