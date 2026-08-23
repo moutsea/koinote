@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version preserves cursor positions during keyboard tab navigation and reports the active client type for administrators."
+          notes="Koinote Desktop $version adds mobile-friendly WeChat typography and reusable member-only AI GEO summaries."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本修复了通过 Ctrl/Cmd+Tab 或数字快捷键切换文档时光标位置丢失的问题，并在管理后台展示用户最近使用的是 Web 端还是桌面客户端。
+          此版本优化了微信公众号导出的移动端排版，并新增可按文档保存、编辑与复用的会员专属 AI GEO 隐藏摘要；界面会明确提示隐藏文本的潜在平台规则风险。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release fixes cursor position loss when switching documents with Ctrl/Cmd+Tab or numbered shortcuts, and shows administrators whether each user most recently used the Web or desktop client.
+          This release improves mobile typography for WeChat exports and adds reusable, member-only AI GEO hidden summaries saved per document, with an explicit warning about potential platform-policy risk.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
