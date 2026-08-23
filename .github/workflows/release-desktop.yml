@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds mobile-friendly WeChat typography and reusable member-only AI GEO summaries."
+          notes="Koinote Desktop $version adds in-app feedback and improves folder drag-and-drop and editor shortcuts."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本优化了微信公众号导出的移动端排版，并新增可按文档保存、编辑与复用的会员专属 AI GEO 隐藏摘要；界面会明确提示隐藏文本的潜在平台规则风险。
+          此版本新增应用内反馈入口与管理员反馈列表，并修复文件夹拖拽移动、编辑器聚焦时关闭文档快捷键等桌面交互问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release improves mobile typography for WeChat exports and adds reusable, member-only AI GEO hidden summaries saved per document, with an explicit warning about potential platform-policy risk.
+          This release adds in-app feedback with an administrator review list, and improves folder drag-and-drop plus document-closing shortcuts while the editor is focused.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 
