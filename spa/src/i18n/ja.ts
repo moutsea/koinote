@@ -4,7 +4,7 @@ export const ja: Messages = {
   nav: {
     editor: "エディタ",
     download: "ダウンロード",
-    pricing: "料金",
+    pricing: "アップグレード",
     docs: "ドキュメント",
     docsHome: "ドキュメント一覧",
     aiGuide: "AI 最適化",
@@ -113,9 +113,12 @@ export const ja: Messages = {
     loadFailed: "料金を読み込めませんでした。もう一度お試しください。",
     unavailable: "この環境ではオンライン決済が設定されていません。",
     creditsTitle: "AI credits",
-    creditsDescription: "内蔵モデルでの AI 最適化は credits を消費します。独自 LLM チャネルでは消費しません。",
-    creditsMembersOnly: "Credits は終身会員のみ購入・利用できます。先に上の終身会員プランへアップグレードしてください。",
-    creditsNote: "購入後はアカウントへ自動反映され、残高と履歴は AI 設定で確認できます。",
+    creditsDescription:
+      "内蔵モデルでの AI 最適化は credits を消費します。独自 LLM チャネルでは消費しません。",
+    creditsMembersOnly:
+      "Credits は終身会員のみ購入・利用できます。先に上の終身会員プランへアップグレードしてください。",
+    creditsNote:
+      "購入後はアカウントへ自動反映され、残高と履歴は AI 設定で確認できます。",
     buyCredits: "購入",
     faqTitle: "よくある質問",
     faqs: [
@@ -269,7 +272,8 @@ export const ja: Messages = {
       },
     ],
     caseEyebrow: "実際のレビュー記録",
-    caseTitle: "事例：『1,000 ドル使ったオンライン Markdown をオープンソース化』",
+    caseTitle:
+      "事例：『1,000 ドル使ったオンライン Markdown をオープンソース化』",
     caseIntro:
       "この製品公開記事は 18 段落で構成されていました。レビューは個人的な語り口と中心メッセージを残し、少数の表現を整えながら不足していた階層を追加しました。以下は 2026 年 8 月 19 日に実施したレビューの結果です。",
     caseSourceCta: "レビュー前の原文を見る",
@@ -308,34 +312,45 @@ export const ja: Messages = {
     caseChangesTitle: "具体的な構成提案と Markdown の差分",
     caseChanges: [
       {
-        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        reason: "全文で 1.0 公開を正式に伝える中心部分です。H2 にすると、読者が公開セクションの開始位置をすぐ見つけられます。",
+        before:
+          "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after:
+          "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason:
+          "全文で 1.0 公開を正式に伝える中心部分です。H2 にすると、読者が公開セクションの開始位置をすぐ見つけられます。",
       },
       {
         before: "并且完整的代码库也都开源了：",
         after: "### 并且完整的代码库也都开源了：",
-        reason: "コードリポジトリは公開告知の子トピックです。H3 にすることで 1.0 セクションの下に入り、親子階層が明確になります。",
+        reason:
+          "コードリポジトリは公開告知の子トピックです。H3 にすることで 1.0 セクションの下に入り、親子階層が明確になります。",
       },
       {
         before: "欢迎各位大佬多提 issue 和 PR。",
         after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
-        reason: "ここでオープンソースへの招待が終わり、次の段落から開発コストの振り返りに移ります。区切り線で話題の切り替えを明示します。",
+        reason:
+          "ここでオープンソースへの招待が終わり、次の段落から開発コストの振り返りに移ります。区切り線で話題の切り替えを明示します。",
       },
       {
         before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        reason: "製品の現状から会員機能と AI の今後へ切り替わる箇所です。H2 にすると前の製品紹介とロードマップを分離できます。",
+        after:
+          "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason:
+          "製品の現状から会員機能と AI の今後へ切り替わる箇所です。H2 にすると前の製品紹介とロードマップを分離できます。",
       },
       {
         before: "关于 AI 这块，不知道大家都有哪些点子呢？",
         after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
-        reason: "全文で最も直接的な問いかけです。引用として強調すれば、流し読みでも見落とされにくくなり、回答を促せます。",
+        reason:
+          "全文で最も直接的な問いかけです。引用として強調すれば、流し読みでも見落とされにくくなり、回答を促せます。",
       },
       {
-        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
-        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
-        reason: "記事末尾の行動喚起です。通常の説明から切り離して強調することで、機能募集を明確な締めくくりにします。",
+        before:
+          "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after:
+          "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason:
+          "記事末尾の行動喚起です。通常の説明から切り離して強調することで、機能募集を明確な締めくくりにします。",
       },
     ],
     caseSafetyTitle: "9 件すべてをユーザー確認後に反映",
@@ -600,19 +615,27 @@ export const ja: Messages = {
   },
   accountDeletion: {
     title: "アカウントを削除",
-    description: "この操作は取り消せません。必要な文書と画像を先にエクスポートしてください。",
-    immediate: "アカウント、文書、履歴、共有、MCP トークン、同期済み画像は直ちに削除処理へ入ります。",
-    membership: "永久会員資格はアカウントと共に終了します。削除による自動返金はありませんが、法定の返金権は妨げません。",
-    paymentRecords: "税務、紛争、不正防止に必要な最小限の決済記録は、アカウントとの関連を解除して法令に従い保持します。",
+    description:
+      "この操作は取り消せません。必要な文書と画像を先にエクスポートしてください。",
+    immediate:
+      "アカウント、文書、履歴、共有、MCP トークン、同期済み画像は直ちに削除処理へ入ります。",
+    membership:
+      "永久会員資格はアカウントと共に終了します。削除による自動返金はありませんが、法定の返金権は妨げません。",
+    paymentRecords:
+      "税務、紛争、不正防止に必要な最小限の決済記録は、アカウントとの関連を解除して法令に従い保持します。",
+    feedbackRecords:
+      "送信したフィードバック本文、送信元ページ、クライアント情報はアカウントとの関連を解除した後も、問題調査と製品改善のため保持します。入力した個人情報が内容に残る場合があります。",
     confirmLabel: "確認のため現在のメール {email} を入力",
     finalConfirmation: "アカウントを今すぐ削除しますか？元に戻せません。",
     deleteButton: "アカウントを完全に削除",
     deleting: "削除中…",
     mismatch: "入力したメールが現在のアカウントと一致しません。",
-    paymentPending: "決済が処理中です。完了を待つか、サポートへ連絡してから削除してください。",
+    paymentPending:
+      "決済が処理中です。完了を待つか、サポートへ連絡してから削除してください。",
     unavailable: "決済処理を安全に終了できません。後でもう一度お試しください。",
     failed: "アカウントを削除できませんでした。後でもう一度お試しください。",
-    localCleanupFailed: "クラウドのアカウントは削除されましたが、この端末のオフラインデータを完全に消去できませんでした。サーバートークンは無効です。アプリを終了し、ローカルのアプリデータを手動で削除してください。",
+    localCleanupFailed:
+      "クラウドのアカウントは削除されましたが、この端末のオフラインデータを完全に消去できませんでした。サーバートークンは無効です。アプリを終了し、ローカルのアプリデータを手動で削除してください。",
   },
   storage: {
     title: "クラウドストレージ",
@@ -655,14 +678,17 @@ export const ja: Messages = {
     loadFailed: "会員ステータスを読み込めませんでした。",
     checkoutSuccess: "支払いを確認しました。ライフタイム会員が有効です。",
     checkoutPending: "支払いを確認中です。完了後、権利は自動的に更新されます。",
-    checkoutDelayed: "Stripe が支払いを処理中です。重複して支払わず、後でもう一度ご確認ください。請求後も長時間反映されない場合はサポートへご連絡ください。",
+    checkoutDelayed:
+      "Stripe が支払いを処理中です。重複して支払わず、後でもう一度ご確認ください。請求後も長時間反映されない場合はサポートへご連絡ください。",
     checkoutCancelled: "決済をキャンセルしました。請求は発生していません。",
     checkoutFailed: "決済を完了できませんでした。もう一度お試しください。",
   },
   agentCredits: {
     title: "AI credits",
-    description: "内蔵モデルのレビューは credits を消費します。自分の LLM チャネルでは消費しません。",
-    membersOnly: "AI 最適化は永久会員向け機能で、アップグレード時に 1,000 credits が付与されます。",
+    description:
+      "内蔵モデルのレビューは credits を消費します。自分の LLM チャネルでは消費しません。",
+    membersOnly:
+      "AI 最適化は永久会員向け機能で、アップグレード時に 1,000 credits が付与されます。",
     available: "利用可能 {count}",
     estimatedCharge: "差し引き予定 {count} credits",
     loading: "Credits を読み込み中…",
@@ -675,7 +701,8 @@ export const ja: Messages = {
     history: "最近の履歴",
     checkoutSuccess: "Credits が残高に追加されました。",
     checkoutPending: "支払いを確認中です。重複して支払わないでください。",
-    checkoutDelayed: "Stripe が支払いを処理中です。重複して支払わず、後で確認してください。",
+    checkoutDelayed:
+      "Stripe が支払いを処理中です。重複して支払わず、後で確認してください。",
     checkoutCancelled: "購入をキャンセルしました。請求は発生していません。",
     checkoutFailed: "購入を完了できませんでした。もう一度お試しください。",
     transactionKinds: {
@@ -688,7 +715,8 @@ export const ja: Messages = {
   },
   agentModelSettings: {
     title: "AI モデル",
-    description: "AI 最適化で内蔵モデルか独自 LLM のどちらを使うか選びます。エディタはこの設定をそのまま使用します。",
+    description:
+      "AI 最適化で内蔵モデルか独自 LLM のどちらを使うか選びます。エディタはこの設定をそのまま使用します。",
     membersOnly: "AI 最適化は永久会員向け機能です。",
     builtIn: "内蔵モデル",
     builtInHint: "実際の使用量に応じて credits を消費します。",
@@ -700,7 +728,8 @@ export const ja: Messages = {
   },
   llmChannels: {
     title: "自分の LLM チャネル",
-    description: "OpenAI 互換 API または Anthropic Messages API を設定できます。AI 最適化はデフォルトチャネルを使い、キーは暗号化されて credits を消費しません。",
+    description:
+      "OpenAI 互換 API または Anthropic Messages API を設定できます。AI 最適化はデフォルトチャネルを使い、キーは暗号化されて credits を消費しません。",
     membersOnly: "カスタム LLM チャネルは永久会員向け機能です。",
     add: "チャネルを追加",
     loading: "チャネルを読み込み中…",
@@ -709,7 +738,8 @@ export const ja: Messages = {
     defaultBadge: "デフォルト",
     edit: "チャネルを編集",
     delete: "チャネルを削除",
-    deleteConfirm: "このチャネルを使う AI 最適化は利用できなくなります。削除しますか？",
+    deleteConfirm:
+      "このチャネルを使う AI 最適化は利用できなくなります。削除しますか？",
     addTitle: "LLM チャネルを追加",
     editTitle: "LLM チャネルを編集",
     cancel: "キャンセル",
@@ -722,16 +752,19 @@ export const ja: Messages = {
     makeDefault: "デフォルトチャネルにする",
     save: "チャネルを保存",
     saving: "保存中…",
-    saveFailed: "チャネルを保存できませんでした。設定を確認して再試行してください。",
+    saveFailed:
+      "チャネルを保存できませんでした。設定を確認して再試行してください。",
     deleteFailed: "チャネルを削除できませんでした。もう一度お試しください。",
   },
   agentReview: {
     button: "AI 最適化",
     title: "AI 最適化",
-    description: "コード変更のようにタイトル、本文、Markdown レイアウトをレビューし、承認した変更だけを反映します。",
+    description:
+      "コード変更のようにタイトル、本文、Markdown レイアウトをレビューし、承認した変更だけを反映します。",
     membersOnly: "この機能は永久会員のみ利用できます。",
     upgrade: "永久会員にアップグレード",
-    localModeUnavailable: "ローカルモードはネットワークへ接続しないため、AI 最適化は利用できません。",
+    localModeUnavailable:
+      "ローカルモードはネットワークへ接続しないため、AI 最適化は利用できません。",
     provider: "今回の最適化方法",
     builtIn: "内蔵モデル",
     builtInHint: "実際の token 使用量に応じて credits を消費します。",
@@ -743,21 +776,27 @@ export const ja: Messages = {
     start: "レビューを開始",
     running: "AI が文章をレビューしています…",
     progress: "{total} 個中 {completed} 個のサブタスクが完了",
-    partialResults: "一部の結果を確認できます。すべて完了すると変更を反映できます。",
+    partialResults:
+      "一部の結果を確認できます。すべて完了すると変更を反映できます。",
     stageTitle: "タイトルと導入",
     stageDocument: "記事全体の編集",
     stageBody: "本文レビュー",
     stageLayout: "構成とレイアウト",
     backgroundRunning: "AI 最適化をバックグラウンドで実行中",
-    backgroundRunningDescription: "執筆やページ移動を続けられます。完了するとここで通知します。",
+    backgroundRunningDescription:
+      "執筆やページ移動を続けられます。完了するとここで通知します。",
     backgroundReady: "AI 最適化が完了しました",
-    backgroundReadyDescription: "タイトル、本文、構成・レイアウトの提案を確認できます。",
+    backgroundReadyDescription:
+      "タイトル、本文、構成・レイアウトの提案を確認できます。",
     backgroundFailed: "AI 最適化を完了できませんでした",
-    backgroundFailedDescription: "モデルチャネルまたはネットワークが一時的に利用できない可能性があります。文書を開いて再試行してください。",
-    backgroundTimeoutDescription: "処理がタイムアウトしたか、サービスが再起動されました。文書を開いてもう一度実行してください。",
+    backgroundFailedDescription:
+      "モデルチャネルまたはネットワークが一時的に利用できない可能性があります。文書を開いて再試行してください。",
+    backgroundTimeoutDescription:
+      "処理がタイムアウトしたか、サービスが再起動されました。文書を開いてもう一度実行してください。",
     viewBackgroundResult: "提案を確認",
     dismissNotification: "通知を閉じる",
-    saveFailed: "現在の文書を保存できませんでした。保存の問題を解決して再試行してください。",
+    saveFailed:
+      "現在の文書を保存できませんでした。保存の問題を解決して再試行してください。",
     loading: "レビューを読み込み中…",
     loadFailed: "レビュー履歴を読み込めませんでした。もう一度お試しください。",
     noPreviousReviews: "レビューはまだありません。",
@@ -770,7 +809,8 @@ export const ja: Messages = {
     layoutAssessment: "6 項目のレーダーチャート",
     layoutShowCards: "すべて展開",
     layoutShowRadar: "チャート表示",
-    layoutRadarHint: "項目にマウスを重ねて評価を確認し、クリックして下の提案を絞り込みます。再クリックで解除できます。",
+    layoutRadarHint:
+      "項目にマウスを重ねて評価を確認し、クリックして下の提案を絞り込みます。再クリックで解除できます。",
     deepAnalysis: "詳細分析",
     deepAnalysisTarget: "詳細分析の対象",
     deepAnalysisStarting: "開始中…",
@@ -785,19 +825,25 @@ export const ja: Messages = {
     applyAll: "すべて反映",
     applyingAll: "すべて反映中…",
     dismissAll: "すべて無視",
-    dismissAllConfirm: "現在のレビューを閉じます。残りの提案をすべて無視しますか？",
+    dismissAllConfirm:
+      "現在のレビューを閉じます。残りの提案をすべて無視しますか？",
     applied: "反映済み",
     dismissed: "無視済み",
     staleTitle: "このレビューは古くなっています",
-    staleDescription: "レビュー後に文書が変更されました。新しい内容を上書きしないよう、再度レビューしてください。",
+    staleDescription:
+      "レビュー後に文書が変更されました。新しい内容を上書きしないよう、再度レビューしてください。",
     failedTitle: "AI がレビューを完了できませんでした",
     retry: "もう一度レビュー",
     noSuggestions: "文章は良好です。今回反映する変更はありません。",
-    noTitleSuggestions: "現在のタイトルを置き換えるに値する、根拠のある代案は見つかりませんでした。",
-    noTitleSuggestionsLowScore: "タイトルの評点は低いものの、根拠のある代案は見つかりませんでした。具体的な成果や読者像を本文に補ってから、もう一度実行してください。",
+    noTitleSuggestions:
+      "現在のタイトルを置き換えるに値する、根拠のある代案は見つかりませんでした。",
+    noTitleSuggestionsLowScore:
+      "タイトルの評点は低いものの、根拠のある代案は見つかりませんでした。具体的な成果や読者像を本文に補ってから、もう一度実行してください。",
     noContentSuggestions: "文章表現は良好です。内容の修正提案はありません。",
-    noLayoutSuggestions: "現在の構成は適切です。安全に適用できるレイアウト変更はありません。",
-    noFilteredLayoutSuggestions: "今回のレビューには「{dimension}」の変更提案がありません。詳細分析で再確認できます。",
+    noLayoutSuggestions:
+      "現在の構成は適切です。安全に適用できるレイアウト変更はありません。",
+    noFilteredLayoutSuggestions:
+      "今回のレビューには「{dimension}」の変更提案がありません。詳細分析で再確認できます。",
     usage: "{credits} credits を消費",
     close: "閉じる",
     categories: {
@@ -866,13 +912,16 @@ export const ja: Messages = {
   },
   mcpActivity: {
     title: "MCP アクティビティログ",
-    description: "Agent が呼び出したツール、対象文書、成否を確認できます。ログは 180 日間保持し、本文やトークンの内容は記録しません。",
+    description:
+      "Agent が呼び出したツール、対象文書、成否を確認できます。ログは 180 日間保持し、本文やトークンの内容は記録しません。",
     back: "MCP 設定に戻る",
     membersOnly: "MCP アクティビティログは永久会員向け機能です。",
     loading: "アクティビティを読み込み中…",
-    loadFailed: "MCP アクティビティを読み込めませんでした。もう一度お試しください。",
+    loadFailed:
+      "MCP アクティビティを読み込めませんでした。もう一度お試しください。",
     retry: "再試行",
-    empty: "MCP アクティビティはまだありません。Agent が初めてツールを使うと表示されます。",
+    empty:
+      "MCP アクティビティはまだありません。Agent が初めてツールを使うと表示されます。",
     loadMore: "さらに読み込む",
     success: "成功",
     error: "失敗",
@@ -929,7 +978,8 @@ export const ja: Messages = {
   },
   aiSettings: {
     title: "AI 設定",
-    subtitle: "AI credits、独自 LLM チャネル、MCP 文書アクセスをまとめて管理します。",
+    subtitle:
+      "AI credits、独自 LLM チャネル、MCP 文書アクセスをまとめて管理します。",
   },
   documentsPage: {
     title: "マイドキュメント",
@@ -948,7 +998,8 @@ export const ja: Messages = {
     quickOpenPlaceholder: "タイトルを入力して移動…",
     quickOpenHint: "⌘P / Ctrl+P でいつでも開けます",
     quickOpenEmpty: "開けるドキュメントがありません。",
-    quickOpenMore: "ほかにも一致する文書があります。入力を続けて絞り込んでください",
+    quickOpenMore:
+      "ほかにも一致する文書があります。入力を続けて絞り込んでください",
     startTyping: "キーワードを入力して、タイトルと Markdown 本文を検索します。",
     noResults: "一致するドキュメントはありません。",
     loadFailed: "検索に失敗しました。もう一度お試しください。",
@@ -964,7 +1015,8 @@ export const ja: Messages = {
     documents: "ドキュメント",
     panels: "パネル",
     editing: "編集",
-    panelHint: "パネルのショートカットは入力欄の外でのみ動作します。本文編集中の ⌘/Ctrl+B は太字になります。",
+    panelHint:
+      "パネルのショートカットは入力欄の外でのみ動作します。本文編集中の ⌘/Ctrl+B は太字になります。",
     actions: {
       showKeyboardShortcuts: "ショートカット一覧を表示",
       searchDocuments: "ドキュメントを検索",
@@ -1028,6 +1080,31 @@ export const ja: Messages = {
     title: "友達を招待",
     subtitle: "専用の招待リンクを共有し、招待実績と特典容量を確認できます。",
   },
+  feedback: {
+    menuLabel: "フィードバック",
+    title: "ご意見をお聞かせください",
+    description:
+      "不具合の報告や使用感へのご提案を送信できます。管理画面で内容を確認します。",
+    categoryLabel: "種類",
+    categoryBug: "不具合",
+    categoryExperience: "使用感",
+    messageLabel: "フィードバック内容",
+    messagePlaceholder:
+      "発生したことと、期待していた動作をできるだけ詳しくご記入ください…",
+    privacyHint:
+      "フィードバックはアカウントに関連付けられ、現在のページとクライアント情報も記録されます。アカウント削除後は関連を解除し、問題調査と製品改善のため保持します。",
+    discardConfirm:
+      "フィードバックはまだ送信されていません。入力内容を破棄しますか？",
+    cancel: "キャンセル",
+    close: "フィードバック画面を閉じる",
+    submit: "送信",
+    submitting: "送信中…",
+    submitFailed:
+      "フィードバックを送信できませんでした。もう一度お試しください。",
+    successTitle: "フィードバックを受け付けました",
+    successDescription: "ありがとうございます。内容を確認いたします。",
+    done: "完了",
+  },
   admin: {
     title: "管理画面",
     subtitle: "サイトの成長、会員、売上、運用状況を確認します。",
@@ -1044,9 +1121,26 @@ export const ja: Messages = {
     tabUsers: "ユーザー",
     tabServer: "サーバー",
     tabAnnouncements: "お知らせ",
+    tabFeedback: "フィードバック",
+    feedbackTitle: "ユーザーフィードバック",
+    feedbackSubtitle: "送信順に不具合報告と使用感へのご提案を確認できます。",
+    feedbackLoading: "フィードバックを読み込み中…",
+    feedbackLoadFailed:
+      "フィードバックを読み込めませんでした。もう一度お試しください。",
+    feedbackEmpty: "まだフィードバックはありません。",
+    feedbackLoadMore: "さらに読み込む",
+    feedbackLoadingMore: "読み込み中…",
+    feedbackBug: "不具合",
+    feedbackExperience: "使用感",
+    feedbackFrom: "送信者",
+    feedbackPage: "送信元ページ",
+    feedbackSubmittedAt: "送信日時",
+    feedbackUserAgent: "クライアント情報",
     serverStatusLoading: "サーバー状態を読み込み中…",
-    serverStatusLoadFailed: "サーバー状態を読み込めませんでした。しばらくしてから再試行してください。",
-    serverStatusUnavailable: "この環境では Linux ホスト指標を取得できません。本番環境でも表示される場合は、コンテナの読み取り専用監視マウントを確認してください。",
+    serverStatusLoadFailed:
+      "サーバー状態を読み込めませんでした。しばらくしてから再試行してください。",
+    serverStatusUnavailable:
+      "この環境では Linux ホスト指標を取得できません。本番環境でも表示される場合は、コンテナの読み取り専用監視マウントを確認してください。",
     serverStatusTitle: "サーバー状態",
     serverStatusSubtitle: "Linux サーバー全体のリソース使用状況です。",
     serverStatusAutoRefresh: "30 秒ごとに自動更新",
@@ -1058,13 +1152,15 @@ export const ja: Messages = {
     notAvailable: "利用不可",
     notConfigured: "未設定",
     uptimeValue: "{days} 日 {hours} 時間 {minutes} 分",
-    serverCPUHint: "CPU はサーバー全体の使用率で、100% はすべての論理コアが使用中であることを示します。",
+    serverCPUHint:
+      "CPU はサーバー全体の使用率で、100% はすべての論理コアが使用中であることを示します。",
     serverLoad: "システム負荷",
     logicalCPUs: "論理 CPU",
     load1: "1 分間の負荷",
     load5: "5 分間の負荷",
     load15: "15 分間の負荷",
-    loadHint: "Load Average を論理 CPU 数と比較してください。コア数を長時間上回る場合、処理待ちが発生している可能性があります。",
+    loadHint:
+      "Load Average を論理 CPU 数と比較してください。コア数を長時間上回る場合、処理待ちが発生している可能性があります。",
     serverMemoryStorage: "メモリとストレージ",
     memoryTotal: "物理メモリ",
     memoryAvailable: "利用可能メモリ",
@@ -1145,20 +1241,27 @@ export const ja: Messages = {
     day30Retention: "D30 継続率",
     retentionSample: "{returned} / {eligible} 人",
     announcementsTitle: "アプリ内のお知らせ",
-    announcementsSubtitle: "ログイン中の全ユーザーへ通知し、日本語・英語・中国語・フランス語を自動生成します。",
+    announcementsSubtitle:
+      "ログイン中の全ユーザーへ通知し、日本語・英語・中国語・フランス語を自動生成します。",
     announcementSourceLanguage: "原文の言語",
     announcementTitleLabel: "タイトル",
     announcementSummaryLabel: "概要",
     announcementHighlightsLabel: "要点",
     announcementHighlightsPlaceholder: "1 行に 1 項目、最大 8 件",
-    announcementTranslationNote: "公開時にサーバー側の LLM が他の言語へ翻訳し、原文は変更しません。",
-    announcementTranslationUnavailable: "お知らせ翻訳サービスが未設定のため、手動公開は利用できません。",
-    announcementTranslationFailed: "多言語翻訳に失敗したため公開されませんでした。後でもう一度お試しください。",
+    announcementTranslationNote:
+      "公開時にサーバー側の LLM が他の言語へ翻訳し、原文は変更しません。",
+    announcementTranslationUnavailable:
+      "お知らせ翻訳サービスが未設定のため、手動公開は利用できません。",
+    announcementTranslationFailed:
+      "多言語翻訳に失敗したため公開されませんでした。後でもう一度お試しください。",
     announcementPublish: "翻訳して公開",
     announcementPublishing: "翻訳中…",
-    announcementPublishSuccess: "公開しました。ユーザーが次回 Koinote を開いたときに表示されます。",
-    announcementPublishFailed: "お知らせを公開できませんでした。内容を確認して再試行してください。",
-    announcementContentInvalid: "タイトル、概要、または要点が文字数制限を超えています。内容を確認して再試行してください。",
+    announcementPublishSuccess:
+      "公開しました。ユーザーが次回 Koinote を開いたときに表示されます。",
+    announcementPublishFailed:
+      "お知らせを公開できませんでした。内容を確認して再試行してください。",
+    announcementContentInvalid:
+      "タイトル、概要、または要点が文字数制限を超えています。内容を確認して再試行してください。",
     announcementHighlightTooLong: "各要点は 500 文字以内で入力してください。",
     announcementHistory: "最近のお知らせ",
     announcementHistoryEmpty: "公開済みのお知らせはありません。",
@@ -1166,8 +1269,10 @@ export const ja: Messages = {
     announcementKindRelease: "バージョン",
     announcementKindManual: "手動のお知らせ",
     announcementWithdraw: "取り下げる",
-    announcementWithdrawConfirm: "このお知らせを取り下げますか？ユーザーには表示されなくなりますが、管理履歴には残ります。",
-    announcementWithdrawFailed: "お知らせを取り下げられませんでした。後でもう一度お試しください。",
+    announcementWithdrawConfirm:
+      "このお知らせを取り下げますか？ユーザーには表示されなくなりますが、管理履歴には残ります。",
+    announcementWithdrawFailed:
+      "お知らせを取り下げられませんでした。後でもう一度お試しください。",
     announcementWithdrawn: "取り下げ済み",
   },
   announcements: {
@@ -1176,12 +1281,14 @@ export const ja: Messages = {
     viewChangelog: "更新履歴を見る",
     acknowledge: "確認しました",
     close: "お知らせを閉じる",
-    markReadFailed: "既読状態を保存できませんでした。このお知らせを閉じて、後でもう一度お試しください。",
+    markReadFailed:
+      "既読状態を保存できませんでした。このお知らせを閉じて、後でもう一度お試しください。",
   },
   documentTemplates: {
     eyebrow: "構成から始める",
     title: "テンプレートから新規作成",
-    subtitle: "目的に合う構成を選び、自由に編集できます。テンプレートは通常の Markdown 文書としてコピーされます。",
+    subtitle:
+      "目的に合う構成を選び、自由に編集できます。テンプレートは通常の Markdown 文書としてコピーされます。",
     close: "テンプレート選択を閉じる",
     blankTitle: "空白の文書",
     blankDescription: "空白のページから独自の構成を作ります。",
@@ -1189,7 +1296,8 @@ export const ja: Messages = {
     memberBadge: "終身会員",
     upgradeHint: "終身会員へアップグレードして利用",
     localModeLocked: "終身会員アカウントでログインすると利用できます",
-    sourceNote: "GitHub で高評価かつ明確な許諾を持つ Markdown の構成を参考に、Koinote 用として書き直しています。",
+    sourceNote:
+      "GitHub で高評価かつ明確な許諾を持つ Markdown の構成を参考に、Koinote 用として書き直しています。",
     createFailed: "文書を作成できませんでした。もう一度お試しください。",
     categories: {
       everyday: "日常の仕事",
@@ -1199,21 +1307,77 @@ export const ja: Messages = {
       technical: "技術的な意思決定",
     },
     templates: {
-      "meeting-notes": { name: "会議メモ", description: "議論を決定事項、担当者、追跡可能なアクションへ整理します。" },
-      "daily-note": { name: "デイリーノート", description: "重点、観察、アイデア、振り返りを一か所に残します。" },
-      "weekly-review": { name: "週間計画と振り返り", description: "三つの成果を計画し、実践的な振り返りで週を閉じます。" },
-      "todo-list": { name: "ToDo リスト", description: "三つの優先事項、収集したタスク、場面別作業、委任、日次整理を管理します。" },
-      table: { name: "汎用テーブル", description: "項目と定義を決め、一覧、用途別ビュー、集計、変更履歴を整理します。" },
-      "daily-report": { name: "業務日報", description: "成果、指標、課題、連携事項、翌日の計画をチームへ共有します。" },
-      "weekly-report": { name: "業務週報", description: "今週の成果、指標差、リスク、学び、翌週の重要成果をまとめます。" },
-      okr: { name: "OKR 計画と振り返り", description: "戦略から Objective、測定可能な KR、確信度確認、採点までを一貫して管理します。" },
-      kpi: { name: "KPI 管理", description: "計算式、データ源、目標、ガードレール、警告値、改善アクションを明確にします。" },
-      "article-outline": { name: "記事企画", description: "読者、タイトル、フック、根拠、構成、行動喚起、公開前確認を整理します。" },
-      "project-readme": { name: "プロジェクト README", description: "価値、導入、使用法、構成、ロードマップ、貢献方法を文書化します。" },
-      "product-requirements": { name: "製品要件", description: "問題、範囲、ユーザーストーリー、受入条件、指標、公開方法を定義します。" },
-      "research-paper": { name: "論文読書ノート", description: "方法、根拠、限界、知識の接続、次の調査を記録します。" },
-      "decision-record": { name: "意思決定記録", description: "背景、選択肢、トレードオフ、結果、検証方法を残します。" },
-      "technical-design": { name: "技術設計", description: "インターフェース、データ、整合性、セキュリティ、容量、移行、テストを網羅します。" },
+      "meeting-notes": {
+        name: "会議メモ",
+        description:
+          "議論を決定事項、担当者、追跡可能なアクションへ整理します。",
+      },
+      "daily-note": {
+        name: "デイリーノート",
+        description: "重点、観察、アイデア、振り返りを一か所に残します。",
+      },
+      "weekly-review": {
+        name: "週間計画と振り返り",
+        description: "三つの成果を計画し、実践的な振り返りで週を閉じます。",
+      },
+      "todo-list": {
+        name: "ToDo リスト",
+        description:
+          "三つの優先事項、収集したタスク、場面別作業、委任、日次整理を管理します。",
+      },
+      table: {
+        name: "汎用テーブル",
+        description:
+          "項目と定義を決め、一覧、用途別ビュー、集計、変更履歴を整理します。",
+      },
+      "daily-report": {
+        name: "業務日報",
+        description:
+          "成果、指標、課題、連携事項、翌日の計画をチームへ共有します。",
+      },
+      "weekly-report": {
+        name: "業務週報",
+        description:
+          "今週の成果、指標差、リスク、学び、翌週の重要成果をまとめます。",
+      },
+      okr: {
+        name: "OKR 計画と振り返り",
+        description:
+          "戦略から Objective、測定可能な KR、確信度確認、採点までを一貫して管理します。",
+      },
+      kpi: {
+        name: "KPI 管理",
+        description:
+          "計算式、データ源、目標、ガードレール、警告値、改善アクションを明確にします。",
+      },
+      "article-outline": {
+        name: "記事企画",
+        description:
+          "読者、タイトル、フック、根拠、構成、行動喚起、公開前確認を整理します。",
+      },
+      "project-readme": {
+        name: "プロジェクト README",
+        description:
+          "価値、導入、使用法、構成、ロードマップ、貢献方法を文書化します。",
+      },
+      "product-requirements": {
+        name: "製品要件",
+        description:
+          "問題、範囲、ユーザーストーリー、受入条件、指標、公開方法を定義します。",
+      },
+      "research-paper": {
+        name: "論文読書ノート",
+        description: "方法、根拠、限界、知識の接続、次の調査を記録します。",
+      },
+      "decision-record": {
+        name: "意思決定記録",
+        description: "背景、選択肢、トレードオフ、結果、検証方法を残します。",
+      },
+      "technical-design": {
+        name: "技術設計",
+        description:
+          "インターフェース、データ、整合性、セキュリティ、容量、移行、テストを網羅します。",
+      },
     },
   },
   editor: {
@@ -1227,7 +1391,8 @@ export const ja: Messages = {
     saveBackupFailed: "バックアップできません。今すぐ本文をコピーしてください",
     retrySave: "再試行",
     remoteUpdated: "別のデバイスでの最新変更を反映しました",
-    remoteUpdateAvailable: "クラウドに新しい版があります。ローカル下書きは自動で上書きされません。",
+    remoteUpdateAvailable:
+      "クラウドに新しい版があります。ローカル下書きは自動で上書きされません。",
     reviewRemoteUpdate: "変更を確認",
     resolveConflict: "競合を解決",
     conflictTitle: "この文書は別の場所で変更されました",
@@ -1366,13 +1531,15 @@ export const ja: Messages = {
     wechatGeoLoading: "保存済みの要約を読み込み中…",
     wechatGeoGenerating: "生成中…",
     wechatGeoSaving: "保存中…",
-    wechatGeoLoadFailed: "保存済みの要約を読み込めませんでした。後でもう一度お試しください",
-    wechatGeoGenerateFailed: "要約を生成できませんでした。後でもう一度お試しください",
-    wechatGeoSaveFailed: "要約を保存できませんでした。後でもう一度お試しください",
+    wechatGeoLoadFailed:
+      "保存済みの要約を読み込めませんでした。後でもう一度お試しください",
+    wechatGeoGenerateFailed:
+      "要約を生成できませんでした。後でもう一度お試しください",
+    wechatGeoSaveFailed:
+      "要約を保存できませんでした。後でもう一度お試しください",
     wechatGeoStale:
       "記事の内容が変更されています。保存済みの要約をそのまま使うか、再生成できます。",
-    wechatGeoPlaceholder:
-      "AI 生成後に非表示要約を確認・編集できます。",
+    wechatGeoPlaceholder: "AI 生成後に非表示要約を確認・編集できます。",
     themeNone: "デフォルト書式",
     tabsLabel: "開いているドキュメント",
     closeTab: "タブを閉じる",
@@ -1390,11 +1557,14 @@ export const ja: Messages = {
     treeMenu: "ファイルツリーの操作",
     organizer: {
       button: "文書を整理",
-      rootOnly: "ルートと以前に自動整理された文書が対象です。手動作成・インポートしたフォルダとその中身は変更されません。",
+      rootOnly:
+        "ルートと以前に自動整理された文書が対象です。手動作成・インポートしたフォルダとその中身は変更されません。",
       smartTitle: "スマート整理",
-      smartDescription: "作成月で分類し、1 か月が 20 件を超えると週へ、週も多い場合は日付へ自動分割します。",
+      smartDescription:
+        "作成月で分類し、1 か月が 20 件を超えると週へ、週も多い場合は日付へ自動分割します。",
       activityTitle: "更新頻度で整理",
-      activityDescription: "最終更新からの期間で分類し、多いグループは月・週・日付へ細分化します。",
+      activityDescription:
+        "最終更新からの期間で分類し、多いグループは月・週・日付へ細分化します。",
       unknownDate: "日付不明",
       weekOfMonth: "第 {n} 週",
       activityRecent7: "最近 7 日",
@@ -1402,14 +1572,17 @@ export const ja: Messages = {
       activityRecent90: "31〜90 日",
       activityInactive: "91〜365 日",
       activityArchive: "1 年以上",
-      confirmSummary: "文書 {documents} 件を移動し、約 {folders} 個の自動整理フォルダを使用します。",
+      confirmSummary:
+        "文書 {documents} 件を移動し、約 {folders} 個の自動整理フォルダを使用します。",
       upToDate: "この方法では文書はすでに正しい場所にあり、再整理は不要です。",
       cancel: "キャンセル",
       apply: "整理を開始",
       organizing: "整理中…",
       success: "文書 {count} 件を整理しました",
-      partial: "{moved} 件を整理しました。{failed} 件は移動できなかったため、後で再試行できます。",
-      failed: "整理に失敗しました。ネットワークまたはローカルストレージを確認してください。",
+      partial:
+        "{moved} 件を整理しました。{failed} 件は移動できなかったため、後で再試行できます。",
+      failed:
+        "整理に失敗しました。ネットワークまたはローカルストレージを確認してください。",
     },
     wechatMathConverted: "{n} 個の数式を画像に変換しました",
     wechatMathFailed:
@@ -1491,10 +1664,13 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "デスクトップアプリ",
     title: "Koinote アプリを承認",
-    description: "文書と画像のオフラインコピーをこの端末に保存し、接続が戻ったときに変更を同期します。",
+    description:
+      "文書と画像のオフラインコピーをこの端末に保存し、接続が戻ったときに変更を同期します。",
     permissionsTitle: "承認すると、アプリは次の操作を行えます：",
-    permissionDocuments: "文書とフォルダーの閲覧・作成・整理・共有・ゴミ箱への移動",
-    permissionOffline: "文書、送信待ち画像、最大 512 MB の画像キャッシュをこの端末に保存",
+    permissionDocuments:
+      "文書とフォルダーの閲覧・作成・整理・共有・ゴミ箱への移動",
+    permissionOffline:
+      "文書、送信待ち画像、最大 512 MB の画像キャッシュをこの端末に保存",
     permissionIdentity: "ログイン中のアカウントを表示するための基本情報の取得",
     approve: "許可してアプリに戻る",
     cancel: "キャンセル",
@@ -1505,11 +1681,14 @@ function hello(name) {
   desktopLocalMode: {
     badge: "ローカルモード",
     title: "この端末だけで執筆",
-    description: "ログイン不要。文書と画像は端末内で暗号化され、アップロードや通信は行わず、リモート機能は利用できません。",
+    description:
+      "ログイン不要。文書と画像は端末内で暗号化され、アップロードや通信は行わず、リモート機能は利用できません。",
     setupTitle: "ローカルモードのパスワードを設定",
-    setupDescription: "このパスワードでローカルデータを暗号化・解除します。送信されず、紛失時の復旧もできません。",
+    setupDescription:
+      "このパスワードでローカルデータを暗号化・解除します。送信されず、紛失時の復旧もできません。",
     unlockTitle: "ローカルモードを解除",
-    unlockDescription: "この端末の文書にアクセスするにはパスワードを入力してください。",
+    unlockDescription:
+      "この端末の文書にアクセスするにはパスワードを入力してください。",
     password: "ローカルモードのパスワード",
     confirmPassword: "パスワードを確認",
     passwordHint: "8 文字以上。アプリを閉じると再入力が必要です。",
@@ -1520,70 +1699,92 @@ function hello(name) {
     useAccount: "Koinote アカウントを使う",
     enterLocalMode: "ローカルモードに切り替える",
     lock: "ローカルモードをロック",
-    encrypted: "文書、フォルダー名、画像は AES-GCM で暗号化してからローカル SQLite に保存されます。",
-    networkDisabled: "同期、更新確認、共有、決済、MCP など、すべてのリモート通信をブロックします。",
+    encrypted:
+      "文書、フォルダー名、画像は AES-GCM で暗号化してからローカル SQLite に保存されます。",
+    networkDisabled:
+      "同期、更新確認、共有、決済、MCP など、すべてのリモート通信をブロックします。",
     passwordMismatch: "パスワードが一致しません。",
     invalidPassword: "パスワードが正しくありません。",
-    genericError: "ローカルモードを利用できません。アプリを再起動して再試行してください。",
-    localSubtitle: "現在はローカルモードです。変更はこの端末だけに保存され、アカウントとは同期されません。",
+    genericError:
+      "ローカルモードを利用できません。アプリを再起動して再試行してください。",
+    localSubtitle:
+      "現在はローカルモードです。変更はこの端末だけに保存され、アカウントとは同期されません。",
     localStorageTitle: "完全なローカル保存",
-    localStorageDescription: "クラウドコピーや自動復旧はありません。マイドキュメントから定期的に ZIP を書き出してください。",
+    localStorageDescription:
+      "クラウドコピーや自動復旧はありません。マイドキュメントから定期的に ZIP を書き出してください。",
     trashRetention: "ローカルのゴミ箱にある文書は自動削除されません。",
     importTitle: "ローカルデータをインポート",
-    importDescription: "パスワード確認後、文書・フォルダー・参照画像をこのアカウントへコピーします。独立したスナップショットのため、その後の編集は別々です。",
+    importDescription:
+      "パスワード確認後、文書・フォルダー・参照画像をこのアカウントへコピーします。独立したスナップショットのため、その後の編集は別々です。",
     importButton: "確認してインポート",
     importing: "インポート中…",
-    importSuccess: "文書 {documents} 件、フォルダー {folders} 件、画像 {images} 件を読み込みました。通常の同期対象になります。",
+    importSuccess:
+      "文書 {documents} 件、フォルダー {folders} 件、画像 {images} 件を読み込みました。通常の同期対象になります。",
     importEmpty: "ローカルモードにはまだインポートできる文書がありません。",
     importPassword: "ローカルモードのパスワードを入力",
-    importWarning: "再度インポートすると別の独立コピーが作成され、以前のコピーは上書きされません。",
+    importWarning:
+      "再度インポートすると別の独立コピーが作成され、以前のコピーは上書きされません。",
   },
   desktopBilling: {
     successTitle: "支払いが完了しました",
     cancelledTitle: "支払いをキャンセルしました",
-    description: "Koinote アプリに戻ります。アプリが購入を安全に確認し、対応する特典を更新します。",
+    description:
+      "Koinote アプリに戻ります。アプリが購入を安全に確認し、対応する特典を更新します。",
     openApp: "Koinote アプリを開く",
-    invalid: "決済の戻り先リンクが無効です。アプリに戻ってもう一度お試しください。",
+    invalid:
+      "決済の戻り先リンクが無効です。アプリに戻ってもう一度お試しください。",
     dismiss: "支払い状況を閉じる",
   },
   desktopHome: {
     eyebrow: "デスクトップワークスペース",
     welcome: "おかえりなさい、{name} さん",
-    subtitle: "前回の続きから始められます。変更はまずこの端末に保存され、オンライン時に自動同期されます。",
+    subtitle:
+      "前回の続きから始められます。変更はまずこの端末に保存され、オンライン時に自動同期されます。",
     newDocument: "新規ドキュメント",
     importDocuments: "Markdown をインポート",
-    createFailed: "ドキュメントを作成できませんでした。もう一度お試しください。",
-    loadFailed: "ローカル文書を読み込めませんでした。アプリを再起動して再試行してください。",
+    createFailed:
+      "ドキュメントを作成できませんでした。もう一度お試しください。",
+    loadFailed:
+      "ローカル文書を読み込めませんでした。アプリを再起動して再試行してください。",
     continueTitle: "編集を続ける",
     recentTitle: "最近のドキュメント",
     allDocuments: "すべて表示",
     updated: "{date} に更新",
     emptyTitle: "最初のドキュメントを作成",
-    emptyDescription: "空のドキュメントを作成するか、マイドキュメントから Markdown ファイルや ZIP アーカイブを読み込めます。",
+    emptyDescription:
+      "空のドキュメントを作成するか、マイドキュメントから Markdown ファイルや ZIP アーカイブを読み込めます。",
     syncTitle: "同期状態",
-    syncDescription: "オンライン時にローカルの変更を自動同期します。競合した場合は残すバージョンを選べます。",
+    syncDescription:
+      "オンライン時にローカルの変更を自動同期します。競合した場合は残すバージョンを選べます。",
     offlineTitle: "オフライン作業の準備完了",
-    offlineDescription: "文書と画像はこの端末に保存されます。オフラインでも画像を貼り付けて編集でき、接続後に自動でアップロードして画像 URL を置き換えます。",
+    offlineDescription:
+      "文書と画像はこの端末に保存されます。オフラインでも画像を貼り付けて編集でき、接続後に自動でアップロードして画像 URL を置き換えます。",
     documentCount: "ローカルで利用可能な文書：{count} 件",
-    imageCacheUsage: "ローカル画像 {total}、ホスト画像キャッシュ {cached} / {limit}、送信待ち {pending}",
+    imageCacheUsage:
+      "ローカル画像 {total}、ホスト画像キャッシュ {cached} / {limit}、送信待ち {pending}",
     clearImageCache: "ホスト画像キャッシュを消去",
     clearingImageCache: "消去中…",
-    imageCacheCleared: "画像キャッシュを消去しました。文書を開くと必要な画像が再びキャッシュされます。",
-    imageMaintenanceDelayed: "画像のバックグラウンド整理が遅れています。文書は同期済みで、アプリが自動的に再試行します。",
+    imageCacheCleared:
+      "画像キャッシュを消去しました。文書を開くと必要な画像が再びキャッシュされます。",
+    imageMaintenanceDelayed:
+      "画像のバックグラウンド整理が遅れています。文書は同期済みで、アプリが自動的に再試行します。",
   },
   desktopUpdate: {
     check: "アップデートを確認",
     checking: "アップデートを確認中",
     checkingDescription: "GitHub Releases から最新バージョンを確認しています。",
     availableTitle: "新しいバージョンがあります",
-    availableDescription: "Koinote {next} を利用できます。現在のバージョンは {current} です。",
+    availableDescription:
+      "Koinote {next} を利用できます。現在のバージョンは {current} です。",
     downloadAndRestart: "ダウンロードして再起動",
     downloading: "アップデートをダウンロードしてインストール中",
     currentTitle: "最新バージョンです",
     currentDescription: "このクライアントはすでに最新です。",
     failedTitle: "更新に失敗しました",
-    failedDescription: "更新サービスに接続できません。ネットワークを確認して再試行してください。",
-    saveFailedDescription: "現在の編集内容を安全に保存できなかったため、更新を中止しました。内容をコピーしてから再試行してください。",
+    failedDescription:
+      "更新サービスに接続できません。ネットワークを確認して再試行してください。",
+    saveFailedDescription:
+      "現在の編集内容を安全に保存できなかったため、更新を中止しました。内容をコピーしてから再試行してください。",
     retry: "再試行",
     later: "後で",
     close: "閉じる",
@@ -1596,12 +1797,15 @@ function hello(name) {
     error: "同期に失敗しました。クリックして再試行",
     conflicts: "件の競合を確認してください",
     conflictsTitle: "同期競合を解決",
-    conflictsDescription: "ローカルとクラウドの両方で変更されています。残す版を選んでください。自動で上書きはしません。",
+    conflictsDescription:
+      "ローカルとクラウドの両方で変更されています。残す版を選んでください。自動で上書きはしません。",
     keepLocal: "ローカル版を残す",
     useCloud: "クラウド版を使う",
     close: "後で解決",
-    logoutWarning: "この端末には未同期の変更が {pending} 件あり、そのうち {conflicts} 件は競合しています。続行するとローカル内容は完全に削除されます。それでもログアウトしますか？",
-    logoutSaveFailed: "現在の編集内容をローカルに保存できなかったため、ログアウトを中止しました。再試行するか、本文をコピーしてからログアウトしてください。",
+    logoutWarning:
+      "この端末には未同期の変更が {pending} 件あり、そのうち {conflicts} 件は競合しています。続行するとローカル内容は完全に削除されます。それでもログアウトしますか？",
+    logoutSaveFailed:
+      "現在の編集内容をローカルに保存できなかったため、ログアウトを中止しました。再試行するか、本文をコピーしてからログアウトしてください。",
   },
   footer: {
     tagline:
@@ -1750,6 +1954,7 @@ function hello(name) {
             "ソーシャルログインを使う場合、Google または GitHub から返される基本プロフィール（メールアドレス、ユーザー名、アバター）",
             "作成したコンテンツ：ドキュメントのタイトルと本文、フォルダ構成、アップロードした画像",
             "共有設定：共有トークン、ハッシュ化されたアクセスパスワード",
+            "ユーザーフィードバック：フィードバック本文、送信元ページ、クライアント情報",
             "運用ログ：障害調査と不正利用対策に必要な範囲でのリクエスト時刻、IP、User-Agent",
             "自社プロダクト指標：登録、最初の文書、初回画像アップロード、初回エクスポート、初回 MCP 呼び出し、決済の完了時刻、アカウントごとに1日最大1件のアクティブ日、共有ページの累計閲覧数",
           ],
@@ -1795,6 +2000,7 @@ function hello(name) {
             "ドキュメントはまず 30 日間ゴミ箱に入り、その間は本文、履歴、画像、使用容量が保持されます。完全削除または期限切れ後、他で参照されていない画像がバックグラウンド削除の対象になります。",
             "ダッシュボードで現在のメールアドレスを入力し再確認すると、アカウント全体を直ちに削除できます。アカウント、文書、履歴、共有、MCP トークン、画像台帳は削除され、関連画像はオブジェクトストレージから非同期で削除されます。この操作は取り消せません。",
             "税務、紛争、不正防止に必要な最小限の Stripe 決済記録はアカウントとの関連を解除して法令に従い保持します。バックアップ内の削除済みデータは保持期間とともに失効し、削除済みアカウントの復元には使用しません。",
+            "送信したフィードバック本文、送信元ページ、クライアント情報はアカウントとの関連を解除した後も、問題調査と製品改善のため保持します。入力した個人情報が内容に残る場合があります。",
             "ログインできない場合やその他の法的権利を行使する場合は、下記の連絡先へご連絡ください。",
           ],
         },
@@ -1875,6 +2081,14 @@ function hello(name) {
   },
   errors: {
     bad_request: "リクエストの形式が正しくありません",
+    feedback_category_invalid: "不具合または使用感を選択してください。",
+    feedback_message_required: "フィードバック内容を入力してください。",
+    feedback_message_invalid:
+      "フィードバックに使用できない文字が含まれています。削除して再試行してください。",
+    feedback_message_too_long:
+      "フィードバックは 4,000 文字以内で入力してください。",
+    feedback_page_invalid:
+      "現在のページ情報が無効です。再読み込みしてお試しください。",
     missing_fields: "ユーザー名、メール、パスワードはすべて必須です",
     invalid_email: "メールアドレスの形式が正しくありません",
     invalid_invitation_code:
@@ -1914,15 +2128,23 @@ function hello(name) {
     title_too_long: "タイトルが長すぎます",
     content_too_large: "ドキュメントが大きすぎて保存できません",
     pdf_path_must_be_absolute: "PDF の有効な保存先を選択してください",
-    pdf_path_must_end_with_pdf: "PDF のファイル名は .pdf で終わる必要があります",
-    pdf_parent_directory_missing: "選択したフォルダが存在しません。別の保存先を選択してください",
-    pdf_path_invalid_unicode: "保存先に使用できない文字が含まれています。名前または保存先を変更してください",
-    pdf_output_too_large: "書き出した PDF が 512 MB を超えました。大きな画像を減らして再試行してください",
+    pdf_path_must_end_with_pdf:
+      "PDF のファイル名は .pdf で終わる必要があります",
+    pdf_parent_directory_missing:
+      "選択したフォルダが存在しません。別の保存先を選択してください",
+    pdf_path_invalid_unicode:
+      "保存先に使用できない文字が含まれています。名前または保存先を変更してください",
+    pdf_output_too_large:
+      "書き出した PDF が 512 MB を超えました。大きな画像を減らして再試行してください",
     pdf_output_invalid: "生成された PDF が不完全です。もう一度お試しください",
-    pdf_export_timed_out: "PDF の書き出しがタイムアウトしました。文書または画像を減らして再試行してください",
-    pdf_export_window_missing: "文書ウィンドウを使用できません。文書を開き直して再試行してください",
-    pdf_export_channel_closed: "PDF の書き出しが予期せず中断されました。再試行してください",
-    pdf_export_unsupported_platform: "このシステムではワンクリック PDF 書き出しを利用できません",
+    pdf_export_timed_out:
+      "PDF の書き出しがタイムアウトしました。文書または画像を減らして再試行してください",
+    pdf_export_window_missing:
+      "文書ウィンドウを使用できません。文書を開き直して再試行してください",
+    pdf_export_channel_closed:
+      "PDF の書き出しが予期せず中断されました。再試行してください",
+    pdf_export_unsupported_platform:
+      "このシステムではワンクリック PDF 書き出しを利用できません",
     image_fetch_rejected: "この画像アドレスは取得できません",
     image_fetch_failed: "元サイトからこの画像を取得できませんでした",
     too_deep: "フォルダの階層が深すぎるため、これ以上作成できません",
@@ -1955,23 +2177,33 @@ function hello(name) {
     desktop_share_cache_failed:
       "共有はオンラインで有効になりましたが、ローカル状態を保存できませんでした。後でもう一度共有設定を適用してください",
     too_many_requests: "試行回数が多すぎます — しばらくしてからお試しください",
-    insufficient_credits: "Credits が不足しています。購入するか、自分の LLM チャネルを使用してください",
+    insufficient_credits:
+      "Credits が不足しています。購入するか、自分の LLM チャネルを使用してください",
     agent_llm_not_configured: "内蔵 AI モデルが設定されていません",
-    agent_invalid_response: "モデルが無効なレビューを返しました。再度レビューしてください",
-    agent_provider_error: "モデルプロバイダがリクエストを拒否しました。モデルと API Key を確認してください",
-    agent_provider_unavailable: "モデルプロバイダは一時的に利用できません。後でもう一度お試しください",
-    agent_review_stale: "文書が変更されました。新しいレビューを開始してください",
+    agent_invalid_response:
+      "モデルが無効なレビューを返しました。再度レビューしてください",
+    agent_provider_error:
+      "モデルプロバイダがリクエストを拒否しました。モデルと API Key を確認してください",
+    agent_provider_unavailable:
+      "モデルプロバイダは一時的に利用できません。後でもう一度お試しください",
+    agent_review_stale:
+      "文書が変更されました。新しいレビューを開始してください",
     agent_review_closed: "このレビューはすでに終了しています",
-    agent_review_in_progress: "別のレビューが進行中です。しばらくお待ちください",
-    invalid_agent_review_source: "文書または元のレビューが変更されています。先に標準レビューをやり直してください",
+    agent_review_in_progress:
+      "別のレビューが進行中です。しばらくお待ちください",
+    invalid_agent_review_source:
+      "文書または元のレビューが変更されています。先に標準レビューをやり直してください",
     invalid_agent_provider: "AI モデルプロバイダが無効です",
     invalid_llm_channel_name: "チャネル名が無効です",
-    invalid_llm_channel_url: "チャネルの Base URL が無効または安全ではありません",
+    invalid_llm_channel_url:
+      "チャネルの Base URL が無効または安全ではありません",
     invalid_llm_channel_model: "モデル名が無効です",
     invalid_llm_channel_api_key: "API Key が無効です",
     llm_channel_not_found: "LLM チャネルが見つかりません",
-    llm_channel_limit_reached: "LLM チャネル数が上限に達しました。先に削除してください",
+    llm_channel_limit_reached:
+      "LLM チャネル数が上限に達しました。先に削除してください",
     llm_channel_name_exists: "同じ名前のチャネルがすでにあります",
-    credit_billing_not_configured: "この環境では credits の購入が設定されていません",
+    credit_billing_not_configured:
+      "この環境では credits の購入が設定されていません",
   },
 };

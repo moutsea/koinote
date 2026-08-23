@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
@@ -14,6 +14,7 @@ import {
   HardDrive,
   Image,
   MemoryStick,
+  MessageSquareText,
   MousePointerClick,
   RefreshCw,
   Server,
@@ -26,6 +27,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import {
+  getAdminFeedback,
   getAdminServerStatus,
   getAdminStats,
   type AdminServerStatus,
@@ -34,6 +36,7 @@ import {
 import { useSession } from "../auth";
 import { PaperCard } from "../components/Ink";
 import { AnnouncementAdminPanel } from "../components/AnnouncementAdminPanel";
+import { FeedbackAdminPanel } from "../components/FeedbackAdminPanel";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { formatBytes } from "../storage";
@@ -51,7 +54,8 @@ type AdminTab =
   | "revenue"
   | "users"
   | "server"
-  | "announcements";
+  | "announcements"
+  | "feedback";
 
 export function AdminPage() {
   const session = useSession();
@@ -79,7 +83,21 @@ export function AdminPage() {
     },
     retry: false,
   });
-  const refreshQuery = activeTab === "server" ? serverStatus : stats;
+  const feedback = useInfiniteQuery({
+    queryKey: ["admin-feedback"],
+    queryFn: ({ pageParam }) => getAdminFeedback(pageParam),
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: Boolean(user?.isAdmin && activeTab === "feedback"),
+    staleTime: 15_000,
+    retry: false,
+  });
+  const refreshQuery =
+    activeTab === "server"
+      ? serverStatus
+      : activeTab === "feedback"
+        ? feedback
+        : stats;
 
   if (session.isLoading) {
     return <CenteredMessage>{t.admin.loading}</CenteredMessage>;
@@ -136,7 +154,10 @@ export function AdminPage() {
             disabled={refreshQuery.isFetching}
             onClick={() => void refreshQuery.refetch()}
             className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
-            style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            style={{
+              borderColor: "var(--ink-line)",
+              color: "var(--ink-strong)",
+            }}
           >
             <RefreshCw
               className={`h-4 w-4 ${refreshQuery.isFetching ? "animate-spin" : ""}`}
@@ -156,6 +177,16 @@ export function AdminPage() {
       >
         {activeTab === "announcements" ? (
           <AnnouncementAdminPanel />
+        ) : activeTab === "feedback" ? (
+          <FeedbackAdminPanel
+            items={feedback.data?.pages.flatMap((page) => page.feedback)}
+            isLoading={feedback.isLoading}
+            isError={feedback.isError}
+            isLoadingMore={feedback.isFetchingNextPage}
+            hasMore={feedback.hasNextPage}
+            onLoadMore={() => void feedback.fetchNextPage()}
+            locale={locale}
+          />
         ) : activeTab === "server" ? (
           <ServerMonitorPanel
             status={serverStatus.data}
@@ -176,7 +207,11 @@ export function AdminPage() {
             </p>
           </PaperCard>
         ) : (
-          <AdminContent stats={stats.data} locale={locale} activeTab={activeTab} />
+          <AdminContent
+            stats={stats.data}
+            locale={locale}
+            activeTab={activeTab}
+          />
         )}
       </div>
     </PageContainer>
@@ -197,7 +232,12 @@ function AdminTabs({
     { id: "revenue", label: t.admin.tabRevenue, icon: <Coins /> },
     { id: "users", label: t.admin.tabUsers, icon: <Users /> },
     { id: "server", label: t.admin.tabServer, icon: <Server /> },
-    { id: "announcements", label: t.admin.tabAnnouncements, icon: <BellRing /> },
+    {
+      id: "announcements",
+      label: t.admin.tabAnnouncements,
+      icon: <BellRing />,
+    },
+    { id: "feedback", label: t.admin.tabFeedback, icon: <MessageSquareText /> },
   ] satisfies Array<{ id: AdminTab; label: string; icon: ReactNode }>;
 
   return (
@@ -205,7 +245,11 @@ function AdminTabs({
       className="mt-8 overflow-x-auto rounded-xl border p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}
     >
-      <div role="tablist" aria-label={t.admin.title} className="flex min-w-max gap-1">
+      <div
+        role="tablist"
+        aria-label={t.admin.title}
+        className="flex min-w-max gap-1"
+      >
         {tabs.map((tab, index) => {
           const active = tab.id === activeTab;
           return (
@@ -220,8 +264,10 @@ function AdminTabs({
               onClick={() => onChange(tab.id)}
               onKeyDown={(event) => {
                 let nextIndex = index;
-                if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-                else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+                if (event.key === "ArrowRight")
+                  nextIndex = (index + 1) % tabs.length;
+                else if (event.key === "ArrowLeft")
+                  nextIndex = (index - 1 + tabs.length) % tabs.length;
                 else if (event.key === "Home") nextIndex = 0;
                 else if (event.key === "End") nextIndex = tabs.length - 1;
                 else return;
@@ -229,7 +275,8 @@ function AdminTabs({
                 const nextTab = tabs[nextIndex];
                 if (!nextTab) return;
                 onChange(nextTab.id);
-                const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                const buttons =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
                   '[role="tab"]',
                 );
                 buttons?.[nextIndex]?.focus();
@@ -243,7 +290,9 @@ function AdminTabs({
             >
               <span
                 className="[&>svg]:h-4 [&>svg]:w-4"
-                style={{ color: active ? "var(--cinnabar)" : "var(--ink-faint)" }}
+                style={{
+                  color: active ? "var(--cinnabar)" : "var(--ink-faint)",
+                }}
               >
                 {tab.icon}
               </span>
@@ -263,7 +312,7 @@ function AdminContent({
 }: {
   stats: AdminStats;
   locale: Locale;
-  activeTab: Exclude<AdminTab, "announcements" | "server">;
+  activeTab: Exclude<AdminTab, "announcements" | "server" | "feedback">;
 }) {
   const { t } = useI18n();
   const totalStorage = stats.overview.documentBytes + stats.overview.imageBytes;
@@ -679,10 +728,7 @@ function ServerMonitorPanel({
             label={t.admin.diskAvailable}
             value={
               status.disk.available
-                ? formatBytes(
-                    status.disk.availableBytes,
-                    DATE_LOCALE[locale],
-                  )
+                ? formatBytes(status.disk.availableBytes, DATE_LOCALE[locale])
                 : t.admin.notAvailable
             }
           />

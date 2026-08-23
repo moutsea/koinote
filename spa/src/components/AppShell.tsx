@@ -25,6 +25,7 @@ import {
   Laptop,
   LogOut,
   LockKeyhole,
+  MessageSquareText,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -80,12 +81,14 @@ import {
   useDesktopMenuActions,
 } from "../desktop/menu";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { FeedbackDialog } from "./FeedbackDialog";
 import {
   detectEditorShortcutPlatform,
   isKeyboardShortcutsShortcut,
   keyboardShortcutsOpenAfterShortcut,
 } from "./editor/editorShortcuts";
 import { isModalOpen, isOnlyModalOpen } from "../modalStack";
+import { feedbackPagePath } from "../feedback";
 
 const DesktopSyncStatus = lazy(() =>
   import("./DesktopSyncStatus").then((module) => ({
@@ -105,9 +108,9 @@ export function AppShell() {
   const desktopMenuAuthenticated = Boolean(user);
   const desktopMenuHistoryAvailable = user?.membershipTier === "lifetime";
   const desktopRuntime = isDesktopRuntime();
-  const localMode = desktopRuntime && (
-    Boolean(user?.isLocalMode) || isDesktopLocalModeSelected()
-  );
+  const localMode =
+    desktopRuntime &&
+    (Boolean(user?.isLocalMode) || isDesktopLocalModeSelected());
   const logout = useLogout();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -119,10 +122,15 @@ export function AppShell() {
       desktopRuntime ? getLatestDesktopBillingEvent() : null,
     );
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const closeKeyboardShortcuts = useCallback(
     () => setKeyboardShortcutsOpen(false),
     [],
   );
+
+  useEffect(() => {
+    if (!user || localMode) setFeedbackOpen(false);
+  }, [localMode, user?.authUserId]);
 
   useDesktopMenuActions((action) => {
     if (action === "open-documentation") {
@@ -215,9 +223,7 @@ export function AppShell() {
       lockRootScroll,
     );
     return () => {
-      document.documentElement.classList.remove(
-        EDITOR_ROOT_SCROLL_LOCK_CLASS,
-      );
+      document.documentElement.classList.remove(EDITOR_ROOT_SCROLL_LOCK_CLASS);
     };
   }, [lockRootScroll]);
 
@@ -370,7 +376,10 @@ export function AppShell() {
               </>
             ) : (
               <>
-                <a href={DESKTOP_DOWNLOAD_URL} className="kn-ink-link transition">
+                <a
+                  href={DESKTOP_DOWNLOAD_URL}
+                  className="kn-ink-link transition"
+                >
                   {t.nav.download}
                 </a>
                 <HeaderDocsMenu
@@ -436,6 +445,7 @@ export function AppShell() {
                 onLogout={() => handleLogout()}
                 onSwitchLocal={() => handleLogout(true)}
                 onUseAccount={handleUseAccount}
+                onShowFeedback={() => setFeedbackOpen(true)}
                 onShowKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
               />
             ) : (
@@ -457,10 +467,24 @@ export function AppShell() {
       <main className="flex min-h-0 flex-1 flex-col">
         {localModeRouteBlocked ? (
           <div className="flex flex-1 items-center justify-center px-4 py-16">
-            <div className="w-full max-w-lg rounded-2xl border p-7 text-center" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
-              <CloudOff className="mx-auto h-8 w-8" style={{ color: "var(--ink-mid)" }} />
-              <h1 className="kn-heading-cn mt-4 text-xl font-semibold">{t.desktopLocalMode.badge}</h1>
-              <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+            <div
+              className="w-full max-w-lg rounded-2xl border p-7 text-center"
+              style={{
+                borderColor: "var(--ink-line)",
+                background: "var(--ink-paper-soft)",
+              }}
+            >
+              <CloudOff
+                className="mx-auto h-8 w-8"
+                style={{ color: "var(--ink-mid)" }}
+              />
+              <h1 className="kn-heading-cn mt-4 text-xl font-semibold">
+                {t.desktopLocalMode.badge}
+              </h1>
+              <p
+                className="mt-3 text-sm leading-6"
+                style={{ color: "var(--ink-mid)" }}
+              >
                 {t.desktopLocalMode.networkDisabled}
               </p>
               <button
@@ -485,6 +509,12 @@ export function AppShell() {
       <QuotaDialog />
       {keyboardShortcutsOpen && (
         <KeyboardShortcutsDialog onClose={closeKeyboardShortcuts} />
+      )}
+      {user && !localMode && feedbackOpen && (
+        <FeedbackDialog
+          pagePath={feedbackPagePath(pathname)}
+          onClose={() => setFeedbackOpen(false)}
+        />
       )}
       {user && !localMode && <AnnouncementDialog />}
       {user?.membershipTier === "lifetime" && !localMode && (
@@ -565,6 +595,7 @@ function UserMenu({
   onLogout,
   onSwitchLocal,
   onUseAccount,
+  onShowFeedback,
   onShowKeyboardShortcuts,
 }: {
   name: string;
@@ -584,6 +615,7 @@ function UserMenu({
   onLogout: () => void | Promise<void>;
   onSwitchLocal: () => void | Promise<void>;
   onUseAccount: () => void | Promise<void>;
+  onShowFeedback: () => void;
   onShowKeyboardShortcuts: () => void;
 }) {
   const { t, locale } = useI18n();
@@ -653,7 +685,10 @@ function UserMenu({
             style={{ borderColor: "var(--ink-line)" }}
           >
             {localMode ? (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--ink-wash-strong)" }}>
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "var(--ink-wash-strong)" }}
+              >
                 <CloudOff className="h-4 w-4" />
               </span>
             ) : (
@@ -680,7 +715,8 @@ function UserMenu({
             </div>
           </div>
 
-          {!localMode && <div
+          {!localMode && (
+            <div
             className="border-b px-3 py-3"
             style={{ borderColor: "var(--ink-line)" }}
           >
@@ -706,11 +742,17 @@ function UserMenu({
             </div>
 
             {storage.isPending ? (
-              <p className="mt-2 text-xs" style={{ color: "var(--ink-faint)" }}>
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: "var(--ink-faint)" }}
+                >
                 {t.storage.loading}
               </p>
             ) : storage.isError || !storage.data ? (
-              <p className="mt-2 text-xs" style={{ color: "var(--ink-faint)" }}>
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: "var(--ink-faint)" }}
+                >
                 {t.storage.loadFailed}
               </p>
             ) : (
@@ -722,7 +764,8 @@ function UserMenu({
                 usedOf={t.storage.usedOf}
               />
             )}
-          </div>}
+            </div>
+          )}
 
           {!localMode && membershipActive && (
             <Link
@@ -731,33 +774,46 @@ function UserMenu({
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex items-center justify-between gap-3 border-b px-3 py-3 text-sm transition hover:bg-[var(--ink-wash-strong)]"
-              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+              style={{
+                borderColor: "var(--ink-line)",
+                color: "var(--ink-strong)",
+              }}
             >
               <span className="flex items-center gap-2 font-medium">
-                <Coins className="h-4 w-4 shrink-0" style={{ color: "var(--ink-mid)" }} />
+                <Coins
+                  className="h-4 w-4 shrink-0"
+                  style={{ color: "var(--ink-mid)" }}
+                />
                 {t.agentCredits.title}
               </span>
-              <span className="flex flex-col items-end text-xs tabular-nums" style={{ color: "var(--ink-faint)" }}>
-                {credits.isPending
-                  ? t.agentCredits.loading
-                  : credits.data?.credits
-                    ? (
+              <span
+                className="flex flex-col items-end text-xs tabular-nums"
+                style={{ color: "var(--ink-faint)" }}
+              >
+                {credits.isPending ? (
+                  t.agentCredits.loading
+                ) : credits.data?.credits ? (
                         <>
                           <span>
                             {interpolate(t.agentCredits.available, {
-                              count: credits.data.credits.available.toLocaleString(locale),
+                        count:
+                          credits.data.credits.available.toLocaleString(locale),
                             })}
                           </span>
                           {credits.data.credits.reserved > 0 && (
                             <span className="mt-0.5">
                               {interpolate(t.agentCredits.estimatedCharge, {
-                                count: credits.data.credits.reserved.toLocaleString(locale),
+                          count:
+                            credits.data.credits.reserved.toLocaleString(
+                              locale,
+                            ),
                               })}
                             </span>
                           )}
                         </>
-                      )
-                    : t.agentCredits.loadFailed}
+                ) : (
+                  t.agentCredits.loadFailed
+                )}
               </span>
             </Link>
           )}
@@ -778,33 +834,41 @@ function UserMenu({
             </Link>
           )}
 
-          {!localMode && <Link
+          {!localMode && (
+            <Link
             to="/dashboard"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
             style={{
-              color: dashboardActive ? "var(--cinnabar)" : "var(--ink-strong)",
+                color: dashboardActive
+                  ? "var(--cinnabar)"
+                  : "var(--ink-strong)",
               fontWeight: dashboardActive ? 500 : undefined,
             }}
           >
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             {t.nav.dashboard}
-          </Link>}
+            </Link>
+          )}
 
-          {!localMode && <Link
+          {!localMode && (
+            <Link
             to="/ai-settings"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
             style={{
-              color: aiSettingsActive ? "var(--cinnabar)" : "var(--ink-strong)",
+                color: aiSettingsActive
+                  ? "var(--cinnabar)"
+                  : "var(--ink-strong)",
               fontWeight: aiSettingsActive ? 500 : undefined,
             }}
           >
             <Bot className="h-4 w-4 shrink-0" />
             {t.nav.aiSettings}
-          </Link>}
+            </Link>
+          )}
 
           <Link
             to="/documents"
@@ -834,7 +898,8 @@ function UserMenu({
             {t.nav.trash}
           </Link>
 
-          {!localMode && <Link
+          {!localMode && (
+            <Link
             to="/invitations"
             role="menuitem"
             onClick={() => setOpen(false)}
@@ -848,7 +913,8 @@ function UserMenu({
           >
             <Gift className="h-4 w-4 shrink-0" />
             {t.nav.invitations}
-          </Link>}
+            </Link>
+          )}
 
           {!localMode && isAdmin && (
             <Link
@@ -914,6 +980,22 @@ function UserMenu({
             </button>
           )}
 
+          {!localMode && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onShowFeedback();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ color: "var(--ink-strong)" }}
+            >
+              <MessageSquareText className="h-4 w-4 shrink-0" />
+              {t.feedback.menuLabel}
+            </button>
+          )}
+
           <button
             type="button"
             role="menuitem"
@@ -943,7 +1025,11 @@ function UserMenu({
             className="flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
             style={{ color: "var(--ink-strong)" }}
           >
-            {localMode ? <LockKeyhole className="h-4 w-4 shrink-0" /> : <LogOut className="h-4 w-4 shrink-0" />}
+            {localMode ? (
+              <LockKeyhole className="h-4 w-4 shrink-0" />
+            ) : (
+              <LogOut className="h-4 w-4 shrink-0" />
+            )}
             {localMode ? t.desktopLocalMode.lock : t.nav.logout}
           </button>
         </div>
@@ -1198,11 +1284,7 @@ function HeaderDocsMenuItem({
   icon,
   children,
 }: {
-  to:
-    | "/docs"
-    | "/docs/ai-optimization"
-    | "/docs/mcp"
-    | "/docs/version-history";
+  to: "/docs" | "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history";
   onSelect: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;

@@ -4,7 +4,7 @@ export const zh: Messages = {
   nav: {
     editor: "编辑器",
     download: "下载客户端",
-    pricing: "价格",
+    pricing: "升级",
     docs: "文档",
     docsHome: "文档中心",
     aiGuide: "AI 优化",
@@ -112,9 +112,12 @@ export const zh: Messages = {
     loadFailed: "价格读取失败，请稍后重试。",
     unavailable: "当前部署尚未配置在线支付。",
     creditsTitle: "AI Credits",
-    creditsDescription: "使用内置模型进行 AI 优化时消耗 credits；使用自己的 LLM 渠道不会消耗 credits。",
-    creditsMembersOnly: "Credits 仅供终生会员购买和使用；可先在上方开通终生会员。",
-    creditsNote: "购买完成后 credits 会自动计入账号，并可在 AI 设置中查看余额与记录。",
+    creditsDescription:
+      "使用内置模型进行 AI 优化时消耗 credits；使用自己的 LLM 渠道不会消耗 credits。",
+    creditsMembersOnly:
+      "Credits 仅供终生会员购买和使用；可先在上方开通终生会员。",
+    creditsNote:
+      "购买完成后 credits 会自动计入账号，并可在 AI 设置中查看余额与记录。",
     buyCredits: "购买",
     faqTitle: "常见问题",
     faqs: [
@@ -307,34 +310,45 @@ export const zh: Messages = {
     caseChangesTitle: "具体结构建议：直接对照 Markdown 改动",
     caseChanges: [
       {
-        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        reason: "这是全文正式宣布 1.0 上线的核心节点，改为二级标题后，读者可以一眼定位发布公告的起点。",
+        before:
+          "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after:
+          "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason:
+          "这是全文正式宣布 1.0 上线的核心节点，改为二级标题后，读者可以一眼定位发布公告的起点。",
       },
       {
         before: "并且完整的代码库也都开源了：",
         after: "### 并且完整的代码库也都开源了：",
-        reason: "开源代码库是发布公告下的子话题，三级标题能把它归入 1.0 上线模块，同时形成清楚的父子层级。",
+        reason:
+          "开源代码库是发布公告下的子话题，三级标题能把它归入 1.0 上线模块，同时形成清楚的父子层级。",
       },
       {
         before: "欢迎各位大佬多提 issue 和 PR。",
         after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
-        reason: "这一段结束开源邀请，下一段转入开发成本复盘；中间加入分隔线可以明确话题切换，避免两个模块粘在一起。",
+        reason:
+          "这一段结束开源邀请，下一段转入开发成本复盘；中间加入分隔线可以明确话题切换，避免两个模块粘在一起。",
       },
       {
         before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        reason: "这里从产品现状转向后续计划和 AI 方向，改为二级标题能把文章的结尾规划与前文介绍分开。",
+        after:
+          "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason:
+          "这里从产品现状转向后续计划和 AI 方向，改为二级标题能把文章的结尾规划与前文介绍分开。",
       },
       {
         before: "关于 AI 这块，不知道大家都有哪些点子呢？",
         after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
-        reason: "这是全文互动性最强的提问。改为引用强调后，它不容易被快速阅读的读者跳过，也更能引导留言。",
+        reason:
+          "这是全文互动性最强的提问。改为引用强调后，它不容易被快速阅读的读者跳过，也更能引导留言。",
       },
       {
-        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
-        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
-        reason: "这是文章最后的行动号召。单独强调能让功能征集从普通说明中脱离出来，形成明确的收尾。",
+        before:
+          "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after:
+          "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason:
+          "这是文章最后的行动号召。单独强调能让功能征集从普通说明中脱离出来，形成明确的收尾。",
       },
     ],
     caseSafetyTitle: "9 条建议全部由用户确认后落实",
@@ -479,8 +493,7 @@ export const zh: Messages = {
       },
     ],
     modesTitle: "先分清本地模式与离线模式",
-    modesSubtitle:
-      "两者都能在断网时写作，但账号、联网行为和数据归属完全不同。",
+    modesSubtitle: "两者都能在断网时写作，但账号、联网行为和数据归属完全不同。",
     modes: [
       {
         title: "离线模式",
@@ -574,7 +587,8 @@ export const zh: Messages = {
   security: {
     title: "账号安全",
     description: "修改密码会保留当前设备，并立即退出其他设备上的旧会话。",
-    desktopDescription: "修改密码和退出其他设备属于敏感操作，请在系统浏览器中完成。",
+    desktopDescription:
+      "修改密码和退出其他设备属于敏感操作，请在系统浏览器中完成。",
     manageOnWeb: "在网页中管理",
     oauthOnly:
       "这个账号目前只使用 Google 或 GitHub 登录，没有可修改的站内密码。",
@@ -593,9 +607,14 @@ export const zh: Messages = {
   accountDeletion: {
     title: "注销账号",
     description: "这是不可撤销的操作。请先导出需要保留的文档和图片。",
-    immediate: "账号、文档、版本、分享、MCP 令牌和已同步图片会立即进入删除流程。",
-    membership: "终生会员资格随账号终止，注销不会自动退款；法定退款权不受影响。",
-    paymentRecords: "为税务、争议与反欺诈所必需的最小付款记录会解除账号关联后依法保留。",
+    immediate:
+      "账号、文档、版本、分享、MCP 令牌和已同步图片会立即进入删除流程。",
+    membership:
+      "终生会员资格随账号终止，注销不会自动退款；法定退款权不受影响。",
+    paymentRecords:
+      "为税务、争议与反欺诈所必需的最小付款记录会解除账号关联后依法保留。",
+    feedbackRecords:
+      "你提交的反馈正文、来源页面和客户端信息会解除账号关联后继续保留，用于问题排查和产品改进；其中可能仍包含你主动填写的个人信息。",
     confirmLabel: "输入当前邮箱 {email} 以确认",
     finalConfirmation: "确定立即注销账号吗？此操作无法撤销。",
     deleteButton: "永久注销账号",
@@ -604,7 +623,8 @@ export const zh: Messages = {
     paymentPending: "仍有一笔付款正在处理。请等待付款结束或联系支持后再注销。",
     unavailable: "暂时无法安全结束付款流程，请稍后重试。",
     failed: "账号注销失败，请稍后重试。",
-    localCleanupFailed: "云端账号已注销，但本机离线数据未能完全清理。服务端令牌已失效，请退出应用后手动删除本机应用数据。",
+    localCleanupFailed:
+      "云端账号已注销，但本机离线数据未能完全清理。服务端令牌已失效，请退出应用后手动删除本机应用数据。",
   },
   storage: {
     title: "云端存储",
@@ -630,7 +650,8 @@ export const zh: Messages = {
     title: "Koinote 终生会员",
     lifetimeBadge: "终生有效",
     activeBadge: "已开通",
-    description: "一次升级，获得 10 GB 云存储、MCP、版本历史、AI 优化和 1,000 credits。",
+    description:
+      "一次升级，获得 10 GB 云存储、MCP、版本历史、AI 优化和 1,000 credits。",
     oneTimePayment: "一次付费，终生有效",
     currencyLabel: "支付币种",
     currencyHint: "选择后将在 Stripe 收银台以该币种结算。",
@@ -640,18 +661,21 @@ export const zh: Messages = {
     purchase: "开通终生会员",
     redirecting: "正在前往安全支付页面…",
     activeTitle: "终生会员已解锁",
-    activeDescription: "你的账号已获得固定 10 GB 云存储、AI 优化和全部会员权益。",
+    activeDescription:
+      "你的账号已获得固定 10 GB 云存储、AI 优化和全部会员权益。",
     unavailable: "当前部署尚未配置会员支付。",
     loadFailed: "会员状态读取失败。",
     checkoutSuccess: "支付已确认，终生会员已经生效。",
     checkoutPending: "支付仍在确认中，完成后权益会自动更新。",
-    checkoutDelayed: "Stripe 仍在处理这笔支付。请勿重复付款，你可以稍后回来查看；若已扣款但长时间未生效，请联系支持。",
+    checkoutDelayed:
+      "Stripe 仍在处理这笔支付。请勿重复付款，你可以稍后回来查看；若已扣款但长时间未生效，请联系支持。",
     checkoutCancelled: "支付已取消，本次不会扣款。",
     checkoutFailed: "支付未能完成，请稍后重试。",
   },
   agentCredits: {
     title: "AI Credits",
-    description: "使用内置模型优化文章时消耗 credits；使用自己的 LLM 渠道不消耗 credits。",
+    description:
+      "使用内置模型优化文章时消耗 credits；使用自己的 LLM 渠道不消耗 credits。",
     membersOnly: "AI 优化是终生会员权益，升级时会赠送 1,000 credits。",
     available: "可用 {count}",
     estimatedCharge: "预计扣除 {count} credits",
@@ -665,7 +689,8 @@ export const zh: Messages = {
     history: "近期记录",
     checkoutSuccess: "Credits 已到账。",
     checkoutPending: "支付正在确认，请勿重复付款。",
-    checkoutDelayed: "Stripe 仍在处理这笔支付。请勿重复付款，稍后回来查看即可。",
+    checkoutDelayed:
+      "Stripe 仍在处理这笔支付。请勿重复付款，稍后回来查看即可。",
     checkoutCancelled: "购买已取消，本次不会扣款。",
     checkoutFailed: "购买未能完成，请稍后重试。",
     transactionKinds: {
@@ -678,7 +703,8 @@ export const zh: Messages = {
   },
   agentModelSettings: {
     title: "AI 模型",
-    description: "选择 AI 优化默认使用内置模型还是自有 LLM。编辑器会直接使用这里的设置，不再重复询问。",
+    description:
+      "选择 AI 优化默认使用内置模型还是自有 LLM。编辑器会直接使用这里的设置，不再重复询问。",
     membersOnly: "AI 优化是终生会员权益。",
     builtIn: "内置模型",
     builtInHint: "按实际用量消耗 credits。",
@@ -690,7 +716,8 @@ export const zh: Messages = {
   },
   llmChannels: {
     title: "自有 LLM 渠道",
-    description: "配置 OpenAI 兼容接口或 Anthropic Messages API。默认渠道会用于 AI 优化，密钥加密保存且不消耗 credits。",
+    description:
+      "配置 OpenAI 兼容接口或 Anthropic Messages API。默认渠道会用于 AI 优化，密钥加密保存且不消耗 credits。",
     membersOnly: "自有 LLM 渠道是终生会员权益。",
     add: "添加渠道",
     loading: "正在加载渠道…",
@@ -718,7 +745,8 @@ export const zh: Messages = {
   agentReview: {
     button: "AI 优化",
     title: "AI 优化",
-    description: "像审查代码一样检查标题、正文和结构排版，只在你确认后落实改动。",
+    description:
+      "像审查代码一样检查标题、正文和结构排版，只在你确认后落实改动。",
     membersOnly: "此功能仅对终生会员开放。",
     upgrade: "升级终生会员",
     localModeUnavailable: "本地模式不会连接网络，因此无法使用 AI 优化。",
@@ -739,12 +767,15 @@ export const zh: Messages = {
     stageBody: "正文审阅",
     stageLayout: "结构排版",
     backgroundRunning: "AI 优化正在后台运行",
-    backgroundRunningDescription: "你可以继续写作或切换页面，完成后会在这里通知你。",
+    backgroundRunningDescription:
+      "你可以继续写作或切换页面，完成后会在这里通知你。",
     backgroundReady: "AI 优化已完成",
     backgroundReadyDescription: "标题、正文和结构排版建议已经准备好。",
     backgroundFailed: "AI 优化未能完成",
-    backgroundFailedDescription: "模型渠道或网络可能暂时不可用，请打开文档后重试。",
-    backgroundTimeoutDescription: "本次优化运行超时或服务曾重启，请打开文档后重新发起。",
+    backgroundFailedDescription:
+      "模型渠道或网络可能暂时不可用，请打开文档后重试。",
+    backgroundTimeoutDescription:
+      "本次优化运行超时或服务曾重启，请打开文档后重新发起。",
     viewBackgroundResult: "查看优化建议",
     dismissNotification: "关闭通知",
     saveFailed: "开始前未能保存当前文档，请处理保存问题后重试。",
@@ -779,15 +810,18 @@ export const zh: Messages = {
     applied: "已落实",
     dismissed: "已忽略",
     staleTitle: "这份审阅已经过期",
-    staleDescription: "文档在审阅后发生了变化。为了避免覆盖新内容，请重新发起审阅。",
+    staleDescription:
+      "文档在审阅后发生了变化。为了避免覆盖新内容，请重新发起审阅。",
     failedTitle: "AI 未能完成审阅",
     retry: "重新审阅",
     noSuggestions: "文章状态不错，本次没有需要落实的改动。",
     noTitleSuggestions: "本次没有找到可靠且值得替换的标题建议。",
-    noTitleSuggestionsLowScore: "标题分数偏低，但本次没有给出可靠的备选——现有内容还撑不起更强的承诺。可以先补上具体结果或对象，再重新优化。",
+    noTitleSuggestionsLowScore:
+      "标题分数偏低，但本次没有给出可靠的备选——现有内容还撑不起更强的承诺。可以先补上具体结果或对象，再重新优化。",
     noContentSuggestions: "内容表达状态不错，本次没有文字改动建议。",
     noLayoutSuggestions: "当前结构和排版已经合理，本次没有安全的排版改动。",
-    noFilteredLayoutSuggestions: "当前没有「{dimension}」维度的改动建议，可以点击深入分析进行第二轮检查。",
+    noFilteredLayoutSuggestions:
+      "当前没有「{dimension}」维度的改动建议，可以点击深入分析进行第二轮检查。",
     usage: "消耗 {credits} credits",
     close: "关闭",
     categories: {
@@ -852,7 +886,8 @@ export const zh: Messages = {
   },
   mcpActivity: {
     title: "MCP 活动日志",
-    description: "查看 Agent 使用了哪些工具、操作了哪篇文档，以及调用是否成功。日志保留 180 天，不记录正文或令牌内容。",
+    description:
+      "查看 Agent 使用了哪些工具、操作了哪篇文档，以及调用是否成功。日志保留 180 天，不记录正文或令牌内容。",
     back: "返回 MCP 设置",
     membersOnly: "MCP 活动日志是终生会员权益。",
     loading: "正在加载活动日志…",
@@ -947,7 +982,8 @@ export const zh: Messages = {
     documents: "文档操作",
     panels: "面板",
     editing: "编辑",
-    panelHint: "面板快捷键仅在焦点不位于输入框时生效；编辑正文时 ⌘/Ctrl+B 仍用于加粗。",
+    panelHint:
+      "面板快捷键仅在焦点不位于输入框时生效；编辑正文时 ⌘/Ctrl+B 仍用于加粗。",
     actions: {
       showKeyboardShortcuts: "显示快捷键表",
       searchDocuments: "搜索文档",
@@ -1005,6 +1041,27 @@ export const zh: Messages = {
     title: "邀请好友",
     subtitle: "分享专属邀请链接，查看邀请记录与奖励空间。",
   },
+  feedback: {
+    menuLabel: "意见反馈",
+    title: "告诉我们你的想法",
+    description: "提交遇到的 Bug 或使用体验建议，我们会在管理后台集中查看。",
+    categoryLabel: "反馈类型",
+    categoryBug: "Bug",
+    categoryExperience: "使用体验",
+    messageLabel: "反馈内容",
+    messagePlaceholder: "请尽量说明发生了什么、你原本希望看到什么……",
+    privacyHint:
+      "反馈会关联你的账号，并记录当前页面和客户端信息；注销账号后，这些内容会解除账号关联并继续保留，用于问题排查和产品改进。",
+    discardConfirm: "反馈尚未提交，确定放弃已输入的内容吗？",
+    cancel: "取消",
+    close: "关闭反馈弹窗",
+    submit: "提交反馈",
+    submitting: "正在提交…",
+    submitFailed: "反馈提交失败，请稍后重试。",
+    successTitle: "反馈已收到",
+    successDescription: "谢谢你的反馈，我们会认真查看。",
+    done: "完成",
+  },
   admin: {
     title: "管理后台",
     subtitle: "查看站点增长、会员、收入与运行概况。",
@@ -1020,9 +1077,24 @@ export const zh: Messages = {
     tabUsers: "用户",
     tabServer: "服务器",
     tabAnnouncements: "站内提醒",
+    tabFeedback: "用户反馈",
+    feedbackTitle: "用户反馈",
+    feedbackSubtitle: "按提交时间查看 Bug 与使用体验反馈。",
+    feedbackLoading: "正在读取用户反馈…",
+    feedbackLoadFailed: "用户反馈读取失败，请稍后重试。",
+    feedbackEmpty: "还没有用户提交反馈。",
+    feedbackLoadMore: "加载更多",
+    feedbackLoadingMore: "正在加载…",
+    feedbackBug: "Bug",
+    feedbackExperience: "使用体验",
+    feedbackFrom: "提交用户",
+    feedbackPage: "来源页面",
+    feedbackSubmittedAt: "提交时间",
+    feedbackUserAgent: "客户端信息",
     serverStatusLoading: "正在读取服务器状态…",
     serverStatusLoadFailed: "服务器状态读取失败，请稍后重试。",
-    serverStatusUnavailable: "当前环境无法读取 Linux 宿主机指标；如果线上也出现此提示，请检查生产容器的只读监控挂载。",
+    serverStatusUnavailable:
+      "当前环境无法读取 Linux 宿主机指标；如果线上也出现此提示，请检查生产容器的只读监控挂载。",
     serverStatusTitle: "服务器状态",
     serverStatusSubtitle: "监控整台 Linux 服务器的资源使用情况。",
     serverStatusAutoRefresh: "每 30 秒自动刷新",
@@ -1040,7 +1112,8 @@ export const zh: Messages = {
     load1: "1 分钟负载",
     load5: "5 分钟负载",
     load15: "15 分钟负载",
-    loadHint: "Load Average 可与逻辑 CPU 数比较；长期高于核心数通常表示任务正在排队。",
+    loadHint:
+      "Load Average 可与逻辑 CPU 数比较；长期高于核心数通常表示任务正在排队。",
     serverMemoryStorage: "内存与存储",
     memoryTotal: "物理内存",
     memoryAvailable: "可用内存",
@@ -1118,20 +1191,24 @@ export const zh: Messages = {
     day30Retention: "D30 留存",
     retentionSample: "{returned} / {eligible} 人",
     announcementsTitle: "站内提醒",
-    announcementsSubtitle: "向所有已登录用户发布通知；系统会自动生成中文、英文、日文和法文版本。",
+    announcementsSubtitle:
+      "向所有已登录用户发布通知；系统会自动生成中文、英文、日文和法文版本。",
     announcementSourceLanguage: "原文语言",
     announcementTitleLabel: "标题",
     announcementSummaryLabel: "摘要",
     announcementHighlightsLabel: "要点",
     announcementHighlightsPlaceholder: "每行一个要点，最多 8 条",
-    announcementTranslationNote: "点击发布后，后端会调用 LLM 翻译为其余语言；原文保持不变。",
-    announcementTranslationUnavailable: "尚未配置提醒翻译服务，暂时无法发布手动提醒。",
+    announcementTranslationNote:
+      "点击发布后，后端会调用 LLM 翻译为其余语言；原文保持不变。",
+    announcementTranslationUnavailable:
+      "尚未配置提醒翻译服务，暂时无法发布手动提醒。",
     announcementTranslationFailed: "多语言翻译失败，提醒尚未发布，请稍后重试。",
     announcementPublish: "翻译并发布",
     announcementPublishing: "正在翻译…",
     announcementPublishSuccess: "提醒已发布，用户将在下次打开 Koinote 时看到。",
     announcementPublishFailed: "提醒发布失败，请检查内容后重试。",
-    announcementContentInvalid: "标题、摘要或要点超过长度限制，请检查内容后重试。",
+    announcementContentInvalid:
+      "标题、摘要或要点超过长度限制，请检查内容后重试。",
     announcementHighlightTooLong: "每条要点最多 500 个字符。",
     announcementHistory: "最近发布",
     announcementHistoryEmpty: "还没有发布过提醒。",
@@ -1139,7 +1216,8 @@ export const zh: Messages = {
     announcementKindRelease: "版本",
     announcementKindManual: "手动提醒",
     announcementWithdraw: "撤回",
-    announcementWithdrawConfirm: "确定撤回这条提醒吗？用户将不再看到它，但后台仍会保留发布记录。",
+    announcementWithdrawConfirm:
+      "确定撤回这条提醒吗？用户将不再看到它，但后台仍会保留发布记录。",
     announcementWithdrawFailed: "提醒撤回失败，请稍后重试。",
     announcementWithdrawn: "已撤回",
   },
@@ -1154,7 +1232,8 @@ export const zh: Messages = {
   documentTemplates: {
     eyebrow: "从结构开始",
     title: "基于模板新建文档",
-    subtitle: "选择一套经过整理的写作框架，再按你的需要修改。模板会复制为普通 Markdown 文档，之后不受任何限制。",
+    subtitle:
+      "选择一套经过整理的写作框架，再按你的需要修改。模板会复制为普通 Markdown 文档，之后不受任何限制。",
     close: "关闭模板选择",
     blankTitle: "空白文档",
     blankDescription: "从空白页面开始，自由建立自己的结构。",
@@ -1162,7 +1241,8 @@ export const zh: Messages = {
     memberBadge: "会员",
     upgradeHint: "升级终生会员后使用此模板",
     localModeLocked: "登录终生会员账号后使用此模板",
-    sourceNote: "参考 GitHub 高评分、许可清晰的 Markdown 模板结构，并为 Koinote 重新编写。",
+    sourceNote:
+      "参考 GitHub 高评分、许可清晰的 Markdown 模板结构，并为 Koinote 重新编写。",
     createFailed: "文档创建失败，请稍后重试。",
     categories: {
       everyday: "日常工作",
@@ -1172,21 +1252,69 @@ export const zh: Messages = {
       technical: "技术决策",
     },
     templates: {
-      "meeting-notes": { name: "会议纪要", description: "把讨论沉淀为决策、负责人和可追踪的行动项。" },
-      "daily-note": { name: "每日记录", description: "集中记录重点、过程、灵感以及当天复盘。" },
-      "weekly-review": { name: "周计划与复盘", description: "先明确三个结果，再用结构化复盘完成每周闭环。" },
-      "todo-list": { name: "任务清单", description: "围绕三项重点管理待办、场景任务、委派事项与每日收尾。" },
-      table: { name: "通用表格", description: "先定义字段与口径，再用主表、常用视图、汇总和变更记录管理信息。" },
-      "daily-report": { name: "工作日报", description: "按结果、指标、问题、协作和次日计划完成团队汇报。" },
-      "weekly-report": { name: "工作周报", description: "汇总本周成果、指标偏差、风险、经验与下周关键结果。" },
-      okr: { name: "OKR 规划与复盘", description: "从战略背景到 Objective、可量化 KR、信心检查和周期评分形成闭环。" },
-      kpi: { name: "KPI 指标管理", description: "明确指标公式、数据源、目标、护栏、预警阈值和改进行动。" },
-      "article-outline": { name: "文章策划", description: "梳理读者、标题、钩子、证据、正文结构、行动号召与发布检查。" },
-      "project-readme": { name: "项目 README", description: "覆盖项目价值、快速开始、使用、架构、路线图与贡献方式。" },
-      "product-requirements": { name: "产品需求文档", description: "定义问题、范围、用户故事、验收标准、指标和发布方案。" },
-      "research-paper": { name: "论文阅读笔记", description: "提炼方法、证据、局限、知识连接与后续研究行动。" },
-      "decision-record": { name: "决策记录", description: "保留决策背景、备选方案、取舍、后果与验证方式。" },
-      "technical-design": { name: "技术方案", description: "系统覆盖接口、数据、一致性、安全、容量、迁移与测试。" },
+      "meeting-notes": {
+        name: "会议纪要",
+        description: "把讨论沉淀为决策、负责人和可追踪的行动项。",
+      },
+      "daily-note": {
+        name: "每日记录",
+        description: "集中记录重点、过程、灵感以及当天复盘。",
+      },
+      "weekly-review": {
+        name: "周计划与复盘",
+        description: "先明确三个结果，再用结构化复盘完成每周闭环。",
+      },
+      "todo-list": {
+        name: "任务清单",
+        description: "围绕三项重点管理待办、场景任务、委派事项与每日收尾。",
+      },
+      table: {
+        name: "通用表格",
+        description:
+          "先定义字段与口径，再用主表、常用视图、汇总和变更记录管理信息。",
+      },
+      "daily-report": {
+        name: "工作日报",
+        description: "按结果、指标、问题、协作和次日计划完成团队汇报。",
+      },
+      "weekly-report": {
+        name: "工作周报",
+        description: "汇总本周成果、指标偏差、风险、经验与下周关键结果。",
+      },
+      okr: {
+        name: "OKR 规划与复盘",
+        description:
+          "从战略背景到 Objective、可量化 KR、信心检查和周期评分形成闭环。",
+      },
+      kpi: {
+        name: "KPI 指标管理",
+        description: "明确指标公式、数据源、目标、护栏、预警阈值和改进行动。",
+      },
+      "article-outline": {
+        name: "文章策划",
+        description:
+          "梳理读者、标题、钩子、证据、正文结构、行动号召与发布检查。",
+      },
+      "project-readme": {
+        name: "项目 README",
+        description: "覆盖项目价值、快速开始、使用、架构、路线图与贡献方式。",
+      },
+      "product-requirements": {
+        name: "产品需求文档",
+        description: "定义问题、范围、用户故事、验收标准、指标和发布方案。",
+      },
+      "research-paper": {
+        name: "论文阅读笔记",
+        description: "提炼方法、证据、局限、知识连接与后续研究行动。",
+      },
+      "decision-record": {
+        name: "决策记录",
+        description: "保留决策背景、备选方案、取舍、后果与验证方式。",
+      },
+      "technical-design": {
+        name: "技术方案",
+        description: "系统覆盖接口、数据、一致性、安全、容量、迁移与测试。",
+      },
     },
   },
   editor: {
@@ -1336,8 +1464,7 @@ export const zh: Messages = {
     wechatGeoSaveFailed: "摘要保存失败，请稍后重试",
     wechatGeoStale:
       "文章内容已变化；当前为上次保存的摘要，可继续使用或重新生成。",
-    wechatGeoPlaceholder:
-      "AI 生成后可在此检查和修改隐藏摘要。",
+    wechatGeoPlaceholder: "AI 生成后可在此检查和修改隐藏摘要。",
     themeNone: "默认排版",
     tabsLabel: "已打开的文档",
     closeTab: "关闭标签",
@@ -1355,11 +1482,14 @@ export const zh: Messages = {
     treeMenu: "文件树操作",
     organizer: {
       button: "整理文档",
-      rootOnly: "整理根目录和此前自动整理的文档；你手动创建或导入的文件夹及其内容始终不会被改动。",
+      rootOnly:
+        "整理根目录和此前自动整理的文档；你手动创建或导入的文件夹及其内容始终不会被改动。",
       smartTitle: "智能整理",
-      smartDescription: "按创建月份归类；单月超过 20 篇时自动细分到周，单周仍过多时再细分到日期。",
+      smartDescription:
+        "按创建月份归类；单月超过 20 篇时自动细分到周，单周仍过多时再细分到日期。",
       activityTitle: "活跃度整理",
-      activityDescription: "按最后修改时间分为近期、较早和归档；单组过多时继续按月、周或日期细分。",
+      activityDescription:
+        "按最后修改时间分为近期、较早和归档；单组过多时继续按月、周或日期细分。",
       unknownDate: "日期未知",
       weekOfMonth: "第 {n} 周",
       activityRecent7: "最近 7 天",
@@ -1367,7 +1497,8 @@ export const zh: Messages = {
       activityRecent90: "31–90 天",
       activityInactive: "91–365 天",
       activityArchive: "一年以上",
-      confirmSummary: "将移动 {documents} 篇文档，并使用约 {folders} 个自动目录。",
+      confirmSummary:
+        "将移动 {documents} 篇文档，并使用约 {folders} 个自动目录。",
       upToDate: "当前策略下的文档已经位于正确目录，无需再次整理。",
       cancel: "取消",
       apply: "开始整理",
@@ -1454,7 +1585,8 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "桌面客户端",
     title: "授权 Koinote 客户端",
-    description: "客户端将在这台设备上保存文档与图片的离线副本，并在恢复网络后同步你的修改。",
+    description:
+      "客户端将在这台设备上保存文档与图片的离线副本，并在恢复网络后同步你的修改。",
     permissionsTitle: "授权后，客户端可以：",
     permissionDocuments: "读取、创建、整理、分享以及移入回收站中的文档与文件夹",
     permissionOffline: "在本机保存文档、待上传图片与最多 512 MB 的站内图片缓存",
@@ -1468,9 +1600,11 @@ function hello(name) {
   desktopLocalMode: {
     badge: "本地模式",
     title: "只在这台设备上写作",
-    description: "无需登录。文档和图片均加密保存在本机，不上传、不发起网络请求，云端功能在此模式下不可用。",
+    description:
+      "无需登录。文档和图片均加密保存在本机，不上传、不发起网络请求，云端功能在此模式下不可用。",
     setupTitle: "设置本地模式密码",
-    setupDescription: "密码用于加密和解锁本地资料。密码不会上传，也无法找回，请妥善保存。",
+    setupDescription:
+      "密码用于加密和解锁本地资料。密码不会上传，也无法找回，请妥善保存。",
     unlockTitle: "解锁本地模式",
     unlockDescription: "输入本地模式密码后继续访问这台设备上的文档。",
     password: "本地模式密码",
@@ -1484,19 +1618,24 @@ function hello(name) {
     enterLocalMode: "切换到本地模式",
     lock: "锁定本地模式",
     encrypted: "文档、文件夹名称和图片均使用 AES-GCM 加密后写入本机 SQLite。",
-    networkDisabled: "本地模式会阻止同步、更新检查、分享、会员、MCP 等所有远端请求。",
+    networkDisabled:
+      "本地模式会阻止同步、更新检查、分享、会员、MCP 等所有远端请求。",
     passwordMismatch: "两次输入的密码不一致。",
     invalidPassword: "密码不正确，请重试。",
     genericError: "本地模式暂时无法使用，请重新打开客户端后重试。",
-    localSubtitle: "当前处于本地模式。所有修改只保存在这台设备上，不会同步到 Koinote 账号。",
+    localSubtitle:
+      "当前处于本地模式。所有修改只保存在这台设备上，不会同步到 Koinote 账号。",
     localStorageTitle: "完全本地存储",
-    localStorageDescription: "没有云端副本，也没有自动恢复。请定期从“我的文档”导出 ZIP 备份。",
+    localStorageDescription:
+      "没有云端副本，也没有自动恢复。请定期从“我的文档”导出 ZIP 备份。",
     trashRetention: "本地回收站中的文档不会自动删除。",
     importTitle: "导入本地模式资料",
-    importDescription: "验证本地密码后，将当前本地文档、文件夹和所引用的图片复制到这个账号。导入的是独立副本，之后两边的修改互不可见。",
+    importDescription:
+      "验证本地密码后，将当前本地文档、文件夹和所引用的图片复制到这个账号。导入的是独立副本，之后两边的修改互不可见。",
     importButton: "验证密码并导入",
     importing: "正在导入…",
-    importSuccess: "已导入 {documents} 篇文档、{folders} 个文件夹和 {images} 张图片，客户端将按正常文档流程同步。",
+    importSuccess:
+      "已导入 {documents} 篇文档、{folders} 个文件夹和 {images} 张图片，客户端将按正常文档流程同步。",
     importEmpty: "本地模式中还没有可导入的文档。",
     importPassword: "输入本地模式密码",
     importWarning: "重复导入会再次创建一套独立副本，不会覆盖上一次导入的文档。",
@@ -1504,7 +1643,8 @@ function hello(name) {
   desktopBilling: {
     successTitle: "支付已完成",
     cancelledTitle: "支付已取消",
-    description: "正在返回 Koinote 客户端。客户端会安全确认本次购买并自动更新对应权益。",
+    description:
+      "正在返回 Koinote 客户端。客户端会安全确认本次购买并自动更新对应权益。",
     openApp: "打开 Koinote 客户端",
     invalid: "支付回跳链接无效，请返回客户端重试。",
     dismiss: "关闭支付状态提示",
@@ -1522,17 +1662,22 @@ function hello(name) {
     allDocuments: "查看全部",
     updated: "更新于 {date}",
     emptyTitle: "开始你的第一篇文档",
-    emptyDescription: "新建一篇空白文档，或从“我的文档”导入现有的 Markdown 与 ZIP 迁移包。",
+    emptyDescription:
+      "新建一篇空白文档，或从“我的文档”导入现有的 Markdown 与 ZIP 迁移包。",
     syncTitle: "同步状态",
-    syncDescription: "联网时自动同步本机修改；存在冲突时会让你选择保留哪个版本。",
+    syncDescription:
+      "联网时自动同步本机修改；存在冲突时会让你选择保留哪个版本。",
     offlineTitle: "离线工作已就绪",
-    offlineDescription: "文档与图片副本保存在这台设备上；断网也能粘贴图片和继续编辑，联网后会自动上传并替换图床地址。",
+    offlineDescription:
+      "文档与图片副本保存在这台设备上；断网也能粘贴图片和继续编辑，联网后会自动上传并替换图床地址。",
     documentCount: "本机已有 {count} 篇文档",
-    imageCacheUsage: "本地图片共 {total}；自动缓存 {cached} / {limit}，待上传 {pending}",
+    imageCacheUsage:
+      "本地图片共 {total}；自动缓存 {cached} / {limit}，待上传 {pending}",
     clearImageCache: "清空自动缓存",
     clearingImageCache: "正在清理…",
     imageCacheCleared: "图片缓存已清空；之后打开的文档会按需重新缓存图片。",
-    imageMaintenanceDelayed: "图片后台整理暂时未完成；文档已经同步，客户端会自动重试。",
+    imageMaintenanceDelayed:
+      "图片后台整理暂时未完成；文档已经同步，客户端会自动重试。",
   },
   desktopUpdate: {
     check: "检查更新",
@@ -1546,7 +1691,8 @@ function hello(name) {
     currentDescription: "当前客户端不需要更新。",
     failedTitle: "更新失败",
     failedDescription: "暂时无法连接更新服务，请检查网络后重试。",
-    saveFailedDescription: "当前编辑内容无法安全保存，更新已取消。请复制正文备份后再试。",
+    saveFailedDescription:
+      "当前编辑内容无法安全保存，更新已取消。请复制正文备份后再试。",
     retry: "重试",
     later: "稍后",
     close: "关闭",
@@ -1559,12 +1705,15 @@ function hello(name) {
     error: "同步失败，点击重试",
     conflicts: "项冲突需要处理",
     conflictsTitle: "处理同步冲突",
-    conflictsDescription: "云端和本机都修改了这些文档。请选择要保留的版本，另一份不会被静默覆盖。",
+    conflictsDescription:
+      "云端和本机都修改了这些文档。请选择要保留的版本，另一份不会被静默覆盖。",
     keepLocal: "保留本机版本",
     useCloud: "使用云端版本",
     close: "稍后处理",
-    logoutWarning: "这台设备还有 {pending} 项修改未同步，其中 {conflicts} 项存在冲突。继续登出会永久删除这些本地内容，确定继续吗？",
-    logoutSaveFailed: "无法先保存当前编辑内容，已取消登出。请重试，或复制正文备份后再退出。",
+    logoutWarning:
+      "这台设备还有 {pending} 项修改未同步，其中 {conflicts} 项存在冲突。继续登出会永久删除这些本地内容，确定继续吗？",
+    logoutSaveFailed:
+      "无法先保存当前编辑内容，已取消登出。请重试，或复制正文备份后再退出。",
   },
   footer: {
     tagline:
@@ -1707,6 +1856,7 @@ function hello(name) {
             "使用第三方登录时，由 Google 或 GitHub 返回的基本资料（邮箱、用户名、头像）",
             "你创建的内容：文档标题与正文、文件夹结构、上传的图片",
             "分享设置：分享令牌、访问密码的哈希",
+            "用户反馈：反馈正文、来源页面和客户端信息",
             "运行日志：请求时间、IP、User-Agent 等排障与防滥用所需的记录",
             "第一方产品统计：注册、首篇文档、首次上传、首次导出、首次 MCP 调用与结算的完成时间；每个账号每天至多一条活跃日期；分享页只保存累计阅读次数",
           ],
@@ -1752,6 +1902,7 @@ function hello(name) {
             "文档先进入 30 天回收站，期间仍保留正文、版本、图片并计入存储用量；永久删除或保留期结束后，不再被其他文档引用的图片才会进入后台待删队列。",
             "你可以在控制台输入当前邮箱并二次确认，立即注销整个账号。账号、文档、版本、分享、MCP 令牌和图片账本会删除，相关对象存储图片由后台异步清理；此操作不可恢复。",
             "为税务、争议与反欺诈所必需的最小 Stripe 付款记录会解除账号关联后依法保留。备份中的已删除数据会随备份保留周期自然过期，且不会用于恢复已注销账号。",
+            "你提交的用户反馈正文、来源页面和客户端信息会解除账号关联后继续保留，用于问题排查和产品改进；其中仍可能包含你主动填写的个人信息。",
             "如无法登录或需要行使其他法定权利，仍可通过下方邮箱联系我们。",
           ],
         },
@@ -1828,6 +1979,11 @@ function hello(name) {
   },
   errors: {
     bad_request: "请求格式错误",
+    feedback_category_invalid: "请选择 Bug 或使用体验反馈。",
+    feedback_message_required: "请填写反馈内容。",
+    feedback_message_invalid: "反馈内容包含不支持的字符，请删除后重试。",
+    feedback_message_too_long: "反馈内容不能超过 4000 个字符。",
+    feedback_page_invalid: "当前页面信息无效，请刷新后重试。",
     missing_fields: "用户名、邮箱、密码均为必填",
     invalid_email: "邮箱格式不正确",
     invalid_invitation_code: "邀请码无效，请检查后重试",
@@ -1861,7 +2017,8 @@ function hello(name) {
     pdf_path_must_be_absolute: "请选择有效的 PDF 保存位置",
     pdf_path_must_end_with_pdf: "PDF 文件名需要以 .pdf 结尾",
     pdf_parent_directory_missing: "所选保存文件夹不存在，请重新选择",
-    pdf_path_invalid_unicode: "保存路径包含客户端无法识别的字符，请更换位置或文件名",
+    pdf_path_invalid_unicode:
+      "保存路径包含客户端无法识别的字符，请更换位置或文件名",
     pdf_output_too_large: "导出的 PDF 超过 512 MB，请减少大型图片后重试",
     pdf_output_invalid: "生成的 PDF 文件不完整，请稍后重试",
     pdf_export_timed_out: "PDF 导出超时，请减少文档内容或图片后重试",
@@ -1894,7 +2051,8 @@ function hello(name) {
       "分享已在云端生效，但客户端未能保存本地状态，请稍后重新打开分享设置并再次应用",
     share_password_invalid: "口令不正确",
     too_many_requests: "尝试过于频繁，请稍后再试",
-    insufficient_credits: "可用 credits 不足，请购买 credits 或改用自己的 LLM 渠道",
+    insufficient_credits:
+      "可用 credits 不足，请购买 credits 或改用自己的 LLM 渠道",
     agent_llm_not_configured: "内置 AI 模型尚未配置",
     agent_invalid_response: "模型返回的建议格式无效，请重新审阅",
     agent_provider_error: "模型渠道拒绝了请求，请检查模型和密钥配置",
@@ -1902,7 +2060,8 @@ function hello(name) {
     agent_review_stale: "文档已经变化，请重新发起审阅",
     agent_review_closed: "这份审阅已经关闭",
     agent_review_in_progress: "已有审阅正在进行，请稍候",
-    invalid_agent_review_source: "文档或来源审阅已经变化，请先重新发起一次标准审阅",
+    invalid_agent_review_source:
+      "文档或来源审阅已经变化，请先重新发起一次标准审阅",
     invalid_agent_provider: "AI 模型渠道无效",
     invalid_llm_channel_name: "渠道名称无效",
     invalid_llm_channel_url: "渠道 Base URL 无效或不安全",

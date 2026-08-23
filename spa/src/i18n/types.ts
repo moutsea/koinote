@@ -281,6 +281,7 @@ export interface Messages {
     immediate: string;
     membership: string;
     paymentRecords: string;
+    feedbackRecords: string;
     confirmLabel: string;
     finalConfirmation: string;
     deleteButton: string;
@@ -685,6 +686,26 @@ export interface Messages {
     title: string;
     subtitle: string;
   };
+  feedback: {
+    menuLabel: string;
+    title: string;
+    description: string;
+    categoryLabel: string;
+    categoryBug: string;
+    categoryExperience: string;
+    messageLabel: string;
+    messagePlaceholder: string;
+    privacyHint: string;
+    discardConfirm: string;
+    cancel: string;
+    close: string;
+    submit: string;
+    submitting: string;
+    submitFailed: string;
+    successTitle: string;
+    successDescription: string;
+    done: string;
+  };
   admin: {
     title: string;
     subtitle: string;
@@ -700,6 +721,20 @@ export interface Messages {
     tabUsers: string;
     tabServer: string;
     tabAnnouncements: string;
+    tabFeedback: string;
+    feedbackTitle: string;
+    feedbackSubtitle: string;
+    feedbackLoading: string;
+    feedbackLoadFailed: string;
+    feedbackEmpty: string;
+    feedbackLoadMore: string;
+    feedbackLoadingMore: string;
+    feedbackBug: string;
+    feedbackExperience: string;
+    feedbackFrom: string;
+    feedbackPage: string;
+    feedbackSubmittedAt: string;
+    feedbackUserAgent: string;
     serverStatusLoading: string;
     serverStatusLoadFailed: string;
     serverStatusUnavailable: string;

@@ -4,7 +4,7 @@ export const en: Messages = {
   nav: {
     editor: "Editor",
     download: "Download",
-    pricing: "Pricing",
+    pricing: "Upgrade",
     docs: "Docs",
     docsHome: "Documentation home",
     aiGuide: "AI optimization",
@@ -113,9 +113,12 @@ export const en: Messages = {
     loadFailed: "Could not load pricing. Please try again.",
     unavailable: "Online checkout is not configured for this deployment.",
     creditsTitle: "AI credits",
-    creditsDescription: "AI optimization with the built-in model uses credits. Using your own LLM channel uses no credits.",
-    creditsMembersOnly: "Credits are available to lifetime members. Upgrade above before purchasing a pack.",
-    creditsNote: "Purchased credits are added to your account automatically; balances and activity are available in AI settings.",
+    creditsDescription:
+      "AI optimization with the built-in model uses credits. Using your own LLM channel uses no credits.",
+    creditsMembersOnly:
+      "Credits are available to lifetime members. Upgrade above before purchasing a pack.",
+    creditsNote:
+      "Purchased credits are added to your account automatically; balances and activity are available in AI settings.",
     buyCredits: "Buy",
     faqTitle: "Frequently asked questions",
     faqs: [
@@ -271,7 +274,8 @@ export const en: Messages = {
       },
     ],
     caseEyebrow: "A real review record",
-    caseTitle: "Case study: “The $1,000 online Markdown editor is now open source”",
+    caseTitle:
+      "Case study: “The $1,000 online Markdown editor is now open source”",
     caseIntro:
       "This product announcement contained 18 paragraphs. The review preserved its personal voice and core message, corrected a few presentation details, and added the hierarchy the draft lacked. The following figures and examples come from an actual review completed on August 19, 2026.",
     caseSourceCta: "Read the pre-review original",
@@ -284,7 +288,8 @@ export const en: Messages = {
       { label: "Layout suggestions", value: "6" },
       { label: "Actual cost", value: "3 credits" },
     ],
-    caseTitleReviewTitle: "76 points: specific, intriguing, and supported by the article",
+    caseTitleReviewTitle:
+      "76 points: specific, intriguing, and supported by the article",
     caseTitleReviewBody:
       "The concrete $1,000 figure creates a strong curiosity gap, and the article genuinely explains that token spend rather than exaggerating it. “Open source” adds a second value point. Not naming AI directly leaves a reasonable amount of suspense, so the title remains clear, specific, and credible without needing a forced rewrite.",
     caseContentTitle: "Copy suggestion: split an overloaded sentence",
@@ -310,37 +315,49 @@ export const en: Messages = {
     caseChangesTitle: "Concrete layout suggestions with Markdown diffs",
     caseChanges: [
       {
-        before: "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        after: "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
-        reason: "This sentence is the article's central launch announcement. Turning it into an H2 lets readers locate the beginning of the release section immediately.",
+        before:
+          "今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        after:
+          "## 今天非常欣喜地宣布，koinote（锦鲤笔记）的 1.0 已经完成并且上线了，欢迎大家试用，多提意见。",
+        reason:
+          "This sentence is the article's central launch announcement. Turning it into an H2 lets readers locate the beginning of the release section immediately.",
       },
       {
         before: "并且完整的代码库也都开源了：",
         after: "### 并且完整的代码库也都开源了：",
-        reason: "The repository is a subtopic of the launch announcement. An H3 places it under the 1.0 section and makes the parent-child hierarchy explicit.",
+        reason:
+          "The repository is a subtopic of the launch announcement. An H3 places it under the 1.0 section and makes the parent-child hierarchy explicit.",
       },
       {
         before: "欢迎各位大佬多提 issue 和 PR。",
         after: "欢迎各位大佬多提 issue 和 PR。\n\n---",
-        reason: "The open-source invitation ends here and the next paragraph begins a cost retrospective. A divider marks that topic change instead of letting the modules run together.",
+        reason:
+          "The open-source invitation ends here and the next paragraph begins a cost retrospective. A divider marks that topic change instead of letting the modules run together.",
       },
       {
         before: "下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        after: "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
-        reason: "The article shifts from the current product to membership and AI plans here. An H2 separates the roadmap from the preceding product overview.",
+        after:
+          "## 下一步打算完善一下会员体系，之后就是大家都期待的 AI 能力了。",
+        reason:
+          "The article shifts from the current product to membership and AI plans here. An H2 separates the roadmap from the preceding product overview.",
       },
       {
         before: "关于 AI 这块，不知道大家都有哪些点子呢？",
         after: "> **关于 AI 这块，不知道大家都有哪些点子呢？**",
-        reason: "This is the article's strongest direct question. A blockquote callout prevents it from disappearing during a quick scan and encourages replies.",
+        reason:
+          "This is the article's strongest direct question. A blockquote callout prevents it from disappearing during a quick scan and encourages replies.",
       },
       {
-        before: "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
-        after: "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
-        reason: "This closing sentence is the real call to action. Isolating it as a callout turns a regular explanation into a clear final request.",
+        before:
+          "所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。",
+        after:
+          "> **所以欢迎给我留言，说说你们想要的功能，如果评估合理的话，一定都会加上的。**",
+        reason:
+          "This closing sentence is the real call to action. Isolating it as a callout turns a regular explanation into a clear final request.",
       },
     ],
-    caseSafetyTitle: "All nine suggestions were applied only after confirmation",
+    caseSafetyTitle:
+      "All nine suggestions were applied only after confirmation",
     caseSafetyBody:
       "The review produced three copy suggestions and six layout suggestions. Koinote stored the review without changing the draft until the author confirmed each item; all suggestions were eventually applied for a total of 3 credits.",
     caseSafetyItems: [
@@ -367,17 +384,20 @@ export const en: Messages = {
           "AI identifies writing issues but does not verify factual claims, figures, or cited sources. Suggestions aim to preserve your voice, but you should still confirm that each one matches your intent.",
       },
       {
-        question: "Can an old review overwrite changes made while it was running?",
+        question:
+          "Can an old review overwrite changes made while it was running?",
         answer:
           "No. Revision and save-conflict checks protect every application. If the document changes after review begins, the old review expires instead of overwriting newer content.",
       },
       {
-        question: "Can I undo applied changes, and what does review history retain?",
+        question:
+          "Can I undo applied changes, and what does review history retain?",
         answer:
           "Yes. Applying AI suggestions creates a complete recovery point for comparison or restoration in version history. Review history also retains summaries, scores, suggestion states, and actual credit usage.",
       },
       {
-        question: "Who can use AI optimization, and how is the built-in model charged?",
+        question:
+          "Who can use AI optimization, and how is the built-in model charged?",
         answer:
           "AI optimization is a Lifetime benefit, with 1,000 credits included when you upgrade. The built-in model uses credits based on the review's actual usage.",
       },
@@ -603,19 +623,29 @@ export const en: Messages = {
   },
   accountDeletion: {
     title: "Delete account",
-    description: "This cannot be undone. Export any documents and images you want to keep first.",
-    immediate: "Your account, documents, versions, shares, MCP tokens, and synced images enter deletion immediately.",
-    membership: "Lifetime membership ends with the account. Deletion is not an automatic refund; statutory refund rights still apply.",
-    paymentRecords: "Minimal payment records required for tax, disputes, and fraud prevention are detached from your account and retained as required by law.",
+    description:
+      "This cannot be undone. Export any documents and images you want to keep first.",
+    immediate:
+      "Your account, documents, versions, shares, MCP tokens, and synced images enter deletion immediately.",
+    membership:
+      "Lifetime membership ends with the account. Deletion is not an automatic refund; statutory refund rights still apply.",
+    paymentRecords:
+      "Minimal payment records required for tax, disputes, and fraud prevention are detached from your account and retained as required by law.",
+    feedbackRecords:
+      "Feedback text, source pages, and client details are detached from your account and retained for troubleshooting and product improvement; they may still contain personal information you entered.",
     confirmLabel: "Type your current email {email} to confirm",
-    finalConfirmation: "Delete this account immediately? This action cannot be undone.",
+    finalConfirmation:
+      "Delete this account immediately? This action cannot be undone.",
     deleteButton: "Permanently delete account",
     deleting: "Deleting…",
     mismatch: "The email does not match this account.",
-    paymentPending: "A payment is still being processed. Wait for it to finish or contact support before deleting the account.",
-    unavailable: "We cannot safely close the payment flow right now. Please try again later.",
+    paymentPending:
+      "A payment is still being processed. Wait for it to finish or contact support before deleting the account.",
+    unavailable:
+      "We cannot safely close the payment flow right now. Please try again later.",
     failed: "Account deletion failed. Please try again later.",
-    localCleanupFailed: "The cloud account was deleted, but some offline data could not be cleared from this device. Server tokens are invalid; quit the app and remove its local application data manually.",
+    localCleanupFailed:
+      "The cloud account was deleted, but some offline data could not be cleared from this device. Server tokens are invalid; quit the app and remove its local application data manually.",
   },
   storage: {
     title: "Cloud storage",
@@ -659,14 +689,17 @@ export const en: Messages = {
     checkoutSuccess: "Payment confirmed. Your lifetime membership is active.",
     checkoutPending:
       "Payment is still being confirmed. Your access will update automatically.",
-    checkoutDelayed: "Stripe is still processing this payment. Do not pay again; check back later, or contact support if you were charged and membership remains inactive.",
+    checkoutDelayed:
+      "Stripe is still processing this payment. Do not pay again; check back later, or contact support if you were charged and membership remains inactive.",
     checkoutCancelled: "Checkout was cancelled. You were not charged.",
     checkoutFailed: "Checkout couldn't be completed. Please try again.",
   },
   agentCredits: {
     title: "AI credits",
-    description: "Built-in AI optimization uses credits. Using your own LLM channel uses no credits.",
-    membersOnly: "AI optimization is a lifetime-member benefit and includes 1,000 credits when you upgrade.",
+    description:
+      "Built-in AI optimization uses credits. Using your own LLM channel uses no credits.",
+    membersOnly:
+      "AI optimization is a lifetime-member benefit and includes 1,000 credits when you upgrade.",
     available: "{count} available",
     estimatedCharge: "Estimated charge: {count} credits",
     loading: "Loading credits…",
@@ -674,12 +707,14 @@ export const en: Messages = {
     balance: "Balance",
     reserved: "Estimated charge",
     availableLabel: "Available",
-    purchaseUnavailable: "Credit purchases are not configured on this deployment.",
+    purchaseUnavailable:
+      "Credit purchases are not configured on this deployment.",
     redirecting: "Opening secure checkout…",
     history: "Recent activity",
     checkoutSuccess: "Credits have been added to your balance.",
     checkoutPending: "Payment is being confirmed. Do not pay again.",
-    checkoutDelayed: "Stripe is still processing this payment. Do not pay again; check back later.",
+    checkoutDelayed:
+      "Stripe is still processing this payment. Do not pay again; check back later.",
     checkoutCancelled: "Purchase cancelled. You were not charged.",
     checkoutFailed: "The purchase could not be completed. Please try again.",
     transactionKinds: {
@@ -692,7 +727,8 @@ export const en: Messages = {
   },
   agentModelSettings: {
     title: "AI model",
-    description: "Choose whether AI optimization uses the built-in model or your own LLM. The editor uses this setting without asking again.",
+    description:
+      "Choose whether AI optimization uses the built-in model or your own LLM. The editor uses this setting without asking again.",
     membersOnly: "AI optimization is available to lifetime members.",
     builtIn: "Built-in model",
     builtInHint: "Uses credits based on actual usage.",
@@ -704,7 +740,8 @@ export const en: Messages = {
   },
   llmChannels: {
     title: "Your LLM channels",
-    description: "Configure an OpenAI-compatible endpoint or Anthropic Messages API. AI optimization uses the default channel; keys are encrypted and BYOK uses no credits.",
+    description:
+      "Configure an OpenAI-compatible endpoint or Anthropic Messages API. AI optimization uses the default channel; keys are encrypted and BYOK uses no credits.",
     membersOnly: "Custom LLM channels are available to lifetime members.",
     add: "Add channel",
     loading: "Loading channels…",
@@ -713,7 +750,8 @@ export const en: Messages = {
     defaultBadge: "Default",
     edit: "Edit channel",
     delete: "Delete channel",
-    deleteConfirm: "AI optimization using this channel will no longer work. Delete it?",
+    deleteConfirm:
+      "AI optimization using this channel will no longer work. Delete it?",
     addTitle: "Add LLM channel",
     editTitle: "Edit LLM channel",
     cancel: "Cancel",
@@ -726,16 +764,19 @@ export const en: Messages = {
     makeDefault: "Make this the default channel",
     save: "Save channel",
     saving: "Saving…",
-    saveFailed: "Could not save the channel. Check the configuration and try again.",
+    saveFailed:
+      "Could not save the channel. Check the configuration and try again.",
     deleteFailed: "Could not delete the channel. Please try again.",
   },
   agentReview: {
     button: "AI optimization",
     title: "AI optimization",
-    description: "Review the title, body, and Markdown layout like a code change; nothing changes until you approve it.",
+    description:
+      "Review the title, body, and Markdown layout like a code change; nothing changes until you approve it.",
     membersOnly: "This feature is available to lifetime members only.",
     upgrade: "Upgrade to lifetime",
-    localModeUnavailable: "Local mode never connects to the network, so AI optimization is unavailable.",
+    localModeUnavailable:
+      "Local mode never connects to the network, so AI optimization is unavailable.",
     provider: "Review method",
     builtIn: "Built-in model",
     builtInHint: "Uses credits based on actual token usage.",
@@ -747,21 +788,27 @@ export const en: Messages = {
     start: "Start review",
     running: "AI is reviewing your article…",
     progress: "{completed}/{total} subtasks complete",
-    partialResults: "Partial results are ready. Changes can be applied after every task finishes.",
+    partialResults:
+      "Partial results are ready. Changes can be applied after every task finishes.",
     stageTitle: "Title & opening",
     stageDocument: "Whole-article edit",
     stageBody: "Body review",
     stageLayout: "Structure & layout",
     backgroundRunning: "AI optimization is running in the background",
-    backgroundRunningDescription: "Keep writing or switch pages. Koinote will notify you when the review is ready.",
+    backgroundRunningDescription:
+      "Keep writing or switch pages. Koinote will notify you when the review is ready.",
     backgroundReady: "AI optimization is ready",
-    backgroundReadyDescription: "The title, body, and structure suggestions are ready to review.",
+    backgroundReadyDescription:
+      "The title, body, and structure suggestions are ready to review.",
     backgroundFailed: "AI optimization could not finish",
-    backgroundFailedDescription: "The model channel or network may be temporarily unavailable. Open the document and try again.",
-    backgroundTimeoutDescription: "This review timed out or the service restarted. Open the document and start it again.",
+    backgroundFailedDescription:
+      "The model channel or network may be temporarily unavailable. Open the document and try again.",
+    backgroundTimeoutDescription:
+      "This review timed out or the service restarted. Open the document and start it again.",
     viewBackgroundResult: "Review suggestions",
     dismissNotification: "Dismiss notification",
-    saveFailed: "The current document could not be saved. Resolve the save issue and try again.",
+    saveFailed:
+      "The current document could not be saved. Resolve the save issue and try again.",
     loading: "Loading review…",
     loadFailed: "Could not load review history. Please try again.",
     noPreviousReviews: "No reviews yet.",
@@ -774,7 +821,8 @@ export const en: Messages = {
     layoutAssessment: "Six-dimension radar",
     layoutShowCards: "Show all details",
     layoutShowRadar: "Show radar",
-    layoutRadarHint: "Hover to inspect a dimension. Click it to filter suggestions below; click again to clear.",
+    layoutRadarHint:
+      "Hover to inspect a dimension. Click it to filter suggestions below; click again to clear.",
     deepAnalysis: "Deep analysis",
     deepAnalysisTarget: "Deep analysis target",
     deepAnalysisStarting: "Starting…",
@@ -789,19 +837,27 @@ export const en: Messages = {
     applyAll: "Apply all",
     applyingAll: "Applying all…",
     dismissAll: "Ignore all",
-    dismissAllConfirm: "This closes the current review. Ignore every remaining suggestion?",
+    dismissAllConfirm:
+      "This closes the current review. Ignore every remaining suggestion?",
     applied: "Applied",
     dismissed: "Ignored",
     staleTitle: "This review is out of date",
-    staleDescription: "The document changed after this review. Start a new review to avoid overwriting newer work.",
+    staleDescription:
+      "The document changed after this review. Start a new review to avoid overwriting newer work.",
     failedTitle: "AI could not complete this review",
     retry: "Review again",
-    noSuggestions: "The article is in good shape; this review has no changes to apply.",
-    noTitleSuggestions: "No reliable title alternative worth replacing the current title was found.",
-    noTitleSuggestionsLowScore: "The title scored low, but no supported alternative was found — the article does not yet carry a stronger promise. Add a concrete result or audience first, then review again.",
-    noContentSuggestions: "The writing is in good shape. No editorial changes are needed.",
-    noLayoutSuggestions: "The current structure already works. No safe layout changes are needed.",
-    noFilteredLayoutSuggestions: "There are no {dimension} changes in this review. Run deep analysis for a focused second pass.",
+    noSuggestions:
+      "The article is in good shape; this review has no changes to apply.",
+    noTitleSuggestions:
+      "No reliable title alternative worth replacing the current title was found.",
+    noTitleSuggestionsLowScore:
+      "The title scored low, but no supported alternative was found — the article does not yet carry a stronger promise. Add a concrete result or audience first, then review again.",
+    noContentSuggestions:
+      "The writing is in good shape. No editorial changes are needed.",
+    noLayoutSuggestions:
+      "The current structure already works. No safe layout changes are needed.",
+    noFilteredLayoutSuggestions:
+      "There are no {dimension} changes in this review. Run deep analysis for a focused second pass.",
     usage: "Used {credits} credits",
     close: "Close",
     categories: {
@@ -869,13 +925,15 @@ export const en: Messages = {
   },
   mcpActivity: {
     title: "MCP activity log",
-    description: "See which tools an Agent called, which document it touched, and whether each call succeeded. Logs are kept for 180 days and never include document or token contents.",
+    description:
+      "See which tools an Agent called, which document it touched, and whether each call succeeded. Logs are kept for 180 days and never include document or token contents.",
     back: "Back to MCP settings",
     membersOnly: "MCP activity logs are a lifetime membership benefit.",
     loading: "Loading activity…",
     loadFailed: "Could not load MCP activity. Please try again.",
     retry: "Retry",
-    empty: "No MCP activity yet. Calls appear here after an Agent first uses a tool.",
+    empty:
+      "No MCP activity yet. Calls appear here after an Agent first uses a tool.",
     loadMore: "Load more",
     success: "Success",
     error: "Failed",
@@ -932,7 +990,8 @@ export const en: Messages = {
   },
   aiSettings: {
     title: "AI settings",
-    subtitle: "Manage AI credits, your own LLM channels, and MCP document access in one place.",
+    subtitle:
+      "Manage AI credits, your own LLM channels, and MCP document access in one place.",
   },
   documentsPage: {
     title: "My documents",
@@ -960,14 +1019,16 @@ export const en: Messages = {
   },
   keyboardShortcuts: {
     title: "Keyboard shortcuts",
-    description: "Search, navigate, and edit documents without leaving the keyboard.",
+    description:
+      "Search, navigate, and edit documents without leaving the keyboard.",
     close: "Close keyboard shortcuts",
     or: "or",
     searchAndNavigation: "Search & navigation",
     documents: "Documents",
     panels: "Panels",
     editing: "Editing",
-    panelHint: "Panel shortcuts only apply outside text fields. In the editor, ⌘/Ctrl+B still makes text bold.",
+    panelHint:
+      "Panel shortcuts only apply outside text fields. In the editor, ⌘/Ctrl+B still makes text bold.",
     actions: {
       showKeyboardShortcuts: "Show keyboard shortcuts",
       searchDocuments: "Search documents",
@@ -1033,6 +1094,30 @@ export const en: Messages = {
     title: "Invite friends",
     subtitle: "Share your personal invitation link and track rewards.",
   },
+  feedback: {
+    menuLabel: "Feedback",
+    title: "Tell us what you think",
+    description:
+      "Report a bug or share an experience suggestion. Our team reviews every submission in the admin dashboard.",
+    categoryLabel: "Feedback type",
+    categoryBug: "Bug",
+    categoryExperience: "Experience",
+    messageLabel: "Your feedback",
+    messagePlaceholder:
+      "Describe what happened and what you expected to happen…",
+    privacyHint:
+      "Feedback is linked to your account and includes the current page and client details. After account deletion, it is detached from your account and retained for troubleshooting and product improvement.",
+    discardConfirm:
+      "This feedback has not been submitted. Discard what you entered?",
+    cancel: "Cancel",
+    close: "Close feedback dialog",
+    submit: "Submit feedback",
+    submitting: "Submitting…",
+    submitFailed: "Feedback could not be submitted. Please try again.",
+    successTitle: "Feedback received",
+    successDescription: "Thank you. We’ll review what you shared.",
+    done: "Done",
+  },
   admin: {
     title: "Admin",
     subtitle: "Monitor site growth, memberships, revenue, and operations.",
@@ -1048,9 +1133,26 @@ export const en: Messages = {
     tabUsers: "Users",
     tabServer: "Server",
     tabAnnouncements: "Announcements",
+    tabFeedback: "Feedback",
+    feedbackTitle: "User feedback",
+    feedbackSubtitle:
+      "Bug reports and experience suggestions in submission order.",
+    feedbackLoading: "Loading user feedback…",
+    feedbackLoadFailed: "User feedback could not be loaded. Please try again.",
+    feedbackEmpty: "No feedback has been submitted yet.",
+    feedbackLoadMore: "Load more",
+    feedbackLoadingMore: "Loading…",
+    feedbackBug: "Bug",
+    feedbackExperience: "Experience",
+    feedbackFrom: "Submitted by",
+    feedbackPage: "Source page",
+    feedbackSubmittedAt: "Submitted",
+    feedbackUserAgent: "Client details",
     serverStatusLoading: "Loading server status…",
-    serverStatusLoadFailed: "Server status could not be loaded. Please try again later.",
-    serverStatusUnavailable: "This environment cannot expose Linux host metrics. If this appears in production, check the container's read-only monitoring mounts.",
+    serverStatusLoadFailed:
+      "Server status could not be loaded. Please try again later.",
+    serverStatusUnavailable:
+      "This environment cannot expose Linux host metrics. If this appears in production, check the container's read-only monitoring mounts.",
     serverStatusTitle: "Server status",
     serverStatusSubtitle: "Resource usage for the entire Linux server.",
     serverStatusAutoRefresh: "Refreshes every 30 seconds",
@@ -1062,20 +1164,23 @@ export const en: Messages = {
     notAvailable: "Unavailable",
     notConfigured: "Not configured",
     uptimeValue: "{days}d {hours}h {minutes}m",
-    serverCPUHint: "CPU is the whole-server utilization; 100% means all logical cores are busy.",
+    serverCPUHint:
+      "CPU is the whole-server utilization; 100% means all logical cores are busy.",
     serverLoad: "System load",
     logicalCPUs: "Logical CPUs",
     load1: "1-minute load",
     load5: "5-minute load",
     load15: "15-minute load",
-    loadHint: "Compare load average with logical CPU count; sustained values above the core count usually mean work is queued.",
+    loadHint:
+      "Compare load average with logical CPU count; sustained values above the core count usually mean work is queued.",
     serverMemoryStorage: "Memory & storage",
     memoryTotal: "Physical memory",
     memoryAvailable: "Available memory",
     swapUsage: "Swap usage",
     diskAvailable: "Disk available",
     serverNetwork: "Primary network traffic",
-    networkUnavailable: "The server's primary network interface could not be identified.",
+    networkUnavailable:
+      "The server's primary network interface could not be identified.",
     downloadRate: "Receiving now",
     uploadRate: "Sending now",
     receivedTotal: "Received total",
@@ -1149,29 +1254,39 @@ export const en: Messages = {
     day30Retention: "D30 retention",
     retentionSample: "{returned} / {eligible} users",
     announcementsTitle: "In-app announcements",
-    announcementsSubtitle: "Notify every signed-in user; Koinote generates English, Chinese, Japanese, and French versions automatically.",
+    announcementsSubtitle:
+      "Notify every signed-in user; Koinote generates English, Chinese, Japanese, and French versions automatically.",
     announcementSourceLanguage: "Source language",
     announcementTitleLabel: "Title",
     announcementSummaryLabel: "Summary",
     announcementHighlightsLabel: "Highlights",
     announcementHighlightsPlaceholder: "One highlight per line, up to 8",
-    announcementTranslationNote: "Publishing asks the server-side LLM to translate the other languages while preserving your source text.",
-    announcementTranslationUnavailable: "The announcement translation service is not configured, so manual publishing is unavailable.",
-    announcementTranslationFailed: "Translation failed and nothing was published. Please try again.",
+    announcementTranslationNote:
+      "Publishing asks the server-side LLM to translate the other languages while preserving your source text.",
+    announcementTranslationUnavailable:
+      "The announcement translation service is not configured, so manual publishing is unavailable.",
+    announcementTranslationFailed:
+      "Translation failed and nothing was published. Please try again.",
     announcementPublish: "Translate and publish",
     announcementPublishing: "Translating…",
-    announcementPublishSuccess: "Published. Users will see this the next time they open Koinote.",
-    announcementPublishFailed: "The announcement could not be published. Check the content and try again.",
-    announcementContentInvalid: "The title, summary, or highlights exceed the allowed length. Check the content and try again.",
-    announcementHighlightTooLong: "Each highlight can contain at most 500 characters.",
+    announcementPublishSuccess:
+      "Published. Users will see this the next time they open Koinote.",
+    announcementPublishFailed:
+      "The announcement could not be published. Check the content and try again.",
+    announcementContentInvalid:
+      "The title, summary, or highlights exceed the allowed length. Check the content and try again.",
+    announcementHighlightTooLong:
+      "Each highlight can contain at most 500 characters.",
     announcementHistory: "Recent announcements",
     announcementHistoryEmpty: "No announcements have been published yet.",
     announcementLoadFailed: "Announcements could not be loaded.",
     announcementKindRelease: "Release",
     announcementKindManual: "Manual notice",
     announcementWithdraw: "Withdraw",
-    announcementWithdrawConfirm: "Withdraw this announcement? Users will stop seeing it, while the record remains in the admin history.",
-    announcementWithdrawFailed: "The announcement could not be withdrawn. Please try again.",
+    announcementWithdrawConfirm:
+      "Withdraw this announcement? Users will stop seeing it, while the record remains in the admin history.",
+    announcementWithdrawFailed:
+      "The announcement could not be withdrawn. Please try again.",
     announcementWithdrawn: "Withdrawn",
   },
   announcements: {
@@ -1180,12 +1295,14 @@ export const en: Messages = {
     viewChangelog: "View full changelog",
     acknowledge: "Got it",
     close: "Close announcement",
-    markReadFailed: "Koinote could not save the read status. You can close this notice and try again later.",
+    markReadFailed:
+      "Koinote could not save the read status. You can close this notice and try again later.",
   },
   documentTemplates: {
     eyebrow: "Start with structure",
     title: "Create from a template",
-    subtitle: "Choose a focused outline, then make it yours. The template is copied into a normal Markdown document and remains fully editable.",
+    subtitle:
+      "Choose a focused outline, then make it yours. The template is copied into a normal Markdown document and remains fully editable.",
     close: "Close templates",
     blankTitle: "Blank document",
     blankDescription: "Start with an empty page and build your own structure.",
@@ -1193,7 +1310,8 @@ export const en: Messages = {
     memberBadge: "Lifetime",
     upgradeHint: "Upgrade to Lifetime to use this template",
     localModeLocked: "Sign in with a Lifetime account to use this template",
-    sourceNote: "Curated from highly rated, permissively licensed Markdown patterns on GitHub and rewritten for Koinote.",
+    sourceNote:
+      "Curated from highly rated, permissively licensed Markdown patterns on GitHub and rewritten for Koinote.",
     createFailed: "The document could not be created. Please try again.",
     categories: {
       everyday: "Everyday work",
@@ -1203,21 +1321,81 @@ export const en: Messages = {
       technical: "Technical decisions",
     },
     templates: {
-      "meeting-notes": { name: "Meeting notes", description: "Turn discussion into decisions, owners, and trackable actions." },
-      "daily-note": { name: "Daily note", description: "Keep priorities, observations, ideas, and reflection in one place." },
-      "weekly-review": { name: "Weekly plan & review", description: "Plan three outcomes and close the loop with a practical review." },
-      "todo-list": { name: "Todo list", description: "Manage three priorities, captured tasks, contexts, delegation, and the daily close." },
-      table: { name: "Flexible table", description: "Define fields and rules, then organize records, views, summaries, and changes." },
-      "daily-report": { name: "Daily work report", description: "Report outcomes, metrics, blockers, collaboration, and tomorrow's plan." },
-      "weekly-report": { name: "Weekly work report", description: "Summarize outcomes, metric gaps, risks, lessons, and next week's results." },
-      okr: { name: "OKR plan & review", description: "Connect strategy to strong objectives, measurable KRs, confidence checks, and scoring." },
-      kpi: { name: "KPI tracker", description: "Define formulas, sources, targets, guardrails, alert thresholds, and corrective actions." },
-      "article-outline": { name: "Article brief", description: "Shape audience, hooks, evidence, structure, CTA, and a publishing checklist." },
-      "project-readme": { name: "Project README", description: "Document value, quick start, usage, architecture, roadmap, and contribution." },
-      "product-requirements": { name: "Product requirements", description: "Define the problem, scope, user stories, acceptance criteria, metrics, and rollout." },
-      "research-paper": { name: "Research paper notes", description: "Capture methods, evidence, limitations, connections, and follow-up work." },
-      "decision-record": { name: "Decision record", description: "Preserve context, options, trade-offs, consequences, and validation." },
-      "technical-design": { name: "Technical design", description: "Cover interfaces, data, consistency, security, capacity, migration, and testing." },
+      "meeting-notes": {
+        name: "Meeting notes",
+        description:
+          "Turn discussion into decisions, owners, and trackable actions.",
+      },
+      "daily-note": {
+        name: "Daily note",
+        description:
+          "Keep priorities, observations, ideas, and reflection in one place.",
+      },
+      "weekly-review": {
+        name: "Weekly plan & review",
+        description:
+          "Plan three outcomes and close the loop with a practical review.",
+      },
+      "todo-list": {
+        name: "Todo list",
+        description:
+          "Manage three priorities, captured tasks, contexts, delegation, and the daily close.",
+      },
+      table: {
+        name: "Flexible table",
+        description:
+          "Define fields and rules, then organize records, views, summaries, and changes.",
+      },
+      "daily-report": {
+        name: "Daily work report",
+        description:
+          "Report outcomes, metrics, blockers, collaboration, and tomorrow's plan.",
+      },
+      "weekly-report": {
+        name: "Weekly work report",
+        description:
+          "Summarize outcomes, metric gaps, risks, lessons, and next week's results.",
+      },
+      okr: {
+        name: "OKR plan & review",
+        description:
+          "Connect strategy to strong objectives, measurable KRs, confidence checks, and scoring.",
+      },
+      kpi: {
+        name: "KPI tracker",
+        description:
+          "Define formulas, sources, targets, guardrails, alert thresholds, and corrective actions.",
+      },
+      "article-outline": {
+        name: "Article brief",
+        description:
+          "Shape audience, hooks, evidence, structure, CTA, and a publishing checklist.",
+      },
+      "project-readme": {
+        name: "Project README",
+        description:
+          "Document value, quick start, usage, architecture, roadmap, and contribution.",
+      },
+      "product-requirements": {
+        name: "Product requirements",
+        description:
+          "Define the problem, scope, user stories, acceptance criteria, metrics, and rollout.",
+      },
+      "research-paper": {
+        name: "Research paper notes",
+        description:
+          "Capture methods, evidence, limitations, connections, and follow-up work.",
+      },
+      "decision-record": {
+        name: "Decision record",
+        description:
+          "Preserve context, options, trade-offs, consequences, and validation.",
+      },
+      "technical-design": {
+        name: "Technical design",
+        description:
+          "Cover interfaces, data, consistency, security, capacity, migration, and testing.",
+      },
     },
   },
   editor: {
@@ -1231,7 +1409,8 @@ export const en: Messages = {
     saveBackupFailed: "Backup failed; copy the document now",
     retrySave: "Retry",
     remoteUpdated: "Updated with the latest changes from another device",
-    remoteUpdateAvailable: "A newer cloud version is available. Your local draft will not be overwritten.",
+    remoteUpdateAvailable:
+      "A newer cloud version is available. Your local draft will not be overwritten.",
     reviewRemoteUpdate: "Review changes",
     resolveConflict: "Resolve conflict",
     conflictTitle: "This document changed elsewhere",
@@ -1333,7 +1512,8 @@ export const en: Messages = {
     exportHTML: "Web page (.html)",
     exportPDF: "PDF",
     exportDOCX: "Word (.docx)",
-    exportPrintHint: "Saved directly on desktop with selectable, searchable text",
+    exportPrintHint:
+      "Saved directly on desktop with selectable, searchable text",
     find: {
       button: "Find",
       placeholder: "Find in this document…",
@@ -1397,11 +1577,14 @@ export const en: Messages = {
     treeMenu: "File tree actions",
     organizer: {
       button: "Organize documents",
-      rootOnly: "Includes root documents and previously auto-organized documents. Folders you create or import, and everything inside them, always remain untouched.",
+      rootOnly:
+        "Includes root documents and previously auto-organized documents. Folders you create or import, and everything inside them, always remain untouched.",
       smartTitle: "Smart organization",
-      smartDescription: "Group by creation month, split months over 20 documents into weeks, then split crowded weeks into dates.",
+      smartDescription:
+        "Group by creation month, split months over 20 documents into weeks, then split crowded weeks into dates.",
       activityTitle: "Activity organization",
-      activityDescription: "Group by last edit recency, then split crowded groups by month, week, or date.",
+      activityDescription:
+        "Group by last edit recency, then split crowded groups by month, week, or date.",
       unknownDate: "Unknown date",
       weekOfMonth: "Week {n}",
       activityRecent7: "Last 7 days",
@@ -1409,14 +1592,18 @@ export const en: Messages = {
       activityRecent90: "31–90 days",
       activityInactive: "91–365 days",
       activityArchive: "Over one year",
-      confirmSummary: "Move {documents} documents using about {folders} auto-organized folders.",
-      upToDate: "Documents already match this strategy. No organization is needed.",
+      confirmSummary:
+        "Move {documents} documents using about {folders} auto-organized folders.",
+      upToDate:
+        "Documents already match this strategy. No organization is needed.",
       cancel: "Cancel",
       apply: "Organize now",
       organizing: "Organizing…",
       success: "Organized {count} documents",
-      partial: "Organized {moved} documents; {failed} could not be moved and can be retried later.",
-      failed: "Organization failed. Check the network or local storage and try again.",
+      partial:
+        "Organized {moved} documents; {failed} could not be moved and can be retried later.",
+      failed:
+        "Organization failed. Check the network or local storage and try again.",
     },
     wechatMathConverted: "{n} formula(s) converted to images",
     wechatMathFailed: "{n} formula(s) failed; fell back to LaTeX source",
@@ -1496,28 +1683,37 @@ function hello(name) {
   desktopAuth: {
     eyebrow: "Desktop app",
     title: "Authorize the Koinote app",
-    description: "The app keeps offline copies of documents and images on this device and syncs your changes when connectivity returns.",
+    description:
+      "The app keeps offline copies of documents and images on this device and syncs your changes when connectivity returns.",
     permissionsTitle: "After approval, the app can:",
-    permissionDocuments: "Read, create, organize, share, and move your documents and folders to trash",
-    permissionOffline: "Keep documents, pending images, and up to 512 MB of hosted-image cache on this device",
-    permissionIdentity: "Read basic account details to show the signed-in account",
+    permissionDocuments:
+      "Read, create, organize, share, and move your documents and folders to trash",
+    permissionOffline:
+      "Keep documents, pending images, and up to 512 MB of hosted-image cache on this device",
+    permissionIdentity:
+      "Read basic account details to show the signed-in account",
     approve: "Allow and return to the app",
     cancel: "Cancel",
     signIn: "Sign in to continue",
-    invalid: "This authorization link is invalid. Return to the app and try again.",
+    invalid:
+      "This authorization link is invalid. Return to the app and try again.",
     failed: "Authorization could not be completed. Please try again.",
   },
   desktopLocalMode: {
     badge: "Local mode",
     title: "Write only on this device",
-    description: "No account required. Documents and images are encrypted on this device, never uploaded, and remote features are unavailable.",
+    description:
+      "No account required. Documents and images are encrypted on this device, never uploaded, and remote features are unavailable.",
     setupTitle: "Set a local-mode password",
-    setupDescription: "This password encrypts and unlocks local data. It is never uploaded and cannot be recovered.",
+    setupDescription:
+      "This password encrypts and unlocks local data. It is never uploaded and cannot be recovered.",
     unlockTitle: "Unlock local mode",
-    unlockDescription: "Enter the local-mode password to access documents stored on this device.",
+    unlockDescription:
+      "Enter the local-mode password to access documents stored on this device.",
     password: "Local-mode password",
     confirmPassword: "Confirm password",
-    passwordHint: "At least 8 characters. You must enter it again after closing the app.",
+    passwordHint:
+      "At least 8 characters. You must enter it again after closing the app.",
     create: "Create and enter local mode",
     unlock: "Unlock",
     creating: "Creating…",
@@ -1525,70 +1721,92 @@ function hello(name) {
     useAccount: "Use a Koinote account",
     enterLocalMode: "Switch to local mode",
     lock: "Lock local mode",
-    encrypted: "Documents, folder names, and images are encrypted with AES-GCM before being stored in local SQLite.",
-    networkDisabled: "Local mode blocks sync, update checks, sharing, billing, MCP, and every other remote request.",
+    encrypted:
+      "Documents, folder names, and images are encrypted with AES-GCM before being stored in local SQLite.",
+    networkDisabled:
+      "Local mode blocks sync, update checks, sharing, billing, MCP, and every other remote request.",
     passwordMismatch: "The passwords do not match.",
     invalidPassword: "The password is incorrect.",
     genericError: "Local mode is unavailable. Restart the app and try again.",
-    localSubtitle: "You are in local mode. Changes stay on this device and are not synced to a Koinote account.",
+    localSubtitle:
+      "You are in local mode. Changes stay on this device and are not synced to a Koinote account.",
     localStorageTitle: "Fully local storage",
-    localStorageDescription: "There is no cloud copy or automatic recovery. Export a ZIP backup from My documents regularly.",
-    trashRetention: "Documents in the local trash are never deleted automatically.",
+    localStorageDescription:
+      "There is no cloud copy or automatic recovery. Export a ZIP backup from My documents regularly.",
+    trashRetention:
+      "Documents in the local trash are never deleted automatically.",
     importTitle: "Import local-mode data",
-    importDescription: "After verifying the local password, copy local documents, folders, and referenced images into this account. The import is an independent snapshot; later edits remain separate.",
+    importDescription:
+      "After verifying the local password, copy local documents, folders, and referenced images into this account. The import is an independent snapshot; later edits remain separate.",
     importButton: "Verify and import",
     importing: "Importing…",
-    importSuccess: "Imported {documents} documents, {folders} folders, and {images} images. They now follow the normal sync flow.",
+    importSuccess:
+      "Imported {documents} documents, {folders} folders, and {images} images. They now follow the normal sync flow.",
     importEmpty: "Local mode has no documents to import yet.",
     importPassword: "Enter the local-mode password",
-    importWarning: "Importing again creates another independent copy and does not overwrite the previous import.",
+    importWarning:
+      "Importing again creates another independent copy and does not overwrite the previous import.",
   },
   desktopBilling: {
     successTitle: "Payment complete",
     cancelledTitle: "Payment cancelled",
-    description: "Returning to the Koinote app. The app will securely confirm this purchase and refresh the corresponding benefit.",
+    description:
+      "Returning to the Koinote app. The app will securely confirm this purchase and refresh the corresponding benefit.",
     openApp: "Open the Koinote app",
-    invalid: "This checkout return link is invalid. Return to the app and try again.",
+    invalid:
+      "This checkout return link is invalid. Return to the app and try again.",
     dismiss: "Dismiss payment status",
   },
   desktopHome: {
     eyebrow: "Desktop workspace",
     welcome: "Welcome back, {name}",
-    subtitle: "Continue where you left off. Changes are saved on this device first and sync automatically when you are online.",
+    subtitle:
+      "Continue where you left off. Changes are saved on this device first and sync automatically when you are online.",
     newDocument: "New document",
     importDocuments: "Import Markdown",
     createFailed: "The document could not be created. Please try again.",
-    loadFailed: "Local documents could not be loaded. Restart the app and try again.",
+    loadFailed:
+      "Local documents could not be loaded. Restart the app and try again.",
     continueTitle: "Continue writing",
     recentTitle: "Recent documents",
     allDocuments: "View all",
     updated: "Updated {date}",
     emptyTitle: "Start your first document",
-    emptyDescription: "Create a blank document, or open My documents to import existing Markdown files and ZIP archives.",
+    emptyDescription:
+      "Create a blank document, or open My documents to import existing Markdown files and ZIP archives.",
     syncTitle: "Sync status",
-    syncDescription: "Local changes sync automatically when online. If both copies change, you choose which version to keep.",
+    syncDescription:
+      "Local changes sync automatically when online. If both copies change, you choose which version to keep.",
     offlineTitle: "Ready for offline work",
-    offlineDescription: "Documents and images live on this device. You can paste images and keep editing offline; they upload and switch to hosted URLs when connectivity returns.",
+    offlineDescription:
+      "Documents and images live on this device. You can paste images and keep editing offline; they upload and switch to hosted URLs when connectivity returns.",
     documentCount: "{count} documents available locally",
-    imageCacheUsage: "Local images {total}; hosted cache {cached} / {limit}, pending {pending}",
+    imageCacheUsage:
+      "Local images {total}; hosted cache {cached} / {limit}, pending {pending}",
     clearImageCache: "Clear hosted-image cache",
     clearingImageCache: "Clearing…",
-    imageCacheCleared: "The image cache was cleared. Images are cached again as you open documents.",
-    imageMaintenanceDelayed: "Background image maintenance is delayed. Your documents are synced, and the app will retry automatically.",
+    imageCacheCleared:
+      "The image cache was cleared. Images are cached again as you open documents.",
+    imageMaintenanceDelayed:
+      "Background image maintenance is delayed. Your documents are synced, and the app will retry automatically.",
   },
   desktopUpdate: {
     check: "Check for updates",
     checking: "Checking for updates",
-    checkingDescription: "Connecting to GitHub Releases for the latest version.",
+    checkingDescription:
+      "Connecting to GitHub Releases for the latest version.",
     availableTitle: "Update available",
-    availableDescription: "Koinote {next} is available. You are using {current}.",
+    availableDescription:
+      "Koinote {next} is available. You are using {current}.",
     downloadAndRestart: "Download and restart",
     downloading: "Downloading and installing the update",
     currentTitle: "You're up to date",
     currentDescription: "This client is already running the latest version.",
     failedTitle: "Update failed",
-    failedDescription: "The update service is unavailable. Check your connection and try again.",
-    saveFailedDescription: "Current edits could not be saved safely, so the update was cancelled. Copy the content before trying again.",
+    failedDescription:
+      "The update service is unavailable. Check your connection and try again.",
+    saveFailedDescription:
+      "Current edits could not be saved safely, so the update was cancelled. Copy the content before trying again.",
     retry: "Retry",
     later: "Later",
     close: "Close",
@@ -1601,12 +1819,15 @@ function hello(name) {
     error: "Sync failed; click to retry",
     conflicts: "conflicts need attention",
     conflictsTitle: "Resolve sync conflicts",
-    conflictsDescription: "These documents changed both locally and in the cloud. Choose which copy to keep; neither is silently overwritten.",
+    conflictsDescription:
+      "These documents changed both locally and in the cloud. Choose which copy to keep; neither is silently overwritten.",
     keepLocal: "Keep local copy",
     useCloud: "Use cloud copy",
     close: "Resolve later",
-    logoutWarning: "This device has {pending} unsynced changes, including {conflicts} conflicts. Continuing will permanently delete this local content. Log out anyway?",
-    logoutSaveFailed: "The current edits could not be saved locally, so logout was cancelled. Try again or copy the content before signing out.",
+    logoutWarning:
+      "This device has {pending} unsynced changes, including {conflicts} conflicts. Continuing will permanently delete this local content. Log out anyway?",
+    logoutSaveFailed:
+      "The current edits could not be saved locally, so logout was cancelled. Try again or copy the content before signing out.",
   },
   footer: {
     tagline:
@@ -1707,7 +1928,7 @@ function hello(name) {
         {
           title: "Lifetime Membership",
           body: [
-            '“Lifetime” means a one-time, non-renewing, non-transferable membership for as long as both your account and the Koinote service continue to exist. It is not a promise that the service will operate forever.',
+            "“Lifetime” means a one-time, non-renewing, non-transferable membership for as long as both your account and the Koinote service continue to exist. It is not a promise that the service will operate forever.",
             "Lifetime currently includes a fixed 10 GB cloud-storage allowance shared by documents and images; invitation bonuses are separate. The base allowance is not promised to increase automatically.",
             "Future AI benefits mean member eligibility if and when relevant features launch. We do not promise a release date, feature set, model, or provider, and this does not mean unlimited free inference. Reasonable usage, cost-control, regional, model, or provider limits may apply and will be described when a feature launches.",
             "Deleting your account immediately ends the membership. Account deletion does not itself trigger an automatic refund, without limiting statutory refund or consumer rights.",
@@ -1753,6 +1974,7 @@ function hello(name) {
             "When you use social sign-in, the basic profile returned by Google or GitHub (email, username, avatar)",
             "Content you create: document titles and bodies, folder structure, uploaded images",
             "Share settings: share tokens and hashed access passwords",
+            "User feedback: feedback text, source page, and client details",
             "Operational logs: request time, IP, and User-Agent, as needed for debugging and abuse prevention",
             "First-party product metrics: completion times for registration, first document, first upload, first export, first MCP call, and checkout; at most one activity date per account per day; shared pages retain only an aggregate read count",
           ],
@@ -1798,6 +2020,7 @@ function hello(name) {
             "Documents first enter a 30-day trash, where content, versions, images, and storage usage remain. After permanent deletion or expiry, images not referenced by another document are queued for background deletion.",
             "You can delete the entire account immediately from Dashboard by typing the current email and confirming again. The account, documents, versions, shares, MCP tokens, and image ledger are deleted, while related object-storage images are removed asynchronously. This cannot be undone.",
             "Minimal Stripe payment records needed for tax, disputes, and fraud prevention are detached from the account and retained as required by law. Deleted data in backups expires with the backup retention cycle and is not used to restore a deleted account.",
+            "Feedback text, source pages, and client details you submitted are detached from your account and retained for troubleshooting and product improvement; they may still contain personal information you entered.",
             "If you cannot sign in or need to exercise another statutory right, you can still contact us at the address below.",
           ],
         },
@@ -1876,6 +2099,13 @@ function hello(name) {
   },
   errors: {
     bad_request: "Invalid request",
+    feedback_category_invalid: "Choose Bug or Experience feedback.",
+    feedback_message_required: "Enter your feedback.",
+    feedback_message_invalid:
+      "Feedback contains unsupported characters. Remove them and try again.",
+    feedback_message_too_long: "Feedback cannot exceed 4,000 characters.",
+    feedback_page_invalid:
+      "The current page is invalid. Refresh and try again.",
     missing_fields: "Username, email and password are all required",
     invalid_email: "Invalid email format",
     invalid_invitation_code:
@@ -1913,14 +2143,21 @@ function hello(name) {
     content_too_large: "Document is too large to save",
     pdf_path_must_be_absolute: "Choose a valid location for the PDF",
     pdf_path_must_end_with_pdf: "The PDF filename must end in .pdf",
-    pdf_parent_directory_missing: "The selected folder no longer exists. Choose another location",
-    pdf_path_invalid_unicode: "The save path contains unsupported characters. Choose another name or location",
-    pdf_output_too_large: "The exported PDF exceeds 512 MB. Remove large images and try again",
+    pdf_parent_directory_missing:
+      "The selected folder no longer exists. Choose another location",
+    pdf_path_invalid_unicode:
+      "The save path contains unsupported characters. Choose another name or location",
+    pdf_output_too_large:
+      "The exported PDF exceeds 512 MB. Remove large images and try again",
     pdf_output_invalid: "The generated PDF is incomplete. Please try again",
-    pdf_export_timed_out: "PDF export timed out. Reduce the document size or images and try again",
-    pdf_export_window_missing: "The document window is unavailable. Reopen the document and try again",
-    pdf_export_channel_closed: "PDF export stopped unexpectedly. Please try again",
-    pdf_export_unsupported_platform: "One-click PDF export is not supported on this system",
+    pdf_export_timed_out:
+      "PDF export timed out. Reduce the document size or images and try again",
+    pdf_export_window_missing:
+      "The document window is unavailable. Reopen the document and try again",
+    pdf_export_channel_closed:
+      "PDF export stopped unexpectedly. Please try again",
+    pdf_export_unsupported_platform:
+      "One-click PDF export is not supported on this system",
     image_fetch_rejected: "That image address is not allowed",
     image_fetch_failed: "Could not fetch that image from its original site",
     too_deep: "Folders are nested too deep to create another one inside",
@@ -1953,23 +2190,30 @@ function hello(name) {
       "Sharing succeeded online, but the app could not save its local state. Open sharing and apply it again later",
     share_password_invalid: "Incorrect password",
     too_many_requests: "Too many attempts — please try again later",
-    insufficient_credits: "Not enough credits. Purchase credits or use your own LLM channel",
+    insufficient_credits:
+      "Not enough credits. Purchase credits or use your own LLM channel",
     agent_llm_not_configured: "The built-in AI model is not configured",
-    agent_invalid_response: "The model returned an invalid review. Start a new review",
-    agent_provider_error: "The model provider rejected the request. Check the model and API key",
-    agent_provider_unavailable: "The model provider is temporarily unavailable. Try again later",
+    agent_invalid_response:
+      "The model returned an invalid review. Start a new review",
+    agent_provider_error:
+      "The model provider rejected the request. Check the model and API key",
+    agent_provider_unavailable:
+      "The model provider is temporarily unavailable. Try again later",
     agent_review_stale: "The document changed. Start a new review",
     agent_review_closed: "This review is already closed",
     agent_review_in_progress: "Another review is still running. Please wait",
-    invalid_agent_review_source: "The document or source review changed. Start a new standard review first",
+    invalid_agent_review_source:
+      "The document or source review changed. Start a new standard review first",
     invalid_agent_provider: "Invalid AI model provider",
     invalid_llm_channel_name: "Invalid channel name",
     invalid_llm_channel_url: "The channel Base URL is invalid or unsafe",
     invalid_llm_channel_model: "Invalid model name",
     invalid_llm_channel_api_key: "Invalid API key",
     llm_channel_not_found: "LLM channel not found",
-    llm_channel_limit_reached: "The LLM channel limit has been reached. Delete one first",
+    llm_channel_limit_reached:
+      "The LLM channel limit has been reached. Delete one first",
     llm_channel_name_exists: "A channel with this name already exists",
-    credit_billing_not_configured: "Credit purchases are not configured on this deployment",
+    credit_billing_not_configured:
+      "Credit purchases are not configured on this deployment",
   },
 };

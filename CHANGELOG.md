@@ -17,6 +17,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added in-document search with `Cmd+F` on macOS and `Ctrl+F` on Windows/Linux, highlighted matches, result counts, and wraparound previous/next navigation.
 - Added localized native desktop menus, a shortcut reference dialog, quick document opening, global search, tab navigation, numbered tab selection, document creation/closing, manual save, and panel toggles.
 - Added a member-only AI-generated hidden GEO summary for WeChat exports. Summaries are saved per document, remain editable and reusable, warn when the article changes, and clearly disclose the platform-policy risk before use.
+- Added an in-app feedback form with bug and experience categories, source/client context, privacy-safe share-link redaction, and a paginated administrator inbox.
 
 ### Changed
 
@@ -40,6 +41,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Desktop save failures now distinguish revision conflicts from offline or network errors, retain retryable drafts without silently restoring stale backups, and expose clearer accessible status feedback.
 - Sync updates, image uploads, and tab switches now preserve cursor and scroll positions without rebuilding unaffected editor content, including after an editor tab is remounted.
 - Native export menu actions now run the selected format directly, and `Cmd/Ctrl+/` toggles the shortcut reference closed instead of only opening it.
+- Desktop folder drag-and-drop now works reliably in WKWebView, rejects unknown payloads before moving anything, and clears stale drop highlights after cancelled drags.
+- `Cmd/Ctrl+W` and new-document shortcuts now work while the editor body is focused without firing inside form fields or through modal dialogs.
 
 ## [0.6.0] - 2026-08-17
 

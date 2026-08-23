@@ -10,6 +10,13 @@ import {
 import { useI18n, type Locale } from "../../i18n";
 import { docPad, folderPad, guideX } from "./indent";
 import type { DocNode, TreeFolder } from "./tree";
+import {
+  readTreeDragPayload,
+  writeTreeDragPayload,
+  type DragPayload,
+} from "./treeDrag";
+
+export type { DragPayload } from "./treeDrag";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -19,10 +26,6 @@ const DATE_LOCALE: Record<Locale, string> = {
 };
 
 // 缩进用 padding 而非 margin —— 整行都要可点、可放置。具体数值见 ./indent
-
-export type DragPayload =
-  | { kind: "doc"; id: string }
-  | { kind: "folder"; id: string };
 
 /**
  * 右键菜单指向的对象。root 是侧栏空白处。
@@ -81,7 +84,7 @@ export function FolderRow({
 }) {
   const { t } = useI18n();
   const open = h.expanded.has(folder.folderId);
-  const [over, setOver] = useState(false);
+  const [overDrag, setOverDrag] = useState<DragPayload | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -100,7 +103,9 @@ export function FolderRow({
   }, [h.autoEditFolderId, folder.folderId, folder.name, h]);
 
   const name = folder.name.trim() || t.editor.untitledFolder;
-  const acceptsDrop = h.dragging ? h.canDropOn(h.dragging, folder.folderId) : false;
+  const acceptsDrop = h.dragging
+    ? h.canDropOn(h.dragging, folder.folderId)
+    : false;
   // 菜单打开时这一行保持高亮：菜单在指针位置弹出，不标出来的话看不清操作的是哪一行
   const menuOpen = h.menuTargetId === folder.folderId;
 
@@ -115,18 +120,28 @@ export function FolderRow({
       <div
         // 整行都是放置区。只给图标的话命中率太低，拖起来很难受
         onDragOver={(e) => {
-          if (!acceptsDrop) return;
+          e.stopPropagation();
+          const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
+          if (!payload || !h.canDropOn(payload, folder.folderId)) return;
           e.preventDefault(); // 不调用它，浏览器不会触发 drop
-          setOver(true);
+          setOverDrag(h.dragging ?? payload);
         }}
-        onDragLeave={() => setOver(false)}
+        onDragLeave={() => setOverDrag(null)}
         onDrop={(e) => {
           e.preventDefault();
-          setOver(false);
-          if (h.dragging && acceptsDrop) h.onDrop(h.dragging, folder.folderId);
+          e.stopPropagation();
+          setOverDrag(null);
+          const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
+          if (payload && h.canDropOn(payload, folder.folderId)) {
+            h.onDrop(payload, folder.folderId);
+          }
         }}
         draggable={!editing}
-        onDragStart={() => h.setDragging({ kind: "folder", id: folder.folderId })}
+        onDragStart={(e) => {
+          const payload: DragPayload = { kind: "folder", id: folder.folderId };
+          writeTreeDragPayload(e.dataTransfer, payload);
+          h.setDragging(payload);
+        }}
         onDragEnd={() => h.setDragging(null)}
         onContextMenu={(e) =>
           h.onContextMenu(e, {
@@ -137,7 +152,7 @@ export function FolderRow({
           })
         }
         className={`group relative flex items-center rounded-lg transition ${
-          over && acceptsDrop
+          overDrag !== null && overDrag === h.dragging && acceptsDrop
             // 拖放目标环用 500 而不是 400：400 压在宣纸上只有 2.47:1，
             // 达不到非文字元素的 3:1。这个环是拖拽时唯一的落点提示，看不见就等于没有
             ? "bg-cinnabar-100 ring-1 ring-cinnabar-500 dark:bg-cinnabar-900/40"
@@ -262,7 +277,11 @@ export function DocRow({
     <li
       className="group relative"
       draggable
-      onDragStart={() => h.setDragging({ kind: "doc", id: doc.docId })}
+      onDragStart={(e) => {
+        const payload: DragPayload = { kind: "doc", id: doc.docId };
+        writeTreeDragPayload(e.dataTransfer, payload);
+        h.setDragging(payload);
+      }}
       onDragEnd={() => h.setDragging(null)}
       onContextMenu={(e) =>
         h.onContextMenu(e, {

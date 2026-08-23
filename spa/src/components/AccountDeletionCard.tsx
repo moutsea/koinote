@@ -62,6 +62,7 @@ export function AccountDeletionCard({ user }: { user: User }) {
             <li>{t.accountDeletion.immediate}</li>
             <li>{t.accountDeletion.membership}</li>
             <li>{t.accountDeletion.paymentRecords}</li>
+            <li>{t.accountDeletion.feedbackRecords}</li>
           </ul>
 
           <label className="mt-5 block text-xs font-medium" style={{ color: "var(--ink-mid)" }}>

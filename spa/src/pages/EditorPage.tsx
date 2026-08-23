@@ -35,9 +35,10 @@ import {
   adjacentTabId,
   detectEditorShortcutPlatform,
   editorShortcutAction,
+  isEditorShortcutFormInputContext,
   isEditorShortcutInputContext,
   numberedTabId,
-  shouldBlockEditorShortcutInInputContext,
+  shouldBlockEditorShortcutInFormInputContext,
   shouldPreserveInputShortcut,
 } from "../components/editor/editorShortcuts";
 import {
@@ -639,11 +640,11 @@ export function EditorPage() {
         return;
       }
 
-      const inputContext = isEditorShortcutInputContext(
-        event.target as HTMLElement | null,
-      );
+      const target = event.target as HTMLElement | null;
+      const inputContext = isEditorShortcutInputContext(target);
       if (shouldPreserveInputShortcut(action, inputContext)) return;
-      if (shouldBlockEditorShortcutInInputContext(action, inputContext)) {
+      const formInputContext = isEditorShortcutFormInputContext(target);
+      if (shouldBlockEditorShortcutInFormInputContext(action, formInputContext)) {
         // 不执行应用动作，也不能交还给 WebView：否则 Cmd+W 可能关闭整个窗口。
         event.preventDefault();
         return;
@@ -674,6 +675,7 @@ export function EditorPage() {
         return;
       }
       if (action === "close-tab") {
+        event.preventDefault();
         if (current.activeDocId) handleCloseTab(current.activeDocId);
         return;
       }
@@ -685,7 +687,10 @@ export function EditorPage() {
         setOutlineOpen(!outlineOpen);
         return;
       }
-      if (action === "new-document") handleCreate(null);
+      if (action === "new-document") {
+        event.preventDefault();
+        handleCreate(null);
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);

@@ -155,30 +155,34 @@ export function isDescendant(
 /**
  * 这个拖放合法吗。
  *
- * 三种非法：拖到自己身上、拖进自己的子孙（会造环）、拖到当前已在的位置（无意义，
- * 但不该报错，静默忽略即可 —— 所以这里区分 invalid 与 noop）。
+ * 非法情况包括载荷不存在、拖到自己身上、拖进自己的子孙（会造环），以及拖到当前
+ * 已在的位置（无意义，但不该报错，静默忽略即可）。
  */
 export function canDropFolder(
   folders: FolderNode[],
   dragged: string,
   targetFolderId: string | null,
-): { ok: boolean; reason?: "self" | "cycle" | "noop" } {
+): { ok: boolean; reason?: "missing" | "self" | "cycle" | "noop" } {
+  const draggedFolder = folders.find((folder) => folder.folderId === dragged);
+  if (!draggedFolder) return { ok: false, reason: "missing" };
   if (dragged === targetFolderId) return { ok: false, reason: "self" };
   if (targetFolderId && isDescendant(folders, dragged, targetFolderId)) {
     return { ok: false, reason: "cycle" };
   }
-  const current = folders.find((f) => f.folderId === dragged)?.parentFolderId ?? null;
+  const current = draggedFolder.parentFolderId;
   if (current === targetFolderId) return { ok: false, reason: "noop" };
   return { ok: true };
 }
 
-/** 文档的拖放：不会造环，只需排除「已经在那儿」 */
+/** 文档的拖放：不会造环，只需排除未知载荷和「已经在那儿」 */
 export function canDropDoc(
   docs: DocNode[],
   docId: string,
   targetFolderId: string | null,
-): { ok: boolean; reason?: "noop" } {
-  const current = docs.find((d) => d.docId === docId)?.folderId ?? null;
+): { ok: boolean; reason?: "missing" | "noop" } {
+  const draggedDocument = docs.find((document) => document.docId === docId);
+  if (!draggedDocument) return { ok: false, reason: "missing" };
+  const current = draggedDocument.folderId;
   if (current === targetFolderId) return { ok: false, reason: "noop" };
   return { ok: true };
 }

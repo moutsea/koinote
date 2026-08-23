@@ -11,6 +11,12 @@ import {
   isDescendant,
   MAX_FOLDER_DEPTH,
 } from "./_tree_bundle.mjs";
+import {
+  readTreeDragPayload,
+  TREE_DRAG_MIME,
+  writeTreeDragPayload,
+} from "./_tree_drag_bundle.mjs";
+import { readFileSync } from "node:fs";
 
 let pass = 0,
   fail = 0;
@@ -38,6 +44,108 @@ const d = (docId, title, folderId = null, updatedAt = null) => ({
   folderId,
   updatedAt,
 });
+
+function fakeDataTransfer() {
+  const values = new Map();
+  return {
+    effectAllowed: "uninitialized",
+    setData(type, value) {
+      values.set(type, value);
+    },
+    getData(type) {
+      return values.get(type) ?? "";
+    },
+    values,
+  };
+}
+
+{
+  const transfer = fakeDataTransfer();
+  const payload = { kind: "doc", id: "doc-1" };
+  writeTreeDragPayload(transfer, payload);
+  eq("拖文档声明 move 操作", transfer.effectAllowed, "move");
+  eq("自定义 MIME 可恢复文档载荷", readTreeDragPayload(transfer), payload);
+  ok("同时写入 text/plain 以启动 WKWebView 拖放", transfer.values.has("text/plain"));
+  ok("写入 Koinote 自定义 MIME", transfer.values.has(TREE_DRAG_MIME));
+}
+
+{
+  const transfer = fakeDataTransfer();
+  transfer.setData(
+    "text/plain",
+    'koinote-tree:{"kind":"folder","id":"folder-1"}',
+  );
+  eq("自定义 MIME 被过滤时从 text/plain 恢复", readTreeDragPayload(transfer), {
+    kind: "folder",
+    id: "folder-1",
+  });
+}
+
+for (const [name, value] of [
+  ["无效 JSON", "{"],
+  ["未知 kind", '{"kind":"image","id":"1"}'],
+  ["空 id", '{"kind":"doc","id":"  "}'],
+  ["普通外部文本", "doc-1"],
+]) {
+  const transfer = fakeDataTransfer();
+  transfer.setData(
+    "text/plain",
+    value.startsWith("{") ? `koinote-tree:${value}` : value,
+  );
+  eq(`${name} 不会成为文件树拖放`, readTreeDragPayload(transfer), null);
+}
+
+{
+  const treeRowSource = readFileSync(
+    new URL("../spa/src/components/editor/TreeRow.tsx", import.meta.url),
+    "utf8",
+  );
+  const documentListSource = readFileSync(
+    new URL("../spa/src/components/editor/DocumentList.tsx", import.meta.url),
+    "utf8",
+  );
+  eq(
+    "文档和文件夹 dragstart 都写入 DataTransfer",
+    treeRowSource.match(/writeTreeDragPayload\(e\.dataTransfer, payload\)/g)?.length,
+    2,
+  );
+  ok(
+    "文件夹落点从 DataTransfer 恢复载荷",
+    /onDrop=\{\(e\) => \{[\s\S]*?readTreeDragPayload\(e\.dataTransfer\) \?\? h\.dragging/.test(
+      treeRowSource,
+    ),
+  );
+  ok(
+    "根落点从 DataTransfer 恢复载荷",
+    /onDrop=\{\(e\) => \{[\s\S]*?readTreeDragPayload\(e\.dataTransfer\) \?\? dragging/.test(
+      documentListSource,
+    ),
+  );
+  ok(
+    "文件夹 drop 阻止冒泡到根落点",
+    /onDrop=\{\(e\) => \{\s*e\.preventDefault\(\);\s*e\.stopPropagation\(\)/.test(
+      treeRowSource,
+    ),
+  );
+  ok(
+    "文件夹 dragover 在校验前阻止根落点误亮",
+    /onDragOver=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*const payload =/.test(
+      treeRowSource,
+    ),
+  );
+  ok(
+    "文件夹落点高亮绑定当前拖拽对象",
+    /overDrag !== null && overDrag === h\.dragging && acceptsDrop/.test(
+      treeRowSource,
+    ),
+  );
+  ok(
+    "根落点高亮绑定当前拖拽对象",
+    /rootOverDrag !== null &&\s*rootOverDrag === dragging &&\s*rootAcceptsDrop/.test(
+      documentListSource,
+    ),
+  );
+}
 
 // ---------- buildTree ----------
 
@@ -193,6 +301,10 @@ const d = (docId, title, folderId = null, updatedAt = null) => ({
     ok: false,
     reason: "noop",
   });
+  eq("未知文件夹载荷被拒绝", canDropFolder(folders, "GHOST", "D"), {
+    ok: false,
+    reason: "missing",
+  });
 
   eq("拖进兄弟合法", canDropFolder(folders, "A", "D"), { ok: true });
   eq("深层文件夹拖到根合法", canDropFolder(folders, "C", null), { ok: true });
@@ -213,6 +325,10 @@ const d = (docId, title, folderId = null, updatedAt = null) => ({
   });
   eq("文档拖进文件夹合法", canDropDoc(docs, "1", "A"), { ok: true });
   eq("文档拖出到根合法", canDropDoc(docs, "2", null), { ok: true });
+  eq("未知文档载荷被拒绝", canDropDoc(docs, "GHOST", "A"), {
+    ok: false,
+    reason: "missing",
+  });
 }
 
 // 不变量：任何合法的文件夹拖放都不会造环

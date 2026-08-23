@@ -423,7 +423,9 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
 		return method == http.MethodPost
-	case "/api/admin/stats", "/api/admin/server-status":
+	case "/api/feedback":
+		return method == http.MethodPost
+	case "/api/admin/stats", "/api/admin/server-status", "/api/admin/feedback":
 		return method == http.MethodGet
 	case "/api/admin/announcements":
 		return method == http.MethodGet || method == http.MethodPost

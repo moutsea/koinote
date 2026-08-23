@@ -3,11 +3,12 @@ import {
   adjacentTabId,
   detectEditorShortcutPlatform,
   editorShortcutAction,
+  isEditorShortcutFormInputContext,
   isEditorShortcutInputContext,
   isKeyboardShortcutsShortcut,
   keyboardShortcutsOpenAfterShortcut,
   numberedTabId,
-  shouldBlockEditorShortcutInInputContext,
+  shouldBlockEditorShortcutInFormInputContext,
   shouldPreserveInputShortcut,
 } from "./_editor_shortcuts_bundle.mjs";
 
@@ -52,6 +53,21 @@ eq(
   isEditorShortcutInputContext({ tagName: "DIV", isContentEditable: true }),
   true,
 );
+for (const tagName of ["INPUT", "input", "TEXTAREA", "select"]) {
+  eq(
+    `${tagName} 属于表单输入上下文`,
+    isEditorShortcutFormInputContext({ tagName }),
+    true,
+  );
+}
+eq(
+  "contenteditable 不属于表单输入上下文",
+  isEditorShortcutFormInputContext({
+    tagName: "DIV",
+    isContentEditable: true,
+  }),
+  false,
+);
 eq(
   "普通元素不属于输入上下文",
   isEditorShortcutInputContext({ tagName: "BUTTON" }),
@@ -60,24 +76,24 @@ eq(
 eq("空目标不属于输入上下文", isEditorShortcutInputContext(null), false);
 eq(
   "输入上下文禁止关闭标签",
-  shouldBlockEditorShortcutInInputContext("close-tab", true),
+  shouldBlockEditorShortcutInFormInputContext("close-tab", true),
   true,
 );
 eq(
   "输入上下文禁止新建文档",
-  shouldBlockEditorShortcutInInputContext("new-document", true),
+  shouldBlockEditorShortcutInFormInputContext("new-document", true),
   true,
 );
 for (const action of ["next-tab", "previous-tab", "select-tab-1", null]) {
   eq(
     `输入上下文允许 ${String(action)}`,
-    shouldBlockEditorShortcutInInputContext(action, true),
+    shouldBlockEditorShortcutInFormInputContext(action, true),
     false,
   );
 }
 eq(
   "非输入上下文允许关闭标签",
-  shouldBlockEditorShortcutInInputContext("close-tab", false),
+  shouldBlockEditorShortcutInFormInputContext("close-tab", false),
   false,
 );
 eq(
@@ -284,12 +300,12 @@ for (const [label, source] of [
   ["读取最新标签状态", "const current = tabStateRef.current"],
   [
     "新建动作显式分支",
-    'if (action === "new-document") handleCreate(null);',
+    'if (action === "new-document") {',
   ],
   ["只在桌面端展示快捷键提示", "desktopShortcuts={isDesktopRuntime()}"],
   [
     "输入上下文保护",
-    "shouldBlockEditorShortcutInInputContext(action, inputContext)",
+    "shouldBlockEditorShortcutInFormInputContext(action, formInputContext)",
   ],
 ]) {
   eq(label, editorPage.includes(source), true);
@@ -334,6 +350,33 @@ eq(
 eq(
   "数字标签快捷键阻止默认行为",
   numberedTabBranch.includes("event.preventDefault()"),
+  true,
+);
+
+const closeTabBranchStart = editorPage.indexOf('if (action === "close-tab")');
+const closeTabBranch = editorPage.slice(
+  closeTabBranchStart,
+  editorPage.indexOf(
+    'if (action === "toggle-documents-panel")',
+    closeTabBranchStart,
+  ),
+);
+eq(
+  "关闭标签快捷键阻止 WebView 默认行为",
+  closeTabBranch.includes("event.preventDefault()"),
+  true,
+);
+
+const newDocumentBranch = editorPage.slice(
+  editorPage.lastIndexOf('if (action === "new-document")'),
+  editorPage.indexOf(
+    "    };",
+    editorPage.lastIndexOf('if (action === "new-document")'),
+  ),
+);
+eq(
+  "新建文档快捷键阻止 WebView 默认行为",
+  newDocumentBranch.includes("event.preventDefault()"),
   true,
 );
 

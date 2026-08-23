@@ -27,10 +27,10 @@ import { buildTree, canCreateSubfolder, canDropDoc, canDropFolder } from "./tree
 import {
   FolderRow,
   DocRow,
-  type DragPayload,
   type MenuTarget,
   type TreeRowHandlers,
 } from "./TreeRow";
+import { readTreeDragPayload, type DragPayload } from "./treeDrag";
 
 /**
  * 侧栏文件树。
@@ -95,7 +95,7 @@ export function DocumentList({
   const organizerMenuRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
-  const [rootOver, setRootOver] = useState(false);
+  const [rootOverDrag, setRootOverDrag] = useState<DragPayload | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(
     null,
   );
@@ -419,21 +419,27 @@ export function DocumentList({
           提示只在拖动中显现，静止时不该有多余的框 */}
       <div
         onDragOver={(e) => {
-          if (!rootAcceptsDrop) return;
+          const payload = readTreeDragPayload(e.dataTransfer) ?? dragging;
+          if (!payload || !canDropOn(payload, null)) return;
           e.preventDefault(); // 不调用它浏览器不会触发 drop
-          setRootOver(true);
+          setRootOverDrag(dragging ?? payload);
         }}
-        onDragLeave={() => setRootOver(false)}
+        onDragLeave={() => setRootOverDrag(null)}
         onDrop={(e) => {
           e.preventDefault();
-          setRootOver(false);
-          if (dragging && rootAcceptsDrop) onDrop(dragging, null);
+          setRootOverDrag(null);
+          const payload = readTreeDragPayload(e.dataTransfer) ?? dragging;
+          if (payload && canDropOn(payload, null)) onDrop(payload, null);
         }}
         // 空白处右键 = 根菜单。行上的右键已经 stopPropagation，不会走到这里
         onContextMenu={(e) => openMenu(e, { kind: "root" })}
         className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
           // 500 而不是 400，理由同 TreeRow：拖放落点提示要够 3:1
-          rootOver && rootAcceptsDrop ? "rounded-lg ring-1 ring-inset ring-cinnabar-500" : ""
+          rootOverDrag !== null &&
+          rootOverDrag === dragging &&
+          rootAcceptsDrop
+            ? "rounded-lg ring-1 ring-inset ring-cinnabar-500"
+            : ""
         }`}
       >
         {error && (

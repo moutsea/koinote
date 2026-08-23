@@ -43,8 +43,9 @@ returns a short-lived desktop session through `koinote://auth` with PKCE.
 
 Download the desktop client through the [Koinote download link](https://koinote.app/download),
 which redirects to the latest GitHub Release. Releases include macOS Apple Silicon, macOS Intel,
-and Windows x64 installers plus SHA-256 checksums. Alpha installers are currently unsigned, so the
-operating system will show a security warning on first launch.
+and Windows x64 installers plus SHA-256 checksums. Alpha installers do not yet use paid platform
+certificates. macOS builds are ad-hoc signed but do not have Apple Developer ID signing or
+notarization, so macOS will still show a security warning on first launch.
 
 > The current open-source scope covers editing, image hosting, export, sharing, MCP,
 > membership, and review-first AI optimization for titles, body copy, and Markdown structure.
@@ -67,10 +68,10 @@ operating system will show a security warning on first launch.
   keep 1–100 versions per document, and choose whether MCP writes keep full history.
   Agent writes still retain the latest safety snapshot when full history is off
   (100 versions per account in total)
-- Lifetime members can review AI-proposed title and body diffs, apply or dismiss each
-  suggestion individually or in bulk, see a 0–100 title-attractiveness score, and choose
-  from 2–3 alternatives when the score is below 60. Reviews continue in the background
-  and notify the user when results are ready
+- Lifetime members can review AI-proposed title, body-expression, and structure/layout diffs,
+  apply or dismiss each suggestion individually or in bulk, see a 0–100 title-attractiveness
+  score, and choose from 2–3 alternatives when the score is below 60. Reviews continue in the
+  background and notify the user when results are ready
 
 **MCP and membership**
 
@@ -126,7 +127,7 @@ operating system will show a security warning on first launch.
 | Markdown                 | As-is                                                                             |
 | HTML                     | One HTML file with embedded document styles; KaTeX CSS and images remain external |
 | DOCX                     | Built from the document tree; formulas keep their LaTeX source                    |
-| PDF                      | Opens the system print dialog for selectable, searchable text                     |
+| PDF                      | Saves directly on desktop; web opens the print dialog. Text remains selectable and searchable |
 | **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin                          |
 
 My Documents also provides bulk portability: import individual `.md` files, folders with
@@ -284,25 +285,29 @@ alternatives. Body edits must anchor to source text that appears exactly once in
 so overlapping, stale, or ambiguous changes are rejected. Applying a suggestion still checks
 the latest revision and leaves a restorable history version.
 
-Reviews have two layers: **content optimization** and **structure & layout**. The layout pass
-scores hierarchy, readability, emphasis, rhythm, modularity, and mobile presentation. It uses
-the Markdown AST to propose verifiable heading-level fixes, paragraph splits, list conversion,
-callout emphasis, and dividers. The server builds these structural patches deterministically:
-layout operations cannot rewrite the original wording, and layout suggestions that overlap a
-text edit are excluded from the review queue.
+Results are split into three tabs: **title suggestions**, **body expression**, and
+**structure & layout**. The layout pass scores hierarchy, readability, emphasis, rhythm,
+modularity, and mobile presentation. It uses the Markdown AST to propose verifiable heading-level
+fixes, paragraph splits, list conversion, callout emphasis, and dividers. The server builds these
+structural patches deterministically: layout operations cannot rewrite the original wording, and
+layout suggestions that overlap a text edit are excluded from the review queue. Users can also
+select any structure dimension for a second, deeper analysis of paragraph, article, or argument-level
+changes using more context from the article.
 
-After submission, title/opening, body sections, and structure/layout run as separate bounded
-background subtasks. Long bodies are divided further along Markdown blocks, while at most three
-model calls run at once. Progress and completed partial suggestions are durable across navigation
-and reloads. If validation rejects one response, only that subtask is retried; partial suggestions
-remain read-only until every track finishes so later results cannot target an already-edited draft.
-To bound cost on very long documents, the layout track receives at most 32 KiB of actual block text
-and 400 block metadata entries sampled from the opening, ending, and middle; sectioned body review
-still covers the full document.
+After submission, the first wave runs title analysis and the six-dimension structure diagnosis in
+parallel. The second wave gives those findings to document-level developmental editing and Markdown
+body-chunk tasks, while at most three model calls run at once. Progress and completed partial
+suggestions are durable across navigation and reloads. If validation rejects one response, only that
+subtask is retried; partial suggestions remain read-only until every track finishes so later results
+cannot target an already-edited draft. To bound cost on very long documents, standard structure
+diagnosis receives at most 32 KiB of actual block text and 400 block metadata entries. Document-level
+editing and deep analysis receive at most 96 KiB and 600 entries, sampled across the article with
+additional coverage for long paragraphs; sectioned body review still covers the full document.
 
 The built-in model is billed from the provider-reported actual input and output tokens at
-1 credit per 2,000 tokens, rounded up. Failed model calls and invalid review payloads are not
-charged. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives
+1 credit per 2,000 tokens, rounded up. Reviews that ultimately fail are not charged. If validation
+rejects a response and a retry later succeeds, billing includes the cumulative tokens from every
+actual model call made for that successful review. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives
 through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000, 10,000, or
 30,000 credits in the same USD, CNY, EUR, and JPY currencies as membership checkout; the amount,
 currency, and granted balance are checked against backend allowlists and the signed Stripe event.

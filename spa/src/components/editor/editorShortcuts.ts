@@ -68,12 +68,21 @@ export function isEditorShortcutInputContext(
   );
 }
 
-export function shouldBlockEditorShortcutInInputContext(
+export function isEditorShortcutFormInputContext(
+  target: EditorShortcutTarget | null,
+): boolean {
+  if (!target) return false;
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(
+    target.tagName?.toUpperCase() ?? "",
+  );
+}
+
+export function shouldBlockEditorShortcutInFormInputContext(
   action: EditorShortcutAction,
-  inputContext: boolean,
+  formInputContext: boolean,
 ): boolean {
   return (
-    inputContext && (action === "close-tab" || action === "new-document")
+    formInputContext && (action === "close-tab" || action === "new-document")
   );
 }
 

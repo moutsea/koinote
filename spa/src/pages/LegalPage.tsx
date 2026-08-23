@@ -17,7 +17,7 @@ export type LegalKind = "privacy" | "terms" | "cookies";
  * 改动条款内容时要一并更新 UPDATED，否则页面上的「更新于」就是假的。
  */
 const EFFECTIVE = "2026-08-05";
-const UPDATED = "2026-08-16";
+const UPDATED = "2026-08-23";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",

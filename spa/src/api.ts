@@ -139,7 +139,8 @@ export async function fetchAppResource(
 ): Promise<Response> {
   if (isDesktopRuntime()) {
     if (isDesktopLocalImageURL(path)) {
-      const { desktopResolveImageSource } = await import("./desktop/offlineStore");
+      const { desktopResolveImageSource } =
+        await import("./desktop/offlineStore");
       const source = await desktopResolveImageSource(path);
       if (!source) return new Response(null, { status: 404 });
       return fetch(source, { signal: init?.signal });
@@ -231,9 +232,12 @@ export function login(identifier: string, password: string) {
 
 export async function logout() {
   if (!isDesktopRuntime()) {
-    return apiJson<{ success: boolean }>("/api/auth/logout", { method: "POST" });
+    return apiJson<{ success: boolean }>("/api/auth/logout", {
+      method: "POST",
+    });
   }
-  const { clearDesktopSession, getStoredDesktopSession } = await import("./desktop/auth");
+  const { clearDesktopSession, getStoredDesktopSession } =
+    await import("./desktop/auth");
   const session = await getStoredDesktopSession();
   try {
     try {
@@ -248,7 +252,8 @@ export async function logout() {
   } finally {
     try {
       if (session?.accountId) {
-        const { clearDesktopOfflineAccount } = await import("./desktop/offlineStore");
+        const { clearDesktopOfflineAccount } =
+          await import("./desktop/offlineStore");
         await clearDesktopOfflineAccount(session.accountId);
       }
     } finally {
@@ -275,7 +280,8 @@ export async function deleteAccount(confirmation: string) {
   let localCleanupFailed = false;
   try {
     if (session?.accountId) {
-      const { clearDesktopOfflineAccount } = await import("./desktop/offlineStore");
+      const { clearDesktopOfflineAccount } =
+        await import("./desktop/offlineStore");
       await clearDesktopOfflineAccount(session.accountId);
     }
   } catch {
@@ -294,10 +300,8 @@ export async function getSession() {
   if (!isDesktopRuntime()) {
     return apiJson<{ user: User }>("/api/auth/session");
   }
-  const {
-    isDesktopLocalModeSelected,
-    isDesktopLocalModeUnlocked,
-  } = await import("./desktop/localMode");
+  const { isDesktopLocalModeSelected, isDesktopLocalModeUnlocked } =
+    await import("./desktop/localMode");
   if (isDesktopLocalModeSelected()) {
     if (!isDesktopLocalModeUnlocked()) return { user: null };
     return {
@@ -426,6 +430,30 @@ export function getInvitationOverview() {
   return apiJson<InvitationOverview>("/api/invitations");
 }
 
+// ---------- 用户反馈 ----------
+
+export type FeedbackCategory = "bug" | "experience";
+
+export type FeedbackSubmission = {
+  id: number;
+  category: FeedbackCategory;
+  message: string;
+  pagePath: string;
+  client: "web" | "desktop";
+  createdAt: string;
+};
+
+export function submitFeedback(input: {
+  category: FeedbackCategory;
+  message: string;
+  pagePath: string;
+}) {
+  return apiJson<{ feedback: FeedbackSubmission }>("/api/feedback", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function createMembershipCheckout(currency: string) {
   return apiJson<{ sessionId: string; url: string }>("/api/billing/checkout", {
     method: "POST",
@@ -461,7 +489,8 @@ export type AgentCreditPack = {
 
 export type AgentCreditTransaction = {
   entryId: string;
-  kind: "membership_grant" | "purchase" | "agent_usage" | "adjustment" | "refund";
+  kind:
+    "membership_grant" | "purchase" | "agent_usage" | "adjustment" | "refund";
   amount: number;
   balanceAfter: number;
   metadata: Record<string, unknown>;
@@ -489,14 +518,17 @@ export function createAgentCreditsCheckout(
   packCode: AgentCreditPack["code"],
   currency: string,
 ) {
-  return apiJson<{ sessionId: string; url: string }>("/api/agent/credits/checkout", {
+  return apiJson<{ sessionId: string; url: string }>(
+    "/api/agent/credits/checkout",
+    {
     method: "POST",
     body: JSON.stringify({
       packCode,
       currency,
       client: isDesktopRuntime() ? "desktop" : "web",
     }),
-  });
+    },
+  );
 }
 
 export function confirmAgentCreditsCheckout(sessionId: string) {
@@ -543,7 +575,9 @@ export function getAgentSettings() {
   return apiJson<{ settings: AgentSettings }>("/api/agent/settings");
 }
 
-export function updateAgentSettings(providerMode: AgentSettings["providerMode"]) {
+export function updateAgentSettings(
+  providerMode: AgentSettings["providerMode"],
+) {
   return apiJson<{ settings: AgentSettings }>("/api/agent/settings", {
     method: "PUT",
     body: JSON.stringify({ providerMode }),
@@ -629,7 +663,13 @@ export type AgentReviewSuggestion = {
   target: "title" | "body";
   kind: "content" | "layout";
   category: string;
-  operation: "change_block_type" | "split_paragraph" | "convert_to_list" | "emphasize_block" | "insert_divider" | null;
+  operation:
+    | "change_block_type"
+    | "split_paragraph"
+    | "convert_to_list"
+    | "emphasize_block"
+    | "insert_divider"
+    | null;
   before: string;
   after: string;
   reason: string;
@@ -638,7 +678,8 @@ export type AgentReviewSuggestion = {
 };
 
 export type AgentReviewLayoutAssessment = {
-  id: "hierarchy" | "readability" | "emphasis" | "rhythm" | "modules" | "mobile";
+  id:
+    "hierarchy" | "readability" | "emphasis" | "rhythm" | "modules" | "mobile";
   label: string;
   score: number;
   summary: string;
@@ -729,7 +770,8 @@ async function reconcileDesktopAgentReviewMutation(
   result: AgentReviewMutation,
 ): Promise<AgentReviewMutation> {
   if (!isDesktopRuntime()) return result;
-  const { desktopAcceptRemoteDocumentMutation } = await import("./desktop/offlineStore");
+  const { desktopAcceptRemoteDocumentMutation } =
+    await import("./desktop/offlineStore");
   const accepted = await desktopAcceptRemoteDocumentMutation(result.document);
   return { ...result, document: accepted.document };
 }
@@ -746,14 +788,20 @@ export async function applyAgentReviewSuggestion(
   return reconcileDesktopAgentReviewMutation(result);
 }
 
-export function dismissAgentReviewSuggestion(reviewId: string, suggestionId: string) {
+export function dismissAgentReviewSuggestion(
+  reviewId: string,
+  suggestionId: string,
+) {
   return apiJson<{ review: AgentReview }>(
     `/api/agent/reviews/${encodeURIComponent(reviewId)}/suggestions/${encodeURIComponent(suggestionId)}/dismiss`,
     { method: "POST" },
   );
 }
 
-export async function applyAllAgentReviewSuggestions(reviewId: string, expectedRevision: number) {
+export async function applyAllAgentReviewSuggestions(
+  reviewId: string,
+  expectedRevision: number,
+) {
   const result = await apiJson<AgentReviewMutation>(
     `/api/agent/reviews/${encodeURIComponent(reviewId)}/apply-all`,
     { method: "POST", body: JSON.stringify({ expectedRevision }) },
@@ -845,6 +893,30 @@ export type AdminStats = {
 
 export function getAdminStats() {
   return apiJson<AdminStats>("/api/admin/stats");
+}
+
+export type AdminFeedback = {
+  id: number;
+  userId: number | null;
+  userName: string | null;
+  userEmail: string | null;
+  category: FeedbackCategory;
+  message: string;
+  pagePath: string;
+  client: "web" | "desktop";
+  userAgent: string;
+  createdAt: string;
+};
+
+export type AdminFeedbackPage = {
+  feedback: AdminFeedback[];
+  nextCursor: number | null;
+};
+
+export function getAdminFeedback(before: number | null = null, limit = 50) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before != null) params.set("before", String(before));
+  return apiJson<AdminFeedbackPage>(`/api/admin/feedback?${params}`);
 }
 
 export type AdminServerStatus = {
@@ -1341,18 +1413,19 @@ export async function createShare(
     { method: "POST", body: JSON.stringify(params) },
   );
   if (desktopStore) {
-    await desktopStore.desktopAcceptDocumentShare(docId, result.share).catch(
-      (error) => {
+    await desktopStore
+      .desktopAcceptDocumentShare(docId, result.share)
+      .catch((error) => {
         console.warn("Desktop share state could not be cached", error);
-        void desktopStore.desktopReportSyncError("desktop_share_cache_failed").catch(
-          (reportError) =>
+        void desktopStore
+          .desktopReportSyncError("desktop_share_cache_failed")
+          .catch((reportError) =>
             console.warn(
               "Desktop share cache failure could not be reported",
               reportError,
             ),
         );
-      },
-    );
+      });
   }
   return result;
 }
@@ -1376,10 +1449,13 @@ export async function revokeShare(docId: string) {
     { method: "DELETE" },
   );
   if (desktopStore) {
-    await desktopStore.desktopAcceptDocumentShare(docId, null).catch((error) => {
+    await desktopStore
+      .desktopAcceptDocumentShare(docId, null)
+      .catch((error) => {
       console.warn("Desktop share state could not be cleared", error);
-      void desktopStore.desktopReportSyncError("desktop_share_cache_failed").catch(
-        (reportError) =>
+        void desktopStore
+          .desktopReportSyncError("desktop_share_cache_failed")
+          .catch((reportError) =>
           console.warn(
             "Desktop share cache failure could not be reported",
             reportError,
@@ -1450,14 +1526,15 @@ export async function uploadImage(
       let localFile = file;
       let flattenedAnimation = false;
       if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-        const { prepareImportedImage } = await import("./importImageCompression");
+        const { prepareImportedImage } =
+          await import("./importImageCompression");
         const prepared = await prepareImportedImage(file);
         localFile = prepared.file;
         flattenedAnimation = prepared.flattenedAnimation;
       }
       const { desktopStoreLocalImage } = await import("./desktop/offlineStore");
       return {
-        ...await desktopStoreLocalImage(localFile),
+        ...(await desktopStoreLocalImage(localFile)),
         ...(flattenedAnimation ? { flattenedAnimation: true } : {}),
       };
     } catch (error) {
@@ -1534,10 +1611,15 @@ export async function releaseUnusedImages(keys: string[]) {
   if (keys.length === 0) return Promise.resolve({ queued: 0 });
   let remoteKeys = keys;
   if (isDesktopRuntime()) {
-    const localKeys = keys.filter((key) => key.startsWith("koinote-local-image://"));
-    remoteKeys = keys.filter((key) => !key.startsWith("koinote-local-image://"));
+    const localKeys = keys.filter((key) =>
+      key.startsWith("koinote-local-image://"),
+    );
+    remoteKeys = keys.filter(
+      (key) => !key.startsWith("koinote-local-image://"),
+    );
     if (localKeys.length > 0) {
-      const { desktopReleaseUnusedImages } = await import("./desktop/offlineStore");
+      const { desktopReleaseUnusedImages } =
+        await import("./desktop/offlineStore");
       await desktopReleaseUnusedImages(localKeys);
     }
     const { isDesktopLocalModeSelected } = await import("./desktop/localMode");
@@ -1564,7 +1646,8 @@ export function trashDocument(docId: string) {
 
 export function listTrashedDocuments() {
   if (isDesktopRuntime()) {
-    return import("./desktop/localMode").then(({ isDesktopLocalModeSelected }) =>
+    return import("./desktop/localMode").then(
+      ({ isDesktopLocalModeSelected }) =>
       isDesktopLocalModeSelected()
         ? import("./desktop/offlineStore").then(
             ({ desktopListLocalTrashedDocuments }) =>
@@ -1582,7 +1665,8 @@ export function listTrashedDocuments() {
 
 export function restoreTrashedDocument(docId: string) {
   if (isDesktopRuntime()) {
-    return import("./desktop/localMode").then(({ isDesktopLocalModeSelected }) =>
+    return import("./desktop/localMode").then(
+      ({ isDesktopLocalModeSelected }) =>
       isDesktopLocalModeSelected()
         ? import("./desktop/offlineStore").then(
             ({ desktopRestoreLocalTrashedDocument }) =>
