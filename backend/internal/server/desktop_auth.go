@@ -513,7 +513,13 @@ func desktopRequestAllowed(r *http.Request) bool {
 				return method == http.MethodPost || method == http.MethodDelete
 			case "versions":
 				return method == http.MethodGet
+			case "wechat-geo-summary":
+				return method == http.MethodGet || method == http.MethodPut
 			}
+		}
+		if len(parts) == 3 && parts[0] != "" && parts[1] == "wechat-geo-summary" &&
+			parts[2] == "generate" {
+			return method == http.MethodPost
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "versions" && parts[2] != "" {
 			return method == http.MethodGet

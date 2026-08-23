@@ -1323,6 +1323,21 @@ export const zh: Messages = {
     mediaImagesUnreachable:
       "有 {n} 张图片可能无法被目标平台抓取（{hosts}）。建议粘贴后先预览。",
     wechatThemeLabel: "排版主题",
+    wechatGeoExperiment: "AI GEO 隐藏摘要",
+    wechatGeoExperimentHint:
+      "会员专属。摘要会随文档保存，导出时标题下会出现分割线作为标记。隐藏文本可能被微信过滤或判定为违规排版，排名效果无法保证；内置模型会消耗 credits。",
+    wechatGeoGenerate: "AI 生成摘要",
+    wechatGeoRegenerate: "重新生成",
+    wechatGeoLoading: "正在读取已保存摘要…",
+    wechatGeoGenerating: "正在生成…",
+    wechatGeoSaving: "正在保存…",
+    wechatGeoLoadFailed: "已保存摘要读取失败，请稍后重试",
+    wechatGeoGenerateFailed: "摘要生成失败，请稍后重试",
+    wechatGeoSaveFailed: "摘要保存失败，请稍后重试",
+    wechatGeoStale:
+      "文章内容已变化；当前为上次保存的摘要，可继续使用或重新生成。",
+    wechatGeoPlaceholder:
+      "AI 生成后可在此检查和修改隐藏摘要。",
     themeNone: "默认排版",
     tabsLabel: "已打开的文档",
     closeTab: "关闭标签",

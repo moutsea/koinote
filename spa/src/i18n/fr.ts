@@ -1382,6 +1382,21 @@ export const fr: Messages = {
     mediaImagesUnreachable:
       "{n} image(s) pourraient être inaccessibles ({hosts}). Vérifiez l’aperçu après collage.",
     wechatThemeLabel: "Thème",
+    wechatGeoExperiment: "Résumé GEO masqué généré par IA",
+    wechatGeoExperimentHint:
+      "Réservé aux membres. Le résumé est enregistré avec le document et l’export ajoute un séparateur sous le titre. WeChat peut supprimer le texte masqué ou considérer cette mise en page comme non conforme ; aucun effet sur le classement n’est garanti. Le modèle intégré consomme des credits.",
+    wechatGeoGenerate: "Générer avec l’IA",
+    wechatGeoRegenerate: "Régénérer",
+    wechatGeoLoading: "Chargement du résumé enregistré…",
+    wechatGeoGenerating: "Génération…",
+    wechatGeoSaving: "Enregistrement…",
+    wechatGeoLoadFailed: "Impossible de charger le résumé enregistré. Réessayez plus tard",
+    wechatGeoGenerateFailed: "Impossible de générer le résumé. Réessayez plus tard",
+    wechatGeoSaveFailed: "Impossible d’enregistrer le résumé. Réessayez plus tard",
+    wechatGeoStale:
+      "L’article a changé. Vous pouvez conserver le résumé enregistré ou le régénérer.",
+    wechatGeoPlaceholder:
+      "Vérifiez et modifiez le résumé masqué après sa génération par l’IA.",
     themeNone: "Style par défaut",
     tabsLabel: "Documents ouverts",
     closeTab: "Fermer l'onglet",

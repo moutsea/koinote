@@ -236,6 +236,25 @@ func (a *App) reserveCredits(
 	credits int64,
 	ttl time.Duration,
 ) (creditReservation, error) {
+	return a.reserveCreditReservation(ctx, userID, &reviewID, credits, ttl)
+}
+
+func (a *App) reserveStandaloneCredits(
+	ctx context.Context,
+	userID int,
+	credits int64,
+	ttl time.Duration,
+) (creditReservation, error) {
+	return a.reserveCreditReservation(ctx, userID, nil, credits, ttl)
+}
+
+func (a *App) reserveCreditReservation(
+	ctx context.Context,
+	userID int,
+	reviewID *int64,
+	credits int64,
+	ttl time.Duration,
+) (creditReservation, error) {
 	if credits <= 0 {
 		return creditReservation{}, fmt.Errorf("credit reservation must be positive")
 	}
@@ -263,24 +282,26 @@ func (a *App) reserveCredits(
 		return creditReservation{}, err
 	}
 
-	var existing creditReservation
-	var existingStatus string
-	err = tx.QueryRow(ctx, `
-		SELECT reservation_id, reserved_credits, expires_at, status
-		FROM credit_reservations
-		WHERE review_id = $1
-	`, reviewID).Scan(&existing.ReservationID, &existing.Reserved, &existing.ExpiresAt, &existingStatus)
-	if err == nil {
-		if existingStatus == "active" && existing.Reserved == credits {
-			if err := tx.Commit(ctx); err != nil {
-				return creditReservation{}, fmt.Errorf("commit existing credit reservation: %w", err)
+	if reviewID != nil {
+		var existing creditReservation
+		var existingStatus string
+		err = tx.QueryRow(ctx, `
+			SELECT reservation_id, reserved_credits, expires_at, status
+			FROM credit_reservations
+			WHERE review_id = $1
+		`, *reviewID).Scan(&existing.ReservationID, &existing.Reserved, &existing.ExpiresAt, &existingStatus)
+		if err == nil {
+			if existingStatus == "active" && existing.Reserved == credits {
+				if err := tx.Commit(ctx); err != nil {
+					return creditReservation{}, fmt.Errorf("commit existing credit reservation: %w", err)
+				}
+				return existing, nil
 			}
-			return existing, nil
+			return creditReservation{}, fmt.Errorf("review already has a %s credit reservation", existingStatus)
 		}
-		return creditReservation{}, fmt.Errorf("review already has a %s credit reservation", existingStatus)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return creditReservation{}, fmt.Errorf("load review credit reservation: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return creditReservation{}, fmt.Errorf("load review credit reservation: %w", err)
+		}
 	}
 	if balance.Available < credits {
 		return creditReservation{}, errInsufficientCredits

@@ -10,6 +10,11 @@ import { estimateBytes, inlineWechatStyles, wrapWechatBody } from "./wechatInlin
 import { replaceMathWithImages, type MathConversion } from "./wechatMath";
 import { findWechatTheme } from "./wechatThemes";
 import { structuralizeCodeWhitespace } from "./wechatWhitespace";
+import { normalizeWechatExportRules } from "./wechatExportTypography";
+import {
+  buildWechatGeoSection,
+  normalizeWechatGeoCorpus,
+} from "./wechatGeo";
 
 /**
  * 导出为微信公众号可直接粘贴的 HTML。
@@ -17,8 +22,8 @@ import { structuralizeCodeWhitespace } from "./wechatWhitespace";
  * 与另外几种导出的区别：产物不落盘，而是写进剪贴板。用户的实际动作是
  * 「粘贴到公众号编辑器」，下载一个 .html 再打开再全选复制是多余的三步。
  *
- * 这里不做预览：主题已经在编辑区生效（themeCss.ts），编辑区就是预览。导出只是
- * 把同一套规则从 CSS 换成内联 style，没有第二种可能的样子需要先看一眼。
+ * 这里不做预览：主题的色彩与装饰已经在编辑区生效（themeCss.ts）。导出时只在
+ * 相同主题上叠加公众号阅读排版，再把规则转换成内联 style。
  */
 
 export type WechatExportResult = {
@@ -42,22 +47,42 @@ export type WechatExportResult = {
   images: ImageAudit;
 };
 
+export type WechatExportOptions = {
+  includeGeoCorpus?: boolean;
+  geoText?: string;
+};
+
 export async function buildWechatHTML(
   editor: Editor,
   title: string,
   themeId: string,
+  options: WechatExportOptions = {},
 ): Promise<WechatExportResult> {
   const stage = document.createElement("div");
   // 需要真实布局：公式栅格化要量尺寸。挪到视口外，不能 display:none
   stage.style.cssText =
     "position:fixed;left:-10000px;top:0;width:700px;background:#fff;";
-  const heading = title.trim() ? `<h1>${escapeHTML(title)}</h1>` : "";
+  const hasExportTitle = title.trim().length > 0;
+  const heading = hasExportTitle ? `<h1>${escapeHTML(title)}</h1>` : "";
   stage.innerHTML = heading + editor.getHTML();
   document.body.appendChild(stage);
 
   const theme = findWechatTheme(themeId);
+  const exportRules = normalizeWechatExportRules(theme.rules);
 
   try {
+    const geoCorpus = options.includeGeoCorpus
+      ? normalizeWechatGeoCorpus(options.geoText ?? "")
+      : "";
+    const geoDivider = geoCorpus ? document.createElement("hr") : null;
+    if (geoDivider) {
+      const titleElement = hasExportTitle ? stage.firstElementChild : null;
+      if (titleElement?.tagName === "H1") {
+        titleElement.insertAdjacentElement("afterend", geoDivider);
+      } else {
+        stage.prepend(geoDivider);
+      }
+    }
     // 顺序要紧：先把公式换成 img，再内联样式。
     // 反过来的话新插入的 img 拿不到主题的 img 规则。
     const math = await replaceMathWithImages(stage);
@@ -76,14 +101,18 @@ export async function buildWechatHTML(
     // Mac 窗口三点。必须在内联之前：它靠 data-wechat-keep-style 把样式带过去，
     // 那是内联器保留内联样式的唯一通道（span 没有主题规则，style 会被清掉）。
     // 用真实元素而不是伪元素 —— 微信剥 <style>，伪元素没有内联等价写法。
-    addMacWindows(stage, theme.rules.pre ?? "");
+    addMacWindows(stage, exportRules.pre ?? "");
     // 图片地址补成绝对的。必须在公式那步之后：公式图也是 img，同样要补
     // （未配 IMAGE_PUBLIC_BASE 时它拿到的也是 /images/<key>）。
     // 放在内联之前是因为内联器会重写 style 但不碰 src，先后其实都行 ——
     // 排在这里只为与"所有 img 都已就位"这个前提对齐。见 wechatImages.ts。
     const images = auditWechatImages(stage, window.location.origin);
-    const stats = inlineWechatStyles(stage, theme.rules);
-    const html = wrapWechatBody(stage.innerHTML, theme.rules.body);
+    const stats = inlineWechatStyles(stage, exportRules);
+    const geoSection = buildWechatGeoSection(geoCorpus);
+    if (geoDivider && geoSection) {
+      geoDivider.insertAdjacentHTML("afterend", geoSection);
+    }
+    const html = wrapWechatBody(stage.innerHTML, exportRules.body);
     return {
       html,
       bytes: estimateBytes(html),
@@ -96,7 +125,6 @@ export async function buildWechatHTML(
     stage.remove();
   }
 }
-
 
 function escapeHTML(value: string): string {
   return value

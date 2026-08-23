@@ -119,6 +119,41 @@ func TestConcurrentCreditReservationsCannotOverspend(t *testing.T) {
 	}
 }
 
+func TestStandaloneCreditReservationCommit(t *testing.T) {
+	pool, userID := newCreditTestUser(t)
+	ctx := context.Background()
+	app := &App{db: pool}
+	grantCreditsForTest(t, pool, userID, 3, "standalone")
+
+	reservation, err := app.reserveStandaloneCredits(ctx, userID, 2, time.Minute)
+	if err != nil {
+		t.Fatalf("reserve standalone credits: %v", err)
+	}
+	var reviewID *int64
+	if err := pool.QueryRow(ctx, `
+		SELECT review_id FROM credit_reservations WHERE reservation_id = $1
+	`, reservation.ReservationID).Scan(&reviewID); err != nil {
+		t.Fatalf("load standalone reservation: %v", err)
+	}
+	if reviewID != nil {
+		t.Fatalf("standalone reservation review_id=%d, want null", *reviewID)
+	}
+
+	balance, charged, err := app.commitCreditReservation(
+		ctx,
+		userID,
+		reservation.ReservationID,
+		1_200,
+		map[string]any{"feature": "standalone-test"},
+	)
+	if err != nil {
+		t.Fatalf("commit standalone credits: %v", err)
+	}
+	if charged != 1 || balance != (creditAccountBalance{Balance: 2, Reserved: 0, Available: 2}) {
+		t.Fatalf("standalone commit charged=%d balance=%+v", charged, balance)
+	}
+}
+
 func TestCreditReservationCommitReleaseAndExpiry(t *testing.T) {
 	pool, userID := newCreditTestUser(t)
 	ctx := context.Background()

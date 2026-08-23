@@ -14,6 +14,8 @@ function ok(label, condition, detail) {
 
 const menu = readFileSync(new URL("../spa/src/components/editor/ExportMenu.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../spa/src/components/editor/WechatDialog.tsx", import.meta.url), "utf8");
+const exportMedia = readFileSync(new URL("../spa/src/components/editor/exportMedia.ts", import.meta.url), "utf8");
+const exportWechat = readFileSync(new URL("../spa/src/components/editor/exportWechat.ts", import.meta.url), "utf8");
 const exportDocument = readFileSync(new URL("../spa/src/components/editor/exportDocument.ts", import.meta.url), "utf8");
 const markdownEditor = readFileSync(new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url), "utf8");
 const docTitle = readFileSync(new URL("../spa/src/components/editor/DocTitle.tsx", import.meta.url), "utf8");
@@ -46,6 +48,81 @@ ok(
   "富文本和 Markdown 提示分开",
   /mediaRichTextNote/.test(dialog) && /mediaMarkdownNote/.test(dialog),
   "不同平台不能共用误导性的格式说明",
+);
+ok(
+  "微信为会员提供 GEO 实验开关",
+  /useState\(false\)/.test(dialog) &&
+    /t\.editor\.wechatGeoExperiment/.test(dialog) &&
+    /type="checkbox"/.test(dialog) &&
+    /platform === "wechat" && member && !localMode/.test(dialog),
+);
+ok(
+  "GEO 摘要由 AI 生成后才能嵌入",
+  /generateWechatGeoSummary\([\s\S]{0,120}docId,[\s\S]{0,40}title,[\s\S]{0,40}markdown/.test(dialog) &&
+    /platform === "wechat" &&\s+member &&\s+!localMode &&\s+geoEnabled &&\s+!geoText\.trim\(\)/.test(dialog),
+);
+ok(
+  "GEO 摘要按文档恢复并保存编辑与开关状态",
+  /getWechatGeoSummary\(docId\)/.test(dialog) &&
+    /setGeoText\(result\.geo\.text\)/.test(dialog) &&
+    /setGeoEnabled\(result\.geo\.enabled\)/.test(dialog) &&
+    /updateWechatGeoSummary\(docId, \{ text: geoText \}\)/.test(dialog) &&
+    /updateWechatGeoSummary\(docId, \{ enabled: next \}\)/.test(dialog) &&
+    /result\.geo\.sourceHash !== sourceHash/.test(dialog),
+);
+ok(
+  "GEO 文本失焦不会吞掉开关点击",
+  /disabled=\{busy \|\| geoLoading \|\| geoGenerating\}/.test(dialog) &&
+    !/type="checkbox"[\s\S]{0,180}disabled=\{[^}]*geoTextSaving/.test(dialog),
+  "文本保存期间应允许用户切换是否嵌入摘要",
+);
+ok(
+  "GEO 开关写入按点击顺序串行化",
+  /geoPreferenceQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/.test(dialog) &&
+    /const previousPreferenceSave = geoPreferenceQueueRef\.current/.test(dialog) &&
+    /geoPreferenceQueueRef\.current = preferenceSave/.test(dialog) &&
+    /version === geoPreferenceVersionRef\.current/.test(dialog),
+  "快速连点不能让旧响应覆盖最新选择",
+);
+ok(
+  "GEO 关闭先保存但不会把用户困在弹窗中",
+  /async function closeDialog\(\) \{[\s\S]{0,220}if \(!closeSaveFailedRef\.current && !\(await persistGeoText\(\)\)\) \{\s*closeSaveFailedRef\.current = true;\s*return;/.test(dialog) &&
+    /closeSaveFailedRef\.current = false;\s*setGeoText\(event\.target\.value\)/.test(dialog) &&
+    /if \(e\.key === "Escape"\) \{[\s\S]{0,120}closeDialogRef\.current\(\)/.test(dialog) &&
+    (dialog.match(/onClick=\{\(\) => void closeDialog\(\)\}/g) ?? []).length === 2 &&
+    /useEffect\(\(\) => \{\s*closeDialogRef\.current = \(\) => \{\s*void closeDialog\(\);\s*\};\s*\}\);/.test(dialog) &&
+    /async function generateGeoSummary\(\) \{[\s\S]{0,400}if \(!\(await persistGeoText\(\)\)\) return;/.test(dialog),
+  "首次关闭保存失败时提示错误，再次关闭必须允许放弃修改",
+);
+ok(
+  "GEO 关闭保存期间提供反馈并阻止重复提交",
+  /closeInFlightRef\.current/.test(dialog) &&
+    /setGeoClosing\(true\)/.test(dialog) &&
+    /disabled=\{geoClosing\}/.test(dialog) &&
+    /geoClosing \? t\.editor\.wechatGeoSaving : t\.editor\.shareClose/.test(dialog),
+);
+ok(
+  "GEO 关闭或卸载会取消仍在生成的付费请求",
+  /geoGenerateAbortRef = useRef<AbortController \| null>\(null\)/.test(dialog) &&
+    /generateWechatGeoSummary\([\s\S]{0,140}controller\.signal/.test(dialog) &&
+    (dialog.match(/geoGenerateAbortRef\.current\?\.abort\(\)/g) ?? []).length >= 2 &&
+    /if \(controller\.signal\.aborted\) return;/.test(dialog),
+  "离开弹窗后不能继续后台扣 credits",
+);
+ok(
+  "GEO 只传给微信公众号导出",
+  /platform === "wechat" && options\.includeWechatGeoCorpus === true/.test(exportMedia),
+);
+ok(
+  "微信导出在标题后用分割线标记隐藏语料",
+  /normalizeWechatGeoCorpus\(options\.geoText \?\? ""\)/.test(exportWechat) &&
+    /document\.createElement\("hr"\)/.test(exportWechat) &&
+    /titleElement\.insertAdjacentElement\("afterend", geoDivider\)/.test(
+      exportWechat,
+    ) &&
+    /stage\.prepend\(geoDivider\)/.test(exportWechat) &&
+    /geoDivider\.insertAdjacentHTML\("afterend", geoSection\)/.test(exportWechat) &&
+    /wrapWechatBody\(stage\.innerHTML, exportRules\.body\)/.test(exportWechat),
 );
 ok(
   "客户端 PDF 选择保存位置后调用原生导出",

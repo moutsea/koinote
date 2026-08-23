@@ -1358,6 +1358,21 @@ export const ja: Messages = {
     mediaImagesUnreachable:
       "{n} 件の画像を投稿先が取得できない可能性があります（{hosts}）。貼り付け後に確認してください。",
     wechatThemeLabel: "テーマ",
+    wechatGeoExperiment: "AI 生成の非表示 GEO 要約",
+    wechatGeoExperimentHint:
+      "会員限定です。要約はドキュメントに保存され、書き出し時にタイトル下へ目印の区切り線が入ります。非表示テキストは WeChat に削除されたり、規約違反のレイアウトと判断されたりする可能性があり、順位効果は保証されません。内蔵モデルは credits を消費します。",
+    wechatGeoGenerate: "AI で要約を生成",
+    wechatGeoRegenerate: "再生成",
+    wechatGeoLoading: "保存済みの要約を読み込み中…",
+    wechatGeoGenerating: "生成中…",
+    wechatGeoSaving: "保存中…",
+    wechatGeoLoadFailed: "保存済みの要約を読み込めませんでした。後でもう一度お試しください",
+    wechatGeoGenerateFailed: "要約を生成できませんでした。後でもう一度お試しください",
+    wechatGeoSaveFailed: "要約を保存できませんでした。後でもう一度お試しください",
+    wechatGeoStale:
+      "記事の内容が変更されています。保存済みの要約をそのまま使うか、再生成できます。",
+    wechatGeoPlaceholder:
+      "AI 生成後に非表示要約を確認・編集できます。",
     themeNone: "デフォルト書式",
     tabsLabel: "開いているドキュメント",
     closeTab: "タブを閉じる",

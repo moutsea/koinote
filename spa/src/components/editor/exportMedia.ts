@@ -4,11 +4,17 @@ import { buildMediaMarkdown, mediaExportFormat, type MediaPlatform } from "./med
 
 export { mediaExportFormat, type MediaPlatform } from "./mediaExportStrategy";
 
+export type MediaExportOptions = {
+  includeWechatGeoCorpus?: boolean;
+  wechatGeoText?: string;
+};
+
 export async function exportToMedia(
   platform: MediaPlatform,
   editor: Editor,
   title: string,
   themeId: string,
+  options: MediaExportOptions = {},
 ): Promise<WechatExportResult | null> {
   const markdown = editor.storage.markdown.getMarkdown() as string;
   if (mediaExportFormat(platform) === "markdown") {
@@ -16,7 +22,11 @@ export async function exportToMedia(
     return null;
   }
 
-  const result = await buildWechatHTML(editor, title, themeId);
+  const result = await buildWechatHTML(editor, title, themeId, {
+    includeGeoCorpus:
+      platform === "wechat" && options.includeWechatGeoCorpus === true,
+    geoText: options.wechatGeoText,
+  });
   await copyRichText(result.html, markdown);
   return result;
 }

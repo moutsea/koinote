@@ -36,13 +36,19 @@ function exportErrorText(
 
 export function ExportMenu({
   editor,
+  docId,
   title,
   themeId,
+  member,
+  localMode,
 }: {
   editor: Editor | null;
+  docId: string;
   title: string;
   /** 文档当前的排版主题，微信导出直接用它 —— 不在导出弹窗里二次选择 */
   themeId: string;
+  member: boolean;
+  localMode: boolean;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -217,8 +223,11 @@ export function ExportMenu({
       {mediaOpen && (
         <MediaExportDialog
           editor={editor}
+          docId={docId}
           title={title}
           themeId={themeId}
+          member={member}
+          localMode={localMode}
           onClose={() => setMediaOpen(false)}
         />
       )}

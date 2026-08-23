@@ -6,15 +6,26 @@
 //
 // 断言的最终对象是「粘到微信里的那串 HTML」本身：里面必须有带颜色的 span。
 import { parseHTML } from "linkedom";
+import { createHash } from "node:crypto";
 import { highlightCodeBlocks } from "./_highlight_code_bundle.mjs";
 import { inlineWechatStyles, wrapWechatBody } from "./_wechat_inline_bundle.mjs";
 import { WECHAT_THEMES, resolveThemeRules } from "./_wechat_themes_bundle.mjs";
+import {
+  normalizeWechatExportRules,
+  WECHAT_EXPORT_TYPOGRAPHY,
+} from "./_wechat_export_typography_bundle.mjs";
 import { structuralizeCodeWhitespace } from "./_wechat_whitespace_bundle.mjs";
 import { addMacWindows } from "./_mac_window_bundle.mjs";
 import {
   addWechatImageCaptions,
   auditWechatImages,
 } from "./_wechat_images_bundle.mjs";
+import {
+  buildWechatGeoSection,
+  normalizeWechatGeoCorpus,
+  WECHAT_GEO_MAX_CHARS,
+  wechatGeoSourceHash,
+} from "./_wechat_geo_bundle.mjs";
 
 const NBSP = " ";
 
@@ -56,16 +67,112 @@ function exportPipeline(bodyHTML, rules, origin = "https://koinote.app") {
   addWechatImageCaptions(stage);
   const highlighted = highlightCodeBlocks(stage);
   structuralizeCodeWhitespace(stage);
-  addMacWindows(stage, rules.pre ?? "");
+  const exportRules = normalizeWechatExportRules(rules);
+  addMacWindows(stage, exportRules.pre ?? "");
   const images = auditWechatImages(stage, origin);
-  const stats = inlineWechatStyles(stage, rules);
+  const stats = inlineWechatStyles(stage, exportRules);
   return {
-    html: wrapWechatBody(stage.innerHTML, rules.body),
+    html: wrapWechatBody(stage.innerHTML, exportRules.body),
     stats,
     highlighted,
     images,
     stage,
   };
+}
+
+function lastDeclaration(declarations, property) {
+  const prefix = `${property}:`;
+  return declarations
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.startsWith(prefix))
+    .at(-1)
+    ?.slice(prefix.length);
+}
+
+{
+  const corpus = normalizeWechatGeoCorpus(
+    "AI 写作指南\n用清晰结构帮助读者理解复杂主题。\nAI 写作工作流",
+  );
+  eq(
+    "GEO 摘要保留分行语义文本",
+    corpus,
+    "AI 写作指南\n用清晰结构帮助读者理解复杂主题。\nAI 写作工作流",
+  );
+
+  const section = buildWechatGeoSection(`${corpus}\n<script>alert(1)</script>`);
+  const parsed = parseHTML(`<div id="result">${section}</div>`).document;
+  const geoSection = parsed.querySelector("section");
+  ok("GEO 区域为零高隐藏定位", /height:0!important/.test(geoSection.getAttribute("style")));
+  ok("GEO 区域设置 visibility hidden", /visibility:hidden!important/.test(geoSection.getAttribute("style")));
+  eq("GEO 文本安全转义", geoSection.querySelectorAll("script").length, 0);
+  ok("GEO 文本仍可被 DOM 读取", geoSection.textContent.includes("<script>alert(1)</script>"));
+
+  const oversized = "字".repeat(WECHAT_GEO_MAX_CHARS + 10);
+  eq(
+    "GEO 文本限制最大长度",
+    Array.from(normalizeWechatGeoCorpus(oversized)).length,
+    WECHAT_GEO_MAX_CHARS,
+  );
+  eq(
+    "GEO 来源指纹与服务端 SHA-256 规则一致",
+    await wechatGeoSourceHash(" 文章标题 ", "正文内容"),
+    createHash("sha256").update("文章标题\0正文内容").digest("hex"),
+  );
+}
+
+for (const theme of WECHAT_THEMES) {
+  const original = JSON.stringify(theme.rules);
+  const rules = normalizeWechatExportRules(theme.rules);
+
+  eq(`${theme.id}: 归一化不修改主题`, JSON.stringify(theme.rules), original);
+  ok(`${theme.id}: 返回独立规则`, rules !== theme.rules);
+  for (const [tag, declarations] of Object.entries(theme.rules)) {
+    ok(`${theme.id}: 保留 ${tag} 主题样式`, rules[tag].startsWith(declarations));
+  }
+  eq(
+    `${theme.id}: 使用系统字体`,
+    lastDeclaration(rules.body, "font-family"),
+    WECHAT_EXPORT_TYPOGRAPHY.fontFamily,
+  );
+  eq(
+    `${theme.id}: 正文字号`,
+    lastDeclaration(rules.body, "font-size"),
+    WECHAT_EXPORT_TYPOGRAPHY.bodyFontSize,
+  );
+  eq(
+    `${theme.id}: 正文行高`,
+    lastDeclaration(rules.body, "line-height"),
+    WECHAT_EXPORT_TYPOGRAPHY.bodyLineHeight,
+  );
+  eq(
+    `${theme.id}: 正文字距`,
+    lastDeclaration(rules.body, "letter-spacing"),
+    WECHAT_EXPORT_TYPOGRAPHY.letterSpacing,
+  );
+  eq(
+    `${theme.id}: 段间距`,
+    lastDeclaration(rules.p, "margin"),
+    WECHAT_EXPORT_TYPOGRAPHY.paragraphMargin,
+  );
+  for (const tag of ["p", "blockquote", "li"]) {
+    eq(
+      `${theme.id}: ${tag} 阅读行高`,
+      lastDeclaration(rules[tag], "line-height"),
+      WECHAT_EXPORT_TYPOGRAPHY.bodyLineHeight,
+    );
+  }
+  for (const [tag, expected] of [
+    ["h1", WECHAT_EXPORT_TYPOGRAPHY.h1FontSize],
+    ["h2", WECHAT_EXPORT_TYPOGRAPHY.h2FontSize],
+    ["h3", WECHAT_EXPORT_TYPOGRAPHY.h3FontSize],
+    ["h4", WECHAT_EXPORT_TYPOGRAPHY.h4FontSize],
+  ]) {
+    eq(`${theme.id}: ${tag} 字号`, lastDeclaration(rules[tag], "font-size"), expected);
+  }
+  for (const tag of ["code", "pre", "pre code", "table"]) {
+    eq(`${theme.id}: ${tag} 不增加字距`, lastDeclaration(rules[tag], "letter-spacing"), "0");
+  }
 }
 
 /**

@@ -162,8 +162,9 @@ export function resolveThemeRules(
   return merged as unknown as WechatThemeRules;
 }
 
-const SANS =
+export const WECHAT_SYSTEM_FONT_STACK =
   '-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
+const SANS = WECHAT_SYSTEM_FONT_STACK;
 const SERIF =
   'Georgia,"Times New Roman","Songti SC","Noto Serif CJK SC",SimSun,serif';
 const SONGTI = '"Songti SC","Noto Serif CJK SC",Georgia,"Times New Roman",SimSun,serif';

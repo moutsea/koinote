@@ -998,6 +998,18 @@ export interface Messages {
     mediaMarkdownNote: string;
     mediaImagesUnreachable: string;
     wechatThemeLabel: string;
+    wechatGeoExperiment: string;
+    wechatGeoExperimentHint: string;
+    wechatGeoGenerate: string;
+    wechatGeoRegenerate: string;
+    wechatGeoLoading: string;
+    wechatGeoGenerating: string;
+    wechatGeoSaving: string;
+    wechatGeoLoadFailed: string;
+    wechatGeoGenerateFailed: string;
+    wechatGeoSaveFailed: string;
+    wechatGeoStale: string;
+    wechatGeoPlaceholder: string;
     themeNone: string;
     tabsLabel: string;
     closeTab: string;

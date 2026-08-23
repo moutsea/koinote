@@ -14,10 +14,12 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout d’une galerie multilingue de 15 modèles : cinq modèles hors ligne sont gratuits, dont la liste de tâches et le tableau polyvalent, tandis que les membres à vie disposent de dix modèles avancés avec rapports quotidien et hebdomadaire, OKR, KPI, écriture, produit, recherche et technique.
 - Ajout de la recherche dans le document avec `Cmd+F` sur macOS et `Ctrl+F` sur Windows/Linux, mise en évidence des résultats, compteur et navigation précédente/suivante en boucle.
 - Ajout de menus natifs localisés et d’un aide-mémoire des raccourcis sur ordinateur, avec ouverture rapide, recherche globale, navigation entre onglets, sélection numérotée, création/fermeture de documents, enregistrement manuel et bascule des panneaux.
+- Ajout d’un résumé GEO masqué généré par IA, réservé aux membres, pour les exports WeChat. Il est enregistré par document, reste modifiable et réutilisable, signale les changements de l’article et présente clairement le risque lié aux règles de la plateforme avant activation.
 
 ### Changed
 
 - Après son lancement, l’optimisation IA ferme le panneau et continue comme tâche d’arrière-plan persistante. Le titre et l’introduction, les sections du corps et la mise en page deviennent des sous-tâches à concurrence limitée ; chaque étape conserve sa progression et ses résultats partiels, et seule la sous-tâche invalide est relancée.
+- L’export WeChat ajuste désormais les marges, le rythme des paragraphes, l’interligne, l’approche et la taille des titres et du corps pour la lecture mobile, tout en conservant la police par défaut et l’identité de chaque thème.
 
 ### Fixed
 

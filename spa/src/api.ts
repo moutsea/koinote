@@ -575,6 +575,54 @@ export function deleteLLMChannel(channelId: string) {
   );
 }
 
+export type WechatGeoSummary = {
+  text: string;
+  summary: string;
+  topics: string[];
+  keywords: string[];
+  sourceHash: string;
+  enabled: boolean;
+  providerMode: "builtin" | "byok";
+  model: string;
+  creditsCharged: number;
+  updatedAt: string;
+};
+
+export function getWechatGeoSummary(docId: string) {
+  return apiJson<{ geo: WechatGeoSummary | null }>(
+    `/api/documents/${encodeURIComponent(docId)}/wechat-geo-summary`,
+  );
+}
+
+export function generateWechatGeoSummary(
+  docId: string,
+  title: string,
+  content: string,
+  signal?: AbortSignal,
+) {
+  return apiJson<{ geo: WechatGeoSummary }>(
+    `/api/documents/${encodeURIComponent(docId)}/wechat-geo-summary/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify({ title, content }),
+      signal,
+    },
+  );
+}
+
+export function updateWechatGeoSummary(
+  docId: string,
+  changes: { text?: string; enabled?: boolean },
+) {
+  return apiJson<{ geo: WechatGeoSummary }>(
+    `/api/documents/${encodeURIComponent(docId)}/wechat-geo-summary`,
+    {
+      method: "PUT",
+      body: JSON.stringify(changes),
+    },
+  );
+}
+
 export type AgentReviewSuggestion = {
   suggestionId: string;
   ordinal: number;

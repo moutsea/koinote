@@ -1365,6 +1365,21 @@ export const en: Messages = {
     mediaImagesUnreachable:
       "{n} image(s) may be unreachable by the destination ({hosts}). Preview after pasting.",
     wechatThemeLabel: "Theme",
+    wechatGeoExperiment: "AI-generated hidden GEO summary",
+    wechatGeoExperimentHint:
+      "Members only. The summary is saved with this document, and export adds a divider below the title as a marker. WeChat may remove hidden text or treat it as a policy-violating layout; ranking impact is not guaranteed. The built-in model uses credits.",
+    wechatGeoGenerate: "Generate with AI",
+    wechatGeoRegenerate: "Regenerate",
+    wechatGeoLoading: "Loading the saved summary…",
+    wechatGeoGenerating: "Generating…",
+    wechatGeoSaving: "Saving…",
+    wechatGeoLoadFailed: "Could not load the saved summary. Try again later",
+    wechatGeoGenerateFailed: "Could not generate the summary. Try again later",
+    wechatGeoSaveFailed: "Could not save the summary. Try again later",
+    wechatGeoStale:
+      "The article has changed. You can keep using the saved summary or regenerate it.",
+    wechatGeoPlaceholder:
+      "Review and edit the hidden summary after AI generation.",
     themeNone: "Default styling",
     tabsLabel: "Open documents",
     closeTab: "Close tab",

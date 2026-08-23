@@ -1126,8 +1126,11 @@ export function EditorPage() {
                 <>
                   <ExportMenu
                     editor={editor}
+                    docId={liveId}
                     title={doc.data.title}
                     themeId={doc.data.theme ?? ""}
+                    member={session.data?.user?.membershipTier === "lifetime"}
+                    localMode={localMode}
                   />
                   {!localMode && <button
                     type="button"

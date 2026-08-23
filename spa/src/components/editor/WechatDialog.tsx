@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
@@ -8,9 +9,17 @@ import {
   type MediaPlatform,
 } from "./exportMedia";
 import { findWechatTheme } from "./wechatThemes";
-import { trackProductEvent } from "../../api";
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { pushModal } from "../../modalStack";
+import { WECHAT_GEO_MAX_CHARS, wechatGeoSourceHash } from "./wechatGeo";
+import {
+  AGENT_CREDITS_QUERY_KEY,
+  ApiError,
+  generateWechatGeoSummary,
+  getWechatGeoSummary,
+  trackProductEvent,
+  updateWechatGeoSummary,
+} from "../../api";
 
 /**
  * 导出到自媒体平台。
@@ -20,39 +29,171 @@ import { pushModal } from "../../modalStack";
  */
 export function MediaExportDialog({
   editor,
+  docId,
   title,
   themeId,
+  member,
+  localMode,
   onClose,
 }: {
   editor: Editor;
+  docId: string;
   title: string;
   themeId: string;
+  member: boolean;
+  localMode: boolean;
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [platform, setPlatform] = useState<MediaPlatform>("wechat");
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [geoEnabled, setGeoEnabled] = useState(false);
+  const [geoText, setGeoText] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoGenerating, setGeoGenerating] = useState(false);
+  const [geoTextSaving, setGeoTextSaving] = useState(false);
+  const [geoPreferenceSaving, setGeoPreferenceSaving] = useState(false);
+  const [geoClosing, setGeoClosing] = useState(false);
+  const [geoDirty, setGeoDirty] = useState(false);
+  const [geoStale, setGeoStale] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   // 与 note 分开：图片抓不到和公式降级可能同时发生，共用一个槽会互相顶掉，
   // 而被顶掉的恰好是更严重的那条
   const [imageWarning, setImageWarning] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const geoTouchedRef = useRef(false);
+  const geoSavePromiseRef = useRef<Promise<boolean> | null>(null);
+  const geoPreferenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const geoPreferenceVersionRef = useRef(0);
+  const geoPersistedEnabledRef = useRef(false);
+  const geoGenerateAbortRef = useRef<AbortController | null>(null);
+  const closeSaveFailedRef = useRef(false);
+  const closeInFlightRef = useRef(false);
+  const closeDialogRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const releaseModal = pushModal();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeDialogRef.current();
+      }
     };
     window.addEventListener("keydown", onKey);
     dialogRef.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
+      geoGenerateAbortRef.current?.abort();
       releaseModal();
     };
-  }, [onClose]);
+  }, []);
+
+  useEffect(() => {
+    if (!member || localMode) return;
+    let cancelled = false;
+    setGeoLoading(true);
+    setGeoError(null);
+    const markdown = editor.storage.markdown.getMarkdown() as string;
+    void Promise.all([
+      getWechatGeoSummary(docId),
+      wechatGeoSourceHash(title, markdown),
+    ])
+      .then(([result, sourceHash]) => {
+        if (cancelled || geoTouchedRef.current || !result.geo) return;
+        setGeoText(result.geo.text);
+        setGeoEnabled(result.geo.enabled);
+        geoPersistedEnabledRef.current = result.geo.enabled;
+        closeSaveFailedRef.current = false;
+        setGeoStale(result.geo.sourceHash !== sourceHash);
+        setGeoDirty(false);
+      })
+      .catch((caught) => {
+        if (cancelled || geoTouchedRef.current) return;
+        const code = caught instanceof ApiError ? caught.code : undefined;
+        setGeoError((code && t.errors[code]) || t.editor.wechatGeoLoadFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setGeoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, editor, localMode, member, t.editor.wechatGeoLoadFailed, t.errors, title]);
+
+  async function persistGeoText(): Promise<boolean> {
+    if (geoSavePromiseRef.current) return geoSavePromiseRef.current;
+    if (!geoDirty || !geoText.trim()) return true;
+    const savePromise = (async () => {
+      setGeoError(null);
+      setGeoTextSaving(true);
+      try {
+        const result = await updateWechatGeoSummary(docId, { text: geoText });
+        setGeoText(result.geo.text);
+        setGeoDirty(false);
+        closeSaveFailedRef.current = false;
+        return true;
+      } catch (caught) {
+        const code = caught instanceof ApiError ? caught.code : undefined;
+        setGeoError((code && t.errors[code]) || t.editor.wechatGeoSaveFailed);
+        return false;
+      } finally {
+        setGeoTextSaving(false);
+      }
+    })();
+    geoSavePromiseRef.current = savePromise;
+    try {
+      return await savePromise;
+    } finally {
+      if (geoSavePromiseRef.current === savePromise) {
+        geoSavePromiseRef.current = null;
+      }
+    }
+  }
+
+  async function persistGeoEnabled(next: boolean) {
+    if (!geoText.trim()) return;
+    const version = ++geoPreferenceVersionRef.current;
+    const textSavePromise = geoSavePromiseRef.current;
+    const previousPreferenceSave = geoPreferenceQueueRef.current;
+    setGeoPreferenceSaving(true);
+    const preferenceSave = previousPreferenceSave
+      .catch(() => undefined)
+      .then(async () => {
+        if (textSavePromise && !(await textSavePromise)) {
+          if (version === geoPreferenceVersionRef.current) {
+            setGeoEnabled(geoPersistedEnabledRef.current);
+          }
+          return;
+        }
+        setGeoError(null);
+        try {
+          const result = await updateWechatGeoSummary(docId, { enabled: next });
+          geoPersistedEnabledRef.current = result.geo.enabled;
+          if (version === geoPreferenceVersionRef.current) {
+            setGeoEnabled(result.geo.enabled);
+          }
+        } catch (caught) {
+          if (version === geoPreferenceVersionRef.current) {
+            setGeoEnabled(geoPersistedEnabledRef.current);
+          }
+          const code = caught instanceof ApiError ? caught.code : undefined;
+          setGeoError((code && t.errors[code]) || t.editor.wechatGeoSaveFailed);
+        }
+      });
+    geoPreferenceQueueRef.current = preferenceSave;
+    try {
+      await preferenceSave;
+    } finally {
+      if (version === geoPreferenceVersionRef.current) {
+        setGeoPreferenceSaving(false);
+      }
+    }
+  }
 
   async function run() {
     setError(null);
@@ -61,7 +202,19 @@ export function MediaExportDialog({
     setDone(false);
     setBusy(true);
     try {
-      const result = await exportToMedia(platform, editor, title, themeId);
+      if (
+        platform === "wechat" &&
+        member &&
+        !localMode &&
+        geoEnabled &&
+        !(await persistGeoText())
+      ) {
+        return;
+      }
+      const result = await exportToMedia(platform, editor, title, themeId, {
+        includeWechatGeoCorpus: member && !localMode && geoEnabled,
+        wechatGeoText: geoText,
+      });
       void trackProductEvent("first_export").catch(() => undefined);
       setDone(true);
       setBytes(result?.bytes ?? null);
@@ -117,11 +270,74 @@ export function MediaExportDialog({
     }
   }
 
+  async function generateGeoSummary() {
+    if (geoGenerateAbortRef.current) return;
+    geoTouchedRef.current = true;
+    setGeoError(null);
+    setGeoGenerating(true);
+    const controller = new AbortController();
+    geoGenerateAbortRef.current = controller;
+    try {
+      if (!(await persistGeoText())) return;
+      const markdown = editor.storage.markdown.getMarkdown() as string;
+      const result = await generateWechatGeoSummary(
+        docId,
+        title,
+        markdown,
+        controller.signal,
+      );
+      setGeoText(result.geo.text);
+      setGeoEnabled(result.geo.enabled);
+      geoPersistedEnabledRef.current = result.geo.enabled;
+      setGeoDirty(false);
+      closeSaveFailedRef.current = false;
+      setGeoStale(false);
+      setDone(false);
+      setBytes(null);
+      if (result.geo.creditsCharged > 0) {
+        void queryClient.invalidateQueries({ queryKey: AGENT_CREDITS_QUERY_KEY });
+      }
+    } catch (caught) {
+      if (controller.signal.aborted) return;
+      const code = caught instanceof ApiError ? caught.code : undefined;
+      setGeoError((code && t.errors[code]) || t.editor.wechatGeoGenerateFailed);
+    } finally {
+      if (geoGenerateAbortRef.current === controller) {
+        geoGenerateAbortRef.current = null;
+      }
+      setGeoGenerating(false);
+    }
+  }
+
+  async function closeDialog() {
+    if (closeInFlightRef.current) return;
+    closeInFlightRef.current = true;
+    setGeoClosing(true);
+    geoGenerateAbortRef.current?.abort();
+    try {
+      if (!closeSaveFailedRef.current && !(await persistGeoText())) {
+        closeSaveFailedRef.current = true;
+        return;
+      }
+      await geoPreferenceQueueRef.current;
+    } finally {
+      closeInFlightRef.current = false;
+      setGeoClosing(false);
+    }
+    onClose();
+  }
+
+  useEffect(() => {
+    closeDialogRef.current = () => {
+      void closeDialog();
+    };
+  });
+
   return (
     <div
       role="presentation"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) void closeDialog();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
     >
@@ -131,7 +347,7 @@ export function MediaExportDialog({
         aria-modal="true"
         aria-label={t.editor.mediaTitle}
         tabIndex={-1}
-        className="w-full max-w-md rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl outline-none dark:border-white/15"
+        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl outline-none dark:border-white/15"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -142,11 +358,16 @@ export function MediaExportDialog({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => void closeDialog()}
+            disabled={geoClosing}
             aria-label={t.editor.shareClose}
-            className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:bg-black/5 dark:hover:bg-white/10"
+            className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
-            <X className="h-4 w-4" />
+            {geoClosing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
           </button>
         </div>
 
@@ -216,6 +437,91 @@ export function MediaExportDialog({
           </p>
         )}
 
+        {platform === "wechat" && member && !localMode && (
+          <div className="mt-3 rounded-xl border border-black/10 px-3 py-3 dark:border-white/10">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={geoEnabled}
+                disabled={busy || geoLoading || geoGenerating}
+                onChange={(event) => {
+                  geoTouchedRef.current = true;
+                  const next = event.target.checked;
+                  setGeoEnabled(next);
+                  void persistGeoEnabled(next);
+                  setDone(false);
+                  setBytes(null);
+                  setGeoError(null);
+                }}
+                className="mt-0.5 h-4 w-4 accent-neutral-900 dark:accent-white"
+              />
+              <span>
+                <span className="block text-xs font-medium text-neutral-700 dark:text-neutral-200">
+                  {t.editor.wechatGeoExperiment}
+                </span>
+                <span className="mt-1 block text-[11px] leading-relaxed text-neutral-400">
+                  {t.editor.wechatGeoExperimentHint}
+                </span>
+              </span>
+            </label>
+            {geoLoading && (
+              <p className="mt-3 flex items-center gap-1.5 text-[11px] text-neutral-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t.editor.wechatGeoLoading}
+              </p>
+            )}
+            {geoEnabled && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  disabled={busy || geoLoading || geoGenerating}
+                  onClick={() => void generateGeoSummary()}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-black/[0.03] disabled:opacity-60 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
+                >
+                  {geoGenerating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {geoTextSaving || geoPreferenceSaving
+                    ? t.editor.wechatGeoSaving
+                    : geoGenerating
+                    ? t.editor.wechatGeoGenerating
+                    : geoText
+                      ? t.editor.wechatGeoRegenerate
+                      : t.editor.wechatGeoGenerate}
+                </button>
+                {geoText && (
+                  <textarea
+                    value={geoText}
+                    maxLength={WECHAT_GEO_MAX_CHARS}
+                    rows={4}
+                    disabled={busy || geoGenerating || geoTextSaving}
+                    onChange={(event) => {
+                      geoTouchedRef.current = true;
+                      closeSaveFailedRef.current = false;
+                      setGeoText(event.target.value);
+                      setGeoDirty(true);
+                      setDone(false);
+                      setBytes(null);
+                    }}
+                    onBlur={() => void persistGeoText()}
+                    aria-label={t.editor.wechatGeoPlaceholder}
+                    placeholder={t.editor.wechatGeoPlaceholder}
+                    className="mt-3 w-full resize-y rounded-lg border border-black/10 bg-transparent px-3 py-2 text-xs leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-300 focus:border-neutral-400 disabled:opacity-60 dark:border-white/10 dark:text-neutral-200 dark:placeholder:text-neutral-600 dark:focus:border-neutral-500"
+                  />
+                )}
+                {geoStale && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
+                    {t.editor.wechatGeoStale}
+                  </p>
+                )}
+              </div>
+            )}
+            {geoError && (
+              <p role="alert" className="mt-2 text-[11px] leading-relaxed text-red-500">
+                {geoError}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 排在公式提示之前：这条更严重（图会裂），先看到它 */}
         {imageWarning && (
           <p
@@ -254,7 +560,16 @@ export function MediaExportDialog({
           <button
             type="button"
             onClick={run}
-            disabled={busy}
+            disabled={
+              busy ||
+              geoLoading ||
+              geoGenerating ||
+              (platform === "wechat" &&
+                member &&
+                !localMode &&
+                geoEnabled &&
+                !geoText.trim())
+            }
             className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
             style={{
               background: "var(--ink-strong)",
@@ -280,10 +595,12 @@ export function MediaExportDialog({
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+            onClick={() => void closeDialog()}
+            disabled={geoClosing}
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
-            {t.editor.shareClose}
+            {geoClosing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {geoClosing ? t.editor.wechatGeoSaving : t.editor.shareClose}
           </button>
           {/* 微信对单篇体积有上限，复制完把实际大小说出来 */}
           {bytes !== null && (

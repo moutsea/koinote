@@ -16,10 +16,12 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added a localized 15-template gallery when creating documents: five offline-ready templates are free, including todo lists and flexible tables, while Lifetime members unlock ten advanced templates including daily and weekly reports, OKR, KPI, writing, product, research, and technical workflows.
 - Added in-document search with `Cmd+F` on macOS and `Ctrl+F` on Windows/Linux, highlighted matches, result counts, and wraparound previous/next navigation.
 - Added localized native desktop menus, a shortcut reference dialog, quick document opening, global search, tab navigation, numbered tab selection, document creation/closing, manual save, and panel toggles.
+- Added a member-only AI-generated hidden GEO summary for WeChat exports. Summaries are saved per document, remain editable and reusable, warn when the article changes, and clearly disclose the platform-policy risk before use.
 
 ### Changed
 
 - AI optimization now closes after submission and continues as a persisted background task. A title and six-dimension diagnosis wave feeds a second wave of whole-document developmental editing and body-chunk review, with at most three concurrent model calls. Each stage persists progress and partial results, validation retries only the failed subtask, and users can run a focused second-pass deep analysis for any structural dimension. The added whole-document context can increase built-in-model input-token usage compared with the previous review pipeline; charges continue to use provider-reported actual tokens.
+- WeChat export now tunes page padding, paragraph rhythm, line and letter spacing, and heading/body sizes for mobile reading while preserving the default font and each theme's visual identity.
 
 ### Fixed
 
