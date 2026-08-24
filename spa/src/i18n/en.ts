@@ -362,7 +362,7 @@ export const en: Messages = {
       "The review produced three copy suggestions and six layout suggestions. Koinote stored the review without changing the draft until the author confirmed each item; all suggestions were eventually applied for a total of 3 credits.",
     caseSafetyItems: [
       "Every suggestion shows the original, proposed text, and reason instead of editing silently.",
-      "If the document changes after review, the old review expires rather than overwriting newer work.",
+      "If the document changes during review, the suggestions remain available with a warning that they may not reflect the latest article; source matching still protects newer work when applying them.",
       "Applying AI changes creates a complete recovery point for comparison or restoration in version history.",
       "Review history retains the summary, scores, suggestion states, and actual credit usage.",
     ],
@@ -387,7 +387,7 @@ export const en: Messages = {
         question:
           "Can an old review overwrite changes made while it was running?",
         answer:
-          "No. Revision and save-conflict checks protect every application. If the document changes after review begins, the old review expires instead of overwriting newer content.",
+          "No. Koinote keeps the review and warns that the article changed, so its suggestions may not reflect the latest version. Revision, save-conflict, and source-text checks still protect every application; a suggestion that no longer matches cannot overwrite newer content.",
       },
       {
         question:
@@ -841,9 +841,9 @@ export const en: Messages = {
       "This closes the current review. Ignore every remaining suggestion?",
     applied: "Applied",
     dismissed: "Ignored",
-    staleTitle: "This review is out of date",
+    staleTitle: "The article changed during AI optimization",
     staleDescription:
-      "The document changed after this review. Start a new review to avoid overwriting newer work.",
+      "You can still review and apply these suggestions, but they may not reflect the latest article. Check each one before applying it.",
     failedTitle: "AI could not complete this review",
     retry: "Review again",
     noSuggestions:
@@ -882,7 +882,7 @@ export const en: Messages = {
       applied: "Applied",
       dismissed: "Ignored",
       failed: "Failed",
-      stale: "Out of date",
+      stale: "Article changed",
     },
   },
   mcp: {
@@ -2199,11 +2199,15 @@ function hello(name) {
       "The model provider rejected the request. Check the model and API key",
     agent_provider_unavailable:
       "The model provider is temporarily unavailable. Try again later",
-    agent_review_stale: "The document changed. Start a new review",
+    // Compatibility with older backend instances during a rolling deployment.
+    agent_review_stale:
+      "Some suggestions no longer match the current article. Review them individually and continue",
+    agent_suggestion_conflict:
+      "Some suggestions no longer match the current article. Review them individually and continue",
     agent_review_closed: "This review is already closed",
     agent_review_in_progress: "Another review is still running. Please wait",
     invalid_agent_review_source:
-      "The document or source review changed. Start a new standard review first",
+      "This source review is not currently available for deep analysis",
     invalid_agent_provider: "Invalid AI model provider",
     invalid_llm_channel_name: "Invalid channel name",
     invalid_llm_channel_url: "The channel Base URL is invalid or unsafe",

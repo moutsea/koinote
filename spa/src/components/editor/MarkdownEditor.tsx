@@ -25,6 +25,7 @@ import { isDesktopRuntime } from "../../desktop/runtime";
 import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
 import { applyUploadedImageMappingToEditor } from "./imageUploadMapping";
 import { DocumentFindBar } from "./DocumentFindBar";
+import { readTreeDragPayload } from "./treeDrag";
 
 /**
  * 没套主题时标题的排版。
@@ -303,6 +304,13 @@ export default function MarkdownEditor({
       },
       handleDrop: (view, event) => {
         const dragEvent = event as DragEvent;
+        if (
+          dragEvent.dataTransfer &&
+          readTreeDragPayload(dragEvent.dataTransfer)
+        ) {
+          event.preventDefault();
+          return true;
+        }
         const files = imageFilesFrom(dragEvent.dataTransfer?.files);
         if (files.length > 0) {
           event.preventDefault();

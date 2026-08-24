@@ -367,7 +367,7 @@ export const fr: Messages = {
       "La revue a produit trois suggestions de texte et six de structure. Koinote a conservé le résultat sans modifier le brouillon avant la confirmation de l’auteur ; les neuf suggestions ont finalement été appliquées pour 3 credits.",
     caseSafetyItems: [
       "Chaque proposition montre l’original, la modification et sa raison, sans changement silencieux.",
-      "Si le document évolue après la revue, l’ancien résultat expire au lieu d’écraser le nouveau contenu.",
+      "Si le document évolue pendant l’analyse, les suggestions restent disponibles avec un avertissement indiquant qu’elles peuvent ne plus refléter la dernière version ; la correspondance du texte source protège les ajouts récents.",
       "L’application des changements IA crée un point de récupération complet pour comparer ou restaurer.",
       "L’historique garde le résumé, les notes, l’état des suggestions et les credits réellement consommés.",
     ],
@@ -393,7 +393,7 @@ export const fr: Messages = {
         question:
           "Une ancienne revue peut-elle écraser des changements plus récents ?",
         answer:
-          "Non. Les contrôles de revision et de conflit protègent chaque application. Si le document change après le début de la revue, l’ancien résultat expire au lieu d’écraser le nouveau contenu.",
+          "Non. Koinote conserve l’analyse et signale que l’article a changé, donc que les suggestions peuvent ne plus refléter sa dernière version. Les contrôles de revision, de conflit d’enregistrement et de correspondance du texte empêchent une suggestion devenue incompatible d’écraser le contenu récent.",
       },
       {
         question:
@@ -853,9 +853,9 @@ export const fr: Messages = {
       "Cette action ferme l’analyse. Ignorer toutes les suggestions restantes ?",
     applied: "Appliquée",
     dismissed: "Ignorée",
-    staleTitle: "Cette analyse n’est plus à jour",
+    staleTitle: "L’article a changé pendant l’optimisation IA",
     staleDescription:
-      "Le document a changé après l’analyse. Lancez-en une nouvelle pour ne pas écraser les modifications récentes.",
+      "Vous pouvez toujours consulter et appliquer ces suggestions, mais elles peuvent ne pas refléter la dernière version. Vérifiez-les une par une avant application.",
     failedTitle: "L’IA n’a pas pu terminer l’analyse",
     retry: "Relancer l’analyse",
     noSuggestions:
@@ -894,7 +894,7 @@ export const fr: Messages = {
       applied: "Appliquée",
       dismissed: "Ignorée",
       failed: "Échec",
-      stale: "Obsolète",
+      stale: "Article modifié",
     },
   },
   mcp: {
@@ -2249,11 +2249,15 @@ function hello(name) {
       "Le fournisseur a refusé la requête. Vérifiez le modèle et la clé API",
     agent_provider_unavailable:
       "Le fournisseur est temporairement indisponible. Réessayez plus tard",
-    agent_review_stale: "Le document a changé. Lancez une nouvelle analyse",
+    // Compatibilité avec les anciennes instances du backend pendant un déploiement progressif.
+    agent_review_stale:
+      "Certaines suggestions ne correspondent plus à l’article actuel. Vérifiez-les une par une avant de continuer",
+    agent_suggestion_conflict:
+      "Certaines suggestions ne correspondent plus à l’article actuel. Vérifiez-les une par une avant de continuer",
     agent_review_closed: "Cette analyse est déjà fermée",
     agent_review_in_progress: "Une autre analyse est en cours. Patientez",
     invalid_agent_review_source:
-      "Le document ou l’analyse source a changé. Relancez d’abord une analyse standard",
+      "Cette analyse source n’est pas disponible pour une analyse approfondie",
     invalid_agent_provider: "Fournisseur de modèle IA invalide",
     invalid_llm_channel_name: "Nom de canal invalide",
     invalid_llm_channel_url: "L’URL de base du canal est invalide ou non sûre",

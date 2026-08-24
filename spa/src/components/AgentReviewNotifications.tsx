@@ -257,7 +257,7 @@ export function AgentReviewNotifications({
                           ? t.agentReview.backgroundTimeoutDescription
                           : failureDescription ?? t.agentReview.backgroundFailedDescription}
                 </p>
-                {ready && (
+                {(ready || stale) && (
                   <button
                     type="button"
                     onClick={() => {

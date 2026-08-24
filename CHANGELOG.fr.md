@@ -20,6 +20,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 ### Changed
 
 - Après son lancement, l’optimisation IA ferme le panneau et continue comme tâche d’arrière-plan persistante. Le titre et l’introduction, les sections du corps et la mise en page deviennent des sous-tâches à concurrence limitée ; chaque étape conserve sa progression et ses résultats partiels, et seule la sous-tâche invalide est relancée.
+- Les résultats de l’optimisation IA restent disponibles si l’article change pendant l’analyse, avec un avertissement indiquant qu’ils peuvent ne plus refléter la dernière version. Les suggestions dont le texte source correspond encore peuvent être appliquées séparément, sans qu’un conflit invalide toute l’analyse.
 - L’export WeChat ajuste désormais les marges, le rythme des paragraphes, l’interligne, l’approche et la taille des titres et du corps pour la lecture mobile, tout en conservant la police par défaut et l’identité de chaque thème.
 
 ### Fixed
@@ -39,7 +40,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Les échecs d’enregistrement distinguent désormais les conflits de révision des erreurs hors ligne ou réseau, conservent un brouillon réessayable sans restaurer silencieusement une ancienne sauvegarde et affichent un état plus clair et accessible.
 - Les synchronisations, téléversements d’images et changements d’onglet conservent désormais le curseur et le défilement, même après le remontage d’un éditeur évincé du cache.
 - Les actions d’export du menu natif exécutent directement le format choisi, et `Cmd/Ctrl+/` referme désormais correctement l’aide-mémoire des raccourcis.
-- Le glisser-déposer des documents et dossiers fonctionne désormais dans WKWebView et WebView2 : le gestionnaire natif de fichiers de Tauri, qui interceptait les événements HTML5 des cibles, est désactivé. Les charges inconnues sont refusées avant tout déplacement et les annulations ne laissent plus de surbrillance résiduelle.
+- Le glisser-déposer des documents et dossiers fonctionne désormais dans WKWebView et WebView2 : le gestionnaire natif de fichiers de Tauri, qui interceptait les événements HTML5 des cibles, est désactivé, ce qui rétablit aussi le téléversement d’images par glisser-déposer. Les charges de l’arborescence ne s’insèrent plus en JSON dans l’éditeur, les fichiers externes déposés hors de l’éditeur ne peuvent plus faire naviguer l’application, les charges inconnues sont refusées, les cibles interfenêtres sont surlignées et les annulations ne laissent plus d’état résiduel.
 - `Cmd/Ctrl+W` et le raccourci de création fonctionnent lorsque le corps de l’éditeur est actif, tout en restant bloqués dans les champs de formulaire et derrière les fenêtres modales.
 
 ## [0.6.0] - 2026-08-17

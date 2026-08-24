@@ -2,6 +2,13 @@ export type DragPayload =
   | { kind: "doc"; id: string }
   | { kind: "folder"; id: string };
 
+export function sameTreeDragPayload(
+  left: DragPayload | null | undefined,
+  right: DragPayload | null | undefined,
+): boolean {
+  return Boolean(left && right && left.kind === right.kind && left.id === right.id);
+}
+
 export const TREE_DRAG_MIME = "application/x-koinote-tree-item";
 const TREE_DRAG_TEXT_PREFIX = "koinote-tree:";
 

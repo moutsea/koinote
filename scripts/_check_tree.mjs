@@ -13,9 +13,11 @@ import {
 } from "./_tree_bundle.mjs";
 import {
   readTreeDragPayload,
+  sameTreeDragPayload,
   TREE_DRAG_MIME,
   writeTreeDragPayload,
 } from "./_tree_drag_bundle.mjs";
+import { installDropNavigationGuard } from "./_drop_navigation_bundle.mjs";
 import { readFileSync } from "node:fs";
 
 let pass = 0,
@@ -69,6 +71,60 @@ function fakeDataTransfer() {
   ok("写入 Koinote 自定义 MIME", transfer.values.has(TREE_DRAG_MIME));
 }
 
+eq(
+  "不同对象中的同一树载荷按值相等",
+  sameTreeDragPayload(
+    { kind: "doc", id: "doc-1" },
+    { kind: "doc", id: "doc-1" },
+  ),
+  true,
+);
+eq(
+  "不同类型的树载荷不相等",
+  sameTreeDragPayload(
+    { kind: "doc", id: "same-id" },
+    { kind: "folder", id: "same-id" },
+  ),
+  false,
+);
+
+{
+  const target = new EventTarget();
+  const removeGuard = installDropNavigationGuard(target);
+  for (const type of ["dragover", "drop"]) {
+    const event = new Event(type, { cancelable: true });
+    target.dispatchEvent(event);
+    eq(`全局 ${type} 阻止 WebView 导航`, event.defaultPrevented, true);
+  }
+  removeGuard();
+  const event = new Event("drop", { cancelable: true });
+  target.dispatchEvent(event);
+  eq("卸载全局拖放保护后不再拦截", event.defaultPrevented, false);
+}
+
+{
+  const added = [];
+  const removed = [];
+  const target = {
+    addEventListener(type, listener, options) {
+      added.push({ type, listener, options });
+    },
+    removeEventListener(type, listener, options) {
+      removed.push({ type, listener, options });
+    },
+  };
+  const removeGuard = installDropNavigationGuard(target);
+  eq("dragover 在捕获阶段阻止 WebView 导航", added[0]?.options, {
+    capture: true,
+  });
+  eq("drop 在冒泡阶段等待编辑器先处理", added[1]?.options, undefined);
+  removeGuard();
+  eq("卸载 dragover 使用相同捕获参数", removed[0]?.options, {
+    capture: true,
+  });
+  eq("卸载 drop 使用相同冒泡参数", removed[1]?.options, undefined);
+}
+
 {
   const transfer = fakeDataTransfer();
   transfer.setData(
@@ -104,6 +160,14 @@ for (const [name, value] of [
     new URL("../spa/src/components/editor/DocumentList.tsx", import.meta.url),
     "utf8",
   );
+  const markdownEditorSource = readFileSync(
+    new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
+    "utf8",
+  );
+  const mainSource = readFileSync(
+    new URL("../spa/src/main.tsx", import.meta.url),
+    "utf8",
+  );
   eq(
     "文档和文件夹 dragstart 都写入 DataTransfer",
     treeRowSource.match(/writeTreeDragPayload\(e\.dataTransfer, payload\)/g)?.length,
@@ -134,27 +198,43 @@ for (const [name, value] of [
     ),
   );
   ok(
-    "文件夹落点高亮绑定当前拖拽对象",
-    /overDrag !== null && overDrag === h\.dragging && acceptsDrop/.test(
+    "文件夹落点高亮按载荷值比较并支持跨窗口",
+    /!overDrag\.local \|\| sameTreeDragPayload\(overDrag\.payload, h\.dragging\)/.test(
       treeRowSource,
     ),
   );
   ok(
-    "根落点高亮绑定当前拖拽对象",
-    /rootOverDrag !== null &&\s*rootOverDrag === dragging &&\s*rootAcceptsDrop/.test(
+    "根落点高亮按载荷值比较并支持跨窗口",
+    /!rootOverDrag\.local \|\|\s*sameTreeDragPayload\(rootOverDrag\.payload, dragging\)/.test(
       documentListSource,
     ),
   );
+  ok(
+    "编辑器吞掉文件树载荷而不插入 JSON",
+    /handleDrop:[\s\S]*?readTreeDragPayload\(dragEvent\.dataTransfer\)[\s\S]*?event\.preventDefault\(\);\s*return true;/.test(
+      markdownEditorSource,
+    ),
+  );
+  ok(
+    "应用入口安装全局拖放导航保护",
+    /installDropNavigationGuard\(\);/.test(mainSource),
+  );
+}
 
+{
   const tauriConfig = JSON.parse(
     readFileSync(
       new URL("../src-tauri/tauri.conf.json", import.meta.url),
       "utf8",
     ),
   );
+  ok("客户端至少配置一个窗口", tauriConfig.app.windows.length > 0);
   ok(
     "客户端关闭 Tauri 原生拖放处理器以保留 HTML5 文件树拖放",
-    tauriConfig.app.windows.every((window) => window.dragDropEnabled === false),
+    tauriConfig.app.windows.length > 0 &&
+      tauriConfig.app.windows.every(
+        (window) => window.dragDropEnabled === false,
+      ),
   );
 }
 

@@ -22,6 +22,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 ### Changed
 
 - AI optimization now closes after submission and continues as a persisted background task. A title and six-dimension diagnosis wave feeds a second wave of whole-document developmental editing and body-chunk review, with at most three concurrent model calls. Each stage persists progress and partial results, validation retries only the failed subtask, and users can run a focused second-pass deep analysis for any structural dimension. The added whole-document context can increase built-in-model input-token usage compared with the previous review pipeline; charges continue to use provider-reported actual tokens.
+- AI optimization results now remain available when the article changes during a review, with a warning that suggestions may not reflect the latest version. Suggestions whose source text still matches can be applied individually, while one conflict no longer invalidates the entire review.
 - WeChat export now tunes page padding, paragraph rhythm, line and letter spacing, and heading/body sizes for mobile reading while preserving the default font and each theme's visual identity.
 
 ### Fixed
@@ -41,7 +42,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Desktop save failures now distinguish revision conflicts from offline or network errors, retain retryable drafts without silently restoring stale backups, and expose clearer accessible status feedback.
 - Sync updates, image uploads, and tab switches now preserve cursor and scroll positions without rebuilding unaffected editor content, including after an editor tab is remounted.
 - Native export menu actions now run the selected format directly, and `Cmd/Ctrl+/` toggles the shortcut reference closed instead of only opening it.
-- Desktop document and folder drag-and-drop now works across WKWebView and WebView2 by disabling Tauri's native file-drop handler that intercepted HTML5 target events; unknown payloads are rejected before moving anything and cancelled drags no longer leave stale highlights.
+- Desktop document and folder drag-and-drop now works across WKWebView and WebView2 by disabling Tauri's native file-drop handler that intercepted HTML5 target events, which also restores drag-to-upload for images. Tree payloads no longer insert JSON into the editor, external files dropped outside the editor cannot navigate the app away, unknown payloads are rejected before moving anything, cross-window targets highlight correctly, and cancelled drags no longer leave stale state.
 - `Cmd/Ctrl+W` and new-document shortcuts now work while the editor body is focused without firing inside form fields or through modal dialogs.
 
 ## [0.6.0] - 2026-08-17

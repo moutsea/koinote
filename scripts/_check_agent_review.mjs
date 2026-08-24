@@ -152,6 +152,29 @@ includes("支持逐条忽略", panel, "dismissAgentReviewSuggestion(");
 includes("支持全部应用", panel, "applyAllAgentReviewSuggestions(");
 includes("支持全部忽略", panel, "dismissAgentReview(");
 assert.equal(
+  panel.match(/const latest = await getAgentReview\(current\.reviewId\);/g)?.length,
+  2,
+  "逐条与全部落实前都应读取最新文档 revision",
+);
+assert.equal(
+  panel.match(/latest\.review\.documentRevision/g)?.length,
+  2,
+  "落实请求必须携带最新文档 revision",
+);
+includes("文章变化后仍可操作审阅建议", panel, 'review.status === "partially_applied" || review.status === "stale"');
+includes("文章变化显示非阻断提醒", panel, 'review.status === "stale" && (');
+assert.ok(
+  !panel.includes('if (review.status === "stale") {\n    return <StatusBlock'),
+  "文章变化后不应隐藏整份审阅",
+);
+includes("文章变化通知仍可打开审阅结果", notifications, "{(ready || stale) && (");
+includes("后端允许变化后的审阅逐条安全落实", backend, 'locked.Status != "partially_applied" && locked.Status != "stale"');
+includes("不匹配建议使用独立错误码", backend, '"agent_suggestion_conflict"');
+assert.ok(
+  !backend.includes("markAgentReviewStaleAndCommit"),
+  "单条建议不匹配不应关闭整份审阅",
+);
+assert.equal(
   panel.match(/await onPrepareReview\(\)/g)?.length,
   3,
   "创建审阅、逐条落实和全部落实前都必须经过保存/同步屏障",

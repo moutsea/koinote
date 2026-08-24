@@ -12,11 +12,14 @@ import { docPad, folderPad, guideX } from "./indent";
 import type { DocNode, TreeFolder } from "./tree";
 import {
   readTreeDragPayload,
+  sameTreeDragPayload,
   writeTreeDragPayload,
   type DragPayload,
 } from "./treeDrag";
 
 export type { DragPayload } from "./treeDrag";
+
+type DragHover = { payload: DragPayload; local: boolean };
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -84,7 +87,7 @@ export function FolderRow({
 }) {
   const { t } = useI18n();
   const open = h.expanded.has(folder.folderId);
-  const [overDrag, setOverDrag] = useState<DragPayload | null>(null);
+  const [overDrag, setOverDrag] = useState<DragHover | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -103,8 +106,9 @@ export function FolderRow({
   }, [h.autoEditFolderId, folder.folderId, folder.name, h]);
 
   const name = folder.name.trim() || t.editor.untitledFolder;
-  const acceptsDrop = h.dragging
-    ? h.canDropOn(h.dragging, folder.folderId)
+  const hoverPayload = h.dragging ?? overDrag?.payload;
+  const acceptsDrop = hoverPayload
+    ? h.canDropOn(hoverPayload, folder.folderId)
     : false;
   // 菜单打开时这一行保持高亮：菜单在指针位置弹出，不标出来的话看不清操作的是哪一行
   const menuOpen = h.menuTargetId === folder.folderId;
@@ -124,7 +128,14 @@ export function FolderRow({
           const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
           if (!payload || !h.canDropOn(payload, folder.folderId)) return;
           e.preventDefault(); // 不调用它，浏览器不会触发 drop
-          setOverDrag(h.dragging ?? payload);
+          const local = h.dragging !== null;
+          setOverDrag((current) =>
+            current &&
+            current.local === local &&
+            sameTreeDragPayload(current.payload, payload)
+              ? current
+              : { payload, local },
+          );
         }}
         onDragLeave={() => setOverDrag(null)}
         onDrop={(e) => {
@@ -152,7 +163,9 @@ export function FolderRow({
           })
         }
         className={`group relative flex items-center rounded-lg transition ${
-          overDrag !== null && overDrag === h.dragging && acceptsDrop
+          overDrag !== null &&
+          acceptsDrop &&
+          (!overDrag.local || sameTreeDragPayload(overDrag.payload, h.dragging))
             // 拖放目标环用 500 而不是 400：400 压在宣纸上只有 2.47:1，
             // 达不到非文字元素的 3:1。这个环是拖拽时唯一的落点提示，看不见就等于没有
             ? "bg-cinnabar-100 ring-1 ring-cinnabar-500 dark:bg-cinnabar-900/40"

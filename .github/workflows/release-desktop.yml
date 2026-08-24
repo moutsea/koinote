@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version restores document and folder drag-and-drop in native desktop webviews."
+          notes="Koinote Desktop $version hardens native drag-and-drop and keeps AI review suggestions available when an article changes."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此补丁版本修复 Tauri 原生拖放处理器截获 HTML5 事件的问题，恢复 macOS 与 Windows 客户端中的文档和文件夹拖拽移动。
+          此补丁版本阻止文件树载荷误插入正文，并避免外部文件拖到非编辑区后让客户端导航离开，同时保留图片拖入上传和跨窗口落点提示。AI 优化期间文章发生改动时，审阅结果不再直接失效；仍可查看并逐条落实与当前原文匹配的建议。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This patch disables Tauri's native file-drop interception so document and folder drag-and-drop works again in the macOS and Windows clients.
+          This patch prevents tree payloads from being inserted into document content and blocks external-file navigation outside the editor while preserving drag-to-upload for images and cross-window drop highlighting. AI review results now remain available when an article changes, and suggestions whose source text still matches can be applied individually.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

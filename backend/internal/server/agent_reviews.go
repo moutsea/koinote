@@ -63,7 +63,6 @@ const expireStaleAgentReviewSQL = `
 
 var (
 	errAgentReviewNotFound     = errors.New("agent review not found")
-	errAgentReviewStale        = errors.New("agent review is stale")
 	errAgentReviewClosed       = errors.New("agent review is closed")
 	errAgentReviewPersistence  = errors.New("agent review persistence failed")
 	errAgentSuggestionNotFound = errors.New("agent suggestion not found")
@@ -264,8 +263,8 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return
 		}
-		if sourceReview.DocumentID != document.DocID || sourceReview.CurrentRevision != document.Revision ||
-			sourceReview.Status == "running" || sourceReview.Status == "failed" || sourceReview.Status == "stale" {
+		if sourceReview.DocumentID != document.DocID ||
+			sourceReview.Status == "running" || sourceReview.Status == "failed" {
 			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Source review is not available for deep analysis")
 			return
 		}
@@ -1418,15 +1417,12 @@ func (a *App) applyAgentReviewSuggestion(
 		return agentReviewMutationResult{}, errAgentSuggestionClosed
 	}
 	if err := validateAgentReviewForApply(locked, expectedRevision); err != nil {
-		if errors.Is(err, errAgentReviewStale) {
-			return agentReviewMutationResult{}, markAgentReviewStaleAndCommit(ctx, tx, locked.DatabaseID)
-		}
 		return agentReviewMutationResult{}, err
 	}
 
 	nextTitle, nextContent, err := applyLockedAgentSuggestion(locked.Document, suggestion)
 	if err != nil {
-		return agentReviewMutationResult{}, markAgentReviewStaleAndCommit(ctx, tx, locked.DatabaseID)
+		return agentReviewMutationResult{}, err
 	}
 	updateResult, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{
 		User:             user,
@@ -1456,7 +1452,8 @@ func (a *App) applyAgentReviewSuggestion(
 			return agentReviewMutationResult{}, err
 		}
 	}
-	status, err := resolvedAgentReviewStatus(ctx, tx, locked.DatabaseID, false)
+	documentChanged := locked.Status == "stale" || locked.Document.Revision != locked.CurrentRevision
+	status, err := resolvedAgentReviewStatus(ctx, tx, locked.DatabaseID, documentChanged)
 	if err != nil {
 		return agentReviewMutationResult{}, err
 	}
@@ -1505,9 +1502,6 @@ func (a *App) applyAllAgentReviewSuggestions(
 		return a.loadAgentReviewMutationResult(ctx, user.ID, reviewID, locked.Document)
 	}
 	if err := validateAgentReviewForApply(locked, expectedRevision); err != nil {
-		if errors.Is(err, errAgentReviewStale) {
-			return agentReviewMutationResult{}, markAgentReviewStaleAndCommit(ctx, tx, locked.DatabaseID)
-		}
 		return agentReviewMutationResult{}, err
 	}
 	if len(suggestions) == 0 {
@@ -1518,7 +1512,7 @@ func (a *App) applyAllAgentReviewSuggestions(
 		locked.Document, suggestions,
 	)
 	if err != nil {
-		return agentReviewMutationResult{}, markAgentReviewStaleAndCommit(ctx, tx, locked.DatabaseID)
+		return agentReviewMutationResult{}, err
 	}
 	updateResult, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{
 		User:             user,
@@ -1752,14 +1746,8 @@ func lockPendingAgentSuggestions(ctx context.Context, tx pgx.Tx, reviewDatabaseI
 }
 
 func validateAgentReviewForApply(locked lockedAgentReview, expectedRevision int64) error {
-	if locked.Status != "ready" && locked.Status != "partially_applied" {
-		if locked.Status == "stale" {
-			return errAgentReviewStale
-		}
+	if locked.Status != "ready" && locked.Status != "partially_applied" && locked.Status != "stale" {
 		return errAgentReviewClosed
-	}
-	if locked.Document.Revision != locked.CurrentRevision {
-		return errAgentReviewStale
 	}
 	if locked.Document.Revision != expectedRevision {
 		return errDocumentRevisionConflict
@@ -1840,7 +1828,7 @@ func applyAllLockedAgentSuggestions(
 	return title, content, appliedIDs, dismissedTitleIDs, nil
 }
 
-func resolvedAgentReviewStatus(ctx context.Context, tx pgx.Tx, reviewDatabaseID int64, stale bool) (string, error) {
+func resolvedAgentReviewStatus(ctx context.Context, tx pgx.Tx, reviewDatabaseID int64, documentChanged bool) (string, error) {
 	var pending int
 	var applied int
 	if err := tx.QueryRow(ctx, `
@@ -1852,7 +1840,7 @@ func resolvedAgentReviewStatus(ctx context.Context, tx pgx.Tx, reviewDatabaseID 
 		return "", err
 	}
 	if pending > 0 {
-		if stale {
+		if documentChanged {
 			return "stale", nil
 		}
 		if applied > 0 {
@@ -1864,18 +1852,6 @@ func resolvedAgentReviewStatus(ctx context.Context, tx pgx.Tx, reviewDatabaseID 
 		return "applied", nil
 	}
 	return "dismissed", nil
-}
-
-func markAgentReviewStaleAndCommit(ctx context.Context, tx pgx.Tx, reviewDatabaseID int64) error {
-	if _, err := tx.Exec(ctx, `
-		UPDATE agent_reviews SET status = 'stale', updated_at = now() WHERE id = $1
-	`, reviewDatabaseID); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
-	return errAgentReviewStale
 }
 
 func agentReviewDocumentFromModel(databaseID int, document model.Document) agentReviewDocument {
@@ -1923,8 +1899,8 @@ func (a *App) writeAgentReviewMutationError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errAgentReviewNotFound), errors.Is(err, errAgentSuggestionNotFound), errors.Is(err, errDocumentNotFound):
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Agent review or suggestion not found")
-	case errors.Is(err, errAgentReviewStale), errors.Is(err, errAgentSuggestionConflict):
-		httpx.ErrorCode(w, http.StatusConflict, "agent_review_stale", "The document changed after this review")
+	case errors.Is(err, errAgentSuggestionConflict):
+		httpx.ErrorCode(w, http.StatusConflict, "agent_suggestion_conflict", "One or more suggestions no longer match the current document")
 	case errors.Is(err, errDocumentRevisionConflict):
 		httpx.ErrorCode(w, http.StatusConflict, "document_revision_conflict", "Reload the latest document before applying suggestions")
 	case errors.Is(err, errAgentReviewClosed), errors.Is(err, errAgentSuggestionClosed):

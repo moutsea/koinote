@@ -356,7 +356,7 @@ export const zh: Messages = {
       "这次审阅生成 3 条正文建议和 6 条结构建议。系统只保存审阅结果，直到作者逐条确认后才修改文档；最终全部建议均已落实，并消耗 3 credits。",
     caseSafetyItems: [
       "每条建议都展示原文、建议和理由，不在后台静默改稿。",
-      "文档若在审阅后发生变化，旧审阅会过期，避免覆盖新内容。",
+      "文档在审阅期间发生变化时，建议仍会保留并提示可能不是最新情况；落实时继续检查原文，避免覆盖新内容。",
       "落实 AI 修改时保存完整恢复点，可以通过版本历史比较或撤销。",
       "审阅记录保留摘要、评分、建议状态和实际 credits 消耗。",
     ],
@@ -380,7 +380,7 @@ export const zh: Messages = {
       {
         question: "审阅期间文档发生变化，会覆盖新内容吗？",
         answer:
-          "不会。落实前后都会经过 revision 与保存冲突保护；文档在审阅后发生变化时，旧审阅会过期，不能覆盖后来新增或修改的内容。",
+          "不会。系统会保留审阅结果并提示文章已发生改动，建议可能不代表最新情况。落实时仍会经过 revision、保存冲突和原文匹配检查；不再匹配的单条建议不会覆盖后来新增或修改的内容。",
       },
       {
         question: "落实后可以撤销吗？审阅记录会保留什么？",
@@ -809,9 +809,9 @@ export const zh: Messages = {
     dismissAllConfirm: "忽略后本次审阅将关闭，确定吗？",
     applied: "已落实",
     dismissed: "已忽略",
-    staleTitle: "这份审阅已经过期",
+    staleTitle: "AI 优化期间文章发生了改动",
     staleDescription:
-      "文档在审阅后发生了变化。为了避免覆盖新内容，请重新发起审阅。",
+      "以下建议仍可查看和落实，但可能不代表文章的最新情况，请在落实前逐条核对。",
     failedTitle: "AI 未能完成审阅",
     retry: "重新审阅",
     noSuggestions: "文章状态不错，本次没有需要落实的改动。",
@@ -846,7 +846,7 @@ export const zh: Messages = {
       applied: "已全部落实",
       dismissed: "已忽略",
       failed: "失败",
-      stale: "已过期",
+      stale: "文章已改动",
     },
   },
   mcp: {
@@ -2057,11 +2057,13 @@ function hello(name) {
     agent_invalid_response: "模型返回的建议格式无效，请重新审阅",
     agent_provider_error: "模型渠道拒绝了请求，请检查模型和密钥配置",
     agent_provider_unavailable: "模型渠道暂时不可用，请稍后重试",
-    agent_review_stale: "文档已经变化，请重新发起审阅",
+    // 兼容滚动部署期间仍可能返回旧错误码的后端实例。
+    agent_review_stale: "部分建议与当前文章不再匹配，请逐条核对后继续处理",
+    agent_suggestion_conflict:
+      "部分建议与当前文章不再匹配，请逐条核对后继续处理",
     agent_review_closed: "这份审阅已经关闭",
     agent_review_in_progress: "已有审阅正在进行，请稍候",
-    invalid_agent_review_source:
-      "文档或来源审阅已经变化，请先重新发起一次标准审阅",
+    invalid_agent_review_source: "这份来源审阅暂时不能用于深入分析",
     invalid_agent_provider: "AI 模型渠道无效",
     invalid_llm_channel_name: "渠道名称无效",
     invalid_llm_channel_url: "渠道 Base URL 无效或不安全",

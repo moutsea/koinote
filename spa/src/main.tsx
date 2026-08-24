@@ -14,9 +14,12 @@ import { I18nProvider } from "./i18n";
 import { AppShell } from "./components/AppShell";
 import { HomePage } from "./pages/HomePage";
 import { isDesktopRuntime } from "./desktop/runtime";
+import { installDropNavigationGuard } from "./dropNavigation";
 
 const queryClient = new QueryClient();
 const desktopRuntime = isDesktopRuntime();
+
+installDropNavigationGuard();
 
 if (desktopRuntime) {
   void import("./desktop/auth").then(

@@ -30,7 +30,13 @@ import {
   type MenuTarget,
   type TreeRowHandlers,
 } from "./TreeRow";
-import { readTreeDragPayload, type DragPayload } from "./treeDrag";
+import {
+  readTreeDragPayload,
+  sameTreeDragPayload,
+  type DragPayload,
+} from "./treeDrag";
+
+type DragHover = { payload: DragPayload; local: boolean };
 
 /**
  * 侧栏文件树。
@@ -95,7 +101,7 @@ export function DocumentList({
   const organizerMenuRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
-  const [rootOverDrag, setRootOverDrag] = useState<DragPayload | null>(null);
+  const [rootOverDrag, setRootOverDrag] = useState<DragHover | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(
     null,
   );
@@ -346,7 +352,15 @@ export function DocumentList({
     return createItems(null, -1);
   }
 
-  const rootAcceptsDrop = dragging ? canDropOn(dragging, null) : false;
+  const rootHoverPayload = dragging ?? rootOverDrag?.payload;
+  const rootAcceptsDrop = rootHoverPayload
+    ? canDropOn(rootHoverPayload, null)
+    : false;
+  const rootDropHovered =
+    rootOverDrag !== null &&
+    rootAcceptsDrop &&
+    (!rootOverDrag.local ||
+      sameTreeDragPayload(rootOverDrag.payload, dragging));
   const isEmpty = folders.length === 0 && documents.length === 0;
 
   return (
@@ -422,7 +436,14 @@ export function DocumentList({
           const payload = readTreeDragPayload(e.dataTransfer) ?? dragging;
           if (!payload || !canDropOn(payload, null)) return;
           e.preventDefault(); // 不调用它浏览器不会触发 drop
-          setRootOverDrag(dragging ?? payload);
+          const local = dragging !== null;
+          setRootOverDrag((current) =>
+            current &&
+            current.local === local &&
+            sameTreeDragPayload(current.payload, payload)
+              ? current
+              : { payload, local },
+          );
         }}
         onDragLeave={() => setRootOverDrag(null)}
         onDrop={(e) => {
@@ -435,9 +456,7 @@ export function DocumentList({
         onContextMenu={(e) => openMenu(e, { kind: "root" })}
         className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
           // 500 而不是 400，理由同 TreeRow：拖放落点提示要够 3:1
-          rootOverDrag !== null &&
-          rootOverDrag === dragging &&
-          rootAcceptsDrop
+          rootDropHovered
             ? "rounded-lg ring-1 ring-inset ring-cinnabar-500"
             : ""
         }`}
@@ -478,7 +497,7 @@ export function DocumentList({
         )}
 
         {/* 拖动中给一条明确落点：内容可能占满滚动区，没有空白可拖 */}
-        {dragging && rootAcceptsDrop && (
+        {((dragging && rootAcceptsDrop) || rootDropHovered) && (
           <div className="mt-1 rounded-lg border border-dashed border-cinnabar-500 px-2 py-2 text-center text-[11px] text-cinnabar-600 dark:text-cinnabar-400">
             {t.editor.dropToRoot}
           </div>

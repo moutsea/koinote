@@ -174,7 +174,8 @@ export function AgentReviewPanel({
   const applyOne = useMutation({
     mutationFn: async ({ current, suggestion }: { current: AgentReview; suggestion: AgentReviewSuggestion }) => {
       if (!(await onPrepareReview())) throw new Error("document_save_failed");
-      return applyAgentReviewSuggestion(current.reviewId, suggestion.suggestionId, current.currentRevision);
+      const latest = await getAgentReview(current.reviewId);
+      return applyAgentReviewSuggestion(current.reviewId, suggestion.suggestionId, latest.review.documentRevision);
     },
     async onSuccess(result) {
       setError(null);
@@ -206,7 +207,8 @@ export function AgentReviewPanel({
   const applyAll = useMutation({
     mutationFn: async (current: AgentReview) => {
       if (!(await onPrepareReview())) throw new Error("document_save_failed");
-      return applyAllAgentReviewSuggestions(current.reviewId, current.currentRevision);
+      const latest = await getAgentReview(current.reviewId);
+      return applyAllAgentReviewSuggestions(current.reviewId, latest.review.documentRevision);
     },
     async onSuccess(result) {
       setError(null);
@@ -472,7 +474,7 @@ function ReviewDetail({
   );
   const deepAnalysisTargetId = deepAnalysisDimensionId ?? defaultDeepAnalysisDimension;
   const deepAnalysisTargetLabel = layoutAssessment.find((item) => item.id === deepAnalysisTargetId)?.label;
-  const actionable = review.status === "ready" || review.status === "partially_applied";
+  const actionable = review.status === "ready" || review.status === "partially_applied" || review.status === "stale";
   // The list endpoint omits suggestions; tolerate that shape while the detail
   // request is loading or when an older response is still in the cache.
   const suggestions = review.suggestions ?? [];
@@ -497,9 +499,6 @@ function ReviewDetail({
       </div>
     );
   }
-  if (review.status === "stale") {
-    return <StatusBlock icon={<Clock3 className="h-5 w-5" />} title={t.agentReview.staleTitle} body={t.agentReview.staleDescription} />;
-  }
   if (review.status === "failed") {
     const message = review.errorCode === "review_timeout"
       ? t.agentReview.backgroundTimeoutDescription
@@ -514,6 +513,22 @@ function ReviewDetail({
           {t.agentReview.statuses[review.status]}
         </span>
       </div>
+
+      {review.status === "stale" && (
+        <div
+          role="status"
+          className="mt-4 flex items-start gap-2.5 rounded-md border px-3 py-2.5"
+          style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)", color: "var(--ink-mid)" }}
+        >
+          <Clock3 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--cinnabar)" }} />
+          <div>
+            <p className="text-xs font-semibold" style={{ color: "var(--ink-strong)" }}>
+              {t.agentReview.staleTitle}
+            </p>
+            <p className="mt-1 text-xs leading-5">{t.agentReview.staleDescription}</p>
+          </div>
+        </div>
+      )}
 
       {review.summary && (
         <div className="mt-4 border-l-2 pl-3" style={{ borderColor: "var(--ink-line)" }}>

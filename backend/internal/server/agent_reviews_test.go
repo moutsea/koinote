@@ -160,7 +160,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		}
 	})
 
-	t.Run("deep review rejects source from older document revision", func(t *testing.T) {
+	t.Run("deep review accepts source from older document revision", func(t *testing.T) {
 		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeOpenAIAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_400, 600)
 		}))
@@ -185,7 +185,7 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		)
 		if _, err := app.updateDocument(context.Background(), updateDocumentParams{
 			User: user, DocID: document.DocID, Title: document.Title, Theme: document.Theme,
-			Content:          document.Content + "\n\nA new paragraph invalidates the earlier review.",
+			Content:          document.Content + "\n\nA new paragraph changes the article after the source review.",
 			ExpectedRevision: document.Revision, Source: documentSourceWeb,
 		}); err != nil {
 			t.Fatal(err)
@@ -195,8 +195,16 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 			t, app, user, document.DocID,
 			`{"providerMode":"builtin","depth":"deep","focusDimension":"hierarchy","sourceReviewId":"`+source.ReviewID+`"}`,
 		)
-		if deepResponse.Code != http.StatusBadRequest || decodeErrorCode(t, deepResponse) != "invalid_agent_review_source" {
+		if deepResponse.Code != http.StatusAccepted {
 			t.Fatalf("stale deep source status=%d body=%s", deepResponse.Code, deepResponse.Body.String())
+		}
+		initial := decodeAgentReviewResponse(t, deepResponse)
+		if initial.TaskProgress.Mode != agentReviewModeDeep || initial.TaskProgress.FocusDimension != "hierarchy" {
+			t.Fatalf("stale deep source progress=%+v", initial.TaskProgress)
+		}
+		completed := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
+		if completed.TaskProgress.Mode != agentReviewModeDeep || completed.TaskProgress.FocusDimension != "hierarchy" {
+			t.Fatalf("completed stale deep source progress=%+v", completed.TaskProgress)
 		}
 	})
 
@@ -874,33 +882,71 @@ func TestAgentReviewSuggestionMutations(t *testing.T) {
 		assertAgentHistoryForTest(t, pool, doc.DocID, []int64{1})
 	})
 
-	t.Run("外部改动后 review 进入 stale", func(t *testing.T) {
+	t.Run("外部改动后仍可落实匹配的单条建议", func(t *testing.T) {
 		doc, err := app.createDocument(ctx, createDocumentParams{
-			User: user, Title: "并发标题", Content: "等待优化。",
+			User: user, Title: "并发标题", Content: "等待优化。\n\n保持原样。",
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 		reviewID, suggestions := insertReadyAgentReviewForTest(t, pool, user.ID, doc, []lockedAgentSuggestion{
 			{Target: "body", Before: "等待优化。", After: "优化完成。"},
+			{Target: "body", Before: "保持原样。", After: "表达更清晰。"},
 		})
 		updated, err := app.updateDocument(ctx, updateDocumentParams{
 			User: user, DocID: doc.DocID, Title: doc.Title, Theme: doc.Theme,
-			Content: "用户已经修改。", ExpectedRevision: doc.Revision, Source: documentSourceWeb,
+			Content: "等待优化。\n\n保持原样。\n\n用户新增。", ExpectedRevision: doc.Revision, Source: documentSourceWeb,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = app.applyAgentReviewSuggestion(ctx, user, reviewID, suggestions[0], updated.Revision)
-		if !errors.Is(err, errAgentReviewStale) {
-			t.Fatalf("外部改动后错误=%v，期望 stale", err)
+		result, err := app.applyAgentReviewSuggestion(ctx, user, reviewID, suggestions[0], updated.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Document.Content != "优化完成。\n\n保持原样。\n\n用户新增。" {
+			t.Fatalf("落实建议覆盖了用户改动: %q", result.Document.Content)
+		}
+		if result.Review.Status != "stale" {
+			t.Fatalf("review status=%q，期望保留文章已改动提示", result.Review.Status)
 		}
 		var status string
 		if err := pool.QueryRow(ctx, `SELECT status FROM agent_reviews WHERE review_id = $1`, reviewID).Scan(&status); err != nil {
 			t.Fatal(err)
 		}
 		if status != "stale" {
-			t.Fatalf("review status=%q，期望 stale", status)
+			t.Fatalf("stored review status=%q，期望 stale", status)
+		}
+	})
+
+	t.Run("外部改动导致单条建议不匹配时不关闭整份审阅", func(t *testing.T) {
+		doc, err := app.createDocument(ctx, createDocumentParams{
+			User: user, Title: "局部冲突", Content: "等待优化。\n\n其他内容。",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reviewID, suggestions := insertReadyAgentReviewForTest(t, pool, user.ID, doc, []lockedAgentSuggestion{
+			{Target: "body", Before: "等待优化。", After: "优化完成。"},
+			{Target: "body", Before: "其他内容。", After: "其他内容更清晰。"},
+		})
+		updated, err := app.updateDocument(ctx, updateDocumentParams{
+			User: user, DocID: doc.DocID, Title: doc.Title, Theme: doc.Theme,
+			Content: "用户改写了这一段。\n\n其他内容。", ExpectedRevision: doc.Revision, Source: documentSourceWeb,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = app.applyAgentReviewSuggestion(ctx, user, reviewID, suggestions[0], updated.Revision)
+		if !errors.Is(err, errAgentSuggestionConflict) {
+			t.Fatalf("不匹配建议错误=%v，期望 suggestion conflict", err)
+		}
+		result, err := app.applyAgentReviewSuggestion(ctx, user, reviewID, suggestions[1], updated.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Document.Content != "用户改写了这一段。\n\n其他内容更清晰。" {
+			t.Fatalf("其他建议未能继续落实: %q", result.Document.Content)
 		}
 	})
 
