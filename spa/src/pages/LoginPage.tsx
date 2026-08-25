@@ -32,7 +32,7 @@ function loginRedirectPath() {
     candidate.startsWith("//") ||
     candidate.includes("\\")
   ) {
-    return "/dashboard";
+    return "/settings";
   }
   return candidate;
 }

@@ -43,7 +43,8 @@ eq("编辑器深层路径通栏", contentWidthFor("/editor/a/b/c"), "full");
 eq("首页收窄", contentWidthFor("/"), "6xl");
 eq("空路径按首页算", contentWidthFor(""), "6xl");
 ok("首页不通栏", contentWidthFor("/") !== "full", contentWidthFor("/"));
-// 控制台不通栏：信息卡和文档列表拉到 2560px 会变成两头各一个字、中间一片空白
+// 账户中心不通栏：信息卡和文档列表拉到 2560px 会变成两头各一个字、中间一片空白
+eq("设置中心收到 7xl", contentWidthFor("/settings"), "7xl");
 eq("控制台收到 5xl", contentWidthFor("/dashboard"), "5xl");
 eq("文档页收到 5xl", contentWidthFor("/documents"), "5xl");
 eq("邀请页收到 5xl", contentWidthFor("/invitations"), "5xl");
@@ -92,6 +93,7 @@ eq("注册页走兜底", contentWidthFor("/register"), "6xl");
       "/",
       "/editor",
       "/editor/x",
+      "/settings",
       "/dashboard",
       "/documents",
       "/invitations",
@@ -155,6 +157,7 @@ for (const path of [
   "/",
   "/editor",
   "/editor/abc",
+  "/settings",
   "/dashboard",
   "/documents",
   "/invitations",
@@ -175,7 +178,7 @@ ok("通栏不含 max-w", !widthClass("full").includes("max-w"), widthClass("full
 ok("通栏不居中", !widthClass("full").includes("mx-auto"), widthClass("full"));
 // 通栏用 px-3 与编辑器侧栏的内边距取齐
 ok("通栏用 px-3", widthClass("full").includes("px-3"), widthClass("full"));
-for (const w of ["6xl", "5xl", "3xl"]) {
+for (const w of ["7xl", "6xl", "5xl", "3xl"]) {
   ok(`${w} 居中`, widthClass(w).includes("mx-auto"), widthClass(w));
   ok(`${w} 带对应 max-w`, widthClass(w).includes(`max-w-${w}`), widthClass(w));
 }
@@ -185,6 +188,7 @@ for (const path of [
   "/",
   "/editor",
   "/editor/abc-123",
+  "/settings",
   "/dashboard",
   "/documents",
   "/invitations",
@@ -210,7 +214,7 @@ ok(
   widthClass("full"),
 );
 // 收窄档不该用它：那几页的正文本来就和页头不对齐，移动端边距大一点更舒服
-for (const w of ["6xl", "5xl", "3xl"]) {
+for (const w of ["7xl", "6xl", "5xl", "3xl"]) {
   ok(
     `${w} 档不用 ${EDGE_PADDING}`,
     !widthClass(w).split(/\s+/).includes(EDGE_PADDING),
@@ -245,6 +249,7 @@ for (const path of [
 // 首页丢了页脚就等于全站找不到条款页
 for (const path of [
   "/",
+  "/settings",
   "/dashboard",
   "/documents",
   "/invitations",
@@ -272,7 +277,7 @@ for (const path of ["/editor", "/editor/", "/editor/abc123"]) {
     "min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden",
   );
 }
-for (const path of ["/", "/dashboard", "/documents", "/editor-guide"]) {
+for (const path of ["/", "/settings", "/dashboard", "/documents", "/editor-guide"]) {
   ok(`${path} 不锁根滚动`, !shouldLockRootScroll(path));
   eq(
     `${path} 保持自然页面高度`,

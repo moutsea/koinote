@@ -24,7 +24,7 @@ export function VersionHistoryGuidePage() {
             {t.versionGuide.subtitle}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/dashboard" hash="history-settings" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.versionGuide.settingsCta}</Link>
+            <Link to="/settings" search={{ section: "membership" }} hash="history-settings" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.versionGuide.settingsCta}</Link>
             <Link to="/docs/mcp" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.mcpCta}</Link>
             <Link to="/pricing" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.versionGuide.pricingCta}</Link>
           </div>

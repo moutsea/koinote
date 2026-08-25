@@ -92,11 +92,10 @@ includes("回跳后刷新会员状态", main, '["membership-status"]');
 includes("Credits 回跳后刷新余额", main, '["agent-credits"]');
 includes("价格页读取权威会员状态", pricing, "getMembershipStatus");
 includes("价格页识别处理中 409", pricing, 'checkoutErrorCode === "checkout_in_progress"');
-includes("会员卡识别处理中 409", membership, 'error.code === "checkout_in_progress"');
-includes("会员卡识别已生效 409", membership, 'error.code === "membership_already_active"');
+includes("会员卡支付回跳主动确认", membership, "confirmMembershipCheckout(sessionId)");
 includes("Web 轮询使用共享终态判断", membership, "isTerminalBillingHTTPStatus(error.status)");
 includes("Web 轮询超时进入 delayed", membership, 'setNotice("delayed")');
-includes("Web 未决支付禁止重复付款", membership, "checkoutUnresolved");
+includes("会员卡升级入口跳转价格页", membership, 'to="/pricing"');
 includes("客户端显示全局支付状态", shell, "desktopBillingNotice");
 includes("后台启动有界 Checkout 清理", backendMain, "StartStripeCheckoutCleanup");
 

@@ -10,11 +10,9 @@ export const ja: Messages = {
     aiGuide: "AI 最適化",
     mcpGuide: "MCP 接続",
     versionHistoryGuide: "バージョン管理",
-    dashboard: "ダッシュボード",
-    aiSettings: "AI 設定",
+    settings: "設定",
     documents: "マイドキュメント",
     trash: "ゴミ箱",
-    invitations: "友達を招待",
     admin: "管理",
     login: "ログイン",
     logout: "ログアウト",
@@ -659,14 +657,15 @@ export const ja: Messages = {
   },
   membership: {
     title: "Koinote ライフタイム",
-    lifetimeBadge: "永久有効",
+    currentPlan: "現在のプラン",
+    freePlan: "無料プラン",
     activeBadge: "有効",
-    description:
-      "一度のアップグレードで、10 GB、MCP、履歴、AI 最適化、1,000 credits を利用できます。",
-    oneTimePayment: "一度のお支払いで永久に利用可能",
+    freeDescription:
+      "現在は無料プランで、基本的な編集機能とクラウド同期を利用できます。",
+    currentStorageBenefit: "{quota} クラウドストレージ",
+    freeCoreBenefit: "基本編集とクラウド同期",
     currencyLabel: "支払い通貨",
     currencyHint: "選択した通貨で Stripe Checkout にて決済されます。",
-    storageBenefit: "10 GB クラウドストレージ",
     aiBenefit: "AI 最適化",
     aiComingSoon: "1,000 credits 付き。自分の LLM も利用可能",
     purchase: "永久アクセスを購入",
@@ -674,8 +673,6 @@ export const ja: Messages = {
     activeTitle: "ライフタイム会員を有効化しました",
     activeDescription:
       "固定 10 GB のクラウドストレージ、AI 最適化、すべての永久会員特典が含まれます。",
-    unavailable: "この環境では会員決済が設定されていません。",
-    loadFailed: "会員ステータスを読み込めませんでした。",
     checkoutSuccess: "支払いを確認しました。ライフタイム会員が有効です。",
     checkoutPending: "支払いを確認中です。完了後、権利は自動的に更新されます。",
     checkoutDelayed:
@@ -976,10 +973,27 @@ export const ja: Messages = {
     loginRequiredHint: "アカウントページにアクセスするにはログインが必要です。",
     goLogin: "ログインへ",
   },
-  aiSettings: {
-    title: "AI 設定",
-    subtitle:
-      "AI credits、独自 LLM チャネル、MCP 文書アクセスをまとめて管理します。",
+  settingsPage: {
+    title: "設定",
+    subtitle: "アカウント、会員情報、AI 接続、招待履歴をまとめて管理します。",
+    general: "一般",
+    generalDescription: "基本情報の確認、アカウントの保護、アカウント操作を管理します。",
+    membership: "会員情報",
+    membershipDescription: "プラン、クラウド使用量、バージョン履歴設定を確認します。",
+    ai: "AI 設定",
+    aiDescription: "モデル、MCP アクセス、credits の利用履歴を管理します。",
+    invitations: "招待",
+    invitationsDescription: "専用招待リンクを作成し、招待から参加したユーザーを確認します。",
+    freePlan: "無料ユーザー",
+    lifetimePlan: "永久会員",
+    upgrade: "会員にアップグレード",
+    aiLockedTitle: "会員になると AI 機能を利用できます",
+    aiLockedDescription:
+      "AI 最適化、独自モデル、MCP 文書アクセス、credits は永久会員向け機能です。",
+    invitedUsers: "招待したユーザー",
+    invitedUsersEmpty: "招待から参加したユーザーはまだいません。",
+    invitedAt: "{date} に参加",
+    invitationReward: "特典 {reward}",
   },
   documentsPage: {
     title: "マイドキュメント",
@@ -1075,10 +1089,6 @@ export const ja: Messages = {
     typeToConfirm: "完全削除を確認するには「{title}」と入力してください：",
     loadFailed: "ゴミ箱を読み込めませんでした。もう一度お試しください。",
     actionFailed: "操作に失敗しました。もう一度お試しください。",
-  },
-  invitationsPage: {
-    title: "友達を招待",
-    subtitle: "専用の招待リンクを共有し、招待実績と特典容量を確認できます。",
   },
   feedback: {
     menuLabel: "フィードバック",
@@ -1815,7 +1825,6 @@ function hello(name) {
     editor: "エディタ",
     download: "デスクトップ版",
     pricing: "料金",
-    dashboard: "ダッシュボード",
     docsCenter: "ドキュメント一覧",
     aiGuide: "AI 最適化ガイド",
     mcpGuide: "MCP 接続ガイド",

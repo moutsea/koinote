@@ -17,16 +17,15 @@ import {
   Coins,
   Crown,
   FileText,
-  Gift,
   HardDrive,
   History,
   Keyboard,
-  LayoutDashboard,
   Laptop,
   LogOut,
   LockKeyhole,
   MessageSquareText,
   RefreshCw,
+  Settings,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -434,11 +433,9 @@ export function AppShell() {
                 avatarUrl={user.avatarUrl}
                 membershipTier={user.membershipTier}
                 isAdmin={user.isAdmin}
-                dashboardActive={isUnder(pathname, "/dashboard")}
-                aiSettingsActive={isUnder(pathname, "/ai-settings")}
+                settingsActive={isUnder(pathname, "/settings")}
                 documentsActive={isUnder(pathname, "/documents")}
                 trashActive={isUnder(pathname, "/trash")}
-                invitationsActive={isUnder(pathname, "/invitations")}
                 adminActive={isUnder(pathname, "/admin")}
                 desktopRuntime={desktopRuntime}
                 localMode={localMode}
@@ -584,11 +581,9 @@ function UserMenu({
   avatarUrl,
   membershipTier,
   isAdmin,
-  dashboardActive,
-  aiSettingsActive,
+  settingsActive,
   documentsActive,
   trashActive,
-  invitationsActive,
   adminActive,
   desktopRuntime,
   localMode,
@@ -604,11 +599,9 @@ function UserMenu({
   avatarUrl?: string | null;
   membershipTier: "free" | "lifetime";
   isAdmin: boolean;
-  dashboardActive: boolean;
-  aiSettingsActive: boolean;
+  settingsActive: boolean;
   documentsActive: boolean;
   trashActive: boolean;
-  invitationsActive: boolean;
   adminActive: boolean;
   desktopRuntime: boolean;
   localMode: boolean;
@@ -769,7 +762,8 @@ function UserMenu({
 
           {!localMode && membershipActive && (
             <Link
-              to="/ai-settings"
+              to="/settings"
+              search={{ section: "ai" }}
               hash="agent-credits"
               role="menuitem"
               onClick={() => setOpen(false)}
@@ -836,37 +830,19 @@ function UserMenu({
 
           {!localMode && (
             <Link
-            to="/dashboard"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
-            style={{
-                color: dashboardActive
+              to="/settings"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+              style={{
+                color: settingsActive
                   ? "var(--cinnabar)"
                   : "var(--ink-strong)",
-              fontWeight: dashboardActive ? 500 : undefined,
-            }}
-          >
-            <LayoutDashboard className="h-4 w-4 shrink-0" />
-            {t.nav.dashboard}
-            </Link>
-          )}
-
-          {!localMode && (
-            <Link
-            to="/ai-settings"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
-            style={{
-                color: aiSettingsActive
-                  ? "var(--cinnabar)"
-                  : "var(--ink-strong)",
-              fontWeight: aiSettingsActive ? 500 : undefined,
-            }}
-          >
-            <Bot className="h-4 w-4 shrink-0" />
-            {t.nav.aiSettings}
+                fontWeight: settingsActive ? 500 : undefined,
+              }}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              {t.nav.settings}
             </Link>
           )}
 
@@ -897,24 +873,6 @@ function UserMenu({
             <Trash2 className="h-4 w-4 shrink-0" />
             {t.nav.trash}
           </Link>
-
-          {!localMode && (
-            <Link
-            to="/invitations"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
-            style={{
-              color: invitationsActive
-                ? "var(--cinnabar)"
-                : "var(--ink-strong)",
-              fontWeight: invitationsActive ? 500 : undefined,
-            }}
-          >
-            <Gift className="h-4 w-4 shrink-0" />
-            {t.nav.invitations}
-            </Link>
-          )}
 
           {!localMode && isAdmin && (
             <Link

@@ -55,6 +55,7 @@ export function InvitationCard() {
   }
 
   const data = overview.data;
+  const invitedUsers = data.invitedUsers ?? [];
   const reward = formatBytes(data.rewardPerInviteBytes, locale);
   const maxBonus = formatBytes(data.maxBonusStorageBytes, locale);
 
@@ -118,6 +119,49 @@ export function InvitationCard() {
         <p className="mt-4 text-xs leading-relaxed" style={{ color: "var(--ink-faint)" }}>
           {interpolate(t.invitations.note, { limit: maxBonus })}
         </p>
+
+        <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--ink-line)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--ink-black)" }}>
+            {t.settingsPage.invitedUsers}
+          </h3>
+          {invitedUsers.length === 0 ? (
+            <p className="mt-3 text-sm" style={{ color: "var(--ink-faint)" }}>
+              {t.settingsPage.invitedUsersEmpty}
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y" style={{ borderColor: "var(--ink-line)" }}>
+              {invitedUsers.map((user, index) => (
+                <li
+                  key={`${user.invitedAt}-${index}`}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium" style={{ color: "var(--ink-strong)" }}>
+                      {user.name}
+                    </p>
+                    {user.email !== user.name && (
+                      <p className="mt-0.5 truncate text-xs" style={{ color: "var(--ink-faint)" }}>
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-xs sm:text-right" style={{ color: "var(--ink-faint)" }}>
+                    <p>
+                      {interpolate(t.settingsPage.invitedAt, {
+                        date: new Date(user.invitedAt).toLocaleDateString(locale),
+                      })}
+                    </p>
+                    <p className="mt-0.5">
+                      {interpolate(t.settingsPage.invitationReward, {
+                        reward: formatBytes(user.rewardBytes, locale),
+                      })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </PaperCard>
   );

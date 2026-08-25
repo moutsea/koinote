@@ -424,6 +424,12 @@ export type InvitationOverview = {
   earnedStorageBytes: number;
   /** 包含自己受邀注册所得与邀请他人所得的全部永久奖励空间 */
   bonusStorageBytes: number;
+  invitedUsers?: Array<{
+    name: string;
+    email: string;
+    rewardBytes: number;
+    invitedAt: string;
+  }>;
 };
 
 export function getInvitationOverview() {

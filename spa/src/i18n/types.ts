@@ -20,11 +20,9 @@ export interface Messages {
     aiGuide: string;
     mcpGuide: string;
     versionHistoryGuide: string;
-    dashboard: string;
-    aiSettings: string;
+    settings: string;
     documents: string;
     trash: string;
-    invitations: string;
     admin: string;
     login: string;
     logout: string;
@@ -318,21 +316,20 @@ export interface Messages {
   };
   membership: {
     title: string;
-    lifetimeBadge: string;
+    currentPlan: string;
+    freePlan: string;
     activeBadge: string;
-    description: string;
-    oneTimePayment: string;
+    freeDescription: string;
+    currentStorageBenefit: string;
+    freeCoreBenefit: string;
     currencyLabel: string;
     currencyHint: string;
-    storageBenefit: string;
     aiBenefit: string;
     aiComingSoon: string;
     purchase: string;
     redirecting: string;
     activeTitle: string;
     activeDescription: string;
-    unavailable: string;
-    loadFailed: string;
     checkoutSuccess: string;
     checkoutPending: string;
     checkoutDelayed: string;
@@ -595,9 +592,26 @@ export interface Messages {
     loginRequiredHint: string;
     goLogin: string;
   };
-  aiSettings: {
+  settingsPage: {
     title: string;
     subtitle: string;
+    general: string;
+    generalDescription: string;
+    membership: string;
+    membershipDescription: string;
+    ai: string;
+    aiDescription: string;
+    invitations: string;
+    invitationsDescription: string;
+    freePlan: string;
+    lifetimePlan: string;
+    upgrade: string;
+    aiLockedTitle: string;
+    aiLockedDescription: string;
+    invitedUsers: string;
+    invitedUsersEmpty: string;
+    invitedAt: string;
+    invitationReward: string;
   };
   documentsPage: {
     title: string;
@@ -681,10 +695,6 @@ export interface Messages {
     typeToConfirm: string;
     loadFailed: string;
     actionFailed: string;
-  };
-  invitationsPage: {
-    title: string;
-    subtitle: string;
   };
   feedback: {
     menuLabel: string;
@@ -1243,7 +1253,6 @@ export interface Messages {
     editor: string;
     download: string;
     pricing: string;
-    dashboard: string;
     docsCenter: string;
     aiGuide: string;
     mcpGuide: string;

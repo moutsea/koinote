@@ -34,9 +34,8 @@ const sync = fs.readFileSync("spa/src/components/DesktopSyncStatus.tsx", "utf8")
 const mcp = fs.readFileSync("spa/src/components/MCPAccessCard.tsx", "utf8");
 const externalNavigation = fs.readFileSync("spa/src/externalNavigation.ts", "utf8");
 const webLinksCore = fs.readFileSync("spa/src/webLinksCore.ts", "utf8");
-const membership = fs.readFileSync("spa/src/components/MembershipCard.tsx", "utf8");
 const pricing = fs.readFileSync("spa/src/pages/PricingPage.tsx", "utf8");
-const dashboard = fs.readFileSync("spa/src/pages/DashboardPage.tsx", "utf8");
+const settings = fs.readFileSync("spa/src/pages/SettingsPage.tsx", "utf8");
 const trash = fs.readFileSync("spa/src/pages/TrashPage.tsx", "utf8");
 
 includes("桌面运行时使用独立首页", main, 'import("./pages/DesktopHomePage")');
@@ -71,9 +70,8 @@ includes("Checkout 拒绝非 HTTPS 地址", externalNavigation, 'url.protocol !=
 includes("桌面外链使用系统浏览器", externalNavigation, 'import("@tauri-apps/plugin-opener")');
 includes("站内网页跳转复用安全链接生成器", externalNavigation, "localWebURL(origin, path)");
 includes("站内网页跳转拒绝反斜杠", webLinksCore, 'path.includes("\\\\")');
-includes("会员卡复用安全 Checkout 导航", membership, "openMembershipCheckout(data.url)");
 includes("价格页复用安全 Checkout 导航", pricing, "openMembershipCheckout(result.url)");
-includes("桌面账户安全操作转到网页", dashboard, 'openKoinoteWebPath("/dashboard#security")');
+includes("桌面账户安全操作转到网页", settings, 'openKoinoteWebPath("/settings?section=general#security")');
 matches(
   "桌面永久删除只需一次确认且自动提交服务端校验文字",
   trash,

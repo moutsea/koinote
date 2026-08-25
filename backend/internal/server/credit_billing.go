@@ -352,8 +352,8 @@ func creditCheckoutParams(
 	client string,
 ) *stripe.CheckoutSessionCreateParams {
 	baseURL := strings.TrimRight(cfg.AppURL, "/")
-	successURL := baseURL + "/ai-settings?credit_checkout=success&session_id={CHECKOUT_SESSION_ID}"
-	cancelURL := baseURL + "/ai-settings?credit_checkout=cancelled"
+	successURL := baseURL + "/settings?section=ai&credit_checkout=success&session_id={CHECKOUT_SESSION_ID}"
+	cancelURL := baseURL + "/settings?section=ai&credit_checkout=cancelled"
 	if client == checkoutClientDesktop {
 		successURL = baseURL + "/billing/desktop-return?checkout=success&purchase=credits&session_id={CHECKOUT_SESSION_ID}"
 		cancelURL = baseURL + "/billing/desktop-return?checkout=cancelled&purchase=credits"

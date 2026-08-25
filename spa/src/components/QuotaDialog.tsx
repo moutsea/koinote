@@ -117,7 +117,8 @@ export function QuotaDialog() {
             {t.storage.quotaDialogDismiss}
           </button>
           <Link
-            to="/dashboard"
+            to="/settings"
+            search={{ section: "membership" }}
             onClick={() => setDetail(null)}
             className="rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "var(--cinnabar)" }}

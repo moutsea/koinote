@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -31,6 +32,19 @@ func TestInvitationCodeGeneration(t *testing.T) {
 			t.Fatalf("生成了重复的邀请码: %q", code)
 		}
 		seen[code] = true
+	}
+}
+
+func TestMaskInvitationEmail(t *testing.T) {
+	for input, expected := range map[string]string{
+		"alice@example.com": "a***@example.com",
+		"李@example.cn":      "李***@example.cn",
+		"invalid":           "***",
+		"":                  "***",
+	} {
+		if actual := maskInvitationEmail(input); actual != expected {
+			t.Fatalf("maskInvitationEmail(%q) = %q, want %q", input, actual, expected)
+		}
 	}
 }
 
@@ -338,12 +352,29 @@ func TestInvitationRewardAndOAuthIdempotency(t *testing.T) {
 		EarnedBytes       int64  `json:"earnedStorageBytes"`
 		BonusBytes        int64  `json:"bonusStorageBytes"`
 		MaxBonusBytes     int64  `json:"maxBonusStorageBytes"`
+		InvitedUsers      []struct {
+			Name        string    `json:"name"`
+			Email       string    `json:"email"`
+			RewardBytes int64     `json:"rewardBytes"`
+			InvitedAt   time.Time `json:"invitedAt"`
+		} `json:"invitedUsers"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &overview); err != nil {
 		t.Fatal(err)
 	}
 	if overview.InvitationCode != inviterCode || overview.SuccessfulInvites != 3 || overview.EarnedBytes != invitationRewardBytes+invitationRewardBytes/2 || overview.BonusBytes != maxInvitationBonusBytes || overview.MaxBonusBytes != maxInvitationBonusBytes {
 		t.Fatalf("邀请概览不符: %+v", overview)
+	}
+	if len(overview.InvitedUsers) != 3 {
+		t.Fatalf("受邀列表长度 = %d，期望 3", len(overview.InvitedUsers))
+	}
+	for _, item := range overview.InvitedUsers {
+		if item.Name == "" || item.Email == "" || !strings.Contains(item.Email, "***@") || item.InvitedAt.IsZero() {
+			t.Fatalf("受邀列表包含无效或未脱敏记录: %+v", item)
+		}
+		if strings.Contains(item.Email, suffix) {
+			t.Fatalf("受邀列表泄露完整邮箱: %q", item.Email)
+		}
 	}
 
 }

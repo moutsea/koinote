@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -122,6 +123,21 @@ func invitationError(w http.ResponseWriter) {
 	httpx.ErrorCode(w, http.StatusBadRequest, "invalid_invitation_code", "Invitation code is invalid")
 }
 
+type invitedUserSummary struct {
+	Name        string    `json:"name"`
+	Email       string    `json:"email"`
+	RewardBytes int64     `json:"rewardBytes"`
+	InvitedAt   time.Time `json:"invitedAt"`
+}
+
+func maskInvitationEmail(email string) string {
+	local, domain, ok := strings.Cut(strings.TrimSpace(email), "@")
+	if !ok || local == "" || domain == "" {
+		return "***"
+	}
+	return string([]rune(local)[0]) + "***@" + domain
+}
+
 func (a *App) invitationsOverview(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -146,6 +162,49 @@ func (a *App) invitationsOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rows, err := a.db.Query(r.Context(), `
+		SELECT COALESCE(
+		           NULLIF(btrim(invited.nickname), ''),
+		           NULLIF(btrim(invited.username), ''),
+		           ''
+		       ),
+		       invited.email,
+		       i.reward_bytes,
+		       i.created_at
+		FROM invitations i
+		JOIN users invited ON invited.id = i.invited_user_id
+		WHERE i.inviter_user_id = $1
+		ORDER BY i.created_at DESC, i.id DESC
+		LIMIT 50
+	`, user.ID)
+	if err != nil {
+		log.Printf("invitation list: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	defer rows.Close()
+
+	invitedUsers := make([]invitedUserSummary, 0)
+	for rows.Next() {
+		var item invitedUserSummary
+		var email string
+		if err := rows.Scan(&item.Name, &email, &item.RewardBytes, &item.InvitedAt); err != nil {
+			log.Printf("scan invitation list: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		item.Email = maskInvitationEmail(email)
+		if item.Name == "" {
+			item.Name = item.Email
+		}
+		invitedUsers = append(invitedUsers, item)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate invitation list: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"invitationCode":       code,
 		"successfulInvites":    successfulInvites,
@@ -153,5 +212,6 @@ func (a *App) invitationsOverview(w http.ResponseWriter, r *http.Request) {
 		"maxBonusStorageBytes": maxInvitationBonusBytes,
 		"earnedStorageBytes":   boundedInvitationBonus(earnedStorageBytes),
 		"bonusStorageBytes":    boundedInvitationBonus(user.BonusStorageBytes),
+		"invitedUsers":         invitedUsers,
 	})
 }

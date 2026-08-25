@@ -182,7 +182,7 @@ func TestLifetimeCheckoutParamsUseFixedPriceAndOwnership(t *testing.T) {
 		params.PaymentIntentData.Metadata["koinote_plan"] != lifetimePlanCode {
 		t.Fatalf("PaymentIntent 缺少服务隔离元数据: %+v", params.PaymentIntentData)
 	}
-	if stripe.StringValue(params.SuccessURL) != "https://koinote.app/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}" {
+	if stripe.StringValue(params.SuccessURL) != "https://koinote.app/settings?section=membership&checkout=success&session_id={CHECKOUT_SESSION_ID}" {
 		t.Fatalf("成功回跳地址不正确: %q", stripe.StringValue(params.SuccessURL))
 	}
 	if params.Metadata["koinote_client"] != checkoutClientWeb {

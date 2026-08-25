@@ -125,6 +125,31 @@ function parseEditorSearch(
   };
 }
 
+function parseSettingsSearch(search: Record<string, unknown>): {
+  section?: "general" | "membership" | "ai" | "invitations";
+  checkout?: string;
+  credit_checkout?: string;
+  session_id?: string;
+} {
+  const section = search.section;
+  return {
+    section:
+      section === "general" ||
+      section === "membership" ||
+      section === "ai" ||
+      section === "invitations"
+        ? section
+        : undefined,
+    checkout: typeof search.checkout === "string" ? search.checkout : undefined,
+    credit_checkout:
+      typeof search.credit_checkout === "string"
+        ? search.credit_checkout
+        : undefined,
+    session_id:
+      typeof search.session_id === "string" ? search.session_id : undefined,
+  };
+}
+
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor",
@@ -187,6 +212,15 @@ const dashboardRoute = createRoute({
   component: lazyRouteComponent(
     () => import("./pages/DashboardPage"),
     "DashboardPage",
+  ),
+});
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  validateSearch: parseSettingsSearch,
+  component: lazyRouteComponent(
+    () => import("./pages/SettingsPage"),
+    "SettingsPage",
   ),
 });
 const aiSettingsRoute = createRoute({
@@ -272,6 +306,7 @@ const routeTree = rootRoute.addChildren([
   desktopBillingReturnRoute,
   registerRoute,
   dashboardRoute,
+  settingsRoute,
   aiSettingsRoute,
   mcpActivityRoute,
   documentsRoute,

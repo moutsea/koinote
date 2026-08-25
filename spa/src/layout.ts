@@ -9,7 +9,7 @@
  */
 
 /** 正文容器的宽度档位 */
-export type ContentWidth = "full" | "6xl" | "5xl" | "3xl";
+export type ContentWidth = "full" | "7xl" | "6xl" | "5xl" | "3xl";
 
 /**
  * 页头与通栏正文共用的左右内边距。
@@ -31,7 +31,8 @@ export const EDGE_PADDING = "px-3";
 export const ROUTE_WIDTHS: Array<{ prefix: string; width: ContentWidth }> = [
   // 编辑器：两列版面，铺满才好用
   { prefix: "/editor", width: "full" },
-  // 账户页：信息卡与列表都需要收窄，避免超宽屏上的行内元素离得太远
+  // 设置中心包含侧栏和内容区，需要比单栏账户页多留一档空间
+  { prefix: "/settings", width: "7xl" },
   { prefix: "/dashboard", width: "5xl" },
   { prefix: "/ai-settings", width: "5xl" },
   { prefix: "/mcp/activity", width: "5xl" },
@@ -92,6 +93,8 @@ export function widthClass(width: ContentWidth): string {
   switch (width) {
     case "full":
       return `w-full ${EDGE_PADDING}`;
+    case "7xl":
+      return "mx-auto w-full max-w-7xl px-4 sm:px-6";
     case "6xl":
       return "mx-auto w-full max-w-6xl px-4 sm:px-6";
     case "5xl":

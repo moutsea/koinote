@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(path, "utf8");
 const login = read("spa/src/pages/LoginPage.tsx");
-const dashboard = read("spa/src/pages/DashboardPage.tsx");
+const settings = read("spa/src/pages/SettingsPage.tsx");
 const security = read("spa/src/components/PasswordSecurityCard.tsx");
 const accountDeletion = read("spa/src/components/AccountDeletionCard.tsx");
 const editor = read("spa/src/pages/EditorPage.tsx");
@@ -16,11 +16,11 @@ assert.match(login, /isPasswordReset/);
 assert.match(api, /\/api\/auth\/password-reset-code/);
 assert.match(api, /\/api\/auth\/password-reset/);
 
-assert.match(dashboard, /<PasswordSecurityCard user=\{user\}/);
+assert.match(settings, /<PasswordSecurityCard user=\{user\}/);
 assert.match(security, /changePassword/);
 assert.match(security, /invalidateOtherSessions/);
 assert.match(security, /user\.hasPassword/);
-assert.match(dashboard, /<AccountDeletionCard user=\{user\}/);
+assert.match(settings, /<AccountDeletionCard user=\{user\}/);
 assert.match(accountDeletion, /deleteAccount/);
 assert.match(accountDeletion, /account_deletion_payment_pending/);
 assert.match(accountDeletion, /confirmation\.trim\(\)\.toLowerCase\(\)/);

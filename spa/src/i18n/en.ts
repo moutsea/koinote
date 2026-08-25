@@ -10,11 +10,9 @@ export const en: Messages = {
     aiGuide: "AI optimization",
     mcpGuide: "MCP integration",
     versionHistoryGuide: "Version control",
-    dashboard: "Dashboard",
-    aiSettings: "AI settings",
+    settings: "Settings",
     documents: "My documents",
     trash: "Trash",
-    invitations: "Invite friends",
     admin: "Admin",
     login: "Log in",
     logout: "Log out",
@@ -669,14 +667,15 @@ export const en: Messages = {
   },
   membership: {
     title: "Koinote Lifetime",
-    lifetimeBadge: "Lifetime",
+    currentPlan: "Current plan",
+    freePlan: "Free Plan",
     activeBadge: "Active",
-    description:
-      "A one-time upgrade for 10 GB of storage, MCP, version history, AI optimization, and 1,000 credits.",
-    oneTimePayment: "One-time payment, yours for life",
+    freeDescription:
+      "You are currently on the free plan with core editing and cloud sync.",
+    currentStorageBenefit: "{quota} cloud storage",
+    freeCoreBenefit: "Core editing and cloud sync",
     currencyLabel: "Payment currency",
     currencyHint: "Stripe Checkout will charge you in the selected currency.",
-    storageBenefit: "10 GB cloud storage",
     aiBenefit: "AI optimization",
     aiComingSoon: "Includes 1,000 credits, or use your own LLM provider",
     purchase: "Get lifetime access",
@@ -684,8 +683,6 @@ export const en: Messages = {
     activeTitle: "Lifetime membership unlocked",
     activeDescription:
       "Your account includes a fixed 10 GB of cloud storage, AI optimization, and every lifetime benefit.",
-    unavailable: "Membership checkout is not configured on this deployment.",
-    loadFailed: "Couldn't load membership status.",
     checkoutSuccess: "Payment confirmed. Your lifetime membership is active.",
     checkoutPending:
       "Payment is still being confirmed. Your access will update automatically.",
@@ -988,10 +985,27 @@ export const en: Messages = {
     loginRequiredHint: "You need to log in to access your account pages.",
     goLogin: "Go to login",
   },
-  aiSettings: {
-    title: "AI settings",
-    subtitle:
-      "Manage AI credits, your own LLM channels, and MCP document access in one place.",
+  settingsPage: {
+    title: "Settings",
+    subtitle: "Manage your account, membership, AI connections, and invitations in one place.",
+    general: "General",
+    generalDescription: "Review your profile, secure your account, and manage account-level actions.",
+    membership: "Membership",
+    membershipDescription: "See your plan, cloud usage, and version history preferences.",
+    ai: "AI settings",
+    aiDescription: "Configure model sources, MCP access, and credits activity.",
+    invitations: "Invitations",
+    invitationsDescription: "Create your invite link and review people who joined through it.",
+    freePlan: "Free",
+    lifetimePlan: "Lifetime member",
+    upgrade: "Upgrade membership",
+    aiLockedTitle: "Upgrade to unlock AI features",
+    aiLockedDescription:
+      "AI optimization, custom model channels, MCP access, and credits are available to lifetime members.",
+    invitedUsers: "Invited people",
+    invitedUsersEmpty: "No one has joined through your invitation yet.",
+    invitedAt: "Joined {date}",
+    invitationReward: "Reward {reward}",
   },
   documentsPage: {
     title: "My documents",
@@ -1089,10 +1103,6 @@ export const en: Messages = {
     typeToConfirm: "Type “{title}” to confirm permanent deletion:",
     loadFailed: "Could not load trash. Please try again.",
     actionFailed: "The action failed. Please try again.",
-  },
-  invitationsPage: {
-    title: "Invite friends",
-    subtitle: "Share your personal invitation link and track rewards.",
   },
   feedback: {
     menuLabel: "Feedback",
@@ -1837,7 +1847,6 @@ function hello(name) {
     editor: "Editor",
     download: "Download app",
     pricing: "Pricing",
-    dashboard: "Dashboard",
     docsCenter: "Documentation",
     aiGuide: "AI optimization guide",
     mcpGuide: "MCP integration guide",

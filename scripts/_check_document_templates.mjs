@@ -111,10 +111,6 @@ const desktopHome = readFileSync(
   new URL("../spa/src/pages/DesktopHomePage.tsx", import.meta.url),
   "utf8",
 );
-const dashboard = readFileSync(
-  new URL("../spa/src/pages/DashboardPage.tsx", import.meta.url),
-  "utf8",
-);
 const documents = readFileSync(
   new URL("../spa/src/pages/DocumentsPage.tsx", import.meta.url),
   "utf8",
@@ -150,9 +146,8 @@ ok(
     desktopHome.includes("<DocumentTemplateDialog"),
 );
 ok(
-  "账号页与文档页的新建按钮进入模板选择",
-  dashboard.includes("search={{ create: true }}") &&
-    documents.match(/search=\{\{ create: true \}\}/g)?.length === 2,
+  "文档页的新建按钮进入模板选择",
+  documents.match(/search=\{\{ create: true \}\}/g)?.length === 2,
 );
 ok(
   "编辑器 create 查询参数为可选布尔值",

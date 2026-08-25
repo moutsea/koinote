@@ -123,7 +123,7 @@ export function AppFooter() {
                 <FooterRoute to="/docs/version-history">
                   {t.footer.versionHistoryGuide}
                 </FooterRoute>
-                <FooterRoute to="/dashboard">{t.footer.dashboard}</FooterRoute>
+                <FooterRoute to="/settings">{t.nav.settings}</FooterRoute>
               </FooterColumn>
 
               <FooterColumn title={t.footer.legal}>

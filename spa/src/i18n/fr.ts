@@ -10,11 +10,9 @@ export const fr: Messages = {
     aiGuide: "Optimisation IA",
     mcpGuide: "Intégration MCP",
     versionHistoryGuide: "Contrôle de version",
-    dashboard: "Tableau de bord",
-    aiSettings: "Paramètres IA",
+    settings: "Paramètres",
     documents: "Mes documents",
     trash: "Corbeille",
-    invitations: "Inviter des amis",
     admin: "Administration",
     login: "Se connecter",
     logout: "Se déconnecter",
@@ -677,14 +675,15 @@ export const fr: Messages = {
   },
   membership: {
     title: "Koinote à vie",
-    lifetimeBadge: "À vie",
+    currentPlan: "Offre actuelle",
+    freePlan: "Offre gratuite",
     activeBadge: "Actif",
-    description:
-      "Une mise à niveau unique pour 10 Go de stockage, MCP, l’historique, l’optimisation IA et 1 000 credits.",
-    oneTimePayment: "Paiement unique, valable à vie",
+    freeDescription:
+      "Vous utilisez actuellement l’offre gratuite avec l’édition essentielle et la synchronisation cloud.",
+    currentStorageBenefit: "{quota} de stockage cloud",
+    freeCoreBenefit: "Édition essentielle et synchronisation cloud",
     currencyLabel: "Devise de paiement",
     currencyHint: "Stripe Checkout vous facturera dans la devise sélectionnée.",
-    storageBenefit: "10 Go de stockage cloud",
     aiBenefit: "Optimisation IA",
     aiComingSoon:
       "Inclut 1 000 credits, ou utilisez votre propre fournisseur LLM",
@@ -693,9 +692,6 @@ export const fr: Messages = {
     activeTitle: "Abonnement à vie débloqué",
     activeDescription:
       "Votre compte bénéficie de 10 Go fixes de stockage cloud, de l’optimisation IA et de tous les avantages à vie.",
-    unavailable:
-      "Le paiement des abonnements n'est pas configuré sur ce déploiement.",
-    loadFailed: "Impossible de charger le statut de l'abonnement.",
     checkoutSuccess: "Paiement confirmé. Votre abonnement à vie est actif.",
     checkoutPending:
       "Le paiement est encore en cours de confirmation. Vos droits seront mis à jour automatiquement.",
@@ -1001,10 +997,27 @@ export const fr: Messages = {
       "Vous devez vous connecter pour accéder aux pages de votre compte.",
     goLogin: "Aller à la connexion",
   },
-  aiSettings: {
-    title: "Paramètres IA",
-    subtitle:
-      "Gérez les credits IA, vos canaux LLM et l’accès MCP aux documents au même endroit.",
+  settingsPage: {
+    title: "Paramètres",
+    subtitle: "Gérez votre compte, votre adhésion, les connexions IA et les invitations au même endroit.",
+    general: "Général",
+    generalDescription: "Consultez votre profil, sécurisez votre compte et gérez les actions du compte.",
+    membership: "Adhésion",
+    membershipDescription: "Consultez votre offre, l’usage du cloud et les réglages d’historique.",
+    ai: "Paramètres IA",
+    aiDescription: "Configurez les modèles, l’accès MCP et l’activité des credits.",
+    invitations: "Invitations",
+    invitationsDescription: "Créez votre lien et consultez les personnes qui l’ont utilisé.",
+    freePlan: "Gratuit",
+    lifetimePlan: "Membre à vie",
+    upgrade: "Mettre à niveau",
+    aiLockedTitle: "Passez membre pour activer l’IA",
+    aiLockedDescription:
+      "L’optimisation IA, les modèles personnalisés, l’accès MCP et les credits sont réservés aux membres à vie.",
+    invitedUsers: "Personnes invitées",
+    invitedUsersEmpty: "Personne n’a encore rejoint Koinote avec votre invitation.",
+    invitedAt: "Inscrit le {date}",
+    invitationReward: "Récompense {reward}",
   },
   documentsPage: {
     title: "Mes documents",
@@ -1105,11 +1118,6 @@ export const fr: Messages = {
       "Saisissez « {title} » pour confirmer la suppression définitive :",
     loadFailed: "Impossible de charger la corbeille. Réessayez.",
     actionFailed: "L’action a échoué. Veuillez réessayer.",
-  },
-  invitationsPage: {
-    title: "Inviter des amis",
-    subtitle:
-      "Partagez votre lien personnel et suivez vos invitations et récompenses.",
   },
   feedback: {
     menuLabel: "Commentaires",
@@ -1869,7 +1877,6 @@ function hello(name) {
     editor: "Éditeur",
     download: "Télécharger l’application",
     pricing: "Tarifs",
-    dashboard: "Tableau de bord",
     docsCenter: "Documentation",
     aiGuide: "Guide d’optimisation IA",
     mcpGuide: "Guide MCP",

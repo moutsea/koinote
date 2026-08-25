@@ -312,7 +312,8 @@ export function AgentReviewPanel({
           ) : access === "membership_required" ? (
             <GateMessage text={t.agentReview.membersOnly}>
               <Link
-                to="/dashboard"
+                to="/settings"
+                search={{ section: "membership" }}
                 hash="membership"
                 className="mt-4 inline-flex rounded-full px-4 py-2 text-sm font-semibold"
                 style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
@@ -335,7 +336,8 @@ export function AgentReviewPanel({
                 )}
                 {providerMode === "byok" && !settings.data?.settings.defaultChannel && !settings.isLoading && (
                   <Link
-                    to="/ai-settings"
+                    to="/settings"
+                    search={{ section: "ai" }}
                     hash="llm-channels"
                     className="inline-flex text-xs font-semibold hover:underline"
                     style={{ color: "var(--cinnabar)" }}

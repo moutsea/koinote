@@ -60,7 +60,7 @@ export function MCPActivityPage() {
 
   return (
     <PageContainer className="flex-1 py-10">
-      <Link to="/ai-settings" hash="mcp" className="inline-flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-mid)" }}>
+      <Link to="/settings" search={{ section: "ai" }} hash="mcp" className="inline-flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-mid)" }}>
         <ArrowLeft className="h-4 w-4" />
         {t.mcpActivity.back}
       </Link>

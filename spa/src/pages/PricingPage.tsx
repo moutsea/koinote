@@ -173,7 +173,8 @@ export function PricingPage() {
                 action={
                   active ? (
                     <Link
-                      to="/ai-settings"
+                      to="/settings"
+                      search={{ section: "ai" }}
                       className="inline-flex w-full items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
                       style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                     >

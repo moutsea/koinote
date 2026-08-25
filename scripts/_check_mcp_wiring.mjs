@@ -19,8 +19,8 @@ const vite = readFileSync(
   new URL("../vite.config.ts", import.meta.url),
   "utf8",
 );
-const aiSettings = readFileSync(
-  new URL("../spa/src/pages/AISettingsPage.tsx", import.meta.url),
+const settings = readFileSync(
+  new URL("../spa/src/pages/SettingsPage.tsx", import.meta.url),
   "utf8",
 );
 const accessCard = readFileSync(
@@ -77,7 +77,7 @@ ok(
 );
 ok(
   "AI 设置页挂载 MCP 令牌入口",
-  /<MCPAccessCard\s+user=\{user\}/.test(aiSettings),
+  /<MCPAccessCard\s+user=\{user\}/.test(settings),
   "会员需要能生成和撤销个人访问令牌",
 );
 ok(

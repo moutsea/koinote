@@ -21,12 +21,12 @@ function excludes(label, source, fragment) {
 
 const main = fs.readFileSync("spa/src/main.tsx", "utf8");
 const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
-const dashboard = fs.readFileSync("spa/src/pages/DashboardPage.tsx", "utf8");
-const aiSettings = fs.readFileSync("spa/src/pages/AISettingsPage.tsx", "utf8");
+const login = fs.readFileSync("spa/src/pages/LoginPage.tsx", "utf8");
+const settings = fs.readFileSync("spa/src/pages/SettingsPage.tsx", "utf8");
 const documents = fs.readFileSync("spa/src/pages/DocumentsPage.tsx", "utf8");
 const documentHooks = fs.readFileSync("spa/src/documents.ts", "utf8");
-const invitations = fs.readFileSync("spa/src/pages/InvitationsPage.tsx", "utf8");
 const invitationCard = fs.readFileSync("spa/src/components/InvitationCard.tsx", "utf8");
+const membershipCard = fs.readFileSync("spa/src/components/MembershipCard.tsx", "utf8");
 const shareDialog = fs.readFileSync("spa/src/components/editor/ShareDialog.tsx", "utf8");
 const historySettings = fs.readFileSync("spa/src/components/DocumentHistorySettingsCard.tsx", "utf8");
 const pricing = fs.readFileSync("spa/src/pages/PricingPage.tsx", "utf8");
@@ -34,42 +34,54 @@ const accountDeletion = fs.readFileSync("spa/src/components/AccountDeletionCard.
 const admin = fs.readFileSync("spa/src/pages/AdminPage.tsx", "utf8");
 
 includes("注册文档页路由", main, 'path: "/documents"');
-includes("注册邀请页路由", main, 'path: "/invitations"');
 includes("注册价格页路由", main, 'path: "/pricing"');
-includes("注册 AI 设置页路由", main, 'path: "/ai-settings"');
+includes("注册统一设置页路由", main, 'path: "/settings"');
+includes("登录默认落点进入设置", login, 'return "/settings";');
 includes(
   "文档路由绑定 DocumentsPage",
   main,
   'path: "/documents",\n  component: lazyRouteComponent(\n    () => import("./pages/DocumentsPage"),\n    "DocumentsPage"',
 );
-includes(
-  "邀请路由绑定 InvitationsPage",
-  main,
-  'path: "/invitations",\n  component: lazyRouteComponent(\n    () => import("./pages/InvitationsPage"),\n    "InvitationsPage"',
-);
 includes("用户菜单包含文档入口", shell, 'to="/documents"');
-includes("用户菜单包含邀请入口", shell, 'to="/invitations"');
-includes("用户菜单包含 AI 设置入口", shell, 'to="/ai-settings"');
+includes("用户菜单包含统一设置入口", shell, 'to="/settings"');
+excludes("用户菜单不再单列控制台", shell, 'to="/dashboard"');
+excludes("用户菜单不再单列 AI 设置", shell, 'to="/ai-settings"');
+excludes("用户菜单不再单列邀请", shell, 'to="/invitations"');
 includes("文档入口只在登录用户菜单中渲染", shell, '<UserMenu\n                name={user.nickname');
 
-excludes("控制台不再读取文档列表", dashboard, "useDocumentList");
-excludes("控制台不再渲染邀请卡", dashboard, "InvitationCard");
-excludes("控制台不再渲染用户名卡片", dashboard, "t.dashboard.username");
-includes("控制台渲染历史版本设置", dashboard, "<DocumentHistorySettingsCard user={user} />");
-includes("控制台渲染账号注销入口", dashboard, "<AccountDeletionCard user={user} />");
-excludes("控制台不再渲染模型渠道", dashboard, "LLMChannelsCard");
-excludes("控制台不再渲染 MCP 令牌", dashboard, "MCPAccessCard");
-includes("AI 设置页渲染 credits", aiSettings, "<AgentCreditsCard user={user} />");
-includes("AI 设置页渲染 Agent 模型来源", aiSettings, "<AgentModelSettingsCard user={user} />");
-includes("AI 设置页渲染模型渠道", aiSettings, "<LLMChannelsCard user={user} />");
-includes("AI 设置页渲染 MCP 令牌", aiSettings, "<MCPAccessCard user={user} />");
+includes("设置页采用左右分栏", settings, 'lg:grid-cols-[14rem_minmax(0,1fr)]');
+includes("设置页包含通用分类", settings, 'id: "general"');
+includes("设置页包含会员分类", settings, 'id: "membership"');
+includes("设置页包含 AI 分类", settings, 'id: "ai"');
+includes("设置页包含邀请分类", settings, 'id: "invitations"');
+includes("通用设置渲染账号安全", settings, "<PasswordSecurityCard user={user} />");
+includes("通用设置渲染账号注销", settings, "<AccountDeletionCard user={user} />");
+includes("会员设置渲染会员信息", settings, "<MembershipCard user={user} />");
+includes("会员卡明确显示当前方案", membershipCard, "t.membership.currentPlan");
+includes("免费账号明确显示 Free Plan", membershipCard, "t.membership.freePlan");
+includes("会员卡优先展示当前存储权益", membershipCard, "t.membership.currentStorageBenefit");
+includes("会员卡只保留升级按钮", membershipCard, 'to="/pricing"');
+excludes("会员卡不再内嵌支付导航", membershipCard, "openMembershipCheckout");
+includes("会员设置渲染云端用量", settings, "<StorageCard />");
+includes("会员设置渲染版本历史", settings, "<DocumentHistorySettingsCard user={user} />");
+includes("AI 设置渲染 credits", settings, "<AgentCreditsCard user={user} />");
+includes("AI 设置渲染模型来源", settings, "<AgentModelSettingsCard user={user} />");
+includes("AI 设置渲染模型渠道", settings, "<LLMChannelsCard user={user} />");
+includes("AI 设置渲染 MCP 令牌", settings, "<MCPAccessCard user={user} />");
+includes("免费用户只显示 AI 升级门禁", settings, 'user.membershipTier !== "lifetime"');
+includes("设置页在基本信息提供升级入口", settings, "<AccountOverviewCard user={user} />");
+includes("旧控制台地址兼容跳转", settings, "LegacyDashboardPage");
+includes("旧 AI 地址兼容跳转", settings, "LegacyAISettingsPage");
+includes("旧邀请地址兼容跳转", settings, "LegacyInvitationsPage");
 includes("账号注销要求当前邮箱确认", accountDeletion, "t.accountDeletion.confirmLabel");
 includes("历史版本设置可读取", historySettings, "getDocumentHistorySettings");
 includes("历史版本设置可修改", historySettings, "updateDocumentHistorySettings");
 includes("文档页读取文档列表", documents, "useDocumentList");
-includes("邀请页渲染邀请卡", invitations, "InvitationCard");
+includes("设置页邀请分类渲染邀请卡", settings, "return <InvitationCard />");
 includes("邀请链接使用站点公开域名", invitationCard, "koinoteWebURL(");
 excludes("邀请链接不使用 Tauri 本地域名", invitationCard, "window.location.origin");
+includes("邀请卡兼容旧版邀请接口", invitationCard, "data.invitedUsers ?? []");
+includes("邀请卡渲染受邀列表", invitationCard, "invitedUsers.map");
 includes("分享链接使用站点公开域名", shareDialog, "koinoteWebURL(");
 excludes("分享链接不使用 Tauri 本地域名", shareDialog, "window.location.origin");
 includes("分享请求期间显示进度", shareDialog, "t.editor.shareSaving");

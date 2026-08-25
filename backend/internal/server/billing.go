@@ -235,8 +235,8 @@ func validCheckoutClient(value string) bool {
 
 func lifetimeCheckoutParams(cfg config.Config, user model.User, price lifetimePriceOption, attemptID, client string) *stripe.CheckoutSessionCreateParams {
 	baseURL := strings.TrimRight(cfg.AppURL, "/")
-	successURL := baseURL + "/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}"
-	cancelURL := baseURL + "/dashboard?checkout=cancelled"
+	successURL := baseURL + "/settings?section=membership&checkout=success&session_id={CHECKOUT_SESSION_ID}"
+	cancelURL := baseURL + "/settings?section=membership&checkout=cancelled"
 	if client == checkoutClientDesktop {
 		successURL = baseURL + "/billing/desktop-return?checkout=success&session_id={CHECKOUT_SESSION_ID}"
 		cancelURL = baseURL + "/billing/desktop-return?checkout=cancelled"

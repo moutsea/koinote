@@ -78,7 +78,7 @@ export function MCPGuidePage() {
             {t.mcpGuide.subtitle}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/dashboard" hash="mcp" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.mcpGuide.tokensCta}</Link>
+            <Link to="/settings" search={{ section: "ai" }} hash="mcp" className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.mcpGuide.tokensCta}</Link>
             <Link to="/docs/version-history" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.mcpGuide.historyCta}</Link>
             <Link to="/pricing" className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>{t.mcpGuide.pricingCta}</Link>
           </div>

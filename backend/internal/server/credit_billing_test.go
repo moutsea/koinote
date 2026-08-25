@@ -73,8 +73,8 @@ func TestCreditCheckoutParamsUseFixedPack(t *testing.T) {
 	if len(params.PaymentMethodTypes) != 0 {
 		t.Fatalf("Credits 支付方式应由 Stripe 按币种动态选择: %+v", params.PaymentMethodTypes)
 	}
-	if stripe.StringValue(params.SuccessURL) != "https://koinote.app/ai-settings?credit_checkout=success&session_id={CHECKOUT_SESSION_ID}" ||
-		stripe.StringValue(params.CancelURL) != "https://koinote.app/ai-settings?credit_checkout=cancelled" {
+	if stripe.StringValue(params.SuccessURL) != "https://koinote.app/settings?section=ai&credit_checkout=success&session_id={CHECKOUT_SESSION_ID}" ||
+		stripe.StringValue(params.CancelURL) != "https://koinote.app/settings?section=ai&credit_checkout=cancelled" {
 		t.Fatalf("Credits 回跳地址错误: success=%q cancel=%q",
 			stripe.StringValue(params.SuccessURL), stripe.StringValue(params.CancelURL))
 	}
