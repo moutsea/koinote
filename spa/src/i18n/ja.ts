@@ -1613,6 +1613,7 @@ export const ja: Messages = {
       bulletList: "箇条書き",
       orderedList: "番号付きリスト",
       taskList: "タスクリスト",
+      table: "表を挿入",
       blockquote: "引用",
       codeBlock: "コードブロック",
       link: "リンク",

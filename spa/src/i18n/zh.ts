@@ -1536,6 +1536,7 @@ export const zh: Messages = {
       bulletList: "无序列表",
       orderedList: "有序列表",
       taskList: "任务列表",
+      table: "插入表格",
       blockquote: "引用",
       codeBlock: "代码块",
       link: "链接",

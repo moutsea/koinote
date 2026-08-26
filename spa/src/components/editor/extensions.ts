@@ -5,6 +5,7 @@ import { TaskItem } from "@tiptap/extension-task-item";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Typography from "@tiptap/extension-typography";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
+import { TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { InputRule } from "@tiptap/core";
 import { Markdown } from "tiptap-markdown";
@@ -13,6 +14,7 @@ import { lowlight } from "./lowlight";
 import { BlockMarkdownImage } from "./markdownImage";
 import { markdownMathPlugin } from "./markdownMath";
 import { PageSearchExtension } from "./pageSearch";
+import { MarkdownTable } from "./markdownTable";
 
 /**
  * TipTap 扩展集合 —— Typora 式所见即所得的地基。
@@ -21,6 +23,7 @@ import { PageSearchExtension } from "./pageSearch";
  *   `1. ` 变有序列表、`` ``` `` 变代码块、`**x**` 变粗体等，实现边写边渲染。
  * - CodeBlockLowlight 替换默认代码块，接语法高亮。
  * - TaskList/TaskItem 提供 `[ ]` 任务列表。
+ * - MarkdownTable/TableRow/TableHeader/TableCell 提供可编辑的 Markdown 表格。
  * - Typography 智能标点（-- → —、(c) → © 等）。
  * - Markdown 负责 .md 的解析(setContent)与序列化(getMarkdown)，保证往返一致。
  */
@@ -38,6 +41,10 @@ export function createEditorExtensions(placeholder: string) {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    MarkdownTable.configure({ resizable: true, cellMinWidth: 96 }),
+    TableRow,
+    TableHeader,
+    TableCell,
     // allowBase64 必须关：否则粘贴截图会以 data:image/... 内联进 Markdown，
     // 文档瞬间膨胀到几 MB 且完全绕过图床。图片一律走 R2 拿到 URL 再插入。
     //

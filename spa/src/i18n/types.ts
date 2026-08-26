@@ -1110,6 +1110,7 @@ export interface Messages {
       bulletList: string;
       orderedList: string;
       taskList: string;
+      table: string;
       blockquote: string;
       codeBlock: string;
       link: string;

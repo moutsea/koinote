@@ -1633,6 +1633,7 @@ export const en: Messages = {
       bulletList: "Bullet list",
       orderedList: "Numbered list",
       taskList: "Task list",
+      table: "Insert table",
       blockquote: "Quote",
       codeBlock: "Code block",
       link: "Link",

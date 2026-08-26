@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseHTML } from "linkedom";
 
 const { window: baseWindow } = parseHTML(
@@ -23,19 +24,31 @@ globalThis.Node = baseWindow.Node;
 const [
   { Editor },
   { default: StarterKit },
+  { TableCell, TableHeader, TableRow },
   { Markdown },
+  { MarkdownTable },
   { BlockMarkdownImage, normalizeLegacyImageAdjacentHeadings },
 ] = await Promise.all([
   import("@tiptap/core"),
   import("@tiptap/starter-kit"),
+  import("@tiptap/extension-table"),
   import("tiptap-markdown"),
+  import("./_markdown_table_bundle.mjs"),
   import("./_markdown_image_bundle.mjs"),
 ]);
 
 function saveTwice(markdown) {
   const editor = new Editor({
     element: null,
-    extensions: [StarterKit, BlockMarkdownImage, Markdown],
+    extensions: [
+      StarterKit,
+      MarkdownTable,
+      TableRow,
+      TableHeader,
+      TableCell,
+      BlockMarkdownImage,
+      Markdown.configure({ html: false }),
+    ],
   });
   editor.commands.setContent(markdown);
   const initialJSON = editor.getJSON();
@@ -46,6 +59,283 @@ function saveTwice(markdown) {
   editor.destroy();
   return { first, initialJSON, second, secondJSON };
 }
+
+function saveDocumentTwice(json) {
+  const editor = new Editor({
+    element: null,
+    extensions: [
+      StarterKit,
+      MarkdownTable,
+      TableRow,
+      TableHeader,
+      TableCell,
+      BlockMarkdownImage,
+      Markdown.configure({ html: false }),
+    ],
+  });
+  editor.commands.setContent(json);
+  const first = editor.storage.markdown.getMarkdown();
+  const firstJSON = editor.getJSON();
+  editor.commands.setContent(first);
+  const second = editor.storage.markdown.getMarkdown();
+  const secondJSON = editor.getJSON();
+  editor.destroy();
+  return { first, firstJSON, second, secondJSON };
+}
+
+const extensionsSource = readFileSync(
+  new URL("../spa/src/components/editor/extensions.ts", import.meta.url),
+  "utf8",
+);
+assert.match(extensionsSource, /MarkdownTable/);
+assert.match(
+  extensionsSource,
+  /MarkdownTable\.configure\([\s\S]*?\),\s*TableRow,\s*TableHeader,\s*TableCell,/,
+);
+
+const tableCase = saveTwice(
+  "| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 铅笔 | 2 | 日常使用 |\n| 橡皮 | 1 | 备用 |");
+assert.equal(
+  tableCase.first,
+  "| 名称 | 数量 | 备注 |\n| :-- | --: | :--: |\n| 铅笔 | 2 | 日常使用 |\n| 橡皮 | 1 | 备用 |\n",
+);
+assert.equal(tableCase.second, tableCase.first);
+assert.deepEqual(tableCase.secondJSON.content.map((node) => node.type), ["table"]);
+assert.deepEqual(
+  tableCase.secondJSON.content[0].content[0].content.map((cell) => cell.type),
+  ["tableHeader", "tableHeader", "tableHeader"],
+);
+assert.equal(
+  tableCase.secondJSON.content[0].content[1].content[0].content[0].content[0].text,
+  "铅笔",
+);
+
+const escapedPipeTable = saveTwice(
+  "| 名称 | 说明 |\n| --- | --- |\n| 项目 | 含有 \\| 分隔符 |",
+);
+assert.match(escapedPipeTable.first, /含有 \\\| 分隔符/);
+assert.equal(escapedPipeTable.second, escapedPipeTable.first);
+
+function tableWithCellText(text) {
+  return saveDocumentTwice({
+    type: "doc",
+    content: [
+      {
+        type: "table",
+        content: [
+          {
+            type: "tableRow",
+            content: [
+              {
+                type: "tableHeader",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "标题" }] }],
+              },
+              {
+                type: "tableHeader",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "内容" }] }],
+              },
+            ],
+          },
+          {
+            type: "tableRow",
+            content: [
+              {
+                type: "tableCell",
+                content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+              },
+              {
+                type: "tableCell",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "旁边" }] }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
+
+for (const text of ["a|b", "a\\|b", "a\\\\|b"]) {
+  const pipeCase = tableWithCellText(text);
+  assert.equal(pipeCase.second, pipeCase.first);
+  assert.equal(
+    pipeCase.secondJSON.content[0].content[1].content[0].content[0].content[0].text,
+    text,
+  );
+}
+
+const complexTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "标题" }] }],
+            },
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "内容" }] }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [
+                { type: "paragraph", content: [{ type: "text", text: "第一段" }] },
+                { type: "paragraph", content: [{ type: "text", text: "第二段" }] },
+              ],
+            },
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: "上" },
+                    { type: "hardBreak" },
+                    { type: "text", text: "下" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "image",
+                  attrs: { src: "https://i.test/a.png", alt: "alt", title: null },
+                },
+              ],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "文本" }] }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.doesNotMatch(complexTable.first, /\[(?:table|hardBreak)\]/);
+assert.match(complexTable.first, /第一段 第二段/);
+assert.match(complexTable.first, /上 下/);
+assert.match(complexTable.first, /!\[alt\]\(https:\/\/i\.test\/a\.png\)/);
+assert.equal(complexTable.second, complexTable.first);
+
+const colspanTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              attrs: { colspan: 2 },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "跨列标题" }] }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "左" }] }] },
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "右" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.doesNotMatch(colspanTable.first, /\[table\]/);
+assert.match(colspanTable.first, /跨列标题/);
+assert.equal(colspanTable.second, colspanTable.first);
+
+const rowspanTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "标题 1" }] }],
+            },
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "标题 2" }] }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              attrs: { rowspan: 2 },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "跨两行" }] }],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "b1" }] }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "b2" }] }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.match(rowspanTable.first, /\|  \| b2 \|/);
+assert.equal(rowspanTable.second, rowspanTable.first);
+
+const emptyHeaderTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        { type: "tableRow", content: [] },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "左" }] }] },
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "右" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.match(emptyHeaderTable.first, /^\|  \|  \|\n\| --- \| --- \|/);
+assert.equal(emptyHeaderTable.second, emptyHeaderTable.first);
 
 const headingCase = saveTwice("![](https://img.test/a.png)\n\n## 下载\n\n正文");
 assert.equal(
@@ -159,4 +449,4 @@ assert.equal(
   intentionalEscapedHeading,
 );
 
-console.log("markdown image round-trip checks passed");
+console.log("markdown round-trip checks passed");

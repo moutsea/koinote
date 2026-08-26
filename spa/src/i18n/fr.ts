@@ -1661,6 +1661,7 @@ export const fr: Messages = {
       bulletList: "Liste à puces",
       orderedList: "Liste numérotée",
       taskList: "Liste de tâches",
+      table: "Insérer un tableau",
       blockquote: "Citation",
       codeBlock: "Bloc de code",
       link: "Lien",

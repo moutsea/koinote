@@ -11,6 +11,7 @@ import {
   List,
   ListOrdered,
   ListChecks,
+  Table2,
   Quote,
   SquareCode,
   Link as LinkIcon,
@@ -192,6 +193,16 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
           disabled={!visible}
         >
           <ListChecks className="h-4 w-4" />
+        </Btn>
+        <Btn
+          label={t.editor.toolbar.table}
+          active={editor?.isActive("table")}
+          onClick={() =>
+            editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+          }
+          disabled={!visible || editor?.isActive("table")}
+        >
+          <Table2 className="h-4 w-4" />
         </Btn>
 
         <Divider />

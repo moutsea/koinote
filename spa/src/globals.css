@@ -262,6 +262,46 @@ body {
   color: #9ca3af;
 }
 
+/* Markdown 表格：横向滚动留在正文内，避免宽表格撑破编辑器。 */
+.ProseMirror .tableWrapper {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  position: relative;
+  min-width: 6rem;
+  border: 1px solid var(--ink-line);
+  padding: 0.45rem 0.65rem;
+  vertical-align: top;
+}
+
+.ProseMirror th {
+  background: var(--ink-wash-strong);
+  font-weight: 650;
+  text-align: left;
+}
+
+.ProseMirror .selectedCell::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  background: var(--cinnabar-soft);
+  content: "";
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
 /* 任务列表：去掉默认项目符号，渲染复选框 */
 .ProseMirror ul[data-type="taskList"] {
   list-style: none;
