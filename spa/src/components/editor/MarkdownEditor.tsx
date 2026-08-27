@@ -1,5 +1,12 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { createEditorExtensions } from "./extensions";
 import { DocTitle } from "./DocTitle";
 import { EditorToolbar } from "./EditorToolbar";
@@ -26,6 +33,35 @@ import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
 import { applyUploadedImageMappingToEditor } from "./imageUploadMapping";
 import { DocumentFindBar } from "./DocumentFindBar";
 import { readTreeDragPayload } from "./treeDrag";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { cellAround, CellSelection } from "@tiptap/pm/tables";
+import { TextSelection } from "@tiptap/pm/state";
+import {
+  ArrowLeft,
+  ArrowUp,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Eraser,
+  PanelTop,
+  TableColumnsSplit,
+  TableRowsSplit,
+  Trash2,
+} from "lucide-react";
+import {
+  clearSelectedTableCells,
+  clearTableAxis,
+  hasTableHeaderRow,
+  insertTableMatrix,
+  isTableCellSelection,
+  selectCurrentTableColumn,
+  selectCurrentTableRow,
+  setTableColumnAlignment,
+  tableMatrixFromClipboard,
+  tableSelectionToMarkdown,
+  shouldInterceptTablePaste,
+} from "./tableActions";
+import { TableContextToolbar } from "./TableContextToolbar";
 
 /**
  * 没套主题时标题的排版。
@@ -92,6 +128,10 @@ export default function MarkdownEditor({
   const [uploading, setUploading] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [tableContextMenu, setTableContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const onContentLoadedRef = useRef(onContentLoaded);
   onContentLoadedRef.current = onContentLoaded;
@@ -280,6 +320,21 @@ export default function MarkdownEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: { class: editorContentClass(document.theme ?? "") },
+      clipboardTextSerializer: (slice) => {
+        const instance = editorRef.current;
+        const tableMarkdown = instance
+          ? tableSelectionToMarkdown(instance, slice)
+          : null;
+        if (tableMarkdown !== null) return tableMarkdown;
+        const serializer = instance
+          ? (
+              instance.storage.markdown as {
+                serializer?: { serialize: (content: typeof slice.content) => string };
+              }
+            ).serializer
+          : undefined;
+        return serializer?.serialize(slice.content) ?? "";
+      },
       handlePaste: (view, event) => {
         // 1) 剪贴板里直接是图片文件（截图、从 Finder 复制）—— 上传后插入
         const files = imageFilesFrom(event.clipboardData?.files);
@@ -297,7 +352,28 @@ export default function MarkdownEditor({
           return true;
         }
 
-        // 3) 其余情况（HTML 里的外链图、Markdown 的 ![](url)）交给默认粘贴，
+        // 3) 从 Excel、表格应用复制的 TSV/HTML 表格：直接填充当前表格，
+        //    不把多行数据拆成普通段落。带图片的 HTML 表格留给默认解析器，
+        //    这样图片仍会走图床转存流程。
+        // 代码块中的制表符是代码缩进或文本内容，必须保留默认粘贴目标。
+        const shouldIntercept = shouldInterceptTablePaste(
+          view.state.selection.$from.parent.type.name,
+        );
+        const matrix = shouldIntercept
+          ? tableMatrixFromClipboard(
+              event.clipboardData?.getData("text/plain") ?? "",
+              html ?? null,
+              view.dom.ownerDocument,
+            )
+          : null;
+        if (matrix) {
+          event.preventDefault();
+          const instance = editorRef.current;
+          if (instance) insertTableMatrix(instance, matrix);
+          return true;
+        }
+
+        // 4) 其余情况（HTML 里的外链图、Markdown 的 ![](url)）交给默认粘贴，
         //    插进来之后再扫一遍转存。放在微任务里等这次事务落定
         queueMicrotask(() => void rehostRemoteImages());
         return false;
@@ -440,6 +516,146 @@ export default function MarkdownEditor({
     editor.commands.focus("start");
   }, []);
 
+  const handleEditorContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!editor) return;
+      if (!editor.view.dom.contains(event.target as Node)) return;
+      const coordinates = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
+      if (!coordinates) return;
+
+      const $position = editor.state.doc.resolve(coordinates.pos);
+      const $cell = cellAround($position);
+      if (!$cell) return;
+
+      event.preventDefault();
+      const targetSelection = TextSelection.near($position, 1);
+      const currentSelection = editor.state.selection;
+      let preserveCellSelection = false;
+      if (currentSelection instanceof CellSelection) {
+        currentSelection.forEachCell((_cell, position) => {
+          if (position === $cell.pos) preserveCellSelection = true;
+        });
+      }
+      if (!preserveCellSelection && !currentSelection.eq(targetSelection)) {
+        editor.view.dispatch(editor.state.tr.setSelection(targetSelection));
+      }
+      setTableContextMenu({ x: event.clientX, y: event.clientY });
+    },
+    [editor],
+  );
+
+  const closeTableContextMenu = useCallback(() => {
+    setTableContextMenu(null);
+  }, []);
+
+  const tableContextMenuItems = useMemo<ContextMenuItem[] | null>(() => {
+    if (!editor || !tableContextMenu) return null;
+    return [
+      {
+        key: "add-row-before",
+        label: t.editor.toolbar.tableAddRowBefore,
+        icon: <ArrowUp className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().addRowBefore().run(),
+        disabled: !editor.can().addRowBefore(),
+      },
+      {
+        key: "add-row",
+        label: t.editor.toolbar.tableAddRow,
+        icon: <TableRowsSplit className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().addRowAfter().run(),
+        disabled: !editor.can().addRowAfter(),
+      },
+      {
+        key: "add-column-before",
+        label: t.editor.toolbar.tableAddColumnBefore,
+        icon: <ArrowLeft className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().addColumnBefore().run(),
+        disabled: !editor.can().addColumnBefore(),
+      },
+      {
+        key: "add-column",
+        label: t.editor.toolbar.tableAddColumn,
+        icon: <TableColumnsSplit className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().addColumnAfter().run(),
+        disabled: !editor.can().addColumnAfter(),
+      },
+      {
+        key: "header-row",
+        label: t.editor.toolbar.tableHeaderRow,
+        icon: <PanelTop className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().toggleHeaderRow().run(),
+        disabled: hasTableHeaderRow(editor) || !editor.can().toggleHeaderRow(),
+      },
+      {
+        key: "align-left",
+        label: t.editor.toolbar.tableAlignLeft,
+        icon: <AlignLeft className="h-4 w-4" />,
+        onSelect: () => setTableColumnAlignment(editor, "left"),
+      },
+      {
+        key: "align-center",
+        label: t.editor.toolbar.tableAlignCenter,
+        icon: <AlignCenter className="h-4 w-4" />,
+        onSelect: () => setTableColumnAlignment(editor, "center"),
+      },
+      {
+        key: "align-right",
+        label: t.editor.toolbar.tableAlignRight,
+        icon: <AlignRight className="h-4 w-4" />,
+        onSelect: () => setTableColumnAlignment(editor, "right"),
+      },
+      ...(isTableCellSelection(editor)
+        ? [
+            {
+              key: "clear-selection",
+              label: t.editor.toolbar.tableClearSelection,
+              icon: <Eraser className="h-4 w-4" />,
+              onSelect: () => clearSelectedTableCells(editor),
+            },
+          ]
+        : []),
+      {
+        key: "clear-row",
+        label: t.editor.toolbar.tableClearRow,
+        icon: <Eraser className="h-4 w-4" />,
+        onSelect: () => clearTableAxis(editor, "row"),
+      },
+      {
+        key: "clear-column",
+        label: t.editor.toolbar.tableClearColumn,
+        icon: <Eraser className="h-4 w-4" />,
+        onSelect: () => clearTableAxis(editor, "column"),
+      },
+      {
+        key: "delete-row",
+        label: t.editor.toolbar.tableDeleteRow,
+        icon: <TableRowsSplit className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().deleteRow().run(),
+        danger: true,
+        disabled: !editor.can().deleteRow(),
+      },
+      {
+        key: "delete-column",
+        label: t.editor.toolbar.tableDeleteColumn,
+        icon: <TableColumnsSplit className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().deleteColumn().run(),
+        danger: true,
+        disabled: !editor.can().deleteColumn(),
+      },
+      {
+        key: "delete-table",
+        label: t.editor.toolbar.tableDelete,
+        icon: <Trash2 className="h-4 w-4" />,
+        onSelect: () => editor.chain().focus().deleteTable().run(),
+        danger: true,
+        disabled: !editor.can().deleteTable(),
+      },
+    ];
+  }, [editor, t, tableContextMenu]);
+
   const statusText =
     status === "saving"
       ? t.editor.saving
@@ -458,6 +674,7 @@ export default function MarkdownEditor({
     <div
       ref={editorRootRef}
       data-koinote-editor-instance
+      onContextMenu={handleEditorContextMenu}
       className="relative flex min-h-0 flex-1 flex-col"
     >
       {/* 控件栏不再放标题输入框 —— 标题挪到正文列里了（见下方 DocTitle）。
@@ -556,6 +773,16 @@ export default function MarkdownEditor({
           </div>
         </div>
       </div>
+      {tableContextMenu && tableContextMenuItems && (
+        <ContextMenu
+          x={tableContextMenu.x}
+          y={tableContextMenu.y}
+          items={tableContextMenuItems}
+          onClose={closeTableContextMenu}
+          ariaLabel={t.editor.toolbar.tableActions}
+        />
+      )}
+      <TableContextToolbar editor={editor} />
     </div>
   );
 }

@@ -20,21 +20,46 @@ Object.defineProperty(testWindow, "DOMParser", { value: FragmentDOMParser });
 globalThis.window = testWindow;
 globalThis.document = baseWindow.document;
 globalThis.Node = baseWindow.Node;
+globalThis.requestAnimationFrame = (callback) => {
+  callback(0);
+  return 0;
+};
 
 const [
   { Editor },
   { default: StarterKit },
   { TableCell, TableHeader, TableRow },
+  { CellSelection },
+  { EditorState, TextSelection },
+  { Fragment },
+  { closeHistory },
   { Markdown },
   { MarkdownTable },
   { BlockMarkdownImage, normalizeLegacyImageAdjacentHeadings },
+  {
+    clearSelectedTableCells,
+    clearTableAxis,
+    hasTableHeaderRow,
+    insertTableMatrix,
+    selectCurrentTableColumn,
+    selectCurrentTableRow,
+    setTableColumnAlignment,
+    shouldInterceptTablePaste,
+    tableMatrixFromClipboard,
+    tableSelectionToMarkdown,
+  },
 ] = await Promise.all([
   import("@tiptap/core"),
   import("@tiptap/starter-kit"),
   import("@tiptap/extension-table"),
+  import("@tiptap/pm/tables"),
+  import("@tiptap/pm/state"),
+  import("@tiptap/pm/model"),
+  import("@tiptap/pm/history"),
   import("tiptap-markdown"),
   import("./_markdown_table_bundle.mjs"),
   import("./_markdown_image_bundle.mjs"),
+  import("./_table_actions_bundle.mjs"),
 ]);
 
 function saveTwice(markdown) {
@@ -83,8 +108,75 @@ function saveDocumentTwice(json) {
   return { first, firstJSON, second, secondJSON };
 }
 
+function tableActionEditor(
+  markdown = "| A | B |\n| --- | --- |\n| a1 | b1 |\n| a2 | b2 |",
+) {
+  const element = baseWindow.document.createElement("div");
+  baseWindow.document.body.appendChild(element);
+  const editor = new Editor({
+    element,
+    extensions: [
+      StarterKit,
+      MarkdownTable,
+      TableRow,
+      TableHeader,
+      TableCell,
+      BlockMarkdownImage,
+      Markdown.configure({ html: false }),
+    ],
+  });
+  editor.view.scrollToSelection = () => {};
+  editor.commands.setContent(markdown);
+  return { editor, element };
+}
+
+function selectTableCell(editor, text) {
+  let position = null;
+  editor.state.doc.descendants((node, nodePosition) => {
+    if (
+      position === null &&
+      (node.type.name === "tableCell" || node.type.name === "tableHeader") &&
+      node.textContent === text
+    ) {
+      position = nodePosition;
+    }
+  });
+  assert.notEqual(position, null);
+  editor.commands.setTextSelection(position + 2);
+}
+
+function typeText(editor, text) {
+  for (const character of text) {
+    const { from, to } = editor.state.selection;
+    const handled = editor.view.someProp("handleTextInput", (handler) =>
+      handler(editor.view, from, to, character),
+    );
+    if (!handled) {
+      editor.view.dispatch(editor.state.tr.insertText(character, from, to));
+    }
+  }
+}
+
+function pressEnter(editor) {
+  return editor.view.someProp("handleKeyDown", (handler) =>
+    handler(editor.view, { key: "Enter" }),
+  );
+}
+
 const extensionsSource = readFileSync(
   new URL("../spa/src/components/editor/extensions.ts", import.meta.url),
+  "utf8",
+);
+const markdownEditorSource = readFileSync(
+  new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
+  "utf8",
+);
+const editorToolbarSource = readFileSync(
+  new URL("../spa/src/components/editor/EditorToolbar.tsx", import.meta.url),
+  "utf8",
+);
+const tableContextToolbarSource = readFileSync(
+  new URL("../spa/src/components/editor/TableContextToolbar.tsx", import.meta.url),
   "utf8",
 );
 assert.match(extensionsSource, /MarkdownTable/);
@@ -92,6 +184,497 @@ assert.match(
   extensionsSource,
   /MarkdownTable\.configure\([\s\S]*?\),\s*TableRow,\s*TableHeader,\s*TableCell,/,
 );
+assert.match(markdownEditorSource, /<TableContextToolbar editor=\{editor\} \/>/);
+assert.match(editorToolbarSource, /useEditorState\(/);
+assert.match(editorToolbarSource, /const tableActive[\s\S]*isActive\("table"\)/);
+assert.match(
+  markdownEditorSource,
+  /const shouldIntercept = shouldInterceptTablePaste\([\s\S]*?\);\s*const matrix = shouldIntercept\s*\?\s*tableMatrixFromClipboard\(/,
+);
+assert.match(markdownEditorSource, /tableSelectionToMarkdown\(instance, slice\)/);
+assert.equal(shouldInterceptTablePaste("codeBlock"), false);
+assert.equal(shouldInterceptTablePaste("paragraph"), true);
+for (const command of [
+  "addRowBefore",
+  "addRowAfter",
+  "addColumnBefore",
+  "addColumnAfter",
+  "deleteRow",
+  "deleteColumn",
+  "deleteTable",
+  "toggleHeaderRow",
+]) {
+  assert.match(tableContextToolbarSource, new RegExp(`editor\\.commands\\.${command}\\(`));
+}
+for (const alignment of ["left", "center", "right"]) {
+  assert.match(
+    tableContextToolbarSource,
+    new RegExp(`setTableColumnAlignment\\(editor, \"${alignment}\"\\)`),
+  );
+}
+
+const typedTableElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(typedTableElement);
+const typedTableEditor = new Editor({
+  element: typedTableElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+typedTableEditor.view.scrollToSelection = () => {};
+typeText(typedTableEditor, "| 姓名 | 年龄 |");
+typedTableEditor.commands.splitBlock();
+typeText(typedTableEditor, "| --- | --- |");
+assert.equal(pressEnter(typedTableEditor), true);
+assert.equal(typedTableEditor.state.doc.firstChild.type.name, "table");
+assert.deepEqual(
+  typedTableEditor.state.doc.firstChild.firstChild.content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["姓名", "年龄"],
+);
+assert.equal(
+  typedTableEditor.state.selection.$from.parent.type.name,
+  "paragraph",
+);
+assert.equal(
+  typedTableEditor.state.selection.$from.node(-1).type.name,
+  "tableCell",
+);
+assert.equal(typedTableEditor.state.selection.$from.parent.textContent, "");
+typedTableEditor.destroy();
+typedTableElement.remove();
+
+const alignedInputElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(alignedInputElement);
+const alignedInputEditor = new Editor({
+  element: alignedInputElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+alignedInputEditor.view.scrollToSelection = () => {};
+typeText(alignedInputEditor, "| a | b |");
+alignedInputEditor.commands.splitBlock();
+typeText(alignedInputEditor, "| :-- | --: |");
+assert.equal(pressEnter(alignedInputEditor), true);
+assert.equal(alignedInputEditor.state.doc.firstChild.type.name, "table");
+alignedInputEditor.destroy();
+alignedInputElement.remove();
+
+const duplicateInputElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(duplicateInputElement);
+const duplicateInputEditor = new Editor({
+  element: duplicateInputElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+duplicateInputEditor.view.scrollToSelection = () => {};
+const duplicateSchema = duplicateInputEditor.state.schema;
+const paragraph = (text) =>
+  duplicateSchema.nodes.paragraph.create(null, duplicateSchema.text(text));
+const duplicatePrefix = paragraph("前置正文");
+const duplicateHeader = paragraph("| a | b |");
+const duplicateDelimiter = paragraph("| --- | --- |");
+const duplicateMiddle = paragraph("重要正文不可丢");
+const duplicateDoc = duplicateSchema.nodes.doc.create(
+  null,
+  Fragment.fromArray([
+    duplicatePrefix,
+    duplicateHeader,
+    duplicateDelimiter,
+    duplicateMiddle,
+    duplicateHeader,
+    duplicateDelimiter,
+  ]),
+);
+let duplicateDelimiterOffset = 0;
+duplicateDoc.forEach((node, offset, index) => {
+  if (index === 5) duplicateDelimiterOffset = offset;
+});
+duplicateInputEditor.view.updateState(
+  EditorState.create({
+    doc: duplicateDoc,
+    selection: TextSelection.create(
+      duplicateDoc,
+      duplicateDelimiterOffset + 1 + duplicateDelimiter.textContent.length,
+    ),
+    plugins: duplicateInputEditor.state.plugins,
+  }),
+);
+assert.equal(duplicateInputEditor.state.doc.child(1), duplicateInputEditor.state.doc.child(4));
+assert.equal(duplicateInputEditor.state.doc.child(2), duplicateInputEditor.state.doc.child(5));
+assert.equal(pressEnter(duplicateInputEditor), true);
+assert.deepEqual(
+  Array.from({ length: duplicateInputEditor.state.doc.childCount }, (_, index) =>
+    duplicateInputEditor.state.doc.child(index).type.name,
+  ).slice(0, 5),
+  ["paragraph", "paragraph", "paragraph", "paragraph", "table"],
+);
+assert.equal(duplicateInputEditor.state.doc.child(0).textContent, "前置正文");
+assert.equal(duplicateInputEditor.state.doc.child(3).textContent, "重要正文不可丢");
+duplicateInputEditor.destroy();
+duplicateInputElement.remove();
+
+const clearRowCase = tableActionEditor();
+selectTableCell(clearRowCase.editor, "a2");
+assert.equal(clearTableAxis(clearRowCase.editor, "row"), true);
+assert.deepEqual(
+  clearRowCase.editor.state.doc.firstChild.child(2).content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["", ""],
+);
+assert.deepEqual(
+  clearRowCase.editor.state.doc.firstChild.child(1).content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["a1", "b1"],
+);
+clearRowCase.editor.destroy();
+clearRowCase.element.remove();
+
+const clearColumnCase = tableActionEditor();
+selectTableCell(clearColumnCase.editor, "b2");
+assert.equal(clearTableAxis(clearColumnCase.editor, "column"), true);
+assert.deepEqual(
+  clearColumnCase.editor.state.doc.firstChild.child(1).content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["a1", ""],
+);
+assert.deepEqual(
+  clearColumnCase.editor.state.doc.firstChild.child(2).content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["a2", ""],
+);
+clearColumnCase.editor.destroy();
+clearColumnCase.element.remove();
+
+const headerStatusCase = tableActionEditor();
+assert.equal(hasTableHeaderRow(headerStatusCase.editor), true);
+headerStatusCase.editor.destroy();
+headerStatusCase.element.remove();
+
+const alignmentEditor = tableActionEditor();
+selectTableCell(alignmentEditor.editor, "b2");
+assert.equal(setTableColumnAlignment(alignmentEditor.editor, "center"), true);
+assert.deepEqual(
+  alignmentEditor.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.attrs.align),
+  ),
+  [
+    [null, "center"],
+    [null, "center"],
+    [null, "center"],
+  ],
+);
+assert.equal(
+  alignmentEditor.editor.storage.markdown.getMarkdown(),
+  "| A | B |\n| --- | :--: |\n| a1 | b1 |\n| a2 | b2 |\n",
+);
+alignmentEditor.editor.destroy();
+alignmentEditor.element.remove();
+
+const cellAlignmentEditor = tableActionEditor();
+let alignedCellPosition = null;
+cellAlignmentEditor.editor.state.doc.descendants((node, position) => {
+  if (node.type.name === "tableCell" && node.textContent === "b2") {
+    alignedCellPosition = position;
+  }
+});
+assert.notEqual(alignedCellPosition, null);
+cellAlignmentEditor.editor.view.dispatch(
+  cellAlignmentEditor.editor.state.tr.setSelection(
+    CellSelection.create(
+      cellAlignmentEditor.editor.state.doc,
+      alignedCellPosition,
+    ),
+  ),
+);
+assert.equal(setTableColumnAlignment(cellAlignmentEditor.editor, "right"), true);
+assert.deepEqual(
+  cellAlignmentEditor.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.attrs.align),
+  ),
+  [
+    [null, "right"],
+    [null, "right"],
+    [null, "right"],
+  ],
+);
+cellAlignmentEditor.editor.destroy();
+cellAlignmentEditor.element.remove();
+
+assert.deepEqual(
+  tableMatrixFromClipboard("a\tb\n1\t2\n", null, baseWindow.document),
+  [
+    ["a", "b"],
+    ["1", "2"],
+  ],
+);
+for (const text of [
+  "function f() {\n\tif (x) {\n\t\treturn 1;\n\t}\n}",
+  "build:\n\tgo build ./...\n\ttest -x bin/app",
+  "第一行\n\t续行内容",
+  "single\trow",
+]) {
+  assert.equal(tableMatrixFromClipboard(text, null, baseWindow.document), null);
+}
+assert.equal(
+  tableMatrixFromClipboard("普通\n多行\n文字", null, baseWindow.document),
+  null,
+);
+assert.deepEqual(
+  tableMatrixFromClipboard(
+    "",
+    "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>",
+    baseWindow.document,
+  ),
+  [
+    ["A", "B"],
+    ["1", "2"],
+  ],
+);
+assert.deepEqual(
+  tableMatrixFromClipboard(
+    "",
+    "<table><tr><th colspan='2'>A</th></tr><tr><td>B</td><td>C</td></tr></table>",
+    baseWindow.document,
+  ),
+  [
+    ["A", ""],
+    ["B", "C"],
+  ],
+);
+assert.deepEqual(
+  tableMatrixFromClipboard(
+    "",
+    "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td></tr></table>",
+    baseWindow.document,
+  ),
+  [
+    ["A", "B"],
+    ["C", ""],
+  ],
+);
+assert.equal(
+  tableMatrixFromClipboard(
+    "",
+    "<table><tr><td><img src='https://example.test/a.png'></td><td>B</td></tr></table>",
+    baseWindow.document,
+  ),
+  null,
+);
+assert.equal(
+  tableMatrixFromClipboard(
+    "标题\t说明\t备注\n\t续行一\n\t续行二",
+    null,
+    baseWindow.document,
+  ),
+  null,
+);
+
+const matrixPasteCase = tableActionEditor();
+selectTableCell(matrixPasteCase.editor, "a1");
+assert.equal(
+  insertTableMatrix(matrixPasteCase.editor, [
+    ["A", "B", "C"],
+    ["1", "2", "3"],
+    ["4", "5", "6"],
+  ]),
+  true,
+);
+assert.deepEqual(
+  matrixPasteCase.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.textContent),
+  ),
+  [
+    ["A", "B", ""],
+    ["A", "B", "C"],
+    ["1", "2", "3"],
+    ["4", "5", "6"],
+  ],
+);
+matrixPasteCase.editor.destroy();
+matrixPasteCase.element.remove();
+
+const singleRowTableCase = tableActionEditor("| A | B |\n| --- | --- |");
+selectTableCell(singleRowTableCase.editor, "A");
+assert.equal(
+  insertTableMatrix(singleRowTableCase.editor, [["A", "B", "C"]]),
+  true,
+);
+assert.deepEqual(
+  singleRowTableCase.editor.state.doc.firstChild.firstChild.content.content.map(
+    (cell) => cell.type.name,
+  ),
+  ["tableHeader", "tableHeader", "tableHeader"],
+);
+assert.equal(hasTableHeaderRow(singleRowTableCase.editor), true);
+singleRowTableCase.editor.destroy();
+singleRowTableCase.element.remove();
+
+const matrixInsertElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(matrixInsertElement);
+const matrixInsertEditor = new Editor({
+  element: matrixInsertElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+matrixInsertEditor.view.scrollToSelection = () => {};
+assert.equal(
+  insertTableMatrix(matrixInsertEditor, [
+    ["A", "B"],
+    ["1", "2"],
+  ]),
+  true,
+);
+assert.equal(matrixInsertEditor.state.doc.firstChild.type.name, "table");
+assert.deepEqual(
+  matrixInsertEditor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.textContent),
+  ),
+  [
+    ["A", "B"],
+    ["1", "2"],
+  ],
+);
+matrixInsertEditor.destroy();
+matrixInsertElement.remove();
+
+const matrixUndoCase = tableActionEditor();
+selectTableCell(matrixUndoCase.editor, "a1");
+const matrixBeforePaste = matrixUndoCase.editor.storage.markdown.getMarkdown();
+matrixUndoCase.editor.view.dispatch(closeHistory(matrixUndoCase.editor.state.tr));
+assert.equal(
+  insertTableMatrix(matrixUndoCase.editor, [
+    ["A", "B", "C"],
+    ["1", "2", "3"],
+    ["4", "5", "6"],
+  ]),
+  true,
+);
+let matrixUndoCount = 0;
+while (
+  matrixUndoCase.editor.storage.markdown.getMarkdown() !== matrixBeforePaste &&
+  matrixUndoCase.editor.commands.undo()
+) {
+  matrixUndoCount += 1;
+}
+assert.equal(matrixUndoCount, 1);
+assert.equal(
+  matrixUndoCase.editor.storage.markdown.getMarkdown(),
+  matrixBeforePaste,
+);
+matrixUndoCase.editor.destroy();
+matrixUndoCase.element.remove();
+
+const cellSelectionCase = tableActionEditor();
+let firstCellPosition = null;
+let secondCellPosition = null;
+let bottomRightCellPosition = null;
+cellSelectionCase.editor.state.doc.descendants((node, position) => {
+  if (node.type.name !== "tableCell") return;
+  if (firstCellPosition === null && node.textContent === "a1") {
+    firstCellPosition = position;
+  } else if (secondCellPosition === null && node.textContent === "b1") {
+    secondCellPosition = position;
+  } else if (bottomRightCellPosition === null && node.textContent === "b2") {
+    bottomRightCellPosition = position;
+  }
+});
+assert.notEqual(firstCellPosition, null);
+assert.notEqual(secondCellPosition, null);
+assert.notEqual(bottomRightCellPosition, null);
+cellSelectionCase.editor.view.dispatch(
+  cellSelectionCase.editor.state.tr.setSelection(
+    CellSelection.create(
+      cellSelectionCase.editor.state.doc,
+      firstCellPosition,
+      secondCellPosition,
+    ),
+  ),
+);
+assert.equal(
+  tableSelectionToMarkdown(
+    cellSelectionCase.editor,
+    cellSelectionCase.editor.state.selection.content(),
+  ),
+  "| a1 | b1 |\n| --- | --- |\n",
+);
+cellSelectionCase.editor.view.dispatch(
+  cellSelectionCase.editor.state.tr.setSelection(
+    CellSelection.create(
+      cellSelectionCase.editor.state.doc,
+      firstCellPosition,
+      bottomRightCellPosition,
+    ),
+  ),
+);
+assert.equal(
+  tableSelectionToMarkdown(
+    cellSelectionCase.editor,
+    cellSelectionCase.editor.state.selection.content(),
+  ),
+  "| a1 | b1 |\n| --- | --- |\n| a2 | b2 |\n",
+);
+cellSelectionCase.editor.view.dispatch(
+  cellSelectionCase.editor.state.tr.setSelection(
+    CellSelection.create(
+      cellSelectionCase.editor.state.doc,
+      firstCellPosition,
+      secondCellPosition,
+    ),
+  ),
+);
+assert.equal(clearSelectedTableCells(cellSelectionCase.editor), true);
+assert.deepEqual(
+  cellSelectionCase.editor.state.doc.firstChild.child(1).content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["", ""],
+);
+cellSelectionCase.editor.destroy();
+cellSelectionCase.element.remove();
+
+const axisSelectionCase = tableActionEditor();
+selectTableCell(axisSelectionCase.editor, "a2");
+assert.equal(selectCurrentTableRow(axisSelectionCase.editor), true);
+assert.equal(axisSelectionCase.editor.state.selection instanceof CellSelection, true);
+assert.equal(axisSelectionCase.editor.state.selection.isRowSelection(), true);
+selectTableCell(axisSelectionCase.editor, "b2");
+assert.equal(selectCurrentTableColumn(axisSelectionCase.editor), true);
+assert.equal(axisSelectionCase.editor.state.selection.isColSelection(), true);
+axisSelectionCase.editor.destroy();
+axisSelectionCase.element.remove();
 
 const tableCase = saveTwice(
   "| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 铅笔 | 2 | 日常使用 |\n| 橡皮 | 1 | 备用 |");
@@ -115,6 +698,74 @@ const escapedPipeTable = saveTwice(
 );
 assert.match(escapedPipeTable.first, /含有 \\\| 分隔符/);
 assert.equal(escapedPipeTable.second, escapedPipeTable.first);
+
+const bodyAlignmentTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableHeader", content: [{ type: "paragraph", content: [{ type: "text", text: "左" }] }] },
+            { type: "tableHeader", content: [{ type: "paragraph", content: [{ type: "text", text: "中" }] }] },
+            { type: "tableHeader", content: [{ type: "paragraph", content: [{ type: "text", text: "右" }] }] },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", attrs: { align: "left" }, content: [{ type: "paragraph", content: [{ type: "text", text: "a" }] }] },
+            { type: "tableCell", attrs: { align: "center" }, content: [{ type: "paragraph", content: [{ type: "text", text: "b" }] }] },
+            { type: "tableCell", attrs: { align: "right" }, content: [{ type: "paragraph", content: [{ type: "text", text: "c" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.match(bodyAlignmentTable.first, /\| :-- \| :--: \| --: \|/);
+assert.equal(bodyAlignmentTable.second, bodyAlignmentTable.first);
+
+const widthTable = saveDocumentTwice({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableHeader", attrs: { colwidth: [120] }, content: [{ type: "paragraph", content: [{ type: "text", text: "A" }] }] },
+            { type: "tableHeader", attrs: { colwidth: [240] }, content: [{ type: "paragraph", content: [{ type: "text", text: "B" }] }] },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", attrs: { colwidth: [120] }, content: [{ type: "paragraph", content: [{ type: "text", text: "1" }] }] },
+            { type: "tableCell", attrs: { colwidth: [240] }, content: [{ type: "paragraph", content: [{ type: "text", text: "2" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert.match(widthTable.first, /<!-- koinote-table-widths: 120,240 -->/);
+assert.equal(widthTable.second, widthTable.first);
+assert.deepEqual(
+  widthTable.secondJSON.content[0].content[0].content.map(
+    (cell) => cell.attrs.colwidth,
+  ),
+  [[120], [240]],
+);
+
+const invalidWidthTable = saveTwice(
+  "<!-- koinote-table-widths: 20,5000 -->\n| A | B |\n| --- | --- |\n| 1 | 2 |",
+);
+assert.match(invalidWidthTable.first, /&lt;!-- koinote-table-widths: 20,5000 --&gt;/);
+assert.equal(invalidWidthTable.second, invalidWidthTable.first);
 
 function tableWithCellText(text) {
   return saveDocumentTwice({

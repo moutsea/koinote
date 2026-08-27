@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Editor } from "@tiptap/react";
+import { useEditorState, type Editor } from "@tiptap/react";
 import {
   Bold,
   Italic,
@@ -12,6 +12,8 @@ import {
   ListOrdered,
   ListChecks,
   Table2,
+  TableColumnsSplit,
+  TableRowsSplit,
   Quote,
   SquareCode,
   Link as LinkIcon,
@@ -36,6 +38,12 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const [focusWithin, setFocusWithin] = useState(false);
   const [alwaysVisible, setAlwaysVisible] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tableActive =
+    useEditorState({
+      editor,
+      selector: ({ editor: currentEditor }) =>
+        Boolean(currentEditor?.isActive("table")),
+    }) ?? false;
 
   // 触屏 / 无悬停能力的设备：常驻显示
   useEffect(() => {
@@ -194,16 +202,24 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         >
           <ListChecks className="h-4 w-4" />
         </Btn>
-        <Btn
+        <TablePicker
+          editor={editor}
           label={t.editor.toolbar.table}
-          active={editor?.isActive("table")}
-          onClick={() =>
-            editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-          }
-          disabled={!visible || editor?.isActive("table")}
-        >
-          <Table2 className="h-4 w-4" />
-        </Btn>
+          visible={visible}
+          active={tableActive}
+        />
+
+        {visible && editor && tableActive && (
+          <TableActions
+            editor={editor}
+            labels={{
+              addRow: t.editor.toolbar.tableAddRow,
+              addColumn: t.editor.toolbar.tableAddColumn,
+              deleteRow: t.editor.toolbar.tableDeleteRow,
+              deleteColumn: t.editor.toolbar.tableDeleteColumn,
+            }}
+          />
+        )}
 
         <Divider />
 
@@ -232,6 +248,227 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
           <LinkIcon className="h-4 w-4" />
         </Btn>
       </div>
+    </div>
+  );
+}
+
+function TableActions({
+  editor,
+  labels,
+}: {
+  editor: Editor;
+  labels: {
+    addRow: string;
+    addColumn: string;
+    deleteRow: string;
+    deleteColumn: string;
+  };
+}) {
+  const actions = [
+    {
+      label: labels.addRow,
+      disabled: !editor.can().addRowAfter(),
+      onClick: () => editor.chain().focus().addRowAfter().run(),
+      icon: <TableRowsSplit className="h-4 w-4" />,
+    },
+    {
+      label: labels.addColumn,
+      disabled: !editor.can().addColumnAfter(),
+      onClick: () => editor.chain().focus().addColumnAfter().run(),
+      icon: <TableColumnsSplit className="h-4 w-4" />,
+    },
+    {
+      label: labels.deleteRow,
+      disabled: !editor.can().deleteRow(),
+      onClick: () => editor.chain().focus().deleteRow().run(),
+      icon: <TableRowsSplit className="h-4 w-4" />,
+      danger: true,
+    },
+    {
+      label: labels.deleteColumn,
+      disabled: !editor.can().deleteColumn(),
+      onClick: () => editor.chain().focus().deleteColumn().run(),
+      icon: <TableColumnsSplit className="h-4 w-4" />,
+      danger: true,
+    },
+  ];
+
+  return (
+    <>
+      {actions.map((action) => (
+        <button
+          key={action.label}
+          type="button"
+          disabled={action.disabled}
+          aria-label={action.label}
+          title={action.label}
+          onClick={action.onClick}
+          className={`flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            action.danger
+              ? "text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+              : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white"
+          }`}
+        >
+          {action.icon}
+        </button>
+      ))}
+    </>
+  );
+}
+
+const TABLE_PICKER_SIZE = 8;
+
+function TablePicker({
+  editor,
+  label,
+  visible,
+  active,
+}: {
+  editor: Editor | null;
+  label: string;
+  visible: boolean;
+  active: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState({ rows: 3, cols: 3 });
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const disabled = !visible || !editor || active;
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  function insertTable(rows: number, cols: number) {
+    if (!editor) return;
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows, cols, withHeaderRow: true })
+      .run();
+    setOpen(false);
+  }
+
+  function moveFocus(row: number, col: number, key: string) {
+    let nextRow = row;
+    let nextCol = col;
+    if (key === "ArrowUp") nextRow -= 1;
+    if (key === "ArrowDown") nextRow += 1;
+    if (key === "ArrowLeft") nextCol -= 1;
+    if (key === "ArrowRight") nextCol += 1;
+    if (
+      nextRow < 1 ||
+      nextRow > TABLE_PICKER_SIZE ||
+      nextCol < 1 ||
+      nextCol > TABLE_PICKER_SIZE
+    ) {
+      return;
+    }
+    const next = pickerRef.current?.querySelector<HTMLButtonElement>(
+      `[data-table-row="${nextRow}"][data-table-col="${nextCol}"]`,
+    );
+    next?.focus();
+    setSelected({ rows: nextRow, cols: nextCol });
+  }
+
+  return (
+    <div ref={pickerRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        aria-haspopup="grid"
+        aria-expanded={open}
+        title={label}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        className={`flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          open || active
+            ? "bg-cinnabar-100 text-cinnabar-700 dark:bg-cinnabar-950/60 dark:text-cinnabar-300"
+            : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white"
+        }`}
+      >
+        <Table2 className="h-4 w-4" />
+      </button>
+
+      {open && !disabled && (
+        <div
+          className="absolute left-1/2 top-10 z-40 -translate-x-1/2 rounded-xl border border-black/10 bg-[var(--background)] p-2 shadow-lg dark:border-white/15"
+        >
+          <div
+            aria-live="polite"
+            className="mb-1.5 text-center text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300"
+          >
+            {selected.rows} × {selected.cols}
+          </div>
+          <div role="grid" aria-label={label}>
+            {Array.from({ length: TABLE_PICKER_SIZE }, (_, rowIndex) => {
+              const row = rowIndex + 1;
+              return (
+                <div key={row} role="row" className="flex gap-0.5">
+                  {Array.from({ length: TABLE_PICKER_SIZE }, (_, colIndex) => {
+                    const col = colIndex + 1;
+                    const highlighted = row <= selected.rows && col <= selected.cols;
+                    return (
+                      <button
+                        key={col}
+                        type="button"
+                        role="gridcell"
+                        tabIndex={row === 1 && col === 1 ? 0 : -1}
+                        data-table-row={row}
+                        data-table-col={col}
+                        aria-label={`${row} × ${col}`}
+                        aria-selected={highlighted}
+                        onMouseEnter={() => setSelected({ rows: row, cols: col })}
+                        onFocus={() => setSelected({ rows: row, cols: col })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            insertTable(row, col);
+                            return;
+                          }
+                          if (event.key.startsWith("Arrow")) {
+                            event.preventDefault();
+                            moveFocus(row, col, event.key);
+                          }
+                        }}
+                        onClick={() => insertTable(row, col)}
+                        className={`h-5 w-5 rounded-sm border transition ${
+                          highlighted
+                            ? "border-cinnabar-500 bg-cinnabar-300/80 dark:bg-cinnabar-500/70"
+                            : "border-black/15 bg-transparent hover:border-cinnabar-400 dark:border-white/20"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

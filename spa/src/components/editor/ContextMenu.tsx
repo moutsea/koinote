@@ -108,7 +108,10 @@ export function ContextMenu({
       role="menu"
       aria-label={ariaLabel}
       onKeyDown={onMenuKeyDown}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       style={{ left: pos.x, top: pos.y }}
       className="fixed z-[60] min-w-[176px] overflow-hidden rounded-xl border border-black/10 bg-[var(--background)] py-1 shadow-lg dark:border-white/15"
     >
