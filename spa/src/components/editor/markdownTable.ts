@@ -1,7 +1,18 @@
-import { InputRule } from "@tiptap/core";
+import { InputRule, type Editor } from "@tiptap/core";
 import { Table, type TableOptions } from "@tiptap/extension-table";
-import { DOMParser } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import {
+  DOMParser,
+  type Node as ProseMirrorNode,
+  type Schema,
+} from "@tiptap/pm/model";
+import { Plugin, TextSelection, type EditorState } from "@tiptap/pm/state";
+import {
+  cellAround,
+  CellSelection,
+  inSameTable,
+  tableEditingKey,
+} from "@tiptap/pm/tables";
+import type { EditorView } from "@tiptap/pm/view";
 
 type MarkdownNode = {
   type: { name: string; spec?: { inlineContent?: boolean } };
@@ -43,6 +54,8 @@ type TableCellNode = MarkdownNode & {
 type TableRowNode = MarkdownNode;
 
 type GridCell = TableCellNode | null;
+
+const activeTableDragCleanups = new WeakMap<EditorView, (clearState?: boolean) => void>();
 
 function cells(row: TableRowNode): TableCellNode[] {
   const result: TableCellNode[] = [];
@@ -88,6 +101,150 @@ function findTableDelimiter(text: string) {
   const line = text.slice(0, -1);
   if (!isTableDelimiter(line)) return null;
   return { index: 0, text };
+}
+
+function findTableHeader(text: string) {
+  if (!text.endsWith("\n")) return null;
+  const line = text.slice(0, -1).trim();
+  if (!line.startsWith("|") || !line.endsWith("|") || isTableDelimiter(line)) {
+    return null;
+  }
+  if (splitTableCells(line).length < 2) return null;
+  return { index: 0, text };
+}
+
+export function shouldDelegateTableMouseDown(event: {
+  button: number;
+  shiftKey: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}): boolean {
+  return event.button !== 0 || event.shiftKey || Boolean(event.ctrlKey || event.metaKey);
+}
+
+function tableCellAtPoint(view: EditorView, event: MouseEvent) {
+  const position = view.posAtCoords({
+    left: event.clientX,
+    top: event.clientY,
+  });
+  if (!position) return null;
+  const { inside, pos } = position;
+  return (
+    (inside >= 0 && cellAround(view.state.doc.resolve(inside))) ||
+    cellAround(view.state.doc.resolve(pos))
+  );
+}
+
+function handleTableDragMouseDown(view: EditorView, event: MouseEvent): boolean {
+  if (view.isDestroyed) return false;
+  activeTableDragCleanups.get(view)?.();
+  const anchorCell = tableCellAtPoint(view, event);
+  if (!anchorCell) return false;
+
+  let dragging = false;
+  let cleaned = false;
+  const root = view.root;
+  const clearTableEditingState = () => {
+    if (!view.isDestroyed && dragging && tableEditingKey.getState(view.state) !== null) {
+      view.dispatch(view.state.tr.setMeta(tableEditingKey, -1));
+    }
+  };
+  const cleanup = (clearState = true) => {
+    if (cleaned) return;
+    cleaned = true;
+    root.removeEventListener("mousemove", onMouseMove);
+    root.removeEventListener("mouseup", onMouseUp);
+    root.removeEventListener("dragstart", onDragStart);
+    if (clearState) clearTableEditingState();
+    if (activeTableDragCleanups.get(view) === cleanup) {
+      activeTableDragCleanups.delete(view);
+    }
+  };
+  const onMouseMove = (moveEvent: Event) => {
+    if (view.isDestroyed) {
+      cleanup();
+      return;
+    }
+    const mouseEvent = moveEvent as MouseEvent;
+    const headCell = tableCellAtPoint(view, mouseEvent);
+    if (!headCell || !inSameTable(anchorCell, headCell)) {
+      return;
+    }
+    if (!dragging && headCell.pos === anchorCell.pos) return;
+    mouseEvent.preventDefault();
+    dragging = true;
+    view.dispatch(
+      view.state.tr
+        .setSelection(new CellSelection(anchorCell, headCell))
+        .setMeta(tableEditingKey, anchorCell.pos),
+    );
+  };
+  const onMouseUp = (upEvent: Event) => {
+    if (dragging) {
+      upEvent.preventDefault();
+    }
+    cleanup();
+  };
+  const onDragStart = (dragEvent: Event) => {
+    if (dragging) {
+      dragEvent.preventDefault();
+      cleanup();
+      return;
+    }
+    cleanup();
+  };
+
+  root.addEventListener("mousemove", onMouseMove);
+  root.addEventListener("mouseup", onMouseUp);
+  root.addEventListener("dragstart", onDragStart);
+  activeTableDragCleanups.set(view, cleanup);
+  return false;
+}
+
+function parseMarkdownTable(
+  editor: Editor,
+  schema: Schema,
+  markdown: string,
+): ProseMirrorNode | null {
+  const markdownParser = (
+    editor.storage.markdown as unknown as {
+      parser: { parse: (content: string) => string };
+    }
+  ).parser;
+  const renderedHTML = markdownParser.parse(markdown);
+  const ownerDocument = editor.view.dom.ownerDocument;
+  const container = ownerDocument.createElement("div");
+  container.innerHTML = renderedHTML;
+  const parsedDocument = DOMParser.fromSchema(schema).parse(container);
+  const table = parsedDocument.firstChild;
+  if (!table || table.type.name !== "table" || table.childCount < 2) {
+    return null;
+  }
+  return table;
+}
+
+function replaceInputWithTable(
+  editor: Editor,
+  state: EditorState,
+  start: number,
+  end: number,
+  markdown: string,
+): boolean {
+  const table = parseMarkdownTable(editor, state.schema, markdown);
+  if (!table) return false;
+
+  const transaction = state.tr.replaceWith(start, end, table);
+  const firstBodyRow = table.child(1);
+  const firstCell = firstBodyRow.firstChild;
+  if (firstCell) {
+    const bodyRowOffset = table.child(0).nodeSize;
+    const cellStart = start + 1 + bodyRowOffset + 1;
+    transaction.setSelection(
+      TextSelection.near(transaction.doc.resolve(cellStart + 2)),
+    );
+  }
+  transaction.scrollIntoView();
+  return true;
 }
 
 function span(value: unknown): number {
@@ -358,6 +515,33 @@ export const MarkdownTable = Table.extend<Partial<TableOptions>>({
   addInputRules() {
     return [
       new InputRule({
+        find: findTableHeader,
+        handler: ({ state }) => {
+          const { $from } = state.selection;
+          if ($from.depth !== 1 || $from.parent.type.name !== "paragraph") {
+            return null;
+          }
+          if ($from.parentOffset !== $from.parent.content.size) return null;
+
+          const headerText = $from.parent.textContent.trim();
+          const headerCells = splitTableCells(headerText);
+          const delimiterText = `| ${headerCells.map(() => "---").join(" | ")} |`;
+          const blankRow = `| ${headerCells.map(() => "").join(" | ")} |`;
+          const start = $from.before(1);
+          const end = start + $from.parent.nodeSize;
+          if (!replaceInputWithTable(
+            this.editor,
+            state,
+            start,
+            end,
+            `${headerText}\n${delimiterText}\n${blankRow}`,
+          )) {
+            return null;
+          }
+          return;
+        },
+      }),
+      new InputRule({
         find: findTableDelimiter,
         handler: ({ state }) => {
           const { $from } = state.selection;
@@ -388,38 +572,47 @@ export const MarkdownTable = Table.extend<Partial<TableOptions>>({
             return null;
           }
 
-          const blankRow = `| ${headerCells.map(() => "").join(" | ")} |`;
-          const markdown = `${headerText}\n${currentText}\n${blankRow}`;
-          const markdownParser = (
-            this.editor.storage.markdown as unknown as {
-              parser: { parse: (content: string) => string };
-            }
-          ).parser;
-          const renderedHTML = markdownParser.parse(markdown);
-          const ownerDocument = this.editor.view.dom.ownerDocument;
-          const container = ownerDocument.createElement("div");
-          container.innerHTML = renderedHTML;
-          const parsedDocument = DOMParser.fromSchema(state.schema).parse(container);
-          const table = parsedDocument.firstChild;
-
-          if (!table || table.type.name !== this.name || table.childCount < 2) {
-            return null;
-          }
-
           const start = currentStart - headerNode.nodeSize;
           const end = currentStart + $from.parent.nodeSize;
-          const transaction = state.tr.replaceWith(start, end, table);
-          const firstBodyRow = table.child(1);
-          const firstCell = firstBodyRow.firstChild;
-          if (firstCell) {
-            const bodyRowOffset = table.child(0).nodeSize;
-            const cellStart = start + 1 + bodyRowOffset + 1;
-            transaction.setSelection(
-              TextSelection.near(transaction.doc.resolve(cellStart + 2)),
-            );
-          }
-          transaction.scrollIntoView();
+          const blankRow = `| ${headerCells.map(() => "").join(" | ")} |`;
+          replaceInputWithTable(
+            this.editor,
+            state,
+            start,
+            end,
+            `${headerText}\n${currentText}\n${blankRow}`,
+          );
           return;
+        },
+      }),
+    ];
+  },
+  addProseMirrorPlugins() {
+    const plugins = this.parent?.() ?? [];
+    const tableEditingPlugin = plugins.find(
+      (plugin) => plugin.spec.key === tableEditingKey,
+    );
+    const handlers = tableEditingPlugin?.props.handleDOMEvents;
+    const originalMouseDown = handlers?.mousedown;
+    if (handlers && originalMouseDown) {
+      handlers.mousedown = (view, event) => {
+        const mouseEvent = event as MouseEvent;
+        if (!shouldDelegateTableMouseDown(mouseEvent)) {
+          // Keep single-cell clicks text-oriented, then upgrade same-table drags to CellSelection.
+          return handleTableDragMouseDown(view, mouseEvent);
+        }
+        return originalMouseDown.call(tableEditingPlugin, view, event);
+      };
+    }
+    return [
+      ...plugins,
+      new Plugin({
+        view(view) {
+          return {
+            destroy() {
+              activeTableDragCleanups.get(view)?.(false);
+            },
+          };
         },
       }),
     ];

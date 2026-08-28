@@ -1635,6 +1635,9 @@ export const en: Messages = {
       taskList: "Task list",
       table: "Insert table",
       tableActions: "Table actions",
+      tableResize: "Resize table",
+      tableResizeWarning:
+        "Resize the table to {rows} × {columns}? Content outside the new bounds will be cleared.",
       tableAddRowBefore: "Add row above",
       tableAddRow: "Add row below",
       tableAddColumnBefore: "Add column left",

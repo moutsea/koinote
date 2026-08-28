@@ -436,7 +436,7 @@ function TablePicker({
                         key={col}
                         type="button"
                         role="gridcell"
-                        tabIndex={row === 1 && col === 1 ? 0 : -1}
+                        tabIndex={row === selected.rows && col === selected.cols ? 0 : -1}
                         data-table-row={row}
                         data-table-col={col}
                         aria-label={`${row} × ${col}`}

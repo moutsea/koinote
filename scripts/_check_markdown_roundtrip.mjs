@@ -29,23 +29,26 @@ const [
   { Editor },
   { default: StarterKit },
   { TableCell, TableHeader, TableRow },
-  { CellSelection },
+  { CellSelection, tableEditingKey },
   { EditorState, TextSelection },
   { Fragment },
   { closeHistory },
   { Markdown },
-  { MarkdownTable },
+  { MarkdownTable, shouldDelegateTableMouseDown },
   { BlockMarkdownImage, normalizeLegacyImageAdjacentHeadings },
   {
     clearSelectedTableCells,
     clearTableAxis,
     hasTableHeaderRow,
     insertTableMatrix,
+    resizeTable,
     selectCurrentTableColumn,
     selectCurrentTableRow,
     setTableColumnAlignment,
     shouldInterceptTablePaste,
+    tableDimensions,
     tableMatrixFromClipboard,
+    tableResizeLosesContent,
     tableSelectionToMarkdown,
   },
 ] = await Promise.all([
@@ -145,6 +148,76 @@ function selectTableCell(editor, text) {
   editor.commands.setTextSelection(position + 2);
 }
 
+function tableCellPosition(editor, text) {
+  const positions = tableCellPositions(editor, text);
+  assert.notEqual(positions.length, 0);
+  return positions[0];
+}
+
+function tableCellPositions(editor, text) {
+  const positions = [];
+  editor.state.doc.descendants((node, nodePosition) => {
+    const role = node.type.spec.tableRole;
+    if (
+      (role === "cell" || role === "header_cell") &&
+      node.textContent === text
+    ) {
+      positions.push(nodePosition);
+    }
+  });
+  return positions;
+}
+
+function tableCellPositionAt(editor, tableIndex, rowIndex, cellIndex) {
+  let tableStart = 0;
+  for (let index = 0; index < tableIndex; index += 1) {
+    tableStart += editor.state.doc.child(index).nodeSize;
+  }
+  const table = editor.state.doc.child(tableIndex);
+  let rowStart = tableStart + 1;
+  for (let index = 0; index < rowIndex; index += 1) {
+    rowStart += table.child(index).nodeSize;
+  }
+  const row = table.child(rowIndex);
+  let cellStart = rowStart + 1;
+  for (let index = 0; index < cellIndex; index += 1) {
+    cellStart += row.child(index).nodeSize;
+  }
+  return cellStart;
+}
+
+function tableMouseEvent(type, clientX, clientY = 0) {
+  const event = new baseWindow.Event(type, {
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperties(event, {
+    button: { value: 0 },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    shiftKey: { value: false },
+  });
+  return event;
+}
+
+function tableMouseDownHandler(editor) {
+  const tablePlugin = editor.state.plugins.find(
+    (plugin) => plugin.spec.key === tableEditingKey,
+  );
+  assert.ok(tablePlugin);
+  const handler = tablePlugin.props.handleDOMEvents?.mousedown;
+  assert.equal(typeof handler, "function");
+  return handler;
+}
+
+function stubTableCoordinates(editor, coordinates) {
+  editor.view.posAtCoords = ({ left }) => {
+    const position = coordinates.get(left);
+    if (position === undefined) return null;
+    return { inside: position + 1, pos: position + 1 };
+  };
+}
+
 function typeText(editor, text) {
   for (const character of text) {
     const { from, to } = editor.state.selection;
@@ -171,6 +244,10 @@ const markdownEditorSource = readFileSync(
   new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
   "utf8",
 );
+const markdownTableSource = readFileSync(
+  new URL("../spa/src/components/editor/markdownTable.ts", import.meta.url),
+  "utf8",
+);
 const editorToolbarSource = readFileSync(
   new URL("../spa/src/components/editor/EditorToolbar.tsx", import.meta.url),
   "utf8",
@@ -192,8 +269,34 @@ assert.match(
   /const shouldIntercept = shouldInterceptTablePaste\([\s\S]*?\);\s*const matrix = shouldIntercept\s*\?\s*tableMatrixFromClipboard\(/,
 );
 assert.match(markdownEditorSource, /tableSelectionToMarkdown\(instance, slice\)/);
+assert.match(tableContextToolbarSource, /const TABLE_RESIZE_PICKER_SIZE = 8/);
+assert.match(tableContextToolbarSource, /role="grid" aria-label=\{t\.editor\.toolbar\.tableResize\}/);
+assert.match(tableContextToolbarSource, /data-table-resize-row=\{row\}/);
+assert.doesNotMatch(tableContextToolbarSource, /type="number"/);
+assert.match(
+  tableContextToolbarSource,
+  /mountedRef\.current = true;[\s\S]*mountedRef\.current = false;/,
+);
+assert.match(
+  editorToolbarSource,
+  /tabIndex=\{row === selected\.rows && col === selected\.cols \? 0 : -1\}/,
+);
 assert.equal(shouldInterceptTablePaste("codeBlock"), false);
 assert.equal(shouldInterceptTablePaste("paragraph"), true);
+assert.equal(shouldDelegateTableMouseDown({ button: 0, shiftKey: false }), false);
+assert.equal(shouldDelegateTableMouseDown({ button: 0, shiftKey: true }), true);
+assert.equal(
+  shouldDelegateTableMouseDown({ button: 0, shiftKey: false, ctrlKey: true }),
+  true,
+);
+assert.equal(
+  shouldDelegateTableMouseDown({ button: 0, shiftKey: false, metaKey: true }),
+  true,
+);
+assert.match(markdownTableSource, /handleTableDragMouseDown\(view, mouseEvent\)/);
+assert.match(markdownTableSource, /inSameTable\(anchorCell, headCell\)/);
+assert.doesNotMatch(markdownTableSource, /headCell\.node\(-1\) !== anchorCell\.node\(-1\)/);
+assert.match(markdownTableSource, /setMeta\(tableEditingKey, anchorCell\.pos\)/);
 for (const command of [
   "addRowBefore",
   "addRowAfter",
@@ -212,6 +315,37 @@ for (const alignment of ["left", "center", "right"]) {
     new RegExp(`setTableColumnAlignment\\(editor, \"${alignment}\"\\)`),
   );
 }
+
+const headerOnlyTableElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(headerOnlyTableElement);
+const headerOnlyTableEditor = new Editor({
+  element: headerOnlyTableElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+headerOnlyTableEditor.view.scrollToSelection = () => {};
+typeText(headerOnlyTableEditor, "| col1 | col2 |");
+assert.equal(pressEnter(headerOnlyTableEditor), true);
+assert.equal(headerOnlyTableEditor.state.doc.firstChild.type.name, "table");
+assert.deepEqual(
+  headerOnlyTableEditor.state.doc.firstChild.firstChild.content.content.map(
+    (cell) => cell.textContent,
+  ),
+  ["col1", "col2"],
+);
+assert.equal(
+  headerOnlyTableEditor.state.selection.$from.node(-1).type.name,
+  "tableCell",
+);
+headerOnlyTableEditor.destroy();
+headerOnlyTableElement.remove();
 
 const typedTableElement = baseWindow.document.createElement("div");
 baseWindow.document.body.appendChild(typedTableElement);
@@ -250,6 +384,66 @@ assert.equal(
 assert.equal(typedTableEditor.state.selection.$from.parent.textContent, "");
 typedTableEditor.destroy();
 typedTableElement.remove();
+
+const midHeaderElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(midHeaderElement);
+const midHeaderEditor = new Editor({
+  element: midHeaderElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+midHeaderEditor.view.scrollToSelection = () => {};
+const midHeaderText = "| 姓名 | 年龄 | 这段说明本该留在下一行";
+midHeaderEditor.commands.setContent(midHeaderText);
+const midHeaderPrefix = "| 姓名 | 年龄 |";
+midHeaderEditor.commands.setTextSelection(midHeaderPrefix.length + 1);
+assert.equal(pressEnter(midHeaderEditor), true);
+assert.deepEqual(
+  Array.from({ length: midHeaderEditor.state.doc.childCount }, (_, index) =>
+    midHeaderEditor.state.doc.child(index).textContent,
+  ),
+  [midHeaderPrefix, " 这段说明本该留在下一行"],
+);
+assert.equal(midHeaderEditor.state.doc.firstChild.type.name, "paragraph");
+midHeaderEditor.destroy();
+midHeaderElement.remove();
+
+const nestedHeaderElement = baseWindow.document.createElement("div");
+baseWindow.document.body.appendChild(nestedHeaderElement);
+const nestedHeaderEditor = new Editor({
+  element: nestedHeaderElement,
+  extensions: [
+    StarterKit,
+    MarkdownTable,
+    TableRow,
+    TableHeader,
+    TableCell,
+    BlockMarkdownImage,
+    Markdown.configure({ html: false }),
+  ],
+});
+nestedHeaderEditor.view.scrollToSelection = () => {};
+nestedHeaderEditor.commands.setContent("- | A | B |");
+nestedHeaderEditor.commands.setTextSelection(
+  nestedHeaderEditor.state.doc.content.size - 1,
+);
+assert.equal(pressEnter(nestedHeaderEditor), true);
+let nestedHasTable = false;
+nestedHeaderEditor.state.doc.descendants((node) => {
+  if (node.type.name === "table") nestedHasTable = true;
+});
+assert.equal(nestedHasTable, false);
+assert.equal(nestedHeaderEditor.state.doc.firstChild.type.name, "bulletList");
+assert.match(nestedHeaderEditor.state.doc.textContent, /\| A \| B \|/);
+nestedHeaderEditor.destroy();
+nestedHeaderElement.remove();
 
 const alignedInputElement = baseWindow.document.createElement("div");
 baseWindow.document.body.appendChild(alignedInputElement);
@@ -488,6 +682,14 @@ assert.equal(
 );
 assert.equal(
   tableMatrixFromClipboard(
+    "A\tB\n1\t2",
+    "<table><tr><td><img src='https://example.test/a.png'></td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>",
+    baseWindow.document,
+  ),
+  null,
+);
+assert.equal(
+  tableMatrixFromClipboard(
     "标题\t说明\t备注\n\t续行一\n\t续行二",
     null,
     baseWindow.document,
@@ -521,6 +723,7 @@ matrixPasteCase.element.remove();
 
 const singleRowTableCase = tableActionEditor("| A | B |\n| --- | --- |");
 selectTableCell(singleRowTableCase.editor, "A");
+assert.equal(singleRowTableCase.editor.state.doc.firstChild.childCount, 1);
 assert.equal(
   insertTableMatrix(singleRowTableCase.editor, [["A", "B", "C"]]),
   true,
@@ -630,6 +833,15 @@ assert.equal(
   ),
   "| a1 | b1 |\n| --- | --- |\n",
 );
+assert.equal(
+  tableSelectionToMarkdown(cellSelectionCase.editor, {
+    content: Fragment.fromArray([
+      cellSelectionCase.editor.state.doc.firstChild,
+      cellSelectionCase.editor.state.schema.nodes.paragraph.create(),
+    ]),
+  }),
+  null,
+);
 cellSelectionCase.editor.view.dispatch(
   cellSelectionCase.editor.state.tr.setSelection(
     CellSelection.create(
@@ -675,6 +887,296 @@ assert.equal(selectCurrentTableColumn(axisSelectionCase.editor), true);
 assert.equal(axisSelectionCase.editor.state.selection.isColSelection(), true);
 axisSelectionCase.editor.destroy();
 axisSelectionCase.element.remove();
+
+const tableDragCase = tableActionEditor();
+const tableDragA1 = tableCellPosition(tableDragCase.editor, "a1");
+const tableDragB1 = tableCellPosition(tableDragCase.editor, "b1");
+const tableDragB2 = tableCellPosition(tableDragCase.editor, "b2");
+stubTableCoordinates(
+  tableDragCase.editor,
+  new Map([
+    [1, tableDragA1],
+    [2, tableDragB2],
+    [3, tableDragB1],
+  ]),
+);
+const tableDragView = tableDragCase.editor.view;
+const tableDragMouseDown = tableMouseDownHandler(tableDragCase.editor);
+assert.equal(
+  tableDragMouseDown(tableDragView, tableMouseEvent("mousedown", 1)),
+  false,
+);
+tableDragView.root.dispatchEvent(tableMouseEvent("mousemove", 2));
+assert.equal(tableDragView.state.selection instanceof CellSelection, true);
+const tableDragSelectedTexts = [];
+tableDragView.state.selection.forEachCell((node) => {
+  tableDragSelectedTexts.push(node.textContent);
+});
+assert.deepEqual(tableDragSelectedTexts, ["a1", "b1", "a2", "b2"]);
+assert.notEqual(tableEditingKey.getState(tableDragView.state), null);
+let postTableMouseupCalled = false;
+const postTableMouseup = () => {
+  postTableMouseupCalled = true;
+};
+tableDragView.root.addEventListener("mouseup", postTableMouseup);
+tableDragView.root.dispatchEvent(tableMouseEvent("mouseup", 2));
+assert.equal(postTableMouseupCalled, true);
+tableDragView.root.removeEventListener("mouseup", postTableMouseup);
+assert.equal(tableEditingKey.getState(tableDragView.state), null);
+tableDragView.root.dispatchEvent(tableMouseEvent("mousemove", 3));
+const tableDragSelectedAfterCleanup = [];
+tableDragView.state.selection.forEachCell((node) => {
+  tableDragSelectedAfterCleanup.push(node.textContent);
+});
+assert.deepEqual(tableDragSelectedAfterCleanup, tableDragSelectedTexts);
+tableDragCase.editor.destroy();
+tableDragCase.element.remove();
+
+const tableDragGapCase = tableActionEditor();
+const tableDragGapA1 = tableCellPosition(tableDragGapCase.editor, "a1");
+const tableDragGapB2 = tableCellPosition(tableDragGapCase.editor, "b2");
+stubTableCoordinates(
+  tableDragGapCase.editor,
+  new Map([
+    [1, tableDragGapA1],
+    [2, tableDragGapB2],
+  ]),
+);
+const tableDragGapView = tableDragGapCase.editor.view;
+const tableDragGapMouseDown = tableMouseDownHandler(tableDragGapCase.editor);
+assert.equal(
+  tableDragGapMouseDown(tableDragGapView, tableMouseEvent("mousedown", 1)),
+  false,
+);
+tableDragGapView.root.dispatchEvent(tableMouseEvent("mousemove", 3));
+tableDragGapView.root.dispatchEvent(tableMouseEvent("mousemove", 2));
+assert.equal(tableDragGapView.state.selection instanceof CellSelection, true);
+tableDragGapView.root.dispatchEvent(tableMouseEvent("mouseup", 2));
+tableDragGapCase.editor.destroy();
+tableDragGapCase.element.remove();
+
+const tableDragDestroyCase = tableActionEditor();
+const tableDragDestroyPosition = tableCellPosition(
+  tableDragDestroyCase.editor,
+  "a1",
+);
+let tableDragDestroyCalls = 0;
+tableDragDestroyCase.editor.view.posAtCoords = () => {
+  tableDragDestroyCalls += 1;
+  return { inside: tableDragDestroyPosition + 1, pos: tableDragDestroyPosition + 1 };
+};
+const tableDragDestroyView = tableDragDestroyCase.editor.view;
+const tableDragDestroyMouseDown = tableMouseDownHandler(tableDragDestroyCase.editor);
+const originalDestroyRootRemove = tableDragDestroyView.root.removeEventListener;
+const destroyRemovedTypes = [];
+tableDragDestroyView.root.removeEventListener = function (type, listener, options) {
+  destroyRemovedTypes.push(type);
+  return originalDestroyRootRemove.call(this, type, listener, options);
+};
+assert.equal(
+  tableDragDestroyMouseDown(
+    tableDragDestroyView,
+    tableMouseEvent("mousedown", 1),
+  ),
+  false,
+);
+const callsBeforeDestroy = tableDragDestroyCalls;
+tableDragDestroyCase.editor.destroy();
+tableDragDestroyView.root.removeEventListener = originalDestroyRootRemove;
+for (const type of ["mousemove", "mouseup", "dragstart"]) {
+  assert.equal(destroyRemovedTypes.includes(type), true);
+}
+assert.doesNotThrow(() => {
+  tableDragDestroyView.root.dispatchEvent(tableMouseEvent("mousemove", 2));
+});
+assert.equal(tableDragDestroyCalls, callsBeforeDestroy);
+tableDragDestroyCase.element.remove();
+
+const sameCellDragCase = tableActionEditor();
+const sameCellPosition = tableCellPosition(sameCellDragCase.editor, "a1");
+stubTableCoordinates(sameCellDragCase.editor, new Map([[1, sameCellPosition]]));
+const sameCellView = sameCellDragCase.editor.view;
+const sameCellMouseDown = tableMouseDownHandler(sameCellDragCase.editor);
+assert.equal(
+  sameCellMouseDown(sameCellView, tableMouseEvent("mousedown", 1)),
+  false,
+);
+sameCellView.root.dispatchEvent(tableMouseEvent("mousemove", 1));
+assert.equal(sameCellView.state.selection instanceof CellSelection, false);
+sameCellView.root.dispatchEvent(tableMouseEvent("mouseup", 1));
+sameCellDragCase.editor.destroy();
+sameCellDragCase.element.remove();
+
+const crossTableDragCase = tableActionEditor();
+const sharedTableNode = crossTableDragCase.editor.state.doc.firstChild;
+assert.ok(sharedTableNode);
+crossTableDragCase.editor.view.dispatch(
+  crossTableDragCase.editor.state.tr.insert(
+    crossTableDragCase.editor.state.doc.content.size,
+    sharedTableNode,
+  ),
+);
+const crossTableA1 = tableCellPositionAt(crossTableDragCase.editor, 0, 1, 0);
+const crossTableSecondA1 = tableCellPositionAt(crossTableDragCase.editor, 2, 1, 0);
+assert.equal(
+  crossTableDragCase.editor.state.doc.child(0),
+  crossTableDragCase.editor.state.doc.child(2),
+);
+stubTableCoordinates(
+  crossTableDragCase.editor,
+  new Map([
+    [1, crossTableA1],
+    [2, crossTableSecondA1],
+  ]),
+);
+const crossTableView = crossTableDragCase.editor.view;
+const crossTableMouseDown = tableMouseDownHandler(crossTableDragCase.editor);
+assert.equal(
+  crossTableMouseDown(crossTableView, tableMouseEvent("mousedown", 1)),
+  false,
+);
+assert.doesNotThrow(() => {
+  crossTableView.root.dispatchEvent(tableMouseEvent("mousemove", 2));
+});
+assert.equal(crossTableView.state.selection instanceof CellSelection, false);
+crossTableDragCase.editor.destroy();
+crossTableDragCase.element.remove();
+
+const resizeTableCase = tableActionEditor();
+selectTableCell(resizeTableCase.editor, "a1");
+assert.deepEqual(tableDimensions(resizeTableCase.editor), { rows: 3, columns: 2 });
+assert.equal(tableResizeLosesContent(resizeTableCase.editor, 4, 3), false);
+assert.equal(resizeTable(resizeTableCase.editor, 4, 3), true);
+assert.deepEqual(tableDimensions(resizeTableCase.editor), { rows: 4, columns: 3 });
+assert.deepEqual(
+  resizeTableCase.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.textContent),
+  ),
+  [
+    ["A", "B", ""],
+    ["a1", "b1", ""],
+    ["a2", "b2", ""],
+    ["", "", ""],
+  ],
+);
+assert.deepEqual(
+  resizeTableCase.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => cell.type.name),
+  ),
+  [
+    ["tableHeader", "tableHeader", "tableHeader"],
+    ["tableCell", "tableCell", "tableCell"],
+    ["tableCell", "tableCell", "tableCell"],
+    ["tableCell", "tableCell", "tableCell"],
+  ],
+);
+assert.equal(tableResizeLosesContent(resizeTableCase.editor, 3, 2), false);
+assert.equal(tableResizeLosesContent(resizeTableCase.editor, 1, 1), true);
+const resizeUndoBefore = resizeTableCase.editor.storage.markdown.getMarkdown();
+resizeTableCase.editor.view.dispatch(closeHistory(resizeTableCase.editor.state.tr));
+assert.equal(resizeTable(resizeTableCase.editor, 1, 1), true);
+assert.deepEqual(tableDimensions(resizeTableCase.editor), { rows: 1, columns: 1 });
+assert.equal(resizeTableCase.editor.state.doc.firstChild.textContent, "A");
+let resizeUndoCount = 0;
+while (
+  resizeTableCase.editor.storage.markdown.getMarkdown() !== resizeUndoBefore &&
+  resizeTableCase.editor.commands.undo()
+) {
+  resizeUndoCount += 1;
+}
+assert.equal(resizeUndoCount, 1);
+resizeTableCase.editor.destroy();
+resizeTableCase.element.remove();
+
+const colspanResizeCase = tableActionEditor();
+colspanResizeCase.editor.commands.setContent({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              attrs: { colspan: 2 },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "A" }] }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "B" }] }] },
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "C" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+selectTableCell(colspanResizeCase.editor, "A");
+assert.deepEqual(tableDimensions(colspanResizeCase.editor), { rows: 2, columns: 2 });
+assert.equal(resizeTable(colspanResizeCase.editor, 2, 1), true);
+assert.deepEqual(
+  colspanResizeCase.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => ({ type: cell.type.name, colspan: cell.attrs.colspan })),
+  ),
+  [
+    [{ type: "tableHeader", colspan: 1 }],
+    [{ type: "tableCell", colspan: 1 }],
+  ],
+);
+colspanResizeCase.editor.destroy();
+colspanResizeCase.element.remove();
+
+const rowspanResizeCase = tableActionEditor();
+rowspanResizeCase.editor.commands.setContent({
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              attrs: { rowspan: 2 },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "A" }] }],
+            },
+            { type: "tableHeader", content: [{ type: "paragraph", content: [{ type: "text", text: "B" }] }] },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "C" }] }] },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "D" }] }] },
+            { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "E" }] }] },
+          ],
+        },
+      ],
+    },
+  ],
+});
+selectTableCell(rowspanResizeCase.editor, "A");
+assert.deepEqual(tableDimensions(rowspanResizeCase.editor), { rows: 3, columns: 2 });
+assert.equal(resizeTable(rowspanResizeCase.editor, 1, 2), true);
+assert.deepEqual(
+  rowspanResizeCase.editor.state.doc.firstChild.content.content.map((row) =>
+    row.content.content.map((cell) => ({ text: cell.textContent, rowspan: cell.attrs.rowspan })),
+  ),
+  [[{ text: "A", rowspan: 1 }, { text: "B", rowspan: 1 }]],
+);
+rowspanResizeCase.editor.destroy();
+rowspanResizeCase.element.remove();
 
 const tableCase = saveTwice(
   "| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 铅笔 | 2 | 日常使用 |\n| 橡皮 | 1 | 备用 |");

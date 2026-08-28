@@ -1,11 +1,17 @@
 import type { Editor } from "@tiptap/react";
-import { cellAround, CellSelection, TableMap } from "@tiptap/pm/tables";
+import {
+  cellAround,
+  CellSelection,
+  removeColSpan,
+  TableMap,
+} from "@tiptap/pm/tables";
 import { Fragment, type Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { TextSelection, type Selection } from "@tiptap/pm/state";
+import { TextSelection, type Selection, type Transaction } from "@tiptap/pm/state";
 
 export type TableClearAxis = "row" | "column";
 export type TableAlignment = "left" | "center" | "right" | null;
 export type TableMatrix = string[][];
+export type TableDimensions = { rows: number; columns: number };
 
 export function shouldInterceptTablePaste(parentTypeName: string): boolean {
   return parentTypeName !== "codeBlock";
@@ -81,6 +87,9 @@ export function tableMatrixFromClipboard(
   if (html) {
     const htmlMatrix = tableMatrixFromHtml(html, ownerDocument);
     if (htmlMatrix) return htmlMatrix;
+    const container = ownerDocument.createElement("div");
+    container.innerHTML = html;
+    if (container.querySelector("table img")) return null;
   }
   return tableMatrixFromText(text);
 }
@@ -189,6 +198,240 @@ function tableCoordinatesFromState(state: TableState) {
 
 function tableCoordinates(editor: Editor) {
   return tableCoordinatesFromState(editor.state);
+}
+
+export function tableDimensions(editor: Editor): TableDimensions | null {
+  const context = tableContext(editor);
+  if (!context) return null;
+  return {
+    rows: context.tableMap.height,
+    columns: context.tableMap.width,
+  };
+}
+
+function cellHasContent(cell: ProseMirrorNode): boolean {
+  let hasContent = false;
+  cell.descendants((node) => {
+    if (node.isText || node.isLeaf) {
+      hasContent = true;
+      return false;
+    }
+    return !hasContent;
+  });
+  return hasContent;
+}
+
+export function tableResizeLosesContent(
+  editor: Editor,
+  rows: number,
+  columns: number,
+): boolean {
+  if (
+    !Number.isInteger(rows) ||
+    !Number.isInteger(columns) ||
+    rows < 1 ||
+    columns < 1
+  ) {
+    return false;
+  }
+  const context = tableContext(editor);
+  if (!context) return false;
+  if (rows >= context.tableMap.height && columns >= context.tableMap.width) {
+    return false;
+  }
+
+  const checked = new Set<number>();
+  for (let row = 0; row < context.tableMap.height; row += 1) {
+    for (let column = 0; column < context.tableMap.width; column += 1) {
+      const position = context.tableMap.map[row * context.tableMap.width + column];
+      if (checked.has(position)) continue;
+      checked.add(position);
+      const cellRect = context.tableMap.findCell(position);
+      if (cellRect.top < rows && cellRect.left < columns) continue;
+      const cell = context.table.nodeAt(position);
+      if (cell && cellHasContent(cell)) return true;
+    }
+  }
+  return false;
+}
+
+type TableTransformContext = {
+  tableStart: number;
+  table: ProseMirrorNode;
+  tableMap: TableMap;
+};
+
+function removeTableColumn(
+  transaction: Transaction,
+  context: TableTransformContext,
+  column: number,
+) {
+  const mapStart = transaction.mapping.maps.length;
+  for (let row = 0; row < context.tableMap.height; ) {
+    const index = row * context.tableMap.width + column;
+    const position = context.tableMap.map[index];
+    const cell = context.table.nodeAt(position);
+    if (!cell) return false;
+    const attrs = cell.attrs;
+    const spansAdjacentColumn =
+      (column > 0 && context.tableMap.map[index - 1] === position) ||
+      (column < context.tableMap.width - 1 &&
+        context.tableMap.map[index + 1] === position);
+    if (spansAdjacentColumn) {
+      transaction.setNodeMarkup(
+        transaction.mapping.slice(mapStart).map(context.tableStart + position),
+        null,
+        removeColSpan(
+          attrs as Parameters<typeof removeColSpan>[0],
+          column - context.tableMap.colCount(position),
+        ),
+      );
+    } else {
+      const start = transaction.mapping
+        .slice(mapStart)
+        .map(context.tableStart + position);
+      transaction.delete(start, start + cell.nodeSize);
+    }
+    row += attrs.rowspan;
+  }
+  return true;
+}
+
+function removeTableRow(
+  transaction: Transaction,
+  context: TableTransformContext,
+  row: number,
+) {
+  let rowPosition = 0;
+  for (let index = 0; index < row; index += 1) {
+    rowPosition += context.table.child(index).nodeSize;
+  }
+  const nextRowPosition = rowPosition + context.table.child(row).nodeSize;
+  const mapStart = transaction.mapping.maps.length;
+  transaction.delete(
+    rowPosition + context.tableStart,
+    nextRowPosition + context.tableStart,
+  );
+
+  const seen = new Set<number>();
+  for (
+    let column = 0, index = row * context.tableMap.width;
+    column < context.tableMap.width;
+    column += 1, index += 1
+  ) {
+    const position = context.tableMap.map[index];
+    if (seen.has(position)) continue;
+    seen.add(position);
+    if (
+      row > 0 &&
+      position === context.tableMap.map[index - context.tableMap.width]
+    ) {
+      const cell = context.table.nodeAt(position);
+      if (!cell) return false;
+      transaction.setNodeMarkup(
+        transaction.mapping.slice(mapStart).map(context.tableStart + position),
+        null,
+        { ...cell.attrs, rowspan: cell.attrs.rowspan - 1 },
+      );
+      column += cell.attrs.colspan - 1;
+    } else if (
+      row < context.tableMap.height - 1 &&
+      position === context.tableMap.map[index + context.tableMap.width]
+    ) {
+      const cell = context.table.nodeAt(position);
+      if (!cell) return false;
+      const copy = cell.type.create(
+        { ...cell.attrs, rowspan: cell.attrs.rowspan - 1 },
+        cell.content,
+      );
+      const insertPosition = context.tableMap.positionAt(row + 1, column, context.table);
+      transaction.insert(
+        transaction.mapping.slice(mapStart).map(context.tableStart + insertPosition),
+        copy,
+      );
+      column += cell.attrs.colspan - 1;
+    }
+  }
+  return true;
+}
+
+export function resizeTable(
+  editor: Editor,
+  rows: number,
+  columns: number,
+): boolean {
+  if (
+    !Number.isInteger(rows) ||
+    !Number.isInteger(columns) ||
+    rows < 1 ||
+    columns < 1
+  ) {
+    return false;
+  }
+  const context = tableContext(editor);
+  if (!context) return false;
+  const currentRows = context.tableMap.height;
+  const currentColumns = context.tableMap.width;
+  if (rows === currentRows && columns === currentColumns) return false;
+
+  const tablePosition = context.tableStart - 1;
+  const selectedCell =
+    editor.state.selection instanceof CellSelection
+      ? editor.state.selection.$headCell
+      : cellAround(editor.state.selection.$head);
+  const selectedRect = selectedCell
+    ? context.tableMap.findCell(selectedCell.pos - context.tableStart)
+    : { top: 0, left: 0 };
+  editor.commands.focus();
+  const transaction = editor.state.tr;
+  let table = transaction.doc.nodeAt(tablePosition);
+  if (!table || table.type.name !== "table") return false;
+
+  let tableMap = TableMap.get(table);
+  for (let row = tableMap.height - 1; row >= rows; row -= 1) {
+    if (!removeTableRow(transaction, { tableStart: context.tableStart, table, tableMap }, row)) {
+      return false;
+    }
+    table = transaction.doc.nodeAt(tablePosition);
+    if (!table || table.type.name !== "table") return false;
+    tableMap = TableMap.get(table);
+  }
+
+  for (let column = tableMap.width - 1; column >= columns; column -= 1) {
+    if (!removeTableColumn(transaction, { tableStart: context.tableStart, table, tableMap }, column)) {
+      return false;
+    }
+    table = transaction.doc.nodeAt(tablePosition);
+    if (!table || table.type.name !== "table") return false;
+    tableMap = TableMap.get(table);
+  }
+
+  const rowsToAdd = Math.max(0, rows - tableMap.height);
+  const columnsToAdd = Math.max(0, columns - tableMap.width);
+  const expandedRows = appendTableRows(table, rowsToAdd);
+  if (!expandedRows) return false;
+  const expandedTable = appendTableColumns(expandedRows, columnsToAdd);
+  if (!expandedTable) return false;
+  if (expandedTable !== table) {
+    transaction.replaceWith(
+      tablePosition,
+      tablePosition + table.nodeSize,
+      expandedTable,
+    );
+    table = expandedTable;
+    tableMap = TableMap.get(table);
+  }
+
+  const row = Math.min(selectedRect.top, tableMap.height - 1);
+  const column = Math.min(selectedRect.left, tableMap.width - 1);
+  const cellPosition =
+    tablePosition + 1 + tableMap.map[row * tableMap.width + column];
+  transaction.setSelection(
+    TextSelection.near(transaction.doc.resolve(cellPosition + 2)),
+  );
+  if (!transaction.docChanged) return false;
+  editor.view.dispatch(transaction);
+  return true;
 }
 
 function appendTableRows(

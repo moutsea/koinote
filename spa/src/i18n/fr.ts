@@ -1663,6 +1663,9 @@ export const fr: Messages = {
       taskList: "Liste de tâches",
       table: "Insérer un tableau",
       tableActions: "Actions du tableau",
+      tableResize: "Redimensionner le tableau",
+      tableResizeWarning:
+        "Redimensionner le tableau en {rows} × {columns} ? Le contenu hors de la nouvelle zone sera supprimé.",
       tableAddRowBefore: "Ajouter une ligne au-dessus",
       tableAddRow: "Ajouter une ligne en dessous",
       tableAddColumnBefore: "Ajouter une colonne à gauche",

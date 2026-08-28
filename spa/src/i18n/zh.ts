@@ -1538,6 +1538,9 @@ export const zh: Messages = {
       taskList: "任务列表",
       table: "插入表格",
       tableActions: "表格操作",
+      tableResize: "修改表格尺寸",
+      tableResizeWarning:
+        "将表格调整为 {rows} × {columns}，超出范围的单元格内容将被清除。是否继续？",
       tableAddRowBefore: "在上方添加行",
       tableAddRow: "在下方添加行",
       tableAddColumnBefore: "在左侧添加列",

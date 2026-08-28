@@ -1615,6 +1615,9 @@ export const ja: Messages = {
       taskList: "タスクリスト",
       table: "表を挿入",
       tableActions: "表の操作",
+      tableResize: "表のサイズを変更",
+      tableResizeWarning:
+        "表を {rows} × {columns} に変更しますか？範囲外のセル内容は削除されます。",
       tableAddRowBefore: "上に行を追加",
       tableAddRow: "下に行を追加",
       tableAddColumnBefore: "左に列を追加",

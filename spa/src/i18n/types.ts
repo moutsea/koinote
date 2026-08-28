@@ -1112,6 +1112,8 @@ export interface Messages {
       taskList: string;
       table: string;
       tableActions: string;
+      tableResize: string;
+      tableResizeWarning: string;
       tableAddRowBefore: string;
       tableAddRow: string;
       tableAddColumnBefore: string;
