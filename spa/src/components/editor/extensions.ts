@@ -15,6 +15,7 @@ import { BlockMarkdownImage } from "./markdownImage";
 import { markdownMathPlugin } from "./markdownMath";
 import { PageSearchExtension } from "./pageSearch";
 import { MarkdownTable } from "./markdownTable";
+import { InlineCode } from "./inlineCode";
 
 /**
  * TipTap 扩展集合 —— Typora 式所见即所得的地基。
@@ -32,8 +33,10 @@ export function createEditorExtensions(placeholder: string) {
   return [
     StarterKit.configure({
       // 用带高亮的代码块替换 StarterKit 内置的
+      code: false,
       codeBlock: false,
     }),
+    InlineCode,
     PageSearchExtension,
     CodeBlockLowlight.configure({
       lowlight,
