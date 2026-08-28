@@ -383,6 +383,7 @@ function TableResizePicker({ editor }: { editor: Editor }) {
 export function TableContextToolbar({ editor }: { editor: Editor | null }) {
   const { t } = useI18n();
   const [layout, setLayout] = useState<TableLayout | null>(null);
+  const [toolbarHovered, setToolbarHovered] = useState(false);
 
   const refreshLayout = useCallback(() => {
     if (!editor) {
@@ -400,6 +401,26 @@ export function TableContextToolbar({ editor }: { editor: Editor | null }) {
   useLayoutEffect(() => {
     refreshLayout();
   }, [refreshLayout]);
+
+  useEffect(() => {
+    if (!layout) {
+      setToolbarHovered(false);
+      return;
+    }
+    const handlePointerMove = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      const isToolbarTarget = Boolean(
+        target?.closest?.('[data-table-context-toolbar="true"]'),
+      );
+      setToolbarHovered((previous) =>
+        previous === isToolbarTarget ? previous : isToolbarTarget,
+      );
+    };
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: true,
+    });
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, [layout]);
 
   useEffect(() => {
     if (!editor) return;
@@ -437,6 +458,7 @@ export function TableContextToolbar({ editor }: { editor: Editor | null }) {
   return (
     <>
       <div
+        data-table-context-toolbar="true"
         role="toolbar"
         aria-label={t.editor.toolbar.tableActions}
         style={{
@@ -562,6 +584,7 @@ export function TableContextToolbar({ editor }: { editor: Editor | null }) {
           left: layout.columnSelectX,
           top: layout.columnSelectY,
           width: layout.columnSelectWidth,
+          zIndex: toolbarHovered ? 49 : 51,
         }}
         className="pointer-events-auto fixed z-50 flex h-6 items-center justify-center rounded-md border border-black/10 bg-[var(--background)]/95 text-neutral-500 shadow-sm transition hover:border-cinnabar-300 hover:bg-cinnabar-50 hover:text-cinnabar-700 dark:border-white/15 dark:text-neutral-400 dark:hover:border-cinnabar-500/60 dark:hover:bg-cinnabar-950/60 dark:hover:text-cinnabar-300"
         onClick={() => selectCurrentTableColumn(editor)}
