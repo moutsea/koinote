@@ -34,7 +34,7 @@ const [
   { Fragment },
   { closeHistory },
   { Markdown },
-  { MarkdownTable, shouldDelegateTableMouseDown },
+  { MarkdownTable, isPrimaryTableDragButtonPressed, shouldDelegateTableMouseDown },
   { BlockMarkdownImage, normalizeLegacyImageAdjacentHeadings },
   {
     clearSelectedTableCells,
@@ -186,13 +186,19 @@ function tableCellPositionAt(editor, tableIndex, rowIndex, cellIndex) {
   return cellStart;
 }
 
-function tableMouseEvent(type, clientX, clientY = 0) {
+function tableMouseEvent(
+  type,
+  clientX,
+  clientY = 0,
+  buttons = type === "mouseup" || type === "dragstart" ? 0 : 1,
+) {
   const event = new baseWindow.Event(type, {
     bubbles: true,
     cancelable: true,
   });
   Object.defineProperties(event, {
     button: { value: 0 },
+    buttons: { value: buttons },
     clientX: { value: clientX },
     clientY: { value: clientY },
     shiftKey: { value: false },
@@ -293,6 +299,10 @@ assert.equal(
   shouldDelegateTableMouseDown({ button: 0, shiftKey: false, metaKey: true }),
   true,
 );
+assert.equal(isPrimaryTableDragButtonPressed({ buttons: 1 }), true);
+assert.equal(isPrimaryTableDragButtonPressed({ buttons: 0 }), false);
+assert.equal(isPrimaryTableDragButtonPressed({ buttons: 2 }), false);
+assert.equal(isPrimaryTableDragButtonPressed({ buttons: 3 }), true);
 assert.match(markdownTableSource, /handleTableDragMouseDown\(view, mouseEvent\)/);
 assert.match(markdownTableSource, /inSameTable\(anchorCell, headCell\)/);
 assert.doesNotMatch(markdownTableSource, /headCell\.node\(-1\) !== anchorCell\.node\(-1\)/);
@@ -1006,6 +1016,34 @@ assert.equal(sameCellView.state.selection instanceof CellSelection, false);
 sameCellView.root.dispatchEvent(tableMouseEvent("mouseup", 1));
 sameCellDragCase.editor.destroy();
 sameCellDragCase.element.remove();
+
+const releasedPointerDragCase = tableActionEditor();
+const releasedPointerA1 = tableCellPosition(releasedPointerDragCase.editor, "a1");
+const releasedPointerB2 = tableCellPosition(releasedPointerDragCase.editor, "b2");
+stubTableCoordinates(
+  releasedPointerDragCase.editor,
+  new Map([
+    [1, releasedPointerA1],
+    [2, releasedPointerB2],
+  ]),
+);
+const releasedPointerView = releasedPointerDragCase.editor.view;
+const releasedPointerMouseDown = tableMouseDownHandler(releasedPointerDragCase.editor);
+assert.equal(
+  releasedPointerMouseDown(
+    releasedPointerView,
+    tableMouseEvent("mousedown", 1),
+  ),
+  false,
+);
+releasedPointerView.root.dispatchEvent(tableMouseEvent("mousemove", 2, 0, 0));
+assert.equal(releasedPointerView.state.selection instanceof CellSelection, false);
+releasedPointerView.root.dispatchEvent(tableMouseEvent("mousemove", 2, 0, 1));
+assert.equal(releasedPointerView.state.selection instanceof CellSelection, false);
+assert.equal(tableEditingKey.getState(releasedPointerView.state), null);
+releasedPointerView.root.dispatchEvent(tableMouseEvent("mouseup", 2));
+releasedPointerDragCase.editor.destroy();
+releasedPointerDragCase.element.remove();
 
 const crossTableDragCase = tableActionEditor();
 const sharedTableNode = crossTableDragCase.editor.state.doc.firstChild;

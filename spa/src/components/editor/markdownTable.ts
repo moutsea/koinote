@@ -122,6 +122,10 @@ export function shouldDelegateTableMouseDown(event: {
   return event.button !== 0 || event.shiftKey || Boolean(event.ctrlKey || event.metaKey);
 }
 
+export function isPrimaryTableDragButtonPressed(event: { buttons: number }): boolean {
+  return (event.buttons & 1) !== 0;
+}
+
 function tableCellAtPoint(view: EditorView, event: MouseEvent) {
   const position = view.posAtCoords({
     left: event.clientX,
@@ -166,6 +170,10 @@ function handleTableDragMouseDown(view: EditorView, event: MouseEvent): boolean 
       return;
     }
     const mouseEvent = moveEvent as MouseEvent;
+    if (!isPrimaryTableDragButtonPressed(mouseEvent)) {
+      cleanup();
+      return;
+    }
     const headCell = tableCellAtPoint(view, mouseEvent);
     if (!headCell || !inSameTable(anchorCell, headCell)) {
       return;
