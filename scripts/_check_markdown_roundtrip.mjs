@@ -278,6 +278,22 @@ assert.match(markdownEditorSource, /tableSelectionToMarkdown\(instance, slice\)/
 assert.match(tableContextToolbarSource, /const TABLE_RESIZE_PICKER_SIZE = 8/);
 assert.match(tableContextToolbarSource, /role="grid" aria-label=\{t\.editor\.toolbar\.tableResize\}/);
 assert.match(tableContextToolbarSource, /data-table-resize-row=\{row\}/);
+assert.match(
+  tableContextToolbarSource,
+  /label=\{t\.editor\.toolbar\.tableAddRowBefore\}[\s\S]*?<BetweenVerticalStart className="h-4 w-4" \/>/,
+);
+assert.match(
+  tableContextToolbarSource,
+  /label=\{t\.editor\.toolbar\.tableAddRow\}[\s\S]*?<BetweenVerticalEnd className="h-4 w-4" \/>/,
+);
+assert.match(
+  tableContextToolbarSource,
+  /label=\{t\.editor\.toolbar\.tableAddColumnBefore\}[\s\S]*?<BetweenHorizontalStart className="h-4 w-4" \/>/,
+);
+assert.match(
+  tableContextToolbarSource,
+  /label=\{t\.editor\.toolbar\.tableAddColumn\}[\s\S]*?<BetweenHorizontalEnd className="h-4 w-4" \/>/,
+);
 assert.doesNotMatch(tableContextToolbarSource, /type="number"/);
 assert.match(
   tableContextToolbarSource,

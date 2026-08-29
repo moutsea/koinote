@@ -472,29 +472,30 @@ export function TableContextToolbar({ editor }: { editor: Editor | null }) {
         className="pointer-events-auto fixed z-50 flex flex-wrap items-center justify-center gap-0.5 rounded-xl border border-black/10 bg-[var(--background)]/95 p-1 shadow-lg backdrop-blur dark:border-white/15"
       >
         <TableResizePicker editor={editor} />
+        {/* Keep these directions aligned with the visible labels: VerticalStart/End are the above/below row icons, and HorizontalStart/End are the left/right column icons. */}
         <ActionButton
           label={t.editor.toolbar.tableAddRowBefore}
           onClick={() => run(() => editor.commands.addRowBefore())}
         >
-          <BetweenHorizontalStart className="h-4 w-4" />
+          <BetweenVerticalStart className="h-4 w-4" />
         </ActionButton>
         <ActionButton
           label={t.editor.toolbar.tableAddRow}
           onClick={() => run(() => editor.commands.addRowAfter())}
         >
-          <BetweenHorizontalEnd className="h-4 w-4" />
+          <BetweenVerticalEnd className="h-4 w-4" />
         </ActionButton>
         <ActionButton
           label={t.editor.toolbar.tableAddColumnBefore}
           onClick={() => run(() => editor.commands.addColumnBefore())}
         >
-          <BetweenVerticalStart className="h-4 w-4" />
+          <BetweenHorizontalStart className="h-4 w-4" />
         </ActionButton>
         <ActionButton
           label={t.editor.toolbar.tableAddColumn}
           onClick={() => run(() => editor.commands.addColumnAfter())}
         >
-          <BetweenVerticalEnd className="h-4 w-4" />
+          <BetweenHorizontalEnd className="h-4 w-4" />
         </ActionButton>
         <span aria-hidden className="mx-1 h-5 w-px bg-black/10 dark:bg-white/15" />
         <ActionButton
