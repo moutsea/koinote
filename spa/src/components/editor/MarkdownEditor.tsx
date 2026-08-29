@@ -37,11 +37,13 @@ import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { cellAround, CellSelection } from "@tiptap/pm/tables";
 import { TextSelection } from "@tiptap/pm/state";
 import {
-  ArrowLeft,
-  ArrowUp,
   AlignCenter,
   AlignLeft,
   AlignRight,
+  BetweenHorizontalEnd,
+  BetweenHorizontalStart,
+  BetweenVerticalEnd,
+  BetweenVerticalStart,
   Eraser,
   PanelTop,
   TableColumnsSplit,
@@ -557,28 +559,28 @@ export default function MarkdownEditor({
       {
         key: "add-row-before",
         label: t.editor.toolbar.tableAddRowBefore,
-        icon: <ArrowUp className="h-4 w-4" />,
+        icon: <BetweenVerticalStart className="h-4 w-4" />,
         onSelect: () => editor.chain().focus().addRowBefore().run(),
         disabled: !editor.can().addRowBefore(),
       },
       {
         key: "add-row",
         label: t.editor.toolbar.tableAddRow,
-        icon: <TableRowsSplit className="h-4 w-4" />,
+        icon: <BetweenVerticalEnd className="h-4 w-4" />,
         onSelect: () => editor.chain().focus().addRowAfter().run(),
         disabled: !editor.can().addRowAfter(),
       },
       {
         key: "add-column-before",
         label: t.editor.toolbar.tableAddColumnBefore,
-        icon: <ArrowLeft className="h-4 w-4" />,
+        icon: <BetweenHorizontalStart className="h-4 w-4" />,
         onSelect: () => editor.chain().focus().addColumnBefore().run(),
         disabled: !editor.can().addColumnBefore(),
       },
       {
         key: "add-column",
         label: t.editor.toolbar.tableAddColumn,
-        icon: <TableColumnsSplit className="h-4 w-4" />,
+        icon: <BetweenHorizontalEnd className="h-4 w-4" />,
         onSelect: () => editor.chain().focus().addColumnAfter().run(),
         disabled: !editor.can().addColumnAfter(),
       },

@@ -268,7 +268,13 @@ assert.match(
   /MarkdownTable\.configure\([\s\S]*?\),\s*TableRow,\s*TableHeader,\s*TableCell,/,
 );
 assert.match(markdownEditorSource, /<TableContextToolbar editor=\{editor\} \/>/);
+assert.match(markdownEditorSource, /key: "add-row-before"[\s\S]*?icon: <BetweenVerticalStart className="h-4 w-4" \/>/);
+assert.match(markdownEditorSource, /key: "add-row"[\s\S]*?icon: <BetweenVerticalEnd className="h-4 w-4" \/>/);
+assert.match(markdownEditorSource, /key: "add-column-before"[\s\S]*?icon: <BetweenHorizontalStart className="h-4 w-4" \/>/);
+assert.match(markdownEditorSource, /key: "add-column"[\s\S]*?icon: <BetweenHorizontalEnd className="h-4 w-4" \/>/);
 assert.match(editorToolbarSource, /useEditorState\(/);
+assert.match(editorToolbarSource, /label: labels\.addRow[\s\S]*?icon: <BetweenVerticalEnd className="h-4 w-4" \/>/);
+assert.match(editorToolbarSource, /label: labels\.addColumn[\s\S]*?icon: <BetweenHorizontalEnd className="h-4 w-4" \/>/);
 assert.match(editorToolbarSource, /const tableActive[\s\S]*isActive\("table"\)/);
 assert.match(
   markdownEditorSource,
