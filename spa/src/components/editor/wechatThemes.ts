@@ -1,5 +1,5 @@
 /**
- * 微信公众号主题，15 套 × 浅色/深色两个变体。
+ * 微信公众号主题，20 套 × 浅色/深色两个变体。
  *
  * ┌─ 新增主题的硬性约束 ────────────────────────────────────────────┐
  * │ 1. rules 与 dark 都必须给。dark 里 body 与 pre 是必填 —— 类型会拦。   │
@@ -74,7 +74,11 @@ export type WechatThemeId =
   | "editorial"
   | "newspaper"
   | "course"
-  | "event";
+  | "event"
+  | "paper"
+  | "signal"
+  | "notes"
+  | "pulse";
 
 /** 分组只用于选择器的分栏展示，不影响导出 */
 export type WechatThemeGroup =
@@ -133,7 +137,7 @@ export type WechatThemeDark = Partial<WechatThemeRules> &
 
 export type WechatTheme = {
   id: WechatThemeId;
-  /** 主题名，四语言共用 —— 风格名不翻译，译了反而认不出 */
+  /** 主题默认名称；界面展示时优先使用 i18n 中的本地化名称 */
   name: string;
   /** 一句话说明适用场景 */
   hint: string;
@@ -196,7 +200,7 @@ const DARK = {
   codeText: "#d4d4d8",
 };
 
-/** 深色下表格与引用的公共写法，15 套里大部分只需要换强调色 */
+/** 深色下表格与引用的公共写法，20 套里大部分只需要换强调色 */
 const darkShared = (accent: string) => ({
   body: `color:${DARK.text};background:${DARK.surface};`,
   pre: `background:${DARK.code};color:${DARK.codeText};`,
@@ -882,10 +886,214 @@ export const WECHAT_THEMES: WechatTheme[] = [
       td: "border-color:#4a2c2c;",
     },
   },
+  {
+    id: "paper",
+    name: "Koinote Paper",
+    hint: "深度长文、人物故事、经验分享",
+    group: "内容出版",
+    rules: {
+      body: `font-family:${SERIF};font-size:16px;line-height:1.92;color:#332b26;background:#fffaf1;padding:20px 16px;`,
+      h1: "font-size:29px;line-height:1.28;font-weight:800;margin:38px 0 26px;color:#2b211c;padding:0 0 16px;border-bottom:4px solid #c76b45;",
+      h2: "font-size:21px;line-height:1.42;font-weight:800;margin:46px 0 16px;color:#3b2921;padding-left:12px;border-left:4px solid #c76b45;",
+      h3: "font-size:18px;line-height:1.5;font-weight:750;margin:32px 0 10px;color:#5a4033;",
+      h4: "font-size:17px;line-height:1.5;font-weight:700;margin:25px 0 8px;color:#725747;",
+      p: "margin:14px 0;line-height:1.92;",
+      blockquote:
+        "margin:24px 0;padding:16px 18px;border:1px solid #ead8c6;border-left:4px solid #c76b45;background:#fff3e4;color:#654b3d;",
+      ul: "margin:14px 0;padding-left:22px;",
+      ol: "margin:14px 0;padding-left:22px;",
+      li: "margin:8px 0;line-height:1.9;",
+      strong: "font-weight:850;color:#2b211c;",
+      em: "font-style:italic;color:#725747;",
+      code: `font-family:${MONO};background:#f4e7d8;color:#7d432c;padding:2px 6px;border-radius:3px;font-size:14px;`,
+      pre: "background:#f4e7d8;color:#4a3024;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.6;border-radius:4px;",
+      "pre code": "background:none;padding:0;color:inherit;",
+      hr: "border:none;border-top:1px solid #d9bda6;margin:36px auto;width:52%;",
+      a: "color:#a94f31;text-decoration:underline;text-decoration-color:#d9a88e;text-underline-offset:3px;",
+      img: IMG + "border-radius:2px;",
+      table: TABLE,
+      th: "border:1px solid #d9bda6;padding:8px 10px;background:#f4e7d8;font-weight:800;text-align:left;color:#4a3024;",
+      td: "border:1px solid #d9bda6;padding:8px 10px;",
+    },
+    dark: {
+      ...darkShared("#e7a078"),
+      body: `color:#e5d9d0;background:${DARK.surface};padding:20px 16px;`,
+      h1: "color:#fff0e5;border-bottom-color:#d9825c;",
+      h2: "color:#f3d2c0;border-left-color:#d9825c;",
+      h3: "color:#dfbda9;",
+      h4: "color:#c7a18c;",
+      blockquote: "background:#211914;border-color:#704331;color:#cbb1a1;",
+      strong: "color:#fff0e5;",
+      em: "color:#c7a18c;",
+      code: "background:#211914;color:#e7a078;",
+      pre: "background:#211914;color:#e5d9d0;",
+      "pre code": "color:#e5d9d0;",
+      a: "color:#e7a078;text-decoration-color:#704331;",
+      hr: "border-color:#4b3328;",
+      th: "background:#211914;border-color:#4b3328;color:#f3d2c0;",
+      td: "border-color:#4b3328;",
+    },
+  },
+  {
+    id: "signal",
+    name: "Koinote Signal",
+    hint: "AI 产品、版本更新、工作流拆解",
+    group: "科技产品",
+    rules: {
+      body: `font-family:${SANS};font-size:16px;line-height:1.78;color:#24334a;background:#f4f8ff;padding:20px 16px;`,
+      h1: "font-size:27px;line-height:1.24;font-weight:850;margin:36px 0 24px;color:#102a43;padding:16px 18px;background:#e5f1ff;border-left:6px solid #1677ff;",
+      h2: "font-size:20px;line-height:1.4;font-weight:820;margin:42px 0 14px;color:#123c66;padding:10px 12px;background:#e8f5ff;border-bottom:2px solid #36b4d8;",
+      h3: "font-size:18px;line-height:1.45;font-weight:800;margin:31px 0 10px;color:#1d5a84;",
+      h4: "font-size:17px;line-height:1.5;font-weight:750;margin:25px 0 8px;color:#34708f;",
+      p: "margin:12px 0;line-height:1.78;",
+      blockquote:
+        "margin:21px 0;padding:14px 16px;background:#fff;border:1px solid #cfe1f2;border-left:4px solid #36b4d8;color:#3c5872;",
+      ul: "margin:12px 0;padding-left:0;list-style:none;",
+      ol: "margin:12px 0;padding-left:22px;",
+      li: "margin:8px 0;line-height:1.76;padding:9px 11px;background:#fff;border:1px solid #dce9f6;border-left:3px solid #1677ff;",
+      strong: "font-weight:850;color:#102a43;background:#dff4ff;",
+      em: "font-style:italic;color:#3c5872;",
+      code: `font-family:${MONO};background:#e4efff;color:#1552a0;padding:2px 6px;border-radius:4px;font-size:14px;`,
+      pre: "background:#102a43;color:#dff4ff;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.6;border-radius:6px;",
+      "pre code": "background:none;padding:0;color:inherit;",
+      hr: "border:none;border-top:2px solid #cfe1f2;margin:32px 0;",
+      a: "color:#1264c4;text-decoration:none;border-bottom:1px solid #9bc4ef;",
+      img: IMG + "border-radius:6px;",
+      table: TABLE,
+      th: "border:1px solid #cfe1f2;padding:8px 10px;background:#e8f5ff;font-weight:800;text-align:left;color:#123c66;",
+      td: "border:1px solid #cfe1f2;padding:8px 10px;",
+    },
+    dark: {
+      ...darkShared("#73c9ff"),
+      body: `color:#d8e4f0;background:${DARK.surface};padding:20px 16px;`,
+      h1: "color:#e8f5ff;background:#142b43;border-left-color:#4cc9e8;",
+      h2: "color:#bfe9ff;background:#152a3c;border-bottom-color:#3b8ca7;",
+      h3: "color:#9ed7f4;",
+      h4: "color:#83b8d3;",
+      blockquote: "background:#14202d;border-color:#3b7186;color:#a9c4d6;",
+      li: "background:#14202d;border-color:#243849;border-left-color:#4c9eff;",
+      strong: "color:#e8f5ff;background:#19384b;",
+      em: "color:#a9c4d6;",
+      code: "background:#142b43;color:#73c9ff;",
+      pre: "background:#101f30;color:#d8e4f0;",
+      "pre code": "color:#d8e4f0;",
+      a: "color:#73c9ff;border-bottom-color:#315f78;",
+      hr: "border-color:#294252;",
+      th: "background:#142b43;border-color:#294252;color:#bfe9ff;",
+      td: "border-color:#294252;",
+    },
+  },
+  {
+    id: "notes",
+    name: "Koinote Notes",
+    hint: "知识卡片、教程清单、学习笔记",
+    group: "中文公众号",
+    rules: {
+      body: `font-family:${SANS};font-size:16px;line-height:1.84;color:#293b34;background:#f4faf6;padding:20px 16px;`,
+      h1: "font-size:26px;line-height:1.3;font-weight:850;margin:36px 0 24px;color:#173c2e;text-align:center;padding:14px 12px;border:1px solid #a8d5bd;background:#e6f5eb;border-radius:10px;",
+      h2: "font-size:20px;line-height:1.44;font-weight:820;margin:42px 0 14px;color:#1f513d;padding:10px 13px;background:#def1e5;border-radius:7px;",
+      h3: "font-size:18px;line-height:1.5;font-weight:800;margin:31px 0 10px;color:#2d694f;",
+      h4: "font-size:17px;line-height:1.5;font-weight:750;margin:25px 0 8px;color:#417760;",
+      p: "margin:12px 0;line-height:1.84;",
+      blockquote:
+        "margin:20px 0;padding:14px 16px;background:#fff;border:1px solid #cfe6d7;border-left:4px solid #4caa73;color:#436352;border-radius:6px;",
+      ul: "margin:12px 0;padding-left:0;list-style:none;",
+      ol: "margin:12px 0;padding-left:22px;",
+      li: "margin:8px 0;line-height:1.8;padding:8px 10px;background:#fff;border:1px solid #dceee2;border-radius:5px;",
+      strong: "font-weight:850;color:#173c2e;background:#e5f5b8;",
+      em: "font-style:italic;color:#436352;",
+      code: `font-family:${MONO};background:#e7f3eb;color:#286344;padding:2px 6px;border-radius:4px;font-size:14px;`,
+      pre: "background:#173c2e;color:#e3f5e9;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.6;border-radius:7px;",
+      "pre code": "background:none;padding:0;color:inherit;",
+      hr: "border:none;border-top:1px dashed #a8d5bd;margin:32px 0;",
+      a: "color:#28784d;text-decoration:none;border-bottom:1px solid #8bc6a4;",
+      img: IMG + "border-radius:7px;",
+      table: TABLE,
+      th: "border:1px solid #cfe6d7;padding:8px 10px;background:#e6f5eb;font-weight:800;text-align:left;color:#1f513d;",
+      td: "border:1px solid #cfe6d7;padding:8px 10px;",
+    },
+    dark: {
+      ...darkShared("#7bd39a"),
+      body: `color:#dcebe1;background:${DARK.surface};padding:20px 16px;`,
+      h1: "color:#e5f7ea;background:#173c2e;border-color:#4caa73;",
+      h2: "color:#c8efd3;background:#19382b;",
+      h3: "color:#a4d8b6;",
+      h4: "color:#86b99a;",
+      blockquote: "background:#15271e;border-color:#3e8e5f;color:#adccb6;",
+      li: "background:#15271e;border-color:#294537;",
+      strong: "color:#e5f7ea;background:#31452d;",
+      em: "color:#adccb6;",
+      code: "background:#173c2e;color:#7bd39a;",
+      pre: "background:#12271d;color:#dcebe1;",
+      "pre code": "color:#dcebe1;",
+      a: "color:#7bd39a;border-bottom-color:#356949;",
+      hr: "border-color:#315440;",
+      th: "background:#173c2e;border-color:#315440;color:#c8efd3;",
+      td: "border-color:#315440;",
+    },
+  },
+  {
+    id: "pulse",
+    name: "Koinote Pulse",
+    hint: "活动预告、观点短文、社区通讯",
+    group: "推荐默认",
+    rules: {
+      body: `font-family:${SANS};font-size:16px;line-height:1.8;color:#34283e;background:#fff7f2;padding:20px 16px;`,
+      h1: "font-size:28px;line-height:1.22;font-weight:900;margin:36px 0 24px;color:#fff;padding:18px 16px;background:#34283e;border-left:7px solid #ff6b55;box-shadow:7px 7px 0 #ffd166;",
+      h2: "font-size:20px;line-height:1.42;font-weight:850;margin:42px 0 14px;color:#34283e;padding:10px 12px;background:#ffe6d9;border-left:4px solid #ff6b55;",
+      h3: "font-size:18px;line-height:1.48;font-weight:820;margin:31px 0 10px;color:#643d61;",
+      h4: "font-size:17px;line-height:1.5;font-weight:780;margin:25px 0 8px;color:#76536f;",
+      p: "margin:12px 0;line-height:1.8;",
+      blockquote:
+        "margin:20px 0;padding:15px 16px;background:#34283e;color:#fff3eb;border-left:0;border-radius:7px;",
+      ul: "margin:12px 0;padding-left:0;list-style:none;",
+      ol: "margin:12px 0;padding-left:22px;",
+      li: "margin:8px 0;line-height:1.78;padding:9px 11px;background:#fff;border:1px solid #f2d7c9;border-left:4px solid #ff6b55;border-radius:4px;",
+      strong: "font-weight:900;color:#34283e;background:#ffd166;",
+      em: "font-style:italic;color:#76536f;",
+      code: `font-family:${MONO};background:#f4ded5;color:#8f3f32;padding:2px 6px;border-radius:4px;font-size:14px;`,
+      pre: "background:#34283e;color:#ffe6d9;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.6;border-radius:7px;",
+      "pre code": "background:none;padding:0;color:inherit;",
+      hr: "border:none;height:3px;background:#ff6b55;margin:32px 0;width:64%;",
+      a: "color:#b23a48;text-decoration:none;border-bottom:2px solid #ffb5a5;",
+      img: IMG + "border-radius:7px;",
+      table: TABLE,
+      th: "border:1px solid #f2d7c9;padding:8px 10px;background:#ffe6d9;font-weight:850;text-align:left;color:#643d61;",
+      td: "border:1px solid #f2d7c9;padding:8px 10px;",
+    },
+    dark: {
+      ...darkShared("#ff9b87"),
+      body: `color:#eee0e8;background:${DARK.surface};padding:20px 16px;`,
+      h1: "color:#fff3eb;background:#34283e;border-left-color:#ff8874;box-shadow:7px 7px 0 #8e6f2f;",
+      h2: "color:#ffe2d5;background:#3a2733;border-left-color:#ff8874;",
+      h3: "color:#e2b3d5;",
+      h4: "color:#c89fbe;",
+      blockquote: "background:#34283e;color:#ffe6d9;",
+      li: "background:#1d191f;border-color:#3d303b;border-left-color:#ff8874;",
+      strong: "color:#34283e;background:#e5b85b;",
+      em: "color:#c89fbe;",
+      code: "background:#34283e;color:#ff9b87;",
+      pre: "background:#241b2b;color:#ffe0d2;",
+      "pre code": "color:#ffe0d2;",
+      a: "color:#ff9b87;border-bottom-color:#70413c;",
+      hr: "background:#ff8874;",
+      th: "background:#34283e;border-color:#4b3548;color:#ffe2d5;",
+      td: "border-color:#4b3548;",
+    },
+  },
 ];
 
 export function findWechatTheme(id: string): WechatTheme {
   return WECHAT_THEMES.find((theme) => theme.id === id) ?? WECHAT_THEMES[0];
+}
+
+/** 返回当前语言的主题名称；未知语言条目回退到主题内置名称。 */
+export function getWechatThemeLabel(
+  id: string,
+  localizedNames?: Readonly<Record<string, string>>,
+): string {
+  const theme = findWechatTheme(id);
+  return localizedNames?.[id] ?? theme.name;
 }
 
 /** 按分组归类，供选择器分栏渲染。空分组不返回。 */

@@ -8,7 +8,7 @@
 import { en } from "./_i18n_bundle.mjs";
 import { zh } from "./_i18n_bundle.mjs";
 import { fr } from "./_i18n_bundle.mjs";
-import { ja } from "./_i18n_bundle.mjs";
+import { ja, WECHAT_THEMES, WECHAT_THEME_GROUPS } from "./_i18n_bundle.mjs";
 
 const LOCALES = { en, zh, fr, ja };
 const LEGAL_KINDS = ["privacy", "terms", "cookies"];
@@ -32,6 +32,26 @@ function eq(label, got, want) {
   else {
     fail += 1;
     console.error(`FAIL  ${label} —— 得到 ${g}，期望 ${w}`);
+  }
+}
+
+// 主题名称和分组同样是界面文案，必须随当前语言切换，不能回退到源码里的英文名。
+for (const [name, messages] of Object.entries(LOCALES)) {
+  for (const theme of WECHAT_THEMES) {
+    const label = messages.editor.wechatThemeNames[theme.id];
+    ok(
+      `${name}.editor.wechatThemeNames.${theme.id} 非空`,
+      typeof label === "string" && label.trim().length > 0,
+      label,
+    );
+  }
+  for (const group of WECHAT_THEME_GROUPS) {
+    const label = messages.editor.wechatThemeGroups[group];
+    ok(
+      `${name}.editor.wechatThemeGroups.${group} 非空`,
+      typeof label === "string" && label.trim().length > 0,
+      label,
+    );
   }
 }
 

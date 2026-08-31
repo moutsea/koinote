@@ -42,10 +42,19 @@ func main() {
 	if cfg.IsProduction() && cfg.LLMCredentialEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 LLM_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.WechatCredentialEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 WECHAT_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
 	if err := cfg.ValidateStripeConfig(); err != nil {
 		log.Fatal(err)
 	}
 	if err := cfg.ValidateAgentLLMConfig(); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.ValidateWechatCoverImageConfig(); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.ValidateWechatAPIProxyConfig(); err != nil {
 		log.Fatal(err)
 	}
 	if err := cfg.ValidateFeishuConfig(); err != nil {
@@ -72,6 +81,11 @@ func main() {
 		log.Printf("AI 优化内置模型已启用（protocol=%s model=%s）", cfg.AgentLLMProtocol, cfg.AgentLLMModel)
 	} else {
 		log.Printf("AI 优化内置模型未配置，BYOK 渠道仍可使用")
+	}
+	if cfg.WechatCoverImageEnabled() {
+		log.Printf("微信公众号封面生成已启用（model=%s）", cfg.WechatCoverImageModel)
+	} else {
+		log.Printf("微信公众号封面生成未配置")
 	}
 	if cfg.FeishuEnabled() {
 		log.Printf("飞书付款通知已启用")

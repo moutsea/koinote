@@ -136,7 +136,7 @@ eq("不匹配后缀相同的假属性", backgroundFrom("xbackground:#fff;"), nul
 //
 // 这不是假想的输入：深色变体就是「浅色声明 + 深色声明」拼出来的
 // （resolveThemeRules），pre 的声明串里必然有两个 background。取第一个会把
-// 15 套主题的深色变体全判成浅底 —— 高亮配色整套错，Mac 窗口标题栏也用错底色。
+// 所有主题的深色变体全判成浅底 —— 高亮配色整套错，Mac 窗口标题栏也用错底色。
 eq(
   "多个 background 取最后一个",
   backgroundFrom("background:#f2f2f2;color:#111;background:#17171b;"),

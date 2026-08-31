@@ -66,6 +66,13 @@ ok(
   "只检查 SQLite 待同步数会漏掉仍在 800ms 防抖窗口内的内容",
 );
 ok(
+  "初次灌入正文不触发保存",
+  /editor\.commands\.setContent\(normalizedContent,\s*\{\s*emitUpdate:\s*false\s*\}\)/.test(
+    bareMarkdownEditor,
+  ),
+  "解析服务端 Markdown 不能被误判成用户编辑，否则任务列表等结构会在路由切换时被重复写回",
+);
+ok(
   "保存失败返回 false 且保留 dirty",
   /catch\s*\([^)]*\)\s*\{[\s\S]{0,1200}["']failed["'][\s\S]{0,500}return false/.test(bareSaver),
   "失败不能被吞成成功",

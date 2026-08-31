@@ -146,6 +146,6 @@ for (const locale of ["zh", "en", "ja", "fr"]) {
 }
 
 const legalPage = read("spa/src/pages/LegalPage.tsx");
-assert.match(legalPage, /const UPDATED = "2026-08-23"/);
+assert.match(legalPage, /const UPDATED = "2026-08-30"/);
 
 console.log("feedback wiring: ok");

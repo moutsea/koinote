@@ -363,7 +363,8 @@ var documentThemes = map[string]bool{
 	"": true, "minimal": true, "medium": true, "wired": true, "verge": true,
 	"stripe": true, "apple": true, "ft": true, "linear": true, "github": true,
 	"notion": true, "magazine": true, "editorial": true, "newspaper": true,
-	"course": true, "event": true,
+	"course": true, "event": true, "paper": true, "signal": true,
+	"notes": true, "pulse": true,
 }
 
 const defaultDocumentTheme = "minimal"

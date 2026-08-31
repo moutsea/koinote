@@ -527,12 +527,12 @@ export function createAgentCreditsCheckout(
   return apiJson<{ sessionId: string; url: string }>(
     "/api/agent/credits/checkout",
     {
-    method: "POST",
-    body: JSON.stringify({
-      packCode,
-      currency,
-      client: isDesktopRuntime() ? "desktop" : "web",
-    }),
+      method: "POST",
+      body: JSON.stringify({
+        packCode,
+        currency,
+        client: isDesktopRuntime() ? "desktop" : "web",
+      }),
     },
   );
 }
@@ -659,6 +659,145 @@ export function updateWechatGeoSummary(
     {
       method: "PUT",
       body: JSON.stringify(changes),
+    },
+  );
+}
+
+export type WechatOfficialAccount = {
+  accountId: string;
+  label: string;
+  appId: string;
+  secretHint: string;
+  isDefault: boolean;
+  verifiedAt: string;
+  updatedAt: string;
+};
+
+export type WechatCoverRatio = "2.35:1" | "1:1";
+export type WechatCoverMode = "default" | "article" | "ai";
+
+export type WechatGeneratedCover = {
+  base64: string;
+  mimeType: "image/jpeg";
+  ratio: WechatCoverRatio;
+  width: number;
+  height: number;
+};
+
+export function getWechatOfficialAccount() {
+  return apiJson<{ account: WechatOfficialAccount | null }>(
+    "/api/wechat/account",
+  );
+}
+
+export function getWechatOfficialAccounts() {
+  return apiJson<{ accounts: WechatOfficialAccount[]; maxCount: number }>(
+    "/api/wechat/accounts",
+  );
+}
+
+export function createWechatOfficialAccount(input: {
+  label: string;
+  appId: string;
+  appSecret: string;
+}) {
+  return apiJson<{ account: WechatOfficialAccount }>("/api/wechat/accounts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateWechatOfficialAccountById(
+  accountId: string,
+  input: { label: string; appId: string; appSecret?: string },
+) {
+  return apiJson<{ account: WechatOfficialAccount }>(
+    `/api/wechat/accounts/${encodeURIComponent(accountId)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+}
+
+export function deleteWechatOfficialAccountById(accountId: string) {
+  return apiJson<{ success: boolean; defaultAccountId: string }>(
+    `/api/wechat/accounts/${encodeURIComponent(accountId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function setDefaultWechatOfficialAccount(accountId: string) {
+  return apiJson<{ account: WechatOfficialAccount }>(
+    `/api/wechat/accounts/${encodeURIComponent(accountId)}/default`,
+    { method: "PUT" },
+  );
+}
+
+export function updateWechatOfficialAccount(input: {
+  appId: string;
+  appSecret: string;
+}) {
+  return apiJson<{ account: WechatOfficialAccount }>("/api/wechat/account", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteWechatOfficialAccount() {
+  return apiJson<{ success: boolean }>("/api/wechat/account", {
+    method: "DELETE",
+  });
+}
+
+export function generateWechatCover(
+  prompt: string,
+  ratio: WechatCoverRatio,
+  signal?: AbortSignal,
+) {
+  return apiJson<{ cover: WechatGeneratedCover }>(
+    "/api/wechat/cover/generate",
+    {
+      method: "POST",
+      body: JSON.stringify({ prompt, ratio }),
+      signal,
+    },
+  );
+}
+
+export async function prepareWechatDraftDocument(docId: string): Promise<void> {
+  const desktopStore = isDesktopRuntime()
+    ? await import("./desktop/offlineStore")
+    : null;
+  if (
+    desktopStore &&
+    !(await desktopStore.desktopPrepareDocumentForRemoteMutation(docId))
+  ) {
+    throw new ApiError(
+      409,
+      "Document must finish syncing before it can be sent to WeChat",
+      "desktop_wechat_sync_required",
+    );
+  }
+}
+
+export async function createWechatDraft(
+  docId: string,
+  input: {
+    accountId?: string;
+    title: string;
+    author?: string;
+    digest?: string;
+    html: string;
+    coverMode?: WechatCoverMode;
+    coverBase64?: string;
+    coverRatio?: WechatCoverRatio;
+    coverImageSource?: string;
+  },
+) {
+  await prepareWechatDraftDocument(docId);
+  return apiJson<{ draft: { mediaId: string } }>(
+    `/api/documents/${encodeURIComponent(docId)}/wechat-draft`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
     },
   );
 }
@@ -1430,7 +1569,7 @@ export async function createShare(
               "Desktop share cache failure could not be reported",
               reportError,
             ),
-        );
+          );
       });
   }
   return result;
@@ -1458,16 +1597,16 @@ export async function revokeShare(docId: string) {
     await desktopStore
       .desktopAcceptDocumentShare(docId, null)
       .catch((error) => {
-      console.warn("Desktop share state could not be cleared", error);
+        console.warn("Desktop share state could not be cleared", error);
         void desktopStore
           .desktopReportSyncError("desktop_share_cache_failed")
           .catch((reportError) =>
-          console.warn(
-            "Desktop share cache failure could not be reported",
-            reportError,
-          ),
-      );
-    });
+            console.warn(
+              "Desktop share cache failure could not be reported",
+              reportError,
+            ),
+          );
+      });
   }
   return result;
 }
@@ -1654,14 +1793,14 @@ export function listTrashedDocuments() {
   if (isDesktopRuntime()) {
     return import("./desktop/localMode").then(
       ({ isDesktopLocalModeSelected }) =>
-      isDesktopLocalModeSelected()
-        ? import("./desktop/offlineStore").then(
-            ({ desktopListLocalTrashedDocuments }) =>
-              desktopListLocalTrashedDocuments(),
-          )
-        : apiJson<{ documents: TrashedDocumentSummary[] }>(
-            "/api/documents/trash",
-          ),
+        isDesktopLocalModeSelected()
+          ? import("./desktop/offlineStore").then(
+              ({ desktopListLocalTrashedDocuments }) =>
+                desktopListLocalTrashedDocuments(),
+            )
+          : apiJson<{ documents: TrashedDocumentSummary[] }>(
+              "/api/documents/trash",
+            ),
     );
   }
   return apiJson<{ documents: TrashedDocumentSummary[] }>(
@@ -1673,15 +1812,15 @@ export function restoreTrashedDocument(docId: string) {
   if (isDesktopRuntime()) {
     return import("./desktop/localMode").then(
       ({ isDesktopLocalModeSelected }) =>
-      isDesktopLocalModeSelected()
-        ? import("./desktop/offlineStore").then(
-            ({ desktopRestoreLocalTrashedDocument }) =>
-              desktopRestoreLocalTrashedDocument(docId),
-          )
-        : apiJson<{ document: Document }>(
-            `/api/documents/${encodeURIComponent(docId)}/restore`,
-            { method: "POST" },
-          ),
+        isDesktopLocalModeSelected()
+          ? import("./desktop/offlineStore").then(
+              ({ desktopRestoreLocalTrashedDocument }) =>
+                desktopRestoreLocalTrashedDocument(docId),
+            )
+          : apiJson<{ document: Document }>(
+              `/api/documents/${encodeURIComponent(docId)}/restore`,
+              { method: "POST" },
+            ),
     );
   }
   return apiJson<{ document: Document }>(

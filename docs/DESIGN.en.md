@@ -839,13 +839,37 @@ it doesn't weigh down the editor's first paint.
 
 Modeled on `dbskill_wechat_styles.go` from `../keepask`, which had two paths: one
 where an LLM generates HTML from a style guide, and one that is pure string-based
-style inlining. **This is the latter** — Koinote has no AI integration, and those
-248 lines of inlining never needed a model anyway: regex out the CSS, flatten it to
+style inlining. **The layout pipeline uses the latter** — those 248 lines of
+inlining never needed a model: regex out the CSS, flatten it to
 tag → declarations, walk the HTML tree writing `style` attributes.
 
 The output isn't written to disk but **to the clipboard** (`text/html` plus
 `text/plain`), because the user's actual next action is pasting into the WeChat
 editor. Downloading an `.html`, opening it, and selecting all is three redundant steps.
+
+The web and desktop apps share a direct draft path. Each user can bind up to five
+Official Accounts, choose one default, and select a target account for each draft.
+Legacy single-account endpoints continue to resolve to the default account for released
+clients. The backend validates every AppID and AppSecret through `stable_token`, caches
+access tokens by account, and encrypts each AppSecret with the dedicated
+`WECHAT_CREDENTIAL_ENCRYPTION_KEY`. Publishing reuses the same HTML builder without
+duplicating the title in the body. The backend safely downloads and validates each
+article image, transfers it with `media/uploadimg`, uploads the permanent thumbnail,
+then calls `draft/add`. Cover settings offer a default cover, an article image, or an
+AI-generated image. The client renders the default cover with the Koinote logo and article
+title; article images are re-read, validated, and center-cropped by the backend to the
+selected ratio.
+AI cover generation is optional, and the backend can still create a deterministic default
+thumbnail for legacy requests before calling `draft/add`.
+Remote downloads reject private and loopback networks, validate
+resolved DNS addresses, disable redirects, and cap response sizes. If draft creation
+fails, the backend makes a best-effort deletion of the newly uploaded orphan thumbnail.
+
+Cover generation calls an OpenAI-compatible Images API only from the backend. It
+supports `2.35:1` (default) and `1:1`; each generated cover costs a fixed 20 credits.
+Go center-crops, resizes, and compresses the result into a WeChat-compatible JPEG
+thumbnail. The provider API key never reaches the SPA, Worker, or desktop client. This
+feature is lifetime-member-only and user-rate-limited.
 
 The WeChat editor's behaviour dictates every part of the implementation:
 

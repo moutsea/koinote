@@ -36,6 +36,7 @@ const [
   { Markdown },
   { MarkdownTable, isPrimaryTableDragButtonPressed, shouldDelegateTableMouseDown },
   { BlockMarkdownImage, normalizeLegacyImageAdjacentHeadings },
+  { splitMixedTaskLists },
   {
     clearSelectedTableCells,
     clearTableAxis,
@@ -62,6 +63,7 @@ const [
   import("tiptap-markdown"),
   import("./_markdown_table_bundle.mjs"),
   import("./_markdown_image_bundle.mjs"),
+  import("./_markdown_task_list_bundle.mjs"),
   import("./_table_actions_bundle.mjs"),
 ]);
 
@@ -186,6 +188,16 @@ function tableCellPositionAt(editor, tableIndex, rowIndex, cellIndex) {
   return cellStart;
 }
 
+const mixedTaskListRoot = baseWindow.document.createElement("div");
+mixedTaskListRoot.innerHTML =
+  '<ul class="contains-task-list"><li>普通项</li><li class="task-list-item">任务项</li><li>另一个普通项</li></ul>';
+splitMixedTaskLists(mixedTaskListRoot);
+assert.equal(mixedTaskListRoot.querySelectorAll("ul").length, 3);
+assert.equal(mixedTaskListRoot.querySelectorAll('ul[data-type="taskList"]').length, 1);
+assert.equal(mixedTaskListRoot.children[0].textContent, "普通项");
+assert.equal(mixedTaskListRoot.children[1].textContent, "任务项");
+assert.equal(mixedTaskListRoot.children[2].textContent, "另一个普通项");
+
 function tableMouseEvent(
   type,
   clientX,
@@ -263,6 +275,9 @@ const tableContextToolbarSource = readFileSync(
   "utf8",
 );
 assert.match(extensionsSource, /MarkdownTable/);
+assert.match(extensionsSource, /const MarkdownTaskList = TaskList\.extend\(/);
+assert.match(extensionsSource, /splitMixedTaskLists/);
+assert.match(extensionsSource, /\s+MarkdownTaskList,\s+TaskItem/);
 assert.match(
   extensionsSource,
   /MarkdownTable\.configure\([\s\S]*?\),\s*TableRow,\s*TableHeader,\s*TableCell,/,

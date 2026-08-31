@@ -108,13 +108,13 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
         run: |
-          out=$(go test ./internal/server/ -run '^(TestAllSQLPrepares|TestImageKeyPatternMatchesPostgres|TestDesktopAuthorizationEndToEnd)$' -v 2>&1)
+          out=$(go test -count=1 ./internal/server/ -run '^(TestAllSQLPrepares|TestImageKeyPatternMatchesPostgres|TestDesktopAuthorizationEndToEnd|TestWechatOfficialMultiAccountPersistence|TestWechatCoverGenerationChargesFixedCredits)$' -v 2>&1)
           echo "$out"
           if echo "$out" | grep -q "SKIP"; then
             echo "::error::PostgreSQL 校验被 skip 了 —— 数据库没连上，这道防线形同不存在"
             exit 1
           fi
-          for test_name in TestAllSQLPrepares TestImageKeyPatternMatchesPostgres TestDesktopAuthorizationEndToEnd; do
+          for test_name in TestAllSQLPrepares TestImageKeyPatternMatchesPostgres TestDesktopAuthorizationEndToEnd TestWechatOfficialMultiAccountPersistence TestWechatCoverGenerationChargesFixedCredits; do
             echo "$out" | grep -q -- "--- PASS: $test_name" || {
               echo "::error::$test_name 未见通过标记"
               exit 1

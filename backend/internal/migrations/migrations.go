@@ -13,9 +13,25 @@ import (
 
 const statementBreakpoint = "--> statement-breakpoint"
 
+const migrationAdvisoryLockName = "koinote:schema-migrations"
+
 // Apply 按文件名顺序执行 dir 下的 *.sql 迁移，已应用的跳过，记录在 schema_migrations 表。
 func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
-	if _, err := pool.Exec(ctx, `
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, migrationAdvisoryLockName); err != nil {
+		return fmt.Errorf("acquire migration lock: %w", err)
+	}
+	defer func() {
+		unlockCtx := context.Background()
+		_, _ = conn.Exec(unlockCtx, `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, migrationAdvisoryLockName)
+	}()
+
+	if _, err := conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version    text PRIMARY KEY,
 			applied_at timestamptz NOT NULL DEFAULT now()
@@ -34,7 +50,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 		version := filepath.Base(file)
 
 		var exists bool
-		if err := pool.QueryRow(ctx,
+		if err := conn.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`,
 			version,
 		).Scan(&exists); err != nil {
@@ -49,7 +65,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 			return fmt.Errorf("read migration %s: %w", version, err)
 		}
 
-		tx, err := pool.Begin(ctx)
+		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin tx for %s: %w", version, err)
 		}

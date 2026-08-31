@@ -1,6 +1,6 @@
 import { ChevronDown, Palette } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { findWechatTheme, groupWechatThemes } from "./wechatThemes";
+import { getWechatThemeLabel, groupWechatThemes } from "./wechatThemes";
 
 /**
  * 排版主题选择器。
@@ -23,7 +23,9 @@ export function ThemePicker({
 }) {
   const { t } = useI18n();
   // findWechatTheme 对空串会兜回第一套主题，这里要的是「不套主题」的文案
-  const label = value ? findWechatTheme(value).name : t.editor.themeNone;
+  const label = value
+    ? getWechatThemeLabel(value, t.editor.wechatThemeNames)
+    : t.editor.themeNone;
 
   return (
     <div className="group relative shrink-0">
@@ -50,10 +52,13 @@ export function ThemePicker({
         {/* 不套主题：整天盯着强风格的主题写稿不见得舒服，留个退出口 */}
         <option value="">{t.editor.themeNone}</option>
         {groupWechatThemes().map(({ group, themes }) => (
-          <optgroup key={group} label={group}>
+          <optgroup
+            key={group}
+            label={t.editor.wechatThemeGroups[group] ?? group}
+          >
             {themes.map((theme) => (
               <option key={theme.id} value={theme.id}>
-                {theme.name}
+                {getWechatThemeLabel(theme.id, t.editor.wechatThemeNames)}
               </option>
             ))}
           </optgroup>

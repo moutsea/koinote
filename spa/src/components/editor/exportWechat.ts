@@ -15,6 +15,14 @@ import {
   buildWechatGeoSection,
   normalizeWechatGeoCorpus,
 } from "./wechatGeo";
+import {
+  applyWechatLayoutModules,
+  type WechatLayoutDiagnostic,
+} from "./wechatLayout";
+import {
+  parseArticleMetadata,
+  removeWechatFrontmatterNodes,
+} from "./wechatPreflight";
 
 /**
  * 导出为微信公众号可直接粘贴的 HTML。
@@ -45,11 +53,18 @@ export type WechatExportResult = {
    * 要等文章预览时才看到裂图 —— 那时用户早已离开我们的页面，无从判断是哪一步错了。
    */
   images: ImageAudit;
+  layout: {
+    rendered: number;
+    names: string[];
+    diagnostics: WechatLayoutDiagnostic[];
+  };
 };
 
 export type WechatExportOptions = {
   includeGeoCorpus?: boolean;
   geoText?: string;
+  /** 草稿箱接口已经单独接收标题，正文里不应再重复渲染一个 H1。 */
+  includeTitle?: boolean;
 };
 
 export async function buildWechatHTML(
@@ -62,8 +77,11 @@ export async function buildWechatHTML(
   // 需要真实布局：公式栅格化要量尺寸。挪到视口外，不能 display:none
   stage.style.cssText =
     "position:fixed;left:-10000px;top:0;width:700px;background:#fff;";
-  const hasExportTitle = title.trim().length > 0;
-  const heading = hasExportTitle ? `<h1>${escapeHTML(title)}</h1>` : "";
+  const markdown = editor.storage.markdown.getMarkdown() as string;
+  const article = parseArticleMetadata(markdown, title);
+  const exportTitle = article.metadata.title || title;
+  const hasExportTitle = options.includeTitle !== false && exportTitle.trim().length > 0;
+  const heading = hasExportTitle ? `<h1>${escapeHTML(exportTitle)}</h1>` : "";
   stage.innerHTML = heading + editor.getHTML();
   document.body.appendChild(stage);
 
@@ -74,6 +92,10 @@ export async function buildWechatHTML(
     const geoCorpus = options.includeGeoCorpus
       ? normalizeWechatGeoCorpus(options.geoText ?? "")
       : "";
+    if (article.metadata.hasFrontmatter) {
+      removeWechatFrontmatterNodes(stage, article.frontmatterKeys);
+    }
+    const layout = applyWechatLayoutModules(stage, article.body);
     const geoDivider = geoCorpus ? document.createElement("hr") : null;
     if (geoDivider) {
       const titleElement = hasExportTitle ? stage.firstElementChild : null;
@@ -120,6 +142,7 @@ export async function buildWechatHTML(
       styledElements: stats.styled,
       highlightedElements: stats.highlighted,
       images,
+      layout,
     };
   } finally {
     stage.remove();

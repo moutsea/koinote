@@ -56,6 +56,7 @@ jobs:
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
+          WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -64,6 +65,10 @@ jobs:
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
+          WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
+          WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
+          WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
+          WECHAT_API_PROXY_URL: ${{ vars.WECHAT_API_PROXY_URL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           ANNOUNCEMENT_LLM_API_KEY: ${{ secrets.ANNOUNCEMENT_LLM_API_KEY }}
@@ -74,7 +79,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -103,6 +108,14 @@ jobs:
           [ -n "$AGENT_LLM_MODEL" ] && agent_llm_count=$((agent_llm_count + 1))
           if [ "$agent_llm_count" -ne 0 ] && [ "$agent_llm_count" -ne 4 ]; then
             echo "AGENT_LLM_PROTOCOL、AGENT_LLM_BASE_URL、AGENT_LLM_API_KEY、AGENT_LLM_MODEL 必须同时配置或同时留空"
+            exit 1
+          fi
+          wechat_cover_count=0
+          [ -n "$WECHAT_COVER_IMAGE_BASE_URL" ] && wechat_cover_count=$((wechat_cover_count + 1))
+          [ -n "$WECHAT_COVER_IMAGE_API_KEY" ] && wechat_cover_count=$((wechat_cover_count + 1))
+          [ -n "$WECHAT_COVER_IMAGE_MODEL" ] && wechat_cover_count=$((wechat_cover_count + 1))
+          if [ "$wechat_cover_count" -ne 0 ] && [ "$wechat_cover_count" -ne 3 ]; then
+            echo "WECHAT_COVER_IMAGE_BASE_URL、WECHAT_COVER_IMAGE_API_KEY、WECHAT_COVER_IMAGE_MODEL 必须同时配置或同时留空"
             exit 1
           fi
           echo "secret 齐全"
@@ -205,6 +218,7 @@ jobs:
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
+          WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -213,6 +227,10 @@ jobs:
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
+          WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
+          WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
+          WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
+          WECHAT_API_PROXY_URL: ${{ vars.WECHAT_API_PROXY_URL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
@@ -221,10 +239,11 @@ jobs:
           ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
         run: |
-          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$EMAIL_VERIFICATION_SECRET" \
             "$MCP_TOKEN_ENCRYPTION_KEY" \
             "$LLM_CREDENTIAL_ENCRYPTION_KEY" \
+            "$WECHAT_CREDENTIAL_ENCRYPTION_KEY" \
             "$STRIPE_SECRET_KEY" \
             "$STRIPE_WEBHOOK_SECRET" \
             "$STRIPE_LIFETIME_PRODUCT_ID" \
@@ -239,13 +258,18 @@ jobs:
             "$AGENT_LLM_PROTOCOL" \
             "$AGENT_LLM_BASE_URL" \
             "$AGENT_LLM_API_KEY" \
-            "$AGENT_LLM_MODEL" | \
+            "$AGENT_LLM_MODEL" \
+            "$WECHAT_COVER_IMAGE_BASE_URL" \
+            "$WECHAT_COVER_IMAGE_API_KEY" \
+            "$WECHAT_COVER_IMAGE_MODEL" \
+            "$WECHAT_API_PROXY_URL" | \
             ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
               "root@$HOST" '
                 set -eu
                 IFS= read -r email_verification_secret
                 IFS= read -r mcp_token_encryption_key
                 IFS= read -r llm_credential_encryption_key
+                IFS= read -r wechat_credential_encryption_key
                 IFS= read -r stripe_secret_key
                 IFS= read -r stripe_webhook_secret
                 IFS= read -r stripe_lifetime_product_id
@@ -261,8 +285,13 @@ jobs:
                 IFS= read -r agent_llm_base_url
                 IFS= read -r agent_llm_api_key
                 IFS= read -r agent_llm_model
+                IFS= read -r wechat_cover_image_base_url
+                IFS= read -r wechat_cover_image_api_key
+                IFS= read -r wechat_cover_image_model
+                IFS= read -r wechat_api_proxy_url
                 test -n "$email_verification_secret"
                 test -n "$mcp_token_encryption_key"
+                test -n "$wechat_credential_encryption_key"
                 test -n "$llm_credential_encryption_key"
                 test -n "$stripe_secret_key"
                 test -n "$stripe_webhook_secret"
@@ -290,6 +319,14 @@ jobs:
                   echo "Agent 内置模型配置不完整"
                   exit 1
                 fi
+                wechat_cover_count=0
+                [ -n "$wechat_cover_image_base_url" ] && wechat_cover_count=$((wechat_cover_count + 1))
+                [ -n "$wechat_cover_image_api_key" ] && wechat_cover_count=$((wechat_cover_count + 1))
+                [ -n "$wechat_cover_image_model" ] && wechat_cover_count=$((wechat_cover_count + 1))
+                if [ "$wechat_cover_count" -ne 0 ] && [ "$wechat_cover_count" -ne 3 ]; then
+                  echo "微信公众号封面模型配置不完整"
+                  exit 1
+                fi
                 env_file=/opt/koinote/.env
                 test -f "$env_file"
                 temp_file=$(mktemp /opt/koinote/.env.XXXXXX)
@@ -304,12 +341,18 @@ jobs:
                 [ -n "$stripe_credits_product_id" ] && replace_stripe_credits=1
                 replace_agent_llm=0
                 [ "$agent_llm_count" -eq 4 ] && replace_agent_llm=1
+                replace_wechat_cover=0
+                [ "$wechat_cover_count" -eq 3 ] && replace_wechat_cover=1
+                replace_wechat_proxy=0
+                [ -n "$wechat_api_proxy_url" ] && replace_wechat_proxy=1
                 # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
-                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" "
-                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" "
+                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
                   replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
+                  replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
+                  replace_wechat_proxy == 1 && /^WECHAT_API_PROXY_URL=/ { next }
                   replace_analytics == 1 && /^CLOUDFLARE_ANALYTICS_TOKEN=/ { next }
                   replace_bot == 1 && /^(BOT_WEBHOOK|BOT_WEBHOOK_SECRET)=/ { next }
                   replace_announcement_llm == 1 && /^(ANNOUNCEMENT_LLM_BASE_URL|ANNOUNCEMENT_LLM_API_KEY|ANNOUNCEMENT_LLM_MODEL)=/ { next }
@@ -318,6 +361,7 @@ jobs:
                 printf "EMAIL_VERIFICATION_SECRET=%s\n" "$email_verification_secret" >> "$temp_file"
                 printf "MCP_TOKEN_ENCRYPTION_KEY=%s\n" "$mcp_token_encryption_key" >> "$temp_file"
                 printf "LLM_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$llm_credential_encryption_key" >> "$temp_file"
+                printf "WECHAT_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$wechat_credential_encryption_key" >> "$temp_file"
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"
                 printf "STRIPE_LIFETIME_PRODUCT_ID=%s\n" "$stripe_lifetime_product_id" >> "$temp_file"
@@ -343,6 +387,14 @@ jobs:
                   printf "AGENT_LLM_BASE_URL=%s\n" "$agent_llm_base_url" >> "$temp_file"
                   printf "AGENT_LLM_API_KEY=%s\n" "$agent_llm_api_key" >> "$temp_file"
                   printf "AGENT_LLM_MODEL=%s\n" "$agent_llm_model" >> "$temp_file"
+                fi
+                if [ "$replace_wechat_cover" -eq 1 ]; then
+                  printf "WECHAT_COVER_IMAGE_BASE_URL=%s\n" "$wechat_cover_image_base_url" >> "$temp_file"
+                  printf "WECHAT_COVER_IMAGE_API_KEY=%s\n" "$wechat_cover_image_api_key" >> "$temp_file"
+                  printf "WECHAT_COVER_IMAGE_MODEL=%s\n" "$wechat_cover_image_model" >> "$temp_file"
+                fi
+                if [ "$replace_wechat_proxy" -eq 1 ]; then
+                  printf "WECHAT_API_PROXY_URL=%s\n" "$wechat_api_proxy_url" >> "$temp_file"
                 fi
                 chmod --reference="$env_file" "$temp_file"
                 chown --reference="$env_file" "$temp_file"

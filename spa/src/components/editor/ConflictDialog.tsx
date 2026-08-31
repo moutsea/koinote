@@ -4,7 +4,7 @@ import { getDocument, type Document } from "../../api";
 import type { DocumentSnapshot } from "./useDocumentSaver";
 import { useI18n } from "../../i18n";
 import { pushModal } from "../../modalStack";
-import { findWechatTheme } from "./wechatThemes";
+import { getWechatThemeLabel } from "./wechatThemes";
 
 export function ConflictDialog({
   docId,
@@ -108,7 +108,11 @@ export function ConflictDialog({
               <SourcePane
                 label={t.editor.localDraft}
                 title={merged.title}
-                theme={themeName(merged.theme, t.editor.themeNone)}
+                theme={themeName(
+                  merged.theme,
+                  t.editor.themeNone,
+                  t.editor.wechatThemeNames,
+                )}
                 value={merged.content}
                 onTitleChange={(title) => setMerged((current) => ({ ...current, title }))}
                 onChange={(content) => setMerged((current) => ({ ...current, content }))}
@@ -116,7 +120,11 @@ export function ConflictDialog({
               <SourcePane
                 label={t.editor.remoteVersion}
                 title={remote.title}
-                theme={themeName(remote.theme, t.editor.themeNone)}
+                theme={themeName(
+                  remote.theme,
+                  t.editor.themeNone,
+                  t.editor.wechatThemeNames,
+                )}
                 value={remote.content}
                 readOnly
               />
@@ -195,6 +203,10 @@ function SourcePane({
   );
 }
 
-function themeName(theme: string, none: string) {
-  return theme ? findWechatTheme(theme).name : none;
+function themeName(
+  theme: string,
+  none: string,
+  localizedNames: Readonly<Record<string, string>>,
+) {
+  return theme ? getWechatThemeLabel(theme, localizedNames) : none;
 }

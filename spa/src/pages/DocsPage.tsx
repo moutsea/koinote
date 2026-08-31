@@ -7,6 +7,7 @@ import {
   FolderInput,
   History,
   Laptop,
+  MessageCircle,
   Search,
   Share2,
   ShieldCheck,
@@ -211,6 +212,13 @@ export function DocsPage() {
               to="/docs/version-history"
               action={t.docsCenter.readGuide}
             />
+            <GuideCard
+              icon={<MessageCircle className="h-5 w-5" />}
+              title={t.wechatGuide.title}
+              description={t.wechatGuide.subtitle}
+              to="/docs/wechat-official-account"
+              action={t.docsCenter.readGuide}
+            />
           </div>
         </section>
 
@@ -246,7 +254,11 @@ function GuideCard({
   icon: React.ReactNode;
   title: string;
   description: string;
-  to: "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history";
+  to:
+    | "/docs/ai-optimization"
+    | "/docs/mcp"
+    | "/docs/version-history"
+    | "/docs/wechat-official-account";
   action: string;
 }) {
   return (

@@ -41,6 +41,13 @@ ok(
   "菜单不应继续把功能描述成仅微信公众号",
 );
 ok(
+  "草稿同步按钮位于微信公众号导出弹窗",
+  !/label=\{t\.editor\.wechatDraftPush\}/.test(menu) &&
+    /t\.editor\.wechatDraftSync/.test(dialog) &&
+    /onOpenWechatDraft/.test(dialog),
+  "顶层导出菜单只保留自媒体入口",
+);
+ok(
   "平台选择同时包含三种目标",
   /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']juejin["']/.test(dialog),
 );
@@ -98,7 +105,7 @@ ok(
   "GEO 关闭保存期间提供反馈并阻止重复提交",
   /closeInFlightRef\.current/.test(dialog) &&
     /setGeoClosing\(true\)/.test(dialog) &&
-    /disabled=\{geoClosing\}/.test(dialog) &&
+    /disabled=\{geoClosing \|\| draftPublishing\}/.test(dialog) &&
     /geoClosing \? t\.editor\.wechatGeoSaving : t\.editor\.shareClose/.test(dialog),
 );
 ok(

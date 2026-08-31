@@ -6,3 +6,7 @@ export { en } from "../spa/src/i18n/en";
 export { zh } from "../spa/src/i18n/zh";
 export { fr } from "../spa/src/i18n/fr";
 export { ja } from "../spa/src/i18n/ja";
+export {
+  WECHAT_THEMES,
+  WECHAT_THEME_GROUPS,
+} from "../spa/src/components/editor/wechatThemes";

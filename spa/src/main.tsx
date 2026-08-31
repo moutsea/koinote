@@ -106,6 +106,14 @@ const aiOptimizationCaseRoute = createRoute({
     "AIOptimizationCasePage",
   ),
 });
+const wechatOfficialAccountGuideRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/wechat-official-account",
+  component: lazyRouteComponent(
+    () => import("./pages/WechatOfficialAccountGuidePage"),
+    "WechatOfficialAccountGuidePage",
+  ),
+});
 const changelogRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/changelog",
@@ -126,7 +134,7 @@ function parseEditorSearch(
 }
 
 function parseSettingsSearch(search: Record<string, unknown>): {
-  section?: "general" | "membership" | "ai" | "invitations";
+  section?: "general" | "membership" | "ai" | "invitations" | "wechat";
   checkout?: string;
   credit_checkout?: string;
   session_id?: string;
@@ -137,7 +145,8 @@ function parseSettingsSearch(search: Record<string, unknown>): {
       section === "general" ||
       section === "membership" ||
       section === "ai" ||
-      section === "invitations"
+      section === "invitations" ||
+      section === "wechat"
         ? section
         : undefined,
     checkout: typeof search.checkout === "string" ? search.checkout : undefined,
@@ -298,6 +307,7 @@ const routeTree = rootRoute.addChildren([
   versionHistoryGuideRoute,
   aiOptimizationGuideRoute,
   aiOptimizationCaseRoute,
+  wechatOfficialAccountGuideRoute,
   changelogRoute,
   editorRoute,
   editorDocRoute,

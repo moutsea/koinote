@@ -447,6 +447,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodPost
 	case "/api/settings/document-history":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/wechat/account":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/wechat/accounts":
+		return method == http.MethodGet || method == http.MethodPost
+	case "/api/wechat/cover/generate":
+		return method == http.MethodPost
 	case "/api/editor/tabs":
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/folders":
@@ -455,6 +461,13 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/documents/search", "/api/documents/trash":
 		return method == http.MethodGet
+	}
+	if rest, found := strings.CutPrefix(path, "/api/wechat/accounts/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && parts[0] != "" {
+			return method == http.MethodPut || method == http.MethodDelete
+		}
+		return len(parts) == 2 && parts[0] != "" && parts[1] == "default" && method == http.MethodPut
 	}
 	if rest, found := strings.CutPrefix(path, "/api/folders/"); found {
 		parts := strings.Split(rest, "/")
@@ -517,6 +530,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 				return method == http.MethodGet
 			case "wechat-geo-summary":
 				return method == http.MethodGet || method == http.MethodPut
+			case "wechat-draft":
+				return method == http.MethodPost
 			}
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "wechat-geo-summary" &&

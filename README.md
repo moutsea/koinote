@@ -28,7 +28,7 @@
 和本地 Markdown 编辑器的五个区别：
 
 - **图片粘贴即上传** —— 存进自己的 R2 图床，正文里是干净链接而不是一坨 base64
-- **一键导出到自媒体** —— 微信公众号与知乎复制内联富文本，掘金复制原生 Markdown
+- **一键导出到自媒体** —— 微信公众号与知乎复制内联富文本，掘金复制原生 Markdown；网页端和桌面端均可绑定最多 5 个公众号、设置默认账号，并把文章保存到指定账号的草稿箱；封面可用 Koinote Logo+标题、正文图片或 AI 生成
 - **文档在云端** —— 多设备同步、可分享
 - **Agent 通过 MCP 读写文档** —— Codex、Claude Code、OpenCode、OpenClaw 等客户端
 - **AI 审阅式优化**（会员）—— 模型先给出标题、正文和排版 Diff，用户逐条决定是否应用
@@ -125,6 +125,11 @@ xattr -dr com.apple.quarantine /Applications/Koinote.app
 富文本导出做了不少细活：代码高亮在导出时重新生成（编辑器里的高亮是视图装饰，
 不在文档里）、缩进用不换行空格 + `<br>` 承载（微信会剥掉 `white-space`）、
 代码块带 Mac 窗口三点、公式栅格化成图片上传。
+
+微信公众号提供 20 套可直接内联的排版主题。除经典媒体与技术文档风格外，还加入
+Koinote Paper（暖纸长文）、Koinote Signal（产品与 AI）、Koinote Notes（知识笔记）
+和 Koinote Pulse（社区通讯）四套原创主题；编辑器预览与复制到微信使用同一套规则。
+主题名称和分组会跟随当前界面语言显示。
 
 **分享**
 
@@ -352,6 +357,18 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 需要同时填写 `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_API_KEY`、
 `AGENT_LLM_MODEL`；四项全空时只关闭内置 credits 模式，会员配置的 BYOK 仍可用。
 
+本地测试微信公众号草稿箱前，也必须单独生成并长期保留
+`WECHAT_CREDENTIAL_ENCRYPTION_KEY`；它不会回退复用 `SESSION_SECRET`。未配置时后端仍可启动，
+但公众号绑定不可用。AI 封面生成为可选能力，需要同时配置
+`WECHAT_COVER_IMAGE_BASE_URL`、`WECHAT_COVER_IMAGE_API_KEY`、`WECHAT_COVER_IMAGE_MODEL`，
+API Key 只由后端读取。绑定前还要在微信公众平台把后端出口 IP 加入 IP 白名单。
+
+如果微信 API 需要经专用中转机访问，本地 Docker 后端可把
+`WECHAT_API_PROXY_URL` 设为 `http://host.docker.internal:18080`，并在宿主机建立
+`ssh -N -L 18080:127.0.0.1:18080 root@<中转机>` 隧道；生产环境优先使用 WireGuard
+私网地址 `http://10.77.0.1:18080`，若云厂商尚未放行 UDP，则使用同样的 SSH 隧道落到
+Docker 网关地址。中转服务只接受发往 `api.weixin.qq.com:443` 的 CONNECT 请求，不是通用代理。
+
 详细步骤、端口冲突、全容器启动见[设计文档](docs/DESIGN.zh.md#本地开发)。
 
 ### 桌面客户端开发
@@ -377,6 +394,34 @@ SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的�
 签名密钥，把私钥写入同名 GitHub Secrets，并替换 `src-tauri/tauri.conf.json` 中的
 `plugins.updater.pubkey` 与更新地址；不要复用 Koinote 官方公钥和 Release 地址。
 
+### 微信导出检查与结构化排版
+
+微信公众号导出弹窗会先给出本地发布检查：标题长度、正文标题重复、图片替代文字、图片转存路径和模块语法都会显示为可解释的提醒。检查不会阻止复制，也不会修改文档；草稿标题仍以编辑器标题为准。
+
+文章可以在开头使用轻量的 YAML frontmatter 保存发布元信息。支持 `title`、`author`、`digest`、`summary` 和 `description`；导出时 frontmatter 会从可见正文移除，标题、摘要和作者会作为公众号草稿元信息传入。
+
+导出阶段支持适合窄屏阅读的结构块，语法来自 Koinote 的独立数据模型：
+
+```markdown
+:::hero
+eyebrow: 深度观察
+title: 先把文章的主判断讲清楚
+subtitle: 让读者在第一屏知道为什么值得继续读
+:::
+
+:::metrics[核心数据]
+阅读量 | 42% | 来自最近一轮测试
+效率 | 2x | 比原流程更快
+:::
+
+:::callout
+type: warning
+body: 发布前请检查图片和链接。
+:::
+```
+
+目前可用模块包括 `hero`、`toc`、`callout`、`metrics`、`steps`、`quote`、`quote-card`、`faq` 和 `cta`。未知或格式错误的模块会保留为普通文本，并在发布前检查中提示，不会静默丢失内容。模块只在微信公众号富文本导出和草稿流程中渲染，编辑区仍保持原有 Markdown 交互。
+
 ## 自建须知
 
 这几条会直接影响安全，部署前值得看一眼：
@@ -395,6 +440,16 @@ SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的�
 **生产环境的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于会员 BYOK
 API Key 的 AES-GCM 加密，不能复用会话、MCP 或模型服务密钥。直接轮换会让既有渠道无法解密，
 轮换前必须先做密文迁移。
+
+**生产环境的 `WECHAT_CREDENTIAL_ENCRYPTION_KEY` 同样必须独立且持久。** 它只用于
+公众号 AppSecret 的 AES-GCM 加密，不能复用会话、BYOK 或封面模型 API Key；直接轮换会让
+既有公众号绑定无法解密。公众号 token、封面生成和草稿创建都只在后端完成，客户端永远拿不到
+AppSecret 或封面模型密钥。
+
+**微信公众号封面模型是可选的完整配置组。** `WECHAT_COVER_IMAGE_BASE_URL`、
+`WECHAT_COVER_IMAGE_API_KEY`、`WECHAT_COVER_IMAGE_MODEL` 必须三项齐全或全部留空；生产只接受
+HTTPS。启用后仅终生会员可调用，每生成一张封面固定消耗 20 credits，并按用户限流。模型服务商会收到用户输入的封面提示词，
+不会收到公众号 AppSecret 或文章正文。
 
 **AI 优化内置模型是可选的完整配置组。** `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、
 `AGENT_LLM_API_KEY`、`AGENT_LLM_MODEL` 必须四项齐全或全部留空；生产只接受 HTTPS。
@@ -589,11 +644,14 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
+| `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
 | `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |
 | `STRIPE_WEBHOOK_SECRET`        | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`）                                           |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |
 | `STRIPE_CREDITS_PRODUCT_ID`    | Credits 充值 Product ID（`prod_...`），三档 USD 价格由后端白名单生成                              |
 | `AGENT_LLM_API_KEY`            | 可选；平台 AI 优化内置模型密钥，须与三个 `AGENT_LLM_*` Actions Variables 同时配置                    |
+| `WECHAT_COVER_IMAGE_API_KEY`   | 可选；公众号 AI 封面模型密钥，须与 Base URL、模型两个 Actions Variables 同时配置                     |
+| `WECHAT_API_PROXY_URL`         | 可选 Actions Variable；生产微信 API 中转地址，配置后部署会写入 VPS `.env`，未配置时保留服务器已有值 |
 | `BOT_WEBHOOK`                  | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置                                                |
 | `BOT_WEBHOOK_SECRET`           | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置                                           |
 | `VPS_HOST`                     | 后端服务器地址                                                                                      |
@@ -607,12 +665,17 @@ openssl rand -base64 48 | tr -d '\n' | gh secret set EMAIL_VERIFICATION_SECRET
 gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
 openssl rand -base64 48 | tr -d '\n' | gh secret set LLM_CREDENTIAL_ENCRYPTION_KEY
+openssl rand -base64 48 | tr -d '\n' | gh secret set WECHAT_CREDENTIAL_ENCRYPTION_KEY
 ```
 
 Stripe 密钥可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
 和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史；Credits 的
 公开 Product ID 放在 Actions Variable `STRIPE_CREDITS_PRODUCT_ID`。AI 优化内置模型的 API Key
 放 Secret，其余协议、Base URL、模型放同名 Actions Variables；整组未设置时部署保留 VPS 已有值。
+公众号封面模型同理：API Key 放 `WECHAT_COVER_IMAGE_API_KEY` Secret，Base URL 与模型分别放
+`WECHAT_COVER_IMAGE_BASE_URL`、`WECHAT_COVER_IMAGE_MODEL` Actions Variables；整组未设置时
+部署保留 VPS 已有配置。生产微信中转地址放 `WECHAT_API_PROXY_URL` Actions Variable；未设置时同样
+保留 VPS `.env` 里的既有值。
 飞书通知同理使用 `gh secret set BOT_WEBHOOK` 和 `gh secret set BOT_WEBHOOK_SECRET`；两项
 都未设置时，部署会保留 VPS `.env` 里已有的飞书配置。
 

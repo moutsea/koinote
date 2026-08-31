@@ -184,7 +184,7 @@ func TestValidateDocumentInput(t *testing.T) {
 // 非法值必须落回默认而不是原样写库，也不该让整篇文档保存失败。
 func TestNormalizeDocumentTheme(t *testing.T) {
 	t.Run("白名单内的 id 原样保留", func(t *testing.T) {
-		for _, id := range []string{"minimal", "linear", "event", "magazine"} {
+		for _, id := range []string{"minimal", "linear", "event", "magazine", "paper", "signal", "notes", "pulse"} {
 			if got := normalizeDocumentTheme(id); got != id {
 				t.Errorf("%q 应原样保留，实际 %q", id, got)
 			}

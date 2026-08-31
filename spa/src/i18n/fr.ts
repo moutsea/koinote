@@ -252,6 +252,83 @@ export const fr: Messages = {
     mcpCta: "Voir l’intégration MCP",
     pricingCta: "Voir les avantages",
   },
+  wechatGuide: {
+    eyebrow: "Configuration d’un compte officiel WeChat",
+    title: "Associer un compte et enregistrer les articles en brouillon",
+    subtitle:
+      "Associez jusqu’à 5 comptes officiels dans Koinote sur le web ou le bureau, puis enregistrez chaque article mis en forme dans les brouillons du compte choisi.",
+    prerequisitesTitle: "Avant de commencer",
+    prerequisites: [
+      "Un ou plusieurs comptes officiels WeChat vérifiés, avec accès aux API de brouillons et de médias.",
+      "L’AppID et l’AppSecret du compte. Saisissez l’AppSecret uniquement dans le formulaire Koinote ; ne l’envoyez jamais par chat ou commentaire.",
+      "L’IP actuelle de sortie de l’API WeChat de Koinote Cloud est 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
+      "Un compte administrateur Koinote connecté avec un abonnement à vie ; l’association, la génération de couverture et l’envoi de brouillons sont actuellement réservés aux administrateurs. Le mode local du bureau ne peut pas contacter WeChat ni générer de couverture.",
+    ],
+    platformTitle: "Configurer la plateforme développeur WeChat",
+    platformSteps: [
+      {
+        title: "Ouvrir la plateforme développeur",
+        desc: "Rendez-vous sur developers.weixin.qq.com/platform et connectez-vous comme administrateur du compte à associer.",
+      },
+      {
+        title: "Ouvrir la gestion des API",
+        desc: "Sélectionnez le compte officiel à associer, ouvrez la gestion des API et repérez les identifiants développeur ainsi que la liste blanche IP.",
+      },
+      {
+        title: "Ajouter l’IP à la liste blanche",
+        desc: "Pour Koinote Cloud, ajoutez 122.51.97.242 (IP de sortie de l’API WeChat) ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur. Saisissez une adresse par ligne si WeChat le demande.",
+      },
+      {
+        title: "Préparer les identifiants",
+        desc: "Copiez l’AppID et générez ou copiez l’AppSecret. WeChat peut ne l’afficher qu’une fois : enregistrez-le d’abord dans un gestionnaire de mots de passe.",
+      },
+    ],
+    ipTitle: "Pourquoi l’IP de sortie est-elle nécessaire ?",
+    ipBody:
+      "WeChat vérifie le serveur qui effectue chaque requête API. Koinote appelle WeChat uniquement depuis son backend : la liste blanche doit donc contenir l’IP de sortie du serveur, pas celle de votre ordinateur. Pour Koinote Cloud, utilisez 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
+    koinoteTitle: "Associer et envoyer depuis Koinote",
+    koinoteSteps: [
+      "Ouvrez Koinote dans votre navigateur ou sur le bureau et connectez-vous avec un compte administrateur à vie.",
+      "Dans Réglages → WeChat, saisissez un libellé, l’AppID et l’AppSecret de chaque compte. Vous pouvez en associer jusqu’à 5 et en choisir un par défaut.",
+      "Ouvrez un document, choisissez Exporter vers les plateformes sociales, sélectionnez WeChat puis Synchroniser avec les brouillons du compte. Choisissez le compte cible dans le panneau ; à défaut, Koinote utilise le compte par défaut.",
+      "La couverture est facultative. Si vous voulez une couverture IA, saisissez un prompt et choisissez 2.35:1 ou 1:1. Chaque couverture générée avec succès coûte 20 credits ; une nouvelle génération est facturée séparément.",
+      "Vous pouvez enregistrer le brouillon WeChat sans générer de couverture IA, puis choisir la couverture par défaut ou une image de l’article. Les images de l’article sont transférées avant la création du brouillon ; Koinote ne publie jamais directement l’article.",
+    ],
+    billingTitle: "Coût et accès",
+    billingBody:
+      "L’association du compte et l’enregistrement d’un brouillon ne consomment aucun credit. L’association, la génération de couverture et l’envoi de brouillons sont actuellement réservés aux administrateurs. Chaque génération de couverture réussie coûte exactement 20 credits ; un échec n’est pas facturé. La génération nécessite aussi un abonnement à vie, un solde suffisant et un modèle d’image configuré par l’administrateur.",
+    troubleshootingTitle: "Résoudre les problèmes courants",
+    troubleshooting: [
+      {
+        problem: "L’IP du backend n’est pas autorisée",
+        solution:
+          "Retournez dans la gestion des API de la plateforme développeur WeChat. Koinote Cloud utilise 122.51.97.242 ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur, pas celle de votre ordinateur.",
+      },
+      {
+        problem: "Le compte n’a pas accès aux API",
+        solution:
+          "Vérifiez que le compte est certifié et dispose des API de brouillons et de médias. Certains types de comptes doivent activer ces droits côté WeChat.",
+      },
+      {
+        problem: "Le modèle est indisponible ou le solde est insuffisant",
+        solution:
+          "Vérifiez qu’au moins 20 credits sont disponibles. Si le modèle reste indisponible, contactez l’administrateur Koinote.",
+      },
+      {
+        problem: "Une image de l’article ne peut pas être transférée",
+        solution:
+          "Revenez à l’éditeur, attendez la fin de la synchronisation des images, puis réessayez. En cas d’échec, Koinote tente de supprimer la couverture nouvellement envoyée.",
+      },
+    ],
+    securityTitle: "Rappels de sécurité",
+    securityBody:
+      "L’AppSecret est chiffré sur le serveur Koinote ; il n’est pas conservé en clair par le client et n’est pas envoyé au fournisseur du modèle de couverture. Ne le mettez jamais dans un document, un commentaire ou une capture. En cas de doute, réinitialisez-le dans WeChat puis associez à nouveau le compte dans Koinote.",
+    backToDocs: "Retour à la documentation",
+    openGuide: "Lire le guide de configuration WeChat",
+    openEditor: "Ouvrir l’éditeur",
+    openPlatform: "Ouvrir la plateforme développeur WeChat",
+    pricingCta: "Voir l’offre et les credits",
+  },
   aiGuide: {
     eyebrow: "Guide de l’optimisation IA",
     title: "Un éditeur IA relit votre texte et détaille chaque suggestion",
@@ -632,7 +709,7 @@ export const fr: Messages = {
     description:
       "Cette action est irréversible. Exportez d’abord les documents et images à conserver.",
     immediate:
-      "Le compte, les documents, versions, partages, jetons MCP et images synchronisées sont immédiatement mis en suppression.",
+      "Le compte, les documents, versions, partages, jetons MCP, l’association WeChat et les images synchronisées sont immédiatement mis en suppression.",
     membership:
       "L’abonnement à vie prend fin avec le compte. La suppression ne déclenche pas de remboursement automatique ; vos droits légaux restent applicables.",
     paymentRecords:
@@ -999,15 +1076,23 @@ export const fr: Messages = {
   },
   settingsPage: {
     title: "Paramètres",
-    subtitle: "Gérez votre compte, votre adhésion, les connexions IA et les invitations au même endroit.",
+    subtitle:
+      "Gérez votre compte, votre adhésion, les connexions IA et les invitations au même endroit.",
     general: "Général",
-    generalDescription: "Consultez votre profil, sécurisez votre compte et gérez les actions du compte.",
+    generalDescription:
+      "Consultez votre profil, sécurisez votre compte et gérez les actions du compte.",
     membership: "Adhésion",
-    membershipDescription: "Consultez votre offre, l’usage du cloud et les réglages d’historique.",
+    membershipDescription:
+      "Consultez votre offre, l’usage du cloud et les réglages d’historique.",
     ai: "Paramètres IA",
-    aiDescription: "Configurez les modèles, l’accès MCP et l’activité des credits.",
+    aiDescription:
+      "Configurez les modèles, l’accès MCP et l’activité des credits.",
     invitations: "Invitations",
-    invitationsDescription: "Créez votre lien et consultez les personnes qui l’ont utilisé.",
+    invitationsDescription:
+      "Créez votre lien et consultez les personnes qui l’ont utilisé.",
+    wechat: "WeChat",
+    wechatDescription:
+      "Associez un compte officiel et gérez l’envoi des brouillons.",
     freePlan: "Gratuit",
     lifetimePlan: "Membre à vie",
     upgrade: "Mettre à niveau",
@@ -1015,7 +1100,8 @@ export const fr: Messages = {
     aiLockedDescription:
       "L’optimisation IA, les modèles personnalisés, l’accès MCP et les credits sont réservés aux membres à vie.",
     invitedUsers: "Personnes invitées",
-    invitedUsersEmpty: "Personne n’a encore rejoint Koinote avec votre invitation.",
+    invitedUsersEmpty:
+      "Personne n’a encore rejoint Koinote avec votre invitation.",
     invitedAt: "Inscrit le {date}",
     invitationReward: "Récompense {reward}",
   },
@@ -1579,6 +1665,34 @@ export const fr: Messages = {
     mediaImagesUnreachable:
       "{n} image(s) pourraient être inaccessibles ({hosts}). Vérifiez l’aperçu après collage.",
     wechatThemeLabel: "Thème",
+    wechatThemeNames: {
+      minimal: "Minimal noir et blanc",
+      medium: "Essai long format",
+      wired: "Dossier tech",
+      verge: "Briefing actualités",
+      stripe: "Documentation produit",
+      apple: "Apple Newsroom",
+      ft: "Analyse business",
+      linear: "Journal des versions",
+      github: "README GitHub",
+      notion: "Note Notion",
+      magazine: "Dossier magazine",
+      editorial: "Chronique éditoriale",
+      newspaper: "Reportage presse",
+      course: "Support de cours",
+      event: "Annonce événement",
+      paper: "Koinote Papier",
+      signal: "Koinote Signal",
+      notes: "Koinote Notes",
+      pulse: "Koinote Pulse",
+    },
+    wechatThemeGroups: {
+      推荐默认: "Recommandé",
+      经典媒体: "Médias classiques",
+      科技产品: "Tech et produits",
+      内容出版: "Édition",
+      中文公众号: "Contenu chinois",
+    },
     wechatGeoExperiment: "Résumé GEO masqué généré par IA",
     wechatGeoExperimentHint:
       "Réservé aux membres. Le résumé est enregistré avec le document et l’export ajoute un séparateur sous le titre. WeChat peut supprimer le texte masqué ou considérer cette mise en page comme non conforme ; aucun effet sur le classement n’est garanti. Le modèle intégré consomme des credits.",
@@ -1597,6 +1711,133 @@ export const fr: Messages = {
       "L’article a changé. Vous pouvez conserver le résumé enregistré ou le régénérer.",
     wechatGeoPlaceholder:
       "Vérifiez et modifiez le résumé masqué après sa génération par l’IA.",
+    wechatOfficialTitle: "Brouillons WeChat",
+    wechatOfficialHint:
+      "Associez jusqu’à 5 comptes officiels vérifiés, choisissez un compte par défaut et enregistrez l’article dans les brouillons du compte sélectionné. Les AppSecrets sont chiffrés sur le serveur.",
+    wechatOfficialMembersOnly:
+      "L’association WeChat, les brouillons en un clic et la génération de couverture par IA sont réservés aux membres.",
+    wechatOfficialAdminsOnly:
+      "L’association WeChat, l’envoi de brouillons et la génération de couverture par IA sont actuellement réservés aux administrateurs.",
+    wechatAccountNotBound:
+      "Aucun compte officiel WeChat n’est encore associé. Associez-en un dans les réglages.",
+    wechatDraftPush: "Envoyer vers les brouillons WeChat",
+    wechatDraftSync: "Synchroniser avec les brouillons du compte",
+    wechatDraftPushHint:
+      "Choisissez une couverture par défaut, une image de l’article ou une couverture générée par IA avant d’enregistrer l’article actuel comme brouillon WeChat. Il ne sera pas publié.",
+    wechatAccountLoading: "Chargement de l’association WeChat…",
+    wechatAccountLoadFailed:
+      "Impossible de charger l’association WeChat. Réessayez plus tard",
+    wechatAccountRetry: "Réessayer",
+    wechatTargetAccount: "Compte officiel cible",
+    wechatAccountDefault: "Compte par défaut",
+    wechatAccountSetDefault: "Définir par défaut",
+    wechatAccountSaveFailed:
+      "Impossible d’enregistrer les réglages du compte WeChat. Réessayez plus tard",
+    wechatAccountAdd: "Ajouter un compte officiel",
+    wechatAccountLimitReached:
+      "Vous pouvez associer jusqu’à 5 comptes officiels.",
+    wechatAccountLabel: "Libellé du compte",
+    wechatAccountLabelPlaceholder:
+      "Par exemple : Compte principal de la marque",
+    wechatAccountBound: "Associé",
+    wechatAccountRebind: "Modifier l’association",
+    wechatAccountUnbind: "Dissocier",
+    wechatAccountUnbindConfirm: "Dissocier ce compte officiel WeChat ?",
+    wechatAccountUnbindFailed:
+      "Impossible de dissocier le compte. Réessayez plus tard",
+    wechatAccountBindFailed:
+      "Impossible d’associer le compte. Vérifiez les réglages",
+    wechatAccountCancel: "Annuler",
+    wechatAccountSave: "Enregistrer",
+    wechatAccountBind: "Associer le compte",
+    wechatAppId: "AppID du compte officiel",
+    wechatAppSecret: "AppSecret du compte officiel",
+    wechatAppSecretPlaceholder:
+      "Saisissez l’AppSecret (il ne sera plus affiché)",
+    wechatAppSecretUpdatePlaceholder:
+      "Laissez vide pour conserver l’AppSecret actuel ; requis si l’AppID change",
+    wechatIPAllowlistHint:
+      "Ajoutez l’IP de sortie du serveur Koinote à la liste blanche WeChat avant l’association.",
+    wechatCoverTitle: "Choisir une couverture",
+    wechatCoverModeLabel: "Source de couverture",
+    wechatCoverDefault: "Couverture par défaut",
+    wechatCoverDefaultHint: "Logo Koinote et titre de l’article",
+    wechatCoverDefaultPreview: "Préparation de la couverture Koinote…",
+    wechatCoverArticle: "Image de l’article",
+    wechatCoverArticleHint: "Choisir parmi les images de l’article",
+    wechatCoverArticleEmpty:
+      "Cet article ne contient aucune image utilisable. Choisissez la couverture par défaut ou générez-en une avec l’IA.",
+    wechatCoverAi: "Génération IA",
+    wechatCoverAiHint: "Créer une couverture à partir d’un prompt",
+    wechatCoverAiRequired:
+      "Saisissez un prompt et générez une couverture, ou choisissez une autre source.",
+    wechatCoverPromptPlaceholder:
+      "Décrivez le sujet, la composition et le style de la couverture…",
+    wechatCoverRatio: "Format de couverture",
+    wechatCoverCreditCost: "20 credits par couverture",
+    wechatCoverGenerate: "Générer",
+    wechatCoverRegenerate: "Régénérer",
+    wechatCoverPreview: "Aperçu de la couverture WeChat",
+    wechatCoverGenerateFailed:
+      "Impossible de générer la couverture. Réessayez plus tard",
+    wechatTitleLimit:
+      "Le titre d’un brouillon WeChat doit contenir entre 1 et 64 caractères.",
+    wechatDraftCreate: "Enregistrer dans les brouillons WeChat",
+    wechatDraftCreating: "Transfert des images et création du brouillon…",
+    wechatDraftCreated: "Enregistré dans les brouillons WeChat",
+    wechatDraftCreateFailed:
+      "Impossible de créer le brouillon WeChat. Réessayez plus tard",
+    wechatPreflight: {
+      title: "Vérification avant publication",
+      ready: "Vérifications réussies",
+      blocked: "Des points nécessitent votre attention",
+      copyTarget: "Copie",
+      draftTarget: "Brouillon",
+      summary:
+        "Vérification rapide des métadonnées, de la structure, des images et des modules facultatifs. Le document n’est jamais modifié.",
+      metadata: "Métadonnées de l’article",
+      structure: "Structure",
+      images: "Images",
+      online: "en ligne",
+      local: "locales",
+      errorCount: "erreur(s)",
+      warningCount: "avertissement(s)",
+      advice: "Améliorations facultatives",
+      noAdvice: "Aucune amélioration évidente détectée.",
+      frontmatter:
+        "Un frontmatter Markdown a été détecté ; il est traité comme métadonnées et n’apparaît pas dans le corps exporté.",
+      checkTitleTooLong:
+        "Le titre dépasse la limite de 64 caractères d’un brouillon WeChat.",
+      checkTitleMissing:
+        "L’article n’a pas de titre. Définissez-en un avant de publier.",
+      checkAuthorTooLong:
+        "Le nom de l’auteur dépasse la limite conseillée de 16 caractères.",
+      checkDigestTooLong:
+        "Le résumé dépasse la limite conseillée de 128 caractères.",
+      checkDuplicateTitle:
+        "Le H1 du corps répète le titre du brouillon et peut créer deux titres visibles.",
+      checkTitleMismatch:
+        "Le titre du brouillon diffère du H1 ; confirmez que c’est intentionnel.",
+      checkImageAlt:
+        "{n} image(s) n’ont pas de texte alternatif ; ajoutez une légende ou un alt.",
+      checkImageSync:
+        "Les images sont vérifiées lors de la copie ou de la création du brouillon ; ce dernier transfère les images du corps.",
+      checkModule:
+        "Certains modules de mise en page nécessitent une vérification ; les modules inconnus restent du texte normal.",
+      checkModuleError:
+        "La syntaxe d’un module est invalide ; il reste du texte normal lors de l’export.",
+      adviceToc:
+        "Ajoutez éventuellement :::toc pour guider la lecture d’un article long.",
+      adviceSteps:
+        "Transformez les étapes consécutives en :::steps pour faciliter la lecture mobile.",
+      adviceQuote:
+        "Du contenu cité est présent ; :::quote ou :::quote-card peut mieux mettre en avant le point clé.",
+      adviceMetrics:
+        "Plusieurs chiffres ont été détectés ; :::metrics peut les transformer en carte lisible.",
+      adviceCover:
+        "L’article est long et sans image ; prévoyez une couverture ou une illustration.",
+      adviceCta: "Aucun appel à l’action clair ; envisagez d’ajouter :::cta.",
+    },
     themeNone: "Style par défaut",
     tabsLabel: "Documents ouverts",
     closeTab: "Fermer l'onglet",
@@ -2037,6 +2278,7 @@ function hello(name) {
             "Données de compte : e-mail, nom d’utilisateur, nom affiché et mot de passe haché",
             "En cas de connexion sociale, le profil de base renvoyé par Google ou GitHub (e-mail, nom d’utilisateur, avatar)",
             "Vos contenus : titres et corps des documents, arborescence des dossiers, images envoyées",
+            "Association au compte officiel WeChat : AppID, AppSecret chiffré et date d’association",
             "Paramètres de partage : jetons de partage et mots de passe d’accès hachés",
             "Commentaires des utilisateurs : texte du commentaire, page source et informations client",
             "Journaux d’exploitation : horodatage, IP et User-Agent, nécessaires au débogage et à la lutte contre les abus",
@@ -2055,7 +2297,7 @@ function hello(name) {
             "Les informations collectées servent uniquement aux finalités suivantes.",
           ],
           items: [
-            "Fournir les fonctions essentielles : sauvegarde et synchronisation des documents, hébergement des images, génération des liens de partage",
+            "Fournir les fonctions essentielles : sauvegarde et synchronisation des documents, hébergement des images, liens de partage et création de brouillons WeChat à votre demande",
             "Vous authentifier et maintenir votre session",
             "Diagnostiquer les pannes et prévenir les abus ou attaques",
             "Comprendre de façon agrégée l’inscription, la première création, l’envoi d’image, l’export, MCP, la conversion de paiement et la rétention J1/J7/J30",
@@ -2078,13 +2320,14 @@ function hello(name) {
             "Google et GitHub : vérification d’identité, uniquement si vous choisissez de vous connecter avec eux",
             "Stripe : traitement du paiement de l’abonnement, avec l’adresse e-mail, le montant, la devise et les identifiants de paiement nécessaires au règlement",
             "Feishu : canal facultatif de notification interne des paiements ; seuls l’identifiant utilisateur Koinote, le montant, la devise et les identifiants de commande sont transmis, jamais l’e-mail ni le contenu des documents",
+            "Fournisseur du modèle de couverture IA : reçoit le prompt saisi uniquement lorsque vous générez une couverture WeChat, jamais l’AppSecret ni le corps de l’article",
           ],
         },
         {
           title: "Conservation et suppression",
           body: [
             "Les documents passent d’abord par une corbeille de 30 jours ; contenu, versions, images et utilisation du stockage restent conservés. Après suppression définitive ou expiration, les images non référencées ailleurs sont mises en file d’attente de suppression.",
-            "Vous pouvez supprimer immédiatement tout le compte depuis le tableau de bord en saisissant l’adresse actuelle puis en confirmant. Le compte, les documents, versions, partages, jetons MCP et le registre d’images sont supprimés ; les images associées sont retirées du stockage objet en arrière-plan. Cette action est irréversible.",
+            "Vous pouvez supprimer immédiatement tout le compte depuis le tableau de bord en saisissant l’adresse actuelle puis en confirmant. Le compte, les documents, versions, partages, jetons MCP, l’association WeChat et le registre d’images sont supprimés ; les images associées sont retirées du stockage objet en arrière-plan. Cette action est irréversible.",
             "Les données de paiement Stripe minimales nécessaires à la fiscalité, aux litiges et à la lutte contre la fraude sont dissociées du compte et conservées conformément à la loi. Les données supprimées présentes dans les sauvegardes expirent avec leur cycle de conservation et ne servent pas à restaurer un compte supprimé.",
             "Le texte des commentaires, la page source et les informations client que vous avez envoyés sont dissociés du compte puis conservés pour le diagnostic et l’amélioration du produit ; ils peuvent toujours contenir les données personnelles que vous avez saisies.",
             "Si vous ne pouvez pas vous connecter ou souhaitez exercer un autre droit légal, contactez-nous à l’adresse ci-dessous.",
@@ -2201,6 +2444,42 @@ function hello(name) {
     unauthorized: "Non connecté",
     session_expired: "Session expirée",
     server_error: "Erreur serveur, veuillez réessayer plus tard",
+    wechat_credentials_invalid: "L’AppID ou l’AppSecret WeChat est incorrect",
+    wechat_ip_not_allowed:
+      "L’IP de sortie du serveur n’est pas dans la liste blanche WeChat",
+    wechat_api_unauthorized:
+      "Ce compte officiel n’a pas accès aux API de brouillons ou de médias",
+    wechat_api_limit_reached: "Le quota quotidien de l’API WeChat est atteint",
+    wechat_provider_error:
+      "WeChat a refusé la requête. Vérifiez les réglages du compte",
+    wechat_provider_unavailable: "WeChat est temporairement indisponible",
+    wechat_account_not_bound: "Associez d’abord un compte officiel WeChat",
+    wechat_account_already_bound:
+      "Ce compte officiel est déjà associé à un autre compte Koinote",
+    wechat_account_limit_reached:
+      "Chaque compte Koinote peut associer jusqu’à 5 comptes officiels WeChat",
+    wechat_account_label_invalid:
+      "Le libellé du compte officiel ne peut pas dépasser 40 caractères",
+    wechat_credentials_unavailable:
+      "Le chiffrement des identifiants WeChat n’est pas configuré",
+    wechat_cover_input_invalid:
+      "Le prompt, le format ou l’image de couverture est invalide",
+    wechat_cover_model_unavailable:
+      "Le modèle de génération de couverture n’est pas configuré",
+    wechat_cover_generation_failed:
+      "Le service de génération de couverture a échoué",
+    wechat_title_invalid:
+      "Le titre du brouillon WeChat doit contenir entre 1 et 64 caractères",
+    wechat_draft_input_invalid:
+      "Le contenu du brouillon WeChat est invalide ou trop volumineux",
+    wechat_cover_upload_failed:
+      "La couverture n’a pas pu être envoyée aux médias WeChat",
+    wechat_image_unreachable:
+      "Une image de l’article n’est pas accessible publiquement",
+    wechat_content_image_failed:
+      "Une image n’a pas pu être transférée vers WeChat",
+    wechat_draft_create_failed:
+      "WeChat n’a pas pu créer le brouillon. Vérifiez les autorisations",
     oauth_unsupported: "Fournisseur de connexion non pris en charge",
     oauth_not_configured:
       "Cette méthode de connexion n'est pas encore configurée",
@@ -2264,6 +2543,8 @@ function hello(name) {
       "Le mot de passe doit comporter au moins 6 caractères",
     desktop_share_sync_required:
       "Le document doit finir sa synchronisation avant le partage. Vérifiez l’état de synchronisation puis réessayez",
+    desktop_wechat_sync_required:
+      "Le document doit finir sa synchronisation avant son envoi vers WeChat. Vérifiez l’état de synchronisation puis réessayez",
     desktop_share_cache_failed:
       "Le partage est actif en ligne, mais son état local n’a pas pu être enregistré. Réappliquez les réglages de partage plus tard",
     share_password_invalid: "Mot de passe incorrect",

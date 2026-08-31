@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Code2,
   Download,
@@ -17,7 +18,13 @@ import {
   safeFilename,
 } from "./exportDocument";
 import { MediaExportDialog } from "./WechatDialog";
-import { trackProductEvent } from "../../api";
+import {
+  ApiError,
+  getWechatOfficialAccounts,
+  prepareWechatDraftDocument,
+  trackProductEvent,
+  type WechatOfficialAccount,
+} from "../../api";
 import { useDesktopMenuActions } from "../../desktop/menu";
 
 function exportErrorText(
@@ -26,11 +33,13 @@ function exportErrorText(
   errors: Record<string, string>,
 ): string {
   const code =
-    typeof error === "string"
-      ? error
-      : error instanceof Error
-        ? error.message
-        : "";
+    error instanceof ApiError
+      ? error.code
+      : typeof error === "string"
+        ? error
+        : error instanceof Error
+          ? error.message
+          : "";
   return (code && errors[code]) || fallback;
 }
 
@@ -40,6 +49,7 @@ export function ExportMenu({
   title,
   themeId,
   member,
+  isAdmin,
   localMode,
 }: {
   editor: Editor | null;
@@ -48,11 +58,18 @@ export function ExportMenu({
   /** 文档当前的排版主题，微信导出直接用它 —— 不在导出弹窗里二次选择 */
   themeId: string;
   member: boolean;
+  isAdmin: boolean;
   localMode: boolean;
 }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [wechatDraftOpen, setWechatDraftOpen] = useState(false);
+  const [wechatAccounts, setWechatAccounts] = useState<WechatOfficialAccount[]>(
+    [],
+  );
+  const [wechatDraftOpening, setWechatDraftOpening] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -144,6 +161,39 @@ export function ExportMenu({
     });
   }
 
+  async function openWechatDraft(): Promise<string | undefined> {
+    setOpen(false);
+    if (!isAdmin) return;
+    if (!member) {
+      await navigate({ to: "/pricing" });
+      return undefined;
+    }
+    if (localMode || wechatDraftOpening) return undefined;
+    setError(null);
+    setWechatDraftOpening(true);
+    try {
+      const result = await getWechatOfficialAccounts();
+      if (result.accounts.length === 0) {
+        await navigate({ to: "/settings", search: { section: "wechat" } });
+        return undefined;
+      }
+      await prepareWechatDraftDocument(docId);
+      setWechatAccounts(result.accounts);
+      setMediaOpen(false);
+      setWechatDraftOpen(true);
+    } catch (caught) {
+      const message = exportErrorText(
+        caught,
+        t.editor.wechatAccountLoadFailed,
+        t.errors,
+      );
+      setError(message);
+      return message;
+    } finally {
+      setWechatDraftOpening(false);
+    }
+  }
+
   if (!editor) return null;
 
   return (
@@ -227,8 +277,25 @@ export function ExportMenu({
           title={title}
           themeId={themeId}
           member={member}
+          isAdmin={isAdmin}
           localMode={localMode}
+          onOpenWechatDraft={openWechatDraft}
+          wechatDraftOpening={wechatDraftOpening}
           onClose={() => setMediaOpen(false)}
+        />
+      )}
+      {wechatDraftOpen && (
+        <MediaExportDialog
+          editor={editor}
+          docId={docId}
+          title={title}
+          themeId={themeId}
+          member={member}
+          isAdmin={isAdmin}
+          localMode={localMode}
+          wechatAccounts={wechatAccounts}
+          draftOnly
+          onClose={() => setWechatDraftOpen(false)}
         />
       )}
     </div>

@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Loader2, X } from "lucide-react";
+import { Check, Copy, Loader2, Send, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
   exportToMedia,
   mediaExportFormat,
   type MediaPlatform,
 } from "./exportMedia";
-import { findWechatTheme } from "./wechatThemes";
+import { getWechatThemeLabel } from "./wechatThemes";
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { pushModal } from "../../modalStack";
 import { WECHAT_GEO_MAX_CHARS, wechatGeoSourceHash } from "./wechatGeo";
@@ -19,7 +19,12 @@ import {
   getWechatGeoSummary,
   trackProductEvent,
   updateWechatGeoSummary,
+  type WechatOfficialAccount,
 } from "../../api";
+import { buildWechatHTML } from "./exportWechat";
+import { WechatDraftPanel } from "./WechatDraftPanel";
+import { WechatPreflightPanel } from "./WechatPreflightPanel";
+import { parseArticleMetadata } from "./wechatPreflight";
 
 /**
  * 导出到自媒体平台。
@@ -33,7 +38,12 @@ export function MediaExportDialog({
   title,
   themeId,
   member,
+  isAdmin,
   localMode,
+  draftOnly = false,
+  wechatAccounts,
+  onOpenWechatDraft,
+  wechatDraftOpening = false,
   onClose,
 }: {
   editor: Editor;
@@ -41,11 +51,23 @@ export function MediaExportDialog({
   title: string;
   themeId: string;
   member: boolean;
+  isAdmin: boolean;
   localMode: boolean;
+  draftOnly?: boolean;
+  wechatAccounts?: WechatOfficialAccount[];
+  onOpenWechatDraft?: () => Promise<string | undefined>;
+  wechatDraftOpening?: boolean;
   onClose: () => void;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const currentMarkdown = editor.storage.markdown.getMarkdown() as string;
+  const articleImages = useMemo(
+    () => extractWechatArticleImages(editor),
+    [editor, currentMarkdown],
+  );
+  const exportMetadata = parseArticleMetadata(currentMarkdown, title).metadata;
+  const exportTitle = exportMetadata.title || title;
   const [platform, setPlatform] = useState<MediaPlatform>("wechat");
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +81,7 @@ export function MediaExportDialog({
   const [geoTextSaving, setGeoTextSaving] = useState(false);
   const [geoPreferenceSaving, setGeoPreferenceSaving] = useState(false);
   const [geoClosing, setGeoClosing] = useState(false);
+  const [draftPublishing, setDraftPublishing] = useState(false);
   const [geoDirty, setGeoDirty] = useState(false);
   const [geoStale, setGeoStale] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -123,7 +146,15 @@ export function MediaExportDialog({
     return () => {
       cancelled = true;
     };
-  }, [docId, editor, localMode, member, t.editor.wechatGeoLoadFailed, t.errors, title]);
+  }, [
+    docId,
+    editor,
+    localMode,
+    member,
+    t.editor.wechatGeoLoadFailed,
+    t.errors,
+    title,
+  ]);
 
   async function persistGeoText(): Promise<boolean> {
     if (geoSavePromiseRef.current) return geoSavePromiseRef.current;
@@ -259,6 +290,13 @@ export function MediaExportDialog({
           ),
         );
       }
+      if (result.layout.diagnostics.length > 0) {
+        setNote((current) =>
+          current
+            ? `${current} ${t.editor.wechatPreflight.checkModule}`
+            : t.editor.wechatPreflight.checkModule,
+        );
+      }
     } catch (error) {
       setError(
         isLocalModeNetworkDisabled(error)
@@ -295,7 +333,9 @@ export function MediaExportDialog({
       setDone(false);
       setBytes(null);
       if (result.geo.creditsCharged > 0) {
-        void queryClient.invalidateQueries({ queryKey: AGENT_CREDITS_QUERY_KEY });
+        void queryClient.invalidateQueries({
+          queryKey: AGENT_CREDITS_QUERY_KEY,
+        });
       }
     } catch (caught) {
       if (controller.signal.aborted) return;
@@ -309,8 +349,66 @@ export function MediaExportDialog({
     }
   }
 
+  async function prepareWechatDraftHTML(): Promise<string | null> {
+    setError(null);
+    setNote(null);
+    setImageWarning(null);
+    if (member && !localMode && geoEnabled && !(await persistGeoText())) {
+      return null;
+    }
+    try {
+      const result = await buildWechatHTML(editor, title, themeId, {
+        includeGeoCorpus: member && !localMode && geoEnabled,
+        geoText,
+        includeTitle: false,
+      });
+      if (result.math.temporaryQuotaFailed > 0) {
+        setNote(
+          t.editor.wechatMathTemporaryQuotaExceeded.replace(
+            "{n}",
+            String(result.math.temporaryQuotaFailed),
+          ),
+        );
+      } else if (result.math.failed > 0) {
+        setNote(
+          t.editor.wechatMathFailed.replace("{n}", String(result.math.failed)),
+        );
+      }
+      if (result.layout.diagnostics.length > 0) {
+        setNote((current) =>
+          current
+            ? `${current} ${t.editor.wechatPreflight.checkModule}`
+            : t.editor.wechatPreflight.checkModule,
+        );
+      }
+      return result.html;
+    } catch (caught) {
+      setError(
+        isLocalModeNetworkDisabled(caught)
+          ? t.desktopLocalMode.networkDisabled
+          : t.editor.exportFailed,
+      );
+      return null;
+    }
+  }
+
+  async function openWechatDraftDialog() {
+    if (!onOpenWechatDraft || geoClosing || closeInFlightRef.current) return;
+    closeInFlightRef.current = true;
+    setGeoClosing(true);
+    try {
+      if (member && !localMode && !(await persistGeoText())) return;
+      await geoPreferenceQueueRef.current;
+      const draftError = await onOpenWechatDraft();
+      if (draftError) setError(draftError);
+    } finally {
+      closeInFlightRef.current = false;
+      setGeoClosing(false);
+    }
+  }
+
   async function closeDialog() {
-    if (closeInFlightRef.current) return;
+    if (draftPublishing || closeInFlightRef.current) return;
     closeInFlightRef.current = true;
     setGeoClosing(true);
     geoGenerateAbortRef.current?.abort();
@@ -345,21 +443,25 @@ export function MediaExportDialog({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t.editor.mediaTitle}
+        aria-label={draftOnly ? t.editor.wechatDraftPush : t.editor.mediaTitle}
         tabIndex={-1}
-        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl outline-none dark:border-white/15"
+        className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl outline-none dark:border-white/15"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">{t.editor.mediaTitle}</h2>
+            <h2 className="text-base font-semibold">
+              {draftOnly ? t.editor.wechatDraftPush : t.editor.mediaTitle}
+            </h2>
             <p className="mt-1 text-xs leading-relaxed text-neutral-400">
-              {t.editor.mediaSubtitle}
+              {draftOnly
+                ? t.editor.wechatDraftPushHint
+                : t.editor.mediaSubtitle}
             </p>
           </div>
           <button
             type="button"
             onClick={() => void closeDialog()}
-            disabled={geoClosing}
+            disabled={geoClosing || draftPublishing}
             aria-label={t.editor.shareClose}
             className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
@@ -371,57 +473,59 @@ export function MediaExportDialog({
           </button>
         </div>
 
-        <div
-          className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
-          role="radiogroup"
-          aria-label={t.editor.mediaPlatformLabel}
-        >
-          {(
-            [
-              ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
-              ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
-              ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
-            ] as const
-          ).map(([value, label, hint]) => {
-            const selected = platform === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => {
-                  setPlatform(value);
-                  setDone(false);
-                  setBytes(null);
-                  setError(null);
-                  setNote(null);
-                  setImageWarning(null);
-                }}
-                className="rounded-xl border px-3 py-3 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/5"
-                style={{
-                  borderColor: selected
-                    ? "var(--ink-strong)"
-                    : "var(--ink-line)",
-                  background: selected ? "var(--ink-wash)" : "transparent",
-                }}
-              >
-                <span
-                  className="block text-sm font-semibold"
-                  style={{ color: "var(--ink-strong)" }}
+        {!draftOnly && (
+          <div
+            className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
+            role="radiogroup"
+            aria-label={t.editor.mediaPlatformLabel}
+          >
+            {(
+              [
+                ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
+                ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
+                ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
+              ] as const
+            ).map(([value, label, hint]) => {
+              const selected = platform === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    setPlatform(value);
+                    setDone(false);
+                    setBytes(null);
+                    setError(null);
+                    setNote(null);
+                    setImageWarning(null);
+                  }}
+                  className="rounded-xl border px-3 py-3 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/5"
+                  style={{
+                    borderColor: selected
+                      ? "var(--ink-strong)"
+                      : "var(--ink-line)",
+                    background: selected ? "var(--ink-wash)" : "transparent",
+                  }}
                 >
-                  {label}
-                </span>
-                <span
-                  className="mt-1 block text-[11px] leading-4"
-                  style={{ color: "var(--ink-faint)" }}
-                >
-                  {hint}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span
+                    className="block text-sm font-semibold"
+                    style={{ color: "var(--ink-strong)" }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className="mt-1 block text-[11px] leading-4"
+                    style={{ color: "var(--ink-faint)" }}
+                  >
+                    {hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* 当前用的是哪套主题。改主题要回编辑区改 —— 那里改完立刻能看见效果，
             在这个弹窗里改反而看不见 */}
@@ -432,9 +536,18 @@ export function MediaExportDialog({
               ·
             </span>
             <span className="font-medium text-neutral-700 dark:text-neutral-200">
-              {themeId ? findWechatTheme(themeId).name : t.editor.themeNone}
+              {themeId
+                ? getWechatThemeLabel(themeId, t.editor.wechatThemeNames)
+                : t.editor.themeNone}
             </span>
           </p>
+        )}
+
+        {platform === "wechat" && (
+          <WechatPreflightPanel
+            markdown={currentMarkdown}
+            title={exportTitle}
+          />
         )}
 
         {platform === "wechat" && member && !localMode && (
@@ -478,14 +591,16 @@ export function MediaExportDialog({
                   onClick={() => void generateGeoSummary()}
                   className="inline-flex items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-black/[0.03] disabled:opacity-60 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
                 >
-                  {geoGenerating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {geoGenerating && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  )}
                   {geoTextSaving || geoPreferenceSaving
                     ? t.editor.wechatGeoSaving
                     : geoGenerating
-                    ? t.editor.wechatGeoGenerating
-                    : geoText
-                      ? t.editor.wechatGeoRegenerate
-                      : t.editor.wechatGeoGenerate}
+                      ? t.editor.wechatGeoGenerating
+                      : geoText
+                        ? t.editor.wechatGeoRegenerate
+                        : t.editor.wechatGeoGenerate}
                 </button>
                 {geoText && (
                   <textarea
@@ -515,12 +630,59 @@ export function MediaExportDialog({
               </div>
             )}
             {geoError && (
-              <p role="alert" className="mt-2 text-[11px] leading-relaxed text-red-500">
+              <p
+                role="alert"
+                className="mt-2 text-[11px] leading-relaxed text-red-500"
+              >
                 {geoError}
               </p>
             )}
           </div>
         )}
+
+        {draftOnly &&
+          platform === "wechat" &&
+          !localMode &&
+          member &&
+          isAdmin && (
+            <WechatDraftPanel
+              accounts={wechatAccounts}
+              docId={docId}
+              title={exportTitle}
+              author={exportMetadata.author}
+              digest={exportMetadata.digest}
+              isAdmin={isAdmin}
+              disabled={
+                busy ||
+                geoClosing ||
+                geoLoading ||
+                geoGenerating ||
+                geoTextSaving ||
+                geoPreferenceSaving ||
+                [...exportMetadata.author].length > 16 ||
+                [...exportMetadata.digest].length > 128
+              }
+              articleImages={articleImages}
+              prepareHTML={prepareWechatDraftHTML}
+              onPublishingChange={setDraftPublishing}
+            />
+          )}
+
+        {draftOnly && platform === "wechat" && !localMode && !isAdmin && (
+          <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+            {t.editor.wechatOfficialAdminsOnly}
+          </p>
+        )}
+
+        {draftOnly &&
+          platform === "wechat" &&
+          !localMode &&
+          isAdmin &&
+          !member && (
+            <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+              {t.editor.wechatOfficialMembersOnly}
+            </p>
+          )}
 
         {/* 排在公式提示之前：这条更严重（图会裂），先看到它 */}
         {imageWarning && (
@@ -556,47 +718,74 @@ export function MediaExportDialog({
             : t.editor.mediaRichTextNote}
         </p>
 
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={run}
-            disabled={
-              busy ||
-              geoLoading ||
-              geoGenerating ||
-              (platform === "wechat" &&
-                member &&
-                !localMode &&
-                geoEnabled &&
-                !geoText.trim())
-            }
-            className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
-            style={{
-              background: "var(--ink-strong)",
-              color: "var(--ink-paper)",
-            }}
-          >
-            {busy ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t.editor.mediaWorking}
-              </>
-            ) : done ? (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                {t.editor.mediaCopied}
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                {t.editor.mediaCopy}
-              </>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {!draftOnly && (
+            <button
+              type="button"
+              onClick={run}
+              disabled={
+                busy ||
+                geoLoading ||
+                geoGenerating ||
+                (platform === "wechat" &&
+                  member &&
+                  !localMode &&
+                  geoEnabled &&
+                  !geoText.trim())
+              }
+              className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
+              style={{
+                background: "var(--ink-strong)",
+                color: "var(--ink-paper)",
+              }}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t.editor.mediaWorking}
+                </>
+              ) : done ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  {t.editor.mediaCopied}
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  {t.editor.mediaCopy}
+                </>
+              )}
+            </button>
+          )}
+          {!draftOnly &&
+            platform === "wechat" &&
+            !localMode &&
+            isAdmin &&
+            onOpenWechatDraft && (
+              <button
+                type="button"
+                onClick={() => void openWechatDraftDialog()}
+                disabled={
+                  busy ||
+                  geoLoading ||
+                  geoGenerating ||
+                  geoClosing ||
+                  wechatDraftOpening
+                }
+                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/10 disabled:opacity-60 dark:border-emerald-400/35 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
+              >
+                {geoClosing || wechatDraftOpening ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                {t.editor.wechatDraftSync}
+              </button>
             )}
-          </button>
           <button
             type="button"
             onClick={() => void closeDialog()}
-            disabled={geoClosing}
+            disabled={geoClosing || draftPublishing}
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
             {geoClosing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -612,4 +801,28 @@ export function MediaExportDialog({
       </div>
     </div>
   );
+}
+
+function extractWechatArticleImages(
+  editor: Editor,
+): Array<{ src: string; alt: string }> {
+  const container = document.createElement("div");
+  container.innerHTML = editor.getHTML();
+  return Array.from(container.querySelectorAll("img"))
+    .map((image) => {
+      const rawSource = image.getAttribute("src")?.trim() ?? "";
+      if (!rawSource) return null;
+      try {
+        const source = new URL(rawSource, window.location.origin).toString();
+        if (!/^(?:https?:|data:)/i.test(source)) return null;
+        return {
+          src: source,
+          alt: image.getAttribute("alt")?.trim() ?? "",
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((image): image is { src: string; alt: string } => image !== null)
+    .slice(0, 20);
 }

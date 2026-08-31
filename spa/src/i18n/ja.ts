@@ -246,6 +246,83 @@ export const ja: Messages = {
     mcpCta: "MCP 接続を見る",
     pricingCta: "会員特典を見る",
   },
+  wechatGuide: {
+    eyebrow: "WeChat 公式アカウント設定ガイド",
+    title: "アカウントを連携して記事を下書きへ保存",
+    subtitle:
+      "Koinote のウェブ版またはデスクトップ版に公式アカウントを 5 件まで連携し、整形済みの記事を選択したアカウントの下書きへ保存できます。",
+    prerequisitesTitle: "始める前に",
+    prerequisites: [
+      "下書き・素材 API を利用できる、認証済みの WeChat 公式アカウント（1 件以上）。",
+      "アカウントの AppID と AppSecret。AppSecret は Koinote の連携フォームだけに入力し、チャットやフィードバックには送らないでください。",
+      "Koinote Cloud の現在の WeChat API 送信元 IP は 122.51.97.242 です。セルフホストではサーバーの公開送信元アドレスを使います。",
+      "ログイン済みの Koinote 管理者アカウントと永久会員。連携、カバー生成、下書き送信は現在管理者のみ利用できます。デスクトップのローカルモードでは WeChat 接続やカバー生成はできません。",
+    ],
+    platformTitle: "WeChat 開発者プラットフォームを設定する",
+    platformSteps: [
+      {
+        title: "WeChat 開発者プラットフォームへログイン",
+        desc: "developers.weixin.qq.com/platform を開き、連携するアカウントの管理者としてログインします。",
+      },
+      {
+        title: "開発インターフェース管理を開く",
+        desc: "連携する公式アカウントを選び、「開発インターフェース管理」で開発者情報と IP ホワイトリストを確認します。",
+      },
+      {
+        title: "IP ホワイトリストに追加",
+        desc: "Koinote Cloud は 122.51.97.242（WeChat API の送信元 IP）を追加します。セルフホストではサーバーの公開送信元 IP を追加してください。複数の場合は WeChat の形式に従って入力します。",
+      },
+      {
+        title: "開発者情報を準備",
+        desc: "AppID をコピーし、AppSecret を生成またはコピーします。一度しか表示されない場合があるため、先にパスワード管理へ保存してください。",
+      },
+    ],
+    ipTitle: "なぜ IP ホワイトリストが必要ですか？",
+    ipBody:
+      "WeChat は API リクエストを行うサーバーを検証します。Koinote はバックエンドからのみ WeChat を呼び出すため、登録するのはパソコンの IP ではなくサーバーの送信元 IP です。Koinote Cloud は 122.51.97.242、セルフホストではサーバーの公開送信元アドレスを登録してください。",
+    koinoteTitle: "Koinote で連携して送信する",
+    koinoteSteps: [
+      "Koinote のウェブ版またはデスクトップ版を開き、永久会員の管理者アカウントでログインします。",
+      "設定 → WeChat で、各アカウントのメモ、AppID、AppSecret を入力します。最大 5 件まで連携し、1 件をデフォルトに設定できます。",
+      "文書を開き、自媒体へのエクスポートから WeChat を選び、「アカウントの下書きへ同期」を押します。下書きパネルで送信先を選び、未選択の場合はデフォルトを使用します。",
+      "カバー画像は任意です。AI カバーが必要な場合はプロンプトを入力し、2.35:1 または 1:1 を選びます。カバー 1 枚の生成成功ごとに 20 credits、再生成も別途消費します。",
+      "AI カバーを生成せずに WeChat の下書きへ保存でき、既定のカバーまたは本文の画像を選べます。本文画像を素材へ転送してから下書きを作成しますが、Koinote が直接公開することはありません。",
+    ],
+    billingTitle: "料金と利用条件",
+    billingBody:
+      "アカウント連携と下書き保存は credits を消費しません。連携、カバー生成、下書き送信は現在管理者のみ利用できます。カバー生成に成功するたび固定で 20 credits を消費し、失敗時は課金されません。生成には永久会員、十分な残高、管理者が設定した画像モデルが必要です。",
+    troubleshootingTitle: "よくある問題",
+    troubleshooting: [
+      {
+        problem: "バックエンドの IP が許可されていない",
+        solution:
+          "WeChat 開発者プラットフォームの開発インターフェース管理に戻り、Koinote Cloud は 122.51.97.242、セルフホストはサーバーの公開送信元 IP を追加してください。ローカル PC のアドレスは使用しません。",
+      },
+      {
+        problem: "アカウントに API 権限がない",
+        solution:
+          "アカウントが認証済みで、下書き・素材 API を利用できることを確認してください。アカウント種別によっては WeChat 側で権限の有効化が必要です。",
+      },
+      {
+        problem: "カバーモデルが利用できない、または credits 不足",
+        solution:
+          "20 credits 以上の利用可能残高を確認してください。モデル未設定の表示が続く場合は Koinote 管理者へ連絡してください。",
+      },
+      {
+        problem: "本文画像を転送できない",
+        solution:
+          "エディターに戻り、画像の同期完了を待ってから再試行してください。下書き作成に失敗した場合、新しく送ったカバー素材の削除を試みます。",
+      },
+    ],
+    securityTitle: "セキュリティに関する注意",
+    securityBody:
+      "AppSecret は Koinote サーバーで暗号化され、クライアントに平文で長期保存されず、カバーモデル提供者にも送信されません。文書、フィードバック、スクリーンショットに記載しないでください。漏えいの疑いがある場合は WeChat でリセットし、Koinote で再連携してください。",
+    backToDocs: "ドキュメントへ戻る",
+    openGuide: "WeChat 設定ガイドを読む",
+    openEditor: "エディターを開く",
+    openPlatform: "WeChat 開発者プラットフォームを開く",
+    pricingCta: "会員と credits を見る",
+  },
   aiGuide: {
     eyebrow: "AI 最適化ガイド",
     title: "AI 編集者が原稿を確認し、修正案を一つずつ提示",
@@ -616,7 +693,7 @@ export const ja: Messages = {
     description:
       "この操作は取り消せません。必要な文書と画像を先にエクスポートしてください。",
     immediate:
-      "アカウント、文書、履歴、共有、MCP トークン、同期済み画像は直ちに削除処理へ入ります。",
+      "アカウント、文書、履歴、共有、MCP トークン、WeChat 連携、同期済み画像は直ちに削除処理へ入ります。",
     membership:
       "永久会員資格はアカウントと共に終了します。削除による自動返金はありませんが、法定の返金権は妨げません。",
     paymentRecords:
@@ -977,13 +1054,18 @@ export const ja: Messages = {
     title: "設定",
     subtitle: "アカウント、会員情報、AI 接続、招待履歴をまとめて管理します。",
     general: "一般",
-    generalDescription: "基本情報の確認、アカウントの保護、アカウント操作を管理します。",
+    generalDescription:
+      "基本情報の確認、アカウントの保護、アカウント操作を管理します。",
     membership: "会員情報",
-    membershipDescription: "プラン、クラウド使用量、バージョン履歴設定を確認します。",
+    membershipDescription:
+      "プラン、クラウド使用量、バージョン履歴設定を確認します。",
     ai: "AI 設定",
     aiDescription: "モデル、MCP アクセス、credits の利用履歴を管理します。",
     invitations: "招待",
-    invitationsDescription: "専用招待リンクを作成し、招待から参加したユーザーを確認します。",
+    invitationsDescription:
+      "専用招待リンクを作成し、招待から参加したユーザーを確認します。",
+    wechat: "WeChat",
+    wechatDescription: "公式アカウントを連携し、下書き送信の設定を管理します。",
     freePlan: "無料ユーザー",
     lifetimePlan: "永久会員",
     upgrade: "会員にアップグレード",
@@ -1533,6 +1615,34 @@ export const ja: Messages = {
     mediaImagesUnreachable:
       "{n} 件の画像を投稿先が取得できない可能性があります（{hosts}）。貼り付け後に確認してください。",
     wechatThemeLabel: "テーマ",
+    wechatThemeNames: {
+      minimal: "ミニマル・モノクロ",
+      medium: "長文エッセイ",
+      wired: "テック特集",
+      verge: "ニュース・ブリーフィング",
+      stripe: "プロダクトドキュメント",
+      apple: "Apple ニュースルーム",
+      ft: "ビジネス分析",
+      linear: "リリースノート",
+      github: "GitHub README",
+      notion: "Notion メモ",
+      magazine: "雑誌特集",
+      editorial: "エディトリアル・コラム",
+      newspaper: "新聞レポート",
+      course: "講義ノート",
+      event: "イベント告知",
+      paper: "Koinote ペーパー",
+      signal: "Koinote シグナル",
+      notes: "Koinote ノーツ",
+      pulse: "Koinote パルス",
+    },
+    wechatThemeGroups: {
+      推荐默认: "おすすめ",
+      经典媒体: "定番メディア",
+      科技产品: "テックとプロダクト",
+      内容出版: "出版・編集",
+      中文公众号: "中国語コンテンツ",
+    },
     wechatGeoExperiment: "AI 生成の非表示 GEO 要約",
     wechatGeoExperimentHint:
       "会員限定です。要約はドキュメントに保存され、書き出し時にタイトル下へ目印の区切り線が入ります。非表示テキストは WeChat に削除されたり、規約違反のレイアウトと判断されたりする可能性があり、順位効果は保証されません。内蔵モデルは credits を消費します。",
@@ -1550,6 +1660,126 @@ export const ja: Messages = {
     wechatGeoStale:
       "記事の内容が変更されています。保存済みの要約をそのまま使うか、再生成できます。",
     wechatGeoPlaceholder: "AI 生成後に非表示要約を確認・編集できます。",
+    wechatOfficialTitle: "WeChat 下書きボックス",
+    wechatOfficialHint:
+      "認証済み公式アカウントを 5 件まで連携し、デフォルトを設定して、記事を選択したアカウントの下書きへ保存できます。AppSecret はサーバーで暗号化されます。",
+    wechatOfficialMembersOnly:
+      "公式アカウント連携、ワンクリック下書き、AI カバー生成は会員限定です。",
+    wechatOfficialAdminsOnly:
+      "公式アカウント連携、下書き送信、AI カバー生成は現在管理者のみ利用できます。",
+    wechatAccountNotBound:
+      "WeChat 公式アカウントが未連携です。先に設定から連携してください。",
+    wechatDraftPush: "WeChat 下書きへ送信",
+    wechatDraftSync: "アカウントの下書きへ同期",
+    wechatDraftPushHint:
+      "既定のカバー、本文の画像、AI 生成カバーから選んで、現在の記事を WeChat の下書きとして保存します。公開は行いません。",
+    wechatAccountLoading: "WeChat 連携を読み込み中…",
+    wechatAccountLoadFailed:
+      "WeChat 連携を読み込めませんでした。後でもう一度お試しください",
+    wechatAccountRetry: "再試行",
+    wechatTargetAccount: "送信先の公式アカウント",
+    wechatAccountDefault: "デフォルト",
+    wechatAccountSetDefault: "デフォルトに設定",
+    wechatAccountSaveFailed: "公式アカウントの設定を保存できませんでした",
+    wechatAccountAdd: "公式アカウントを追加",
+    wechatAccountLimitReached: "公式アカウントは 5 件まで連携できます。",
+    wechatAccountLabel: "アカウントのメモ",
+    wechatAccountLabelPlaceholder: "例：ブランド公式",
+    wechatAccountBound: "連携済み",
+    wechatAccountRebind: "連携を更新",
+    wechatAccountUnbind: "連携を解除",
+    wechatAccountUnbindConfirm:
+      "この WeChat 公式アカウントとの連携を解除しますか？",
+    wechatAccountUnbindFailed:
+      "連携を解除できませんでした。後でもう一度お試しください",
+    wechatAccountBindFailed:
+      "連携できませんでした。設定を確認して再試行してください",
+    wechatAccountCancel: "キャンセル",
+    wechatAccountSave: "連携を保存",
+    wechatAccountBind: "公式アカウントを連携",
+    wechatAppId: "公式アカウント AppID",
+    wechatAppSecret: "公式アカウント AppSecret",
+    wechatAppSecretPlaceholder: "AppSecret を入力（保存後は再表示されません）",
+    wechatAppSecretUpdatePlaceholder:
+      "空欄のままで現在の AppSecret を維持します。AppID 変更時は必須です",
+    wechatIPAllowlistHint:
+      "連携前に Koinote サーバーの送信元 IP を WeChat の IP ホワイトリストへ追加してください。",
+    wechatCoverTitle: "カバーを設定",
+    wechatCoverModeLabel: "カバーのソース",
+    wechatCoverDefault: "既定のカバー",
+    wechatCoverDefaultHint: "Koinote ロゴと記事タイトル",
+    wechatCoverDefaultPreview: "Koinote の既定カバーを準備中…",
+    wechatCoverArticle: "本文の画像",
+    wechatCoverArticleHint: "記事内の画像から選択",
+    wechatCoverArticleEmpty:
+      "使用できる本文画像がありません。既定のカバーを選ぶか、AI カバーを生成してください。",
+    wechatCoverAi: "AI 生成",
+    wechatCoverAiHint: "プロンプトからカバーを作成",
+    wechatCoverAiRequired:
+      "プロンプトを入力してカバーを生成するか、別のソースを選んでください。",
+    wechatCoverPromptPlaceholder:
+      "テーマ、構図、雰囲気を説明してください。例：深い青の夜空と都会の机、モダンで控えめ、タイトル用の余白…",
+    wechatCoverRatio: "カバー比率",
+    wechatCoverCreditCost: "カバー 1 枚につき 20 credits",
+    wechatCoverGenerate: "カバーを生成",
+    wechatCoverRegenerate: "再生成",
+    wechatCoverPreview: "WeChat カバープレビュー",
+    wechatCoverGenerateFailed:
+      "カバーを生成できませんでした。後でもう一度お試しください",
+    wechatTitleLimit: "WeChat 下書きのタイトルは 1〜64 文字にしてください。",
+    wechatDraftCreate: "WeChat の下書きに保存",
+    wechatDraftCreating: "画像を転送して下書きを作成中…",
+    wechatDraftCreated: "WeChat の下書きに保存しました",
+    wechatDraftCreateFailed:
+      "WeChat の下書きを作成できませんでした。後でもう一度お試しください",
+    wechatPreflight: {
+      title: "公開前チェック",
+      ready: "チェック完了",
+      blocked: "確認が必要な項目があります",
+      copyTarget: "コピー書き出し",
+      draftTarget: "下書き",
+      summary:
+        "メタデータ、構成、画像、任意のレイアウトモジュールを確認します。文書は変更しません。",
+      metadata: "記事メタデータ",
+      structure: "構成",
+      images: "画像",
+      online: "オンライン",
+      local: "ローカル",
+      errorCount: "エラー",
+      warningCount: "警告",
+      advice: "任意の改善案",
+      noAdvice: "目立った改善案はありません。",
+      frontmatter:
+        "Markdown frontmatter を検出しました。書き出し時はメタデータとして扱い、本文には表示しません。",
+      checkTitleTooLong:
+        "タイトルが WeChat 下書きの 64 文字制限を超えています。",
+      checkTitleMissing: "記事タイトルがありません。公開前に設定してください。",
+      checkAuthorTooLong: "著者名が推奨の 16 文字制限を超えています。",
+      checkDigestTooLong: "概要が推奨の 128 文字制限を超えています。",
+      checkDuplicateTitle:
+        "本文の H1 が下書きタイトルと重複するため、タイトルが二重に表示される可能性があります。",
+      checkTitleMismatch:
+        "下書きタイトルと本文 H1 が異なります。意図した差か確認してください。",
+      checkImageAlt:
+        "代替テキストのない画像が {n} 枚あります。キャプションまたは alt を追加してください。",
+      checkImageSync:
+        "画像はコピーまたは下書き作成時に確認され、下書きフローで本文画像が転送されます。",
+      checkModule:
+        "確認が必要なレイアウトモジュールがあります。未対応のものは通常のテキストとして残ります。",
+      checkModuleError:
+        "レイアウトモジュールの構文が不正です。書き出し時は通常のテキストとして残ります。",
+      adviceToc: "長文には :::toc を追加して読み進める道筋を示せます。",
+      adviceSteps:
+        "連続した手順は :::steps にするとモバイルで読みやすくなります。",
+      adviceQuote:
+        "引用があるため、:::quote または :::quote-card で要点を強調できます。",
+      adviceMetrics:
+        "複数の数値が見つかりました。:::metrics でデータカードにできます。",
+      adviceCover:
+        "長文ですが画像がありません。カバーまたは本文画像を用意するとよいでしょう。",
+      adviceCta:
+        "明確な行動喚起がありません。:::cta の追加を検討してください。",
+    },
     themeNone: "デフォルト書式",
     tabsLabel: "開いているドキュメント",
     closeTab: "タブを閉じる",
@@ -1983,6 +2213,7 @@ function hello(name) {
             "アカウント情報：メールアドレス、ユーザー名、表示名、ハッシュ化されたパスワード",
             "ソーシャルログインを使う場合、Google または GitHub から返される基本プロフィール（メールアドレス、ユーザー名、アバター）",
             "作成したコンテンツ：ドキュメントのタイトルと本文、フォルダ構成、アップロードした画像",
+            "WeChat 公式アカウント連携：AppID、暗号化された AppSecret、連携日時",
             "共有設定：共有トークン、ハッシュ化されたアクセスパスワード",
             "ユーザーフィードバック：フィードバック本文、送信元ページ、クライアント情報",
             "運用ログ：障害調査と不正利用対策に必要な範囲でのリクエスト時刻、IP、User-Agent",
@@ -1999,7 +2230,7 @@ function hello(name) {
           title: "情報の利用目的",
           body: ["取得した情報は以下の目的にのみ利用します。"],
           items: [
-            "中核機能の提供：ドキュメントの保存と同期、画像のホスティング、共有リンクの生成",
+            "中核機能の提供：ドキュメントの保存と同期、画像のホスティング、共有リンクの生成、操作に応じた WeChat 下書きの作成",
             "本人確認とセッションの維持",
             "障害の調査、不正利用や攻撃の防止",
             "登録、初回作成、画像アップロード、エクスポート、MCP 接続、決済転換、D1/D7/D30 継続率の集計把握",
@@ -2022,13 +2253,14 @@ function hello(name) {
             "Google、GitHub：それらでログインを選んだ場合の本人確認のみ",
             "Stripe：会員決済の処理。決済に必要なメールアドレス、金額、通貨、支払い識別子を受け取ります",
             "Feishu：任意の社内決済通知。Koinote のユーザー ID、金額、通貨、注文識別子のみを送り、メールアドレスや文書内容は送りません",
+            "AI カバーモデル提供者：WeChat カバーを生成した場合のみ入力したプロンプトを受け取り、公式アカウントの AppSecret や記事本文は受け取りません",
           ],
         },
         {
           title: "保存期間と削除",
           body: [
             "ドキュメントはまず 30 日間ゴミ箱に入り、その間は本文、履歴、画像、使用容量が保持されます。完全削除または期限切れ後、他で参照されていない画像がバックグラウンド削除の対象になります。",
-            "ダッシュボードで現在のメールアドレスを入力し再確認すると、アカウント全体を直ちに削除できます。アカウント、文書、履歴、共有、MCP トークン、画像台帳は削除され、関連画像はオブジェクトストレージから非同期で削除されます。この操作は取り消せません。",
+            "ダッシュボードで現在のメールアドレスを入力し再確認すると、アカウント全体を直ちに削除できます。アカウント、文書、履歴、共有、MCP トークン、WeChat 連携、画像台帳は削除され、関連画像はオブジェクトストレージから非同期で削除されます。この操作は取り消せません。",
             "税務、紛争、不正防止に必要な最小限の Stripe 決済記録はアカウントとの関連を解除して法令に従い保持します。バックアップ内の削除済みデータは保持期間とともに失効し、削除済みアカウントの復元には使用しません。",
             "送信したフィードバック本文、送信元ページ、クライアント情報はアカウントとの関連を解除した後も、問題調査と製品改善のため保持します。入力した個人情報が内容に残る場合があります。",
             "ログインできない場合やその他の法的権利を行使する場合は、下記の連絡先へご連絡ください。",
@@ -2145,6 +2377,37 @@ function hello(name) {
     unauthorized: "ログインしていません",
     session_expired: "セッションの有効期限が切れました",
     server_error: "サーバーエラーです。しばらくして再試行してください",
+    wechat_credentials_invalid:
+      "WeChat の AppID または AppSecret が正しくありません",
+    wechat_ip_not_allowed:
+      "サーバーの送信元 IP が WeChat のホワイトリストにありません",
+    wechat_api_unauthorized:
+      "この公式アカウントには下書きまたは素材 API の権限がありません",
+    wechat_api_limit_reached: "WeChat API の本日の上限に達しました",
+    wechat_provider_error:
+      "WeChat がリクエストを拒否しました。設定を確認してください",
+    wechat_provider_unavailable: "WeChat は一時的に利用できません",
+    wechat_account_not_bound: "先に WeChat 公式アカウントを連携してください",
+    wechat_account_already_bound:
+      "この公式アカウントは別の Koinote アカウントに連携済みです",
+    wechat_account_limit_reached:
+      "1 つの Koinote アカウントに連携できる WeChat 公式アカウントは 5 件までです",
+    wechat_account_label_invalid:
+      "公式アカウントのメモは 40 文字以内にしてください",
+    wechat_credentials_unavailable:
+      "WeChat 認証情報の暗号化が設定されていません",
+    wechat_cover_input_invalid:
+      "カバーのプロンプト、比率、または画像が無効です",
+    wechat_cover_model_unavailable: "カバー生成モデルが設定されていません",
+    wechat_cover_generation_failed: "カバー生成サービスでエラーが発生しました",
+    wechat_title_invalid: "WeChat 下書きのタイトルは 1〜64 文字にしてください",
+    wechat_draft_input_invalid: "WeChat 下書きの内容が無効または大きすぎます",
+    wechat_cover_upload_failed:
+      "カバーを WeChat 素材へアップロードできませんでした",
+    wechat_image_unreachable: "記事内の画像を公開 URL から取得できません",
+    wechat_content_image_failed: "記事内の画像を WeChat へ転送できませんでした",
+    wechat_draft_create_failed:
+      "WeChat の下書きを作成できませんでした。API 権限を確認してください",
     oauth_unsupported: "サポートされていないログイン方法です",
     oauth_not_configured: "このログイン方法はまだ設定されていません",
     oauth_denied: "認可がキャンセルされました",
@@ -2204,6 +2467,8 @@ function hello(name) {
     share_password_too_short: "パスワードは 6 文字以上必要です",
     desktop_share_sync_required:
       "共有する前に文書の同期を完了してください。同期状態を確認して再試行してください",
+    desktop_wechat_sync_required:
+      "WeChat の下書きへ送信する前に文書の同期を完了してください。同期状態を確認して再試行してください",
     desktop_share_cache_failed:
       "共有はオンラインで有効になりましたが、ローカル状態を保存できませんでした。後でもう一度共有設定を適用してください",
     too_many_requests: "試行回数が多すぎます — しばらくしてからお試しください",

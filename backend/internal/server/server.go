@@ -30,6 +30,12 @@ type App struct {
 	clientActivity         clientActivityTracker
 	announcementTranslator announcementTranslator
 	agentLLMHTTPClient     *http.Client
+	wechatAPIHTTPClient    *http.Client
+	wechatImageHTTPClient  *http.Client
+	wechatCoverHTTPClient  *http.Client
+	wechatTokenMu          sync.Mutex
+	wechatTokens           map[string]wechatAccessToken
+	wechatTokenRefreshes   map[wechatTokenRefreshKey]*wechatTokenRefresh
 	serverStatus           *serverStatusMonitor
 	serverStatusOnce       sync.Once
 }
@@ -43,6 +49,11 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		paymentNotifier:        newPaymentNotifier(cfg),
 		siteAnalytics:          newCloudflareAnalyticsClient(cfg),
 		announcementTranslator: newAnnouncementTranslator(cfg),
+		wechatAPIHTTPClient:    newWechatAPIHTTPClient(cfg.WechatAPIProxyURL),
+		wechatImageHTTPClient:  newSafeLLMHTTPClient(),
+		wechatCoverHTTPClient:  newTrustedLLMHTTPClient(),
+		wechatTokens:           make(map[string]wechatAccessToken),
+		wechatTokenRefreshes:   make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
 		serverStatus: newServerStatusMonitor(
 			cfg.HostMetricsProcPath,
 			cfg.HostMetricsFilesystemPath,
@@ -121,6 +132,16 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/documents/{docId}/wechat-geo-summary", a.wechatGeoSummaryGet)
 	mux.HandleFunc("PUT /api/documents/{docId}/wechat-geo-summary", a.wechatGeoSummaryUpdate)
 	mux.HandleFunc("POST /api/documents/{docId}/wechat-geo-summary/generate", a.wechatGeoSummaryGenerate)
+	mux.HandleFunc("GET /api/wechat/account", a.wechatOfficialAccountGet)
+	mux.HandleFunc("PUT /api/wechat/account", a.wechatOfficialAccountPut)
+	mux.HandleFunc("DELETE /api/wechat/account", a.wechatOfficialAccountDelete)
+	mux.HandleFunc("GET /api/wechat/accounts", a.wechatOfficialAccountsList)
+	mux.HandleFunc("POST /api/wechat/accounts", a.wechatOfficialAccountCreate)
+	mux.HandleFunc("PUT /api/wechat/accounts/{accountId}", a.wechatOfficialAccountUpdate)
+	mux.HandleFunc("DELETE /api/wechat/accounts/{accountId}", a.wechatOfficialAccountDeleteByID)
+	mux.HandleFunc("PUT /api/wechat/accounts/{accountId}/default", a.wechatOfficialAccountSetDefault)
+	mux.HandleFunc("POST /api/wechat/cover/generate", a.wechatCoverGenerate)
+	mux.HandleFunc("POST /api/documents/{docId}/wechat-draft", a.wechatDraftCreate)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
 	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)

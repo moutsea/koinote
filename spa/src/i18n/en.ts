@@ -248,6 +248,83 @@ export const en: Messages = {
     mcpCta: "View MCP integration",
     pricingCta: "View membership benefits",
   },
+  wechatGuide: {
+    eyebrow: "WeChat Official Account setup",
+    title: "Bind an account and save articles to drafts",
+    subtitle:
+      "Bind up to 5 Official Accounts in Koinote's web or desktop app, then save each formatted article directly to the selected account's drafts.",
+    prerequisitesTitle: "Before you start",
+    prerequisites: [
+      "One or more verified WeChat Official Accounts with access to draft and material APIs.",
+      "The account's AppID and AppSecret. Enter the AppSecret only in Koinote's binding form; never send it in chat or feedback.",
+      "Koinote Cloud's current WeChat API egress IP is 122.51.97.242; self-hosted deployments should use the server's public egress address.",
+      "A signed-in Koinote administrator account with Lifetime membership; binding, cover generation, and draft delivery are currently administrator-only. Desktop local mode cannot connect to WeChat or generate covers.",
+    ],
+    platformTitle: "Configure the WeChat developer platform",
+    platformSteps: [
+      {
+        title: "Sign in to the developer platform",
+        desc: "Open developers.weixin.qq.com/platform and sign in as an administrator of the account you want to bind.",
+      },
+      {
+        title: "Open API management",
+        desc: "Select the Official Account you want to bind, open API management, and find the developer credentials and IP allowlist.",
+      },
+      {
+        title: "Add the IP allowlist entry",
+        desc: "For Koinote Cloud, add 122.51.97.242 (the WeChat API egress IP); self-hosted deployments should add their server's public egress IP. Enter one address per line when required by WeChat.",
+      },
+      {
+        title: "Prepare developer credentials",
+        desc: "Copy the AppID and generate or copy the AppSecret. WeChat may show it only once, so store it in a password manager first.",
+      },
+    ],
+    ipTitle: "Why is the IP allowlist required?",
+    ipBody:
+      "WeChat verifies the server making each API request. Koinote calls WeChat only from its backend, so the allowlist must contain the server's egress IP—not your computer's IP. For Koinote Cloud, use 122.51.97.242; self-hosted deployments should use their server's public egress address.",
+    koinoteTitle: "Bind and push from Koinote",
+    koinoteSteps: [
+      "Open Koinote in your browser or desktop app and sign in with a Lifetime administrator account.",
+      "Go to Settings → WeChat and enter a label, AppID, and AppSecret for each account. You can bind up to 5 accounts and choose one as the default.",
+      "Open any document, choose Export to social platforms, select WeChat Official Account, then choose Sync to account drafts. Select the target account in the draft panel; Koinote uses the default when you do not choose another.",
+      "A cover is optional. If you want an AI cover, enter a prompt and choose 2.35:1 or 1:1. Each successfully generated cover costs 20 credits; regenerating is charged separately.",
+      "Choose Save to WeChat drafts without generating an AI cover, then select the default cover or any image from the article. Article images are transferred to WeChat before the draft is created; Koinote never publishes the article directly.",
+    ],
+    billingTitle: "Cost and access",
+    billingBody:
+      "Binding an account and saving a draft do not use credits. Binding, cover generation, and draft delivery are currently administrator-only. Each successful cover generation costs a fixed 20 credits; failed generations do not charge. Cover generation also requires Lifetime membership, available credits, and an image model configured by the administrator.",
+    troubleshootingTitle: "Troubleshooting",
+    troubleshooting: [
+      {
+        problem: "The backend IP is not allowlisted",
+        solution:
+          "Return to API management on the WeChat developer platform. Koinote Cloud uses 122.51.97.242; self-hosted deployments should add their server's public egress IP, not the local computer address.",
+      },
+      {
+        problem: "The account lacks API access",
+        solution:
+          "Confirm that the account is verified and can use draft and material APIs. Some account types or permission states require activation on WeChat's side.",
+      },
+      {
+        problem: "The cover model is unavailable or credits are low",
+        solution:
+          "Make sure at least 20 credits are available. If the model is still reported as unavailable, contact the Koinote administrator.",
+      },
+      {
+        problem: "An article image cannot be transferred",
+        solution:
+          "Return to the editor, wait for image synchronization to finish, and try again. If draft creation fails, Koinote makes a best-effort cleanup of the newly uploaded cover material.",
+      },
+    ],
+    securityTitle: "Security reminders",
+    securityBody:
+      "The AppSecret is encrypted on Koinote's server and is not kept as plaintext by the client or sent to the cover model provider. Never put it in a document, feedback message, or screenshot. If you suspect exposure, reset it in WeChat and bind the account again in Koinote.",
+    backToDocs: "Back to documentation",
+    openGuide: "Read the WeChat setup guide",
+    openEditor: "Open editor",
+    openPlatform: "Open WeChat developer platform",
+    pricingCta: "View membership and credits",
+  },
   aiGuide: {
     eyebrow: "AI optimization guide",
     title: "Let an AI editor review your draft, suggestion by suggestion",
@@ -624,7 +701,7 @@ export const en: Messages = {
     description:
       "This cannot be undone. Export any documents and images you want to keep first.",
     immediate:
-      "Your account, documents, versions, shares, MCP tokens, and synced images enter deletion immediately.",
+      "Your account, documents, versions, shares, MCP tokens, WeChat binding, and synced images enter deletion immediately.",
     membership:
       "Lifetime membership ends with the account. Deletion is not an automatic refund; statutory refund rights still apply.",
     paymentRecords:
@@ -987,15 +1064,22 @@ export const en: Messages = {
   },
   settingsPage: {
     title: "Settings",
-    subtitle: "Manage your account, membership, AI connections, and invitations in one place.",
+    subtitle:
+      "Manage your account, membership, AI connections, and invitations in one place.",
     general: "General",
-    generalDescription: "Review your profile, secure your account, and manage account-level actions.",
+    generalDescription:
+      "Review your profile, secure your account, and manage account-level actions.",
     membership: "Membership",
-    membershipDescription: "See your plan, cloud usage, and version history preferences.",
+    membershipDescription:
+      "See your plan, cloud usage, and version history preferences.",
     ai: "AI settings",
     aiDescription: "Configure model sources, MCP access, and credits activity.",
     invitations: "Invitations",
-    invitationsDescription: "Create your invite link and review people who joined through it.",
+    invitationsDescription:
+      "Create your invite link and review people who joined through it.",
+    wechat: "WeChat",
+    wechatDescription:
+      "Bind an Official Account and manage draft delivery settings.",
     freePlan: "Free",
     lifetimePlan: "Lifetime member",
     upgrade: "Upgrade membership",
@@ -1555,6 +1639,34 @@ export const en: Messages = {
     mediaImagesUnreachable:
       "{n} image(s) may be unreachable by the destination ({hosts}). Preview after pasting.",
     wechatThemeLabel: "Theme",
+    wechatThemeNames: {
+      minimal: "Minimal Black & White",
+      medium: "Longform Essay",
+      wired: "Tech Feature",
+      verge: "News Briefing",
+      stripe: "Product Docs",
+      apple: "Apple Newsroom",
+      ft: "Business Analysis",
+      linear: "Release Notes",
+      github: "GitHub README",
+      notion: "Notion Memo",
+      magazine: "Magazine Feature",
+      editorial: "Editorial Column",
+      newspaper: "Newspaper Report",
+      course: "Course Handout",
+      event: "Event Notice",
+      paper: "Koinote Paper",
+      signal: "Koinote Signal",
+      notes: "Koinote Notes",
+      pulse: "Koinote Pulse",
+    },
+    wechatThemeGroups: {
+      推荐默认: "Recommended",
+      经典媒体: "Classic media",
+      科技产品: "Tech & product",
+      内容出版: "Publishing",
+      中文公众号: "Chinese social",
+    },
     wechatGeoExperiment: "AI-generated hidden GEO summary",
     wechatGeoExperimentHint:
       "Members only. The summary is saved with this document, and export adds a divider below the title as a marker. WeChat may remove hidden text or treat it as a policy-violating layout; ranking impact is not guaranteed. The built-in model uses credits.",
@@ -1570,6 +1682,126 @@ export const en: Messages = {
       "The article has changed. You can keep using the saved summary or regenerate it.",
     wechatGeoPlaceholder:
       "Review and edit the hidden summary after AI generation.",
+    wechatOfficialTitle: "WeChat draft box",
+    wechatOfficialHint:
+      "Bind up to 5 verified Official Accounts, choose a default, and save the current article to the selected account's drafts. AppSecrets are encrypted on the server.",
+    wechatOfficialMembersOnly:
+      "Official Account binding, one-click drafts, and AI cover generation are member features.",
+    wechatOfficialAdminsOnly:
+      "Official Account binding, draft delivery, and AI cover generation are currently available to administrators only.",
+    wechatAccountNotBound:
+      "No WeChat Official Account is bound yet. Bind one in Settings first.",
+    wechatDraftPush: "Push to WeChat drafts",
+    wechatDraftSync: "Sync to account drafts",
+    wechatDraftPushHint:
+      "Choose a default cover, an article image, or an AI-generated cover before saving the current article as a WeChat draft. It will not be published.",
+    wechatAccountLoading: "Loading the WeChat binding…",
+    wechatAccountLoadFailed:
+      "Could not load the WeChat binding. Try again later",
+    wechatAccountRetry: "Retry",
+    wechatTargetAccount: "Target Official Account",
+    wechatAccountDefault: "Default account",
+    wechatAccountSetDefault: "Set as default",
+    wechatAccountSaveFailed:
+      "Could not save the WeChat account settings. Try again later",
+    wechatAccountAdd: "Add Official Account",
+    wechatAccountLimitReached: "You can bind up to 5 Official Accounts.",
+    wechatAccountLabel: "Account label",
+    wechatAccountLabelPlaceholder: "For example: Main brand account",
+    wechatAccountBound: "Bound",
+    wechatAccountRebind: "Update binding",
+    wechatAccountUnbind: "Unbind",
+    wechatAccountUnbindConfirm: "Unbind this WeChat Official Account?",
+    wechatAccountUnbindFailed: "Could not unbind the account. Try again later",
+    wechatAccountBindFailed:
+      "Could not bind the account. Check the settings and try again",
+    wechatAccountCancel: "Cancel",
+    wechatAccountSave: "Save binding",
+    wechatAccountBind: "Bind account",
+    wechatAppId: "Official Account AppID",
+    wechatAppSecret: "Official Account AppSecret",
+    wechatAppSecretPlaceholder: "Enter AppSecret (it will not be shown again)",
+    wechatAppSecretUpdatePlaceholder:
+      "Leave blank to keep the current AppSecret; required when changing AppID",
+    wechatIPAllowlistHint:
+      "Add Koinote's backend egress IP to the WeChat IP allowlist before binding, or WeChat will reject the request.",
+    wechatCoverTitle: "Set article cover",
+    wechatCoverModeLabel: "Cover source",
+    wechatCoverDefault: "Default cover",
+    wechatCoverDefaultHint: "Koinote logo and the article title",
+    wechatCoverDefaultPreview: "Preparing the Koinote default cover…",
+    wechatCoverArticle: "Article image",
+    wechatCoverArticleHint: "Choose from images in the article",
+    wechatCoverArticleEmpty:
+      "This article has no usable images. Choose the default cover or generate an AI cover.",
+    wechatCoverAi: "AI generated",
+    wechatCoverAiHint: "Create a custom cover from a prompt",
+    wechatCoverAiRequired:
+      "Enter a prompt and generate a cover, or choose another cover source.",
+    wechatCoverPromptPlaceholder:
+      "Describe the subject, composition, and style, for example: a modern writing desk under a deep-blue night sky, restrained, with clean title space…",
+    wechatCoverRatio: "Cover ratio",
+    wechatCoverCreditCost: "20 credits per cover",
+    wechatCoverGenerate: "Generate cover",
+    wechatCoverRegenerate: "Regenerate",
+    wechatCoverPreview: "WeChat cover preview",
+    wechatCoverGenerateFailed: "Could not generate the cover. Try again later",
+    wechatTitleLimit:
+      "A WeChat draft title must contain 1–64 characters. Update the article title first.",
+    wechatDraftCreate: "Save to WeChat drafts",
+    wechatDraftCreating: "Transferring images and creating the draft…",
+    wechatDraftCreated: "Saved to WeChat drafts",
+    wechatDraftCreateFailed:
+      "Could not create the WeChat draft. Try again later",
+    wechatPreflight: {
+      title: "Publish check",
+      ready: "Checks passed",
+      blocked: "Items need attention",
+      copyTarget: "Copy export",
+      draftTarget: "Draft box",
+      summary:
+        "A quick check of metadata, structure, images, and optional layout modules. It only gives guidance and never changes your document.",
+      metadata: "Article metadata",
+      structure: "Structure",
+      images: "Images",
+      online: "online",
+      local: "local",
+      errorCount: "error(s)",
+      warningCount: "warning(s)",
+      advice: "Optional enhancements",
+      noAdvice: "No obvious enhancements found.",
+      frontmatter:
+        "Markdown frontmatter detected; it is treated as metadata and kept out of the visible body during export.",
+      checkTitleTooLong: "The title exceeds WeChat's 64-character draft limit.",
+      checkTitleMissing: "The article has no title. Set one before publishing.",
+      checkAuthorTooLong:
+        "The author name is longer than the suggested 16-character limit.",
+      checkDigestTooLong:
+        "The digest is longer than the suggested 128-character limit.",
+      checkDuplicateTitle:
+        "The body H1 repeats the draft title and may produce two visible titles.",
+      checkTitleMismatch:
+        "The draft title differs from the body H1; confirm that this is intentional.",
+      checkImageAlt:
+        "{n} image(s) have no alternative text; consider adding captions or alt text.",
+      checkImageSync:
+        "Images are checked during copy or draft creation; the draft flow transfers body images.",
+      checkModule:
+        "Some layout modules need review; unsupported modules remain ordinary text.",
+      checkModuleError:
+        "A layout module has invalid syntax and remains ordinary text during export.",
+      adviceToc:
+        "Consider adding :::toc to give a long article a reading path.",
+      adviceSteps:
+        "Consider turning consecutive steps into :::steps for easier mobile reading.",
+      adviceQuote:
+        "Quote content is present; :::quote or :::quote-card can make the key judgment easier to scan.",
+      adviceMetrics:
+        "Several numeric signals were found; :::metrics can turn them into a scannable data card.",
+      adviceCover:
+        "The article is long and has no images; consider preparing a cover or an in-body illustration.",
+      adviceCta: "There is no clear call to action; consider adding :::cta.",
+    },
     themeNone: "Default styling",
     tabsLabel: "Open documents",
     closeTab: "Close tab",
@@ -2003,6 +2235,7 @@ function hello(name) {
             "Account data: email, username, display name, and a hashed password",
             "When you use social sign-in, the basic profile returned by Google or GitHub (email, username, avatar)",
             "Content you create: document titles and bodies, folder structure, uploaded images",
+            "WeChat Official Account binding: AppID, encrypted AppSecret, and binding time",
             "Share settings: share tokens and hashed access passwords",
             "User feedback: feedback text, source page, and client details",
             "Operational logs: request time, IP, and User-Agent, as needed for debugging and abuse prevention",
@@ -2019,7 +2252,7 @@ function hello(name) {
           title: "How We Use Information",
           body: ["Collected information is used only for the following."],
           items: [
-            "Providing core features: saving and syncing documents, hosting images, generating share links",
+            "Providing core features: saving and syncing documents, hosting images, generating share links, and creating WeChat drafts at your request",
             "Authenticating you and maintaining your session",
             "Diagnosing faults and preventing abuse or attacks",
             "Understanding aggregate registration, first creation, upload, export, MCP, checkout conversion, and D1/D7/D30 retention",
@@ -2042,13 +2275,14 @@ function hello(name) {
             "Google and GitHub: identity verification, only if you choose to sign in with them",
             "Stripe: membership payment processing, receiving the email, amount, currency, and payment identifiers needed for checkout",
             "Feishu: optional internal payment notifications containing only the Koinote user ID, amount, currency, and order identifiers — never email addresses or document content",
+            "AI cover model provider: receives the cover prompt you enter only when you generate a WeChat cover; it never receives the Official Account AppSecret or article body",
           ],
         },
         {
           title: "Retention and Deletion",
           body: [
             "Documents first enter a 30-day trash, where content, versions, images, and storage usage remain. After permanent deletion or expiry, images not referenced by another document are queued for background deletion.",
-            "You can delete the entire account immediately from Dashboard by typing the current email and confirming again. The account, documents, versions, shares, MCP tokens, and image ledger are deleted, while related object-storage images are removed asynchronously. This cannot be undone.",
+            "You can delete the entire account immediately from Dashboard by typing the current email and confirming again. The account, documents, versions, shares, MCP tokens, WeChat binding, and image ledger are deleted, while related object-storage images are removed asynchronously. This cannot be undone.",
             "Minimal Stripe payment records needed for tax, disputes, and fraud prevention are detached from the account and retained as required by law. Deleted data in backups expires with the backup retention cycle and is not used to restore a deleted account.",
             "Feedback text, source pages, and client details you submitted are detached from your account and retained for troubleshooting and product improvement; they may still contain personal information you entered.",
             "If you cannot sign in or need to exercise another statutory right, you can still contact us at the address below.",
@@ -2161,6 +2395,40 @@ function hello(name) {
     unauthorized: "Not logged in",
     session_expired: "Session expired",
     server_error: "Server error, please try again later",
+    wechat_credentials_invalid: "The WeChat AppID or AppSecret is incorrect",
+    wechat_ip_not_allowed:
+      "The backend egress IP is not in the WeChat IP allowlist",
+    wechat_api_unauthorized:
+      "This Official Account lacks draft or material API access",
+    wechat_api_limit_reached: "The WeChat API daily quota has been reached",
+    wechat_provider_error:
+      "WeChat rejected the request. Check the account settings",
+    wechat_provider_unavailable:
+      "WeChat is temporarily unavailable. Try again later",
+    wechat_account_not_bound: "Bind a WeChat Official Account first",
+    wechat_account_already_bound:
+      "This Official Account is bound to another Koinote account",
+    wechat_account_limit_reached:
+      "Each Koinote account can bind up to 5 WeChat Official Accounts",
+    wechat_account_label_invalid:
+      "The Official Account label cannot exceed 40 characters",
+    wechat_credentials_unavailable:
+      "WeChat credential encryption is not configured",
+    wechat_cover_input_invalid: "The cover prompt, ratio, or image is invalid",
+    wechat_cover_model_unavailable: "The cover image model is not configured",
+    wechat_cover_generation_failed:
+      "The cover image service failed. Try again later",
+    wechat_title_invalid: "A WeChat draft title must contain 1–64 characters",
+    wechat_draft_input_invalid:
+      "The WeChat draft content is invalid or too large",
+    wechat_cover_upload_failed:
+      "The cover could not be uploaded to WeChat materials",
+    wechat_image_unreachable:
+      "An article image is not publicly reachable. Finish image sync first",
+    wechat_content_image_failed:
+      "An article image could not be transferred to WeChat",
+    wechat_draft_create_failed:
+      "WeChat could not create the draft. Check API access",
     oauth_unsupported: "Unsupported login provider",
     oauth_not_configured: "This login method is not configured yet",
     oauth_denied: "Authorization was cancelled",
@@ -2216,6 +2484,8 @@ function hello(name) {
     share_password_too_short: "Password must be at least 6 characters",
     desktop_share_sync_required:
       "This document must finish syncing before it can be shared. Check sync status and try again",
+    desktop_wechat_sync_required:
+      "This document must finish syncing before it can be sent to WeChat. Check sync status and try again",
     desktop_share_cache_failed:
       "Sharing succeeded online, but the app could not save its local state. Open sharing and apply it again later",
     share_password_invalid: "Incorrect password",

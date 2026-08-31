@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { buildWechatHTML, copyRichText, type WechatExportResult } from "./exportWechat";
 import { buildMediaMarkdown, mediaExportFormat, type MediaPlatform } from "./mediaExportStrategy";
+import { parseArticleMetadata } from "./wechatPreflight";
 
 export { mediaExportFormat, type MediaPlatform } from "./mediaExportStrategy";
 
@@ -17,8 +18,10 @@ export async function exportToMedia(
   options: MediaExportOptions = {},
 ): Promise<WechatExportResult | null> {
   const markdown = editor.storage.markdown.getMarkdown() as string;
+  const article = parseArticleMetadata(markdown, title);
+  const exportTitle = article.metadata.title || title;
   if (mediaExportFormat(platform) === "markdown") {
-    await copyPlainText(buildMediaMarkdown(title, markdown));
+    await copyPlainText(buildMediaMarkdown(exportTitle, article.body));
     return null;
   }
 
@@ -27,7 +30,7 @@ export async function exportToMedia(
       platform === "wechat" && options.includeWechatGeoCorpus === true,
     geoText: options.wechatGeoText,
   });
-  await copyRichText(result.html, markdown);
+  await copyRichText(result.html, buildMediaMarkdown(exportTitle, article.body));
   return result;
 }
 

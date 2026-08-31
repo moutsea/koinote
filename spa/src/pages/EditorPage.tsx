@@ -1,4 +1,10 @@
-import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useBlocker,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
@@ -141,6 +147,27 @@ export function EditorPage() {
   const tabStateRef = useRef(tabState);
   tabStateRef.current = tabState;
   const saver = useDocumentSaver(refreshList);
+
+  const prepareEditorRouteExit = useCallback(
+    async ({ next }: { next: { pathname: string } }) => {
+      if (
+        next.pathname === "/editor" ||
+        next.pathname.startsWith("/editor/")
+      ) {
+        return false;
+      }
+      await saver.flushAll();
+      // 保存失败时 useDocumentSaver 已经同步写入本地恢复草稿。这里仍允许离开，
+      // 否则持续离线或服务端故障会把用户永久困在编辑器路由。
+      return false;
+    },
+    [saver.flushAll],
+  );
+  useBlocker({
+    shouldBlockFn: prepareEditorRouteExit,
+    enableBeforeUnload: false,
+  });
+
   const serverTabs = useEditorTabs(loggedIn);
   const syncTabs = useSyncEditorTabs();
   // 折叠状态与面板宽度一样要记住，否则每次刷新都弹回展开态
@@ -1135,6 +1162,7 @@ export function EditorPage() {
                     title={doc.data.title}
                     themeId={doc.data.theme ?? ""}
                     member={session.data?.user?.membershipTier === "lifetime"}
+                    isAdmin={session.data?.user?.isAdmin === true}
                     localMode={localMode}
                   />
                   {!localMode && <button

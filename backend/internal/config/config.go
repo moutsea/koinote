@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,10 +25,13 @@ type Config struct {
 	// LLMCredentialEncryptionKey 只用于加密会员保存的 BYOK API Key，不能与
 	// 会话、MCP token 或第三方服务密钥复用。
 	LLMCredentialEncryptionKey string
-	NodeEnv                    string // "production" | "development"
-	AutoMigrate                bool
-	MigrationsDir              string
-	AllowedOrigins             []string
+	// WechatCredentialEncryptionKey 只用于加密用户绑定的微信公众号 AppSecret。
+	// 各环境都必须显式配置，不能回退或复用 SessionSecret。
+	WechatCredentialEncryptionKey string
+	NodeEnv                       string // "production" | "development"
+	AutoMigrate                   bool
+	MigrationsDir                 string
+	AllowedOrigins                []string
 
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
@@ -67,6 +71,15 @@ type Config struct {
 	AgentLLMBaseURL  string
 	AgentLLMAPIKey   string
 	AgentLLMModel    string
+
+	// 微信公众号封面生成使用 OpenAI-compatible Images API。三项齐全时启用，
+	// API Key 只留在后端，绝不下发给桌面客户端。
+	WechatCoverImageBaseURL string
+	WechatCoverImageAPIKey  string
+	WechatCoverImageModel   string
+	// WechatAPIProxyURL 是可选的 HTTP(S) CONNECT 代理。生产环境通过 WireGuard
+	// 指向专用微信中转机的私网地址，微信 API 的 TLS 仍由本后端端到端终止。
+	WechatAPIProxyURL string
 
 	// 飞书付款通知沿用 Kimiseek 的机器人配置名。两项同时配置才启用；
 	// 生产环境只配置一项时拒绝启动，避免付款后静默漏通知。
@@ -135,6 +148,9 @@ func Load() Config {
 		LLMCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("LLM_CREDENTIAL_ENCRYPTION_KEY"),
 		),
+		WechatCredentialEncryptionKey: strings.TrimSpace(
+			os.Getenv("WECHAT_CREDENTIAL_ENCRYPTION_KEY"),
+		),
 		NodeEnv:       nodeEnv,
 		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
 		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
@@ -164,6 +180,11 @@ func Load() Config {
 		AgentLLMBaseURL:  strings.TrimSpace(os.Getenv("AGENT_LLM_BASE_URL")),
 		AgentLLMAPIKey:   strings.TrimSpace(os.Getenv("AGENT_LLM_API_KEY")),
 		AgentLLMModel:    strings.TrimSpace(os.Getenv("AGENT_LLM_MODEL")),
+
+		WechatCoverImageBaseURL: strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_BASE_URL")),
+		WechatCoverImageAPIKey:  strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_API_KEY")),
+		WechatCoverImageModel:   strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_MODEL")),
+		WechatAPIProxyURL:       strings.TrimSpace(os.Getenv("WECHAT_API_PROXY_URL")),
 
 		BotWebhook:       strings.TrimSpace(os.Getenv("BOT_WEBHOOK")),
 		BotWebhookSecret: strings.TrimSpace(os.Getenv("BOT_WEBHOOK_SECRET")),
@@ -229,6 +250,58 @@ func (c Config) StripeWebhookEnabled() bool {
 
 func (c Config) AgentLLMEnabled() bool {
 	return c.AgentLLMProtocol != "" && c.AgentLLMBaseURL != "" && c.AgentLLMAPIKey != "" && c.AgentLLMModel != ""
+}
+
+func (c Config) WechatCoverImageEnabled() bool {
+	return c.WechatCoverImageBaseURL != "" && c.WechatCoverImageAPIKey != "" && c.WechatCoverImageModel != ""
+}
+
+func (c Config) ValidateWechatCoverImageConfig() error {
+	configured := 0
+	for _, value := range []string{c.WechatCoverImageBaseURL, c.WechatCoverImageAPIKey, c.WechatCoverImageModel} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 {
+		return nil
+	}
+	if configured != 3 {
+		return fmt.Errorf("WECHAT_COVER_IMAGE_BASE_URL、WECHAT_COVER_IMAGE_API_KEY、WECHAT_COVER_IMAGE_MODEL 必须同时配置或同时留空")
+	}
+	parsed, err := url.Parse(c.WechatCoverImageBaseURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("WECHAT_COVER_IMAGE_BASE_URL 必须是合法的 HTTPS URL")
+	}
+	return nil
+}
+
+func (c Config) ValidateWechatAPIProxyConfig() error {
+	rawURL := strings.TrimSpace(c.WechatAPIProxyURL)
+	if rawURL == "" {
+		return nil
+	}
+	if len(rawURL) > 2_048 {
+		return fmt.Errorf("WECHAT_API_PROXY_URL 必须不超过 2048 字节")
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Path != "" && parsed.Path != "/") {
+		return fmt.Errorf("WECHAT_API_PROXY_URL 必须是无路径、无认证信息的 HTTP(S) 代理 URL")
+	}
+	if parsed.Scheme == "http" {
+		address, err := netip.ParseAddr(parsed.Hostname())
+		localDockerHost := c.NodeEnv != "production" && strings.EqualFold(parsed.Hostname(), "host.docker.internal")
+		if err != nil && !localDockerHost {
+			return fmt.Errorf("公网微信代理必须使用 HTTPS；HTTP 代理只允许回环或私网 IP（WireGuard）")
+		}
+		if err == nil && !address.IsPrivate() && !address.IsLoopback() {
+			return fmt.Errorf("公网微信代理必须使用 HTTPS；HTTP 代理只允许回环或私网 IP（WireGuard）")
+		}
+	}
+	return nil
 }
 
 // ValidateAgentLLMConfig 让平台 credits 模式保持显式开关：全空即关闭，部分

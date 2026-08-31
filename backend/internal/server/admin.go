@@ -154,6 +154,18 @@ func (a *App) requireAdmin(w http.ResponseWriter, r *http.Request) (model.User, 
 	return user, true
 }
 
+func (a *App) requireWechatAdminMember(w http.ResponseWriter, r *http.Request) (model.User, bool) {
+	user, ok := a.requireLifetimeMember(w, r)
+	if !ok {
+		return model.User{}, false
+	}
+	if !user.IsAdmin {
+		httpx.ErrorCode(w, http.StatusForbidden, "admin_required", "Administrator access required")
+		return model.User{}, false
+	}
+	return user, true
+}
+
 func (a *App) adminStats(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requireAdmin(w, r); !ok {
 		return

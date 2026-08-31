@@ -481,7 +481,7 @@ export default function MarkdownEditor({
     const normalizedContent = normalizeLegacyImageAdjacentHeadings(
       document.content,
     );
-    editor.commands.setContent(normalizedContent);
+    editor.commands.setContent(normalizedContent, { emitUpdate: false });
     onContentLoadedRef.current?.(normalizedContent);
     if (normalizedContent !== document.content) {
       // 让兼容恢复不只停留在当前 DOM：排入正常的 CAS 保存链，分享页和下一次

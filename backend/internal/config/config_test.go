@@ -451,3 +451,67 @@ func TestLoadPopulatesAnnouncementLLMConfiguration(t *testing.T) {
 		t.Fatalf("提醒配置未完整加载: %+v", cfg)
 	}
 }
+
+func TestValidateWechatCoverImageConfig(t *testing.T) {
+	complete := Config{
+		WechatCoverImageBaseURL: "https://images.example.test/v1",
+		WechatCoverImageAPIKey:  "secret",
+		WechatCoverImageModel:   "image-model",
+	}
+	if err := complete.ValidateWechatCoverImageConfig(); err != nil || !complete.WechatCoverImageEnabled() {
+		t.Fatalf("complete WeChat cover config rejected: %v", err)
+	}
+	for _, cfg := range []Config{
+		{WechatCoverImageBaseURL: "https://images.example.test/v1"},
+		{WechatCoverImageBaseURL: "http://images.example.test/v1", WechatCoverImageAPIKey: "key", WechatCoverImageModel: "model"},
+		{WechatCoverImageBaseURL: "https://user@images.example.test/v1", WechatCoverImageAPIKey: "key", WechatCoverImageModel: "model"},
+	} {
+		if err := cfg.ValidateWechatCoverImageConfig(); err == nil {
+			t.Fatalf("invalid WeChat cover config accepted: %+v", cfg)
+		}
+	}
+	if err := (Config{}).ValidateWechatCoverImageConfig(); err != nil {
+		t.Fatalf("disabled WeChat cover config rejected: %v", err)
+	}
+}
+
+func TestLoadPopulatesWechatConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("WECHAT_CREDENTIAL_ENCRYPTION_KEY", " credential-key ")
+	t.Setenv("WECHAT_COVER_IMAGE_BASE_URL", " https://images.example.test/v1 ")
+	t.Setenv("WECHAT_COVER_IMAGE_API_KEY", " image-key ")
+	t.Setenv("WECHAT_COVER_IMAGE_MODEL", " image-model ")
+	cfg := Load()
+	if cfg.WechatCredentialEncryptionKey != "credential-key" ||
+		cfg.WechatCoverImageBaseURL != "https://images.example.test/v1" ||
+		cfg.WechatCoverImageAPIKey != "image-key" ||
+		cfg.WechatCoverImageModel != "image-model" {
+		t.Fatalf("WeChat configuration was not fully loaded: %+v", cfg)
+	}
+}
+
+func TestValidateWechatAPIProxyConfig(t *testing.T) {
+	for _, raw := range []string{
+		"http://127.0.0.1:18080",
+		"http://10.77.0.1:18080",
+		"http://host.docker.internal:18080",
+		"https://relay.example.test:443",
+	} {
+		if err := (Config{WechatAPIProxyURL: raw}).ValidateWechatAPIProxyConfig(); err != nil {
+			t.Fatalf("valid proxy %q rejected: %v", raw, err)
+		}
+	}
+	if err := (Config{NodeEnv: "production", WechatAPIProxyURL: "http://host.docker.internal:18080"}).ValidateWechatAPIProxyConfig(); err == nil {
+		t.Fatal("production accepted the Docker-only proxy hostname")
+	}
+	for _, raw := range []string{
+		"http://122.51.97.242:18080",
+		"http://user:pass@10.77.0.1:18080",
+		"http://10.77.0.1:18080/path",
+		"https://relay.example.test:18080?token=secret",
+	} {
+		if err := (Config{WechatAPIProxyURL: raw}).ValidateWechatAPIProxyConfig(); err == nil {
+			t.Fatalf("invalid proxy %q accepted", raw)
+		}
+	}
+}

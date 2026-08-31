@@ -16,6 +16,25 @@ import { markdownMathPlugin } from "./markdownMath";
 import { PageSearchExtension } from "./pageSearch";
 import { MarkdownTable } from "./markdownTable";
 import { InlineCode } from "./inlineCode";
+import taskListPlugin from "markdown-it-task-lists";
+import { splitMixedTaskLists } from "./markdownTaskList";
+
+const MarkdownTaskList = TaskList.extend({
+  addStorage() {
+    return {
+      markdown: {
+        parse: {
+          setup(markdownit: any) {
+            markdownit.use(taskListPlugin);
+          },
+          updateDOM(element: Element) {
+            splitMixedTaskLists(element);
+          },
+        },
+      },
+    };
+  },
+});
 
 /**
  * TipTap 扩展集合 —— Typora 式所见即所得的地基。
@@ -42,7 +61,7 @@ export function createEditorExtensions(placeholder: string) {
       lowlight,
       defaultLanguage: "plaintext",
     }),
-    TaskList,
+    MarkdownTaskList,
     TaskItem.configure({ nested: true }),
     MarkdownTable.configure({ resizable: true, cellMinWidth: 96 }),
     TableRow,

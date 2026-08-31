@@ -9,6 +9,7 @@ require (
 	github.com/stripe/stripe-go/v82 v82.5.0
 	github.com/yuin/goldmark v1.7.13
 	golang.org/x/crypto v0.37.0
+	golang.org/x/image v0.28.0
 )
 
 require (
@@ -20,7 +21,7 @@ require (
 	github.com/segmentio/encoding v0.5.3 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 )
