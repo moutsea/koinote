@@ -8,6 +8,7 @@ import {
   type Folder,
 } from "./api";
 import {
+  documentOrganizerFolderKey,
   isDocumentInOrganizerScope,
   organizerScopeFolderIds,
   type DocumentOrganizationPlan,
@@ -20,8 +21,36 @@ export type ApplyDocumentOrganizationResult = {
 };
 
 const MOVE_CONCURRENCY = 4;
+const ORGANIZATION_LOCK_NAME = "koinote:document-organization";
+let organizationQueue: Promise<void> = Promise.resolve();
 
 export async function applyDocumentOrganization(
+  plan: DocumentOrganizationPlan,
+): Promise<ApplyDocumentOrganizationResult> {
+  const run = organizationQueue.then(
+    () => withOrganizationLock(() => applyDocumentOrganizationNow(plan)),
+    () => withOrganizationLock(() => applyDocumentOrganizationNow(plan)),
+  );
+  organizationQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function withOrganizationLock<T>(operation: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined") return operation();
+  const lockManager = (
+    navigator as Navigator & {
+      locks?: { request<T>(name: string, callback: () => Promise<T>): Promise<T> };
+    }
+  ).locks;
+  return lockManager
+    ? lockManager.request(ORGANIZATION_LOCK_NAME, operation)
+    : operation();
+}
+
+async function applyDocumentOrganizationNow(
   plan: DocumentOrganizationPlan,
 ): Promise<ApplyDocumentOrganizationResult> {
   const [{ documents }, { folders }] = await Promise.all([
@@ -39,42 +68,53 @@ export async function applyDocumentOrganization(
     return { moved: 0, failed: 0, foldersCreated: 0 };
   }
 
-  const knownFolders = [...folders];
   const createdFolderIds: string[] = [];
   const folderIds = new Map<string, string>();
+  const folderByLocation = new Map<string, Folder>();
+  for (const folder of folders) {
+    if (folder.organizerKind !== plan.strategy) continue;
+    const key = documentOrganizerFolderKey(
+      folder.parentFolderId,
+      plan.strategy,
+      folder.name,
+    );
+    const existing = folderByLocation.get(key);
+    if (!existing || folder.folderId < existing.folderId) {
+      folderByLocation.set(key, folder);
+    }
+  }
 
   try {
     for (const assignment of assignments) {
       let parentFolderId: string | null = null;
       for (let index = 1; index <= assignment.path.length; index += 1) {
         const path = assignment.path.slice(0, index);
-        const key = JSON.stringify(path);
-        const cached = folderIds.get(key);
+        const pathKey = JSON.stringify(path);
+        const cached = folderIds.get(pathKey);
         if (cached) {
           parentFolderId = cached;
           continue;
         }
 
         const name = path[path.length - 1];
-        let folder = knownFolders.find(
-          (candidate) =>
-            candidate.parentFolderId === parentFolderId &&
-            candidate.organizerKind === plan.strategy &&
-            candidate.name === name,
+        const locationKey = documentOrganizerFolderKey(
+          parentFolderId,
+          plan.strategy,
+          name,
         );
+        let folder = folderByLocation.get(locationKey);
         if (!folder) {
-          folder = (
-            await createFolder({
-              name,
-              parentFolderId,
-              organizerKind: plan.strategy,
-            })
-          ).folder;
-          knownFolders.push(folder);
-          createdFolderIds.push(folder.folderId);
+          const result = await createFolder({
+            name,
+            parentFolderId,
+            organizerKind: plan.strategy,
+          });
+          folder = result.folder;
+          folderByLocation.set(locationKey, folder);
+          if (result.created === true) createdFolderIds.push(folder.folderId);
         }
         parentFolderId = folder.folderId;
-        folderIds.set(key, parentFolderId);
+        folderIds.set(pathKey, parentFolderId);
       }
     }
   } catch (error) {

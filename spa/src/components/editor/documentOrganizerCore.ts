@@ -32,6 +32,14 @@ export type DocumentOrganizationPlan = {
   folderCount: number;
 };
 
+export function documentOrganizerFolderKey(
+  parentFolderId: string | null,
+  organizerKind: DocumentOrganizerStrategy,
+  name: string,
+): string {
+  return JSON.stringify([parentFolderId, organizerKind, name]);
+}
+
 type DatedDocument = {
   document: DocumentSummary;
   date: Date | null;
@@ -86,16 +94,19 @@ export function countDocumentOrganizationMoves(
   const documentById = new Map(
     documents.map((document) => [document.docId, document]),
   );
-  const folderByLocation = new Map(
-    folders.map((folder) => [
-      JSON.stringify([
-        folder.parentFolderId,
-        folder.organizerKind,
-        folder.name,
-      ]),
-      folder,
-    ]),
-  );
+  const folderByLocation = new Map<string, Folder>();
+  for (const folder of folders) {
+    if (!folder.organizerKind) continue;
+    const key = documentOrganizerFolderKey(
+      folder.parentFolderId,
+      folder.organizerKind,
+      folder.name,
+    );
+    const existing = folderByLocation.get(key);
+    if (!existing || folder.folderId < existing.folderId) {
+      folderByLocation.set(key, folder);
+    }
+  }
 
   return plan.assignments.reduce((count, assignment) => {
     const document = documentById.get(assignment.docId);
@@ -104,7 +115,7 @@ export function countDocumentOrganizationMoves(
     let parentFolderId: string | null = null;
     for (const name of assignment.path) {
       const folder = folderByLocation.get(
-        JSON.stringify([parentFolderId, plan.strategy, name]),
+        documentOrganizerFolderKey(parentFolderId, plan.strategy, name),
       );
       if (!folder) return count + 1;
       parentFolderId = folder.folderId;

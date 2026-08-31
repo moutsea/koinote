@@ -40,6 +40,39 @@ const {
   snapshotGuard,
 } = await import("./_offline_sync_bundle.mjs");
 
+const offlineStoreSource = readFileSync(
+  new URL("../spa/src/desktop/offlineStore.ts", import.meta.url),
+  "utf8",
+);
+const pushFoldersSource = sourceBetween(
+  offlineStoreSource,
+  "async function pushFolders(account: string)",
+  "async function pushDocuments(account: string)",
+);
+assert.match(
+  pushFoldersSource,
+  /result\.folder\.folderId === row\.folder_id[\s\S]*reconcileFolderIdentity\(account, row, result\.folder\)/,
+  "服务端复用自动目录时，桌面端必须合并本地临时 folderId",
+);
+const reconcileFolderSource = sourceBetween(
+  offlineStoreSource,
+  "async function reconcileFolderIdentity(",
+  "async function insertRemoteDocument(",
+);
+for (const required of [
+  "UPDATE offline_documents",
+  "folder_id = $3",
+  "UPDATE offline_folders",
+  "parent_folder_id = $3",
+  "DELETE FROM offline_folders",
+]) {
+  assert.match(
+    reconcileFolderSource,
+    new RegExp(required.replaceAll("$", "\\$")),
+    `自动目录身份合并缺少：${required}`,
+  );
+}
+
 const localImageID = "550e8400-e29b-41d4-a716-446655440000";
 const localImageURL = desktopLocalImageURL(localImageID);
 assert.equal(localImageURL, `koinote-local-image://${localImageID}`);
@@ -680,6 +713,11 @@ const pushDocumentsSection = sourceBetween(
   "async function pushDocuments",
   "async function recoverDeletedRemoteDocument",
 );
+const performSyncSection = sourceBetween(
+  offlineStore,
+  "async function performSync",
+  "async function pushFolders",
+);
 const calculateSummarySection = sourceBetween(
   offlineStore,
   "async function calculateSummary",
@@ -714,6 +752,16 @@ assert.match(
   pushDocumentsSection,
   /catch \(error\) \{\s*if \(error instanceof OfflineImageUploadError\) \{\s*imageUploadIssues\.push\(error\.code\);[\s\S]*?continue;/,
   "单张图片被拒绝时必须继续同步后续文档",
+);
+assert.match(
+  pushDocumentsSection,
+  /if \(current\?\.folder_dirty\) \{\s*try \{[\s\S]*?error instanceof RemoteHTTPError[\s\S]*?error\.status !== 404[\s\S]*?error\.code !== "not_found"[\s\S]*?current\.sync_state !== "clean"[\s\S]*?current\.base_revision <= 0[\s\S]*?DELETE FROM offline_documents[\s\S]*?sync_state = 'clean' AND folder_dirty = 1[\s\S]*?base_revision = \$3 AND change_seq = \$4[\s\S]*?if \(removed\.rowsAffected !== 1\) throw error;\s*continue;/,
+  "云端已删除的干净文档不能让文件夹归属同步永久失败",
+);
+assert.match(
+  performSyncSection,
+  /const message = error instanceof RemoteHTTPError[\s\S]*?error\.code \?\? `http_\$\{error\.status\}`[\s\S]*?offline \? "offline" : "error",\s*message/,
+  "同步失败时必须保留远端错误码以便诊断和本地化",
 );
 assert.match(offlineStore, /runDesktopSyncSequence\(\{/);
 assert.match(

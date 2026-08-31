@@ -2,6 +2,7 @@ import {
   ORGANIZER_BUCKET_LIMIT,
   buildDocumentOrganizationPlan,
   countDocumentOrganizationMoves,
+  documentOrganizerFolderKey,
 } from "./_document_organizer_bundle.mjs";
 import { readFileSync } from "node:fs";
 
@@ -48,6 +49,11 @@ const folder = (folderId, parentFolderId = null, organizerKind = null) => ({
 });
 
 eq("单个目录最多 20 篇", ORGANIZER_BUCKET_LIMIT, 20);
+eq(
+  "自动目录位置键区分父级、策略和名称",
+  documentOrganizerFolderKey("parent", "activity", "Recent 7"),
+  JSON.stringify(["parent", "activity", "Recent 7"]),
+);
 
 {
   const plan = buildDocumentOrganizationPlan(
@@ -164,6 +170,30 @@ eq("单个目录最多 20 篇", ORGANIZER_BUCKET_LIMIT, 20);
 }
 
 {
+  const duplicateLocationFolders = [
+    { ...folder("a-canonical", null, "activity"), name: "Recent 7" },
+    { ...folder("z-duplicate", null, "activity"), name: "Recent 7" },
+  ];
+  const plan = buildDocumentOrganizationPlan(
+    [document("doc", "2026-08-17T12:00:00")],
+    duplicateLocationFolders,
+    "activity",
+    "en",
+    labels,
+    now,
+  );
+  eq(
+    "重复自动目录预览使用稳定的规范目录",
+    countDocumentOrganizationMoves(
+      plan,
+      [document("doc", "2026-08-17T12:00:00", undefined, "z-duplicate")],
+      duplicateLocationFolders,
+    ),
+    1,
+  );
+}
+
+{
   const plan = buildDocumentOrganizationPlan(
     [document("fallback", "2026-07-02T12:00:00", "not-a-date")],
     [],
@@ -246,6 +276,12 @@ eq("单个目录最多 20 篇", ORGANIZER_BUCKET_LIMIT, 20);
   ok(
     "整理结果只统计真正移动的文档",
     /if \(document\?\.folderId !== folderId\) \{\s*await moveDocument\(assignment\.docId, folderId\);\s*moved \+= 1;\s*\}/.test(executor),
+  );
+  ok(
+    "整理操作串行化并跨标签互斥",
+    /organizationQueue/.test(executor) &&
+      /koinote:document-organization/.test(executor) &&
+      /lockManager\.request\(ORGANIZATION_LOCK_NAME, operation\)/.test(executor),
   );
   ok(
     "整理入口固定在侧栏底部滚动区之后",

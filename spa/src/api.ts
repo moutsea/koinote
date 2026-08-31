@@ -1438,7 +1438,7 @@ export function createFolder(params: {
       desktopCreateFolder(params),
     );
   }
-  return apiJson<{ folder: Folder }>("/api/folders", {
+  return apiJson<{ folder: Folder; created?: boolean }>("/api/folders", {
     method: "POST",
     body: JSON.stringify(params),
   });

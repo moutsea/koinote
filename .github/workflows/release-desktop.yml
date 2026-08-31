@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds editable Markdown tables with row and column controls, TSV paste support, and Markdown clipboard export."
+          notes="Koinote Desktop $version improves organizer folder reconciliation and recovers clean local documents that no longer exist in the cloud."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此补丁版本完善 Markdown 表格编辑：支持创建时选择行列、增加与删除行列、对齐、清空单元格，以及右键表格操作。支持从 Excel 等来源粘贴 TSV 表格，并在复制时输出标准 Markdown 表格语法。
+          此补丁版本修复文档整理后的文件夹身份合并与桌面同步：自动整理目录在云端复用时会正确迁移本地文档归属；云端已删除且本地正文干净的缓存文档不会再让同步无限失败。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This patch improves Markdown table editing with row and column controls, alignment, cell clearing, and table context-menu actions. Tables pasted as TSV from Excel and similar apps are recognized, while copied tables use standard Markdown syntax.
+          This patch improves organizer folder reconciliation and desktop synchronization. Reused organizer folders now migrate local document references correctly, and clean local cache entries for documents removed from the cloud no longer block synchronization forever.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

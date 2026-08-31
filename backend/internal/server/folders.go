@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -149,6 +151,28 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if body.OrganizerKind != nil {
+		created, wasCreated, conflict, err := a.createOrganizerFolder(
+			r.Context(),
+			user.ID,
+			folderID,
+			derefOrEmpty(body.ParentFolderID),
+			name,
+			*body.OrganizerKind,
+		)
+		if err != nil {
+			log.Printf("organizer folder create: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if conflict {
+			httpx.ErrorCode(w, http.StatusConflict, "conflict", "Folder already exists")
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"folder": created, "created": wasCreated})
+		return
+	}
+
 	// parent_id 经子查询解析并带 user_id 过滤：传别人的 folderId 会解析成 NULL
 	// （落到根下）而不是报外键错误 —— 后者会泄露「该文件夹存在」
 	var created model.Folder
@@ -181,7 +205,7 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 				if existingParent != "" {
 					existing.ParentFolderID = &existingParent
 				}
-				httpx.JSON(w, http.StatusOK, map[string]any{"folder": existing})
+				httpx.JSON(w, http.StatusOK, map[string]any{"folder": existing, "created": false})
 				return
 			}
 			if lookupErr == nil || errors.Is(lookupErr, pgx.ErrNoRows) {
@@ -197,7 +221,165 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		created.ParentFolderID = &parent
 	}
 
-	httpx.JSON(w, http.StatusOK, map[string]any{"folder": created})
+	httpx.JSON(w, http.StatusOK, map[string]any{"folder": created, "created": true})
+}
+
+func (a *App) createOrganizerFolder(
+	ctx context.Context,
+	userID int,
+	folderID string,
+	requestedParent string,
+	name string,
+	organizerKind string,
+) (model.Folder, bool, bool, error) {
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return model.Folder{}, false, false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var parentID *int
+	if requestedParent != "" {
+		var resolvedParentID int
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM folders WHERE folder_id = $1 AND user_id = $2`,
+			requestedParent, userID,
+		).Scan(&resolvedParentID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			requestedParent = ""
+		} else if err != nil {
+			return model.Folder{}, false, false, err
+		} else {
+			parentID = &resolvedParentID
+		}
+	}
+
+	lockKey := fmt.Sprintf(
+		"koinote:organizer-folder:%d:%d:%s:%s",
+		userID,
+		intValueOrZero(parentID),
+		organizerKind,
+		name,
+	)
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		lockKey,
+	); err != nil {
+		return model.Folder{}, false, false, err
+	}
+
+	if folderID != "" {
+		var existing model.Folder
+		var existingParentID *int
+		var existingParent string
+		err := tx.QueryRow(ctx, `
+			SELECT f.folder_id, f.name, f.parent_id, COALESCE(p.folder_id, ''), f.organizer_kind
+			FROM folders f
+			LEFT JOIN folders p ON p.id = f.parent_id
+			WHERE f.folder_id = $1 AND f.user_id = $2
+		`, folderID, userID).Scan(
+			&existing.FolderID,
+			&existing.Name,
+			&existingParentID,
+			&existingParent,
+			&existing.OrganizerKind,
+		)
+		if err == nil {
+			if existing.Name != name ||
+				!sameFolderParent(existingParentID, parentID) ||
+				!sameOrganizerKind(existing.OrganizerKind, organizerKind) {
+				return model.Folder{}, false, true, nil
+			}
+			if existingParent != "" {
+				existing.ParentFolderID = &existingParent
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return model.Folder{}, false, false, err
+			}
+			return existing, false, false, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return model.Folder{}, false, false, err
+		}
+	}
+
+	var existing model.Folder
+	var existingParentID *int
+	var existingParent string
+	err = tx.QueryRow(ctx, `
+		SELECT f.folder_id, f.name, f.parent_id, COALESCE(p.folder_id, ''), f.organizer_kind
+		FROM folders f
+		LEFT JOIN folders p ON p.id = f.parent_id
+		WHERE f.user_id = $1
+		  AND f.parent_id IS NOT DISTINCT FROM $2
+		  AND f.name = $3
+		  AND f.organizer_kind = $4
+		ORDER BY f.folder_id
+		LIMIT 1
+	`, userID, parentID, name, organizerKind).Scan(
+		&existing.FolderID,
+		&existing.Name,
+		&existingParentID,
+		&existingParent,
+		&existing.OrganizerKind,
+	)
+	if err == nil {
+		if existingParent != "" {
+			existing.ParentFolderID = &existingParent
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return model.Folder{}, false, false, err
+		}
+		return existing, false, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return model.Folder{}, false, false, err
+	}
+
+	var created model.Folder
+	var createdParent string
+	err = tx.QueryRow(ctx, `
+		WITH ins AS (
+			INSERT INTO folders (folder_id, user_id, parent_id, name, organizer_kind)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING folder_id, name, parent_id, organizer_kind
+		)
+		SELECT ins.folder_id, ins.name, COALESCE(p.folder_id, ''), ins.organizer_kind
+		FROM ins LEFT JOIN folders p ON p.id = ins.parent_id
+	`, folderID, userID, parentID, name, organizerKind).Scan(
+		&created.FolderID,
+		&created.Name,
+		&createdParent,
+		&created.OrganizerKind,
+	)
+	if err != nil {
+		return model.Folder{}, false, false, err
+	}
+	if createdParent != "" {
+		created.ParentFolderID = &createdParent
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return model.Folder{}, false, false, err
+	}
+	return created, true, false, nil
+}
+
+func intValueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func sameFolderParent(left, right *int) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func sameOrganizerKind(value *string, expected string) bool {
+	return value != nil && *value == expected
 }
 
 func (a *App) folderRename(w http.ResponseWriter, r *http.Request) {

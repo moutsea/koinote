@@ -1489,7 +1489,7 @@ export async function desktopCreateFolder(params: {
   name: string;
   parentFolderId: string | null;
   organizerKind?: Folder["organizerKind"];
-}): Promise<{ folder: Folder }> {
+}): Promise<{ folder: Folder; created: boolean }> {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
@@ -1512,7 +1512,7 @@ export async function desktopCreateFolder(params: {
       local ? "clean" : "create",
     ]);
     if (!local) scheduleSync();
-    return { folder };
+    return { folder, created: true };
   });
 }
 
@@ -1897,10 +1897,15 @@ async function performSync(
     return summary;
   } catch (error) {
     const offline = !navigator.onLine;
+    const message = error instanceof RemoteHTTPError
+      ? error.code ?? `http_${error.status}`
+      : error instanceof Error
+        ? error.message
+        : "desktop_sync_failed";
     const summary = await calculateSummary(
       account,
       offline ? "offline" : "error",
-      error instanceof Error ? error.message : "desktop_sync_failed",
+      message,
     );
     notify(summary);
     return summary;
@@ -1917,7 +1922,7 @@ async function pushFolders(account: string) {
     const ready = pendingCreates.filter((row) => !row.parent_folder_id || !pendingIDs.has(row.parent_folder_id));
     if (ready.length === 0) break;
     for (const row of ready) {
-      const result = await remoteJSON<{ folder: Folder }>("/api/folders", {
+      const result = await remoteJSON<{ folder: Folder; created?: boolean }>("/api/folders", {
         method: "POST",
         body: JSON.stringify({
           folderId: row.folder_id,
@@ -1926,7 +1931,11 @@ async function pushFolders(account: string) {
           organizerKind: row.organizer_kind,
         }),
       });
-      await acknowledgeFolder(account, row, result.folder);
+      if (result.folder.folderId === row.folder_id) {
+        await acknowledgeFolder(account, row, result.folder);
+      } else {
+        await reconcileFolderIdentity(account, row, result.folder);
+      }
     }
     pendingCreates = await db.select<FolderRow[]>(`
       SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state = 'create'
@@ -2025,9 +2034,29 @@ async function pushDocuments(account: string): Promise<string[]> {
 
       const current = await selectDocument(account, row.doc_id);
       if (current?.folder_dirty) {
-        await remoteJSON(`/api/documents/${encodeURIComponent(row.doc_id)}/folder`, {
-          method: "PUT", body: JSON.stringify({ folderId: current.folder_id }),
-        });
+        try {
+          await remoteJSON(`/api/documents/${encodeURIComponent(row.doc_id)}/folder`, {
+            method: "PUT", body: JSON.stringify({ folderId: current.folder_id }),
+          });
+        } catch (error) {
+          if (
+            !(error instanceof RemoteHTTPError) ||
+            error.status !== 404 ||
+            error.code !== "not_found" ||
+            current.sync_state !== "clean" ||
+            current.base_revision <= 0
+          ) {
+            throw error;
+          }
+          const removed = await db.execute(`
+            DELETE FROM offline_documents
+            WHERE account_id = $1 AND doc_id = $2
+              AND sync_state = 'clean' AND folder_dirty = 1
+              AND base_revision = $3 AND change_seq = $4
+          `, [account, row.doc_id, current.base_revision, current.change_seq]);
+          if (removed.rowsAffected !== 1) throw error;
+          continue;
+        }
         await db.execute(`
           UPDATE offline_documents SET folder_dirty = 0
           WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
@@ -2321,6 +2350,67 @@ async function acknowledgeFolder(account: string, sent: FolderRow, remote: Folde
     account, sent.folder_id, sent.change_seq, remote.name,
     remote.parentFolderId, remote.organizerKind ?? null,
   ]);
+}
+
+async function reconcileFolderIdentity(
+  account: string,
+  sent: FolderRow,
+  remote: Folder,
+) {
+  const db = await database();
+  const currentRows = await db.select<FolderRow[]>(`
+    SELECT * FROM offline_folders
+    WHERE account_id = $1 AND folder_id = $2
+  `, [account, sent.folder_id]);
+  const current = currentRows[0];
+
+  if (!current || current.sync_state === "delete") return;
+
+  await insertRemoteFolder(account, remote);
+
+  if (current && current.change_seq !== sent.change_seq) {
+    const canonicalRows = await db.select<FolderRow[]>(`
+      SELECT * FROM offline_folders
+      WHERE account_id = $1 AND folder_id = $2
+    `, [account, remote.folderId]);
+    const canonical = canonicalRows[0];
+    if (canonical && canonical.sync_state !== "conflict") {
+      const parentFolderId =
+        current.parent_folder_id === sent.parent_folder_id
+          ? remote.parentFolderId
+          : current.parent_folder_id;
+      await db.execute(`
+        UPDATE offline_folders
+        SET name = $3, parent_folder_id = $4, organizer_kind = $5,
+            sync_state = CASE WHEN sync_state IN ('clean', 'delete') THEN 'update' ELSE sync_state END,
+            change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
+        WHERE account_id = $1 AND folder_id = $2
+      `, [
+        account, remote.folderId, current.name, parentFolderId,
+        current.organizer_kind,
+      ]);
+    }
+  }
+
+  await db.execute(`
+    UPDATE offline_documents
+    SET folder_id = $3,
+        folder_dirty = CASE WHEN sync_state = 'trash' THEN folder_dirty ELSE 1 END,
+        change_seq = change_seq + 1
+    WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
+  `, [account, sent.folder_id, remote.folderId]);
+  await db.execute(`
+    UPDATE offline_folders
+    SET parent_folder_id = $3,
+        sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
+        change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
+    WHERE account_id = $1 AND parent_folder_id = $2
+      AND folder_id <> $2 AND sync_state NOT IN ('delete', 'conflict')
+  `, [account, sent.folder_id, remote.folderId]);
+  await db.execute(`
+    DELETE FROM offline_folders
+    WHERE account_id = $1 AND folder_id = $2
+  `, [account, sent.folder_id]);
 }
 
 async function insertRemoteDocument(account: string, document: Document, folderID: string | null) {

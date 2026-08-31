@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -377,6 +378,76 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("idempotent folder create attempt %d status=%d body=%s", attempt, rec.Code, rec.Body.String())
 		}
+	}
+	duplicateFolderID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate := authenticatedJSON(
+		pair2.AccessToken,
+		http.MethodPost,
+		"/api/folders",
+		`{"folderId":"`+duplicateFolderID+`","name":"Offline","organizerKind":"smart"}`,
+	)
+	if duplicate.Code != http.StatusOK {
+		t.Fatalf("semantic duplicate folder create status=%d body=%s", duplicate.Code, duplicate.Body.String())
+	}
+	var duplicateResult struct {
+		Folder struct {
+			FolderID string `json:"folderId"`
+		} `json:"folder"`
+		Created bool `json:"created"`
+	}
+	if err := json.Unmarshal(duplicate.Body.Bytes(), &duplicateResult); err != nil {
+		t.Fatal(err)
+	}
+	if duplicateResult.Created || duplicateResult.Folder.FolderID != folderID {
+		t.Fatalf("semantic duplicate result=%+v want existing folder %s", duplicateResult, folderID)
+	}
+	var semanticFolderCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM folders
+		WHERE user_id = $1 AND parent_id IS NULL AND name = 'Offline' AND organizer_kind = 'smart'
+	`, userID).Scan(&semanticFolderCount); err != nil {
+		t.Fatal(err)
+	}
+	if semanticFolderCount != 1 {
+		t.Fatalf("semantic duplicate folder count=%d", semanticFolderCount)
+	}
+	concurrentBodies := []string{}
+	for i := 0; i < 2; i++ {
+		concurrentID, err := randomUUID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		concurrentBodies = append(concurrentBodies,
+			`{"folderId":"`+concurrentID+`","name":"Concurrent","organizerKind":"activity"}`,
+		)
+	}
+	responses := make([]*httptest.ResponseRecorder, len(concurrentBodies))
+	var group sync.WaitGroup
+	for i, body := range concurrentBodies {
+		group.Add(1)
+		go func(index int, requestBody string) {
+			defer group.Done()
+			responses[index] = authenticatedJSON(pair2.AccessToken, http.MethodPost, "/api/folders", requestBody)
+		}(i, body)
+	}
+	group.Wait()
+	for i, response := range responses {
+		if response.Code != http.StatusOK {
+			t.Fatalf("concurrent organizer folder create %d status=%d body=%s", i, response.Code, response.Body.String())
+		}
+	}
+	var concurrentFolderCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM folders
+		WHERE user_id = $1 AND parent_id IS NULL AND name = 'Concurrent' AND organizer_kind = 'activity'
+	`, userID).Scan(&concurrentFolderCount); err != nil {
+		t.Fatal(err)
+	}
+	if concurrentFolderCount != 1 {
+		t.Fatalf("concurrent organizer folder count=%d", concurrentFolderCount)
 	}
 	var storedOrganizerKind string
 	if err := pool.QueryRow(ctx, `SELECT organizer_kind FROM folders WHERE folder_id = $1`, folderID).Scan(&storedOrganizerKind); err != nil {
