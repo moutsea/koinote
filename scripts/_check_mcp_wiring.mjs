@@ -35,8 +35,36 @@ const server = readFileSync(
   new URL("../backend/internal/server/server.go", import.meta.url),
   "utf8",
 );
+const tokens = readFileSync(
+  new URL("../backend/internal/server/mcp_tokens.go", import.meta.url),
+  "utf8",
+);
+const migration = readFileSync(
+  new URL("../backend/migrations/0041_mcp_publish_scope.sql", import.meta.url),
+  "utf8",
+);
 const mcp = readFileSync(
   new URL("../backend/internal/server/mcp.go", import.meta.url),
+  "utf8",
+);
+const mcpWechat = readFileSync(
+  new URL("../backend/internal/server/mcp_wechat.go", import.meta.url),
+  "utf8",
+);
+const mcpGeo = readFileSync(
+  new URL("../backend/internal/server/mcp_geo.go", import.meta.url),
+  "utf8",
+);
+const mcpCatalog = readFileSync(
+  new URL("../backend/internal/server/mcp_catalog.go", import.meta.url),
+  "utf8",
+);
+const documentSearch = readFileSync(
+  new URL("../backend/internal/server/document_search.go", import.meta.url),
+  "utf8",
+);
+const readme = readFileSync(
+  new URL("../README.md", import.meta.url),
   "utf8",
 );
 const main = readFileSync(
@@ -46,6 +74,9 @@ const main = readFileSync(
 const guide = readFileSync(
   new URL("../spa/src/pages/MCPGuidePage.tsx", import.meta.url),
   "utf8",
+);
+const localeFiles = ["zh", "en", "ja", "fr"].map((locale) =>
+  readFileSync(new URL(`../spa/src/i18n/${locale}.ts`, import.meta.url), "utf8"),
 );
 const versionGuide = readFileSync(
   new URL("../spa/src/pages/VersionHistoryGuidePage.tsx", import.meta.url),
@@ -153,6 +184,103 @@ ok(
   /Name:\s*["']get_document_history_settings["']/.test(mcp) &&
     /Name:\s*["']update_document_history_settings["']/.test(mcp),
   "Agent 需要和网页使用同一套历史版本设置",
+);
+ok(
+  "MCP 工具覆盖文件夹、上下文、精准编辑和版本比较",
+  [
+    "list_folders",
+    "list_wechat_accounts",
+    "get_wechat_geo_summary",
+    "list_document_themes",
+    "get_agent_credits",
+    "get_document_outline",
+    "get_document_context",
+    "find_text_in_document",
+    "compare_document_versions",
+    "create_folder",
+    "rename_folder",
+    "move_folder",
+    "move_document",
+    "batch_move_documents",
+    "delete_folder",
+    "update_document_metadata",
+    "apply_text_patch",
+    "generate_wechat_geo_summary",
+    "update_wechat_geo_summary",
+  ].every((name) => new RegExp(`Name: [\\"']${name}[\\"']`).test(mcp)),
+  "新增工具必须同时注册并进入 read/write 工具清单",
+);
+ok(
+  "MCP 提供主题目录和 credits 查询",
+  /Name: [\"']list_document_themes[\"']/.test(mcp) &&
+    /Name: [\"']get_agent_credits[\"']/.test(mcp) &&
+    /func \(a \*App\) mcpListDocumentThemes/.test(mcpCatalog) &&
+    /func \(a \*App\) mcpGetAgentCredits/.test(mcpCatalog) &&
+    /loadCreditBalance/.test(mcpCatalog),
+  "Agent 需要发现合法主题并在调用付费能力前查看 credits",
+);
+ok(
+  "MCP 文档列表和搜索支持文件夹筛选",
+  /FolderID \*string/.test(mcp) &&
+    /folderId/.test(mcp) &&
+    /folderID \*string/.test(documentSearch) &&
+    /d\.folder_id IS NULL/.test(documentSearch) &&
+    /f\.folder_id = \$5/.test(documentSearch),
+  "文件夹筛选必须区分根目录和指定文件夹，并沿用账号隔离",
+);
+ok(
+  "MCP 支持微信公众号 GEO 摘要",
+  /Name: [\"']get_wechat_geo_summary[\"']/.test(mcp) &&
+    /Name: [\"']generate_wechat_geo_summary[\"']/.test(mcp) &&
+    /Name: [\"']update_wechat_geo_summary[\"']/.test(mcp) &&
+    /func \(a \*App\) mcpGetWechatGeoSummary/.test(mcpGeo) &&
+    /func \(a \*App\) mcpGenerateWechatGeoSummary/.test(mcpGeo) &&
+    /func \(a \*App\) mcpUpdateWechatGeoSummary/.test(mcpGeo) &&
+    /IncludeGeo/.test(mcpWechat),
+  "Agent 应能读取、生成和调整 GEO 摘要，并在推送草稿时显式选择是否嵌入",
+);
+ok(
+  "MCP 可以列出已绑定公众号但不返回密钥",
+  /Name: [\"']list_wechat_accounts[\"']/.test(mcp) &&
+    /func \(a \*App\) mcpListWechatAccounts/.test(mcpWechat) &&
+    !/SecretHint|AppSecret/.test(mcpWechat),
+  "Agent 需要先读取账号 ID 才能安全选择非默认公众号",
+);
+ok(
+  "微信公众号推送隔离到 publish scope",
+  /canPublish\(\)\s*bool/.test(tokens) &&
+    /return p\.Scope == "publish"/.test(tokens) &&
+    /scope IN \('read', 'write', 'publish'\)/.test(migration) &&
+    /Name: "push_wechat_draft"/.test(mcp) &&
+    /func \(a \*App\) mcpPushWechatDraft/.test(mcpWechat) &&
+    /push_wechat_draft/.test(readme),
+  "发布能力不能随普通 write token 一起开放",
+);
+ok(
+  "MCP 草稿明确说明不套用文档主题",
+  /Koinote WeChat theme is not applied/.test(mcp) &&
+    /不会套用文档的 Koinote 微信主题/.test(readme) &&
+    /不套用文档的 Koinote 微信主题/.test(
+      readFileSync(new URL("../docs/DESIGN.zh.md", import.meta.url), "utf8"),
+    ),
+  "服务端基础 HTML 与网页端主题导出不同，工具说明必须明确披露",
+);
+ok(
+  "MCP 指南说明发布令牌和微信公众号草稿",
+  localeFiles.every(
+    (locale) =>
+      /publish|发布|公開|publication/i.test(locale) &&
+      /push_wechat_draft|草稿|下書き|brouillon/i.test(locale),
+  ),
+  "用户需要知道如何创建仅发布令牌及其副作用",
+);
+ok(
+  "MCP 文档披露 GEO 生成会调用模型",
+  /GEO 摘要生成[\s\S]{0,180}(内置模型|BYOK)/.test(readme) &&
+    /GEO summary generation[\s\S]{0,180}(built-in|BYOK)/i.test(
+      readFileSync(new URL("../docs/DESIGN.en.md", import.meta.url), "utf8"),
+    ),
+  "面向用户的 MCP 说明不能把 GEO 生成误写成完全不调用模型",
 );
 ok(
   "会员可以查看 MCP 活动日志",

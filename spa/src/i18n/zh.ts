@@ -147,13 +147,13 @@ export const zh: Messages = {
       "Koinote 提供标准 Streamable HTTP MCP 接口。配置一次后，你可以直接让 Codex、Claude Code、OpenCode、OpenClaw 或其他兼容客户端查找、创建和修改文档。",
     overviewTitle: "它如何工作",
     overviewBody:
-      "模型能力由你的 Agent 提供；Koinote 不调用 LLM，也不需要模型 API Key。本站只负责令牌鉴权、文档工具、并发冲突检测和审计记录。",
+      "常规文档工具由你的 Agent 提供模型能力，Koinote 只负责令牌鉴权、文档工具、并发冲突检测和审计记录。若调用 GEO 摘要生成工具，Koinote 会按你的设置调用内置模型或 BYOK 渠道。",
     setupTitle: "开始之前",
     setupSteps: [
       { title: "开通终生会员", desc: "MCP 是终生会员权益。" },
       {
         title: "创建个人令牌",
-        desc: "在控制台创建只读或读写令牌，并选择期限或永久有效。",
+        desc: "在控制台创建只读、读写或仅发布令牌，并选择期限或永久有效。",
       },
       {
         title: "配置客户端",
@@ -174,7 +174,7 @@ export const zh: Messages = {
     verifyLabel: "配置后可用这些提示词验证",
     usageTitle: "如何让 Agent 使用",
     usageBody:
-      "配置完成后不需要特殊语法，直接在对话里说明要操作 Koinote。Agent 会自行选择合适的 MCP 工具；涉及覆盖或移入回收站时，建议明确文档标题和期望结果。",
+      "配置完成后不需要特殊语法，直接在对话里说明要操作 Koinote。Agent 会自行选择合适的 MCP 工具；涉及覆盖或移入回收站时，建议明确文档标题和期望结果。使用仅发布令牌时，可以要求 Agent 将指定文章推送到已绑定的微信公众号草稿箱，也可以让它生成或维护 GEO 摘要；推送时需明确要求携带 GEO。",
     prompts: [
       "列出我在 Koinote 最近修改的 5 篇文档。",
       "写一篇关于远程工作的文章，并保存到 Koinote。",
@@ -185,6 +185,8 @@ export const zh: Messages = {
     permissions: [
       "只读令牌可列出、搜索、读取文档与历史版本，不能改动内容。",
       "读写令牌可以创建、追加、更新、恢复版本，以及移入或移出回收站。",
+      "仅发布令牌可以读取文档并调用 push_wechat_draft 创建公众号草稿，但不能修改或删除 Koinote 文档。",
+      "读写和仅发布令牌可以生成或维护微信公众号 GEO 摘要；内置模型会消耗 credits，推送草稿默认不携带摘要。",
       "Agent 不能永久删除文档；永久删除只能在网页回收站中二次确认。",
       "令牌可以单独撤销，过期或会员失效后会立即停止访问。",
     ],
@@ -944,6 +946,7 @@ export const zh: Messages = {
     scope: "权限",
     readOnly: "只读",
     readWrite: "读写",
+    publishOnly: "仅发布",
     expiry: "有效期",
     days: "{n} 天",
     neverExpires: "永久",

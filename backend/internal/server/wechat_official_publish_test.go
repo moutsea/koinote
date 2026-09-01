@@ -830,9 +830,10 @@ func TestPrepareWechatDraftImagesUsesBoundedConcurrencyAndKeepsOrder(t *testing.
 		"https://three.example.test/c.png",
 		"https://four.example.test/d.png",
 	}
+	preserveRaw := []bool{true, false, true, false}
 	done := make(chan []wechatDraftImagePreparation, 1)
 	go func() {
-		done <- app.prepareWechatDraftImages(context.Background(), sources, true, sources[2])
+		done <- app.prepareWechatDraftImages(context.Background(), sources, preserveRaw)
 	}()
 	for index := 0; index < wechatDraftImagePrepareWorkers; index++ {
 		select {
@@ -850,7 +851,7 @@ func TestPrepareWechatDraftImagesUsesBoundedConcurrencyAndKeepsOrder(t *testing.
 		if result.Source != sources[index] || result.Err != nil || len(result.Prepared) == 0 {
 			t.Fatalf("result %d=%+v", index, result)
 		}
-		shouldRetainRaw := index == 0 || index == 2
+		shouldRetainRaw := preserveRaw[index]
 		if (len(result.Raw) > 0) != shouldRetainRaw {
 			t.Fatalf("result %d raw retained=%v want=%v", index, len(result.Raw) > 0, shouldRetainRaw)
 		}
@@ -866,7 +867,7 @@ func TestPrepareWechatDraftImagesReportsSafeImageContext(t *testing.T) {
 		}, nil
 	})}}
 	source := "https://cdn.example.test/private/token-value/image.png"
-	results := app.prepareWechatDraftImages(context.Background(), []string{source}, false, "")
+	results := app.prepareWechatDraftImages(context.Background(), []string{source}, []bool{false})
 	if len(results) != 1 || !errors.Is(results[0].Err, errWechatImageUnreachable) {
 		t.Fatalf("unexpected image error: %+v", results)
 	}

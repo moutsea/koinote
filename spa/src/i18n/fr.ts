@@ -151,7 +151,7 @@ export const fr: Messages = {
       "Connectez Codex, Claude Code, OpenCode, OpenClaw ou tout client MCP Streamable HTTP compatible à Koinote.",
     overviewTitle: "Fonctionnement",
     overviewBody:
-      "Le modèle est fourni par votre agent. Koinote n’appelle aucun LLM : il gère l’autorisation, les outils documentaires, les conflits et l’audit.",
+      "Pour les outils documentaires habituels, le modèle est fourni par votre agent. Koinote gère l’autorisation, les outils, les conflits et l’audit ; la génération d’un résumé GEO peut appeler le modèle intégré ou votre canal BYOK configuré.",
     setupTitle: "Avant de commencer",
     setupSteps: [
       {
@@ -160,7 +160,7 @@ export const fr: Messages = {
       },
       {
         title: "Créez un jeton",
-        desc: "Choisissez lecture seule ou lecture/écriture, avec une durée limitée ou permanente.",
+        desc: "Choisissez lecture seule, lecture-écriture ou publication seule, avec une durée limitée ou permanente.",
       },
       {
         title: "Configurez le client",
@@ -181,7 +181,7 @@ export const fr: Messages = {
     verifyLabel: "Exemples à essayer",
     usageTitle: "Utilisation depuis un agent",
     usageBody:
-      "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille.",
+      "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille. Avec un jeton de publication seule, demandez à l’agent d’envoyer un document nommé vers les brouillons du compte WeChat lié ou de générer et gérer son résumé GEO ; demandez explicitement l’inclusion du GEO lors de l’envoi.",
     prompts: [
       "Liste mes cinq documents Koinote modifiés le plus récemment.",
       "Rédige un article sur le travail à distance et enregistre-le dans Koinote.",
@@ -192,6 +192,8 @@ export const fr: Messages = {
     permissions: [
       "Les jetons en lecture seule peuvent lister, rechercher et lire les documents et l’historique.",
       "Les jetons en écriture peuvent créer, ajouter, mettre à jour, restaurer et gérer la corbeille.",
+      "Les jetons de publication seule peuvent lire les documents et appeler push_wechat_draft pour créer un brouillon WeChat, sans modifier ni supprimer les documents Koinote.",
+      "Les jetons d’écriture et de publication seule peuvent générer ou gérer un résumé GEO WeChat ; le modèle intégré consomme des credits et les brouillons l’omettront sauf demande explicite.",
       "Un agent ne peut pas supprimer définitivement un document ; cette action reste dans l’interface web.",
       "Chaque jeton peut être révoqué et cesse de fonctionner à son expiration ou à la fin de l’adhésion.",
     ],
@@ -992,6 +994,7 @@ export const fr: Messages = {
     scope: "Portée",
     readOnly: "Lecture seule",
     readWrite: "Lecture et écriture",
+    publishOnly: "Publication seule",
     expiry: "Expiration",
     days: "{n} jours",
     neverExpires: "Permanent",

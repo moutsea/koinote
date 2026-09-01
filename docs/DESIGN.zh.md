@@ -435,9 +435,9 @@ Product、金额、币种和 Customer 参数一起生成指纹。Stripe 对同�
 
 ## MCP 文档访问
 
-MCP 是 Koinote 暴露给 Codex、Claude Code 等 Agent 客户端的文档操作协议。模型推理发生在
-客户端；Koinote 只提供工具与数据，因此服务端不调用 LLM，也不需要 OpenAI、Anthropic
-等模型 API Key。当前入口是 Streamable HTTP `POST /mcp`，使用官方 Go MCP SDK 的无状态
+MCP 是 Koinote 暴露给 Codex、Claude Code 等 Agent 客户端的文档操作协议。常规文档工具的模型推理发生在
+客户端；GEO 摘要工具例外，会按用户设置调用内置或 BYOK 模型。服务端因此只在 GEO 生成时需要相应的模型配置。
+当前入口是 Streamable HTTP `POST /mcp`，使用官方 Go MCP SDK 的无状态
 JSON 响应模式。Worker 只精确代理 `/mcp`，保持请求 body stream，不解析或重编码协议内容。
 
 ### 为什么协议层在 Go，而不是 Worker / Durable Object
@@ -449,7 +449,7 @@ MCP 的身份、会员等级、文档授权、版本和审计真值都在 Postgr
 
 ### 为什么第一版使用 PAT，而不是 OAuth
 
-第一版只面向终生会员，并采用账户页创建的个人访问令牌：`read` 或 `write` scope、1–365 天
+第一版只面向终生会员，并采用账户页创建的个人访问令牌：`read`、`write` 或 `publish` scope、1–365 天
 或永久有效、创建后可修改有效期、逐个撤销，最多 20 个有效令牌。永久令牌以
 `expires_at IS NULL` 表示。明文带 `knt_mcp_` 前缀；数据库用 SHA-256 摘要鉴权，
 同时以独立密钥做 AES-GCM 加密，账号本人可通过带限流的专用接口按需再次查看。列表接口只
@@ -469,13 +469,22 @@ PAT 对 CLI 客户端是一等公民，也避免为了首版引入 OAuth 2.1 的
 
 只读令牌暴露：
 
-- `list_documents`：按最近修改分页列出摘要，不返回正文
-- `search_documents`：搜索标题与 Markdown 正文，并返回命中位置附近的短摘要
+- `list_documents`：按最近修改分页列出摘要，不返回正文；可按文件夹筛选，`folderId` 为空字符串表示根目录
+- `list_folders`：分页列出当前账号的文件夹树和文档数量
+- `list_wechat_accounts`：列出当前账号绑定的公众号、标签与默认项，不返回 AppSecret
+- `list_document_themes`：列出可用于文档的主题 ID，并标记默认主题
+- `get_agent_credits`：查看 credits 总余额、已预留、可用余额和 token 换算比例，不会产生费用
+- `search_documents`：搜索标题与 Markdown 正文，并返回命中位置附近的短摘要；可按文件夹筛选，`folderId` 为空字符串表示根目录
 - `get_document`：按 Unicode 字符 offset/limit 分段读取，并返回总长度与 `hasMore`
+- `get_document_outline` / `get_document_context`：读取最多 500 个标题层级，或连同正文片段一次返回；超出时看 `headingsTruncated`
+- `find_text_in_document`：查找唯一文本锚点并返回 Unicode offset 与上下文
+- `compare_document_versions`：比较两个保留版本（或当前版本）的元数据和不重复行变化统计
 - `list_document_versions` / `get_document_version`：查看保留的恢复点
 - `list_trashed_documents`：列出 30 天回收站中的摘要和自动删除时间
 
-读写令牌额外暴露 `create_document`、`append_to_document`、`update_document` 与
+读写令牌额外暴露 `create_document`、`append_to_document`、`update_document`、`apply_text_patch`、
+`update_document_metadata`、`create_folder`、`rename_folder`、`move_folder`、`move_document`、
+`batch_move_documents`、`delete_folder` 与
 `restore_document_version`，以及带 `expectedRevision` 的 `trash_document`、
 `restore_trashed_document`。MCP 不暴露永久删除；永久删除只允许网页回收站在再次确认并输入
 标题后调用。普通删除只是设置 `trashed_at`，30 天内仍计入配额、保留版本并保护图片引用；
@@ -487,6 +496,23 @@ PAT 对 CLI 客户端是一等公民，也避免为了首版引入 OAuth 2.1 的
 并由后端每日清理超过 180 天的记录，避免高频工具调用让运维元数据无界增长。
 协议工具的业务错误给 Agent 返回可行动的信息（如重新读取最新 revision），数据库内部错误
 则统一对外为 `internal server error`。
+
+### 文件夹、精准编辑与发布
+
+文件夹工具复用网页端的用户隔离、深度上限和防环校验。移动文档和文件夹不会改变正文 revision；
+批量移动在同一事务中执行，任一文档不存在或目标文件夹不属于当前用户就整体失败。`apply_text_patch`
+要求每个原文锚点在当前正文中恰好出现一次，所有锚点先完成校验后才写入，并继续使用 revision CAS。
+
+发布工具只对 `publish` scope 令牌开放。Agent 可先用只读的 `list_wechat_accounts` 获取最多 5 个账号的
+公开标识与默认项，再由 `push_wechat_draft` 在后端从当前 Markdown 生成基础富文本（不套用文档的 Koinote 微信主题），
+通过已绑定的公众号上传正文图片和封面，再创建草稿；它不修改 Koinote 文档。默认封面不产生 credits
+费用，选择 AI 封面时复用封面生成的 20 credits 预留、提交与失败释放流程。由于该操作会在第三方平台
+创建草稿，客户端应在对话中明确要求后再调用，令牌也应单独设置期限并可随时撤销。
+
+`get_wechat_geo_summary` 是只读工具；读写和仅发布令牌可调用 `generate_wechat_geo_summary`、
+`update_wechat_geo_summary` 管理已保存的 GEO 隐藏摘要。生成沿用网页端的会员、模型选择、限流和 credits 预留流程，
+内置模型按实际用量扣费，BYOK 不扣费。`push_wechat_draft` 只有在显式传入 `includeGeo: true` 时才会嵌入已启用且未过期的摘要，
+发现摘要对应的文档版本已变化时会要求先重新生成，避免把旧语料推到新文章中。
 
 ### 版本历史先于 Agent 写入
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -123,27 +124,46 @@ func TestMCPOriginValidation(t *testing.T) {
 func TestMCPScopeControlsExposedTools(t *testing.T) {
 	readTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "read"})
 	wantRead := []string{
+		"compare_document_versions",
+		"get_document_context",
 		"get_document",
 		"get_document_history_settings",
 		"get_document_version",
+		"get_document_outline",
+		"find_text_in_document",
+		"get_wechat_geo_summary",
+		"get_agent_credits",
 		"list_document_versions",
+		"list_document_themes",
 		"list_documents",
+		"list_folders",
+		"list_wechat_accounts",
 		"list_trashed_documents",
 		"search_documents",
 	}
+	slices.Sort(wantRead)
 	if !slices.Equal(readTools, wantRead) {
 		t.Fatalf("read scope 工具 = %v，期望 %v", readTools, wantRead)
 	}
 
 	writeTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "write"})
 	wantWrite := append(slices.Clone(wantRead),
-		"append_to_document", "create_document", "restore_document_version", "restore_trashed_document", "trash_document", "update_document", "update_document_history_settings")
+		"append_to_document", "apply_text_patch", "batch_move_documents", "create_document", "create_folder", "delete_folder",
+		"generate_wechat_geo_summary", "update_wechat_geo_summary",
+		"move_document", "move_folder", "rename_folder", "restore_document_version", "restore_trashed_document", "trash_document",
+		"update_document", "update_document_history_settings", "update_document_metadata")
 	slices.Sort(wantWrite)
 	if !slices.Equal(writeTools, wantWrite) {
 		t.Fatalf("write scope 工具 = %v，期望 %v", writeTools, wantWrite)
 	}
 	if slices.Contains(writeTools, "delete_document") || slices.Contains(writeTools, "permanently_delete_document") {
 		t.Fatal("MCP 不得暴露永久删除工具")
+	}
+	publishTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "publish"})
+	wantPublish := append(slices.Clone(wantRead), "generate_wechat_geo_summary", "push_wechat_draft", "update_wechat_geo_summary")
+	slices.Sort(wantPublish)
+	if !slices.Equal(publishTools, wantPublish) {
+		t.Fatalf("publish scope 工具 = %v，期望 %v", publishTools, wantPublish)
 	}
 }
 
@@ -194,10 +214,199 @@ func TestMCPUpdateThemeIsOptional(t *testing.T) {
 	t.Fatal("write scope 缺少 update_document")
 }
 
+func TestMCPLocateUniqueRuneMatchCountsOverlaps(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		find      string
+		wantStart int
+		wantCount int
+	}{
+		{name: "unique", content: "alpha beta", find: "beta", wantStart: 6, wantCount: 1},
+		{name: "duplicate", content: "one one", find: "one", wantStart: 4, wantCount: 2},
+		{name: "overlap", content: "aaa", find: "aa", wantStart: 1, wantCount: 2},
+		{name: "missing", content: "alpha", find: "omega", wantStart: -1, wantCount: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			start, count := locateUniqueRuneMatch([]rune(tc.content), []rune(tc.find))
+			if start != tc.wantStart || count != tc.wantCount {
+				t.Fatalf("locateUniqueRuneMatch() = (%d, %d), want (%d, %d)", start, count, tc.wantStart, tc.wantCount)
+			}
+		})
+	}
+}
+
+func TestMCPWechatMarkdownRendering(t *testing.T) {
+	html, err := renderMCPWechatHTML("# 标题\n\n正文 **加粗**\n\n![图片](/images/u/user/abcdef12.png)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"<section", "<h1>标题</h1>", "<strong>加粗</strong>", `src="/images/u/user/abcdef12.png"`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("渲染结果缺少 %q: %s", want, html)
+		}
+	}
+	if _, err := renderMCPWechatHTML("   "); err == nil {
+		t.Fatal("空 Markdown 必须拒绝")
+	}
+}
+
+func TestMCPWechatGeoEmbeddingEscapesAndPreservesTitleOrder(t *testing.T) {
+	view := wechatGeoSummaryView{Text: "摘要\n主题 · 关键词 <tag>", Enabled: true}
+	got, err := applyMCPWechatGeoSummary("<section><h1>标题</h1><p>正文</p></section>", view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "<h1>标题</h1><hr") {
+		t.Fatalf("GEO divider must follow the title: %s", got)
+	}
+	if !strings.Contains(got, "摘要\n主题 · 关键词 &lt;tag&gt;") || strings.Contains(got, "<tag>") {
+		t.Fatalf("GEO text must be escaped: %s", got)
+	}
+	if _, err := applyMCPWechatGeoSummary("<p>正文</p>", wechatGeoSummaryView{Text: "摘要"}); err == nil {
+		t.Fatal("disabled GEO summary must not be embedded")
+	}
+}
+
+func TestMCPWechatGeoSummaryRoundTrip(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer geo-mcp-key" {
+			t.Fatalf("unexpected GEO provider request: path=%q authorization=%q", r.URL.Path, r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"{\"summary\":\"I explain a practical writing workflow for clearer long-form content.\",\"topics\":[\"writing workflow\",\"content structure\"],\"keywords\":[\"long-form writing\",\"WeChat publishing\"]}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}`)
+	}))
+	defer provider.Close()
+	app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
+		SessionSecret:    "mcp-geo-round-trip",
+		AgentLLMProtocol: "openai",
+		AgentLLMBaseURL:  provider.URL,
+		AgentLLMAPIKey:   "geo-mcp-key",
+		AgentLLMModel:    "geo-mcp-model",
+	})
+	app.agentLLMHTTPClient = provider.Client()
+	grantCreditsForTest(t, pool, user.ID, 5, "mcp-geo-round-trip")
+
+	tokenHash := sha256.Sum256([]byte("mcp-geo-round-trip-token"))
+	var tokenID int64
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO mcp_tokens (token_id, user_id, name, token_hash, token_hint, scope)
+		VALUES ('mcp-geo-round-trip-token', $1, 'GEO round trip', $2, '…geo', 'write')
+		RETURNING id
+	`, user.ID, tokenHash[:]).Scan(&tokenID); err != nil {
+		t.Fatalf("create MCP GEO token: %v", err)
+	}
+	principal := mcpPrincipal{User: user, Scope: "write", TokenID: tokenID}
+	ctx := context.WithValue(context.Background(), mcpPrincipalContextKey{}, principal)
+	_, generated, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryInput{DocID: document.DocID})
+	if err != nil {
+		t.Fatalf("generate MCP GEO summary: %v", err)
+	}
+	if generated.Geo == nil || generated.Geo.Text == "" || generated.Geo.CreditsCharged != 1 || generated.Stale {
+		t.Fatalf("generated MCP GEO summary=%+v", generated)
+	}
+	_, loaded, err := app.mcpGetWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryInput{DocID: document.DocID})
+	if err != nil {
+		t.Fatalf("get MCP GEO summary: %v", err)
+	}
+	if loaded.Geo == nil || loaded.Geo.Text != generated.Geo.Text || loaded.Stale {
+		t.Fatalf("loaded MCP GEO summary=%+v", loaded)
+	}
+	disabled := false
+	_, updated, err := app.mcpUpdateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryUpdateInput{DocID: document.DocID, Enabled: &disabled})
+	if err != nil {
+		t.Fatalf("update MCP GEO summary: %v", err)
+	}
+	if updated.Geo == nil || updated.Geo.Enabled {
+		t.Fatalf("updated MCP GEO summary=%+v", updated)
+	}
+}
+
+func TestMCPGenerateWechatGeoSummaryReportsDocumentChanges(t *testing.T) {
+	providerStarted := make(chan struct{})
+	continueProvider := make(chan struct{})
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(providerStarted)
+		<-continueProvider
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"{\"summary\":\"A practical writing workflow for clear long-form content.\",\"topics\":[\"writing workflow\"],\"keywords\":[\"long-form writing\"]}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}`)
+	}))
+	defer provider.Close()
+	app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
+		SessionSecret:    "mcp-geo-stale",
+		AgentLLMProtocol: "openai",
+		AgentLLMBaseURL:  provider.URL,
+		AgentLLMAPIKey:   "geo-stale-key",
+		AgentLLMModel:    "geo-stale-model",
+	})
+	app.agentLLMHTTPClient = provider.Client()
+	grantCreditsForTest(t, pool, user.ID, 5, "mcp-geo-stale")
+	tokenHash := sha256.Sum256([]byte("mcp-geo-stale-token"))
+	var tokenID int64
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO mcp_tokens (token_id, user_id, name, token_hash, token_hint, scope)
+		VALUES ('mcp-geo-stale-token', $1, 'GEO stale', $2, '…stale', 'write')
+		RETURNING id
+	`, user.ID, tokenHash[:]).Scan(&tokenID); err != nil {
+		t.Fatalf("create stale MCP token: %v", err)
+	}
+	principal := mcpPrincipal{User: user, Scope: "write", TokenID: tokenID}
+	ctx := context.WithValue(context.Background(), mcpPrincipalContextKey{}, principal)
+	resultCh := make(chan struct {
+		output mcpWechatGeoSummaryOutput
+		err    error
+	}, 1)
+	go func() {
+		_, output, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryInput{DocID: document.DocID})
+		resultCh <- struct {
+			output mcpWechatGeoSummaryOutput
+			err    error
+		}{output: output, err: err}
+	}()
+	<-providerStarted
+	updated, err := app.updateDocument(ctx, updateDocumentParams{
+		User: user, DocID: document.DocID, Title: document.Title, Theme: document.Theme,
+		Content: "The document changed while GEO generation was running.", ExpectedRevision: document.Revision,
+		Source: documentSourceMCP,
+	})
+	if err != nil {
+		t.Fatalf("update document during GEO generation: %v", err)
+	}
+	close(continueProvider)
+	result := <-resultCh
+	if result.err != nil {
+		t.Fatalf("generate stale GEO summary: %v", result.err)
+	}
+	if result.output.Revision != updated.Revision || !result.output.Stale {
+		t.Fatalf("stale GEO output=%+v, want revision=%d and stale=true", result.output, updated.Revision)
+	}
+}
+
+func TestMCPWechatImageSourceNormalization(t *testing.T) {
+	if got := normalizeMCPWechatImageSource("/images/u/user/abcdef12.png", "https://worker.example", "https://koinote.app"); got != "https://worker.example/images/u/user/abcdef12.png" {
+		t.Fatalf("Worker 图片地址归一化异常: %q", got)
+	}
+	if got := normalizeMCPWechatImageSource("/images/u/user/abcdef12.png", "", "http://localhost:5273"); got != "/images/u/user/abcdef12.png" {
+		t.Fatalf("不安全的图片基址不应被使用: %q", got)
+	}
+	app := &App{}
+	got, err := app.normalizeMCPWechatImageSources(`<p><img src="/images/u/user/abcdef12.png"></p>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `src="/images/u/user/abcdef12.png"`) {
+		t.Fatalf("没有配置公网基址时应保留原地址: %s", got)
+	}
+}
+
 func TestMCPUpdateRejectsUnknownTheme(t *testing.T) {
 	_, err := validateMCPDocumentTheme("unknown-theme")
 	if err == nil || !strings.Contains(err.Error(), "not a supported") {
 		t.Fatalf("未知主题应被拒绝，实际 %v", err)
+	}
+	if theme, err := validateMCPDocumentTheme(""); err != nil || theme != "" {
+		t.Fatalf("空主题应表示移除主题: theme=%q err=%v", theme, err)
 	}
 }
 
@@ -212,6 +421,96 @@ func TestMCPChunkingUsesUnicodeCharacters(t *testing.T) {
 	}
 	if _, _, _, _, _, err := chunkText("abc", 4, 1); err == nil {
 		t.Fatal("offset 超过正文长度必须报错")
+	}
+}
+
+func TestMCPFindTextTruncationIsAccurate(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		content   string
+		wantCount int
+		wantMore  bool
+	}{
+		{name: "exact limit", content: strings.Repeat("x", 100), wantCount: 100, wantMore: false},
+		{name: "over limit", content: strings.Repeat("x", 101), wantCount: 100, wantMore: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			matches, truncated := findMCPTextMatches(test.content, "x")
+			if len(matches) != test.wantCount || truncated != test.wantMore {
+				t.Fatalf("matches=%d truncated=%v, want %d/%v", len(matches), truncated, test.wantCount, test.wantMore)
+			}
+		})
+	}
+}
+
+func TestMCPFindTextMatchesIsCaseInsensitiveByRune(t *testing.T) {
+	matches, truncated := findMCPTextMatches("Go 编程 GO 编程", "go 编程")
+	if truncated || len(matches) != 2 {
+		t.Fatalf("大小写不敏感查找结果异常: matches=%+v truncated=%v", matches, truncated)
+	}
+	if matches[0].Offset != 0 || matches[1].Offset != 6 {
+		t.Fatalf("Unicode 偏移异常: %+v", matches)
+	}
+}
+
+func TestMCPDocumentOutlineHasResponseLimit(t *testing.T) {
+	headings, truncated := mcpDocumentHeadings(strings.Repeat("# heading\n", mcpMaxOutlineItems))
+	if len(headings) != mcpMaxOutlineItems || truncated {
+		t.Fatalf("exact outline limit = %d/%v, want %d/false", len(headings), truncated, mcpMaxOutlineItems)
+	}
+	headings, truncated = mcpDocumentHeadings(strings.Repeat("# heading\n", mcpMaxOutlineItems+1))
+	if len(headings) != mcpMaxOutlineItems || !truncated {
+		t.Fatalf("over outline limit = %d/%v, want %d/true", len(headings), truncated, mcpMaxOutlineItems)
+	}
+}
+
+func TestMCPCreateDocumentTrimsFolderID(t *testing.T) {
+	pool := newGCTestPool(t)
+	app := New(config.Config{SessionSecret: "mcp-folder-trim-test"}, pool)
+	user := seedMCPUser(t, pool, app, membershipTierLifetime)
+	tokenHash := sha256.Sum256([]byte("mcp-folder-trim-token"))
+	var tokenID int64
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO mcp_tokens (token_id, user_id, name, token_hash, token_hint, scope)
+		VALUES ('mcp-folder-trim-token', $1, 'folder trim test', $2, '…trim', 'write')
+		RETURNING id
+	`, user.ID, tokenHash[:]).Scan(&tokenID); err != nil {
+		t.Fatalf("create test token: %v", err)
+	}
+	principal := mcpPrincipal{User: user, TokenID: tokenID, Scope: "write"}
+	ctx := context.WithValue(context.Background(), mcpPrincipalContextKey{}, principal)
+
+	_, folder, err := app.mcpCreateFolder(ctx, nil, mcpCreateFolderInput{Name: "Trimmed folder"})
+	if err != nil {
+		t.Fatalf("create folder: %v", err)
+	}
+	folderID := "  " + folder.FolderID + "  "
+	_, created, err := app.mcpCreateDocument(ctx, nil, mcpCreateDocumentInput{
+		Title: "Folder assignment", Content: "body", FolderID: &folderID,
+	})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	var storedFolderID string
+	if err := pool.QueryRow(context.Background(), `
+		SELECT f.folder_id
+		FROM documents d
+		JOIN folders f ON f.id = d.folder_id
+		WHERE d.doc_id = $1 AND d.user_id = $2
+	`, created.DocID, user.ID).Scan(&storedFolderID); err != nil {
+		t.Fatalf("read document folder: %v", err)
+	}
+	if storedFolderID != folder.FolderID {
+		t.Fatalf("stored folder=%q want=%q", storedFolderID, folder.FolderID)
+	}
+}
+
+func TestMCPWechatPublishErrorHidesProviderDetails(t *testing.T) {
+	if got := mapMCPWechatPublishError(errors.Join(errWechatCredentialCrypto, errors.New("cipher details"))).Error(); got != "WeChat publishing is temporarily unavailable" {
+		t.Fatalf("credential error=%q", got)
+	}
+	if got := mapMCPWechatPublishError(&wechatProviderError{Code: 49999, Message: "internal provider detail"}).Error(); got != "WeChat rejected the request" {
+		t.Fatalf("provider error=%q", got)
 	}
 }
 
@@ -286,6 +585,7 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 
 	writeToken := createMCPTokenForTest(t, server, lifetimeCookie, "Codex", "write")
 	readToken := createMCPTokenForTest(t, server, lifetimeCookie, "Claude", "read")
+	publishToken := createMCPTokenForTest(t, server, lifetimeCookie, "Publisher", "publish")
 	otherReadToken := createMCPTokenForTest(t, server, otherLifetimeCookie, "Other", "read")
 
 	t.Run("创建永久令牌并编辑有效期", func(t *testing.T) {
@@ -444,8 +744,9 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = readSession.Close() })
 	assertMCPToolSet(t, readSession, []string{
-		"get_document", "get_document_history_settings", "get_document_version", "list_document_versions",
-		"list_documents", "list_trashed_documents", "search_documents",
+		"compare_document_versions", "find_text_in_document", "get_document_context", "get_document_outline",
+		"get_agent_credits", "get_document", "get_document_history_settings", "get_document_version", "get_wechat_geo_summary", "list_document_versions",
+		"list_document_themes", "list_documents", "list_folders", "list_trashed_documents", "list_wechat_accounts", "search_documents",
 	})
 
 	writeSession, err := connectMCPClient(context.Background(), server.URL+"/mcp", writeToken.Secret)
@@ -454,10 +755,22 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = writeSession.Close() })
 	assertMCPToolSet(t, writeSession, []string{
-		"append_to_document", "create_document", "get_document", "get_document_history_settings", "get_document_version",
-		"list_document_versions", "list_documents", "list_trashed_documents", "restore_document_version",
-		"restore_trashed_document", "search_documents", "trash_document", "update_document",
-		"update_document_history_settings",
+		"append_to_document", "apply_text_patch", "batch_move_documents", "create_document", "create_folder",
+		"delete_folder", "find_text_in_document", "get_document", "get_document_context", "get_document_history_settings",
+		"get_agent_credits", "get_document_outline", "get_document_version", "list_document_versions", "list_document_themes", "list_documents", "list_folders",
+		"get_wechat_geo_summary", "generate_wechat_geo_summary", "update_wechat_geo_summary", "list_trashed_documents", "list_wechat_accounts", "move_document", "move_folder", "rename_folder", "restore_document_version",
+		"restore_trashed_document", "search_documents", "trash_document", "update_document", "update_document_history_settings",
+		"update_document_metadata", "compare_document_versions",
+	})
+	publishSession, err := connectMCPClient(context.Background(), server.URL+"/mcp", publishToken.Secret)
+	if err != nil {
+		t.Fatalf("publish MCP 握手失败: %v", err)
+	}
+	t.Cleanup(func() { _ = publishSession.Close() })
+	assertMCPToolSet(t, publishSession, []string{
+		"compare_document_versions", "find_text_in_document", "get_document", "get_document_context",
+		"get_agent_credits", "get_document_history_settings", "get_document_outline", "get_document_version", "list_document_versions", "list_document_themes",
+		"list_documents", "list_folders", "list_trashed_documents", "list_wechat_accounts", "get_wechat_geo_summary", "generate_wechat_geo_summary", "update_wechat_geo_summary", "push_wechat_draft", "search_documents",
 	})
 	otherReadSession, err := connectMCPClient(context.Background(), server.URL+"/mcp", otherReadToken.Secret)
 	if err != nil {
@@ -466,6 +779,37 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	t.Cleanup(func() { _ = otherReadSession.Close() })
 
 	ctx := context.Background()
+	grantCreditsForTest(t, pool, lifetime.ID, 7, "mcp-catalog")
+	themesResult := callMCPToolOK(t, readSession, "list_document_themes", map[string]any{})
+	var themes mcpDocumentThemesOutput
+	decodeMCPStructured(t, themesResult, &themes)
+	if len(themes.Themes) != len(documentThemes) {
+		t.Fatalf("主题目录数量 = %d，期望 %d", len(themes.Themes), len(documentThemes))
+	}
+	var foundEmpty, foundDefault bool
+	for _, theme := range themes.Themes {
+		if theme.ID == "" {
+			foundEmpty = true
+		}
+		if theme.ID == defaultDocumentTheme && theme.Default {
+			foundDefault = true
+		}
+	}
+	if !foundEmpty || !foundDefault {
+		t.Fatalf("主题目录必须包含空主题和默认主题: %+v", themes.Themes)
+	}
+	creditsResult := callMCPToolOK(t, readSession, "get_agent_credits", map[string]any{})
+	var credits mcpAgentCreditsOutput
+	decodeMCPStructured(t, creditsResult, &credits)
+	if credits.Balance != 7 || credits.Reserved != 0 || credits.Available != 7 || credits.TokensPerCredit != creditTokensPerCredit {
+		t.Fatalf("credits 查询结果异常: %+v", credits)
+	}
+	accountsResult := callMCPToolOK(t, readSession, "list_wechat_accounts", map[string]any{})
+	var accounts mcpWechatAccountsOutput
+	decodeMCPStructured(t, accountsResult, &accounts)
+	if len(accounts.Accounts) != 0 || accounts.MaxCount != wechatOfficialAccountMaxCount {
+		t.Fatalf("空公众号列表结果异常: %+v", accounts)
+	}
 	historySettingsResult := callMCPToolOK(t, readSession, "get_document_history_settings", map[string]any{})
 	var historySettings documentHistorySettings
 	decodeMCPStructured(t, historySettingsResult, &historySettings)
@@ -488,6 +832,64 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	if created.DocID == "" || created.Revision != 1 {
 		t.Fatalf("新建结果异常: %+v", created)
 	}
+	folderResult := callMCPToolOK(t, writeSession, "create_folder", map[string]any{"name": "MCP 集成测试文件夹"})
+	var createdFolder mcpFolderSummary
+	decodeMCPStructured(t, folderResult, &createdFolder)
+	if createdFolder.FolderID == "" || createdFolder.Name != "MCP 集成测试文件夹" {
+		t.Fatalf("创建文件夹结果异常: %+v", createdFolder)
+	}
+	secondFolderResult := callMCPToolOK(t, writeSession, "create_folder", map[string]any{"name": "MCP 第二个文件夹"})
+	var secondFolder mcpFolderSummary
+	decodeMCPStructured(t, secondFolderResult, &secondFolder)
+	if secondFolder.FolderID == "" || secondFolder.Name != "MCP 第二个文件夹" {
+		t.Fatalf("创建第二个文件夹结果异常: %+v", secondFolder)
+	}
+	foldersResult := callMCPToolOK(t, readSession, "list_folders", map[string]any{"limit": 1})
+	var folders mcpFolderPage
+	decodeMCPStructured(t, foldersResult, &folders)
+	if len(folders.Folders) != 1 || folders.Folders[0].FolderID == "" || folders.NextCursor == "" {
+		t.Fatalf("文件夹列表结果异常: %+v", folders.Folders)
+	}
+	foldersNextResult := callMCPToolOK(t, readSession, "list_folders", map[string]any{"cursor": folders.NextCursor, "limit": 1})
+	var foldersNext mcpFolderPage
+	decodeMCPStructured(t, foldersNextResult, &foldersNext)
+	if len(foldersNext.Folders) != 1 || foldersNext.Folders[0].FolderID == folders.Folders[0].FolderID {
+		t.Fatalf("文件夹下一页结果异常: %+v", foldersNext)
+	}
+	callMCPToolOK(t, writeSession, "move_document", map[string]any{
+		"docId": created.DocID, "folderId": createdFolder.FolderID, "expectedRevision": 1,
+	})
+	folderDocumentsResult := callMCPToolOK(t, readSession, "list_documents", map[string]any{
+		"folderId": createdFolder.FolderID,
+	})
+	var folderDocuments mcpDocumentPage
+	decodeMCPStructured(t, folderDocumentsResult, &folderDocuments)
+	if len(folderDocuments.Documents) != 1 || folderDocuments.Documents[0].FolderID != createdFolder.FolderID {
+		t.Fatalf("文件夹筛选结果异常: %+v", folderDocuments.Documents)
+	}
+	folderSearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{
+		"query": "集成", "folderId": createdFolder.FolderID,
+	})
+	var folderSearch mcpDocumentPage
+	decodeMCPStructured(t, folderSearchResult, &folderSearch)
+	if len(folderSearch.Documents) != 1 || folderSearch.Documents[0].DocID != created.DocID || folderSearch.Documents[0].FolderID != createdFolder.FolderID {
+		t.Fatalf("文件夹搜索结果异常: %+v", folderSearch.Documents)
+	}
+	unknownFolderResult := callMCPTool(t, readSession, "list_documents", map[string]any{
+		"folderId": "00000000-0000-0000-0000-000000000000",
+	})
+	if !unknownFolderResult.IsError || !strings.Contains(mcpResultText(unknownFolderResult), "folder not found") {
+		t.Fatalf("不存在的文件夹筛选必须明确报错: %s", mcpResultText(unknownFolderResult))
+	}
+	unknownFolderSearchResult := callMCPTool(t, readSession, "search_documents", map[string]any{
+		"query": "集成", "folderId": "00000000-0000-0000-0000-000000000000",
+	})
+	if !unknownFolderSearchResult.IsError || !strings.Contains(mcpResultText(unknownFolderSearchResult), "folder not found") {
+		t.Fatalf("不存在的文件夹搜索必须明确报错: %s", mcpResultText(unknownFolderSearchResult))
+	}
+	callMCPToolOK(t, writeSession, "move_document", map[string]any{
+		"docId": created.DocID, "folderId": nil, "expectedRevision": 1,
+	})
 	otherUserRead := callMCPTool(t, otherReadSession, "get_document", map[string]any{"docId": created.DocID})
 	if !otherUserRead.IsError || !strings.Contains(mcpResultText(otherUserRead), "not found") {
 		t.Fatalf("其他用户不得读取本账号文档: %s", mcpResultText(otherUserRead))
@@ -521,6 +923,32 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	decodeMCPStructured(t, updatedResult, &updated)
 	if updated.Revision != 2 {
 		t.Fatalf("更新 revision = %d，期望 2", updated.Revision)
+	}
+	outlineResult := callMCPToolOK(t, readSession, "get_document_outline", map[string]any{"docId": created.DocID})
+	var outline map[string]any
+	decodeMCPStructured(t, outlineResult, &outline)
+	if outline["docId"] != created.DocID {
+		t.Fatalf("文档大纲结果异常: %+v", outline)
+	}
+	contextResult := callMCPToolOK(t, readSession, "get_document_context", map[string]any{"docId": created.DocID, "limit": 4})
+	var documentContext map[string]any
+	decodeMCPStructured(t, contextResult, &documentContext)
+	if documentContext["content"] != "甲🙂乙\n" {
+		t.Fatalf("文档上下文结果异常: %+v", documentContext)
+	}
+	findResult := callMCPToolOK(t, readSession, "find_text_in_document", map[string]any{"docId": created.DocID, "query": "由 MCP"})
+	var textMatches map[string]any
+	decodeMCPStructured(t, findResult, &textMatches)
+	if matches, ok := textMatches["matches"].([]any); !ok || len(matches) != 1 {
+		t.Fatalf("正文查找结果异常: %+v", textMatches)
+	}
+	compareResult := callMCPToolOK(t, readSession, "compare_document_versions", map[string]any{
+		"docId": created.DocID, "baseRevision": 1, "compareRevision": 2,
+	})
+	var comparison map[string]any
+	decodeMCPStructured(t, compareResult, &comparison)
+	if comparison["contentChanged"] != true {
+		t.Fatalf("版本比较结果异常: %+v", comparison)
 	}
 
 	// 请求已成功但客户端丢了响应时，会用旧 revision 重试完全相同的内容。
@@ -587,6 +1015,16 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	if finalChunk.Content != "甲🙂乙\n\n初始内容\n\n追加内容" || finalChunk.Revision != 4 {
 		t.Fatalf("追加结果异常: %+v", finalChunk)
 	}
+	patchedResult := callMCPToolOK(t, writeSession, "apply_text_patch", map[string]any{
+		"docId": created.DocID, "expectedRevision": 4,
+		"patches": []map[string]string{{"find": "追加内容", "replace": "精准补丁"}},
+	})
+	var patched mcpDocumentMutationOutput
+	decodeMCPStructured(t, patchedResult, &patched)
+	if patched.Revision != 5 {
+		t.Fatalf("精准补丁 revision = %d，期望 5", patched.Revision)
+	}
+	callMCPToolOK(t, writeSession, "delete_folder", map[string]any{"folderId": createdFolder.FolderID})
 
 	searchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "集成", "limit": 10})
 	var search mcpDocumentPage
@@ -594,39 +1032,47 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	if len(search.Documents) != 1 || search.Documents[0].DocID != created.DocID {
 		t.Fatalf("标题搜索结果异常: %+v", search.Documents)
 	}
+	rootSearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{
+		"query": "集成", "folderId": "",
+	})
+	var rootSearch mcpDocumentPage
+	decodeMCPStructured(t, rootSearchResult, &rootSearch)
+	if len(rootSearch.Documents) != 1 || rootSearch.Documents[0].DocID != created.DocID || rootSearch.Documents[0].FolderID != "" {
+		t.Fatalf("根目录搜索结果异常: %+v", rootSearch.Documents)
+	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO documents (doc_id, user_id, title, content)
 		VALUES ($1, $2, '其他用户文档', '这里也有追加内容，但不应被搜索到')
 	`, "other-search-"+otherLifetime.AuthUserID, otherLifetime.ID); err != nil {
 		t.Fatalf("插入跨用户搜索文档: %v", err)
 	}
-	bodySearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "追加内容", "limit": 10})
+	bodySearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "精准补丁", "limit": 10})
 	var bodySearch mcpDocumentPage
 	decodeMCPStructured(t, bodySearchResult, &bodySearch)
 	if len(bodySearch.Documents) != 1 || bodySearch.Documents[0].DocID != created.DocID ||
 		bodySearch.Documents[0].TitleMatched || !bodySearch.Documents[0].ContentMatched ||
-		!strings.Contains(bodySearch.Documents[0].Snippet, "追加内容") {
+		!strings.Contains(bodySearch.Documents[0].Snippet, "精准补丁") {
 		t.Fatalf("正文搜索或跨用户隔离异常: %+v", bodySearch.Documents)
 	}
 	listResult := callMCPToolOK(t, readSession, "list_documents", map[string]any{"limit": 1})
 	var list mcpDocumentPage
 	decodeMCPStructured(t, listResult, &list)
-	if len(list.Documents) != 1 || list.Documents[0].Revision != 4 {
+	if len(list.Documents) != 1 || list.Documents[0].Revision != 5 {
 		t.Fatalf("文档列表结果异常: %+v", list.Documents)
 	}
 
 	staleTrash := callMCPTool(t, writeSession, "trash_document", map[string]any{
-		"docId": created.DocID, "expectedRevision": 3,
+		"docId": created.DocID, "expectedRevision": 4,
 	})
 	if !staleTrash.IsError || !strings.Contains(mcpResultText(staleTrash), "revision conflict") {
 		t.Fatalf("旧 revision 移入回收站必须冲突: %s", mcpResultText(staleTrash))
 	}
 	trashedResult := callMCPToolOK(t, writeSession, "trash_document", map[string]any{
-		"docId": created.DocID, "expectedRevision": 4,
+		"docId": created.DocID, "expectedRevision": 5,
 	})
 	var trashed mcpTrashedDocumentOutput
 	decodeMCPStructured(t, trashedResult, &trashed)
-	if trashed.DocID != created.DocID || trashed.Revision != 5 || trashed.DeletesAt == "" {
+	if trashed.DocID != created.DocID || trashed.Revision != 6 || trashed.DeletesAt == "" {
 		t.Fatalf("移入回收站结果异常: %+v", trashed)
 	}
 	trashedSearchResult := callMCPToolOK(t, readSession, "search_documents", map[string]any{"query": "追加内容", "limit": 10})
@@ -646,21 +1092,21 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 		t.Fatalf("回收站列表异常: %+v", trashList.Documents)
 	}
 	restoredTrashResult := callMCPToolOK(t, writeSession, "restore_trashed_document", map[string]any{
-		"docId": created.DocID, "expectedRevision": 5,
+		"docId": created.DocID, "expectedRevision": 6,
 	})
 	var restoredTrash mcpDocumentMutationOutput
 	decodeMCPStructured(t, restoredTrashResult, &restoredTrash)
-	if restoredTrash.Revision != 6 {
-		t.Fatalf("回收站恢复 revision = %d，期望 6", restoredTrash.Revision)
+	if restoredTrash.Revision != 7 {
+		t.Fatalf("回收站恢复 revision = %d，期望 7", restoredTrash.Revision)
 	}
 	preservedThemeResult := callMCPToolOK(t, writeSession, "update_document", map[string]any{
-		"docId": created.DocID, "expectedRevision": 6, "title": "MCP 集成测试",
+		"docId": created.DocID, "expectedRevision": 7, "title": "MCP 集成测试",
 		"content": "省略 theme 时保留现有主题",
 	})
 	var preservedTheme mcpDocumentMutationOutput
 	decodeMCPStructured(t, preservedThemeResult, &preservedTheme)
-	if preservedTheme.Revision != 7 {
-		t.Fatalf("省略 theme 更新 revision = %d，期望 7", preservedTheme.Revision)
+	if preservedTheme.Revision != 8 {
+		t.Fatalf("省略 theme 更新 revision = %d，期望 8", preservedTheme.Revision)
 	}
 	var storedTheme string
 	if err := pool.QueryRow(ctx, `SELECT theme FROM documents WHERE doc_id = $1`, created.DocID).Scan(&storedTheme); err != nil {
@@ -692,8 +1138,8 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 	}
 
 	t.Run("有效令牌上限", func(t *testing.T) {
-		// 当前已有 write/read/legacy/permanent 四个，补到 20。过期令牌不占有效名额。
-		for index := 0; index < mcpTokenMaxActive-4; index++ {
+		// 当前已有 write/read/publish/legacy/permanent 五个，补到 20。过期令牌不占有效名额。
+		for index := 0; index < mcpTokenMaxActive-5; index++ {
 			plain := fmt.Sprintf("%s%064x", mcpTokenPrefix, index+1)
 			hash := sha256.Sum256([]byte(plain))
 			if _, err := pool.Exec(ctx, `
@@ -726,6 +1172,121 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 			t.Fatal("已建立的无状态 MCP 会话在令牌撤销后必须立即失效")
 		}
 	})
+}
+
+func TestMCPPushWechatDraftEndToEnd(t *testing.T) {
+	pool := newGCTestPool(t)
+	app := New(config.Config{
+		SessionSecret:                 "mcp-wechat-publish-session",
+		WechatCredentialEncryptionKey: "mcp-wechat-publish-credentials",
+	}, pool)
+	var draftPayload map[string]any
+	var requestPaths []string
+	app.wechatAPIHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requestPaths = append(requestPaths, request.URL.Path)
+		response := func(body string) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}
+		switch request.URL.Path {
+		case "/cgi-bin/stable_token":
+			return response(`{"access_token":"mcp-wechat-token","expires_in":7200}`)
+		case "/cgi-bin/material/add_material":
+			return response(`{"media_id":"mcp-thumb-media"}`)
+		case "/cgi-bin/draft/add":
+			if err := json.NewDecoder(request.Body).Decode(&draftPayload); err != nil {
+				return nil, err
+			}
+			return response(`{"media_id":"mcp-draft-media"}`)
+		default:
+			return nil, fmt.Errorf("unexpected WeChat API path %s", request.URL.Path)
+		}
+	})}
+	user := seedMCPUser(t, pool, app, membershipTierLifetime)
+	accountID, err := randomUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := app.encryptWechatCredential(user.ID, "wechat-secret")
+	if err != nil {
+		t.Fatalf("encrypt WeChat credential: %v", err)
+	}
+	label := "MCP Publish"
+	if _, err := app.createWechatOfficialAccount(context.Background(), user.ID, accountID, wechatOfficialAccountInput{
+		Label: &label, AppID: "wx" + strings.ReplaceAll(accountID, "-", ""), AppSecret: "wechat-secret",
+	}, ciphertext); err != nil {
+		t.Fatalf("create WeChat account: %v", err)
+	}
+	doc, err := app.createDocument(context.Background(), createDocumentParams{User: user, Title: "MCP 发布测试", Content: "# 正文\n\n这是 MCP 发布内容。"})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	server := httptest.NewServer(app.Routes())
+	t.Cleanup(server.Close)
+	token := createMCPTokenForTest(t, server, mcpSessionCookie(app, user.AuthUserID), "Publisher", "publish")
+	session, err := connectMCPClient(context.Background(), server.URL+"/mcp", token.Secret)
+	if err != nil {
+		t.Fatalf("connect publish MCP client: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	result := callMCPToolOK(t, session, "push_wechat_draft", map[string]any{"docId": doc.DocID})
+	var output mcpWechatDraftOutput
+	decodeMCPStructured(t, result, &output)
+	if output.MediaID != "mcp-draft-media" || output.AccountID != accountID || output.CoverMode != wechatCoverModeDefault || output.CoverRatio != wechatCoverRatioWide {
+		t.Fatalf("publish output=%+v", output)
+	}
+	if len(requestPaths) != 3 || requestPaths[0] != "/cgi-bin/stable_token" || requestPaths[1] != "/cgi-bin/material/add_material" || requestPaths[2] != "/cgi-bin/draft/add" {
+		t.Fatalf("WeChat API calls=%v", requestPaths)
+	}
+	article, ok := draftPayload["articles"].([]any)
+	if !ok || len(article) != 1 {
+		t.Fatalf("draft articles=%#v", draftPayload["articles"])
+	}
+	articleMap, ok := article[0].(map[string]any)
+	if !ok || articleMap["title"] != doc.Title || articleMap["thumb_media_id"] != "mcp-thumb-media" {
+		t.Fatalf("draft article=%#v", article[0])
+	}
+
+	var documentID int
+	if err := pool.QueryRow(context.Background(), `SELECT id FROM documents WHERE doc_id = $1`, doc.DocID).Scan(&documentID); err != nil {
+		t.Fatalf("读取 GEO 文档 ID: %v", err)
+	}
+	geoText := "这是与当前文章匹配的 GEO 摘要。\n写作 · 微信"
+	geoHash := wechatGeoSummaryFingerprint(doc.Title, doc.Content)
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO document_wechat_geo_summaries (
+			document_id, source_hash, summary, topics, keywords, rendered_text,
+			enabled, provider_mode, model
+		) VALUES ($1, $2, '这是与当前文章匹配的 GEO 摘要。', '["写作"]'::jsonb,
+		          '["微信"]'::jsonb, $3, true, 'builtin', 'mcp-test')
+	`, documentID, geoHash, geoText); err != nil {
+		t.Fatalf("写入 GEO 测试摘要: %v", err)
+	}
+	draftPayload = nil
+	requestPaths = nil
+	geoResult := callMCPToolOK(t, session, "push_wechat_draft", map[string]any{
+		"docId": doc.DocID, "includeGeo": true,
+	})
+	var geoOutput mcpWechatDraftOutput
+	decodeMCPStructured(t, geoResult, &geoOutput)
+	if !geoOutput.GeoIncluded {
+		t.Fatalf("推送结果应标记 GEO 已嵌入: %+v", geoOutput)
+	}
+	geoArticle, ok := draftPayload["articles"].([]any)
+	if !ok || len(geoArticle) != 1 {
+		t.Fatalf("GEO 草稿 articles=%#v", draftPayload["articles"])
+	}
+	geoArticleMap, ok := geoArticle[0].(map[string]any)
+	if !ok {
+		t.Fatalf("GEO 草稿 article=%#v", geoArticle[0])
+	}
+	geoContent, ok := geoArticleMap["content"].(string)
+	if !ok || !strings.Contains(geoContent, `visibility:hidden`) || !strings.Contains(geoContent, `<hr`) || !strings.Contains(geoContent, "这是与当前文章匹配的 GEO 摘要") {
+		t.Fatalf("GEO 草稿正文未包含隐藏摘要: %s", geoContent)
+	}
 }
 
 func TestDocumentCASAndVersionRetention(t *testing.T) {

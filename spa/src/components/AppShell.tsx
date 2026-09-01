@@ -368,6 +368,7 @@ export function AppShell() {
                   aiLabel={t.nav.aiGuide}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
+                  wechatLabel={t.settingsPage.wechat}
                 />
                 <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
                   {t.nav.pricing}
@@ -388,6 +389,7 @@ export function AppShell() {
                   aiLabel={t.nav.aiGuide}
                   mcpLabel={t.nav.mcpGuide}
                   versionLabel={t.nav.versionHistoryGuide}
+                  wechatLabel={t.settingsPage.wechat}
                 />
                 <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
                   {t.nav.pricing}
@@ -1142,6 +1144,7 @@ function HeaderDocsMenu({
   aiLabel,
   mcpLabel,
   versionLabel,
+  wechatLabel,
 }: {
   active: boolean;
   label: string;
@@ -1149,6 +1152,7 @@ function HeaderDocsMenu({
   aiLabel: string;
   mcpLabel: string;
   versionLabel: string;
+  wechatLabel: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1230,6 +1234,14 @@ function HeaderDocsMenu({
           >
             {versionLabel}
           </HeaderDocsMenuItem>
+          <HeaderDocsMenuItem
+            to="/settings"
+            search={{ section: "wechat" }}
+            onSelect={() => setOpen(false)}
+            icon={<MessageSquareText className="h-4 w-4" />}
+          >
+            {wechatLabel}
+          </HeaderDocsMenuItem>
         </div>
       )}
     </div>
@@ -1238,11 +1250,13 @@ function HeaderDocsMenu({
 
 function HeaderDocsMenuItem({
   to,
+  search,
   onSelect,
   icon,
   children,
 }: {
-  to: "/docs" | "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history";
+  to: "/docs" | "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history" | "/settings";
+  search?: { section: "wechat" };
   onSelect: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -1250,6 +1264,7 @@ function HeaderDocsMenuItem({
   return (
     <Link
       to={to}
+      search={search}
       role="menuitem"
       onClick={onSelect}
       className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"

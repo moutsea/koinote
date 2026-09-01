@@ -23,7 +23,7 @@ export function MCPAccessCard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const active = user.membershipTier === "lifetime";
   const [name, setName] = useState("Codex");
-  const [scope, setScope] = useState<"read" | "write">("write");
+  const [scope, setScope] = useState<"read" | "write" | "publish">("write");
   const [expiryChoice, setExpiryChoice] = useState<ExpiryChoice>(90);
   const [editingExpiry, setEditingExpiry] = useState<{ tokenId: string; choice: ExpiryChoice } | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
@@ -142,12 +142,13 @@ export function MCPAccessCard({ user }: { user: User }) {
                 <span className="mb-1.5 block">{t.mcp.scope}</span>
                 <select
                   value={scope}
-                  onChange={(event) => setScope(event.target.value as "read" | "write")}
+                  onChange={(event) => setScope(event.target.value as "read" | "write" | "publish")}
                   className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
                   style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                 >
                   <option value="read">{t.mcp.readOnly}</option>
                   <option value="write">{t.mcp.readWrite}</option>
+                  <option value="publish">{t.mcp.publishOnly}</option>
                 </select>
               </label>
               <label className="text-xs" style={{ color: "var(--ink-mid)" }}>
@@ -208,7 +209,7 @@ export function MCPAccessCard({ user }: { user: User }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium" style={{ color: "var(--ink-strong)" }}>{token.name}</p>
                         <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-                          {token.hint} · {token.scope === "write" ? t.mcp.readWrite : t.mcp.readOnly}
+                          {token.hint} · {token.scope === "write" ? t.mcp.readWrite : token.scope === "publish" ? t.mcp.publishOnly : t.mcp.readOnly}
                           {token.expiresAt
                             ? ` · ${t.mcp.expires} ${new Date(token.expiresAt).toLocaleDateString(locale)}`
                             : ` · ${t.mcp.neverExpires}`}

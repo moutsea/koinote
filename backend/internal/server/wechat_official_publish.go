@@ -629,7 +629,11 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 			uniqueSources = append(uniqueSources, source)
 		}
 	}
-	preparations := a.prepareWechatDraftImages(ctx, uniqueSources, selectCover, coverSource)
+	preserveRaw := make([]bool, len(uniqueSources))
+	for index, source := range uniqueSources {
+		preserveRaw[index] = index == 0 || selectCover && source == coverSource
+	}
+	preparations := a.prepareWechatDraftImages(ctx, uniqueSources, preserveRaw)
 	var firstImage []byte
 	var selectedImage []byte
 	for index, preparation := range preparations {
@@ -711,8 +715,7 @@ func rewriteWechatImageSources(
 func (a *App) prepareWechatDraftImages(
 	ctx context.Context,
 	sources []string,
-	selectCover bool,
-	coverSource string,
+	preserveRaw []bool,
 ) []wechatDraftImagePreparation {
 	results := make([]wechatDraftImagePreparation, len(sources))
 	jobs := make(chan int, len(sources))
@@ -748,7 +751,7 @@ func (a *App) prepareWechatDraftImages(
 					continue
 				}
 				result.Prepared = prepared
-				if index == 0 || selectCover && source == coverSource {
+				if index < len(preserveRaw) && preserveRaw[index] {
 					result.Raw = raw
 				}
 				results[index] = result

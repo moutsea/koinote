@@ -541,6 +541,7 @@ export interface Messages {
     scope: string;
     readOnly: string;
     readWrite: string;
+    publishOnly: string;
     expiry: string;
     days: string;
     neverExpires: string;

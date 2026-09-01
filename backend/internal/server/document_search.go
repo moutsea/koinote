@@ -20,6 +20,7 @@ const (
 type documentSearchResult struct {
 	DocID          string     `json:"docId"`
 	Title          string     `json:"title"`
+	FolderID       string     `json:"folderId,omitempty"`
 	Snippet        string     `json:"snippet"`
 	TitleMatched   bool       `json:"titleMatched"`
 	ContentMatched bool       `json:"contentMatched"`
@@ -33,19 +34,28 @@ func (a *App) searchDocuments(
 	query string,
 	limit int,
 	offset int,
+	folderID *string,
 ) ([]documentSearchResult, error) {
+	var requestedFolderID *string
+	if folderID != nil {
+		requestedFolderID = folderID
+	}
 	rows, err := a.db.Query(ctx, `
 		WITH matched AS (
 			SELECT
-				doc_id, title, content, revision, updated_at, id,
+				d.doc_id, d.title, d.content, d.revision, d.updated_at, d.id,
+				COALESCE(f.folder_id, '') AS folder_id,
 				position(lower($2::text) in lower(title)) AS title_pos,
 				position(lower($2::text) in lower(content)) AS content_pos
-			FROM documents
-			WHERE user_id = $1 AND trashed_at IS NULL
+			FROM documents d
+			LEFT JOIN folders f ON f.id = d.folder_id AND f.user_id = d.user_id
+			WHERE d.user_id = $1 AND d.trashed_at IS NULL
+			  AND ($5::text IS NULL OR ($5 = '' AND d.folder_id IS NULL) OR f.folder_id = $5)
 		)
 		SELECT
 			doc_id,
 			title,
+			folder_id,
 			CASE
 				WHEN content_pos = 0 THEN ''
 				ELSE
@@ -61,7 +71,7 @@ func (a *App) searchDocuments(
 		WHERE title_pos > 0 OR content_pos > 0
 		ORDER BY (title_pos > 0) DESC, updated_at DESC, id DESC
 		LIMIT $3 OFFSET $4
-	`, userID, query, limit, offset)
+	`, userID, query, limit, offset, requestedFolderID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +83,7 @@ func (a *App) searchDocuments(
 		if err := rows.Scan(
 			&item.DocID,
 			&item.Title,
+			&item.FolderID,
 			&item.Snippet,
 			&item.TitleMatched,
 			&item.ContentMatched,
@@ -105,7 +116,7 @@ func (a *App) documentsSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	results, err := a.searchDocuments(r.Context(), user.ID, query, limit, 0)
+	results, err := a.searchDocuments(r.Context(), user.ID, query, limit, 0, nil)
 	if err != nil {
 		log.Printf("documents search: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")

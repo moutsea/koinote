@@ -996,6 +996,7 @@ export async function desktopSearchDocuments(
       return {
         docId: row.doc_id,
         title: row.title,
+        folderId: row.folder_id,
         snippet,
         titleMatched,
         contentMatched,

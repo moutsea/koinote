@@ -512,8 +512,9 @@ same database tier without querying Stripe.
 ## MCP document access
 
 MCP lets Codex, Claude Code, and other agent clients operate on Koinote documents. Model
-inference stays in the client: Koinote exposes tools and data but never calls an LLM, so
-the server needs no OpenAI, Anthropic, or other model API key. The endpoint is Streamable
+inference stays in the client for normal document tools; GEO summary generation is an
+exception and calls the configured built-in or BYOK model. The server therefore needs no
+model API key unless the GEO generation tool is used. The endpoint is Streamable
 HTTP `POST /mcp`, using the official Go MCP SDK in stateless JSON-response mode. The Worker
 only proxies the exact `/mcp` path and preserves the request body stream without parsing or
 re-encoding protocol messages.
@@ -529,7 +530,7 @@ The Worker therefore remains a thin edge proxy while all authorization stays in 
 ### Why the first release uses PATs instead of OAuth
 
 The initial audience is lifetime members, using personal access tokens created on the
-account page. Tokens have `read` or `write` scope, a 1–365 day or permanent lifetime,
+account page. Tokens have `read`, `write`, or `publish` scope, a 1–365 day or permanent lifetime,
 an editable expiry, individual
 revocation, and a maximum of 20 active tokens. Plaintext starts with `knt_mcp_`; PostgreSQL
 authenticates with SHA-256 and stores a separate AES-GCM-encrypted recovery copy under a
@@ -554,14 +555,22 @@ exists; the first release keeps the trust boundary smaller, revocable, and audit
 
 Read tokens expose:
 
-- `list_documents`: recent-first paginated summaries without content
-- `search_documents`: title and Markdown-body search with a nearby matching snippet
+- `list_documents`: recent-first paginated summaries without content; optionally filter by folder, using an empty `folderId` for root documents
+- `list_folders`: the account's paginated folder tree and document counts
+- `list_wechat_accounts`: bound WeChat Official Accounts, labels, and the default without returning AppSecret
+- `list_document_themes`: every supported document theme ID, including the default marker
+- `get_agent_credits`: current balance, active reservations, available credits, and the token conversion ratio; this is read-only
+- `search_documents`: title and Markdown-body search with a nearby matching snippet, optionally filtered by folder; use an empty `folderId` for root documents
 - `get_document`: Unicode character offset/limit chunks with total length and `hasMore`
+- `get_document_outline` / `get_document_context`: up to 500 heading entries, optionally with a content chunk; check `headingsTruncated` for larger outlines
+- `find_text_in_document`: unique text anchors with Unicode offsets and context
+- `compare_document_versions`: metadata and unique-line change counts for retained/current revisions
 - `list_document_versions` / `get_document_version`: retained recovery points
 - `list_trashed_documents`: summaries waiting in the 30-day trash
 
 Write tokens additionally expose `create_document`, `append_to_document`,
-`update_document`, and `restore_document_version`, plus revision-checked `trash_document`
+`update_document`, `apply_text_patch`, `update_document_metadata`, folder/document organization tools,
+and `restore_document_version`, plus revision-checked `trash_document`
 and `restore_trashed_document`. MCP never exposes permanent deletion; only the browser trash
 page can call it after a second warning and typed-title confirmation. Normal deletion only
 sets `trashed_at`: versions, quota usage, and image references remain for 30 days. An hourly
@@ -576,6 +585,27 @@ they never contain document text or plaintext tokens. The backend removes rows o
 180 days once per day so operational metadata cannot grow without bound. Business errors give the agent an
 actionable response such as re-reading the latest revision, while internal database errors
 collapse to `internal server error`.
+
+### Folders, precise edits, and publishing
+
+Folder tools reuse the web authorization, nesting limit, and cycle checks. Moving a document or folder does
+not change the document body revision; bulk document moves run in one transaction and fail as a whole if any
+document or target folder is unavailable. `apply_text_patch` requires every exact anchor to occur once in the
+current Markdown; all anchors are validated before the revision-protected write.
+
+Publishing is isolated behind the `publish` scope. An agent can first use the read-only
+`list_wechat_accounts` tool to choose among up to five bound accounts, then `push_wechat_draft` renders the current Markdown as basic HTML on the
+backend (it does not apply the document's Koinote WeChat theme), transfers article images and a cover through a bound Official Account, then creates a WeChat draft
+without modifying Koinote. The default cover is free; an AI cover reuses the normal 20-credit reservation,
+commit, and release flow. Because this creates an external draft, clients should call it only after an explicit
+user request, and publish tokens should have a short expiry and be revoked when no longer needed.
+
+`get_wechat_geo_summary` is read-only. Write and publish tokens may call
+`generate_wechat_geo_summary` and `update_wechat_geo_summary` to manage a saved GEO summary. Generation
+reuses the member check, provider selection, rate limit, and credit reservation used by the web flow;
+built-in providers consume credits according to reported usage while BYOK providers do not. The draft tool
+embeds the hidden corpus only when `includeGeo: true` is explicitly supplied and the saved summary is enabled
+and matches the current document revision; stale summaries must be regenerated first.
 
 ### Version history before agent writes
 

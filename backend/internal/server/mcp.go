@@ -94,12 +94,12 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false)}
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_documents", Title: "List documents",
-		Description: "List the authenticated member's own Koinote documents in recently-edited order. Results are paginated and never include document content.",
+		Description: "List the authenticated member's own Koinote documents in recently-edited order. Optionally filter by folderId. Results are paginated and never include document content.",
 		Annotations: readOnly,
 	}, a.mcpListDocuments)
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "search_documents", Title: "Search documents",
-		Description: "Search the authenticated member's own document titles and Markdown bodies. Results include a matching content snippet and never expose another member's documents.",
+		Description: "Search the authenticated member's own document titles and Markdown bodies. Optionally filter by folderId; use null or an empty string for root documents. Results include a matching content snippet and never expose another member's documents.",
 		Annotations: readOnly,
 	}, a.mcpSearchDocuments)
 	mcp.AddTool(server, &mcp.Tool{
@@ -127,13 +127,70 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 		Description: "Read the authenticated member's version-history policy, including whether regular history and full MCP history are enabled. MCP writes retain one latest safety snapshot even when either setting is off.",
 		Annotations: readOnly,
 	}, a.mcpGetDocumentHistorySettings)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "list_folders", Title: "List folders",
+		Description: "List the authenticated member's folder tree with document counts. Results are paginated; folder names and IDs never cross account boundaries.",
+		Annotations: readOnly,
+	}, a.mcpListFolders)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "list_wechat_accounts", Title: "List WeChat accounts",
+		Description: "List the authenticated member's bound WeChat Official Accounts, including labels, AppIDs, and which account is default. Secrets are never returned.",
+		Annotations: readOnly,
+	}, a.mcpListWechatAccounts)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "get_wechat_geo_summary", Title: "Get WeChat GEO summary",
+		Description: "Read the saved WeChat GEO summary for one of the authenticated member's documents. Reports whether it is stale relative to the current document and never generates or charges credits.",
+		Annotations: readOnly,
+	}, a.mcpGetWechatGeoSummary)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "list_document_themes", Title: "List document themes",
+		Description: "List every supported Koinote WeChat document theme ID. The empty ID means no theme; use these IDs with create_document or update_document_metadata.",
+		Annotations: readOnly,
+	}, a.mcpListDocumentThemes)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "get_agent_credits", Title: "Get agent credits",
+		Description: "Read the authenticated member's current AI credits balance, active reservations, and available credits. This never creates a reservation or charges credits.",
+		Annotations: readOnly,
+	}, a.mcpGetAgentCredits)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "get_document_outline", Title: "Get document outline",
+		Description: "Read up to 500 heading entries from one of the authenticated member's documents without loading the full body. Check headingsTruncated for very large outlines.",
+		Annotations: readOnly,
+	}, a.mcpGetDocumentOutline)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "get_document_context", Title: "Get document context",
+		Description: "Read a document chunk together with up to 500 heading entries, reducing round trips for agents working on a long document. Check headingsTruncated for very large outlines.",
+		Annotations: readOnly,
+	}, a.mcpGetDocumentContext)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "compare_document_versions", Title: "Compare document versions",
+		Description: "Compare two retained revisions or the current revision and return metadata and unique-line change counts without exposing another member's content.",
+		Annotations: readOnly,
+	}, a.mcpCompareDocumentVersions)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "find_text_in_document", Title: "Find text in a document",
+		Description: "Find exact, case-insensitive text matches in one of the authenticated member's documents and return Unicode offsets with nearby context.",
+		Annotations: readOnly,
+	}, a.mcpFindTextInDocument)
+	addWechatGeoTools := func(annotations *mcp.ToolAnnotations) {
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "generate_wechat_geo_summary", Title: "Generate WeChat GEO summary",
+			Description: "Generate and save a WeChat GEO summary from the current document using the member's configured AI provider. Built-in provider usage consumes credits; BYOK usage does not. Requires lifetime membership and may take up to 90 seconds.",
+			Annotations: annotations,
+		}, a.mcpGenerateWechatGeoSummary)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "update_wechat_geo_summary", Title: "Update WeChat GEO summary",
+			Description: "Edit the saved WeChat GEO summary text or enable/disable its inclusion in WeChat exports. This does not call the model or consume credits.",
+			Annotations: annotations,
+		}, a.mcpUpdateWechatGeoSummary)
+	}
 
 	if principal.canWrite() {
 		additive := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)}
 		destructive := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)}
 		mcp.AddTool(server, &mcp.Tool{
 			Name: "create_document", Title: "Create a document",
-			Description: "Create a new Koinote Markdown document. This is additive and does not modify existing documents.",
+			Description: "Create a new Koinote Markdown document, optionally in a folder and with a WeChat theme. This is additive and does not modify existing documents.",
 			Annotations: additive,
 		}, a.mcpCreateDocument)
 		mcp.AddTool(server, &mcp.Tool{
@@ -166,6 +223,56 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 			Description: "Set whether regular history and full MCP history are enabled and how many versions each document keeps. MCP writes still maintain one latest safety snapshot when either history setting is off. Lowering the limit prunes immediately.",
 			Annotations: destructive,
 		}, a.mcpUpdateDocumentHistorySettings)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "create_folder", Title: "Create a folder",
+			Description: "Create a folder under the authenticated member's folder tree. Creating the same request twice is not automatically deduplicated.",
+			Annotations: additive,
+		}, a.mcpCreateFolder)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "rename_folder", Title: "Rename a folder",
+			Description: "Rename one of the authenticated member's folders.",
+			Annotations: destructive,
+		}, a.mcpRenameFolder)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "move_folder", Title: "Move a folder",
+			Description: "Move a folder under another folder or to the root. Cycles and nesting deeper than the product limit are rejected.",
+			Annotations: destructive,
+		}, a.mcpMoveFolder)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "move_document", Title: "Move a document",
+			Description: "Move one of the authenticated member's documents into a folder or back to the root.",
+			Annotations: destructive,
+		}, a.mcpMoveDocument)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "batch_move_documents", Title: "Move documents in bulk",
+			Description: "Move up to 100 of the authenticated member's documents into one folder or back to the root. The operation is all-or-nothing.",
+			Annotations: destructive,
+		}, a.mcpBatchMoveDocuments)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "delete_folder", Title: "Delete a folder",
+			Description: "Delete a folder while lifting its child folders and documents to the deleted folder's parent. Documents are not deleted.",
+			Annotations: destructive,
+		}, a.mcpDeleteFolder)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "update_document_metadata", Title: "Update document metadata",
+			Description: "Update a document's title and/or WeChat theme with revision protection, without resending its Markdown body.",
+			Annotations: destructive,
+		}, a.mcpUpdateDocumentMetadata)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "apply_text_patch", Title: "Apply text patches",
+			Description: "Apply one or more unique exact-text replacements to a document only if expectedRevision still matches. Read the document again after a conflict or ambiguous anchor.",
+			Annotations: destructive,
+		}, a.mcpApplyTextPatch)
+		addWechatGeoTools(destructive)
+	}
+	if principal.canPublish() {
+		addWechatGeoTools(&mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)})
+		publish := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(false), IdempotentHint: false, OpenWorldHint: boolPtr(true)}
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "push_wechat_draft", Title: "Push a WeChat draft",
+			Description: "Render one of the authenticated member's documents as basic HTML (the document's Koinote WeChat theme is not applied by this MCP tool) and create a draft in a bound WeChat Official Account. This is an external side effect and may upload article images. Set includeGeo=true only when you explicitly want the current enabled, non-stale GEO summary embedded in the draft.",
+			Annotations: publish,
+		}, a.mcpPushWechatDraft)
 	}
 	return server
 }
@@ -212,12 +319,19 @@ type mcpPageInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"Number of results, from 1 to 100. Defaults to 50."`
 }
 
+type mcpListDocumentsInput struct {
+	Cursor   string  `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous call."`
+	Limit    int     `json:"limit,omitempty" jsonschema:"Number of results, from 1 to 100. Defaults to 50."`
+	FolderID *string `json:"folderId,omitempty" jsonschema:"Optional folder ID. Omit it to list all documents; use null or an empty string for root documents."`
+}
+
 type mcpDocumentSummary struct {
 	DocID          string `json:"docId"`
 	Title          string `json:"title"`
 	Snippet        string `json:"snippet,omitempty"`
 	TitleMatched   bool   `json:"titleMatched,omitempty"`
 	ContentMatched bool   `json:"contentMatched,omitempty"`
+	FolderID       string `json:"folderId,omitempty"`
 	Revision       int64  `json:"revision"`
 	UpdatedAt      string `json:"updatedAt"`
 }
@@ -282,7 +396,7 @@ func (a *App) mcpListTrashedDocuments(ctx context.Context, _ *mcp.CallToolReques
 	return nil, page, nil
 }
 
-func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, input mcpPageInput) (*mcp.CallToolResult, mcpDocumentPage, error) {
+func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, input mcpListDocumentsInput) (*mcp.CallToolResult, mcpDocumentPage, error) {
 	principal := mcpPrincipalFromContext(ctx)
 	started := time.Now()
 	result := "error"
@@ -291,12 +405,28 @@ func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, inpu
 	if err != nil {
 		return nil, mcpDocumentPage{}, err
 	}
+	folderID := ""
+	if input.FolderID != nil {
+		folderID = strings.TrimSpace(*input.FolderID)
+		if folderID != "" {
+			if err := a.ensureMCPFolder(ctx, principal.User.ID, folderID); err != nil {
+				return nil, mcpDocumentPage{}, err
+			}
+		}
+	}
+	var requestedFolderID *string
+	if input.FolderID != nil {
+		requestedFolderID = &folderID
+	}
 	rows, err := a.db.Query(ctx, `
-		SELECT doc_id, title, revision, updated_at
-		FROM documents WHERE user_id = $1 AND trashed_at IS NULL
-		ORDER BY updated_at DESC, id DESC
+		SELECT d.doc_id, d.title, d.revision, d.updated_at, COALESCE(f.folder_id, '')
+		FROM documents d
+		LEFT JOIN folders f ON f.id = d.folder_id AND f.user_id = d.user_id
+		WHERE d.user_id = $1 AND d.trashed_at IS NULL
+		  AND ($4::text IS NULL OR ($4 = '' AND d.folder_id IS NULL) OR f.folder_id = $4)
+		ORDER BY d.updated_at DESC, d.id DESC
 		LIMIT $2 OFFSET $3
-	`, principal.User.ID, limit+1, offset)
+	`, principal.User.ID, limit+1, offset, requestedFolderID)
 	if err != nil {
 		return nil, mcpDocumentPage{}, mcpInternalError("list documents", err)
 	}
@@ -305,7 +435,7 @@ func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, inpu
 	for rows.Next() {
 		var item mcpDocumentSummary
 		var updated time.Time
-		if err := rows.Scan(&item.DocID, &item.Title, &item.Revision, &updated); err != nil {
+		if err := rows.Scan(&item.DocID, &item.Title, &item.Revision, &updated, &item.FolderID); err != nil {
 			return nil, mcpDocumentPage{}, mcpInternalError("scan documents", err)
 		}
 		item.UpdatedAt = updated.UTC().Format(time.RFC3339)
@@ -323,9 +453,10 @@ func (a *App) mcpListDocuments(ctx context.Context, _ *mcp.CallToolRequest, inpu
 }
 
 type mcpSearchDocumentsInput struct {
-	Query  string `json:"query" jsonschema:"Non-empty text to find in document titles or Markdown bodies."`
-	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous call."`
-	Limit  int    `json:"limit,omitempty" jsonschema:"Number of results, from 1 to 100. Defaults to 50."`
+	Query    string  `json:"query" jsonschema:"Non-empty text to find in document titles or Markdown bodies."`
+	Cursor   string  `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous call."`
+	Limit    int     `json:"limit,omitempty" jsonschema:"Number of results, from 1 to 100. Defaults to 50."`
+	FolderID *string `json:"folderId,omitempty" jsonschema:"Optional folder ID. Omit it to search all documents; use null or an empty string for root documents."`
 }
 
 func (a *App) mcpSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, input mcpSearchDocumentsInput) (*mcp.CallToolResult, mcpDocumentPage, error) {
@@ -341,7 +472,17 @@ func (a *App) mcpSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, in
 	if err != nil {
 		return nil, mcpDocumentPage{}, err
 	}
-	items, err := a.searchDocuments(ctx, principal.User.ID, query, limit+1, offset)
+	var folderID *string
+	if input.FolderID != nil {
+		normalizedFolderID := strings.TrimSpace(*input.FolderID)
+		folderID = &normalizedFolderID
+		if normalizedFolderID != "" {
+			if err := a.ensureMCPFolder(ctx, principal.User.ID, normalizedFolderID); err != nil {
+				return nil, mcpDocumentPage{}, err
+			}
+		}
+	}
+	items, err := a.searchDocuments(ctx, principal.User.ID, query, limit+1, offset, folderID)
 	if err != nil {
 		return nil, mcpDocumentPage{}, mcpInternalError("search documents", err)
 	}
@@ -354,6 +495,7 @@ func (a *App) mcpSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, in
 		page.Documents = append(page.Documents, mcpDocumentSummary{
 			DocID: item.DocID, Title: item.Title, Snippet: item.Snippet,
 			TitleMatched: item.TitleMatched, ContentMatched: item.ContentMatched,
+			FolderID: item.FolderID,
 			Revision: item.Revision, UpdatedAt: updatedAt,
 		})
 	}
@@ -402,8 +544,10 @@ func (a *App) mcpGetDocument(ctx context.Context, _ *mcp.CallToolRequest, input 
 }
 
 type mcpCreateDocumentInput struct {
-	Title   string `json:"title,omitempty" jsonschema:"Document title, up to 200 characters."`
-	Content string `json:"content,omitempty" jsonschema:"Markdown content, up to 1 MiB."`
+	Title    string  `json:"title,omitempty" jsonschema:"Document title, up to 200 characters."`
+	Content  string  `json:"content,omitempty" jsonschema:"Markdown content, up to 1 MiB."`
+	Theme    *string `json:"theme,omitempty" jsonschema:"Optional Koinote WeChat theme ID."`
+	FolderID *string `json:"folderId,omitempty" jsonschema:"Optional folder ID. Omit to create at the root."`
 }
 
 type mcpDocumentMutationOutput struct {
@@ -423,7 +567,23 @@ func (a *App) mcpCreateDocument(ctx context.Context, _ *mcp.CallToolRequest, inp
 	if err != nil {
 		return nil, mcpDocumentMutationOutput{}, err
 	}
-	doc, err := a.createDocument(ctx, createDocumentParams{User: principal.User, Title: title, Content: content})
+	var theme *string
+	if input.Theme != nil {
+		normalizedTheme, themeErr := validateMCPDocumentTheme(*input.Theme)
+		if themeErr != nil {
+			return nil, mcpDocumentMutationOutput{}, themeErr
+		}
+		theme = &normalizedTheme
+	}
+	folderID := derefOrEmpty(input.FolderID)
+	var normalizedFolderID *string
+	if folderID != "" {
+		if err := a.ensureMCPFolder(ctx, principal.User.ID, folderID); err != nil {
+			return nil, mcpDocumentMutationOutput{}, err
+		}
+		normalizedFolderID = &folderID
+	}
+	doc, err := a.createDocument(ctx, createDocumentParams{User: principal.User, Title: title, Content: content, Theme: theme, FolderID: normalizedFolderID})
 	if err != nil {
 		return nil, mcpDocumentMutationOutput{}, mapMCPDocumentError(err)
 	}

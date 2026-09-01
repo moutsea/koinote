@@ -197,11 +197,11 @@ PostgreSQL ──pg_dump / AES-256-GCM──▶ 私有备份 R2（每 6 小时�
 终生会员可以在 Dashboard 的「Agent 文档访问（MCP）」区域创建个人访问令牌（PAT），
 然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。站内的
 [MCP 接入指南](https://koinote.app/docs/mcp)汇总了 Codex、Claude Code、OpenCode、OpenClaw、
-WorkBuddy 与通用客户端的配置及版本控制说明。MCP 链路本身只负责鉴权、文档读写、版本控制
-与审计，**不会代替客户端调用 LLM，也不需要 OpenAI、Anthropic 或其他模型 API Key**；理解
-指令和选择工具的是 Codex、Claude Code 等客户端自身。
+WorkBuddy 与通用客户端的配置及版本控制说明。常规 MCP 文档工具只负责鉴权、文档读写、版本控制
+与审计，由客户端提供模型能力；微信公众号 GEO 摘要生成是例外，会按账号设置调用内置模型或 BYOK
+渠道。除使用 GEO 生成工具外，Koinote 不需要 OpenAI、Anthropic 或其他模型 API Key。
 
-PAT 支持只读或读写 scope、1–365 天或永久有效、创建后修改有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
+PAT 支持只读、读写或仅发布 scope、1–365 天或永久有效、创建后修改有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
 AES-GCM 加密保存可恢复副本；账号本人可按需再次查看，列表不会直接返回完整令牌。每次 MCP
 请求都会重新检查会员状态、有效期与撤销状态。建议先创建只读令牌，需要写入时再单独创建
 读写令牌。Dashboard 的活动日志可分页追踪 Agent 调用过的工具、关联文档、结果与耗时，保留
@@ -260,10 +260,18 @@ openclaw mcp doctor koinote --probe
 其他客户端无需 Koinote 专用适配：只要支持远程 Streamable HTTP MCP，并允许给请求设置
 `Authorization: Bearer <PAT>`，即可使用相同端点和令牌接入。
 
-只读工具包括分页列出文档、按标题与正文搜索、分段读取正文、查看历史版本和列出回收站；读写令牌额外获得
-新建、追加、整篇更新、恢复版本、移入回收站与恢复文档。Agent 不能永久删除文档，永久删除只在
+只读工具包括分页列出文档和文件夹、按文件夹筛选、列出文件夹树、查看已绑定公众号（不返回密钥）、列出可用文档主题、查询 credits 余额、按标题与正文搜索、读取文档大纲和上下文、查找正文锚点、比较版本、分段读取正文、查看历史版本和列出回收站；读写令牌额外获得
+新建、追加、整篇更新、精准文本补丁、修改元数据、创建/重命名/移动/删除文件夹、移动文档、批量移动文档、恢复版本、移入回收站与恢复文档。Agent 不能永久删除文档，永久删除只在
 网页回收站提供标题确认；普通删除保留 30 天。整篇更新、追加、移入回收站和恢复都要求最新 revision；网页端使用同一套乐观锁并在冲突时提供
 本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
+
+需要向微信公众号草稿箱推送时，请创建“仅发布”令牌。Agent 可先调用 `list_wechat_accounts` 选择默认账号或指定账号；该令牌只能读取文档并调用
+`push_wechat_draft`，不会获得修改文档或删除文档的权限；推送会在服务端生成基础 HTML，不会套用文档的 Koinote 微信主题，并使用已绑定的公众号上传文章图片，属于外部副作用。
+封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面消耗 20 credits）。
+
+微信公众号 GEO 摘要也可通过 MCP 管理：`get_wechat_geo_summary` 用于读取已保存摘要和检查是否过期，读写或仅发布令牌可以调用
+`generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。使用内置模型生成会按实际用量消耗 credits，BYOK 渠道不扣费。
+推送草稿时需显式传入 `includeGeo: true`，且摘要必须已启用并与当前文档匹配；默认不会把隐藏语料带入草稿。
 
 ## AI 优化
 

@@ -60,6 +60,10 @@ func (p mcpPrincipal) canWrite() bool {
 	return p.Scope == "write"
 }
 
+func (p mcpPrincipal) canPublish() bool {
+	return p.Scope == "publish"
+}
+
 func (a *App) requireLifetimeMember(w http.ResponseWriter, r *http.Request) (model.User, bool) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -135,8 +139,8 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Scope = strings.ToLower(strings.TrimSpace(body.Scope))
-	if body.Scope != "read" && body.Scope != "write" {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_scope", "Token scope must be read or write")
+	if body.Scope != "read" && body.Scope != "write" && body.Scope != "publish" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_scope", "Token scope must be read, write, or publish")
 		return
 	}
 	expiresAt, valid := mcpTokenExpiry(mcpTokenExpiryInput{

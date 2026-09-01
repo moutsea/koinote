@@ -1236,6 +1236,8 @@ export function listDocuments() {
 export type DocumentSearchResult = {
   docId: string;
   title: string;
+  /** null or an omitted value means the document is in the root */
+  folderId?: string | null;
   snippet: string;
   titleMatched: boolean;
   contentMatched: boolean;
@@ -1341,7 +1343,7 @@ export type MCPToken = {
   tokenId: string;
   name: string;
   hint: string;
-  scope: "read" | "write";
+  scope: "read" | "write" | "publish";
   expiresAt?: string | null;
   lastUsedAt?: string | null;
   createdAt?: string | null;
@@ -1354,7 +1356,7 @@ export function listMCPTokens() {
 
 export function createMCPToken(params: {
   name: string;
-  scope: "read" | "write";
+  scope: "read" | "write" | "publish";
   expiresInDays?: number;
   neverExpires?: boolean;
 }) {
