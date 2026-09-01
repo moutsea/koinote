@@ -86,7 +86,10 @@ export async function buildWechatHTML(
   document.body.appendChild(stage);
 
   const theme = findWechatTheme(themeId);
-  const exportRules = normalizeWechatExportRules(theme.rules);
+  const exportRules = normalizeWechatExportRules(theme.rules, {
+    preserveBodyBackground: theme.exportBodyBackground !== false,
+    bodyColor: theme.exportBodyColor,
+  });
 
   try {
     const geoCorpus = options.includeGeoCorpus

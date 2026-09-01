@@ -12,20 +12,21 @@
  * └──────────────────────────────────────────────────────────────┘
  *
  * 两个变体的分工：
- *   · 浅色 (rules)：编辑区、分享页的浅色模式，以及**所有微信导出**。公众号的
- *     阅读界面是白底，多数主题因此用浅底。
+ *   · 浅色 (rules)：编辑区、分享页的浅色模式，以及微信导出。公众号的阅读界面
+ *     通常是白底；需要保留主题整篇底色的主题可使用 exportBodyBackground。
  *   · 深色 (dark)：只作用于编辑区与分享页的深色模式，不参与导出。
  *
  * 因此深色模式下「所见即所得」有一处让位：你在深色下写，粘出去是浅色版。这是
  * 有意的 —— 另一种做法是深色模式下把编辑区强行留白，那样整个界面更割裂。
  *
  * linear 是唯一一套浅色变体也用深底的（#111114）—— 它仿的是 Linear 的 changelog
- * 页面，深底加紫色强调就是那套设计的身份，换成浅底就不是它了。
+ * 页面，深底加紫色强调就是那套设计的身份。编辑器与分享页继续保留这套深底；公众号
+ * 导出则可关闭整篇底色，并为正文换成适合白底的文字色。
  *
- * 深底能不能活过微信的过滤器：**能，已实测确认**。导出时底色靠最外层 <section>
- * 的 background 撑着，微信保留了它。这一条值得写下来 —— 曾经担心过它被剥掉：
+ * 深底能不能活过微信的过滤器：**能，已实测确认**。保留整篇底色时，导出时底色靠
+ * 最外层 <section> 的 background 撑着，微信保留了它。这一条值得写下来 —— 曾经担心过它被剥掉：
  * 那样正文 #d7d7e1 压在白底上只有 1.43:1，而 h1 是纯白压纯白 1.00:1，整篇消失。
- * 已验证不会发生，所以 linear 保持深底，不必为导出单独做浅色版。
+ * 已验证不会发生；是否保留整篇底色由主题的 exportBodyBackground 控制。
  * （微信确实会剥 white-space，见 wechatWhitespace.ts —— 但 background 不剥。）
  *
  * 为什么是「标签名 → 声明串」而不是 CSS 文本：
@@ -51,9 +52,8 @@
  *          quote 的常见做法，同样能把引用从正文里拎出来。
  *
  *   b. body 去掉 max-width 和 margin:0 auto。微信正文宽度由平台固定，这两条
- *      不起作用。padding 只给背景非纯白的主题保留（verge / stripe / ft /
- *      linear / notion），让染色面板有留白；纯白背景的主题留着 padding 只会
- *      把正文往里缩，和微信自身的边距叠成双重缩进。
+ *      不起作用。padding 只给需要面内留白的主题保留；是否在导出时保留 body
+ *      背景由 exportBodyBackground 控制，局部元素背景始终保留。
  *
  *   c. 补齐 a / em / img / table / th / td 六个标签。原 CSS 没写，缺了会让
  *      链接、表格在微信里退回浏览器默认样式，图片还会溢出容器。
@@ -146,6 +146,10 @@ export type WechatTheme = {
   rules: WechatThemeRules;
   /** 深色变体。只作用于编辑区与分享页，不参与导出 */
   dark: WechatThemeDark;
+  /** 是否在微信公众号导出最外层正文容器上保留背景 */
+  exportBodyBackground?: boolean;
+  /** 微信公众号导出时覆盖正文文字色，保证去掉深色背景后仍有足够对比度 */
+  exportBodyColor?: string;
 };
 
 /**
@@ -357,6 +361,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "The Verge Briefing",
     hint: "热点解读、产品更新、资讯评论",
     group: "经典媒体",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.76;color:#171717;background:#fff7fb;padding:20px 16px;`,
       h1: "font-size:27px;line-height:1.2;font-weight:950;margin:36px 0 24px;color:#fff;background:#111;padding:18px 16px;box-shadow:8px 8px 0 #ff4fd8;",
@@ -407,6 +412,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Stripe Docs",
     hint: "教程、工具说明、Agent 工作流文档",
     group: "科技产品",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.78;color:#2a2f45;background:#fbfcff;padding:20px 16px;`,
       h1: "font-size:25px;line-height:1.32;font-weight:850;margin:36px 0 24px;color:#0a2540;",
@@ -496,6 +502,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "FT Analysis",
     hint: "商业分析、市场判断、对标研究",
     group: "经典媒体",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SERIF};font-size:16px;line-height:1.9;color:#262018;background:#fff1df;padding:20px 16px;`,
       h1: "font-size:27px;line-height:1.3;font-weight:800;margin:38px 0 24px;color:#111;border-bottom:3px double #5a4a36;padding-bottom:14px;",
@@ -544,6 +551,8 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Linear Changelog",
     hint: "版本公告、功能更新、路线图说明",
     group: "科技产品",
+    exportBodyBackground: false,
+    exportBodyColor: "#24242b",
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.76;color:#d7d7e1;background:#111114;padding:20px 16px;`,
       h1: "font-size:25px;line-height:1.32;font-weight:850;margin:36px 0 24px;color:#fff;",
@@ -627,6 +636,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Notion Memo",
     hint: "学习笔记、内部总结、项目复盘",
     group: "科技产品",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.82;color:#37352f;background:#fffefc;padding:20px 16px;`,
       h1: "font-size:27px;line-height:1.28;font-weight:780;margin:38px 0 24px;color:#37352f;",
@@ -891,6 +901,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Koinote Paper",
     hint: "深度长文、人物故事、经验分享",
     group: "内容出版",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SERIF};font-size:16px;line-height:1.92;color:#332b26;background:#fffaf1;padding:20px 16px;`,
       h1: "font-size:29px;line-height:1.28;font-weight:800;margin:38px 0 26px;color:#2b211c;padding:0 0 16px;border-bottom:4px solid #c76b45;",
@@ -939,6 +950,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Koinote Signal",
     hint: "AI 产品、版本更新、工作流拆解",
     group: "科技产品",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.78;color:#24334a;background:#f4f8ff;padding:20px 16px;`,
       h1: "font-size:27px;line-height:1.24;font-weight:850;margin:36px 0 24px;color:#102a43;padding:16px 18px;background:#e5f1ff;border-left:6px solid #1677ff;",
@@ -988,6 +1000,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Koinote Notes",
     hint: "知识卡片、教程清单、学习笔记",
     group: "中文公众号",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.84;color:#293b34;background:#f4faf6;padding:20px 16px;`,
       h1: "font-size:26px;line-height:1.3;font-weight:850;margin:36px 0 24px;color:#173c2e;text-align:center;padding:14px 12px;border:1px solid #a8d5bd;background:#e6f5eb;border-radius:10px;",
@@ -1037,6 +1050,7 @@ export const WECHAT_THEMES: WechatTheme[] = [
     name: "Koinote Pulse",
     hint: "活动预告、观点短文、社区通讯",
     group: "推荐默认",
+    exportBodyBackground: false,
     rules: {
       body: `font-family:${SANS};font-size:16px;line-height:1.8;color:#34283e;background:#fff7f2;padding:20px 16px;`,
       h1: "font-size:28px;line-height:1.22;font-weight:900;margin:36px 0 24px;color:#fff;padding:18px 16px;background:#34283e;border-left:7px solid #ff6b55;box-shadow:7px 7px 0 #ffd166;",

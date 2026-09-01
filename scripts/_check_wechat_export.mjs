@@ -61,13 +61,18 @@ function escapeHTML(value) {
  *
  * 顺序与产品代码一致：先补高亮，再内联。公式那步依赖 canvas，跳过。
  */
-function exportPipeline(bodyHTML, rules, origin = "https://koinote.app") {
+function exportPipeline(
+  bodyHTML,
+  rules,
+  origin = "https://koinote.app",
+  normalizeOptions = {},
+) {
   const { document } = parseHTML(`<div id="stage">${bodyHTML}</div>`);
   const stage = document.getElementById("stage");
   addWechatImageCaptions(stage);
   const highlighted = highlightCodeBlocks(stage);
   structuralizeCodeWhitespace(stage);
-  const exportRules = normalizeWechatExportRules(rules);
+  const exportRules = normalizeWechatExportRules(rules, normalizeOptions);
   addMacWindows(stage, exportRules.pre ?? "");
   const images = auditWechatImages(stage, origin);
   const stats = inlineWechatStyles(stage, exportRules);
@@ -172,6 +177,42 @@ for (const theme of WECHAT_THEMES) {
   }
   for (const tag of ["code", "pre", "pre code", "table"]) {
     eq(`${theme.id}: ${tag} 不增加字距`, lastDeclaration(rules[tag], "letter-spacing"), "0");
+  }
+
+  const exportRules = normalizeWechatExportRules(theme.rules, {
+    preserveBodyBackground: theme.exportBodyBackground !== false,
+    bodyColor: theme.exportBodyColor,
+  });
+  eq(
+    `${theme.id}: 导出整篇背景策略`,
+    lastDeclaration(exportRules.body, "background"),
+    theme.exportBodyBackground === false
+      ? undefined
+      : lastDeclaration(theme.rules.body, "background"),
+  );
+  eq(
+    `${theme.id}: 导出正文颜色策略`,
+    lastDeclaration(exportRules.body, "color"),
+    theme.exportBodyColor ?? lastDeclaration(theme.rules.body, "color"),
+  );
+}
+
+for (const theme of WECHAT_THEMES.filter((item) => item.exportBodyBackground === false)) {
+  const { html } = exportPipeline(
+    "<h1>标题</h1><blockquote>引用</blockquote><p>正文</p>",
+    theme.rules,
+    "https://koinote.app",
+    {
+      preserveBodyBackground: false,
+      bodyColor: theme.exportBodyColor,
+    },
+  );
+  const result = parseHTML(`<div id="result">${html}</div>`).document;
+  const section = result.querySelector("section");
+  ok(`${theme.id}: 外层导出不含整篇背景`, !/background(?:-color)?:/.test(section.getAttribute("style") ?? ""));
+  ok(`${theme.id}: 引用局部背景仍保留`, /background(?:-color)?:/.test(section.querySelector("blockquote")?.getAttribute("style") ?? ""));
+  if (theme.exportBodyColor) {
+    eq(`${theme.id}: 导出正文颜色可读`, lastDeclaration(section.getAttribute("style") ?? "", "color"), theme.exportBodyColor);
   }
 }
 

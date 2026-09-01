@@ -880,7 +880,15 @@ The WeChat editor's behaviour dictates every part of the implementation:
 | Strips `<script>` and friends                 | Delete those subtrees outright                 |
 | Fetches and re-hosts external images on paste | Point formula images at real R2 URLs           |
 | Strips `white-space` (verified)               | Carry indentation structurally, not via CSS    |
-| Keeps `background` (verified)                 | Dark themes survive as-is                      |
+| Keeps `background` (verified)                 | Themes may preserve a full-page background     |
+
+Theme `body` rules are normally exported on the outer `<section>`, so a theme's full-page
+background is preserved by default. The five existing tinted themes — `verge`, `stripe`,
+`ft`, `linear`, and `notion` — plus the four new themes — `paper`, `signal`, `notes`, and
+`pulse` — set `exportBodyBackground: false` to avoid painting a large colored surface in
+WeChat's white reading area. Local backgrounds on headings, quotes, and code blocks remain
+part of the theme. `linear` also sets `exportBodyColor` so its body text remains readable
+after the dark background is removed.
 
 **Themes are stored as tag → declaration strings** (`wechatThemes.ts`), not as CSS
 text. Since the final lookup can only be by tag name, we skip keepask's step of

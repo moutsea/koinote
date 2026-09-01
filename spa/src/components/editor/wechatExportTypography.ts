@@ -20,17 +20,40 @@ function appendDeclarations(source: string, declarations: string): string {
   return `${source}${separator}${declarations}`;
 }
 
+function removeBodyBackground(source: string): string {
+  return source
+    .split(";")
+    .filter((declaration) => {
+      const property = declaration.split(":", 1)[0]?.trim().toLowerCase();
+      return property !== "background" && property !== "background-color";
+    })
+    .join(";");
+}
+
+export type WechatExportRuleOptions = {
+  preserveBodyBackground?: boolean;
+  bodyColor?: string;
+};
+
 export function normalizeWechatExportRules(
   rules: WechatThemeRules,
+  options: WechatExportRuleOptions = {},
 ): WechatThemeRules {
   const typography = WECHAT_EXPORT_TYPOGRAPHY;
   const readingLineHeight = `line-height:${typography.bodyLineHeight};`;
   const neutralLetterSpacing = "letter-spacing:0;";
+  const bodyWithoutBackground =
+    options.preserveBodyBackground === false
+      ? removeBodyBackground(rules.body)
+      : rules.body;
+  const body = options.bodyColor
+    ? appendDeclarations(bodyWithoutBackground, `color:${options.bodyColor};`)
+    : bodyWithoutBackground;
 
   return {
     ...rules,
     body: appendDeclarations(
-      rules.body,
+      body,
       `font-family:${typography.fontFamily};font-size:${typography.bodyFontSize};${readingLineHeight}letter-spacing:${typography.letterSpacing};`,
     ),
     h1: appendDeclarations(rules.h1, `font-size:${typography.h1FontSize};`),

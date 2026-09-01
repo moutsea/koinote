@@ -90,13 +90,13 @@ const SPECIAL = new Set(["body", "pre code"]);
  * 的瑕疵」而不是层次。深色变体早就是这么处理的（见 wechatThemes.ts 里 DARK.surface
  * 的注释：试过亮一档，不成立），浅色这边漏了。
  *
- * 只改屏幕呈现，不动 theme.rules —— 那张表要原样导出到微信，公众号阅读界面是
- * 白底，导出物的 #fff 是对的，不能跟着改。
+ * 只改屏幕呈现，不动 theme.rules —— 主题规则仍作为导出基础；导出是否保留最外层
+ * body 背景由主题的 exportBodyBackground 单独控制，不能让屏幕适配影响导出物。
  *
  * 例外是本来就用深色底的浅色变体（linear 的 #111114）：那是主题刻意的身份
  * （仿 Linear 的 changelog 页面），而且它的正文字色 #d7d7e1 压在宣纸上只有
  * 1.3:1，换底色会直接读不了。深底能活过微信的过滤器已实测确认，
- * 见 wechatThemes.ts 头注 —— 所以不必为导出单独做浅色版。
+ * 见 wechatThemes.ts 头注 —— 编辑器无需另做浅色版；公众号导出会按主题策略处理。
  * 判据用亮度而不是主题 id 白名单 —— 后者在新增主题时必然会漏。
  */
 function surfaceOverride(bodyRules: string | undefined): string {
