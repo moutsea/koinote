@@ -95,7 +95,7 @@ ok(
   "GEO 关闭先保存但不会把用户困在弹窗中",
   /async function closeDialog\(\) \{[\s\S]{0,220}if \(!closeSaveFailedRef\.current && !\(await persistGeoText\(\)\)\) \{\s*closeSaveFailedRef\.current = true;\s*return;/.test(dialog) &&
     /closeSaveFailedRef\.current = false;\s*setGeoText\(event\.target\.value\)/.test(dialog) &&
-    /if \(e\.key === "Escape"\) \{[\s\S]{0,120}closeDialogRef\.current\(\)/.test(dialog) &&
+    /if \(e\.key === "Escape"\) \{[\s\S]{0,240}closeDialogRef\.current\(\)/.test(dialog) &&
     (dialog.match(/onClick=\{\(\) => void closeDialog\(\)\}/g) ?? []).length === 2 &&
     /useEffect\(\(\) => \{\s*closeDialogRef\.current = \(\) => \{\s*void closeDialog\(\);\s*\};\s*\}\);/.test(dialog) &&
     /async function generateGeoSummary\(\) \{[\s\S]{0,400}if \(!\(await persistGeoText\(\)\)\) return;/.test(dialog),

@@ -998,6 +998,11 @@ assert.match(
 );
 assert.match(
   liveEditor,
+  /remoteRevision === undefined[\s\S]{0,180}saver\.isSaving\(docId\)[\s\S]{0,900}disposed \|\| saver\.isSaving\(docId\)/,
+  "保存请求响应返回前不能把同一保存误判为远端冲突",
+);
+assert.match(
+  liveEditor,
   /const normalizedContent = normalizeLegacyImageAdjacentHeadings[\s\S]*?editorContentRef\.current !== normalizedContent[\s\S]*?if \(contentChanged\)[\s\S]*?editorViewportRestorePoint\.current[\s\S]*?setEditorGeneration/,
   "仅 revision 或同步元数据变化时不能重建编辑器",
 );

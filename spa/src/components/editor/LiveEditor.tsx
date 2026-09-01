@@ -233,7 +233,13 @@ export function LiveEditor({
   }, [acceptLatestDocument, docId, saver]);
 
   useEffect(() => {
-    if (isDesktopRuntime() || remoteRevision === undefined) return;
+    if (
+      isDesktopRuntime() ||
+      remoteRevision === undefined ||
+      saver.isSaving(docId)
+    ) {
+      return;
+    }
     const current = saver.peek(docId);
     const decision = decideRemoteDocumentUpdate(
       current?.revision ?? doc.data?.revision ?? 0,
@@ -244,8 +250,9 @@ export function LiveEditor({
 
     let disposed = false;
     void getDocument(docId).then(({ document }) => {
-      if (disposed) return;
+      if (disposed || saver.isSaving(docId)) return;
       const latest = saver.peek(docId);
+      if (saver.isSaving(docId)) return;
       const latestDecision = decideRemoteDocumentUpdate(
         latest?.revision ?? doc.data?.revision ?? 0,
         document.revision,

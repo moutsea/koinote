@@ -102,7 +102,15 @@ ok(
   "未绑定时跳转公众号设置",
   exportMenu.includes('search: { section: "wechat" }'),
 );
-ok("免费用户推送入口跳转会员页", exportMenu.includes('to: "/pricing"'));
+ok(
+  "免费用户推送入口显示升级提示并提供付款链接",
+  dialog.includes("wechatUpgradePromptOpen") &&
+    /if \(!member\) \{\s*setWechatUpgradePromptOpen\(true\);\s*return;\s*\}/.test(
+      dialog,
+    ) &&
+    dialog.includes('to="/pricing"') &&
+    dialog.includes("t.settingsPage.upgrade"),
+);
 ok(
   "设置页支持最多 5 个公众号",
   panel.includes("createWechatOfficialAccount") &&

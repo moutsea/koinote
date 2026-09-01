@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Check, Copy, Loader2, Send, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
@@ -83,6 +84,7 @@ export function MediaExportDialog({
   const [geoDirty, setGeoDirty] = useState(false);
   const [geoStale, setGeoStale] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [wechatUpgradePromptOpen, setWechatUpgradePromptOpen] = useState(false);
   // 与 note 分开：图片抓不到和公式降级可能同时发生，共用一个槽会互相顶掉，
   // 而被顶掉的恰好是更严重的那条
   const [imageWarning, setImageWarning] = useState<string | null>(null);
@@ -93,6 +95,7 @@ export function MediaExportDialog({
   const geoPreferenceVersionRef = useRef(0);
   const geoPersistedEnabledRef = useRef(false);
   const geoGenerateAbortRef = useRef<AbortController | null>(null);
+  const wechatUpgradePromptOpenRef = useRef(false);
   const closeSaveFailedRef = useRef(false);
   const closeInFlightRef = useRef(false);
   const closeDialogRef = useRef<() => void>(() => undefined);
@@ -102,6 +105,10 @@ export function MediaExportDialog({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        if (wechatUpgradePromptOpenRef.current) {
+          setWechatUpgradePromptOpen(false);
+          return;
+        }
         closeDialogRef.current();
       }
     };
@@ -113,6 +120,10 @@ export function MediaExportDialog({
       releaseModal();
     };
   }, []);
+
+  useEffect(() => {
+    wechatUpgradePromptOpenRef.current = wechatUpgradePromptOpen;
+  }, [wechatUpgradePromptOpen]);
 
   useEffect(() => {
     if (!member || localMode) return;
@@ -392,6 +403,10 @@ export function MediaExportDialog({
 
   async function openWechatDraftDialog() {
     if (!onOpenWechatDraft || geoClosing || closeInFlightRef.current) return;
+    if (!member) {
+      setWechatUpgradePromptOpen(true);
+      return;
+    }
     closeInFlightRef.current = true;
     setGeoClosing(true);
     try {
@@ -699,6 +714,52 @@ export function MediaExportDialog({
           >
             {error}
           </p>
+        )}
+
+        {wechatUpgradePromptOpen && !member && (
+          <div
+            role="presentation"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                setWechatUpgradePromptOpen(false);
+              }
+            }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="wechat-upgrade-prompt-title"
+              className="w-full max-w-sm rounded-2xl border border-black/10 bg-[var(--background)] p-5 shadow-2xl dark:border-white/15"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h3
+                  id="wechat-upgrade-prompt-title"
+                  className="text-base font-semibold"
+                >
+                  {t.editor.wechatDraftPush}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setWechatUpgradePromptOpen(false)}
+                  aria-label={t.editor.shareClose}
+                  className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+                {t.editor.wechatOfficialMembersOnly}
+              </p>
+              <Link
+                to="/pricing"
+                onClick={() => setWechatUpgradePromptOpen(false)}
+                className="mt-4 inline-flex rounded-full bg-[var(--cinnabar)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                {t.settingsPage.upgrade}
+              </Link>
+            </div>
+          </div>
         )}
 
         <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">

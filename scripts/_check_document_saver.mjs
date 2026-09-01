@@ -46,6 +46,14 @@ ok(
   "boolean 只能说明正在保存，不能让 flush 等待它",
 );
 ok(
+  "保存层暴露真实的进行中状态",
+  /isSaving:\s*\(docId: string\) => boolean/.test(bareSaver) &&
+    /const isSaving = useCallback\([\s\S]{0,180}entries\.current\.get\(docId\)\?\.inFlight/.test(
+      bareSaver,
+    ),
+  "远端 revision 检查必须能避开响应尚未返回的保存请求",
+);
+ok(
   "已有保存时 flush 返回同一 Promise",
   /if\s*\(entry\.inFlight\)[\s\S]{0,120}return entry\.inFlight/.test(bareSaver),
   "立即 return 会让删除流程误以为最新正文已经落库",

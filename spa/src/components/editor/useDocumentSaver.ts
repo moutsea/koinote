@@ -72,6 +72,8 @@ export type DocumentSaver = {
   applyImageMapping: (docId: string, localURL: string, remoteURL: string) => boolean;
   status: (docId: string) => SaveStatus;
   isDirty: (docId: string) => boolean;
+  /** 当前是否有保存请求正在等待响应。 */
+  isSaving: (docId: string) => boolean;
   /** 关标签时调用：先存，再丢掉记录 */
   forget: (docId: string) => Promise<void>;
   /**
@@ -448,6 +450,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [],
   );
 
+  const isSaving = useCallback(
+    (docId: string) => Boolean(entries.current.get(docId)?.inFlight),
+    [],
+  );
+
   // 页面卸载：把所有待存内容发出去。定时器清掉但内容不能丢
   useEffect(() => {
     const map = entries.current;
@@ -473,6 +480,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       applyImageMapping,
       status,
       isDirty,
+      isSaving,
       forget,
       drop,
       overwrite,
@@ -487,6 +495,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       applyImageMapping,
       status,
       isDirty,
+      isSaving,
       forget,
       drop,
       overwrite,
