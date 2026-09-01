@@ -22,7 +22,6 @@ export function WechatDraftPanel({
   title,
   author,
   digest,
-  isAdmin,
   disabled,
   articleImages,
   prepareHTML,
@@ -33,7 +32,6 @@ export function WechatDraftPanel({
   title: string;
   author?: string;
   digest?: string;
-  isAdmin: boolean;
   disabled: boolean;
   articleImages: Array<{ src: string; alt: string }>;
   prepareHTML: () => Promise<string | null>;
@@ -70,7 +68,6 @@ export function WechatDraftPanel({
   const coverAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) return;
     if (initialAccounts !== undefined) {
       setAccounts(initialAccounts);
       setAccountLoading(false);
@@ -95,7 +92,7 @@ export function WechatDraftPanel({
     return () => {
       cancelled = true;
     };
-  }, [initialAccounts, isAdmin, t.editor.wechatAccountLoadFailed, t.errors]);
+  }, [initialAccounts, t.editor.wechatAccountLoadFailed, t.errors]);
 
   useEffect(
     () => () => {
@@ -269,14 +266,6 @@ export function WechatDraftPanel({
       hint: t.editor.wechatCoverAiHint,
     },
   ];
-
-  if (!isAdmin) {
-    return (
-      <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-        {t.editor.wechatOfficialAdminsOnly}
-      </p>
-    );
-  }
 
   if (accountLoading) {
     return (

@@ -247,7 +247,6 @@ function SettingsSectionContent({
     return (
       <WechatOfficialAccountPanel
         member={user.membershipTier === "lifetime"}
-        isAdmin={user.isAdmin}
         localMode={Boolean(user.isLocalMode)}
       />
     );

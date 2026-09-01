@@ -49,7 +49,6 @@ export function ExportMenu({
   title,
   themeId,
   member,
-  isAdmin,
   localMode,
 }: {
   editor: Editor | null;
@@ -58,7 +57,6 @@ export function ExportMenu({
   /** 文档当前的排版主题，微信导出直接用它 —— 不在导出弹窗里二次选择 */
   themeId: string;
   member: boolean;
-  isAdmin: boolean;
   localMode: boolean;
 }) {
   const { t } = useI18n();
@@ -163,7 +161,6 @@ export function ExportMenu({
 
   async function openWechatDraft(): Promise<string | undefined> {
     setOpen(false);
-    if (!isAdmin) return;
     if (!member) {
       await navigate({ to: "/pricing" });
       return undefined;
@@ -277,7 +274,6 @@ export function ExportMenu({
           title={title}
           themeId={themeId}
           member={member}
-          isAdmin={isAdmin}
           localMode={localMode}
           onOpenWechatDraft={openWechatDraft}
           wechatDraftOpening={wechatDraftOpening}
@@ -291,7 +287,6 @@ export function ExportMenu({
           title={title}
           themeId={themeId}
           member={member}
-          isAdmin={isAdmin}
           localMode={localMode}
           wechatAccounts={wechatAccounts}
           draftOnly

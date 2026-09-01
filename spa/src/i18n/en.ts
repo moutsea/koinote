@@ -254,13 +254,17 @@ export const en: Messages = {
     subtitle:
       "Bind up to 5 Official Accounts in Koinote's web or desktop app, then save each formatted article directly to the selected account's drafts.",
     prerequisitesTitle: "Before you start",
+    prerequisitesIntro:
+      "Before binding an account, make sure its WeChat permissions and developer credentials are ready. You only need to complete these platform steps once per account.",
     prerequisites: [
       "One or more verified WeChat Official Accounts with access to draft and material APIs.",
       "The account's AppID and AppSecret. Enter the AppSecret only in Koinote's binding form; never send it in chat or feedback.",
       "Koinote Cloud's current WeChat API egress IP is 122.51.97.242; self-hosted deployments should use the server's public egress address.",
-      "A signed-in Koinote administrator account with Lifetime membership; binding, cover generation, and draft delivery are currently administrator-only. Desktop local mode cannot connect to WeChat or generate covers.",
+      "A signed-in Koinote Lifetime member account; binding, cover generation, and draft delivery are available to paid members. Desktop local mode cannot connect to WeChat or generate covers.",
     ],
     platformTitle: "Configure the WeChat developer platform",
+    platformIntro:
+      "First allow Koinote's backend to call the WeChat APIs, then return to Koinote to enter the credentials. Menu names can change as WeChat updates its console, but the settings remain under API management.",
     platformSteps: [
       {
         title: "Sign in to the developer platform",
@@ -279,12 +283,17 @@ export const en: Messages = {
         desc: "Copy the AppID and generate or copy the AppSecret. WeChat may show it only once, so store it in a password manager first.",
       },
     ],
+    platformScreenshotAlt: "Example of the API IP allowlist in the WeChat developer platform",
+    platformScreenshotCaption:
+      "Example: add Koinote Cloud's egress IP, 122.51.97.242, to the API IP allowlist.",
     ipTitle: "Why is the IP allowlist required?",
     ipBody:
       "WeChat verifies the server making each API request. Koinote calls WeChat only from its backend, so the allowlist must contain the server's egress IP—not your computer's IP. For Koinote Cloud, use 122.51.97.242; self-hosted deployments should use their server's public egress address.",
     koinoteTitle: "Bind and push from Koinote",
+    koinoteIntro:
+      "Once the WeChat settings are ready, bind the account in Koinote and save an article as a draft from the editor. Koinote never publishes the article directly, so you can review it in WeChat first.",
     koinoteSteps: [
-      "Open Koinote in your browser or desktop app and sign in with a Lifetime administrator account.",
+      "Open Koinote in your browser or desktop app and sign in with a Lifetime member account.",
       "Go to Settings → WeChat and enter a label, AppID, and AppSecret for each account. You can bind up to 5 accounts and choose one as the default.",
       "Open any document, choose Export to social platforms, select WeChat Official Account, then choose Sync to account drafts. Select the target account in the draft panel; Koinote uses the default when you do not choose another.",
       "A cover is optional. If you want an AI cover, enter a prompt and choose 2.35:1 or 1:1. Each successfully generated cover costs 20 credits; regenerating is charged separately.",
@@ -292,7 +301,7 @@ export const en: Messages = {
     ],
     billingTitle: "Cost and access",
     billingBody:
-      "Binding an account and saving a draft do not use credits. Binding, cover generation, and draft delivery are currently administrator-only. Each successful cover generation costs a fixed 20 credits; failed generations do not charge. Cover generation also requires Lifetime membership, available credits, and an image model configured by the administrator.",
+      "Binding an account and saving a draft do not use credits. Binding and draft delivery are available to paid members. Each successful cover generation costs a fixed 20 credits; failed generations do not charge. Cover generation also requires Lifetime membership, available credits, and an image model configured for the service.",
     troubleshootingTitle: "Troubleshooting",
     troubleshooting: [
       {
@@ -324,6 +333,8 @@ export const en: Messages = {
     openEditor: "Open editor",
     openPlatform: "Open WeChat developer platform",
     pricingCta: "View membership and credits",
+    footerNote:
+      "If binding or delivery fails, check the egress IP, AppID/AppSecret, and account API permissions before trying again.",
   },
   aiGuide: {
     eyebrow: "AI optimization guide",
@@ -1687,8 +1698,6 @@ export const en: Messages = {
       "Bind up to 5 verified Official Accounts, choose a default, and save the current article to the selected account's drafts. AppSecrets are encrypted on the server.",
     wechatOfficialMembersOnly:
       "Official Account binding, one-click drafts, and AI cover generation are member features.",
-    wechatOfficialAdminsOnly:
-      "Official Account binding, draft delivery, and AI cover generation are currently available to administrators only.",
     wechatAccountNotBound:
       "No WeChat Official Account is bound yet. Bind one in Settings first.",
     wechatDraftPush: "Push to WeChat drafts",

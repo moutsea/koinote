@@ -122,12 +122,17 @@ export interface Messages {
     title: string;
     subtitle: string;
     prerequisitesTitle: string;
+    prerequisitesIntro: string;
     prerequisites: string[];
     platformTitle: string;
+    platformIntro: string;
     platformSteps: Array<{ title: string; desc: string }>;
+    platformScreenshotAlt: string;
+    platformScreenshotCaption: string;
     ipTitle: string;
     ipBody: string;
     koinoteTitle: string;
+    koinoteIntro: string;
     koinoteSteps: string[];
     billingTitle: string;
     billingBody: string;
@@ -140,6 +145,7 @@ export interface Messages {
     openEditor: string;
     openPlatform: string;
     pricingCta: string;
+    footerNote: string;
   };
   aiGuide: {
     eyebrow: string;
@@ -1086,7 +1092,6 @@ export interface Messages {
     wechatOfficialTitle: string;
     wechatOfficialHint: string;
     wechatOfficialMembersOnly: string;
-    wechatOfficialAdminsOnly: string;
     wechatAccountNotBound: string;
     wechatDraftPush: string;
     wechatDraftSync: string;

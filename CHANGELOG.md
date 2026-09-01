@@ -6,8 +6,15 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Planned
+
+- Future user-facing changes will be recorded here.
+
+## [0.7.0] - 2026-09-01
+
 ### Added
 
+- Lifetime members can bind up to five verified WeChat Official Accounts, choose a default, and save formatted articles to the selected account's draft box. Covers can use the Koinote default, an article image, or an AI-generated image at 20 credits per successful generation.
 - Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and model-requested alternatives when the score is below 60. Reviews separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.
 - Lifetime membership now grants 1,000 credits. Built-in reviews cost 1 credit per 2,000 actual tokens, with Stripe packs of 3,000, 10,000, and 30,000 credits.
 - Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.
@@ -17,7 +24,6 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added in-document search with `Cmd+F` on macOS and `Ctrl+F` on Windows/Linux, highlighted matches, result counts, and wraparound previous/next navigation.
 - Added localized native desktop menus, a shortcut reference dialog, quick document opening, global search, tab navigation, numbered tab selection, document creation/closing, manual save, and panel toggles.
 - Added a member-only AI-generated hidden GEO summary for WeChat exports. Summaries are saved per document, remain editable and reusable, warn when the article changes, and clearly disclose the platform-policy risk before use.
-- Added an in-app feedback form with bug and experience categories, source/client context, privacy-safe share-link redaction, and a paginated administrator inbox.
 
 ### Changed
 

@@ -118,7 +118,7 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
       setDialogOpen(true);
       return;
     }
-    setSummary(await syncDesktopNow());
+    setSummary(await syncDesktopNow({ force: true }));
   }
 
   async function resolve(docId: string, choice: "local" | "remote") {

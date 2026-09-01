@@ -122,6 +122,12 @@ body {
   font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 
+.guide-prose {
+  color: var(--ink-mid);
+  font-size: 0.9375rem;
+  line-height: 1.9;
+}
+
 /* 宣纸纹理：极淡噪点，增纸感而不喧宾夺主。
    用 radial-gradient 而不是贴图：没有额外请求，且随主题令牌自动换色 */
 .kn-paper-grain {

@@ -258,13 +258,17 @@ export const fr: Messages = {
     subtitle:
       "Associez jusqu’à 5 comptes officiels dans Koinote sur le web ou le bureau, puis enregistrez chaque article mis en forme dans les brouillons du compte choisi.",
     prerequisitesTitle: "Avant de commencer",
+    prerequisitesIntro:
+      "Avant d’associer un compte, préparez ses autorisations WeChat et ses identifiants développeur. Ces étapes ne sont nécessaires qu’une fois par compte.",
     prerequisites: [
       "Un ou plusieurs comptes officiels WeChat vérifiés, avec accès aux API de brouillons et de médias.",
       "L’AppID et l’AppSecret du compte. Saisissez l’AppSecret uniquement dans le formulaire Koinote ; ne l’envoyez jamais par chat ou commentaire.",
       "L’IP actuelle de sortie de l’API WeChat de Koinote Cloud est 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
-      "Un compte administrateur Koinote connecté avec un abonnement à vie ; l’association, la génération de couverture et l’envoi de brouillons sont actuellement réservés aux administrateurs. Le mode local du bureau ne peut pas contacter WeChat ni générer de couverture.",
+      "Un compte Koinote connecté avec un abonnement à vie ; l’association, la génération de couverture et l’envoi de brouillons sont disponibles pour les membres payants. Le mode local du bureau ne peut pas contacter WeChat ni générer de couverture.",
     ],
     platformTitle: "Configurer la plateforme développeur WeChat",
+    platformIntro:
+      "Autorisez d’abord le backend de Koinote à appeler les API WeChat, puis revenez dans Koinote pour saisir les identifiants. Les noms des menus peuvent évoluer, mais ces réglages restent dans la gestion des API.",
     platformSteps: [
       {
         title: "Ouvrir la plateforme développeur",
@@ -283,12 +287,17 @@ export const fr: Messages = {
         desc: "Copiez l’AppID et générez ou copiez l’AppSecret. WeChat peut ne l’afficher qu’une fois : enregistrez-le d’abord dans un gestionnaire de mots de passe.",
       },
     ],
+    platformScreenshotAlt: "Exemple de liste blanche IP des API sur la plateforme développeur WeChat",
+    platformScreenshotCaption:
+      "Exemple : ajoutez l’IP de sortie de Koinote Cloud, 122.51.97.242, à la liste blanche des API.",
     ipTitle: "Pourquoi l’IP de sortie est-elle nécessaire ?",
     ipBody:
       "WeChat vérifie le serveur qui effectue chaque requête API. Koinote appelle WeChat uniquement depuis son backend : la liste blanche doit donc contenir l’IP de sortie du serveur, pas celle de votre ordinateur. Pour Koinote Cloud, utilisez 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
     koinoteTitle: "Associer et envoyer depuis Koinote",
+    koinoteIntro:
+      "Une fois les réglages WeChat terminés, associez le compte dans Koinote et enregistrez l’article comme brouillon depuis l’éditeur. Koinote ne publie jamais directement l’article : vous pouvez le vérifier dans WeChat avant publication.",
     koinoteSteps: [
-      "Ouvrez Koinote dans votre navigateur ou sur le bureau et connectez-vous avec un compte administrateur à vie.",
+      "Ouvrez Koinote dans votre navigateur ou sur le bureau et connectez-vous avec un compte membre à vie.",
       "Dans Réglages → WeChat, saisissez un libellé, l’AppID et l’AppSecret de chaque compte. Vous pouvez en associer jusqu’à 5 et en choisir un par défaut.",
       "Ouvrez un document, choisissez Exporter vers les plateformes sociales, sélectionnez WeChat puis Synchroniser avec les brouillons du compte. Choisissez le compte cible dans le panneau ; à défaut, Koinote utilise le compte par défaut.",
       "La couverture est facultative. Si vous voulez une couverture IA, saisissez un prompt et choisissez 2.35:1 ou 1:1. Chaque couverture générée avec succès coûte 20 credits ; une nouvelle génération est facturée séparément.",
@@ -296,7 +305,7 @@ export const fr: Messages = {
     ],
     billingTitle: "Coût et accès",
     billingBody:
-      "L’association du compte et l’enregistrement d’un brouillon ne consomment aucun credit. L’association, la génération de couverture et l’envoi de brouillons sont actuellement réservés aux administrateurs. Chaque génération de couverture réussie coûte exactement 20 credits ; un échec n’est pas facturé. La génération nécessite aussi un abonnement à vie, un solde suffisant et un modèle d’image configuré par l’administrateur.",
+      "L’association du compte et l’enregistrement d’un brouillon ne consomment aucun credit. L’association et l’envoi de brouillons sont disponibles pour les membres payants. Chaque génération de couverture réussie coûte exactement 20 credits ; un échec n’est pas facturé. La génération nécessite aussi un abonnement à vie, un solde suffisant et un modèle d’image configuré pour le service.",
     troubleshootingTitle: "Résoudre les problèmes courants",
     troubleshooting: [
       {
@@ -328,6 +337,8 @@ export const fr: Messages = {
     openEditor: "Ouvrir l’éditeur",
     openPlatform: "Ouvrir la plateforme développeur WeChat",
     pricingCta: "Voir l’offre et les credits",
+    footerNote:
+      "En cas d’échec, vérifiez l’IP de sortie, l’AppID/AppSecret et les permissions API du compte avant de réessayer.",
   },
   aiGuide: {
     eyebrow: "Guide de l’optimisation IA",
@@ -1716,8 +1727,6 @@ export const fr: Messages = {
       "Associez jusqu’à 5 comptes officiels vérifiés, choisissez un compte par défaut et enregistrez l’article dans les brouillons du compte sélectionné. Les AppSecrets sont chiffrés sur le serveur.",
     wechatOfficialMembersOnly:
       "L’association WeChat, les brouillons en un clic et la génération de couverture par IA sont réservés aux membres.",
-    wechatOfficialAdminsOnly:
-      "L’association WeChat, l’envoi de brouillons et la génération de couverture par IA sont actuellement réservés aux administrateurs.",
     wechatAccountNotBound:
       "Aucun compte officiel WeChat n’est encore associé. Associez-en un dans les réglages.",
     wechatDraftPush: "Envoyer vers les brouillons WeChat",

@@ -140,6 +140,20 @@ indentation is carried by non-breaking spaces plus `<br>` (WeChat strips
 `white-space`), code blocks get macOS-style window dots, and formulas are
 rasterized and uploaded as images.
 
+### WeChat Official Account drafts
+
+Lifetime members can bind up to five verified Official Accounts in the web or desktop client,
+choose a default account, and save the current article—with its inline theme styling—directly to
+that account's drafts. The flow is:
+
+1. Prepare the AppID and AppSecret in WeChat, and add Koinote Cloud's egress IP to the API allowlist.
+2. Open **Settings → WeChat Official Account** in Koinote; the AppSecret is encrypted server-side.
+3. In the editor choose **Export to social platforms → WeChat → Sync to account drafts**, then choose a cover and save.
+
+The cover is optional: use the Koinote Logo + title, an image from the article, or an AI-generated image.
+Each successful AI cover costs 20 credits. Koinote saves the article as a draft and never publishes it directly.
+See the complete [WeChat configuration guide](https://koinote.app/docs/wechat-official-account) for platform setup and troubleshooting.
+
 **Sharing**
 
 - Two levels: anyone with the link, or password required

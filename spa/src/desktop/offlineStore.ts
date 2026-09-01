@@ -168,6 +168,7 @@ const DESKTOP_IMAGE_CONCURRENCY = 3;
 const LOCAL_IMPORT_FOLDER_BATCH_SIZE = 100;
 const LOCAL_IMPORT_DOCUMENT_BATCH_SIZE = 10;
 const IMAGE_MAINTENANCE_META_KEY = "image-maintenance-state";
+export const DESKTOP_DOCUMENT_SYNC_IDLE_MS = 20_000;
 export const DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
 // 图片写入和文档自动保存不是一个原子操作。维护任务在两者之间运行时，
 // 不能把刚插入、尚未出现在文档正文里的图片误判成孤儿。
@@ -185,6 +186,7 @@ const serializeImageCacheMutation = createAsyncSerialQueue();
 let syncPromise: Promise<DesktopSyncSummary> | null = null;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncQueuedAfterCurrent = false;
+let lastDocumentMutationAt = 0;
 const snapshotInitializations = new Map<string, Promise<void>>();
 const remoteCacheFullAccounts = new Set<string>();
 
@@ -1111,14 +1113,14 @@ export async function desktopUpdateDocument(
     if (result.rowsAffected !== 1) throw new Error("document_revision_conflict");
     const row = await selectDocument(account, docId);
     if (!row) throw new Error("Document not found");
-    if (!local) scheduleSync();
+    if (!local) scheduleDocumentSync();
     return { document: rowToDocument(row) };
   });
 }
 
 export async function desktopPrepareDocumentForRemoteMutation(docId: string): Promise<boolean> {
   if (isDesktopLocalModeSelected()) return false;
-  await syncDesktopNow({ silent: true });
+  await syncDesktopNow({ silent: true, force: true });
   const account = await accountID();
   const row = await selectDocument(account, docId);
   return Boolean(row && canRunRemoteDocumentMutation({
@@ -1693,7 +1695,7 @@ export async function desktopPutEditorTabs(value: EditorTabs): Promise<EditorTab
   return value;
 }
 
-export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<DesktopSyncSummary> {
+export function syncDesktopNow(options: { silent?: boolean; force?: boolean } = {}): Promise<DesktopSyncSummary> {
   if (isDesktopLocalModeSelected()) {
     return Promise.resolve({
       state: "idle",
@@ -1701,6 +1703,13 @@ export function syncDesktopNow(options: { silent?: boolean } = {}): Promise<Desk
       conflicts: 0,
       lastSyncedAt: null,
     });
+  }
+  if (!options.force) {
+    const remaining = documentSyncIdleRemaining();
+    if (remaining > 0) {
+      scheduleSync(remaining);
+      return desktopSyncSummary();
+    }
   }
   if (syncPromise) return syncPromise;
   syncPromise = performPreparedSync(options).finally(() => {
@@ -1800,6 +1809,7 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
     syncTimer = null;
   }
   syncQueuedAfterCurrent = false;
+  lastDocumentMutationAt = 0;
   const db = await database();
   await db.execute(`DELETE FROM offline_documents WHERE account_id = $1`, [account]);
   await db.execute(`DELETE FROM offline_folders WHERE account_id = $1`, [account]);
@@ -1838,6 +1848,19 @@ async function initializeDesktopSnapshot(account: string): Promise<void> {
   } else {
     scheduleSync(0);
   }
+}
+
+function scheduleDocumentSync() {
+  lastDocumentMutationAt = Date.now();
+  scheduleSync(DESKTOP_DOCUMENT_SYNC_IDLE_MS);
+}
+
+function documentSyncIdleRemaining() {
+  if (lastDocumentMutationAt <= 0) return 0;
+  return Math.max(
+    0,
+    DESKTOP_DOCUMENT_SYNC_IDLE_MS - (Date.now() - lastDocumentMutationAt),
+  );
 }
 
 function scheduleSync(delay = 1500) {
@@ -1961,11 +1984,11 @@ async function pushFolders(account: string) {
   for (const row of deletions) {
     try {
       if (row.last_error === "organizer_empty_delete") {
-        const result = await remoteJSON<{ deleted: boolean }>(
+        const result = await remoteJSON<{ deleted: boolean; found?: boolean }>(
           `/api/folders/${encodeURIComponent(row.folder_id)}/empty`,
           { method: "DELETE" },
         );
-        if (!result.deleted) continue;
+        if (!result.deleted && result.found !== false) continue;
       } else {
         await remoteJSON(`/api/folders/${encodeURIComponent(row.folder_id)}`, { method: "DELETE" });
       }
@@ -2072,7 +2095,11 @@ async function pushDocuments(account: string): Promise<string[]> {
         `, [account, row.doc_id, error.code]);
         continue;
       }
-      if (error instanceof RemoteHTTPError && error.status === 409) {
+      if (
+        error instanceof RemoteHTTPError &&
+        error.status === 409 &&
+        error.code === "document_revision_conflict"
+      ) {
         const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(row.doc_id)}`);
         await cacheDocumentImages(account, remote.document.content);
         await db.execute(`

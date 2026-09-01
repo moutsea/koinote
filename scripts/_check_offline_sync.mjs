@@ -54,6 +54,11 @@ assert.match(
   /result\.folder\.folderId === row\.folder_id[\s\S]*reconcileFolderIdentity\(account, row, result\.folder\)/,
   "服务端复用自动目录时，桌面端必须合并本地临时 folderId",
 );
+assert.match(
+  pushFoldersSource,
+  /deleted: boolean; found\?: boolean[\s\S]*?if \(!result\.deleted && result\.found !== false\) continue;/,
+  "云端已删除的自动整理目录不能因空删除接口返回 deleted=false 而永久待同步",
+);
 const reconcileFolderSource = sourceBetween(
   offlineStoreSource,
   "async function reconcileFolderIdentity(",
@@ -607,7 +612,7 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /SET sync_state = 'conflict'[\s\S]*?sync_state NOT IN \('trash', 'conflict'\)/,
+  /error\.status === 409[\s\S]*?error\.code === "document_revision_conflict"[\s\S]*?SET sync_state = 'conflict'[\s\S]*?sync_state NOT IN \('trash', 'conflict'\)/,
   "远端 409 不能把同步期间删除的文档复活成冲突",
 );
 assert.match(
@@ -773,6 +778,21 @@ assert.match(
   offlineStore,
   /syncPromise = performPreparedSync\(options\)\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
   "当前同步结束后必须立即补跑期间积累的新改动",
+);
+assert.match(
+  offlineStore,
+  /DESKTOP_DOCUMENT_SYNC_IDLE_MS = 20_000[\s\S]*?desktopUpdateDocument[\s\S]*?scheduleDocumentSync\(\)/,
+  "文档编辑后的云端同步必须等待 20 秒输入空闲",
+);
+assert.match(
+  offlineStore,
+  /syncDesktopNow\(options:[\s\S]*?documentSyncIdleRemaining\(\)[\s\S]*?scheduleSync\(remaining\)/,
+  "后台检查遇到近期编辑时必须沿用 20 秒空闲窗口",
+);
+assert.match(
+  offlineStore,
+  /desktopPrepareDocumentForRemoteMutation[\s\S]*?syncDesktopNow\(\{ silent: true, force: true \}\)/,
+  "需要最新云端版本的远程操作必须绕过编辑空闲延迟",
 );
 assert.match(
   offlineStore,

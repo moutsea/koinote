@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version improves WeChat export theme readability and organizer folder synchronization."
+          notes="Koinote Desktop $version adds paid-member WeChat draft delivery, improves WeChat export readability, and hardens organizer folder synchronization."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此补丁版本优化微信公众号主题导出：带色主题不再给整篇文章铺设背景，保留标题、引用和代码块等局部样式；同时修复文档整理后的文件夹身份合并与桌面同步问题。
+          此版本向付费会员开放微信公众号绑定与草稿箱同步，并优化微信公众号主题导出：带色主题不再给整篇文章铺设背景，保留标题、引用和代码块等局部样式；同时修复文档整理后的文件夹身份合并与桌面同步问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This patch improves WeChat export theme readability: tinted themes no longer paint the entire article background while preserving local heading, quote, and code-block styles. It also improves organizer folder reconciliation and desktop synchronization.
+          This release opens WeChat account binding and draft delivery to paid members, improves WeChat export theme readability, and hardens organizer folder reconciliation and desktop synchronization.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

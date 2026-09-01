@@ -1162,7 +1162,6 @@ export function EditorPage() {
                     title={doc.data.title}
                     themeId={doc.data.theme ?? ""}
                     member={session.data?.user?.membershipTier === "lifetime"}
-                    isAdmin={session.data?.user?.isAdmin === true}
                     localMode={localMode}
                   />
                   {!localMode && <button

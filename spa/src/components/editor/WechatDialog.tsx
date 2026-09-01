@@ -38,7 +38,6 @@ export function MediaExportDialog({
   title,
   themeId,
   member,
-  isAdmin,
   localMode,
   draftOnly = false,
   wechatAccounts,
@@ -51,7 +50,6 @@ export function MediaExportDialog({
   title: string;
   themeId: string;
   member: boolean;
-  isAdmin: boolean;
   localMode: boolean;
   draftOnly?: boolean;
   wechatAccounts?: WechatOfficialAccount[];
@@ -643,15 +641,13 @@ export function MediaExportDialog({
         {draftOnly &&
           platform === "wechat" &&
           !localMode &&
-          member &&
-          isAdmin && (
+          member && (
             <WechatDraftPanel
               accounts={wechatAccounts}
               docId={docId}
               title={exportTitle}
               author={exportMetadata.author}
               digest={exportMetadata.digest}
-              isAdmin={isAdmin}
               disabled={
                 busy ||
                 geoClosing ||
@@ -668,16 +664,9 @@ export function MediaExportDialog({
             />
           )}
 
-        {draftOnly && platform === "wechat" && !localMode && !isAdmin && (
-          <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-            {t.editor.wechatOfficialAdminsOnly}
-          </p>
-        )}
-
         {draftOnly &&
           platform === "wechat" &&
           !localMode &&
-          isAdmin &&
           !member && (
             <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
               {t.editor.wechatOfficialMembersOnly}
@@ -760,7 +749,6 @@ export function MediaExportDialog({
           {!draftOnly &&
             platform === "wechat" &&
             !localMode &&
-            isAdmin &&
             onOpenWechatDraft && (
               <button
                 type="button"

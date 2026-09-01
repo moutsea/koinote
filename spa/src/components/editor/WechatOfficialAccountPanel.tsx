@@ -14,11 +14,9 @@ import { useI18n } from "../../i18n";
 
 export function WechatOfficialAccountPanel({
   member,
-  isAdmin,
   localMode,
 }: {
   member: boolean;
-  isAdmin: boolean;
   localMode: boolean;
 }) {
   const { t } = useI18n();
@@ -36,7 +34,7 @@ export function WechatOfficialAccountPanel({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!member || !isAdmin || localMode) return;
+    if (!member || localMode) return;
     let cancelled = false;
     setAccountLoading(true);
     setAccountLoadFailed(false);
@@ -62,7 +60,6 @@ export function WechatOfficialAccountPanel({
       cancelled = true;
     };
   }, [
-    isAdmin,
     loadVersion,
     localMode,
     member,
@@ -192,19 +189,6 @@ export function WechatOfficialAccountPanel({
     } finally {
       setAccountBusy(false);
     }
-  }
-
-  if (!isAdmin) {
-    return (
-      <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
-        <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-          {t.editor.wechatOfficialTitle}
-        </h3>
-        <p className="mt-1.5 text-sm leading-6 text-amber-700 dark:text-amber-300">
-          {t.editor.wechatOfficialAdminsOnly}
-        </p>
-      </section>
-    );
   }
 
   if (!member) {

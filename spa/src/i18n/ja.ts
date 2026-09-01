@@ -252,13 +252,17 @@ export const ja: Messages = {
     subtitle:
       "Koinote のウェブ版またはデスクトップ版に公式アカウントを 5 件まで連携し、整形済みの記事を選択したアカウントの下書きへ保存できます。",
     prerequisitesTitle: "始める前に",
+    prerequisitesIntro:
+      "連携を始める前に、WeChat 側の権限と開発者情報を準備してください。以下の設定はアカウントごとに一度だけ行います。",
     prerequisites: [
       "下書き・素材 API を利用できる、認証済みの WeChat 公式アカウント（1 件以上）。",
       "アカウントの AppID と AppSecret。AppSecret は Koinote の連携フォームだけに入力し、チャットやフィードバックには送らないでください。",
       "Koinote Cloud の現在の WeChat API 送信元 IP は 122.51.97.242 です。セルフホストではサーバーの公開送信元アドレスを使います。",
-      "ログイン済みの Koinote 管理者アカウントと永久会員。連携、カバー生成、下書き送信は現在管理者のみ利用できます。デスクトップのローカルモードでは WeChat 接続やカバー生成はできません。",
+      "ログイン済みの Koinote 永久会員アカウント。連携、カバー生成、下書き送信は有料会員が利用できます。デスクトップのローカルモードでは WeChat 接続やカバー生成はできません。",
     ],
     platformTitle: "WeChat 開発者プラットフォームを設定する",
+    platformIntro:
+      "まず Koinote のバックエンドから WeChat API を呼び出せるようにし、その後 Koinote に戻って認証情報を入力します。WeChat の更新でメニュー名が変わっても、設定場所は API 管理の配下です。",
     platformSteps: [
       {
         title: "WeChat 開発者プラットフォームへログイン",
@@ -277,12 +281,17 @@ export const ja: Messages = {
         desc: "AppID をコピーし、AppSecret を生成またはコピーします。一度しか表示されない場合があるため、先にパスワード管理へ保存してください。",
       },
     ],
+    platformScreenshotAlt: "WeChat 開発者プラットフォームの API IP ホワイトリスト設定例",
+    platformScreenshotCaption:
+      "例：Koinote Cloud の送信元 IP 122.51.97.242 を API IP ホワイトリストに追加します。",
     ipTitle: "なぜ IP ホワイトリストが必要ですか？",
     ipBody:
       "WeChat は API リクエストを行うサーバーを検証します。Koinote はバックエンドからのみ WeChat を呼び出すため、登録するのはパソコンの IP ではなくサーバーの送信元 IP です。Koinote Cloud は 122.51.97.242、セルフホストではサーバーの公開送信元アドレスを登録してください。",
     koinoteTitle: "Koinote で連携して送信する",
+    koinoteIntro:
+      "WeChat 側の設定が終わったら、Koinote でアカウントを連携し、エディターから記事を下書きとして保存します。Koinote が直接公開することはないため、WeChat 側で内容を確認してから公開できます。",
     koinoteSteps: [
-      "Koinote のウェブ版またはデスクトップ版を開き、永久会員の管理者アカウントでログインします。",
+      "Koinote のウェブ版またはデスクトップ版を開き、永久会員アカウントでログインします。",
       "設定 → WeChat で、各アカウントのメモ、AppID、AppSecret を入力します。最大 5 件まで連携し、1 件をデフォルトに設定できます。",
       "文書を開き、自媒体へのエクスポートから WeChat を選び、「アカウントの下書きへ同期」を押します。下書きパネルで送信先を選び、未選択の場合はデフォルトを使用します。",
       "カバー画像は任意です。AI カバーが必要な場合はプロンプトを入力し、2.35:1 または 1:1 を選びます。カバー 1 枚の生成成功ごとに 20 credits、再生成も別途消費します。",
@@ -290,7 +299,7 @@ export const ja: Messages = {
     ],
     billingTitle: "料金と利用条件",
     billingBody:
-      "アカウント連携と下書き保存は credits を消費しません。連携、カバー生成、下書き送信は現在管理者のみ利用できます。カバー生成に成功するたび固定で 20 credits を消費し、失敗時は課金されません。生成には永久会員、十分な残高、管理者が設定した画像モデルが必要です。",
+      "アカウント連携と下書き保存は credits を消費しません。連携と下書き送信は有料会員が利用できます。カバー生成に成功するたび固定で 20 credits を消費し、失敗時は課金されません。生成には永久会員、十分な残高、サービスに設定された画像モデルが必要です。",
     troubleshootingTitle: "よくある問題",
     troubleshooting: [
       {
@@ -322,6 +331,8 @@ export const ja: Messages = {
     openEditor: "エディターを開く",
     openPlatform: "WeChat 開発者プラットフォームを開く",
     pricingCta: "会員と credits を見る",
+    footerNote:
+      "連携や送信に失敗した場合は、送信元 IP、AppID/AppSecret、アカウントの API 権限を確認してから再試行してください。",
   },
   aiGuide: {
     eyebrow: "AI 最適化ガイド",
@@ -1665,8 +1676,6 @@ export const ja: Messages = {
       "認証済み公式アカウントを 5 件まで連携し、デフォルトを設定して、記事を選択したアカウントの下書きへ保存できます。AppSecret はサーバーで暗号化されます。",
     wechatOfficialMembersOnly:
       "公式アカウント連携、ワンクリック下書き、AI カバー生成は会員限定です。",
-    wechatOfficialAdminsOnly:
-      "公式アカウント連携、下書き送信、AI カバー生成は現在管理者のみ利用できます。",
     wechatAccountNotBound:
       "WeChat 公式アカウントが未連携です。先に設定から連携してください。",
     wechatDraftPush: "WeChat 下書きへ送信",

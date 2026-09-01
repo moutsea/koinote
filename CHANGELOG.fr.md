@@ -4,8 +4,15 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Planned
+
+- Les prochains changements destinés aux utilisateurs seront ajoutés ici.
+
+## [0.7.0] - 2026-09-01
+
 ### Added
 
+- Les membres à vie peuvent désormais lier jusqu’à cinq comptes officiels WeChat vérifiés, choisir un compte par défaut et enregistrer les articles mis en forme dans sa boîte de brouillons. La couverture peut être l’image Koinote par défaut, une image de l’article ou une image générée par IA ; chaque génération réussie coûte 20 credits.
 - Ajout de l’optimisation IA réservée aux membres : diffs Git pour le titre et le corps, application ou rejet individuel et global, score du titre sur 100 et 2 à 3 alternatives sous 60. L’analyse sépare désormais le contenu de la structure, avec des modifications Markdown validées par AST et six scores pour la hiérarchie, la lisibilité, la mise en valeur, le rythme, les modules et le mobile.
 - L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000, 10 000 et 30 000 credits.
 - Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.
@@ -15,7 +22,6 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout de la recherche dans le document avec `Cmd+F` sur macOS et `Ctrl+F` sur Windows/Linux, mise en évidence des résultats, compteur et navigation précédente/suivante en boucle.
 - Ajout de menus natifs localisés et d’un aide-mémoire des raccourcis sur ordinateur, avec ouverture rapide, recherche globale, navigation entre onglets, sélection numérotée, création/fermeture de documents, enregistrement manuel et bascule des panneaux.
 - Ajout d’un résumé GEO masqué généré par IA, réservé aux membres, pour les exports WeChat. Il est enregistré par document, reste modifiable et réutilisable, signale les changements de l’article et présente clairement le risque lié aux règles de la plateforme avant activation.
-- Ajout d’un formulaire de retour intégré avec catégories problème et expérience, contexte de page et de client, masquage des jetons de partage et boîte de réception paginée pour l’administration.
 
 ### Changed
 

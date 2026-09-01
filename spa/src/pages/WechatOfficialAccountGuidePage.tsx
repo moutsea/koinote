@@ -1,17 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  Check,
-  CircleAlert,
-  ExternalLink,
-  ImagePlus,
-  KeyRound,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowLeft, Check, CircleAlert, ExternalLink, ShieldCheck } from "lucide-react";
 import { InkClouds, PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n } from "../i18n";
+
+const PLATFORM_SCREENSHOT = "/docs/wechat-platform-ip-allowlist.png";
 
 export function WechatOfficialAccountGuidePage() {
   const { t } = useI18n();
@@ -20,7 +13,7 @@ export function WechatOfficialAccountGuidePage() {
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
       <InkClouds />
-      <PageContainer className="relative flex-1 py-12 sm:py-16">
+      <PageContainer className="relative flex-1 py-10 sm:py-14">
         <Link
           to="/docs"
           className="kn-ink-link inline-flex items-center gap-1.5 text-sm font-semibold"
@@ -30,256 +23,203 @@ export function WechatOfficialAccountGuidePage() {
           {guide.backToDocs}
         </Link>
 
-        <header className="mx-auto mt-10 max-w-3xl text-center">
-          <p
-            className="text-xs font-semibold uppercase tracking-[0.2em]"
-            style={{ color: "var(--ink-mid)" }}
-          >
-            {guide.eyebrow}
-          </p>
-          <h1
-            className="kn-heading-cn mt-4 text-3xl font-bold tracking-tight sm:text-5xl"
-            style={{ color: "var(--ink-black)" }}
-          >
-            {guide.title}
-          </h1>
-          <p
-            className="mx-auto mt-5 max-w-2xl text-base leading-7"
-            style={{ color: "var(--ink-mid)" }}
-          >
-            {guide.subtitle}
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              to="/editor"
-              className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
-              style={{
-                background: "var(--ink-strong)",
-                color: "var(--ink-paper)",
-              }}
+        <article className="mx-auto mt-10 max-w-3xl">
+          <header className="border-b pb-9" style={{ borderColor: "var(--ink-line)" }}>
+            <p
+              className="text-xs font-semibold uppercase tracking-[0.2em]"
+              style={{ color: "var(--ink-mid)" }}
             >
-              {guide.openEditor}
-            </Link>
-            <a
-              href="https://developers.weixin.qq.com/platform"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
-              style={{
-                borderColor: "var(--ink-line)",
-                color: "var(--ink-strong)",
-              }}
+              {guide.eyebrow}
+            </p>
+            <h1
+              className="kn-heading-cn mt-4 text-3xl font-bold tracking-tight sm:text-5xl"
+              style={{ color: "var(--ink-black)" }}
             >
-              {guide.openPlatform}
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-            <Link
-              to="/pricing"
-              className="rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
-              style={{
-                borderColor: "var(--ink-line)",
-                color: "var(--ink-strong)",
-              }}
+              {guide.title}
+            </h1>
+            <p
+              className="mt-5 max-w-2xl text-base leading-8"
+              style={{ color: "var(--ink-mid)" }}
             >
-              {guide.pricingCta}
-            </Link>
-          </div>
-        </header>
+              {guide.subtitle}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link
+                to="/editor"
+                className="rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
+                style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+              >
+                {guide.openEditor}
+              </Link>
+              <a
+                href="https://developers.weixin.qq.com/platform"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
+                style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+              >
+                {guide.openPlatform}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </header>
 
-        <section className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2">
-          <GuideCard
-            icon={<Check className="h-5 w-5" />}
-            title={guide.prerequisitesTitle}
-          >
-            <ul className="space-y-3">
+          <GuideArticleSection title={guide.prerequisitesTitle}>
+            <p className="guide-prose">{guide.prerequisitesIntro}</p>
+            <ul className="mt-5 space-y-3">
               {guide.prerequisites.map((item) => (
                 <CheckItem key={item}>{item}</CheckItem>
               ))}
             </ul>
-          </GuideCard>
-          <GuideCard
-            icon={<KeyRound className="h-5 w-5" />}
-            title={guide.platformTitle}
-          >
-            <ol className="space-y-4">
+          </GuideArticleSection>
+
+          <GuideArticleSection title={guide.platformTitle}>
+            <p className="guide-prose">{guide.platformIntro}</p>
+            <ol className="mt-6 space-y-6">
               {guide.platformSteps.map((step, index) => (
-                <li key={step.title} className="flex gap-3 text-sm leading-6">
+                <li key={step.title} className="flex gap-4">
                   <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold"
-                    style={{
-                      borderColor: "var(--ink-line)",
-                      color: "var(--ink-strong)",
-                    }}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                    style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
                   >
                     {index + 1}
                   </span>
-                  <span>
-                    <strong style={{ color: "var(--ink-strong)" }}>
+                  <div className="min-w-0 pt-0.5">
+                    <h3 className="font-semibold" style={{ color: "var(--ink-black)" }}>
                       {step.title}
-                    </strong>
-                    <span className="block" style={{ color: "var(--ink-mid)" }}>
+                    </h3>
+                    <p className="mt-1 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>
                       {step.desc}
-                    </span>
-                  </span>
+                    </p>
+                    {index === 2 && (
+                      <figure
+                        className="mt-5 overflow-hidden rounded-xl border"
+                        style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}
+                      >
+                        <img
+                          src={PLATFORM_SCREENSHOT}
+                          alt={guide.platformScreenshotAlt}
+                          loading="lazy"
+                          className="block h-auto w-full"
+                        />
+                        <figcaption
+                          className="border-t px-4 py-3 text-xs leading-5"
+                          style={{ borderColor: "var(--ink-line)", color: "var(--ink-faint)" }}
+                        >
+                          {guide.platformScreenshotCaption}
+                        </figcaption>
+                      </figure>
+                    )}
+                  </div>
                 </li>
               ))}
             </ol>
-          </GuideCard>
-        </section>
+          </GuideArticleSection>
 
-        <section
-          className="mx-auto mt-8 flex max-w-5xl items-start gap-3 rounded-2xl border p-6 sm:p-7"
-          style={{
-            borderColor: "var(--ink-line)",
-            background: "var(--ink-wash)",
-          }}
-        >
-          <ShieldCheck
-            className="mt-0.5 h-5 w-5 shrink-0"
-            style={{ color: "var(--ink-strong)" }}
-          />
-          <div>
-            <h2
-              className="kn-heading-cn text-xl font-bold"
-              style={{ color: "var(--ink-black)" }}
-            >
-              {guide.ipTitle}
-            </h2>
-            <p
-              className="mt-2 text-sm leading-7"
-              style={{ color: "var(--ink-mid)" }}
-            >
-              {guide.ipBody}
-            </p>
-          </div>
-        </section>
-
-        <section className="mx-auto mt-16 max-w-5xl">
-          <GuideCard
-            icon={<Send className="h-5 w-5" />}
-            title={guide.koinoteTitle}
+          <PaperCard
+            className="mt-12 flex items-start gap-3 rounded-2xl border p-5 sm:p-6"
           >
-            <ol className="grid gap-4 md:grid-cols-2">
-              {guide.koinoteSteps.map((step, index) => (
-                <li key={step} className="flex gap-3 text-sm leading-6">
-                  <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold"
-                    style={{
-                      borderColor: "var(--ink-line)",
-                      color: "var(--ink-strong)",
-                    }}
-                  >
-                    {index + 1}
-                  </span>
-                  <span style={{ color: "var(--ink-mid)" }}>{step}</span>
-                </li>
-              ))}
-            </ol>
-          </GuideCard>
-        </section>
-
-        <section className="mx-auto mt-8 grid max-w-5xl gap-5 lg:grid-cols-2">
-          <GuideCard
-            icon={<ImagePlus className="h-5 w-5" />}
-            title={guide.billingTitle}
-          >
-            <p
-              className="text-sm leading-7"
-              style={{ color: "var(--ink-mid)" }}
-            >
-              {guide.billingBody}
-            </p>
-          </GuideCard>
-          <GuideCard
-            icon={<ShieldCheck className="h-5 w-5" />}
-            title={guide.securityTitle}
-          >
-            <p
-              className="text-sm leading-7"
-              style={{ color: "var(--ink-mid)" }}
-            >
-              {guide.securityBody}
-            </p>
-          </GuideCard>
-        </section>
-
-        <section className="mx-auto mt-16 max-w-5xl">
-          <div className="flex items-center gap-3">
-            <CircleAlert
-              className="h-5 w-5"
+            <ShieldCheck
+              className="mt-0.5 h-5 w-5 shrink-0"
               style={{ color: "var(--ink-strong)" }}
             />
-            <h2
-              className="kn-heading-cn text-2xl font-bold"
-              style={{ color: "var(--ink-black)" }}
+            <div>
+              <h2 className="kn-heading-cn text-xl font-bold" style={{ color: "var(--ink-black)" }}>
+                {guide.ipTitle}
+              </h2>
+              <p className="mt-2 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>
+                {guide.ipBody}
+              </p>
+            </div>
+          </PaperCard>
+
+          <GuideArticleSection title={guide.koinoteTitle}>
+            <p className="guide-prose">{guide.koinoteIntro}</p>
+            <ol className="mt-6 space-y-5">
+              {guide.koinoteSteps.map((step, index) => (
+                <li key={step} className="flex gap-4">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold"
+                    style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+                  >
+                    {index + 1}
+                  </span>
+                  <p className="pt-0.5 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>
+                    {step}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </GuideArticleSection>
+
+          <GuideArticleSection title={guide.billingTitle}>
+            <p className="guide-prose">{guide.billingBody}</p>
+          </GuideArticleSection>
+
+          <GuideArticleSection title={guide.securityTitle}>
+            <p className="guide-prose">{guide.securityBody}</p>
+          </GuideArticleSection>
+
+          <GuideArticleSection title={guide.troubleshootingTitle} icon={<CircleAlert className="h-5 w-5" />}>
+            <div className="space-y-5">
+              {guide.troubleshooting.map((item) => (
+                <div key={item.problem}>
+                  <h3 className="font-semibold" style={{ color: "var(--ink-black)" }}>
+                    {item.problem}
+                  </h3>
+                  <p className="mt-1 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>
+                    {item.solution}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </GuideArticleSection>
+
+          <footer
+            className="mt-12 border-t pt-7 text-sm leading-7"
+            style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
+          >
+            <p>{guide.footerNote}</p>
+            <Link
+              to="/pricing"
+              className="mt-4 inline-flex rounded-full border px-4 py-2 text-sm font-semibold transition hover:bg-[var(--ink-wash)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
             >
-              {guide.troubleshootingTitle}
-            </h2>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {guide.troubleshooting.map((item) => (
-              <PaperCard key={item.problem} className="p-5 sm:p-6">
-                <h3
-                  className="font-semibold"
-                  style={{ color: "var(--ink-black)" }}
-                >
-                  {item.problem}
-                </h3>
-                <p
-                  className="mt-2 text-sm leading-6"
-                  style={{ color: "var(--ink-mid)" }}
-                >
-                  {item.solution}
-                </p>
-              </PaperCard>
-            ))}
-          </div>
-        </section>
+              {guide.pricingCta}
+            </Link>
+          </footer>
+        </article>
       </PageContainer>
     </div>
   );
 }
 
-function GuideCard({
-  icon,
+function GuideArticleSection({
   title,
+  icon,
   children,
 }: {
-  icon: React.ReactNode;
   title: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <PaperCard className="p-6 sm:p-7">
-      <div className="flex items-center gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: "var(--ink-wash)", color: "var(--ink-strong)" }}
-        >
-          {icon}
-        </span>
-        <h2
-          className="kn-heading-cn text-xl font-bold"
-          style={{ color: "var(--ink-black)" }}
-        >
+    <section className="mt-12 sm:mt-14">
+      <div className="flex items-center gap-2.5">
+        {icon ? <span style={{ color: "var(--ink-strong)" }}>{icon}</span> : null}
+        <h2 className="kn-heading-cn text-2xl font-bold" style={{ color: "var(--ink-black)" }}>
           {title}
         </h2>
       </div>
-      <div className="mt-5">{children}</div>
-    </PaperCard>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
 function CheckItem({ children }: { children: React.ReactNode }) {
   return (
-    <li
-      className="flex items-start gap-2.5 text-sm leading-6"
-      style={{ color: "var(--ink-mid)" }}
-    >
-      <Check
-        className="mt-1 h-4 w-4 shrink-0"
-        style={{ color: "var(--ink-strong)" }}
-      />
+    <li className="flex items-start gap-2.5 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>
+      <Check className="mt-1.5 h-4 w-4 shrink-0" style={{ color: "var(--ink-strong)" }} />
       <span>{children}</span>
     </li>
   );

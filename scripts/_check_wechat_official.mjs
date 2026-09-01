@@ -69,24 +69,29 @@ ok(
   "草稿面板支持网页和桌面运行时",
   !dialog.includes("isDesktopRuntime()") &&
     dialog.includes("<WechatDraftPanel") &&
-    /draftOnly\s*&&\s*platform === "wechat"\s*&&\s*!localMode\s*&&\s*member\s*&&\s*isAdmin/.test(
+    /draftOnly\s*&&\s*platform === "wechat"\s*&&\s*!localMode\s*&&\s*member\s*&&/.test(
       dialog,
     ),
 );
 ok(
-  "公众号能力只对会员和管理员显示",
-  /!localMode\s*&&\s*member\s*&&\s*isAdmin/.test(dialog) &&
+  "公众号能力只对付费会员显示",
+  /!localMode\s*&&\s*member/.test(dialog) &&
     panel.includes("if (!member)") &&
-    panel.includes("if (!isAdmin)"),
+    !dialog.includes("isAdmin") &&
+    !panel.includes("isAdmin") &&
+    !draftPanel.includes("isAdmin") &&
+    !exportMenu.includes("isAdmin"),
 );
 ok(
-  "后端公众号账号接口需要管理员会员",
-  admin.includes("requireWechatAdminMember") &&
-    (account.match(/requireWechatAdminMember/g) || []).length === 8,
+  "后端公众号账号接口需要付费会员",
+  admin.includes("requireWechatMember") &&
+    !admin.includes("requireWechatAdminMember") &&
+    (account.match(/requireWechatMember/g) || []).length === 8,
 );
 ok(
-  "后端封面和草稿接口需要管理员会员",
-  (publish.match(/requireWechatAdminMember/g) || []).length === 2,
+  "后端封面和草稿接口需要付费会员",
+  (publish.match(/requireWechatMember/g) || []).length === 2 &&
+    !publish.includes("requireWechatAdminMember"),
 );
 ok(
   "账号绑定位于设置页",

@@ -123,7 +123,7 @@ func newWechatAPIHTTPClient(proxyURLs ...string) *http.Client {
 
 func (a *App) wechatOfficialAccountGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -142,7 +142,7 @@ func (a *App) wechatOfficialAccountGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) wechatOfficialAccountPut(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -161,7 +161,7 @@ func (a *App) wechatOfficialAccountPut(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) wechatOfficialAccountDelete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -184,7 +184,7 @@ func (a *App) wechatOfficialAccountDelete(w http.ResponseWriter, r *http.Request
 
 func (a *App) wechatOfficialAccountsList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -202,7 +202,7 @@ func (a *App) wechatOfficialAccountsList(w http.ResponseWriter, r *http.Request)
 
 func (a *App) wechatOfficialAccountCreate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -227,7 +227,7 @@ func (a *App) wechatOfficialAccountCreate(w http.ResponseWriter, r *http.Request
 
 func (a *App) wechatOfficialAccountUpdate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -286,7 +286,7 @@ func (a *App) wechatOfficialAccountUpdate(w http.ResponseWriter, r *http.Request
 
 func (a *App) wechatOfficialAccountDeleteByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -304,7 +304,7 @@ func (a *App) wechatOfficialAccountDeleteByID(w http.ResponseWriter, r *http.Req
 
 func (a *App) wechatOfficialAccountSetDefault(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}

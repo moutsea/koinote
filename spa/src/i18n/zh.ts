@@ -251,13 +251,17 @@ export const zh: Messages = {
     subtitle:
       "完成配置后，你可以在 Koinote 网页端或桌面客户端绑定最多 5 个公众号，并把排版后的文章一键保存到指定账号的草稿箱。",
     prerequisitesTitle: "开始前准备",
+    prerequisitesIntro:
+      "绑定公众号前，请先确认微信侧的账号权限和开发者凭据都已准备好。下面的配置只需为每个公众号完成一次。",
     prerequisites: [
       "一个或多个已认证的微信公众号，并确认每个账号都可以使用草稿和素材接口。",
       "公众号后台的 AppID 和 AppSecret。AppSecret 只应交给 Koinote 的绑定表单，不要发到聊天或反馈中。",
       "Koinote 云端服务当前的微信 API 出口 IP 是 122.51.97.242；自部署用户填写服务器访问微信时使用的公网出口 IP。",
-      "已登录的 Koinote 管理员账号和终生会员；绑定、封面生成和草稿推送目前仅对管理员开放，桌面端本地模式不能连接微信或生成封面。",
+      "已登录的 Koinote 终生会员账号；绑定、封面生成和草稿推送对付费会员开放，桌面端本地模式不能连接微信或生成封面。",
     ],
     platformTitle: "在微信开发者平台配置",
+    platformIntro:
+      "先在微信开发者平台允许 Koinote 的服务端访问接口，再回到 Koinote 填写凭据。微信后台的菜单名称可能随版本调整，但核心位置仍是开发接口管理。",
     platformSteps: [
       {
         title: "登录微信开发者平台",
@@ -276,12 +280,17 @@ export const zh: Messages = {
         desc: "复制 AppID，并生成或复制 AppSecret。微信可能只展示一次，请先保存在密码管理器中。",
       },
     ],
+    platformScreenshotAlt: "微信公众号开发者平台中的 API IP 白名单设置示例",
+    platformScreenshotCaption:
+      "示例：在开发者平台的 API IP 白名单中添加 Koinote 云端出口 IP 122.51.97.242。",
     ipTitle: "为什么必须设置 IP 白名单？",
     ipBody:
       "微信会校验调用接口的服务器来源。Koinote 只在服务端请求微信，因此白名单里要填服务端出口 IP，而不是你当前电脑的 IP。Koinote 云端服务当前请填写 122.51.97.242；自部署时填写服务器的公网出口地址。",
     koinoteTitle: "在 Koinote 中绑定并推送",
+    koinoteIntro:
+      "微信侧配置完成后，接下来在 Koinote 绑定账号，并从编辑器把文章保存为草稿。整个流程不会直接发布文章，你仍可在公众号后台检查后再发布。",
     koinoteSteps: [
-      "打开 Koinote 网页端或桌面客户端，并登录终生会员管理员账号。",
+      "打开 Koinote 网页端或桌面客户端，并登录终生会员账号。",
       "进入设置 → 微信公众号，为每个账号填写备注、AppID 和 AppSecret。最多可绑定 5 个账号，并可指定其中一个为默认账号。",
       "打开任意文档，在导出菜单中选择“导出到自媒体”，切换到“微信公众号”，再点击“同步到账号草稿箱”。在草稿面板选择目标公众号；未手动选择时使用默认账号。",
       "封面图是可选的；如需 AI 封面，填写提示词并选择 2.35:1 或 1:1。每成功生成一张封面消耗 20 credits，重新生成也会单独计费。",
@@ -289,7 +298,7 @@ export const zh: Messages = {
     ],
     billingTitle: "费用与权限",
     billingBody:
-      "绑定公众号和保存草稿不消耗 credits。当前绑定、封面生成和草稿推送仅对管理员开放。每次成功生成封面固定消耗 20 credits，生成失败不会扣除；封面生成还需要终生会员、可用 credits，以及管理员已配置的封面模型。",
+      "绑定公众号和保存草稿不消耗 credits。绑定和草稿推送对付费会员开放；每次成功生成封面固定消耗 20 credits，生成失败不会扣除。封面生成还需要终生会员、可用 credits，以及已配置的封面模型。",
     troubleshootingTitle: "遇到错误怎么办",
     troubleshooting: [
       {
@@ -321,6 +330,8 @@ export const zh: Messages = {
     openEditor: "打开编辑器",
     openPlatform: "打开微信开发者平台",
     pricingCta: "查看会员与 credits",
+    footerNote:
+      "如果绑定或推送失败，请先核对出口 IP、AppID/AppSecret 和公众号接口权限，再根据上面的排查建议重试。",
   },
   aiGuide: {
     eyebrow: "AI 优化指南",
@@ -1587,8 +1598,6 @@ export const zh: Messages = {
       "最多绑定 5 个已认证的公众号，设置默认账号，并把当前文章保存到指定账号的草稿箱。AppSecret 会在服务端加密保存。",
     wechatOfficialMembersOnly:
       "绑定公众号、一键保存草稿和 AI 封面生成为会员专属功能。",
-    wechatOfficialAdminsOnly:
-      "微信公众号绑定、草稿推送和 AI 封面功能目前仅对管理员开放。",
     wechatAccountNotBound: "还没有绑定微信公众号，请先完成绑定。",
     wechatDraftPush: "推送到公众号草稿箱",
     wechatDraftSync: "同步到账号草稿箱",

@@ -110,7 +110,7 @@ func (e *wechatArticleImageError) Unwrap() error {
 
 func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}
@@ -309,7 +309,7 @@ func (a *App) readGeneratedCover(ctx context.Context, encoded, remoteURL string)
 
 func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireWechatAdminMember(w, r)
+	user, ok := a.requireWechatMember(w, r)
 	if !ok {
 		return
 	}

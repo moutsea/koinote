@@ -520,24 +520,31 @@ func (a *App) folderDeleteEmptyOrganizer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var deleted bool
+	var found, deleted bool
 	err := a.db.QueryRow(r.Context(), `
-		WITH deleted AS (
+		WITH target AS (
+			SELECT id FROM folders WHERE folder_id = $1 AND user_id = $2
+		), deleted AS (
 			DELETE FROM folders f
-			WHERE f.folder_id = $1 AND f.user_id = $2
+			USING target
+			WHERE f.id = target.id
 			  AND f.organizer_kind IS NOT NULL
 			  AND NOT EXISTS (SELECT 1 FROM folders child WHERE child.parent_id = f.id)
 			  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.folder_id = f.id)
 			RETURNING 1
 		)
-		SELECT EXISTS (SELECT 1 FROM deleted)
-	`, folderID, user.ID).Scan(&deleted)
+		SELECT EXISTS (SELECT 1 FROM target), EXISTS (SELECT 1 FROM deleted)
+	`, folderID, user.ID).Scan(&found, &deleted)
 	if err != nil {
 		log.Printf("folder delete empty organizer: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"deleted": deleted})
+	if !found {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Folder not found")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"deleted": deleted, "found": true})
 }
 
 func validateFolderName(raw string) (string, error) {

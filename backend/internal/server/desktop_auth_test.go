@@ -516,6 +516,10 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	if emptyFolderExists {
 		t.Fatal("empty organizer folder was not deleted")
 	}
+	missingEmptyDelete := authenticatedJSON(pair2.AccessToken, http.MethodDelete, "/api/folders/"+folderID+"/empty", "")
+	if missingEmptyDelete.Code != http.StatusNotFound {
+		t.Fatalf("missing empty organizer folder status=%d body=%s", missingEmptyDelete.Code, missingEmptyDelete.Body.String())
+	}
 	cookieOnly := httptest.NewRequest(http.MethodPost, "/api/documents", strings.NewReader(
 		`{"docId":"`+docID+`","title":"Cookie cannot choose IDs"}`,
 	))
