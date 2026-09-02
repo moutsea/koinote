@@ -70,6 +70,7 @@ export function useCreateDocument() {
     mutationFn: (params?: {
       title?: string;
       content?: string;
+      theme?: string;
       folderId?: string | null;
     }) => createDocument(params),
     onSuccess: ({ document }) => {

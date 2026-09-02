@@ -214,6 +214,10 @@ for (const [tabs, active] of [
     new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),
     "utf8",
   );
+  const markdownEditor = readFileSync(
+    new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url),
+    "utf8",
+  );
   ok(
     "活动编辑器与文档 id 绑定",
     /activeEditor\.docId\s*===\s*activeDocId/.test(page) &&
@@ -264,6 +268,15 @@ for (const [tabs, active] of [
     "LiveEditor 上报编辑器时携带 docId",
     /onEditorReady\?\.\(docId, editor\)/.test(liveEditor) &&
       /onEditorReady=\{handleEditorReady\}/.test(page),
+  );
+  ok(
+    "隐藏标签不挂载全局主题样式",
+    /<MarkdownEditor[\s\S]*?visible=\{visible\}/.test(liveEditor) &&
+      /visible\s*=\s*true/.test(markdownEditor) &&
+      /\{visible\s*&&\s*themeCSS\s*&&\s*\([\s\S]*?<style\s+data-koinote-document-theme/.test(
+        markdownEditor,
+      ),
+    "每篇文档的主题选择器共用全局作用域，隐藏标签若继续挂 style 会覆盖当前文章",
   );
   const tabBar = readFileSync(
     new URL("../spa/src/components/editor/TabBar.tsx", import.meta.url),

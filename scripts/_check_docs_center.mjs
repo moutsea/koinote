@@ -137,6 +137,12 @@ ok(
   "文档索引和 AI 指南不能只藏在页脚",
 );
 ok(
+  "顶部菜单的微信公众号入口指向配置教程",
+  /<HeaderDocsMenuItem\s+to="\/docs\/wechat-official-account"/.test(shell) &&
+    !/<HeaderDocsMenuItem\s+to="\/settings"[\s\S]*?wechatLabel/.test(shell),
+  "微信公众号入口应先帮助用户完成草稿箱同步配置",
+);
+ok(
   "页脚包含文档中心与 AI 指南",
   /<FooterRoute to="\/docs">\{t\.footer\.docsCenter\}<\/FooterRoute>/.test(footer) &&
     /<FooterRoute to="\/docs\/ai-optimization">/.test(footer),

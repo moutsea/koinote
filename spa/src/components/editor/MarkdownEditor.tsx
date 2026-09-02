@@ -97,6 +97,7 @@ export default function MarkdownEditor({
   onFlush,
   onEditorReady,
   scrollContainerRef,
+  visible = true,
   outlineSlot,
   leadingControls,
   trailingControls,
@@ -113,6 +114,8 @@ export default function MarkdownEditor({
   onEditorReady?: (editor: Editor | null) => void;
   /** 滚动容器。多开时由外层持有，用于在标签隐藏/显示间存取滚动位置 */
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** 主题样式是全局规则，隐藏的标签不能继续挂载，否则会覆盖当前文档 */
+  visible?: boolean;
   /** 大纲渲染在正文区左侧、标题栏之下——它是正文的一部分，不是独立侧栏 */
   outlineSlot?: React.ReactNode;
   /** 标题栏左侧的控件（面板展开按钮） */
@@ -321,7 +324,7 @@ export default function MarkdownEditor({
     extensions,
     immediatelyRender: false,
     editorProps: {
-      attributes: { class: editorContentClass(document.theme ?? "") },
+      attributes: { class: editorContentClass(themeId) },
       clipboardTextSerializer: (slice) => {
         const instance = editorRef.current;
         const tableMarkdown = instance
@@ -754,9 +757,12 @@ export default function MarkdownEditor({
           <EditorToolbar editor={editor} />
 
           <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
-            {/* 主题 CSS 随文档走，挂在作用域容器上。空串时 themeCSS 是空的，
+            {/* 主题 CSS 随文档走，挂在作用域容器上；多开时只让当前可见标签挂载，
+                避免隐藏标签的全局规则覆盖当前文档。空串时 themeCSS 是空的，
                 editorContentClass 会把 prose 加回来，观感回到没有主题的样子 */}
-            {themeCSS && <style data-koinote-document-theme>{themeCSS}</style>}
+            {visible && themeCSS && (
+              <style data-koinote-document-theme>{themeCSS}</style>
+            )}
             <div
               data-koinote-print-source
               className={`mx-auto w-full max-w-3xl px-4 ${themeId ? THEME_SCOPE : ""}`}

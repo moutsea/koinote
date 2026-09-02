@@ -1235,8 +1235,7 @@ function HeaderDocsMenu({
             {versionLabel}
           </HeaderDocsMenuItem>
           <HeaderDocsMenuItem
-            to="/settings"
-            search={{ section: "wechat" }}
+            to="/docs/wechat-official-account"
             onSelect={() => setOpen(false)}
             icon={<MessageSquareText className="h-4 w-4" />}
           >
@@ -1250,13 +1249,16 @@ function HeaderDocsMenu({
 
 function HeaderDocsMenuItem({
   to,
-  search,
   onSelect,
   icon,
   children,
 }: {
-  to: "/docs" | "/docs/ai-optimization" | "/docs/mcp" | "/docs/version-history" | "/settings";
-  search?: { section: "wechat" };
+  to:
+    | "/docs"
+    | "/docs/ai-optimization"
+    | "/docs/mcp"
+    | "/docs/version-history"
+    | "/docs/wechat-official-account";
   onSelect: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -1264,7 +1266,6 @@ function HeaderDocsMenuItem({
   return (
     <Link
       to={to}
-      search={search}
       role="menuitem"
       onClick={onSelect}
       className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)]"

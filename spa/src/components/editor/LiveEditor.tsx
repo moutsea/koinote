@@ -379,6 +379,7 @@ export function LiveEditor({
         onFlush={() => void saver.flush(docId)}
         onEditorReady={handleEditorReady}
         scrollContainerRef={scrollRef}
+        visible={visible}
         leadingControls={leadingControls}
         trailingControls={
           <>

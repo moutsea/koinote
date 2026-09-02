@@ -1029,6 +1029,7 @@ export async function desktopGetDocument(docId: string): Promise<{ document: Doc
 export async function desktopCreateDocument(params?: {
   title?: string;
   content?: string;
+  theme?: string;
   folderId?: string | null;
 }): Promise<{ document: Document }> {
   return serializeMutation(async () => {
@@ -1039,7 +1040,7 @@ export async function desktopCreateDocument(params?: {
     const document: Document = {
       docId: crypto.randomUUID(),
       title: params?.title?.trim() ?? "",
-      theme: DEFAULT_DOCUMENT_THEME,
+      theme: params?.theme ?? DEFAULT_DOCUMENT_THEME,
       content: params?.content ?? "",
       revision: 1,
       createdAt: now,

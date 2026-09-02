@@ -258,12 +258,12 @@ ok("确实检查了若干裸绑", checked > 0, String(checked));
   // 这仍然钉住了事件对象可能一路走到 JSON.stringify 的完整通道。
   ok(
     "handleCreate 把 folderId 保存到模板请求",
-    /setTemplateRequest\(\{\s*folderId:\s*folderId\s*\?\?\s*null,\s*fromRoute:\s*false\s*\}\)/.test(page),
+    /setTemplateRequest\(\{[\s\S]*?folderId:\s*folderId\s*\?\?\s*null,[\s\S]*?fromRoute:\s*false/.test(page),
     "新建流程改动时要保留 folderId 的显式传递",
   );
   ok(
     "模板创建把保存的 folderId 放进 mutate",
-    /create\.mutate\(\s*\{\s*\.\.\.copy,\s*folderId:\s*templateRequest\.folderId\s*\}/.test(page),
+    /create\.mutate\(\s*\{[\s\S]*?\.\.\.copy,[\s\S]*?folderId:\s*templateRequest\.folderId/.test(page),
     "模板选择后必须在目标文件夹内直接创建",
   );
 }

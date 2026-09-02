@@ -1260,6 +1260,8 @@ export function searchDocuments(query: string, limit = 20) {
 export function createDocument(params?: {
   title?: string;
   content?: string;
+  /** 新文档的排版主题；省略时使用默认主题 */
+  theme?: string;
   /** 直接建在这个文件夹里。省掉「建到根下再移动」那一步的闪烁 */
   folderId?: string | null;
 }) {

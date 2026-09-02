@@ -140,6 +140,7 @@ export function EditorPage() {
   const [templateRequest, setTemplateRequest] = useState<{
     folderId: string | null;
     fromRoute: boolean;
+    theme?: string;
   } | null>(() =>
     createFromRoute ? { folderId: null, fromRoute: true } : null,
   );
@@ -612,9 +613,17 @@ export function EditorPage() {
   const handleCreate = useCallback(
     (folderId?: string | null) => {
       create.reset();
-      setTemplateRequest({ folderId: folderId ?? null, fromRoute: false });
+      const current = activeDocId ? saver.peek(activeDocId) : null;
+      const inheritedTheme = activeDocId
+        ? current?.theme ?? doc.data?.theme
+        : undefined;
+      setTemplateRequest({
+        folderId: folderId ?? null,
+        fromRoute: false,
+        ...(inheritedTheme !== undefined ? { theme: inheritedTheme } : {}),
+      });
     },
-    [create],
+    [activeDocId, create, doc.data?.theme, saver],
   );
 
   useDesktopMenuActions((action) => {
@@ -753,7 +762,13 @@ export function EditorPage() {
         ? buildDocumentFromTemplate(templateId, locale)
         : { title: "", content: "" };
       create.mutate(
-        { ...copy, folderId: templateRequest.folderId },
+        {
+          ...copy,
+          folderId: templateRequest.folderId,
+          ...(templateRequest.theme !== undefined
+            ? { theme: templateRequest.theme }
+            : {}),
+        },
         {
           onSuccess: ({ document }) => {
             createdHere.current.add(document.docId);
@@ -1027,6 +1042,8 @@ export function EditorPage() {
     </>
   );
 
+  const activeSnapshot = activeDocId ? saver.peek(activeDocId) : null;
+
   // 桌面外壳已经锁住页面滚动，这里的 overflow 是工作区自己的第二道边界，避免子面板
   // 溢出相邻列；移动端没有侧栏，刻意不锁这一层，让 Safari 使用页面自然滚动。
   return (
@@ -1159,8 +1176,8 @@ export function EditorPage() {
                   <ExportMenu
                     editor={editor}
                     docId={liveId}
-                    title={doc.data.title}
-                    themeId={doc.data.theme ?? ""}
+                    title={activeSnapshot?.title ?? doc.data.title}
+                    themeId={activeSnapshot?.theme ?? doc.data.theme ?? ""}
                     member={session.data?.user?.membershipTier === "lifetime"}
                     localMode={localMode}
                   />
