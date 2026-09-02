@@ -449,6 +449,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/wechat/account":
 		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/zhihu/account":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
 	case "/api/wechat/accounts":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/wechat/cover/generate":
@@ -533,6 +535,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 			case "wechat-draft":
 				return method == http.MethodPost
 			}
+		}
+		if len(parts) == 3 && parts[0] != "" && parts[1] == "zhihu" &&
+			parts[2] == "publish" {
+			return method == http.MethodPost
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "wechat-geo-summary" &&
 			parts[2] == "generate" {

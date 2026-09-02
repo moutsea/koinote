@@ -747,6 +747,46 @@ export function deleteWechatOfficialAccount() {
   });
 }
 
+export type ZhihuAccount = {
+  appKey: string;
+  secretHint: string;
+  updatedAt: string;
+};
+
+export function getZhihuAccount() {
+  return apiJson<{ account: ZhihuAccount | null }>("/api/zhihu/account");
+}
+
+export function updateZhihuAccount(input: {
+  appKey: string;
+  appSecret?: string;
+}) {
+  return apiJson<{ account: ZhihuAccount }>("/api/zhihu/account", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteZhihuAccount() {
+  return apiJson<{ success: boolean }>("/api/zhihu/account", {
+    method: "DELETE",
+  });
+}
+
+export function publishZhihuArticle(
+  docId: string,
+  input: { title: string; html: string },
+) {
+  return apiJson<{
+    published: boolean;
+    contentToken: string;
+    url: string;
+  }>(`/api/documents/${encodeURIComponent(docId)}/zhihu/publish`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function generateWechatCover(
   prompt: string,
   ratio: WechatCoverRatio,

@@ -128,7 +128,13 @@ notarization, so macOS will still show a security warning on first launch.
 | HTML                     | One HTML file with embedded document styles; KaTeX CSS and images remain external |
 | DOCX                     | Built from the document tree; formulas keep their LaTeX source                    |
 | PDF                      | Saves directly on desktop; web opens the print dialog. Text remains selectable and searchable |
-| **Publishing platforms** | Rich text for WeChat / Zhihu; native Markdown for Juejin                          |
+| **Publishing platforms** | WeChat drafts; Zhihu OpenAPI direct or assisted web publishing (rich text); native Markdown for Juejin |
+
+Zhihu articles can be published directly after binding OpenAPI credentials in Settings.
+The current publisher rejects articles containing images before sending them to Zhihu;
+use the assisted web flow in the Zhihu panel for image-heavy articles or when you do not
+have OpenAPI credentials. It copies the themed title and article body and opens Zhihu’s
+writing page; paste the complete content and confirm publication yourself.
 
 My Documents also provides bulk portability: import individual `.md` files, folders with
 images, or ZIP archives, and export every document, folder, and referenced image as a ZIP that

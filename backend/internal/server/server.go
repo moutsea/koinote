@@ -33,6 +33,8 @@ type App struct {
 	wechatAPIHTTPClient    *http.Client
 	wechatImageHTTPClient  *http.Client
 	wechatCoverHTTPClient  *http.Client
+	zhihuAPIHTTPClient     *http.Client
+	zhihuAPIBaseURL        string
 	wechatTokenMu          sync.Mutex
 	wechatTokens           map[string]wechatAccessToken
 	wechatTokenRefreshes   map[wechatTokenRefreshKey]*wechatTokenRefresh
@@ -52,6 +54,8 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		wechatAPIHTTPClient:    newWechatAPIHTTPClient(cfg.WechatAPIProxyURL),
 		wechatImageHTTPClient:  newSafeLLMHTTPClient(),
 		wechatCoverHTTPClient:  newTrustedLLMHTTPClient(),
+		zhihuAPIHTTPClient:     newZhihuAPIHTTPClient(),
+		zhihuAPIBaseURL:        zhihuOpenAPIBaseURL,
 		wechatTokens:           make(map[string]wechatAccessToken),
 		wechatTokenRefreshes:   make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
 		serverStatus: newServerStatusMonitor(
@@ -142,6 +146,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/wechat/accounts/{accountId}/default", a.wechatOfficialAccountSetDefault)
 	mux.HandleFunc("POST /api/wechat/cover/generate", a.wechatCoverGenerate)
 	mux.HandleFunc("POST /api/documents/{docId}/wechat-draft", a.wechatDraftCreate)
+	mux.HandleFunc("POST /api/documents/{docId}/zhihu/publish", a.zhihuPublish)
+	mux.HandleFunc("GET /api/zhihu/account", a.zhihuAccountGet)
+	mux.HandleFunc("PUT /api/zhihu/account", a.zhihuAccountPut)
+	mux.HandleFunc("DELETE /api/zhihu/account", a.zhihuAccountDelete)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
 	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)

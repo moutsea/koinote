@@ -28,6 +28,9 @@ type Config struct {
 	// WechatCredentialEncryptionKey 只用于加密用户绑定的微信公众号 AppSecret。
 	// 各环境都必须显式配置，不能回退或复用 SessionSecret。
 	WechatCredentialEncryptionKey string
+	// ZhihuCredentialEncryptionKey 只用于加密用户绑定的知乎 OpenAPI AppSecret。
+	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地测试。
+	ZhihuCredentialEncryptionKey string
 	NodeEnv                       string // "production" | "development"
 	AutoMigrate                   bool
 	MigrationsDir                 string
@@ -150,6 +153,9 @@ func Load() Config {
 		),
 		WechatCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("WECHAT_CREDENTIAL_ENCRYPTION_KEY"),
+		),
+		ZhihuCredentialEncryptionKey: strings.TrimSpace(
+			os.Getenv("ZHIHU_CREDENTIAL_ENCRYPTION_KEY"),
 		),
 		NodeEnv:       nodeEnv,
 		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",

@@ -14,8 +14,11 @@ function ok(label, condition, detail) {
 
 const menu = readFileSync(new URL("../spa/src/components/editor/ExportMenu.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../spa/src/components/editor/WechatDialog.tsx", import.meta.url), "utf8");
+const zhihuPanel = readFileSync(new URL("../spa/src/components/editor/ZhihuPublishPanel.tsx", import.meta.url), "utf8");
+const zhihuServer = readFileSync(new URL("../backend/internal/server/zhihu.go", import.meta.url), "utf8");
 const exportMedia = readFileSync(new URL("../spa/src/components/editor/exportMedia.ts", import.meta.url), "utf8");
 const exportWechat = readFileSync(new URL("../spa/src/components/editor/exportWechat.ts", import.meta.url), "utf8");
+const externalNavigation = readFileSync(new URL("../spa/src/externalNavigation.ts", import.meta.url), "utf8");
 const exportDocument = readFileSync(new URL("../spa/src/components/editor/exportDocument.ts", import.meta.url), "utf8");
 const markdownEditor = readFileSync(new URL("../spa/src/components/editor/MarkdownEditor.tsx", import.meta.url), "utf8");
 const docTitle = readFileSync(new URL("../spa/src/components/editor/DocTitle.tsx", import.meta.url), "utf8");
@@ -50,6 +53,51 @@ ok(
 ok(
   "平台选择同时包含三种目标",
   /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']juejin["']/.test(dialog),
+);
+ok(
+  "知乎发布在客户端和服务端拦截图片",
+  /result\.images\.total > 0/.test(dialog) &&
+    /zhihuImageTagPattern/.test(zhihuServer) &&
+    /errZhihuImagesUnsupported/.test(zhihuServer),
+  "知乎媒体上传尚未接入前，不能把图片文章发送到发布接口",
+);
+ok(
+  "知乎发布成功后禁止重复提交",
+  /publishedURL/.test(zhihuPanel) &&
+    /Boolean\(publishedURL\)/.test(zhihuPanel),
+  "直接发布是不可逆操作，成功后不能再次点击创建重复文章",
+);
+ok(
+  "知乎支持无需 OpenAPI 的辅助发布",
+  /copyRichText\(html, plainText\)/.test(zhihuPanel) &&
+    /openZhihuComposer\(\)/.test(zhihuPanel) &&
+    /ZHIHU_COMPOSER_URL = "https:\/\/zhuanlan\.zhihu\.com\/write"/.test(
+      externalNavigation,
+    ) &&
+    /plainText=\{exportPlainText\}/.test(dialog),
+  "辅助发布应复制富文本并打开知乎写作页，且不依赖 OpenAPI 账号",
+);
+ok(
+  "知乎直发与辅助发布使用不同的图片策略",
+  /const html = await prepareHTML\(\)/.test(zhihuPanel) &&
+    /const html = await \(prepareAssistedHTML \?\? prepareHTML\)\(\)/.test(zhihuPanel) &&
+    /!allowImages && result\.images\.total > 0/.test(dialog) &&
+    /prepareHTML=\{\(\) => prepareZhihuHTML\(false\)\}/.test(dialog) &&
+    /prepareAssistedHTML=\{\(\) => prepareZhihuHTML\(true, true\)\}/.test(dialog),
+  "OpenAPI 直发继续拒绝图片，辅助发布应允许图片并复制标题",
+);
+ok(
+  "知乎不显示重复的通用复制按钮",
+  /!draftOnly && platform !== "zhihu"/.test(dialog),
+  "知乎平台只保留面板中的直发和复制并打开知乎按钮",
+);
+ok(
+  "知乎绑定只在直发点击后读取",
+  !/useEffect/.test(zhihuPanel) &&
+    /async function ensureAccount\(\)/.test(zhihuPanel) &&
+    /const connectedAccount = await ensureAccount\(\)/.test(zhihuPanel) &&
+    /showBindPrompt/.test(zhihuPanel),
+  "打开知乎导出面板时不应自动请求账号，未绑定时再展示设置入口",
 );
 ok(
   "富文本和 Markdown 提示分开",

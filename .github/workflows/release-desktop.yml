@@ -239,7 +239,7 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本向付费会员开放微信公众号绑定与草稿箱同步，并优化微信公众号主题导出：带色主题不再给整篇文章铺设背景，保留标题、引用和代码块等局部样式；同时修复文档整理后的文件夹身份合并与桌面同步问题。
+          此版本向付费会员开放微信公众号绑定与草稿箱同步，并新增知乎 OpenAPI 直发与网页辅助发布；同时优化微信公众号主题导出，修复文档整理后的文件夹身份合并与桌面同步问题。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +253,7 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release opens WeChat account binding and draft delivery to paid members, improves WeChat export theme readability, and hardens organizer folder reconciliation and desktop synchronization.
+          This release opens WeChat account binding and draft delivery to paid members, adds Zhihu OpenAPI and assisted publishing, and hardens WeChat export themes, organizer folder reconciliation, and desktop synchronization.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

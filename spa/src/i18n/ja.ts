@@ -1080,6 +1080,8 @@ export const ja: Messages = {
       "専用招待リンクを作成し、招待から参加したユーザーを確認します。",
     wechat: "WeChat",
     wechatDescription: "公式アカウントを連携し、下書き送信の設定を管理します。",
+    zhihu: "Zhihu",
+    zhihuDescription: "Zhihu OpenAPI を連携し、記事を直接公開します。",
     freePlan: "無料ユーザー",
     lifetimePlan: "永久会員",
     upgrade: "会員にアップグレード",
@@ -1616,7 +1618,7 @@ export const ja: Messages = {
     mediaWechat: "WeChat",
     mediaWechatHint: "装飾付きリッチテキスト",
     mediaZhihu: "Zhihu",
-    mediaZhihuHint: "調整済みリッチテキスト",
+    mediaZhihuHint: "調整済みリッチテキスト（OpenAPI 直接公開は画像非対応）",
     mediaJuejin: "Juejin",
     mediaJuejinHint: "Markdown",
     mediaCopy: "クリップボードにコピー",
@@ -1716,6 +1718,48 @@ export const ja: Messages = {
       "空欄のままで現在の AppSecret を維持します。AppID 変更時は必須です",
     wechatIPAllowlistHint:
       "連携前に Koinote サーバーの送信元 IP を WeChat の IP ホワイトリストへ追加してください。",
+    zhihuAccountTitle: "Zhihu 公開",
+    zhihuAccountHint:
+      "Zhihu OpenAPI の認証情報を連携します。確認後に記事を直接公開し、Zhihu の下書きには保存しません。",
+    zhihuAccountLoading: "Zhihu 連携を読み込み中…",
+    zhihuAccountLoadFailed:
+      "Zhihu 連携を読み込めませんでした。もう一度お試しください",
+    zhihuAccountRetry: "再試行",
+    zhihuAccountNotBound: "Zhihu アカウントはまだ連携されていません。",
+    zhihuAccountBind: "Zhihu を連携",
+    zhihuAccountSave: "連携を保存",
+    zhihuAccountEdit: "連携を更新",
+    zhihuAccountUnbind: "連携を解除",
+    zhihuAccountUnbindConfirm: "この Zhihu アカウントとの連携を解除しますか？",
+    zhihuAccountBindFailed:
+      "Zhihu を連携できません。認証情報を確認して再試行してください。",
+    zhihuAccountSaveFailed:
+      "Zhihu 設定を保存できません。もう一度お試しください。",
+    zhihuAccountUnbindFailed:
+      "Zhihu の連携を解除できません。もう一度お試しください。",
+    zhihuAccountCancel: "キャンセル",
+    zhihuAppKey: "Zhihu App Key",
+    zhihuAppKeyPlaceholder: "Zhihu プロフィール URL のユーザートークン",
+    zhihuAppSecret: "Zhihu App Secret",
+    zhihuAppSecretPlaceholder:
+      "Zhihu が発行した完全な App Secret を入力（保存後は表示されません）",
+    zhihuAppSecretUpdatePlaceholder:
+      "現在の App Secret を維持する場合は空欄にしてください",
+    zhihuOpenAPIHint: "Zhihu Playground で認証情報を申請",
+    zhihuPublish: "Zhihu に公開",
+    zhihuPublishing: "Zhihu に公開中…",
+    zhihuPublished: "Zhihu に公開しました",
+    zhihuPublishConfirm: "この記事を Zhihu に直接公開します。続行しますか？",
+    zhihuPublishHint:
+      "確認後に直接公開し、公開された記事を Zhihu で開けます。OpenAPI の直接公開は画像に対応していないため、下のブラウザー補助公開をご利用ください。",
+    zhihuPublishFailed:
+      "Zhihu の記事を公開できませんでした。もう一度お試しください。",
+    zhihuImagesUnsupported:
+      "現在、<img> 画像を含む記事は Zhihu に公開できません。画像を削除するか、別のプラットフォームを選択してください。",
+    zhihuAssistPublish: "コピーして Zhihu を開く",
+    zhihuAssistPublishing: "準備して Zhihu を開いています…",
+    zhihuAssistDone: "コピーしました — Zhihu の執筆ページを開きました",
+    zhihuAssistFailed: "コピーまたは Zhihu の起動に失敗しました。もう一度お試しください。",
     wechatCoverTitle: "カバーを設定",
     wechatCoverModeLabel: "カバーのソース",
     wechatCoverDefault: "既定のカバー",
@@ -2420,6 +2464,23 @@ function hello(name) {
     wechat_content_image_failed: "記事内の画像を WeChat へ転送できませんでした",
     wechat_draft_create_failed:
       "WeChat の下書きを作成できませんでした。API 権限を確認してください",
+    zhihu_account_invalid:
+      "Zhihu App Key または App Secret の形式が正しくありません",
+    zhihu_app_secret_required:
+      "Zhihu App Key の連携または変更には App Secret が必要です",
+    zhihu_app_key_already_bound:
+      "この Zhihu App Key は別の Koinote アカウントに連携済みです",
+    zhihu_credential_unavailable:
+      "Zhihu 認証情報の暗号化が設定されていません",
+    zhihu_account_not_bound: "先に Zhihu アカウントを連携してください",
+    zhihu_publish_input_invalid:
+      "Zhihu 記事のタイトルまたは内容が無効です",
+    zhihu_provider_unavailable:
+      "Zhihu は一時的に利用できません。後でもう一度お試しください",
+    zhihu_publish_failed:
+      "Zhihu が記事を拒否しました。内容を確認して再試行してください",
+    zhihu_images_unsupported:
+      "現在、画像を含む記事は Zhihu に公開できません。画像を削除するか、別のプラットフォームを選択してください。",
     oauth_unsupported: "サポートされていないログイン方法です",
     oauth_not_configured: "このログイン方法はまだ設定されていません",
     oauth_denied: "認可がキャンセルされました",

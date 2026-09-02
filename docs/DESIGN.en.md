@@ -833,7 +833,8 @@ The My Documents full ZIP migration is separate from single-document format expo
 optimizes for reversible Markdown/folder/image portability, while the latter targets readers,
 office formats, and publishing platforms. See “Search, portability, and product analytics” above.
 
-Five paths, all client-side so they cost no backend resources:
+Base document formatting runs client-side; WeChat drafts and Zhihu OpenAPI publishing send
+user-confirmed rich text through the backend, while the assisted browser flow stays client-side:
 
 | Format               | Implementation                                                                                         |
 | -------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -841,7 +842,11 @@ Five paths, all client-side so they cost no backend resources:
 | `.html`              | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
 | `.docx`              | The `docx` library, built from the ProseMirror document tree                                           |
 | `.pdf`               | The system print pipeline + `@media print`                                                             |
-| Publishing platforms | Rich text for WeChat / Zhihu and native Markdown for Juejin                                            |
+| Publishing platforms | Rich text for WeChat / Zhihu (OpenAPI or assisted web flow) and native Markdown for Juejin             |
+
+Zhihu OpenAPI publishing currently rejects articles with images before making the request.
+The assisted browser flow copies the themed title and article body (including images) and opens
+Zhihu’s writing page for the user to paste and confirm publication.
 
 PDF has one menu action. The only browser engine that produces vector-text PDFs
 hangs off the print pipeline, and the print dialog cannot be bypassed, so users

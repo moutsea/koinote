@@ -57,6 +57,7 @@ jobs:
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
+          ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -79,7 +80,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -219,6 +220,7 @@ jobs:
           MCP_TOKEN_ENCRYPTION_KEY: ${{ secrets.MCP_TOKEN_ENCRYPTION_KEY }}
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
+          ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -239,11 +241,12 @@ jobs:
           ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
         run: |
-          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$EMAIL_VERIFICATION_SECRET" \
             "$MCP_TOKEN_ENCRYPTION_KEY" \
             "$LLM_CREDENTIAL_ENCRYPTION_KEY" \
             "$WECHAT_CREDENTIAL_ENCRYPTION_KEY" \
+            "$ZHIHU_CREDENTIAL_ENCRYPTION_KEY" \
             "$STRIPE_SECRET_KEY" \
             "$STRIPE_WEBHOOK_SECRET" \
             "$STRIPE_LIFETIME_PRODUCT_ID" \
@@ -270,6 +273,7 @@ jobs:
                 IFS= read -r mcp_token_encryption_key
                 IFS= read -r llm_credential_encryption_key
                 IFS= read -r wechat_credential_encryption_key
+                IFS= read -r zhihu_credential_encryption_key
                 IFS= read -r stripe_secret_key
                 IFS= read -r stripe_webhook_secret
                 IFS= read -r stripe_lifetime_product_id
@@ -292,6 +296,7 @@ jobs:
                 test -n "$email_verification_secret"
                 test -n "$mcp_token_encryption_key"
                 test -n "$wechat_credential_encryption_key"
+                test -n "$zhihu_credential_encryption_key"
                 test -n "$llm_credential_encryption_key"
                 test -n "$stripe_secret_key"
                 test -n "$stripe_webhook_secret"
@@ -348,7 +353,7 @@ jobs:
                 # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
                 awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" "
-                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
                   replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
                   replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
@@ -362,6 +367,7 @@ jobs:
                 printf "MCP_TOKEN_ENCRYPTION_KEY=%s\n" "$mcp_token_encryption_key" >> "$temp_file"
                 printf "LLM_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$llm_credential_encryption_key" >> "$temp_file"
                 printf "WECHAT_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$wechat_credential_encryption_key" >> "$temp_file"
+                printf "ZHIHU_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$zhihu_credential_encryption_key" >> "$temp_file"
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"
                 printf "STRIPE_LIFETIME_PRODUCT_ID=%s\n" "$stripe_lifetime_product_id" >> "$temp_file"

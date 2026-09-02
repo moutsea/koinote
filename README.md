@@ -28,7 +28,7 @@
 和本地 Markdown 编辑器的五个区别：
 
 - **图片粘贴即上传** —— 存进自己的 R2 图床，正文里是干净链接而不是一坨 base64
-- **一键导出到自媒体** —— 微信公众号与知乎复制内联富文本，掘金复制原生 Markdown；网页端和桌面端均可绑定最多 5 个公众号、设置默认账号，并把文章保存到指定账号的草稿箱；封面可用 Koinote Logo+标题、正文图片或 AI 生成
+- **一键导出到自媒体** —— 微信公众号复制内联富文本并可保存到草稿箱，知乎可在确认后直接发布，掘金复制原生 Markdown；网页端和桌面端均可绑定最多 5 个公众号、设置默认账号；封面可用 Koinote Logo+标题、正文图片或 AI 生成
 - **文档在云端** —— 多设备同步、可分享
 - **Agent 通过 MCP 读写文档** —— Codex、Claude Code、OpenCode、OpenClaw 等客户端
 - **AI 审阅式优化**（会员）—— 模型先给出标题、正文和排版 Diff，用户逐条决定是否应用
@@ -117,7 +117,7 @@ xattr -dr com.apple.quarantine /Applications/Koinote.app
 | HTML           | 单 HTML 文件，正文样式内嵌；KaTeX CSS 与图片仍使用外部地址 |
 | DOCX           | 走文档树构建，公式保留 LaTeX 源码                          |
 | PDF            | 桌面端直接保存；浏览器端打开系统打印面板。文字可选、可搜索 |
-| **自媒体平台** | 微信公众号 / 知乎复制内联富文本；掘金复制原生 Markdown     |
+| **自媒体平台** | 微信公众号草稿箱、知乎 OpenAPI 直发或网页辅助发布（均支持内联富文本）；掘金复制原生 Markdown |
 
 「我的文档」还支持批量迁移：可导入单个 `.md`、带图片的文件夹或 ZIP，也可把全部
 文档、文件夹结构和引用图片一次导出为可再次导入的 ZIP。
@@ -140,6 +140,12 @@ Koinote Paper（暖纸长文）、Koinote Signal（产品与 AI）、Koinote Not
 3. 在编辑器选择「导出到自媒体 → 微信公众号 → 同步到账号草稿箱」，再选择封面并确认保存。
 
 封面不是必需项，可使用 Koinote Logo + 标题、正文图片或 AI 生成的图片；每次成功生成 AI 封面消耗 20 credits。文章只会进入草稿箱，不会被 Koinote 直接发布。完整的微信后台配置和排查步骤见[公众号配置教程](https://koinote.app/docs/wechat-official-account)。
+
+### 知乎直接发布
+
+在「设置 → 知乎」绑定知乎开放平台凭证后，可在编辑器选择「导出到自媒体 → 知乎」并确认直接发布。文章不会写入知乎草稿箱；OpenAPI 直发暂不支持包含图片的文章，发布前会明确提示。
+
+如果没有 OpenAPI 凭证，仍可使用知乎面板中的「复制并打开知乎」：Koinote 会复制带主题的标题和正文（包含图片）并打开知乎写作页，用户粘贴完整内容后自行确认发布。
 
 **分享**
 
@@ -381,6 +387,12 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 `WECHAT_COVER_IMAGE_BASE_URL`、`WECHAT_COVER_IMAGE_API_KEY`、`WECHAT_COVER_IMAGE_MODEL`，
 API Key 只由后端读取。绑定前还要在微信公众平台把后端出口 IP 加入 IP 白名单。
 
+本地测试知乎直接发布时，生产环境必须配置独立的
+`ZHIHU_CREDENTIAL_ENCRYPTION_KEY`；开发环境留空时复用 `SESSION_SECRET`。在知乎开放平台
+申请 OpenAPI 凭证后，进入设置中的“知乎”绑定 App Key 和 App Secret。发布前会弹出确认，
+确认后直接调用知乎发布接口，不会写入知乎草稿箱。当前知乎发布暂不支持包含图片的文章，
+含图片时会在发布前提示；需要图片的文章请先使用微信公众号或掘金等其他导出方式。
+
 如果微信 API 需要经专用中转机访问，本地 Docker 后端可把
 `WECHAT_API_PROXY_URL` 设为 `http://host.docker.internal:18080`，并在宿主机建立
 `ssh -N -L 18080:127.0.0.1:18080 root@<中转机>` 隧道；生产环境优先使用 WireGuard
@@ -463,6 +475,10 @@ API Key 的 AES-GCM 加密，不能复用会话、MCP 或模型服务密钥。�
 公众号 AppSecret 的 AES-GCM 加密，不能复用会话、BYOK 或封面模型 API Key；直接轮换会让
 既有公众号绑定无法解密。公众号 token、封面生成和草稿创建都只在后端完成，客户端永远拿不到
 AppSecret 或封面模型密钥。
+
+**生产环境的 `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于知乎 OpenAPI
+AppSecret 的 AES-GCM 加密，不能复用会话、MCP、BYOK 或微信凭据密钥；直接轮换会让既有知乎
+绑定无法解密。AppSecret 只在后端使用，不会下发到 SPA、桌面客户端或知乎请求正文。
 
 **微信公众号封面模型是可选的完整配置组。** `WECHAT_COVER_IMAGE_BASE_URL`、
 `WECHAT_COVER_IMAGE_API_KEY`、`WECHAT_COVER_IMAGE_MODEL` 必须三项齐全或全部留空；生产只接受
@@ -663,6 +679,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
+| `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` | 知乎 OpenAPI AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                         |
 | `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |
 | `STRIPE_WEBHOOK_SECRET`        | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`）                                           |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |
@@ -684,6 +701,7 @@ gh secret list --app actions | grep '^EMAIL_VERIFICATION_SECRET'
 openssl rand -base64 48 | tr -d '\n' | gh secret set MCP_TOKEN_ENCRYPTION_KEY
 openssl rand -base64 48 | tr -d '\n' | gh secret set LLM_CREDENTIAL_ENCRYPTION_KEY
 openssl rand -base64 48 | tr -d '\n' | gh secret set WECHAT_CREDENTIAL_ENCRYPTION_KEY
+openssl rand -base64 48 | tr -d '\n' | gh secret set ZHIHU_CREDENTIAL_ENCRYPTION_KEY
 ```
 
 Stripe 密钥可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`

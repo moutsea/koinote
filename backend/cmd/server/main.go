@@ -45,6 +45,9 @@ func main() {
 	if cfg.IsProduction() && cfg.WechatCredentialEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 WECHAT_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.ZhihuCredentialEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 ZHIHU_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
 	if err := cfg.ValidateStripeConfig(); err != nil {
 		log.Fatal(err)
 	}

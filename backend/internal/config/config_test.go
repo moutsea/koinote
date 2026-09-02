@@ -478,11 +478,13 @@ func TestValidateWechatCoverImageConfig(t *testing.T) {
 func TestLoadPopulatesWechatConfiguration(t *testing.T) {
 	chdir(t, t.TempDir())
 	t.Setenv("WECHAT_CREDENTIAL_ENCRYPTION_KEY", " credential-key ")
+	t.Setenv("ZHIHU_CREDENTIAL_ENCRYPTION_KEY", " zhihu-credential-key ")
 	t.Setenv("WECHAT_COVER_IMAGE_BASE_URL", " https://images.example.test/v1 ")
 	t.Setenv("WECHAT_COVER_IMAGE_API_KEY", " image-key ")
 	t.Setenv("WECHAT_COVER_IMAGE_MODEL", " image-model ")
 	cfg := Load()
 	if cfg.WechatCredentialEncryptionKey != "credential-key" ||
+		cfg.ZhihuCredentialEncryptionKey != "zhihu-credential-key" ||
 		cfg.WechatCoverImageBaseURL != "https://images.example.test/v1" ||
 		cfg.WechatCoverImageAPIKey != "image-key" ||
 		cfg.WechatCoverImageModel != "image-model" {

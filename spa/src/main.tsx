@@ -134,7 +134,13 @@ function parseEditorSearch(
 }
 
 function parseSettingsSearch(search: Record<string, unknown>): {
-  section?: "general" | "membership" | "ai" | "invitations" | "wechat";
+  section?:
+    | "general"
+    | "membership"
+    | "ai"
+    | "invitations"
+    | "wechat"
+    | "zhihu";
   checkout?: string;
   credit_checkout?: string;
   session_id?: string;
@@ -146,7 +152,8 @@ function parseSettingsSearch(search: Record<string, unknown>): {
       section === "membership" ||
       section === "ai" ||
       section === "invitations" ||
-      section === "wechat"
+      section === "wechat" ||
+      section === "zhihu"
         ? section
         : undefined,
     checkout: typeof search.checkout === "string" ? search.checkout : undefined,

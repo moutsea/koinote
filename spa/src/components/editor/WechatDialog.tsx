@@ -9,6 +9,7 @@ import {
   mediaExportFormat,
   type MediaPlatform,
 } from "./exportMedia";
+import { buildMediaMarkdown } from "./mediaExportStrategy";
 import { getWechatThemeLabel } from "./wechatThemes";
 import { isLocalModeNetworkDisabled } from "../../desktop/localMode";
 import { pushModal } from "../../modalStack";
@@ -24,6 +25,7 @@ import {
 } from "../../api";
 import { buildWechatHTML } from "./exportWechat";
 import { WechatDraftPanel } from "./WechatDraftPanel";
+import { ZhihuPublishPanel } from "./ZhihuPublishPanel";
 import { WechatPreflightPanel } from "./WechatPreflightPanel";
 import { parseArticleMetadata } from "./wechatPreflight";
 
@@ -67,6 +69,10 @@ export function MediaExportDialog({
   );
   const exportMetadata = parseArticleMetadata(currentMarkdown, title).metadata;
   const exportTitle = exportMetadata.title || title;
+  const exportPlainText = buildMediaMarkdown(
+    exportTitle,
+    parseArticleMetadata(currentMarkdown, title).body,
+  );
   const [platform, setPlatform] = useState<MediaPlatform>("wechat");
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -420,6 +426,52 @@ export function MediaExportDialog({
     }
   }
 
+  async function prepareZhihuHTML(
+    allowImages = false,
+    includeTitle = false,
+  ): Promise<string | null> {
+    setError(null);
+    setNote(null);
+    setImageWarning(null);
+    try {
+      const result = await buildWechatHTML(editor, title, themeId, {
+        includeGeoCorpus: false,
+        includeTitle,
+      });
+      if (!allowImages && result.images.total > 0) {
+        setError(t.editor.zhihuImagesUnsupported);
+        return null;
+      }
+      if (result.math.temporaryQuotaFailed > 0) {
+        setNote(
+          t.editor.wechatMathTemporaryQuotaExceeded.replace(
+            "{n}",
+            String(result.math.temporaryQuotaFailed),
+          ),
+        );
+      } else if (result.math.failed > 0) {
+        setNote(
+          t.editor.wechatMathFailed.replace("{n}", String(result.math.failed)),
+        );
+      }
+      if (result.images.unreachable > 0) {
+        setImageWarning(
+          t.editor.mediaImagesUnreachable
+            .replace("{n}", String(result.images.unreachable))
+            .replace("{hosts}", result.images.unreachableHosts.join("、")),
+        );
+      }
+      return result.html;
+    } catch (caught) {
+      setError(
+        isLocalModeNetworkDisabled(caught)
+          ? t.desktopLocalMode.networkDisabled
+          : t.editor.exportFailed,
+      );
+      return null;
+    }
+  }
+
   async function closeDialog() {
     if (draftPublishing || closeInFlightRef.current) return;
     closeInFlightRef.current = true;
@@ -560,6 +612,18 @@ export function MediaExportDialog({
           <WechatPreflightPanel
             markdown={currentMarkdown}
             title={exportTitle}
+          />
+        )}
+
+        {!draftOnly && platform === "zhihu" && !localMode && (
+          <ZhihuPublishPanel
+            docId={docId}
+            title={exportTitle}
+            plainText={exportPlainText}
+            prepareHTML={() => prepareZhihuHTML(false)}
+            prepareAssistedHTML={() => prepareZhihuHTML(true, true)}
+            disabled={busy || geoLoading || geoGenerating || draftPublishing}
+            onPublishingChange={setDraftPublishing}
           />
         )}
 
@@ -769,7 +833,7 @@ export function MediaExportDialog({
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {!draftOnly && (
+          {!draftOnly && platform !== "zhihu" && (
             <button
               type="button"
               onClick={run}

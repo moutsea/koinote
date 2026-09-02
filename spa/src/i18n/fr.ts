@@ -1107,6 +1107,9 @@ export const fr: Messages = {
     wechat: "WeChat",
     wechatDescription:
       "Associez un compte officiel et gérez l’envoi des brouillons.",
+    zhihu: "Zhihu",
+    zhihuDescription:
+      "Associez les identifiants OpenAPI Zhihu et publiez directement vos articles.",
     freePlan: "Gratuit",
     lifetimePlan: "Membre à vie",
     upgrade: "Mettre à niveau",
@@ -1666,7 +1669,7 @@ export const fr: Messages = {
     mediaWechat: "WeChat",
     mediaWechatHint: "Texte enrichi stylé",
     mediaZhihu: "Zhihu",
-    mediaZhihuHint: "Texte enrichi adapté",
+    mediaZhihuHint: "Texte enrichi adapté ; la publication OpenAPI directe n’accepte pas les images",
     mediaJuejin: "Juejin",
     mediaJuejinHint: "Markdown natif",
     mediaCopy: "Copier",
@@ -1770,6 +1773,48 @@ export const fr: Messages = {
       "Laissez vide pour conserver l’AppSecret actuel ; requis si l’AppID change",
     wechatIPAllowlistHint:
       "Ajoutez l’IP de sortie du serveur Koinote à la liste blanche WeChat avant l’association.",
+    zhihuAccountTitle: "Publication Zhihu",
+    zhihuAccountHint:
+      "Associez les identifiants OpenAPI Zhihu. Après confirmation, l’article est publié directement et n’est pas enregistré en brouillon.",
+    zhihuAccountLoading: "Chargement de la connexion Zhihu…",
+    zhihuAccountLoadFailed:
+      "Impossible de charger la connexion Zhihu. Réessayez.",
+    zhihuAccountRetry: "Réessayer",
+    zhihuAccountNotBound: "Aucun compte Zhihu n’est encore associé.",
+    zhihuAccountBind: "Associer Zhihu",
+    zhihuAccountSave: "Enregistrer la connexion",
+    zhihuAccountEdit: "Modifier la connexion",
+    zhihuAccountUnbind: "Dissocier",
+    zhihuAccountUnbindConfirm: "Dissocier ce compte Zhihu ?",
+    zhihuAccountBindFailed:
+      "Impossible d’associer Zhihu. Vérifiez les identifiants et réessayez.",
+    zhihuAccountSaveFailed:
+      "Impossible d’enregistrer les réglages Zhihu. Réessayez.",
+    zhihuAccountUnbindFailed: "Impossible de dissocier Zhihu. Réessayez.",
+    zhihuAccountCancel: "Annuler",
+    zhihuAppKey: "App Key Zhihu",
+    zhihuAppKeyPlaceholder: "Le token utilisateur de l’URL de votre profil Zhihu",
+    zhihuAppSecret: "App Secret Zhihu",
+    zhihuAppSecretPlaceholder:
+      "Saisissez l’App Secret complet généré par Zhihu (il ne sera plus affiché)",
+    zhihuAppSecretUpdatePlaceholder:
+      "Laissez vide pour conserver l’App Secret actuel",
+    zhihuOpenAPIHint: "Ouvrir Zhihu Playground pour demander les identifiants",
+    zhihuPublish: "Publier sur Zhihu",
+    zhihuPublishing: "Publication sur Zhihu…",
+    zhihuPublished: "Publié sur Zhihu",
+    zhihuPublishConfirm:
+      "Cet article sera publié directement sur Zhihu. Continuer ?",
+    zhihuPublishHint:
+      "Après confirmation, l’article sera publié directement et pourra être ouvert sur Zhihu. La publication OpenAPI directe n’accepte pas les images ; utilisez plutôt la publication assistée ci-dessous.",
+    zhihuPublishFailed:
+      "Impossible de publier l’article Zhihu. Réessayez plus tard.",
+    zhihuImagesUnsupported:
+      "La publication Zhihu ne prend pas encore en charge les articles contenant des images <img>. Supprimez-les ou choisissez une autre plateforme.",
+    zhihuAssistPublish: "Copier et ouvrir Zhihu",
+    zhihuAssistPublishing: "Préparation et ouverture de Zhihu…",
+    zhihuAssistDone: "Copié — la page d’écriture Zhihu est ouverte",
+    zhihuAssistFailed: "Impossible de copier ou d’ouvrir Zhihu. Réessayez.",
     wechatCoverTitle: "Choisir une couverture",
     wechatCoverModeLabel: "Source de couverture",
     wechatCoverDefault: "Couverture par défaut",
@@ -2492,6 +2537,23 @@ function hello(name) {
       "Une image n’a pas pu être transférée vers WeChat",
     wechat_draft_create_failed:
       "WeChat n’a pas pu créer le brouillon. Vérifiez les autorisations",
+    zhihu_account_invalid:
+      "Le format de l’App Key ou de l’App Secret Zhihu est invalide",
+    zhihu_app_secret_required:
+      "Un App Secret est requis pour associer ou modifier l’App Key Zhihu",
+    zhihu_app_key_already_bound:
+      "Cette App Key Zhihu est déjà associée à un autre compte Koinote",
+    zhihu_credential_unavailable:
+      "Le chiffrement des identifiants Zhihu n’est pas configuré",
+    zhihu_account_not_bound: "Associez d’abord un compte Zhihu",
+    zhihu_publish_input_invalid:
+      "Le titre ou le contenu de l’article Zhihu est invalide",
+    zhihu_provider_unavailable:
+      "Zhihu est temporairement indisponible. Réessayez plus tard",
+    zhihu_publish_failed:
+      "Zhihu a refusé l’article. Vérifiez son contenu puis réessayez",
+    zhihu_images_unsupported:
+      "La publication Zhihu ne prend pas encore en charge les articles contenant des images. Supprimez-les ou choisissez une autre plateforme.",
     oauth_unsupported: "Fournisseur de connexion non pris en charge",
     oauth_not_configured:
       "Cette méthode de connexion n'est pas encore configurée",

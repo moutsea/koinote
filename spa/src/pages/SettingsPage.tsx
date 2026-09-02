@@ -15,6 +15,7 @@ import {
   KeyRound,
   LockKeyhole,
   MessageCircle,
+  Send,
   Settings,
   ShieldCheck,
   UserRound,
@@ -35,6 +36,7 @@ import { PageContainer } from "../components/PageContainer";
 import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
 import { StorageCard } from "../components/StorageCard";
 import { WechatOfficialAccountPanel } from "../components/editor/WechatOfficialAccountPanel";
+import { ZhihuAccountPanel } from "../components/editor/ZhihuAccountPanel";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { openKoinoteWebPath } from "../externalNavigation";
 import { useI18n, type Locale } from "../i18n";
@@ -44,7 +46,8 @@ type SettingsSection =
   | "membership"
   | "ai"
   | "invitations"
-  | "wechat";
+  | "wechat"
+  | "zhihu";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -103,6 +106,12 @@ export function SettingsPage() {
       icon: <MessageCircle className="h-4 w-4" />,
     },
     {
+      id: "zhihu",
+      label: t.settingsPage.zhihu,
+      description: t.settingsPage.zhihuDescription,
+      icon: <Send className="h-4 w-4" />,
+    },
+    {
       id: "invitations",
       label: t.settingsPage.invitations,
       description: t.settingsPage.invitationsDescription,
@@ -137,7 +146,7 @@ export function SettingsPage() {
         <aside className="min-w-0">
           <nav
             aria-label={t.settingsPage.title}
-            className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:sticky lg:top-20 lg:flex lg:flex-col"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:sticky lg:top-20 lg:flex lg:flex-col"
           >
             {sections.map((item) => {
               const active = item.id === section;
@@ -250,6 +259,10 @@ function SettingsSectionContent({
         localMode={Boolean(user.isLocalMode)}
       />
     );
+  }
+
+  if (section === "zhihu") {
+    return <ZhihuAccountPanel localMode={Boolean(user.isLocalMode)} />;
   }
 
   return <InvitationCard />;
