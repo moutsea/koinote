@@ -103,6 +103,7 @@ includes("本地 Tauri 配置固定 local 前端 flavor", tauriLocalConfig, "des
 includes("前端 flavor runner 设置 Vite flavor", desktopFrontendRunner, "VITE_DESKTOP_FLAVOR: flavor");
 includes("桌面构建 runner 透传 Tauri 参数", desktopRunner, "const [command, flavor, ...extraArgs]");
 includes("桌面构建 runner 保留额外参数", desktopRunner, "args.push(...extraArgs)");
+includes("Windows 桌面 runner 可执行 cmd shim", desktopRunner, 'shell: process.platform === "win32"');
 includes("Rust 构建检查 flavor 与 Tauri 配置一致", tauriBuild, "desktop flavor mismatch");
 
 console.log(`\ndesktop home: ${pass} passed, ${fail} failed`);

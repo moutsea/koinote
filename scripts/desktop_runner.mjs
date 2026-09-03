@@ -22,6 +22,7 @@ const child = spawn(tauriBinary, args, {
     KOINOTE_DESKTOP_FLAVOR: flavor,
     VITE_DESKTOP_FLAVOR: flavor,
   },
+  shell: process.platform === "win32",
   stdio: "inherit",
 });
 
