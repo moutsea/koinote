@@ -12,6 +12,7 @@ const child = spawn(npm, ["run", command], {
     ...process.env,
     VITE_DESKTOP_FLAVOR: flavor,
   },
+  shell: process.platform === "win32",
   stdio: "inherit",
 });
 

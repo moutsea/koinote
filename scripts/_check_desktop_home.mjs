@@ -101,6 +101,7 @@ includes("正式桌面开发使用显式 production flavor", packageJSON, '"desk
 includes("正式 Tauri 配置固定 production 前端 flavor", tauriConfig, "desktop_frontend_runner.mjs build production");
 includes("本地 Tauri 配置固定 local 前端 flavor", tauriLocalConfig, "desktop_frontend_runner.mjs build local");
 includes("前端 flavor runner 设置 Vite flavor", desktopFrontendRunner, "VITE_DESKTOP_FLAVOR: flavor");
+includes("Windows 前端 runner 可执行 npm cmd shim", desktopFrontendRunner, 'shell: process.platform === "win32"');
 includes("桌面构建 runner 透传 Tauri 参数", desktopRunner, "const [command, flavor, ...extraArgs]");
 includes("桌面构建 runner 保留额外参数", desktopRunner, "args.push(...extraArgs)");
 includes("Windows 桌面 runner 可执行 cmd shim", desktopRunner, 'shell: process.platform === "win32"');
