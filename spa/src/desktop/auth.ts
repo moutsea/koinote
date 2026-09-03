@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { User } from "../api";
-import { desktopAPIOrigin } from "./runtime";
+import {
+  desktopAPIOrigin,
+  desktopAuthClientID,
+  desktopCallbackScheme,
+} from "./runtime";
 import { desktopRawFetch } from "./transport";
 import {
   DESKTOP_BILLING_EVENT,
@@ -14,8 +18,8 @@ import {
 
 export { DESKTOP_BILLING_EVENT } from "./billingCore";
 
-const CLIENT_ID = "koinote-desktop";
-const CALLBACK_SCHEME = "koinote:";
+const CLIENT_ID = desktopAuthClientID();
+const CALLBACK_SCHEME = desktopCallbackScheme();
 const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 
 export type StoredDesktopSession = {
@@ -105,6 +109,18 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
     }
     if (callback.hostname === "billing") {
       await handleDesktopBillingCallback(callback);
+      continue;
+    }
+    if (callback.hostname === "x-oauth2") {
+      const status = callback.searchParams.get("status");
+      window.dispatchEvent(
+        new CustomEvent("koinote:x-oauth2-complete", {
+          detail: {
+            status,
+            code: callback.searchParams.get("code") ?? "",
+          },
+        }),
+      );
       continue;
     }
     if (callback.hostname !== "auth") continue;
@@ -318,6 +334,10 @@ export async function updateCachedDesktopUser(user: User): Promise<void> {
 
 export function clearDesktopSession(): Promise<void> {
   return invoke("desktop_session_clear");
+}
+
+export function cancelDesktopAuthorization(): Promise<void> {
+  return clearPendingAuthorization();
 }
 
 export async function refreshDesktopSession(): Promise<StoredDesktopSession | null> {

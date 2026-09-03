@@ -9,6 +9,7 @@ import { TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { InputRule } from "@tiptap/core";
 import { Markdown } from "tiptap-markdown";
+import { TextSelection } from "@tiptap/pm/state";
 import { ImageNodeView } from "./ImageNodeView";
 import { lowlight } from "./lowlight";
 import { BlockMarkdownImage } from "./markdownImage";
@@ -18,6 +19,59 @@ import { MarkdownTable } from "./markdownTable";
 import { InlineCode } from "./inlineCode";
 import taskListPlugin from "markdown-it-task-lists";
 import { splitMixedTaskLists } from "./markdownTaskList";
+import { CodeBlockCopyView } from "./CodeBlockCopyView";
+
+const CodeBlockWithCopy = CodeBlockLowlight.extend({
+  addKeyboardShortcuts() {
+    const parent = this.parent?.() ?? {};
+    return {
+      ...parent,
+      "Mod-a": ({ editor }: { editor: any }) => {
+        const { state } = editor;
+        const { selection } = state;
+        if (
+          selection.$from.parent.type.name !== this.name ||
+          !selection.$from.sameParent(selection.$to)
+        ) {
+          return false;
+        }
+        const blockStart = selection.$from.start();
+        const blockEnd = selection.$from.end();
+        if (blockStart === blockEnd) {
+          return false;
+        }
+        if (!selection.empty && selection.from === blockStart && selection.to === blockEnd) {
+          return false;
+        }
+
+        editor.view.dispatch(
+          state.tr.setSelection(
+            TextSelection.create(state.doc, blockStart, blockEnd),
+          ),
+        );
+        return true;
+      },
+      Tab: ({ editor }: { editor: any }) => {
+        if (!this.options.enableTabIndentation) return false;
+
+        const { state } = editor;
+        const { selection } = state;
+        if (selection.$from.parent.type.name !== this.name) return false;
+
+        if (selection.empty) {
+          const indent = " ".repeat(this.options.tabSize ?? 4);
+          editor.view.dispatch(state.tr.insertText(indent, selection.from, selection.to));
+          return true;
+        }
+
+        return parent.Tab?.({ editor }) ?? false;
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockCopyView);
+  },
+});
 
 const MarkdownTaskList = TaskList.extend({
   addStorage() {
@@ -57,9 +111,11 @@ export function createEditorExtensions(placeholder: string) {
     }),
     InlineCode,
     PageSearchExtension,
-    CodeBlockLowlight.configure({
+    CodeBlockWithCopy.configure({
       lowlight,
       defaultLanguage: "plaintext",
+      enableTabIndentation: true,
+      tabSize: 4,
     }),
     MarkdownTaskList,
     TaskItem.configure({ nested: true }),

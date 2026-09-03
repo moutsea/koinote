@@ -1,5 +1,23 @@
 export const DESKTOP_SYNC_EVENT = "koinote:desktop-sync";
 
+export type DesktopFlavor = "production" | "local";
+
+export function desktopFlavor(): DesktopFlavor {
+  return import.meta.env?.VITE_DESKTOP_FLAVOR?.trim() === "local"
+    ? "local"
+    : "production";
+}
+
+export function desktopCallbackScheme(): string {
+  return desktopFlavor() === "local" ? "koinote-local:" : "koinote:";
+}
+
+export function desktopAuthClientID(): string {
+  return desktopFlavor() === "local"
+    ? "koinote-desktop-local"
+    : "koinote-desktop";
+}
+
 export function isDesktopRuntime(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -8,9 +26,7 @@ export function isDesktopRuntime(): boolean {
 }
 
 export function desktopAPIOrigin(): string {
-  const configured = import.meta.env.VITE_DESKTOP_API_ORIGIN?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  return import.meta.env.DEV ? "http://localhost:5273" : "https://koinote.app";
+  return desktopFlavor() === "local" ? "http://localhost:5273" : "https://koinote.app";
 }
 
 export function desktopURL(path: string): string {

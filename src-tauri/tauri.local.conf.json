@@ -1,0 +1,40 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Koinote Local",
+  "identifier": "app.koinote.desktop.local",
+  "build": {
+    "frontendDist": "../spa/dist",
+    "devUrl": "http://localhost:5273",
+    "beforeDevCommand": "node scripts/desktop_frontend_runner.mjs dev local",
+    "beforeBuildCommand": "node scripts/desktop_frontend_runner.mjs build local"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Koinote Local",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 640,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "fullscreen": false,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["koinote-local"]
+      }
+    },
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

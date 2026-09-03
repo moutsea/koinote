@@ -266,6 +266,14 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 浏览器做不到或不该做的能力：原生窗口、`koinote://` 深链、SQLite、系统钥匙串和单实例。
 这样安装包和常驻内存更小，也不用维护第二套编辑器。
 
+正式客户端与本地测试客户端是两个独立 flavor。正式客户端使用 `app.koinote.desktop`、
+`koinote://` 和 `https://koinote.app`；本地测试客户端使用 `app.koinote.desktop.local`、
+`koinote-local://` 和 `http://localhost:5273`，系统钥匙串服务和 SQLite 数据目录也分别隔离。
+开发默认使用本地后端：`npm run desktop:dev`（或
+`npm run desktop:dev:local`）；正式配置开发使用
+`npm run desktop:dev:production`，正式安装包使用 `npm run desktop:build`。
+本地测试安装包使用 `npm run desktop:build:local`。
+
 ### 系统浏览器登录与 PKCE
 
 桌面 WebView 不直接收密码，也不复制 Google / GitHub OAuth 回调。登录流程是：
@@ -273,7 +281,8 @@ GITHUB_CLIENT_ID= / GITHUB_CLIENT_SECRET=
 1. 客户端生成 `state` 与 PKCE verifier，只把它们暂存在 macOS Keychain / Windows Credential Manager。
 2. 系统浏览器打开 `/desktop/authorize`；用户沿用网页 cookie 登录并明确批准客户端访问。
 3. 后端生成 5 分钟、单次有效的授权码，数据库只存 SHA-256 摘要与 code challenge。
-4. 浏览器跳到 `koinote://auth?code=…&state=…`；客户端先比较 state，再用 verifier 换 token。
+4. 浏览器跳到正式客户端的 `koinote://auth?code=…&state=…`，或本地测试客户端的
+   `koinote-local://auth?code=…&state=…`；客户端先比较 state，再用 verifier 换 token。
 5. 访问令牌 15 分钟有效，刷新令牌 30 天有效且每次使用都轮换。数据库只存 token 摘要，
    原文只留在系统钥匙串；撤销、修改密码和“退出其他设备”都通过 `session_version` 立即生效。
 
@@ -505,8 +514,7 @@ PAT 对 CLI 客户端是一等公民，也避免为了首版引入 OAuth 2.1 的
 
 发布工具只对 `publish` scope 令牌开放。Agent 可先用只读的 `list_wechat_accounts` 获取最多 5 个账号的
 公开标识与默认项，再由 `push_wechat_draft` 在后端从当前 Markdown 生成基础富文本（不套用文档的 Koinote 微信主题），
-通过已绑定的公众号上传正文图片和封面，再创建草稿；它不修改 Koinote 文档。默认封面不产生 credits
-费用，选择 AI 封面时复用封面生成的 20 credits 预留、提交与失败释放流程。由于该操作会在第三方平台
+通过已绑定的公众号上传正文图片和封面，再创建草稿；它不修改 Koinote 文档。每次成功同步草稿固定消耗 20 credits，失败时释放预留；选择 AI 封面时另复用封面生成的 20 credits 预留、提交与失败释放流程。由于该操作会在第三方平台
 创建草稿，客户端应在对话中明确要求后再调用，令牌也应单独设置期限并可随时撤销。
 
 `get_wechat_geo_summary` 是只读工具；读写和仅发布令牌可调用 `generate_wechat_geo_summary`、
@@ -694,11 +702,13 @@ canonical 与 OpenGraph/Twitter 卡片；口令档的 meta 只回 `protected=tru
 | `.html`    | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
 | `.docx`    | `docx` 库，走 ProseMirror 文档树构建                          |
 | `.pdf`     | 系统原生打印管道 + `@media print`                             |
-| 自媒体平台 | 微信公众号复制富文本并可保存草稿；知乎支持 OpenAPI 直发或网页辅助发布；掘金复制原生 Markdown |
+| 自媒体平台 | 微信公众号复制富文本并可保存草稿；知乎支持 OpenAPI 直发或网页辅助发布；X 通过 OAuth 2.0 发布 Article；掘金复制原生 Markdown |
 
 知乎发布当前只接受不含图片的文章。客户端和后端都会在调用知乎接口前拦截 `<img>`，
 避免发布成功后图片无法显示。没有 OpenAPI 凭证或文章含图片时，可使用客户端复制正文并打开
 知乎写作页的辅助发布流程（剪贴板包含标题和正文），由用户粘贴并确认发布。
+
+X 官方发布走 OAuth 2.0 PKCE，后端用加密保存的 access/refresh token 调用 Articles API 和媒体上传接口。只有 X Premium 或 Premium+ 账号可以发布 Article；每次成功发布消耗 20 Koinote credits。客户端发送标题、Markdown 正文和图片来源清单，服务端构造 DraftJS content state，创建 Article 草稿后立即发布；正文按 X 的加权字符规则限制为 10,000，最多 20 张图片。OAuth 2.0 应用凭证只在后端使用。
 
 PDF 只保留一个入口。浏览器里能产出矢量文字 PDF 的引擎只挂在打印管道上，
 打印对话框也无法绕过，因此用户在系统对话框中选择“保存为 PDF”。桌面 macOS

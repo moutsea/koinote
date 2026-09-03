@@ -1206,6 +1206,7 @@ func TestMCPPushWechatDraftEndToEnd(t *testing.T) {
 		}
 	})}
 	user := seedMCPUser(t, pool, app, membershipTierLifetime)
+	grantCreditsForTest(t, pool, user.ID, 40, "wechat-draft-sync")
 	accountID, err := randomUUID()
 	if err != nil {
 		t.Fatal(err)
@@ -1274,6 +1275,21 @@ func TestMCPPushWechatDraftEndToEnd(t *testing.T) {
 	decodeMCPStructured(t, geoResult, &geoOutput)
 	if !geoOutput.GeoIncluded {
 		t.Fatalf("推送结果应标记 GEO 已嵌入: %+v", geoOutput)
+	}
+	balance, err := app.loadCreditBalance(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("读取草稿推送后的 credits: %v", err)
+	}
+	if balance.Balance != 0 || balance.Reserved != 0 || balance.Available != 0 {
+		t.Fatalf("两次草稿推送后的 credits = %+v，期望全部扣除", balance)
+	}
+	providerCallsBeforeInsufficient := len(requestPaths)
+	insufficientResult := callMCPTool(t, session, "push_wechat_draft", map[string]any{"docId": doc.DocID})
+	if !insufficientResult.IsError || !strings.Contains(mcpResultText(insufficientResult), "not enough credits for a WeChat draft") {
+		t.Fatalf("credits 不足时 MCP 返回异常: %+v", insufficientResult)
+	}
+	if len(requestPaths) != providerCallsBeforeInsufficient {
+		t.Fatalf("credits 不足时仍调用微信 API: before=%d after=%d", providerCallsBeforeInsufficient, len(requestPaths))
 	}
 	geoArticle, ok := draftPayload["articles"].([]any)
 	if !ok || len(geoArticle) != 1 {

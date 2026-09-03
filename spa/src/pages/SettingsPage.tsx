@@ -18,6 +18,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  Twitter,
   UserRound,
 } from "lucide-react";
 import type { User } from "../api";
@@ -37,6 +38,7 @@ import { PasswordSecurityCard } from "../components/PasswordSecurityCard";
 import { StorageCard } from "../components/StorageCard";
 import { WechatOfficialAccountPanel } from "../components/editor/WechatOfficialAccountPanel";
 import { ZhihuAccountPanel } from "../components/editor/ZhihuAccountPanel";
+import { XAccountPanel } from "../components/editor/XAccountPanel";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { openKoinoteWebPath } from "../externalNavigation";
 import { useI18n, type Locale } from "../i18n";
@@ -47,7 +49,8 @@ type SettingsSection =
   | "ai"
   | "invitations"
   | "wechat"
-  | "zhihu";
+  | "zhihu"
+  | "x";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -110,6 +113,12 @@ export function SettingsPage() {
       label: t.settingsPage.zhihu,
       description: t.settingsPage.zhihuDescription,
       icon: <Send className="h-4 w-4" />,
+    },
+    {
+      id: "x",
+      label: t.settingsPage.x,
+      description: t.settingsPage.xDescription,
+      icon: <Twitter className="h-4 w-4" />,
     },
     {
       id: "invitations",
@@ -263,6 +272,10 @@ function SettingsSectionContent({
 
   if (section === "zhihu") {
     return <ZhihuAccountPanel localMode={Boolean(user.isLocalMode)} />;
+  }
+
+  if (section === "x") {
+    return <XAccountPanel localMode={Boolean(user.isLocalMode)} />;
   }
 
   return <InvitationCard />;

@@ -31,10 +31,16 @@ type Config struct {
 	// ZhihuCredentialEncryptionKey 只用于加密用户绑定的知乎 OpenAPI AppSecret。
 	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地测试。
 	ZhihuCredentialEncryptionKey string
-	NodeEnv                       string // "production" | "development"
-	AutoMigrate                   bool
-	MigrationsDir                 string
-	AllowedOrigins                []string
+	// XCredentialEncryptionKey 只用于加密用户绑定的 X API 凭证。
+	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地测试。
+	XCredentialEncryptionKey string
+	// X OAuth 2.0 应用凭证只用于服务端授权码交换，不能下发给 SPA 或桌面客户端。
+	XOAuth2ClientID     string
+	XOAuth2ClientSecret string
+	NodeEnv             string // "production" | "development"
+	AutoMigrate         bool
+	MigrationsDir       string
+	AllowedOrigins      []string
 
 	// DotEnvPath 记录实际加载的 .env 绝对路径，空表示没找到（如容器内）。仅用于启动日志。
 	DotEnvPath string
@@ -157,10 +163,15 @@ func Load() Config {
 		ZhihuCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("ZHIHU_CREDENTIAL_ENCRYPTION_KEY"),
 		),
-		NodeEnv:       nodeEnv,
-		AutoMigrate:   getenv("AUTO_MIGRATE", "true") == "true",
-		MigrationsDir: getenv("MIGRATIONS_DIR", "migrations"),
-		WorkerURL:     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
+		XCredentialEncryptionKey: strings.TrimSpace(
+			os.Getenv("X_CREDENTIAL_ENCRYPTION_KEY"),
+		),
+		XOAuth2ClientID:     strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_ID")),
+		XOAuth2ClientSecret: strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_SECRET")),
+		NodeEnv:             nodeEnv,
+		AutoMigrate:         getenv("AUTO_MIGRATE", "true") == "true",
+		MigrationsDir:       getenv("MIGRATIONS_DIR", "migrations"),
+		WorkerURL:           strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 
@@ -260,6 +271,29 @@ func (c Config) AgentLLMEnabled() bool {
 
 func (c Config) WechatCoverImageEnabled() bool {
 	return c.WechatCoverImageBaseURL != "" && c.WechatCoverImageAPIKey != "" && c.WechatCoverImageModel != ""
+}
+
+func (c Config) XOAuth2Enabled() bool {
+	return c.XOAuth2ClientID != "" && c.XOAuth2ClientSecret != ""
+}
+
+func (c Config) ValidateXOAuth2Config() error {
+	configured := 0
+	for _, value := range []string{c.XOAuth2ClientID, c.XOAuth2ClientSecret} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 {
+		return nil
+	}
+	if configured != 2 {
+		return fmt.Errorf("X_OAUTH2_CLIENT_ID、X_OAUTH2_CLIENT_SECRET 必须同时配置或同时留空")
+	}
+	if len(c.XOAuth2ClientID) > 512 || len(c.XOAuth2ClientSecret) > 8<<10 {
+		return fmt.Errorf("X OAuth 2.0 客户端凭证长度无效")
+	}
+	return nil
 }
 
 func (c Config) ValidateWechatCoverImageConfig() error {

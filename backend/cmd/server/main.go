@@ -48,6 +48,12 @@ func main() {
 	if cfg.IsProduction() && cfg.ZhihuCredentialEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 ZHIHU_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.XCredentialEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 X_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
+	if err := cfg.ValidateXOAuth2Config(); err != nil {
+		log.Fatal(err)
+	}
 	if err := cfg.ValidateStripeConfig(); err != nil {
 		log.Fatal(err)
 	}
@@ -89,6 +95,11 @@ func main() {
 		log.Printf("微信公众号封面生成已启用（model=%s）", cfg.WechatCoverImageModel)
 	} else {
 		log.Printf("微信公众号封面生成未配置")
+	}
+	if cfg.XOAuth2Enabled() {
+		log.Printf("X OAuth 2.0 已启用")
+	} else {
+		log.Printf("X OAuth 2.0 未配置，仍可使用 OAuth 1.0a")
 	}
 	if cfg.FeishuEnabled() {
 		log.Printf("飞书付款通知已启用")

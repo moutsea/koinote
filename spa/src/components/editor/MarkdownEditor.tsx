@@ -33,6 +33,7 @@ import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
 import { applyUploadedImageMappingToEditor } from "./imageUploadMapping";
 import { DocumentFindBar } from "./DocumentFindBar";
 import { readTreeDragPayload } from "./treeDrag";
+import { copyPlainText, selectedCodeBlockText } from "./codeBlockCopy";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { cellAround, CellSelection } from "@tiptap/pm/tables";
 import { TextSelection } from "@tiptap/pm/state";
@@ -340,6 +341,19 @@ export default function MarkdownEditor({
           : undefined;
         return serializer?.serialize(slice.content) ?? "";
       },
+      handleDOMEvents: {
+        copy: (view, event) => {
+          const code = selectedCodeBlockText(view.state);
+          if (code === null) return false;
+          event.preventDefault();
+          if (event.clipboardData) {
+            event.clipboardData.setData("text/plain", code);
+          } else {
+            void copyPlainText(code).catch(() => undefined);
+          }
+          return true;
+        },
+      },
       handlePaste: (view, event) => {
         // 1) 剪贴板里直接是图片文件（截图、从 Finder 复制）—— 上传后插入
         const files = imageFilesFrom(event.clipboardData?.files);
@@ -465,7 +479,10 @@ export default function MarkdownEditor({
   useEffect(() => {
     if (!editor) return;
     editor.setOptions({
-      editorProps: { attributes: { class: editorContentClass(themeId) } },
+      editorProps: {
+        ...editor.options.editorProps,
+        attributes: { class: editorContentClass(themeId) },
+      },
     });
   }, [editor, themeId]);
 

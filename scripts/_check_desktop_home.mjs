@@ -30,13 +30,21 @@ function matches(label, source, pattern) {
 const main = fs.readFileSync("spa/src/main.tsx", "utf8");
 const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
 const home = fs.readFileSync("spa/src/pages/DesktopHomePage.tsx", "utf8");
+const desktopAuthorize = fs.readFileSync("spa/src/pages/DesktopAuthorizePage.tsx", "utf8");
 const sync = fs.readFileSync("spa/src/components/DesktopSyncStatus.tsx", "utf8");
 const mcp = fs.readFileSync("spa/src/components/MCPAccessCard.tsx", "utf8");
+const desktopRuntime = fs.readFileSync("spa/src/desktop/runtime.ts", "utf8");
 const externalNavigation = fs.readFileSync("spa/src/externalNavigation.ts", "utf8");
 const webLinksCore = fs.readFileSync("spa/src/webLinksCore.ts", "utf8");
 const pricing = fs.readFileSync("spa/src/pages/PricingPage.tsx", "utf8");
 const settings = fs.readFileSync("spa/src/pages/SettingsPage.tsx", "utf8");
 const trash = fs.readFileSync("spa/src/pages/TrashPage.tsx", "utf8");
+const packageJSON = fs.readFileSync("package.json", "utf8");
+const tauriConfig = fs.readFileSync("src-tauri/tauri.conf.json", "utf8");
+const tauriLocalConfig = fs.readFileSync("src-tauri/tauri.local.conf.json", "utf8");
+const desktopFrontendRunner = fs.readFileSync("scripts/desktop_frontend_runner.mjs", "utf8");
+const desktopRunner = fs.readFileSync("scripts/desktop_runner.mjs", "utf8");
+const tauriBuild = fs.readFileSync("src-tauri/build.rs", "utf8");
 
 includes("桌面运行时使用独立首页", main, 'import("./pages/DesktopHomePage")');
 includes("网页仍使用营销首页", main, ": HomePage;");
@@ -66,6 +74,14 @@ includes("桌面端隐藏营销导航", shell, "desktopRuntime && localMode ? nu
 includes("工作台不重复挂载同步状态", shell, 'desktopRuntime && !localMode && pathname !== "/"');
 includes("桌面端隐藏官网页脚", shell, "{!desktopRuntime && hasFooter(pathname) && <AppFooter />}");
 includes("桌面 MCP 配置使用线上端点", mcp, '`${desktopAPIOrigin()}/mcp`');
+includes("授权页允许本地客户端", desktopAuthorize, 'clientId !== "koinote-desktop-local"');
+includes("桌面 API 地址按 flavor 切换", desktopRuntime, "VITE_DESKTOP_FLAVOR");
+matches(
+  "桌面 API 地址固定且按 flavor 切换",
+  desktopRuntime,
+  /desktopFlavor\(\) === "local" \? "http:\/\/localhost:5273" : "https:\/\/koinote\.app"/,
+);
+excludes("桌面 API 地址不依赖 Vite DEV 标志", desktopRuntime, "import.meta.env.DEV");
 includes("Checkout 拒绝非 HTTPS 地址", externalNavigation, 'url.protocol !== "https:"');
 includes("桌面外链使用系统浏览器", externalNavigation, 'import("@tauri-apps/plugin-opener")');
 includes("站内网页跳转复用安全链接生成器", externalNavigation, "localWebURL(origin, path)");
@@ -80,6 +96,14 @@ matches(
 excludes("桌面永久删除不再跳转网页", trash, 'openKoinoteWebPath("/trash")');
 excludes("客户端首页不再宣传下载客户端", home, "DESKTOP_DOWNLOAD_URL");
 excludes("客户端首页不再渲染营销功能卡", home, "FEATURE_ICONS");
+includes("桌面开发默认使用本地 flavor", packageJSON, '"desktop:dev": "node scripts/desktop_runner.mjs dev local"');
+includes("正式桌面开发使用显式 production flavor", packageJSON, '"desktop:dev:production": "node scripts/desktop_runner.mjs dev production"');
+includes("正式 Tauri 配置固定 production 前端 flavor", tauriConfig, "desktop_frontend_runner.mjs build production");
+includes("本地 Tauri 配置固定 local 前端 flavor", tauriLocalConfig, "desktop_frontend_runner.mjs build local");
+includes("前端 flavor runner 设置 Vite flavor", desktopFrontendRunner, "VITE_DESKTOP_FLAVOR: flavor");
+includes("桌面构建 runner 透传 Tauri 参数", desktopRunner, "const [command, flavor, ...extraArgs]");
+includes("桌面构建 runner 保留额外参数", desktopRunner, "args.push(...extraArgs)");
+includes("Rust 构建检查 flavor 与 Tauri 配置一致", tauriBuild, "desktop flavor mismatch");
 
 console.log(`\ndesktop home: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

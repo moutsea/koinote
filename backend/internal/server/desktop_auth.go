@@ -25,7 +25,9 @@ import (
 
 const (
 	desktopClientID             = "koinote-desktop"
+	desktopLocalClientID        = "koinote-desktop-local"
 	desktopRedirectURI          = "koinote://auth"
+	desktopLocalRedirectURI     = "koinote-local://auth"
 	desktopAuthorizationCodeTTL = 5 * time.Minute
 	desktopAccessTokenTTL       = 15 * time.Minute
 	desktopRefreshTokenTTL      = 30 * 24 * time.Hour
@@ -33,6 +35,17 @@ const (
 	desktopAccessTokenPrefix    = "knt_app_at_"
 	desktopRefreshTokenPrefix   = "knt_app_rt_"
 )
+
+func desktopClientAllowed(clientID string) bool {
+	return clientID == desktopClientID || clientID == desktopLocalClientID
+}
+
+func desktopRedirectURIForClient(clientID string) string {
+	if clientID == desktopLocalClientID {
+		return desktopLocalRedirectURI
+	}
+	return desktopRedirectURI
+}
 
 var pkceValuePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43,128}$`)
 
@@ -61,7 +74,7 @@ func (a *App) desktopAuthorize(w http.ResponseWriter, r *http.Request) {
 	body.ClientID = strings.TrimSpace(body.ClientID)
 	body.CodeChallenge = strings.TrimSpace(body.CodeChallenge)
 	body.State = strings.TrimSpace(body.State)
-	if body.ClientID != desktopClientID || !pkceValuePattern.MatchString(body.CodeChallenge) ||
+	if !desktopClientAllowed(body.ClientID) || !pkceValuePattern.MatchString(body.CodeChallenge) ||
 		body.State == "" || len(body.State) > 512 {
 		httpx.ErrorCode(w, http.StatusBadRequest, "desktop_authorization_invalid", "Invalid desktop authorization request")
 		return
@@ -88,7 +101,7 @@ func (a *App) desktopAuthorize(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
 		return
 	}
-	callback, _ := url.Parse(desktopRedirectURI)
+	callback, _ := url.Parse(desktopRedirectURIForClient(body.ClientID))
 	query := callback.Query()
 	query.Set("code", code)
 	query.Set("state", body.State)
@@ -113,7 +126,7 @@ func (a *App) desktopToken(w http.ResponseWriter, r *http.Request) {
 	if !decodeAuthBody(w, r, &body) {
 		return
 	}
-	if strings.TrimSpace(body.ClientID) != desktopClientID {
+	if !desktopClientAllowed(strings.TrimSpace(body.ClientID)) {
 		desktopTokenError(w)
 		return
 	}
@@ -451,6 +464,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
 	case "/api/zhihu/account":
 		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/x/account":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/x/oauth2/start":
+		return method == http.MethodGet
+	case "/api/x/oauth2/account":
+		return method == http.MethodDelete
 	case "/api/wechat/accounts":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/wechat/cover/generate":
@@ -537,6 +556,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 			}
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "zhihu" &&
+			parts[2] == "publish" {
+			return method == http.MethodPost
+		}
+		if len(parts) == 3 && parts[0] != "" && parts[1] == "x" &&
 			parts[2] == "publish" {
 			return method == http.MethodPost
 		}

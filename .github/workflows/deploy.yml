@@ -58,6 +58,9 @@ jobs:
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
+          X_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.X_CREDENTIAL_ENCRYPTION_KEY }}
+          X_OAUTH2_CLIENT_ID: ${{ vars.X_OAUTH2_CLIENT_ID }}
+          X_OAUTH2_CLIENT_SECRET: ${{ secrets.X_OAUTH2_CLIENT_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -80,13 +83,20 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY X_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
           if [ -n "$missing" ]; then
             echo "缺少 secret：$missing"
             echo "在 Settings → Secrets and variables → Actions 里补上"
+            exit 1
+          fi
+          x_oauth2_count=0
+          [ -n "$X_OAUTH2_CLIENT_ID" ] && x_oauth2_count=$((x_oauth2_count + 1))
+          [ -n "$X_OAUTH2_CLIENT_SECRET" ] && x_oauth2_count=$((x_oauth2_count + 1))
+          if [ "$x_oauth2_count" -ne 0 ] && [ "$x_oauth2_count" -ne 2 ]; then
+            echo "X_OAUTH2_CLIENT_ID 与 X_OAUTH2_CLIENT_SECRET 必须同时配置或同时留空"
             exit 1
           fi
           if { [ -n "$BOT_WEBHOOK" ] && [ -z "$BOT_WEBHOOK_SECRET" ]; } || \
@@ -221,6 +231,9 @@ jobs:
           LLM_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.LLM_CREDENTIAL_ENCRYPTION_KEY }}
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
+          X_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.X_CREDENTIAL_ENCRYPTION_KEY }}
+          X_OAUTH2_CLIENT_ID: ${{ vars.X_OAUTH2_CLIENT_ID }}
+          X_OAUTH2_CLIENT_SECRET: ${{ secrets.X_OAUTH2_CLIENT_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
@@ -241,12 +254,15 @@ jobs:
           ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
         run: |
-          printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+          printf '%s\n' \
             "$EMAIL_VERIFICATION_SECRET" \
             "$MCP_TOKEN_ENCRYPTION_KEY" \
             "$LLM_CREDENTIAL_ENCRYPTION_KEY" \
             "$WECHAT_CREDENTIAL_ENCRYPTION_KEY" \
             "$ZHIHU_CREDENTIAL_ENCRYPTION_KEY" \
+            "$X_CREDENTIAL_ENCRYPTION_KEY" \
+            "$X_OAUTH2_CLIENT_ID" \
+            "$X_OAUTH2_CLIENT_SECRET" \
             "$STRIPE_SECRET_KEY" \
             "$STRIPE_WEBHOOK_SECRET" \
             "$STRIPE_LIFETIME_PRODUCT_ID" \
@@ -274,6 +290,9 @@ jobs:
                 IFS= read -r llm_credential_encryption_key
                 IFS= read -r wechat_credential_encryption_key
                 IFS= read -r zhihu_credential_encryption_key
+                IFS= read -r x_credential_encryption_key
+                IFS= read -r x_oauth2_client_id
+                IFS= read -r x_oauth2_client_secret
                 IFS= read -r stripe_secret_key
                 IFS= read -r stripe_webhook_secret
                 IFS= read -r stripe_lifetime_product_id
@@ -297,6 +316,14 @@ jobs:
                 test -n "$mcp_token_encryption_key"
                 test -n "$wechat_credential_encryption_key"
                 test -n "$zhihu_credential_encryption_key"
+                test -n "$x_credential_encryption_key"
+                x_oauth2_count=0
+                [ -n "$x_oauth2_client_id" ] && x_oauth2_count=$((x_oauth2_count + 1))
+                [ -n "$x_oauth2_client_secret" ] && x_oauth2_count=$((x_oauth2_count + 1))
+                if [ "$x_oauth2_count" -ne 0 ] && [ "$x_oauth2_count" -ne 2 ]; then
+                  echo "X OAuth 2.0 配置不完整"
+                  exit 1
+                fi
                 test -n "$llm_credential_encryption_key"
                 test -n "$stripe_secret_key"
                 test -n "$stripe_webhook_secret"
@@ -350,14 +377,17 @@ jobs:
                 [ "$wechat_cover_count" -eq 3 ] && replace_wechat_cover=1
                 replace_wechat_proxy=0
                 [ -n "$wechat_api_proxy_url" ] && replace_wechat_proxy=1
+                replace_x_oauth2=0
+                [ "$x_oauth2_count" -eq 2 ] && replace_x_oauth2=1
                 # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
-                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" "
-                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
+                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" "
+                  /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|X_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
                   replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
                   replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
                   replace_wechat_proxy == 1 && /^WECHAT_API_PROXY_URL=/ { next }
+                  replace_x_oauth2 == 1 && /^(X_OAUTH2_CLIENT_ID|X_OAUTH2_CLIENT_SECRET)=/ { next }
                   replace_analytics == 1 && /^CLOUDFLARE_ANALYTICS_TOKEN=/ { next }
                   replace_bot == 1 && /^(BOT_WEBHOOK|BOT_WEBHOOK_SECRET)=/ { next }
                   replace_announcement_llm == 1 && /^(ANNOUNCEMENT_LLM_BASE_URL|ANNOUNCEMENT_LLM_API_KEY|ANNOUNCEMENT_LLM_MODEL)=/ { next }
@@ -368,6 +398,11 @@ jobs:
                 printf "LLM_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$llm_credential_encryption_key" >> "$temp_file"
                 printf "WECHAT_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$wechat_credential_encryption_key" >> "$temp_file"
                 printf "ZHIHU_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$zhihu_credential_encryption_key" >> "$temp_file"
+                printf "X_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$x_credential_encryption_key" >> "$temp_file"
+                if [ "$replace_x_oauth2" -eq 1 ]; then
+                  printf "X_OAUTH2_CLIENT_ID=%s\n" "$x_oauth2_client_id" >> "$temp_file"
+                  printf "X_OAUTH2_CLIENT_SECRET=%s\n" "$x_oauth2_client_secret" >> "$temp_file"
+                fi
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"
                 printf "STRIPE_LIFETIME_PRODUCT_ID=%s\n" "$stripe_lifetime_product_id" >> "$temp_file"

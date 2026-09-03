@@ -787,6 +787,81 @@ export function publishZhihuArticle(
   });
 }
 
+export type XAccount = {
+  apiKey: string;
+  secretHint: string;
+  updatedAt: string;
+};
+
+export type XOAuth2Account = {
+  userId: string;
+  username: string;
+  updatedAt: string;
+};
+
+export function getXAccount() {
+  return apiJson<{ account: XAccount | null; oauth2: XOAuth2Account | null }>("/api/x/account");
+}
+
+export function startXOAuth2(params?: { redirectTo?: string; client?: "desktop" | "desktop-local" }) {
+  const query = new URLSearchParams();
+  if (params?.redirectTo) query.set("redirectTo", params.redirectTo);
+  if (params?.client) query.set("client", params.client);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return apiJson<{ url: string }>(`/api/x/oauth2/start${suffix}`);
+}
+
+export function deleteXOAuth2Account() {
+  return apiJson<{ success: boolean }>("/api/x/oauth2/account", { method: "DELETE" });
+}
+
+export function updateXAccount(input: {
+  apiKey: string;
+  apiSecret?: string;
+  accessToken?: string;
+  accessTokenSecret?: string;
+}) {
+  return apiJson<{ account: XAccount }>("/api/x/account", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteXAccount() {
+  return apiJson<{ success: boolean }>("/api/x/account", {
+    method: "DELETE",
+  });
+}
+
+export function publishXThread(
+  docId: string,
+  input: {
+    mode?: "oauth2";
+    posts: string[];
+    images?: Array<{ postIndex: number; source: string }>;
+  },
+) {
+  return apiJson<{ published: boolean; url: string; postCount: number }>(
+    `/api/documents/${encodeURIComponent(docId)}/x/publish`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function publishXArticle(
+  docId: string,
+  input: {
+    mode: "oauth2";
+    title: string;
+    markdown: string;
+    images?: Array<{ source: string; alt?: string }>;
+  },
+) {
+  return apiJson<{ published: boolean; url: string; postCount: number; contentType: "article" }>(
+    `/api/documents/${encodeURIComponent(docId)}/x/publish`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
 export function generateWechatCover(
   prompt: string,
   ratio: WechatCoverRatio,

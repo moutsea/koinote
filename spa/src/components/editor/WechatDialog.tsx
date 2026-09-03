@@ -26,13 +26,15 @@ import {
 import { buildWechatHTML } from "./exportWechat";
 import { WechatDraftPanel } from "./WechatDraftPanel";
 import { ZhihuPublishPanel } from "./ZhihuPublishPanel";
+import { XPublishPanel } from "./XPublishPanel";
 import { WechatPreflightPanel } from "./WechatPreflightPanel";
 import { parseArticleMetadata } from "./wechatPreflight";
+import { isDesktopLocalImageURL } from "../../desktop/offlineImagesCore";
 
 /**
  * 导出到自媒体平台。
  *
- * 微信与知乎使用内联样式富文本；掘金原生支持 Markdown，直接复制源码能保留最多语义。
+ * 微信与知乎使用内联样式富文本；掘金原生支持 Markdown，X 使用服务端线程发布以保留图片。
  * 不带主题选择也不带预览：主题是文档属性，在编辑区已经生效了。
  */
 export function MediaExportDialog({
@@ -540,7 +542,7 @@ export function MediaExportDialog({
 
         {!draftOnly && (
           <div
-            className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
+            className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4"
             role="radiogroup"
             aria-label={t.editor.mediaPlatformLabel}
           >
@@ -549,6 +551,7 @@ export function MediaExportDialog({
                 ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
                 ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
                 ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
+                ["x", t.editor.mediaX, t.editor.mediaXHint],
               ] as const
             ).map(([value, label, hint]) => {
               const selected = platform === value;
@@ -622,6 +625,18 @@ export function MediaExportDialog({
             plainText={exportPlainText}
             prepareHTML={() => prepareZhihuHTML(false)}
             prepareAssistedHTML={() => prepareZhihuHTML(true, true)}
+            disabled={busy || geoLoading || geoGenerating || draftPublishing}
+            onPublishingChange={setDraftPublishing}
+          />
+        )}
+
+        {!draftOnly && platform === "x" && (
+          <XPublishPanel
+            docId={docId}
+            title={exportTitle}
+            markdownBody={parseArticleMetadata(currentMarkdown, title).body}
+            articleImages={articleImages}
+            localMode={localMode}
             disabled={busy || geoLoading || geoGenerating || draftPublishing}
             onPublishingChange={setDraftPublishing}
           />
@@ -826,14 +841,16 @@ export function MediaExportDialog({
           </div>
         )}
 
-        <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">
-          {mediaExportFormat(platform) === "markdown"
-            ? t.editor.mediaMarkdownNote
-            : t.editor.mediaRichTextNote}
-        </p>
+        {platform !== "x" && (
+          <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">
+            {mediaExportFormat(platform) === "markdown"
+              ? t.editor.mediaMarkdownNote
+              : t.editor.mediaRichTextNote}
+          </p>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {!draftOnly && platform !== "zhihu" && (
+          {!draftOnly && platform !== "zhihu" && platform !== "x" && (
             <button
               type="button"
               onClick={run}
@@ -927,7 +944,7 @@ function extractWechatArticleImages(
       if (!rawSource) return null;
       try {
         const source = new URL(rawSource, window.location.origin).toString();
-        if (!/^(?:https?:|data:)/i.test(source)) return null;
+        if (!/^(?:https?:|data:)/i.test(source) && !isDesktopLocalImageURL(source)) return null;
         return {
           src: source,
           alt: image.getAttribute("alt")?.trim() ?? "",
@@ -936,6 +953,5 @@ function extractWechatArticleImages(
         return null;
       }
     })
-    .filter((image): image is { src: string; alt: string } => image !== null)
-    .slice(0, 20);
+    .filter((image): image is { src: string; alt: string } => image !== null);
 }

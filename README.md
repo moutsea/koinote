@@ -117,7 +117,7 @@ xattr -dr com.apple.quarantine /Applications/Koinote.app
 | HTML           | 单 HTML 文件，正文样式内嵌；KaTeX CSS 与图片仍使用外部地址 |
 | DOCX           | 走文档树构建，公式保留 LaTeX 源码                          |
 | PDF            | 桌面端直接保存；浏览器端打开系统打印面板。文字可选、可搜索 |
-| **自媒体平台** | 微信公众号草稿箱、知乎 OpenAPI 直发或网页辅助发布（均支持内联富文本）；掘金复制原生 Markdown |
+| **自媒体平台** | 微信公众号草稿箱、知乎 OpenAPI 直发或网页辅助发布、X Article 直接发布（图片由服务端上传）；掘金复制原生 Markdown |
 
 「我的文档」还支持批量迁移：可导入单个 `.md`、带图片的文件夹或 ZIP，也可把全部
 文档、文件夹结构和引用图片一次导出为可再次导入的 ZIP。
@@ -139,13 +139,17 @@ Koinote Paper（暖纸长文）、Koinote Signal（产品与 AI）、Koinote Not
 2. 打开 Koinote「设置 → 微信公众号」完成绑定；AppSecret 只在服务端加密保存。
 3. 在编辑器选择「导出到自媒体 → 微信公众号 → 同步到账号草稿箱」，再选择封面并确认保存。
 
-封面不是必需项，可使用 Koinote Logo + 标题、正文图片或 AI 生成的图片；每次成功生成 AI 封面消耗 20 credits。文章只会进入草稿箱，不会被 Koinote 直接发布。完整的微信后台配置和排查步骤见[公众号配置教程](https://koinote.app/docs/wechat-official-account)。
+封面不是必需项，可使用 Koinote Logo + 标题、正文图片或 AI 生成的图片。每次成功同步到草稿箱消耗 20 credits；每次成功生成 AI 封面另消耗 20 credits。失败不会扣除对应费用。文章只会进入草稿箱，不会被 Koinote 直接发布。完整的微信后台配置和排查步骤见[公众号配置教程](https://koinote.app/docs/wechat-official-account)。
 
 ### 知乎直接发布
 
 在「设置 → 知乎」绑定知乎开放平台凭证后，可在编辑器选择「导出到自媒体 → 知乎」并确认直接发布。文章不会写入知乎草稿箱；OpenAPI 直发暂不支持包含图片的文章，发布前会明确提示。
 
 如果没有 OpenAPI 凭证，仍可使用知乎面板中的「复制并打开知乎」：Koinote 会复制带主题的标题和正文（包含图片）并打开知乎写作页，用户粘贴完整内容后自行确认发布。
+
+### X 文章发布
+
+在「设置 → X」通过 X 官方 OAuth 2.0 授权绑定账号。只有 X Premium 或 Premium+ 账号可以发布 Article；编辑器的 X 面板会把标题、正文和图片作为一篇 X Article 发布。正文按 X Articles API 的加权字符规则限制为最多 10,000，图片最多 20 张，超出时会在发布前提示，不会静默截断。每次成功发布消耗 20 Koinote credits。OAuth 令牌只在服务端加密保存。
 
 **分享**
 
@@ -272,8 +276,8 @@ openclaw mcp doctor koinote --probe
 本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
 
 需要向微信公众号草稿箱推送时，请创建“仅发布”令牌。Agent 可先调用 `list_wechat_accounts` 选择默认账号或指定账号；该令牌只能读取文档并调用
-`push_wechat_draft`，不会获得修改文档或删除文档的权限；推送会在服务端生成基础 HTML，不会套用文档的 Koinote 微信主题，并使用已绑定的公众号上传文章图片，属于外部副作用。
-封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面消耗 20 credits）。
+`push_wechat_draft`，不会获得修改文档或删除文档的权限；推送会在服务端生成基础 HTML，不会套用文档的 Koinote 微信主题，并使用已绑定的公众号上传文章图片，属于外部副作用。每次成功推送消耗 20 credits。
+封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面额外消耗 20 credits）。
 
 微信公众号 GEO 摘要也可通过 MCP 管理：`get_wechat_geo_summary` 用于读取已保存摘要和检查是否过期，读写或仅发布令牌可以调用
 `generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。使用内置模型生成会按实际用量消耗 credits，BYOK 渠道不扣费。
@@ -407,13 +411,17 @@ Docker 网关地址。中转服务只接受发往 `api.weixin.qq.com:443` 的 CO
 Build Tools 与 WebView2。先按上文启动本地 PostgreSQL、后端与 Vite，再运行：
 
 ```bash
-npm run desktop:dev       # Tauri 开发窗口，系统浏览器回调 koinote://auth
-npm run desktop:check     # Rust / Tauri 编译检查
-npm run desktop:build     # 生成当前平台安装包
+npm run desktop:dev             # Koinote Local 开发客户端，连接本机 http://localhost:5273
+npm run desktop:dev:local       # Koinote Local（同上）
+npm run desktop:dev:production   # Koinote 正式配置，连接 https://koinote.app
+npm run desktop:check           # Rust / Tauri 编译检查
+npm run desktop:build           # 生成连接正式服务的安装包
+npm run desktop:build:local     # 生成 Koinote Local 测试安装包
 ```
 
-生产构建默认同步 `https://koinote.app`；本地开发默认同步 `http://localhost:5273`。桌面端
-SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的图片先使用本地占位地址，联网后
+正式客户端固定同步 `https://koinote.app`；本地测试客户端使用独立的应用标识、系统钥匙串服务和
+`koinote-local://` 深链，并固定同步 `http://localhost:5273`。两者不会共用登录会话、离线数据库或
+OAuth 回调。桌面端 SQLite 保存离线文档与图片副本，但不保存令牌；断网粘贴的图片先使用本地占位地址，联网后
 自动上传到 R2 并把正文替换成图床 URL。自动下载的远端图片缓存最多占用 512 MB；用户主动
 粘贴但尚未上传的图片不会被缓存上限淘汰。退出账号会清除该账号的离线文档与图片缓存。
 完全本地模式的数据使用独立 SQLite 命名空间并加密存储，密码和派生密钥不会上传，派生密钥
@@ -680,6 +688,9 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
 | `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` | 知乎 OpenAPI AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                         |
+| `X_CREDENTIAL_ENCRYPTION_KEY`     | X API 凭证独立加密密钥；生产必填，轮换前必须迁移既有密文                                      |
+| `X_OAUTH2_CLIENT_ID`              | X Developer Portal OAuth 2.0 Client ID；与 Secret 同时配置                                     |
+| `X_OAUTH2_CLIENT_SECRET`          | X Developer Portal OAuth 2.0 Client Secret；回调地址为 `{APP_URL}/api/x/oauth2/callback`       |
 | `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |
 | `STRIPE_WEBHOOK_SECRET`        | `/api/billing/webhook` endpoint 的签名密钥（`whsec_...`）                                           |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |

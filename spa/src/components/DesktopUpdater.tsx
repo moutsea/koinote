@@ -13,6 +13,7 @@ import {
   desktopUpdateCheckDue,
   nextDesktopUpdateCheckAt,
 } from "../desktop/updaterSchedule";
+import { desktopFlavor } from "../desktop/runtime";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopLocalModeSelected } from "../desktop/localMode";
 import { pushModal } from "../modalStack";
@@ -39,7 +40,7 @@ export function DesktopUpdater() {
   const modalVisible = phase !== "idle";
 
   const runCheck = useCallback(async (interactive: boolean) => {
-    if (isDesktopLocalModeSelected()) return;
+    if (isDesktopLocalModeSelected() || desktopFlavor() === "local") return;
     if (checkingRef.current || (!interactive && availableUpdateRef.current)) return;
     checkingRef.current = true;
     setSaveFailed(false);

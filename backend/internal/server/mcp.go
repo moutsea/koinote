@@ -270,7 +270,7 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 		publish := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(false), IdempotentHint: false, OpenWorldHint: boolPtr(true)}
 		mcp.AddTool(server, &mcp.Tool{
 			Name: "push_wechat_draft", Title: "Push a WeChat draft",
-			Description: "Render one of the authenticated member's documents as basic HTML (the document's Koinote WeChat theme is not applied by this MCP tool) and create a draft in a bound WeChat Official Account. This is an external side effect and may upload article images. Set includeGeo=true only when you explicitly want the current enabled, non-stale GEO summary embedded in the draft.",
+			Description: "Render one of the authenticated member's documents as basic HTML (the document's Koinote WeChat theme is not applied by this MCP tool) and create a draft in a bound WeChat Official Account. Each successful draft synchronization consumes 20 Koinote credits; an AI cover consumes an additional 20 credits. This is an external side effect and may upload article images. Set includeGeo=true only when you explicitly want the current enabled, non-stale GEO summary embedded in the draft.",
 			Annotations: publish,
 		}, a.mcpPushWechatDraft)
 	}

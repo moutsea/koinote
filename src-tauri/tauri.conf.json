@@ -1,13 +1,13 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Koinote",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "identifier": "app.koinote.desktop",
   "build": {
     "frontendDist": "../spa/dist",
     "devUrl": "http://localhost:5273",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "node scripts/desktop_frontend_runner.mjs dev production",
+    "beforeBuildCommand": "node scripts/desktop_frontend_runner.mjs build production"
   },
   "app": {
     "windows": [

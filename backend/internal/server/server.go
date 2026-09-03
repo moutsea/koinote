@@ -17,47 +17,58 @@ import (
 )
 
 type App struct {
-	cfg                    config.Config
-	db                     *pgxpool.Pool
-	emailSender            verificationEmailSender
-	limiter                *rateLimiter
-	limiterOnce            sync.Once
-	stripeCheckout         stripeCheckoutSessionClient
-	paymentNotifier        paymentNotifier
-	siteAnalytics          siteAnalyticsClient
-	adminOverview          adminOverviewCache
-	productActivity        activityTracker
-	clientActivity         clientActivityTracker
-	announcementTranslator announcementTranslator
-	agentLLMHTTPClient     *http.Client
-	wechatAPIHTTPClient    *http.Client
-	wechatImageHTTPClient  *http.Client
-	wechatCoverHTTPClient  *http.Client
-	zhihuAPIHTTPClient     *http.Client
-	zhihuAPIBaseURL        string
-	wechatTokenMu          sync.Mutex
-	wechatTokens           map[string]wechatAccessToken
-	wechatTokenRefreshes   map[wechatTokenRefreshKey]*wechatTokenRefresh
-	serverStatus           *serverStatusMonitor
-	serverStatusOnce       sync.Once
+	cfg                     config.Config
+	db                      *pgxpool.Pool
+	emailSender             verificationEmailSender
+	limiter                 *rateLimiter
+	limiterOnce             sync.Once
+	stripeCheckout          stripeCheckoutSessionClient
+	paymentNotifier         paymentNotifier
+	siteAnalytics           siteAnalyticsClient
+	adminOverview           adminOverviewCache
+	productActivity         activityTracker
+	clientActivity          clientActivityTracker
+	announcementTranslator  announcementTranslator
+	agentLLMHTTPClient      *http.Client
+	wechatAPIHTTPClient     *http.Client
+	wechatImageHTTPClient   *http.Client
+	wechatCoverHTTPClient   *http.Client
+	zhihuAPIHTTPClient      *http.Client
+	zhihuAPIBaseURL         string
+	xAPIHTTPClient          *http.Client
+	xImageHTTPClient        *http.Client
+	xTrustedImageHTTPClient *http.Client
+	xOAuth2HTTPClient       *http.Client
+	wechatTokenMu           sync.Mutex
+	wechatTokens            map[string]wechatAccessToken
+	wechatTokenRefreshes    map[wechatTokenRefreshKey]*wechatTokenRefresh
+	xOAuth2TokenMu          sync.Mutex
+	xOAuth2Refreshes        map[int]*xOAuth2Refresh
+	serverStatus            *serverStatusMonitor
+	serverStatusOnce        sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
 	app := &App{
-		cfg:                    cfg,
-		db:                     db,
-		emailSender:            newWorkerVerificationEmailSender(cfg),
-		limiter:                newRateLimiter(),
-		paymentNotifier:        newPaymentNotifier(cfg),
-		siteAnalytics:          newCloudflareAnalyticsClient(cfg),
-		announcementTranslator: newAnnouncementTranslator(cfg),
-		wechatAPIHTTPClient:    newWechatAPIHTTPClient(cfg.WechatAPIProxyURL),
-		wechatImageHTTPClient:  newSafeLLMHTTPClient(),
-		wechatCoverHTTPClient:  newTrustedLLMHTTPClient(),
-		zhihuAPIHTTPClient:     newZhihuAPIHTTPClient(),
-		zhihuAPIBaseURL:        zhihuOpenAPIBaseURL,
-		wechatTokens:           make(map[string]wechatAccessToken),
-		wechatTokenRefreshes:   make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
+		cfg:                     cfg,
+		db:                      db,
+		emailSender:             newWorkerVerificationEmailSender(cfg),
+		limiter:                 newRateLimiter(),
+		paymentNotifier:         newPaymentNotifier(cfg),
+		siteAnalytics:           newCloudflareAnalyticsClient(cfg),
+		announcementTranslator:  newAnnouncementTranslator(cfg),
+		wechatAPIHTTPClient:     newWechatAPIHTTPClient(cfg.WechatAPIProxyURL),
+		wechatImageHTTPClient:   newSafeLLMHTTPClient(),
+		wechatCoverHTTPClient:   newTrustedLLMHTTPClient(),
+		zhihuAPIHTTPClient:      newZhihuAPIHTTPClient(),
+		zhihuAPIBaseURL:         zhihuOpenAPIBaseURL,
+		xAPIHTTPClient:          newXAPIHTTPClient(),
+		xImageHTTPClient:        newSafeLLMHTTPClient(),
+		xTrustedImageHTTPClient: newTrustedXImageHTTPClient(),
+		xOAuth2HTTPClient:       newXAPIHTTPClient(),
+		wechatTokens:            make(map[string]wechatAccessToken),
+		wechatTokenRefreshes:    make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
+		xOAuth2Refreshes:        make(map[int]*xOAuth2Refresh),
 		serverStatus: newServerStatusMonitor(
 			cfg.HostMetricsProcPath,
 			cfg.HostMetricsFilesystemPath,
@@ -150,6 +161,14 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/zhihu/account", a.zhihuAccountGet)
 	mux.HandleFunc("PUT /api/zhihu/account", a.zhihuAccountPut)
 	mux.HandleFunc("DELETE /api/zhihu/account", a.zhihuAccountDelete)
+	mux.HandleFunc("POST /api/documents/{docId}/x/publish", a.xPublish)
+	mux.HandleFunc("GET /api/x/account", a.xAccountGet)
+	mux.HandleFunc("PUT /api/x/account", a.xAccountPut)
+	mux.HandleFunc("DELETE /api/x/account", a.xAccountDelete)
+	mux.HandleFunc("GET /api/x/oauth2/start", a.xOAuth2Start)
+	mux.HandleFunc("GET /api/x/oauth2/desktop-start", a.xOAuth2DesktopStart)
+	mux.HandleFunc("GET /api/x/oauth2/callback", a.xOAuth2Callback)
+	mux.HandleFunc("DELETE /api/x/oauth2/account", a.xOAuth2AccountDelete)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
 	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)

@@ -54,6 +54,8 @@ const (
 	wechatCoverReservationTTL       = wechatCoverGenerationRunLimit + 2*time.Minute
 	wechatDraftCreateLimit          = 30
 	wechatDraftCreateWindow         = time.Hour
+	wechatDraftSyncCredits          = int64(20)
+	wechatDraftReservationTTL       = 30 * time.Minute
 )
 
 const (
@@ -402,6 +404,33 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 		writeWechatOfficialError(w, err)
 		return
 	}
+	draftReservation, err := a.reserveStandaloneCredits(
+		r.Context(),
+		user.ID,
+		wechatDraftSyncCredits,
+		wechatDraftReservationTTL,
+	)
+	if errors.Is(err, errInsufficientCredits) {
+		httpx.ErrorCode(w, http.StatusPaymentRequired, "insufficient_credits", "Not enough credits for WeChat draft synchronization")
+		return
+	}
+	if err != nil {
+		log.Printf("wechat draft reserve credits: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	draftCreditsCommitted := false
+	defer func() {
+		if draftCreditsCommitted {
+			return
+		}
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, releaseErr := a.releaseCreditReservation(cleanupContext, user.ID, draftReservation.ReservationID); releaseErr != nil &&
+			!errors.Is(releaseErr, errCreditReservationNotFound) {
+			log.Printf("wechat draft release credits: %v", releaseErr)
+		}
+	}()
 	var cover []byte
 	if strings.TrimSpace(input.CoverBase64) != "" {
 		coverRaw, decodeErr := decodeWechatCoverInput(input.CoverBase64)
@@ -458,6 +487,18 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 		writeWechatPublishError(w, errors.Join(errWechatDraftCreateFailed, err))
 		return
 	}
+	if _, _, err := a.commitCreditReservation(
+		r.Context(),
+		user.ID,
+		draftReservation.ReservationID,
+		int(wechatDraftSyncCredits*creditTokensPerCredit),
+		map[string]any{"feature": "wechat_draft_sync", "source": "http"},
+	); err != nil {
+		log.Printf("wechat draft commit credits: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Draft was created, but usage could not be recorded")
+		return
+	}
+	draftCreditsCommitted = true
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"draft": map[string]string{"mediaId": mediaID},
 	})

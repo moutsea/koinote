@@ -1,4 +1,5 @@
 import type { User } from "../api";
+import { desktopCallbackScheme } from "./runtime";
 export {
   billingPriceFor,
   DEFAULT_CURRENCY_BY_LOCALE,
@@ -38,7 +39,7 @@ export function desktopBillingDeepLink(value: string): string | null {
   if (checkout !== "success" && checkout !== "cancelled") return null;
   const purchase = source.searchParams.get("purchase")?.trim() ?? "membership";
   if (purchase !== "membership" && purchase !== "credits") return null;
-  const target = new URL("koinote://billing");
+  const target = new URL(`${desktopCallbackScheme()}//billing`);
   target.searchParams.set("checkout", checkout);
   if (purchase === "credits") target.searchParams.set("purchase", purchase);
   if (checkout === "success") {

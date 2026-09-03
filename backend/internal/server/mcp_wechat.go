@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -27,6 +28,8 @@ type mcpPushWechatDraftInput struct {
 	CoverPrompt      string `json:"coverPrompt,omitempty" jsonschema:"Prompt used when coverMode is ai. AI generation consumes 20 credits."`
 	IncludeGeo       bool   `json:"includeGeo,omitempty" jsonschema:"Whether to include the current non-stale, enabled WeChat GEO summary in the draft. Defaults to false."`
 }
+
+var errMCPWechatDraftInsufficientCredits = errors.New("not enough credits for a WeChat draft")
 
 type mcpWechatAccountSummary struct {
 	AccountID  string `json:"accountId"`
@@ -158,6 +161,30 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 	if !a.rateLimit().allow("wechat-draft:"+fmt.Sprint(principal.User.ID), wechatDraftCreateLimit, wechatDraftCreateWindow) {
 		return nil, mcpWechatDraftOutput{}, errors.New("too many WeChat draft requests; try again later")
 	}
+	draftReservation, err := a.reserveStandaloneCredits(
+		ctx,
+		principal.User.ID,
+		wechatDraftSyncCredits,
+		wechatDraftReservationTTL,
+	)
+	if errors.Is(err, errInsufficientCredits) {
+		return nil, mcpWechatDraftOutput{}, errMCPWechatDraftInsufficientCredits
+	}
+	if err != nil {
+		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+	}
+	draftCreditsCommitted := false
+	defer func() {
+		if draftCreditsCommitted {
+			return
+		}
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, releaseErr := a.releaseCreditReservation(cleanupContext, principal.User.ID, draftReservation.ReservationID); releaseErr != nil &&
+			!errors.Is(releaseErr, errCreditReservationNotFound) {
+			log.Printf("mcp wechat draft release credits: %v", releaseErr)
+		}
+	}()
 	var cover []byte
 	if coverMode == wechatCoverModeAI {
 		cover, err = a.generateWechatCoverForMCP(ctx, principal.User.ID, input.CoverPrompt, ratio)
@@ -189,6 +216,16 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 		a.deleteWechatMaterialBestEffort(ctx, account, thumbMediaID)
 		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(errors.Join(errWechatDraftCreateFailed, err))
 	}
+	if _, _, err := a.commitCreditReservation(
+		ctx,
+		principal.User.ID,
+		draftReservation.ReservationID,
+		int(wechatDraftSyncCredits*creditTokensPerCredit),
+		map[string]any{"feature": "wechat_draft_sync", "source": "mcp"},
+	); err != nil {
+		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+	}
+	draftCreditsCommitted = true
 	result = "success"
 	return nil, mcpWechatDraftOutput{
 		MediaID: mediaID, AccountID: account.AccountID, DocID: doc.DocID, Title: doc.Title,
@@ -274,6 +311,8 @@ func (a *App) generateWechatCoverForMCP(ctx context.Context, userID int, prompt,
 
 func mapMCPWechatPublishError(err error) error {
 	switch {
+	case errors.Is(err, errMCPWechatDraftInsufficientCredits):
+		return errMCPWechatDraftInsufficientCredits
 	case errors.Is(err, errInsufficientCredits):
 		return errors.New("not enough credits for an AI cover")
 	case errors.Is(err, errWechatPersistence), errors.Is(err, errWechatCredentialCrypto), errors.Is(err, errCreditReservationNotFound), errors.Is(err, errCreditReservationReleased):

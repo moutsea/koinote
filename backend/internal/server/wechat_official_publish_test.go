@@ -801,6 +801,102 @@ func TestPrepareWechatContentImageSupportsTallImages(t *testing.T) {
 	}
 }
 
+func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
+	pool := newGCTestPool(t)
+	tests := []struct {
+		name        string
+		failDraft   bool
+		credits     int64
+		wantStatus  int
+		wantCode    string
+		wantBalance int64
+	}{
+		{name: "successful sync charges 20", credits: 20, wantStatus: http.StatusOK, wantBalance: 0},
+		{name: "draft failure releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_draft_create_failed", wantBalance: 20},
+		{name: "insufficient credits blocks provider calls", credits: 1, wantStatus: http.StatusPaymentRequired, wantCode: "insufficient_credits", wantBalance: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := New(config.Config{
+				SessionSecret:                 "wechat-credit-test-session",
+				InternalToken:                 "wechat-credit-test-internal",
+				WechatCredentialEncryptionKey: "wechat-credit-test-key",
+			}, pool)
+			app.wechatAPIHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				response := func(body string) (*http.Response, error) {
+					return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+				}
+				switch request.URL.Path {
+				case "/cgi-bin/stable_token":
+					return response(`{"access_token":"wechat-credit-token","expires_in":7200}`)
+				case "/cgi-bin/material/add_material":
+					return response(`{"media_id":"wechat-credit-thumb"}`)
+				case "/cgi-bin/material/del_material":
+					return response(`{}`)
+				case "/cgi-bin/draft/add":
+					if test.failDraft {
+						return &http.Response{StatusCode: http.StatusBadGateway, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"errcode":-1,"errmsg":"unavailable"}`))}, nil
+					}
+					return response(`{"media_id":"wechat-credit-draft"}`)
+				default:
+					return nil, fmt.Errorf("unexpected WeChat API path %s", request.URL.Path)
+				}
+			})}
+			user := seedMCPUser(t, pool, app, membershipTierLifetime)
+			grantCreditsForTest(t, pool, user.ID, test.credits, "wechat-http-draft")
+			accountID, err := randomUUID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ciphertext, err := app.encryptWechatCredential(user.ID, "wechat-secret")
+			if err != nil {
+				t.Fatalf("encrypt WeChat credential: %v", err)
+			}
+			label := "HTTP Publish"
+			if _, err := app.createWechatOfficialAccount(context.Background(), user.ID, accountID, wechatOfficialAccountInput{
+				Label: &label, AppID: "wx" + strings.ReplaceAll(accountID, "-", ""), AppSecret: "wechat-secret",
+			}, ciphertext); err != nil {
+				t.Fatalf("create WeChat account: %v", err)
+			}
+			doc, err := app.createDocument(context.Background(), createDocumentParams{User: user, Title: "Credit test", Content: "Article body"})
+			if err != nil {
+				t.Fatalf("create document: %v", err)
+			}
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/documents/"+doc.DocID+"/wechat-draft",
+				strings.NewReader(fmt.Sprintf(`{"accountId":%q,"title":"Credit test","html":"<p>Article body</p>"}`, accountID)),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("x-koinote-internal-token", "wechat-credit-test-internal")
+			request.Header.Set("X-Auth-User-Id", user.AuthUserID)
+			response := httptest.NewRecorder()
+			app.Routes().ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("draft status=%d want=%d body=%s", response.Code, test.wantStatus, response.Body.String())
+			}
+			if test.wantCode != "" {
+				var payload struct {
+					Code string `json:"code"`
+				}
+				if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+					t.Fatalf("decode draft error: %v", err)
+				}
+				if payload.Code != test.wantCode {
+					t.Fatalf("draft code=%q want=%q", payload.Code, test.wantCode)
+				}
+			}
+			balance, err := app.loadCreditBalance(context.Background(), user.ID)
+			if err != nil {
+				t.Fatalf("load credit balance: %v", err)
+			}
+			if balance.Balance != test.wantBalance || balance.Reserved != 0 || balance.Available != test.wantBalance {
+				t.Fatalf("credit balance=%+v want balance=%d and no reservation", balance, test.wantBalance)
+			}
+		})
+	}
+}
+
 func TestPrepareWechatDraftImagesUsesBoundedConcurrencyAndKeepsOrder(t *testing.T) {
 	imageData := testWechatCoverJPEG(t)
 	var active atomic.Int32

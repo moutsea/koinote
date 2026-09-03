@@ -19,9 +19,13 @@ use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
 mod pdf_export;
 
+#[cfg(koinote_local)]
+const KEYRING_SERVICE: &str = "app.koinote.desktop.local";
+#[cfg(not(koinote_local))]
 const KEYRING_SERVICE: &str = "app.koinote.desktop";
 const SESSION_ENTRY: &str = "session";
 const PENDING_AUTH_ENTRY: &str = "pending-auth";
+const LEGACY_X_BROWSER_CREDENTIALS_ENTRY: &str = "x-browser-credentials";
 const DATABASE_URL: &str = "sqlite:koinote-offline.db";
 const DESKTOP_MENU_EVENT: &str = "koinote:desktop-menu-action";
 const DESKTOP_MENU_PREFIX: &str = "koinote.";
@@ -343,13 +347,8 @@ fn build_desktop_menu<R: Runtime, M: Manager<R>>(
         None,
         enabled_actions,
     )?;
-    let export_pdf = desktop_menu_item(
-        handle,
-        "export-pdf",
-        copy.export_pdf,
-        None,
-        enabled_actions,
-    )?;
+    let export_pdf =
+        desktop_menu_item(handle, "export-pdf", copy.export_pdf, None, enabled_actions)?;
     let export_media = desktop_menu_item(
         handle,
         "export-media",
@@ -582,11 +581,7 @@ fn apply_desktop_menu_enabled<R: Runtime>(
     let top_level_items = menu.items()?;
     let mut menu_items = HashMap::new();
     let mut export_submenu = None;
-    collect_desktop_menu_entries(
-        &top_level_items,
-        &mut menu_items,
-        &mut export_submenu,
-    )?;
+    collect_desktop_menu_entries(&top_level_items, &mut menu_items, &mut export_submenu)?;
     for action in DESKTOP_MENU_ACTIONS {
         let menu_item = menu_items.get(action).ok_or_else(|| {
             std::io::Error::new(
@@ -597,11 +592,11 @@ fn apply_desktop_menu_enabled<R: Runtime>(
         menu_item.set_enabled(enabled_actions.contains(action))?;
     }
     let export_submenu = export_submenu.ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "desktop_export_submenu_missing",
-            )
-        })?;
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "desktop_export_submenu_missing",
+        )
+    })?;
     export_submenu.set_enabled(desktop_export_enabled(enabled_actions))?;
     Ok(())
 }
@@ -1003,13 +998,15 @@ pub fn run() {
         },
     ];
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
+    let builder = tauri::Builder::default();
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+    let builder = builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
@@ -1021,6 +1018,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let _ = clear_entry(LEGACY_X_BROWSER_CREDENTIALS_ENTRY);
             #[cfg(desktop)]
             {
                 let menu_settings = DesktopMenuSettings::default();
@@ -1063,7 +1061,8 @@ pub fn run() {
             desktop_export_pdf,
             desktop_set_menu_locale,
             desktop_set_menu_enabled,
-        ])
+        ]);
+    builder
         .run(tauri::generate_context!())
         .expect("error while running Koinote");
 }

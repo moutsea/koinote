@@ -620,6 +620,41 @@ body {
   font-size: inherit;
 }
 
+.ProseMirror .kn-code-block-content {
+  padding-bottom: 3rem !important;
+}
+
+.ProseMirror .kn-code-block-copy {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--ink-line);
+  border-radius: 0.4rem;
+  background: var(--background);
+  padding: 0.3rem 0.45rem;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.7rem;
+  line-height: 1;
+  opacity: 0.78;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.ProseMirror .kn-code-block-copy:hover,
+.ProseMirror .kn-code-block-copy:focus-visible {
+  background: var(--ink-paper-soft);
+  opacity: 1;
+}
+
+.ProseMirror .kn-code-block-copy svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
 /* highlight.js (lowlight) 语法高亮配色 —— GitHub Dark 精简版 */
 .hljs-comment,
 .hljs-quote {

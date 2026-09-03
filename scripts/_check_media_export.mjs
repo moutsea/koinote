@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { buildMediaMarkdown, mediaExportFormat } from "./_media_export_bundle.mjs";
+import { buildXArticle } from "./_x_publish_bundle.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -25,10 +26,12 @@ const docTitle = readFileSync(new URL("../spa/src/components/editor/DocTitle.tsx
 const globals = readFileSync(new URL("../spa/src/globals.css", import.meta.url), "utf8");
 const desktopLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const desktopPdf = readFileSync(new URL("../src-tauri/src/pdf_export.rs", import.meta.url), "utf8");
+const xAccountPanel = readFileSync(new URL("../spa/src/components/editor/XAccountPanel.tsx", import.meta.url), "utf8");
 
 ok("微信公众号使用富文本", mediaExportFormat("wechat") === "rich-text");
 ok("知乎使用富文本", mediaExportFormat("zhihu") === "rich-text");
 ok("掘金使用 Markdown", mediaExportFormat("juejin") === "markdown");
+ok("X 使用服务端文章发布格式", mediaExportFormat("x") === "markdown");
 ok(
   "掘金 Markdown 包含文档标题",
   buildMediaMarkdown("一篇文章", "正文内容") === "# 一篇文章\n\n正文内容",
@@ -51,8 +54,32 @@ ok(
   "顶层导出菜单只保留自媒体入口",
 );
 ok(
-  "平台选择同时包含三种目标",
-  /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']juejin["']/.test(dialog),
+  "平台选择包含全部目标",
+  /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']juejin["']/.test(dialog) && /["']x["']/.test(dialog),
+);
+const xPanel = readFileSync(new URL("../spa/src/components/editor/XPublishPanel.tsx", import.meta.url), "utf8");
+const xThread = readFileSync(new URL("../spa/src/components/editor/xPublish.ts", import.meta.url), "utf8");
+ok(
+  "X 仅通过官方授权发布文章",
+  /publishXArticle/.test(xPanel) && /buildXArticle/.test(xPanel) &&
+    /resolveXImageSource/.test(xPanel) && /X_ARTICLE_MAX_WEIGHT = 10_000/.test(xThread) &&
+    !/buildXThread/.test(xPanel) && !/publishXWithLocalBrowser/.test(xPanel) && /localMode/.test(xPanel),
+);
+ok(
+  "X 发布等待按钮不使用半透明旋转合成层",
+  /aria-busy=\{checking \|\| publishing\}/.test(xPanel) &&
+    !/Loader2/.test(xPanel) &&
+    !/disabled:opacity-50/.test(xPanel),
+  "WKWebView 在半透明按钮内旋转 SVG 时可能留下重影",
+);
+ok(
+  "X 文章超长或图片过多会被提示",
+  buildXArticle("标题", "正文", []).tooLong === false &&
+    buildXArticle("标题", "内容 ".repeat(4000), []).tooLong === true &&
+    buildXArticle("标题", "正文", Array.from({ length: 21 }, (_, index) => ({
+      src: `https://example.test/${index}.jpg`,
+      alt: "",
+    }))).tooManyImages === true,
 );
 ok(
   "知乎发布在客户端和服务端拦截图片",

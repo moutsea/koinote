@@ -21,7 +21,7 @@ export function DesktopAuthorizePage() {
     const codeChallenge = params.get("code_challenge")?.trim() ?? "";
     const state = params.get("state")?.trim() ?? "";
     if (
-      clientId !== "koinote-desktop" ||
+      (clientId !== "koinote-desktop" && clientId !== "koinote-desktop-local") ||
       !PKCE_PATTERN.test(codeChallenge) ||
       !state ||
       state.length > 512

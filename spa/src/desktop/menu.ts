@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { isModalOpen } from "../modalStack";
-import { isDesktopRuntime } from "./runtime";
+import { desktopFlavor, isDesktopRuntime } from "./runtime";
 
 export const DESKTOP_MENU_EVENT = "koinote:desktop-menu-action";
 
@@ -82,7 +82,7 @@ export function desktopMenuEnabledActions({
     "show-keyboard-shortcuts",
   ];
 
-  if (!localMode) enabled.push("check-updates");
+  if (!localMode && desktopFlavor() === "production") enabled.push("check-updates");
   if (authenticated) {
     enabled.push("quick-open", "search-all-documents");
   }

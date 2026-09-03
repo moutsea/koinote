@@ -223,6 +223,8 @@ export interface Messages {
     mcpDescription: string;
     versionTitle: string;
     versionDescription: string;
+    xTitle: string;
+    xDescription: string;
     readGuide: string;
     safetyTitle: string;
     safetyBody: string;
@@ -638,6 +640,8 @@ export interface Messages {
     wechatDescription: string;
     zhihu: string;
     zhihuDescription: string;
+    x: string;
+    xDescription: string;
     freePlan: string;
     lifetimePlan: string;
     upgrade: string;
@@ -1012,6 +1016,9 @@ export interface Messages {
     imageBroken: string;
     /** 重试期间的提示，与 imageBroken 分开：那 4 秒里说"加载失败"会让人以为没救了 */
     imageRetrying: string;
+    codeBlockCopy: string;
+    codeBlockCopied: string;
+    codeBlockCopyFailed: string;
     // 分享
     share: string;
     shareTitle: string;
@@ -1071,6 +1078,8 @@ export interface Messages {
     mediaZhihuHint: string;
     mediaJuejin: string;
     mediaJuejinHint: string;
+    mediaX: string;
+    mediaXHint: string;
     mediaCopy: string;
     mediaCopied: string;
     mediaWorking: string;
@@ -1156,6 +1165,53 @@ export interface Messages {
     zhihuAssistPublishing: string;
     zhihuAssistDone: string;
     zhihuAssistFailed: string;
+    xAccountTitle: string;
+    xAccountHint: string;
+    xDeveloperPortal: string;
+    xAccountLoading: string;
+    xAccountLoadFailed: string;
+    xAccountRetry: string;
+    xAccountNotBound: string;
+    xAccountBind: string;
+    xAccountSave: string;
+    xAccountSaving: string;
+    xAccountEdit: string;
+    xAccountUnbind: string;
+    xAccountUnbindConfirm: string;
+    xAccountBindFailed: string;
+    xAccountSaveFailed: string;
+    xAccountUnbindFailed: string;
+    xAccountCancel: string;
+    xOAuth2Title: string;
+    xOAuth2Hint: string;
+    xOAuth2Bind: string;
+    xOAuth2Binding: string;
+    xOAuth2Connected: string;
+    xOAuth2NotBound: string;
+    xOAuth2BindFailed: string;
+    xOAuth2Unbind: string;
+    xOAuth2UnbindConfirm: string;
+    xOAuth2UnbindFailed: string;
+    xApiKey: string;
+    xApiKeyPlaceholder: string;
+    xApiSecret: string;
+    xApiSecretPlaceholder: string;
+    xAccessToken: string;
+    xAccessTokenPlaceholder: string;
+    xAccessTokenSecret: string;
+    xAccessTokenSecretPlaceholder: string;
+    xCredentialUpdatePlaceholder: string;
+    xPublish: string;
+    xPublishing: string;
+    xPublished: string;
+    xPublishConfirm: string;
+    xPublishHint: string;
+    xPublishOAuth2BillingHint: string;
+    xPublishFailed: string;
+    xPublishTooLong: string;
+    xPublishTooManyImages: string;
+    xArticleInvalid: string;
+    xArticleTooLong: string;
     wechatCoverTitle: string;
     wechatCoverModeLabel: string;
     wechatCoverDefault: string;
@@ -1322,6 +1378,7 @@ export interface Messages {
     signIn: string;
     invalid: string;
     failed: string;
+    timeout: string;
   };
   desktopLocalMode: {
     badge: string;

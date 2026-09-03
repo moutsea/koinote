@@ -1,9 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { CloudOff, KeyRound, Laptop, LoaderCircle, ShieldCheck } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { getSession } from "../api";
-import { beginDesktopAuthorization } from "../desktop/auth";
+import {
+  beginDesktopAuthorization,
+  cancelDesktopAuthorization,
+} from "../desktop/auth";
 import {
   configureDesktopLocalMode,
   desktopLocalModeStatus,
@@ -14,6 +17,8 @@ import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 import { useI18n } from "../i18n";
 
+const DESKTOP_AUTH_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function DesktopLoginPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -22,6 +27,13 @@ export function DesktopLoginPage() {
   const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState<"account" | "local" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const authTimeoutRef = useRef<number | null>(null);
+
+  function clearAuthTimeout() {
+    if (authTimeoutRef.current === null) return;
+    window.clearTimeout(authTimeoutRef.current);
+    authTimeoutRef.current = null;
+  }
 
   useEffect(() => {
     void desktopLocalModeStatus()
@@ -30,13 +42,24 @@ export function DesktopLoginPage() {
   }, [t.desktopLocalMode.genericError]);
 
   useEffect(() => {
+    const handleAuthenticated = () => {
+      clearAuthTimeout();
+      setLoading(null);
+    };
     const handleError = () => {
+      clearAuthTimeout();
       setLoading(null);
       setError(t.desktopAuth.failed);
     };
+    window.addEventListener("koinote:desktop-authenticated", handleAuthenticated);
     window.addEventListener("koinote:desktop-auth-error", handleError);
-    return () => window.removeEventListener("koinote:desktop-auth-error", handleError);
+    return () => {
+      window.removeEventListener("koinote:desktop-authenticated", handleAuthenticated);
+      window.removeEventListener("koinote:desktop-auth-error", handleError);
+    };
   }, [t.desktopAuth.failed]);
+
+  useEffect(() => () => clearAuthTimeout(), []);
 
   async function connectAccount() {
     setLoading("account");
@@ -44,7 +67,15 @@ export function DesktopLoginPage() {
     try {
       await beginDesktopAuthorization();
       queryClient.setQueryData(["session"], { user: null });
+      clearAuthTimeout();
+      authTimeoutRef.current = window.setTimeout(() => {
+        authTimeoutRef.current = null;
+        void cancelDesktopAuthorization();
+        setLoading((current) => (current === "account" ? null : current));
+        setError(t.desktopAuth.timeout);
+      }, DESKTOP_AUTH_TIMEOUT_MS);
     } catch {
+      clearAuthTimeout();
       setLoading(null);
       setError(t.desktopAuth.failed);
     }

@@ -596,7 +596,7 @@ current Markdown; all anchors are validated before the revision-protected write.
 Publishing is isolated behind the `publish` scope. An agent can first use the read-only
 `list_wechat_accounts` tool to choose among up to five bound accounts, then `push_wechat_draft` renders the current Markdown as basic HTML on the
 backend (it does not apply the document's Koinote WeChat theme), transfers article images and a cover through a bound Official Account, then creates a WeChat draft
-without modifying Koinote. The default cover is free; an AI cover reuses the normal 20-credit reservation,
+without modifying Koinote. Each successful draft synchronization costs a fixed 20 credits; failed operations release the reservation. An AI cover uses an additional 20-credit reservation,
 commit, and release flow. Because this creates an external draft, clients should call it only after an explicit
 user request, and publish tokens should have a short expiry and be revoked when no longer needed.
 
