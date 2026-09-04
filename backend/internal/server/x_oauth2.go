@@ -38,6 +38,7 @@ const (
 type xArticleMedia struct {
 	ID      string
 	Caption string
+	Source  string
 }
 
 type xArticleDraftResponse struct {
@@ -847,7 +848,11 @@ func (a *App) publishXArticleOAuth2(
 		if err != nil {
 			return xPublishResult{}, errors.Join(errXImageFailed, err)
 		}
-		media = append(media, xArticleMedia{ID: mediaID, Caption: strings.TrimSpace(image.Alt)})
+		media = append(media, xArticleMedia{
+			ID:      mediaID,
+			Caption: strings.TrimSpace(image.Alt),
+			Source:  xArticleImageSourceForMatching(image),
+		})
 	}
 
 	draftRequest := map[string]any{
@@ -901,10 +906,14 @@ func buildXArticleContentState(markdown string, media []xArticleMedia) map[strin
 			}},
 		})
 	}
-	if markdown != "" {
-		addEntity("markdown", "mutable", map[string]any{"markdown": markdown})
+	addMarkdown := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		addEntity("markdown", "mutable", map[string]any{"markdown": value})
 	}
-	for _, item := range media {
+	addImage := func(item xArticleMedia) {
 		data := map[string]any{
 			"media_items": []map[string]string{{
 				"media_category": "tweet_image",
@@ -916,7 +925,156 @@ func buildXArticleContentState(markdown string, media []xArticleMedia) map[strin
 		}
 		addEntity("image", "immutable", data)
 	}
+
+	markdown = strings.TrimSpace(markdown)
+	articleMarkdown := markdown
+	usedMedia := make([]bool, len(media))
+	codeRanges := xArticleCodeRanges(articleMarkdown)
+	allOccurrences := xArticleImagePattern.FindAllStringSubmatchIndex(articleMarkdown, -1)
+	linkedReplacements := make([]xArticleReplacement, 0)
+	for _, occurrence := range allOccurrences {
+		if xArticleRangeContains(codeRanges, occurrence[0]) || !xArticleImageInLink(articleMarkdown, occurrence[0], occurrence[1]) {
+			continue
+		}
+		destination := xArticleImageDestination(articleMarkdown[occurrence[4]:occurrence[5]])
+		if mediaIndex := findXArticleMedia(media, usedMedia, destination); mediaIndex >= 0 {
+			usedMedia[mediaIndex] = true
+		}
+		linkedReplacements = append(linkedReplacements, xArticleReplacement{
+			start:       occurrence[0],
+			end:         occurrence[1],
+			replacement: articleMarkdown[occurrence[2]:occurrence[3]],
+		})
+	}
+	for index := len(linkedReplacements) - 1; index >= 0; index-- {
+		replacement := linkedReplacements[index]
+		articleMarkdown = articleMarkdown[:replacement.start] + replacement.replacement + articleMarkdown[replacement.end:]
+	}
+	codeRanges = xArticleCodeRanges(articleMarkdown)
+	allOccurrences = xArticleImagePattern.FindAllStringSubmatchIndex(articleMarkdown, -1)
+	occurrences := make([][]int, 0, len(allOccurrences))
+	for _, occurrence := range allOccurrences {
+		if !xArticleRangeContains(codeRanges, occurrence[0]) {
+			occurrences = append(occurrences, occurrence)
+		}
+	}
+	cursor := 0
+	for _, match := range occurrences {
+		start, end := match[0], match[1]
+		alt := articleMarkdown[match[2]:match[3]]
+		destination := xArticleImageDestination(articleMarkdown[match[4]:match[5]])
+		mediaIndex := findXArticleMedia(media, usedMedia, destination)
+		remainingMedia := len(media)
+		for _, isUsed := range usedMedia {
+			if isUsed {
+				remainingMedia--
+			}
+		}
+		if mediaIndex < 0 && len(occurrences) == remainingMedia {
+			mediaIndex = nextXArticleMedia(usedMedia)
+		}
+		if mediaIndex >= 0 {
+			replacement := alt
+			if xArticleImageIsStandalone(articleMarkdown, start, end) {
+				replacement = ""
+			}
+			addMarkdown(articleMarkdown[cursor:start] + replacement)
+			addImage(media[mediaIndex])
+			usedMedia[mediaIndex] = true
+		} else {
+			addMarkdown(articleMarkdown[cursor:start] + alt)
+		}
+		cursor = end
+	}
+	addMarkdown(articleMarkdown[cursor:])
+	for index, item := range media {
+		if !usedMedia[index] {
+			addImage(item)
+		}
+	}
 	return map[string]any{"blocks": blocks, "entities": entities}
+}
+
+func xArticleImageSourceForMatching(image xPublishImageInput) string {
+	if source := strings.TrimSpace(image.OriginalSource); source != "" {
+		return source
+	}
+	return strings.TrimSpace(image.Source)
+}
+
+func xArticleImageDestination(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "<") {
+		if end := strings.IndexByte(value, '>'); end > 0 {
+			return strings.TrimSpace(value[1:end])
+		}
+	}
+	if fields := strings.Fields(value); len(fields) > 0 {
+		return strings.Trim(fields[0], "<>")
+	}
+	return value
+}
+
+func xArticleImageIsStandalone(markdown string, start, end int) bool {
+	lineStart := strings.LastIndexByte(markdown[:start], '\n') + 1
+	lineEnd := strings.IndexByte(markdown[end:], '\n')
+	if lineEnd < 0 {
+		lineEnd = len(markdown)
+	} else {
+		lineEnd += end
+	}
+	return strings.TrimSpace(markdown[lineStart:lineEnd]) == markdown[start:end]
+}
+
+type xArticleReplacement struct {
+	start       int
+	end         int
+	replacement string
+}
+
+func xArticleImageInLink(markdown string, start, end int) bool {
+	return start > 0 && markdown[start-1] == '[' && strings.HasPrefix(markdown[end:], "](")
+}
+
+func findXArticleMedia(media []xArticleMedia, used []bool, destination string) int {
+	for index, item := range media {
+		if !used[index] && xArticleImageSourcesEqual(item.Source, destination) {
+			return index
+		}
+	}
+	return -1
+}
+
+func nextXArticleMedia(used []bool) int {
+	for index, isUsed := range used {
+		if !isUsed {
+			return index
+		}
+	}
+	return -1
+}
+
+func xArticleImageSourcesEqual(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == right {
+		return true
+	}
+	leftURL, leftErr := url.Parse(left)
+	rightURL, rightErr := url.Parse(right)
+	if leftErr != nil || rightErr != nil || leftURL.Path == "" || rightURL.Path == "" {
+		return false
+	}
+	if leftURL.Scheme != "" || rightURL.Scheme != "" {
+		if leftURL.Scheme == "" || rightURL.Scheme == "" {
+			return false
+		}
+		return strings.EqualFold(leftURL.Scheme, rightURL.Scheme) &&
+			strings.EqualFold(leftURL.Host, rightURL.Host) &&
+			leftURL.Path == rightURL.Path &&
+			leftURL.RawQuery == rightURL.RawQuery
+	}
+	return leftURL.Path == rightURL.Path && leftURL.RawQuery == rightURL.RawQuery
 }
 
 func (a *App) doXOAuth2JSON(

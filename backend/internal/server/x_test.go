@@ -422,6 +422,242 @@ func TestBuildXArticleContentStateIncludesMarkdownAndImages(t *testing.T) {
 	}
 }
 
+func TestBuildXArticleContentStatePreservesImagePositions(t *testing.T) {
+	state := buildXArticleContentState(
+		"Intro\n\n![First](https://images.example/first.png)\n\nMiddle\n\n![Second](https://images.example/second.png)\n\nEnd",
+		[]xArticleMedia{
+			{ID: "media-first", Caption: "First", Source: "https://images.example/first.png"},
+			{ID: "media-second", Caption: "Second", Source: "https://images.example/second.png"},
+		},
+	)
+	blocks, ok := state["blocks"].([]map[string]any)
+	if !ok {
+		t.Fatalf("content blocks = %#v", state["blocks"])
+	}
+	entities, ok := state["entities"].([]map[string]any)
+	if !ok {
+		t.Fatalf("content entities = %#v", state["entities"])
+	}
+	if len(blocks) != 5 || len(entities) != 5 {
+		t.Fatalf("content state lengths = blocks %d, entities %d", len(blocks), len(entities))
+	}
+
+	wantTypes := []string{"markdown", "image", "markdown", "image", "markdown"}
+	wantMarkdown := []string{"Intro", "", "Middle", "", "End"}
+	wantMedia := []string{"", "media-first", "", "media-second", ""}
+	for index, entity := range entities {
+		value, ok := entity["value"].(map[string]any)
+		if !ok {
+			t.Fatalf("entity %d value = %#v", index, entity["value"])
+		}
+		entityType, _ := value["type"].(string)
+		if entityType != wantTypes[index] {
+			t.Errorf("entity %d type = %q, want %q", index, entityType, wantTypes[index])
+		}
+		data, _ := value["data"].(map[string]any)
+		if entityType == "markdown" {
+			if got, _ := data["markdown"].(string); got != wantMarkdown[index] {
+				t.Errorf("entity %d markdown = %q, want %q", index, got, wantMarkdown[index])
+			}
+		} else {
+			items, _ := data["media_items"].([]map[string]string)
+			if len(items) != 1 || items[0]["media_id"] != wantMedia[index] {
+				t.Errorf("entity %d media items = %#v, want %q", index, items, wantMedia[index])
+			}
+		}
+	}
+}
+
+func TestBuildXArticleContentStateUsesImageOrderForRehostedSources(t *testing.T) {
+	state := buildXArticleContentState(
+		"Before\n\n![First](koinote-local-image://first)\n\nAfter\n\n![Second](koinote-local-image://second)",
+		[]xArticleMedia{
+			{
+				ID: "media-first", Caption: "First",
+				Source: xArticleImageSourceForMatching(xPublishImageInput{
+					Source: "https://img.koinote.app/u/user/first.png", OriginalSource: "koinote-local-image://first",
+				}),
+			},
+			{
+				ID: "media-second", Caption: "Second",
+				Source: xArticleImageSourceForMatching(xPublishImageInput{
+					Source: "https://img.koinote.app/u/user/second.png", OriginalSource: "koinote-local-image://second",
+				}),
+			},
+		},
+	)
+	entities, ok := state["entities"].([]map[string]any)
+	if !ok || len(entities) != 4 {
+		t.Fatalf("content entities = %#v", state["entities"])
+	}
+	for index, wantID := range []string{"media-first", "media-second"} {
+		value := entities[index*2+1]["value"].(map[string]any)
+		data := value["data"].(map[string]any)
+		items := data["media_items"].([]map[string]string)
+		if got := items[0]["media_id"]; got != wantID {
+			t.Errorf("image %d media ID = %q, want %q", index, got, wantID)
+		}
+	}
+}
+
+func TestBuildXArticleContentStateKeepsImagesInsideInlineCodeUntouched(t *testing.T) {
+	markdown := "How to embed:\n\n`markdown\n![Alt text](https://example.com/pic.png)\n`\n\nDone."
+	state := buildXArticleContentState(markdown, nil)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 1 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	value := entities[0]["value"].(map[string]any)
+	data := value["data"].(map[string]any)
+	gotMarkdown, _ := data["markdown"].(string)
+	if gotMarkdown != markdown {
+		t.Fatalf("code markdown = %#v, want %q", gotMarkdown, markdown)
+	}
+	if got := strings.Count(gotMarkdown, "`"); got != 2 {
+		t.Fatalf("code fence count = %d, want 2", got)
+	}
+	if got := normalizeXArticleMarkdown(markdown); got != "How to embed:\n\n`markdown\nAlt text\n`\n\nDone." {
+		t.Fatalf("normalized code markdown = %q", got)
+	}
+}
+
+func TestBuildXArticleContentStateSkipsFencedImagesButPlacesRealImages(t *testing.T) {
+	markdown := "```markdown\n![Example](https://example.com/example.png)\n```\n\n~~~markdown\n![Other](https://example.com/other.png)\n~~~\n\n![Real](https://example.com/real.png)"
+	state := buildXArticleContentState(markdown, []xArticleMedia{{
+		ID: "media-real", Caption: "Real", Source: "https://example.com/real.png",
+	}})
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 2 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	firstValue := entities[0]["value"].(map[string]any)
+	firstData := firstValue["data"].(map[string]any)
+	if firstValue["type"] != "markdown" ||
+		!strings.Contains(firstData["markdown"].(string), "![Example]") ||
+		!strings.Contains(firstData["markdown"].(string), "![Other]") {
+		t.Fatalf("fenced image markdown = %#v", firstData["markdown"])
+	}
+	secondValue := entities[1]["value"].(map[string]any)
+	if secondValue["type"] != "image" {
+		t.Fatalf("real image entity = %#v", secondValue)
+	}
+	if got := normalizeXArticleMarkdown(markdown); got != "```markdown\nExample\n```\n\n~~~markdown\nOther\n~~~\n\nReal" {
+		t.Fatalf("fenced image normalization = %q", got)
+	}
+}
+
+func TestBuildXArticleContentStateKeepsIndentedCodeImagesUntouched(t *testing.T) {
+	markdown := "How to embed:\n\n    ![Example](https://example.com/example.png)\n\nDone."
+	state := buildXArticleContentState(markdown, nil)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 1 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	value := entities[0]["value"].(map[string]any)
+	data := value["data"].(map[string]any)
+	if value["type"] != "markdown" || data["markdown"] != markdown {
+		t.Fatalf("indented code markdown = %#v", data["markdown"])
+	}
+	if got := normalizeXArticleMarkdown(markdown); got != "How to embed:\n\n    Example\n\nDone." {
+		t.Fatalf("indented code normalization = %q", got)
+	}
+}
+
+func TestBuildXArticleContentStateKeepsInlineImageAltInContext(t *testing.T) {
+	state := buildXArticleContentState(
+		"See ![diagram](https://example.com/diagram.png) for details.",
+		[]xArticleMedia{{ID: "media-diagram", Caption: "diagram", Source: "https://example.com/diagram.png"}},
+	)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 3 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	firstData := entities[0]["value"].(map[string]any)["data"].(map[string]any)
+	lastData := entities[2]["value"].(map[string]any)["data"].(map[string]any)
+	if firstData["markdown"] != "See diagram" || lastData["markdown"] != "for details." {
+		t.Fatalf("inline image context = %#v, %#v", firstData["markdown"], lastData["markdown"])
+	}
+}
+
+func TestBuildXArticleContentStateDoesNotPairInlineCodeAcrossBlankLines(t *testing.T) {
+	markdown := "# Release notes\n\nPress ` to open the palette.\n\nBuild status:\n\n![Screenshot](https://cdn.example/shot.png)\n\nSet the limit to 10` in config."
+	state := buildXArticleContentState(markdown, []xArticleMedia{{
+		ID: "media-screenshot", Caption: "Screenshot", Source: "https://cdn.example/shot.png",
+	}})
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 3 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	firstValue := entities[0]["value"].(map[string]any)
+	firstData := firstValue["data"].(map[string]any)
+	if firstValue["type"] != "markdown" || !strings.Contains(firstData["markdown"].(string), "Press ` to open") {
+		t.Fatalf("leading markdown = %#v", firstData["markdown"])
+	}
+	imageValue := entities[1]["value"].(map[string]any)
+	if imageValue["type"] != "image" {
+		t.Fatalf("image entity = %#v", imageValue)
+	}
+	imageData := imageValue["data"].(map[string]any)
+	items := imageData["media_items"].([]map[string]string)
+	if len(items) != 1 || items[0]["media_id"] != "media-screenshot" {
+		t.Fatalf("image media = %#v", items)
+	}
+	lastValue := entities[2]["value"].(map[string]any)
+	lastData := lastValue["data"].(map[string]any)
+	if lastValue["type"] != "markdown" || !strings.Contains(lastData["markdown"].(string), "10` in config.") {
+		t.Fatalf("trailing markdown = %#v", lastData["markdown"])
+	}
+}
+
+func TestXArticleCodeRangesStopAtWhitespaceOnlyBlankLines(t *testing.T) {
+	for _, markdown := range []string{
+		"`before\n\nafter`",
+		"`before\n \t\nafter`",
+		"`before\r\n \t\r\nafter`",
+	} {
+		if got := len(xArticleCodeRanges(markdown)); got != 0 {
+			t.Errorf("code ranges for %q = %d, want 0", markdown, got)
+		}
+	}
+}
+
+func TestBuildXArticleContentStateKeepsImageLinksAsMarkdown(t *testing.T) {
+	state := buildXArticleContentState(
+		"See [![Badge](https://cdn.example/badge.png)](https://target.example) for status.",
+		[]xArticleMedia{{ID: "media-badge", Caption: "Badge", Source: "https://cdn.example/badge.png"}},
+	)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 1 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	value := entities[0]["value"].(map[string]any)
+	if value["type"] != "markdown" {
+		t.Fatalf("linked image entity = %#v", value)
+	}
+	data := value["data"].(map[string]any)
+	if got := data["markdown"]; got != "See [Badge](https://target.example) for status." {
+		t.Fatalf("linked image markdown = %#v", got)
+	}
+}
+
+func TestStripXArticleFrontmatterRemovesOnlyOneLeadingBlock(t *testing.T) {
+	input := "---\nSection A\n---\n---\nSection B\n---\nSection C"
+	want := "---\nSection B\n---\nSection C"
+	got := stripXArticleFrontmatter(input)
+	if got != want {
+		t.Fatalf("stripped frontmatter = %q, want %q", got, want)
+	}
+	state := buildXArticleContentState(got, nil)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 1 {
+		t.Fatalf("frontmatter content entities = %#v", entities)
+	}
+	data := entities[0]["value"].(map[string]any)["data"].(map[string]any)
+	if data["markdown"] != want {
+		t.Fatalf("frontmatter markdown = %#v, want %q", data["markdown"], want)
+	}
+}
+
 func TestPublishXArticleOAuth2PreservesDraftOnPublishFailure(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		if request.URL.Path == xOAuth2ArticleDraftPath {

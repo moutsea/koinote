@@ -853,7 +853,7 @@ export function publishXArticle(
     mode: "oauth2";
     title: string;
     markdown: string;
-    images?: Array<{ source: string; alt?: string }>;
+    images?: Array<{ source: string; originalSource?: string; alt?: string }>;
   },
 ) {
   return apiJson<{ published: boolean; url: string; postCount: number; contentType: "article" }>(

@@ -58,7 +58,7 @@ var (
 	xAPIKeyPattern             = regexp.MustCompile(`^[A-Za-z0-9_-]{1,256}$`)
 	xURLPattern                = regexp.MustCompile(`(?i)https?://[^\s<>"']+`)
 	xArticleFrontmatterPattern = regexp.MustCompile(`(?s)^---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|$)`)
-	xArticleImagePattern       = regexp.MustCompile(`!\[([^\]]*)\]\([^\r\n)]*\)`)
+	xArticleImagePattern       = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\r\n]*)\)`)
 	xArticleIDPattern          = regexp.MustCompile(`^[0-9]{1,19}$`)
 	errXAccountNotBound        = errors.New("x account is not bound")
 	errXOAuth2AccountNotBound  = errors.New("x oauth2 account is not bound")
@@ -88,9 +88,10 @@ type xCredential struct {
 }
 
 type xPublishImageInput struct {
-	PostIndex int    `json:"postIndex"`
-	Source    string `json:"source"`
-	Alt       string `json:"alt,omitempty"`
+	PostIndex      int    `json:"postIndex"`
+	Source         string `json:"source"`
+	OriginalSource string `json:"originalSource,omitempty"`
+	Alt            string `json:"alt,omitempty"`
 }
 
 type xPublishInput struct {
@@ -326,8 +327,10 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	}
 	articleRequest := input.Mode == "oauth2" && (strings.TrimSpace(input.Title) != "" || strings.TrimSpace(input.Markdown) != "")
 	imagesByPost := make(map[int][]xPublishImageInput)
+	articleMarkdown := ""
 	if articleRequest {
 		input.Title = strings.TrimSpace(input.Title)
+		articleMarkdown = stripXArticleFrontmatter(input.Markdown)
 		input.Markdown = normalizeXArticleMarkdown(input.Markdown)
 		if input.Title == "" || (input.Markdown == "" && len(input.Images) == 0) || len(input.Images) > xPublishMaxImages {
 			httpx.ErrorCode(w, http.StatusBadRequest, "x_publish_input_invalid", "Invalid X Article")
@@ -447,7 +450,7 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	defer cancelPublish()
 	var result xPublishResult
 	if articleRequest {
-		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, input.Markdown, input.Images)
+		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, articleMarkdown, input.Images)
 	} else if input.Mode == "oauth2" {
 		result, err = a.publishXThreadOAuth2(publishContext, oauth2Credential, input.Posts, imagesByPost)
 	} else {
@@ -524,10 +527,207 @@ func xTextWeight(value string) int {
 }
 
 func normalizeXArticleMarkdown(value string) string {
-	value = strings.TrimPrefix(value, "\ufeff")
-	value = xArticleFrontmatterPattern.ReplaceAllString(value, "")
-	value = xArticleImagePattern.ReplaceAllString(value, "$1")
+	value = stripXArticleFrontmatter(value)
+	matches := xArticleImagePattern.FindAllStringSubmatchIndex(value, -1)
+	if len(matches) == 0 {
+		return strings.TrimSpace(value)
+	}
+	var normalized strings.Builder
+	cursor := 0
+	for _, match := range matches {
+		normalized.WriteString(value[cursor:match[0]])
+		normalized.WriteString(value[match[2]:match[3]])
+		cursor = match[1]
+	}
+	normalized.WriteString(value[cursor:])
+	value = normalized.String()
 	return strings.TrimSpace(value)
+}
+
+func stripXArticleFrontmatter(value string) string {
+	value = strings.TrimPrefix(value, "\ufeff")
+	return xArticleFrontmatterPattern.ReplaceAllString(value, "")
+}
+
+type xArticleCodeRange struct {
+	start int
+	end   int
+}
+
+func xArticleCodeRanges(value string) []xArticleCodeRange {
+	ranges := xArticleFencedCodeRanges(value)
+	ranges = append(ranges, xArticleIndentedCodeRanges(value)...)
+	for index := 0; index < len(value); {
+		if codeRange, ok := xArticleCodeRangeAt(ranges, index); ok {
+			index = codeRange.end
+			continue
+		}
+		if value[index] != '`' {
+			index++
+			continue
+		}
+		runEnd := index + 1
+		for runEnd < len(value) && value[runEnd] == '`' {
+			runEnd++
+		}
+		runLength := runEnd - index
+		for search := runEnd; search < len(value); {
+			if value[search] != '`' {
+				search++
+				continue
+			}
+			if xArticleHasBlankLine(value, runEnd, search) {
+				break
+			}
+			closingEnd := search + 1
+			for closingEnd < len(value) && value[closingEnd] == '`' {
+				closingEnd++
+			}
+			if closingEnd-search == runLength {
+				ranges = append(ranges, xArticleCodeRange{start: index, end: closingEnd})
+				index = closingEnd
+				break
+			}
+			search = closingEnd
+		}
+		if index < runEnd {
+			index = runEnd
+		}
+	}
+	return ranges
+}
+
+func xArticleIndentedCodeRanges(value string) []xArticleCodeRange {
+	ranges := []xArticleCodeRange{}
+	inCode := false
+	codeStart := 0
+	codeEnd := 0
+	previousBlank := true
+	for lineStart := 0; lineStart <= len(value); {
+		lineEnd := strings.IndexByte(value[lineStart:], '\n')
+		if lineEnd < 0 {
+			lineEnd = len(value)
+		} else {
+			lineEnd += lineStart
+		}
+		line := value[lineStart:lineEnd]
+		blank := strings.TrimSpace(line) == ""
+		indented := xArticleIndentColumns(line) >= 4
+		if inCode {
+			if indented || blank {
+				codeEnd = lineEnd
+			} else {
+				ranges = append(ranges, xArticleCodeRange{start: codeStart, end: codeEnd})
+				inCode = false
+			}
+		}
+		if !inCode && indented && previousBlank {
+			inCode = true
+			codeStart = lineStart
+			codeEnd = lineEnd
+		}
+		previousBlank = blank
+		if lineEnd == len(value) {
+			break
+		}
+		lineStart = lineEnd + 1
+	}
+	if inCode {
+		ranges = append(ranges, xArticleCodeRange{start: codeStart, end: codeEnd})
+	}
+	return ranges
+}
+
+func xArticleIndentColumns(line string) int {
+	columns := 0
+	for index := 0; index < len(line); index++ {
+		switch line[index] {
+		case ' ':
+			columns++
+		case '\t':
+			columns += 4 - columns%4
+		default:
+			return columns
+		}
+	}
+	return columns
+}
+
+func xArticleHasBlankLine(value string, start, end int) bool {
+	for index := start; index < end; index++ {
+		if value[index] != '\n' {
+			continue
+		}
+		next := index + 1
+		for next < end && (value[next] == ' ' || value[next] == '\t') {
+			next++
+		}
+		if next < end && value[next] == '\r' {
+			next++
+		}
+		if next < end && value[next] == '\n' {
+			return true
+		}
+	}
+	return false
+}
+
+func xArticleFencedCodeRanges(value string) []xArticleCodeRange {
+	ranges := []xArticleCodeRange{}
+	inFence := false
+	fenceChar := byte(0)
+	fenceLength := 0
+	fenceStart := 0
+	for lineStart := 0; lineStart <= len(value); {
+		lineEnd := strings.IndexByte(value[lineStart:], '\n')
+		if lineEnd < 0 {
+			lineEnd = len(value)
+		} else {
+			lineEnd += lineStart
+		}
+		line := value[lineStart:lineEnd]
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		content := line[indent:]
+		if indent <= 3 && len(content) >= 3 && (content[0] == '`' || content[0] == '~') {
+			runEnd := 0
+			for runEnd < len(content) && content[runEnd] == content[0] {
+				runEnd++
+			}
+			if runEnd >= 3 {
+				if !inFence {
+					inFence = true
+					fenceChar = content[0]
+					fenceLength = runEnd
+					fenceStart = lineStart
+				} else if content[0] == fenceChar && runEnd >= fenceLength && strings.TrimSpace(content[runEnd:]) == "" {
+					ranges = append(ranges, xArticleCodeRange{start: fenceStart, end: lineEnd})
+					inFence = false
+				}
+			}
+		}
+		if lineEnd == len(value) {
+			break
+		}
+		lineStart = lineEnd + 1
+	}
+	if inFence {
+		ranges = append(ranges, xArticleCodeRange{start: fenceStart, end: len(value)})
+	}
+	return ranges
+}
+
+func xArticleCodeRangeAt(ranges []xArticleCodeRange, position int) (xArticleCodeRange, bool) {
+	for _, codeRange := range ranges {
+		if position >= codeRange.start && position < codeRange.end {
+			return codeRange, true
+		}
+	}
+	return xArticleCodeRange{}, false
+}
+
+func xArticleRangeContains(ranges []xArticleCodeRange, position int) bool {
+	_, ok := xArticleCodeRangeAt(ranges, position)
+	return ok
 }
 
 const xTransformedURLLength = 23

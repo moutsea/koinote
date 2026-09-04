@@ -93,10 +93,11 @@ export function XPublishPanel({
         return;
       }
       await prepareWechatDraftDocument(docId);
-      const images: Array<{ source: string; alt: string }> = [];
+      const images: Array<{ source: string; originalSource: string; alt: string }> = [];
       for (const image of draft.images) {
         images.push({
           source: await resolveXImageSource(image.src),
+          originalSource: image.src,
           alt: image.alt,
         });
       }
