@@ -959,7 +959,7 @@ func buildXArticleContentState(markdown string, media []xArticleMedia) map[strin
 		}
 	}
 	cursor := 0
-	for _, match := range occurrences {
+	for occurrenceIndex, match := range occurrences {
 		start, end := match[0], match[1]
 		alt := articleMarkdown[match[2]:match[3]]
 		destination := xArticleImageDestination(articleMarkdown[match[4]:match[5]])
@@ -970,7 +970,7 @@ func buildXArticleContentState(markdown string, media []xArticleMedia) map[strin
 				remainingMedia--
 			}
 		}
-		if mediaIndex < 0 && len(occurrences) == remainingMedia {
+		if mediaIndex < 0 && len(occurrences)-occurrenceIndex == remainingMedia {
 			mediaIndex = nextXArticleMedia(usedMedia)
 		}
 		if mediaIndex >= 0 {
@@ -1033,7 +1033,11 @@ type xArticleReplacement struct {
 }
 
 func xArticleImageInLink(markdown string, start, end int) bool {
-	return start > 0 && markdown[start-1] == '[' && strings.HasPrefix(markdown[end:], "](")
+	if start <= 0 || markdown[start-1] != '[' {
+		return false
+	}
+	suffix := markdown[end:]
+	return strings.HasPrefix(suffix, "](") || strings.HasPrefix(suffix, "][") || strings.HasPrefix(suffix, "]")
 }
 
 func findXArticleMedia(media []xArticleMedia, used []bool, destination string) int {

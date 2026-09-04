@@ -500,6 +500,40 @@ func TestBuildXArticleContentStateUsesImageOrderForRehostedSources(t *testing.T)
 	}
 }
 
+func TestBuildXArticleContentStateFallsBackByRemainingImageOrder(t *testing.T) {
+	state := buildXArticleContentState(
+		"A\n\n![First](https://article.example/first.png)\n\nB\n\n![Second](https://article.example/second.png)\n\nC",
+		[]xArticleMedia{
+			{ID: "media-first", Caption: "First", Source: "https://upload.example/first.png"},
+			{ID: "media-second", Caption: "Second", Source: "https://upload.example/second.png"},
+		},
+	)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 5 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	wantTypes := []string{"markdown", "image", "markdown", "image", "markdown"}
+	wantMarkdown := []string{"A", "", "B", "", "C"}
+	wantMedia := []string{"", "media-first", "", "media-second", ""}
+	for index, entity := range entities {
+		value := entity["value"].(map[string]any)
+		if value["type"] != wantTypes[index] {
+			t.Errorf("entity %d type = %q, want %q", index, value["type"], wantTypes[index])
+		}
+		data := value["data"].(map[string]any)
+		if value["type"] == "markdown" {
+			if data["markdown"] != wantMarkdown[index] {
+				t.Errorf("entity %d markdown = %q, want %q", index, data["markdown"], wantMarkdown[index])
+			}
+			continue
+		}
+		items := data["media_items"].([]map[string]string)
+		if len(items) != 1 || items[0]["media_id"] != wantMedia[index] {
+			t.Errorf("entity %d media = %#v, want %q", index, items, wantMedia[index])
+		}
+	}
+}
+
 func TestBuildXArticleContentStateKeepsImagesInsideInlineCodeUntouched(t *testing.T) {
 	markdown := "How to embed:\n\n`markdown\n![Alt text](https://example.com/pic.png)\n`\n\nDone."
 	state := buildXArticleContentState(markdown, nil)
@@ -637,6 +671,29 @@ func TestBuildXArticleContentStateKeepsImageLinksAsMarkdown(t *testing.T) {
 	data := value["data"].(map[string]any)
 	if got := data["markdown"]; got != "See [Badge](https://target.example) for status." {
 		t.Fatalf("linked image markdown = %#v", got)
+	}
+}
+
+func TestBuildXArticleContentStateKeepsReferenceImageLinksAsMarkdown(t *testing.T) {
+	for _, markdown := range []string{
+		"See [![Badge](https://cdn.example/badge.png)][status] now.\n\n[status]: https://target.example",
+		"See [![Badge](https://cdn.example/badge.png)] now.",
+	} {
+		state := buildXArticleContentState(markdown, []xArticleMedia{{
+			ID: "media-badge", Caption: "Badge", Source: "https://cdn.example/badge.png",
+		}})
+		entities := state["entities"].([]map[string]any)
+		if len(entities) != 1 {
+			t.Fatalf("content entities for %q = %#v", markdown, entities)
+		}
+		value := entities[0]["value"].(map[string]any)
+		if value["type"] != "markdown" {
+			t.Fatalf("reference image entity for %q = %#v", markdown, value)
+		}
+		data := value["data"].(map[string]any)
+		if !strings.Contains(data["markdown"].(string), "[Badge]") || strings.Contains(data["markdown"].(string), "![Badge]") {
+			t.Fatalf("reference image markdown for %q = %q", markdown, data["markdown"])
+		}
 	}
 }
 
