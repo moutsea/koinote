@@ -1,0 +1,97 @@
+name: One-off admin credit grant
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "管理员邮箱"
+        required: true
+        default: "cfjwlchangji@gmail.com"
+        type: string
+      amount:
+        description: "增加 credits 数量"
+        required: true
+        default: "10000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  grant:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
+
+      - name: Grant credits through immutable ledger
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          TARGET_EMAIL: ${{ inputs.email }}
+          GRANT_AMOUNT: ${{ inputs.amount }}
+          REFERENCE_KEY: admin-credit-grant-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          case "$GRANT_AMOUNT" in
+            ''|*[!0-9]*) echo "amount 必须是正整数"; exit 1 ;;
+          esac
+          test "$GRANT_AMOUNT" -gt 0
+          test "$GRANT_AMOUNT" -le 1000000
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "root@$HOST" \
+            "cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -v target_email=\"$TARGET_EMAIL\" -v grant_amount=\"$GRANT_AMOUNT\" -v reference_key=\"$REFERENCE_KEY\"'" <<'SQL'
+          BEGIN;
+          DO $do$
+          DECLARE
+              target_id integer;
+              current_balance bigint;
+              grant_amount bigint := :'grant_amount'::bigint;
+              reference_key text := :'reference_key';
+          BEGIN
+              SELECT u.id, ca.balance
+              INTO target_id, current_balance
+              FROM users u
+              JOIN credit_accounts ca ON ca.user_id = u.id
+              WHERE lower(u.email) = lower(:'target_email')
+                AND u.is_admin
+              FOR UPDATE OF u, ca;
+              IF NOT FOUND THEN
+                  RAISE EXCEPTION '未找到匹配的管理员账号: %', :'target_email';
+              END IF;
+              INSERT INTO credit_transactions (
+                  entry_id, user_id, kind, amount, balance_after, reference_key, metadata
+              ) VALUES (
+                  'credit:' || reference_key,
+                  target_id,
+                  'adjustment',
+                  grant_amount,
+                  current_balance + grant_amount,
+                  reference_key,
+                  jsonb_build_object('source', 'one-off-admin-credit-grant', 'workflow_run', :'reference_key')
+              );
+              UPDATE credit_accounts
+              SET balance = current_balance + grant_amount, updated_at = now()
+              WHERE user_id = target_id;
+              RAISE NOTICE '已为管理员 user_id=% 增加 % credits，余额=%', target_id, grant_amount, current_balance + grant_amount;
+          END
+          $do$;
+          COMMIT;
+          SELECT u.email, ca.balance
+          FROM users u
+          JOIN credit_accounts ca ON ca.user_id = u.id
+          WHERE lower(u.email) = lower(:'target_email') AND u.is_admin;
+          SQL
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts
