@@ -51,40 +51,36 @@ jobs:
             "root@$HOST" \
             "cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -v target_email=\"$TARGET_EMAIL\" -v grant_amount=\"$GRANT_AMOUNT\" -v reference_key=\"$REFERENCE_KEY\"'" <<'SQL'
           BEGIN;
-          DO $do$
-          DECLARE
-              target_id integer;
-              current_balance bigint;
-              grant_amount bigint := :'grant_amount'::bigint;
-              reference_key text := :'reference_key';
-          BEGIN
+          WITH target AS (
               SELECT u.id, ca.balance
-              INTO target_id, current_balance
               FROM users u
               JOIN credit_accounts ca ON ca.user_id = u.id
               WHERE lower(u.email) = lower(:'target_email')
                 AND u.is_admin
-              FOR UPDATE OF u, ca;
-              IF NOT FOUND THEN
-                  RAISE EXCEPTION '未找到匹配的管理员账号: %', :'target_email';
-              END IF;
+              FOR UPDATE OF u, ca
+          ), inserted AS (
               INSERT INTO credit_transactions (
                   entry_id, user_id, kind, amount, balance_after, reference_key, metadata
-              ) VALUES (
-                  'credit:' || reference_key,
-                  target_id,
+              )
+              SELECT
+                  'credit:' || :'reference_key',
+                  target.id,
                   'adjustment',
-                  grant_amount,
-                  current_balance + grant_amount,
-                  reference_key,
+                  :'grant_amount'::bigint,
+                  target.balance + :'grant_amount'::bigint,
+                  :'reference_key',
                   jsonb_build_object('source', 'one-off-admin-credit-grant', 'workflow_run', :'reference_key')
-              );
-              UPDATE credit_accounts
-              SET balance = current_balance + grant_amount, updated_at = now()
-              WHERE user_id = target_id;
-              RAISE NOTICE '已为管理员 user_id=% 增加 % credits，余额=%', target_id, grant_amount, current_balance + grant_amount;
-          END
-          $do$;
+              FROM target
+              RETURNING user_id, amount
+          )
+          UPDATE credit_accounts ca
+          SET balance = ca.balance + inserted.amount, updated_at = now()
+          FROM inserted
+          WHERE ca.user_id = inserted.user_id;
+          SELECT CASE
+              WHEN EXISTS (SELECT 1 FROM credit_transactions WHERE reference_key = :'reference_key') THEN 1
+              ELSE 1 / 0
+          END;
           COMMIT;
           SELECT u.email, ca.balance
           FROM users u
