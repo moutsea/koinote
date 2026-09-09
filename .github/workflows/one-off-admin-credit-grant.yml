@@ -47,7 +47,7 @@ jobs:
           esac
           test "$GRANT_AMOUNT" -gt 0
           test "$GRANT_AMOUNT" -le 1000000
-          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+          result=$(ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
             "root@$HOST" \
             "cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -v target_email=\"$TARGET_EMAIL\" -v grant_amount=\"$GRANT_AMOUNT\" -v reference_key=\"$REFERENCE_KEY\"'" <<'SQL'
           BEGIN;
@@ -77,16 +77,24 @@ jobs:
           SET balance = ca.balance + inserted.amount, updated_at = now()
           FROM inserted
           WHERE ca.user_id = inserted.user_id;
-          SELECT CASE
-              WHEN EXISTS (SELECT 1 FROM credit_transactions WHERE reference_key = :'reference_key') THEN 1
-              ELSE 1 / 0
-          END;
           COMMIT;
           SELECT u.email, ca.balance
           FROM users u
           JOIN credit_accounts ca ON ca.user_id = u.id
-          WHERE lower(u.email) = lower(:'target_email') AND u.is_admin;
+          WHERE lower(u.email) = lower(:'target_email')
+            AND u.is_admin
+            AND EXISTS (
+                SELECT 1 FROM credit_transactions
+                WHERE reference_key = :'reference_key'
+                  AND user_id = u.id
+            );
           SQL
+          )
+          printf '%s\n' "$result"
+          echo "$result" | grep -Fq "$TARGET_EMAIL" || {
+            echo "发放事务未返回目标管理员和账本记录，已停止"
+            exit 1
+          }
 
       - name: Cleanup SSH key
         if: always()
