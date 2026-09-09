@@ -87,7 +87,7 @@ func TestParseWritingReviewBuildsLayoutSuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	review, err := parseAndValidateWritingReview(raw, "标题", "第一句。第二句。")
+	review, err := validateFullWritingReview(raw, "标题", "第一句。第二句。")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestParseWritingReviewSkipsInvalidLayoutSuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	review, err := parseAndValidateWritingReview(raw, "标题", "第一句。第二句。\n\n第三句。第四句。")
+	review, err := validateFullWritingReview(raw, "标题", "第一句。第二句。\n\n第三句。第四句。")
 	if err != nil {
 		t.Fatal(err)
 	}

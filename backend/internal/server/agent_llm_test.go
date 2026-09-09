@@ -33,29 +33,72 @@ const validAgentReviewJSON = `{
   "layoutSuggestions": []
 }`
 
-func TestWritingReviewPromptIncludesEditorialRubric(t *testing.T) {
-	prompt, err := buildWritingReviewPrompt(
-		"标题",
-		"这是一篇有事实依据的文章。",
-	)
+// validateFullWritingReview 用不设作用域限制的方式校验一份完整审阅结果，覆盖
+// 标题、正文、六维都齐全的场景。生产代码走的是分任务校验，每个任务各带自己的
+// 作用域；这里只是把作用域全开，验证校验规则本身。
+func validateFullWritingReview(
+	raw []byte,
+	title string,
+	content string,
+) (validatedWritingReview, error) {
+	return parseAndValidateWritingReviewWithScopes(raw, title, content, writingReviewValidationScope{
+		HasTitleReview: true, HasLayoutReview: true,
+	})
+}
+
+// transportTestPrompt 给传输层测试一个形状真实的提示词。这些用例验证的是 HTTP
+// 编解码，不是提示词内容，所以直接取生产计划里的标题任务，避免为测试单独维护一份
+// 用户永远走不到的提示词。
+func transportTestPrompt(t *testing.T) agentLLMPrompt {
+	t.Helper()
+	plan, err := buildWritingReviewTaskPlan("原标题", "这是原始句子。", "title")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("build transport test plan: %v", err)
 	}
-	checks := []string{
-		"Diagnose the article's actual value, evidence, audience, and central promise before polishing wording",
-		"Make the opening work independently",
-		"Optimize for mobile long-form reading",
-		"smooth repetitive parallelism",
-		"repeated \"not X but Y\" turns",
-		"promise-to-evidence fit",
-		"cognitive contrast",
-		"curiosity gap",
-		"Never invent authority, figures, urgency, outcomes, or pain points",
-		"meaningfully different supported angles",
+	if len(plan.Tasks) != 1 {
+		t.Fatalf("transport test plan tasks = %d, want 1", len(plan.Tasks))
 	}
-	for _, check := range checks {
-		if !strings.Contains(prompt.System, check) {
-			t.Errorf("writing review system prompt is missing rubric rule %q", check)
+	return plan.Tasks[0].Prompt
+}
+
+// 评分标准分散在四个任务提示词里，每个任务只带自己那一份。这里逐个任务断言它的
+// 核心规则还在——规则被误删时，用户看到的是模型退回泛泛而谈的建议，没有别的信号。
+func TestWritingReviewTaskPromptsCarryTheirRubric(t *testing.T) {
+	checksByPrompt := map[string][]string{
+		writingReviewTitleSystemPrompt: {
+			"promise-to-evidence fit",
+			"Never invent authority, figures, urgency, outcomes, pain points, or claims",
+			"never inflate it to reduce the work owed by the ranges below",
+			"must differ from the others in angle",
+		},
+		writingReviewBodySystemPrompt: {
+			"state what a reader loses without it",
+			"recites a generic writing rule",
+			"smooth repetitive parallelism",
+			`repeated "not X but Y" turns`,
+			"Returning none is a valid answer",
+		},
+		writingReviewDocumentSystemPrompt: {
+			"only reviewer that spans sections",
+			"impossible to see from inside a single section",
+			"Never encode a move or consolidation as coordinated",
+			"partial=true",
+		},
+		writingReviewLayoutSystemPrompt: {
+			"hierarchy, readability, emphasis, rhythm, modules, and mobile",
+			"without rewriting words",
+			"Never change links, images, code, formulas, or factual wording",
+		},
+		writingReviewProofreadSystemPrompt: {
+			"Do not optimize the article's structure, argument, engagement, tone, or paragraph order",
+			"uniquely occurring byte-for-byte substring",
+		},
+	}
+	for prompt, checks := range checksByPrompt {
+		for _, check := range checks {
+			if !strings.Contains(prompt, check) {
+				t.Errorf("system prompt starting %q is missing rubric rule %q", prompt[:40], check)
+			}
 		}
 	}
 }
@@ -94,10 +137,7 @@ func TestCallOpenAIAgentLLMUsesStrictStructuredOutput(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, err := buildWritingReviewPrompt("原标题", "这是原始句子。")
-	if err != nil {
-		t.Fatal(err)
-	}
+	prompt := transportTestPrompt(t)
 	provider := agentLLMProvider{
 		Mode:         "builtin",
 		Protocol:     "openai",
@@ -116,7 +156,7 @@ func TestCallOpenAIAgentLLMUsesStrictStructuredOutput(t *testing.T) {
 	if err := requireAgentLLMUsage(provider, result); err != nil {
 		t.Fatalf("require OpenAI usage: %v", err)
 	}
-	if _, err := parseAndValidateWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
+	if _, err := validateFullWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
 		t.Fatalf("validate OpenAI review: %v", err)
 	}
 }
@@ -144,7 +184,7 @@ func TestCallOpenAICompatibleAgentLLMUsesJSONMode(t *testing.T) {
 				system = message.Content
 			}
 		}
-		if !strings.Contains(system, `"bodySuggestions"`) || !strings.Contains(system, `"additionalProperties":false`) {
+		if !strings.Contains(system, `"titleSuggestions"`) || !strings.Contains(system, `"additionalProperties":false`) {
 			t.Errorf("compatible system prompt is missing the output schema")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -157,7 +197,7 @@ func TestCallOpenAICompatibleAgentLLMUsesJSONMode(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, _ := buildWritingReviewPrompt("原标题", "这是原始句子。")
+	prompt := transportTestPrompt(t)
 	provider := agentLLMProvider{
 		Mode:     "byok",
 		Protocol: "openai",
@@ -172,7 +212,7 @@ func TestCallOpenAICompatibleAgentLLMUsesJSONMode(t *testing.T) {
 	if err := requireAgentLLMUsage(provider, result); err != nil {
 		t.Fatalf("BYOK should not require token usage: %v", err)
 	}
-	if _, err := parseAndValidateWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
+	if _, err := validateFullWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
 		t.Fatalf("validate compatible review: %v", err)
 	}
 }
@@ -196,7 +236,7 @@ func TestCallAnthropicAgentLLM(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, _ := buildWritingReviewPrompt("原标题", "这是原始句子。")
+	prompt := transportTestPrompt(t)
 	provider := agentLLMProvider{
 		Mode:     "byok",
 		Protocol: "anthropic",
@@ -211,8 +251,47 @@ func TestCallAnthropicAgentLLM(t *testing.T) {
 	if result.TotalTokens != 1_750 {
 		t.Fatalf("Anthropic usage = %+v", result)
 	}
-	if _, err := parseAndValidateWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
+	if _, err := validateFullWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
 		t.Fatalf("validate Anthropic review: %v", err)
+	}
+}
+
+func TestCallAnthropicBuiltinUsesEphemeralPromptCache(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode Anthropic request: %v", err)
+		}
+		system, ok := payload["system"].([]any)
+		if !ok || len(system) != 1 {
+			t.Fatalf("builtin Anthropic system blocks = %#v", payload["system"])
+		}
+		block, ok := system[0].(map[string]any)
+		if !ok || block["type"] != "text" || block["text"] == "" {
+			t.Fatalf("builtin Anthropic system block = %#v", system[0])
+		}
+		cacheControl, ok := block["cache_control"].(map[string]any)
+		if !ok || cacheControl["type"] != "ephemeral" {
+			t.Fatalf("builtin Anthropic cache control = %#v", block["cache_control"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		streamText, _ := json.Marshal(validAgentReviewJSON)
+		_, _ = io.WriteString(w, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1500,\"output_tokens\":0}}}\n\n")
+		_, _ = io.WriteString(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":"+string(streamText)+"}}\n\n")
+		_, _ = io.WriteString(w, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":250}}\n\n")
+		_, _ = io.WriteString(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer server.Close()
+
+	result, err := callAgentLLM(context.Background(), server.Client(), agentLLMProvider{
+		Mode: "builtin", Protocol: "anthropic", BaseURL: server.URL,
+		APIKey: "sk-ant-test", Model: "claude-sonnet-5",
+	}, transportTestPrompt(t))
+	if err != nil {
+		t.Fatalf("call builtin Anthropic agent LLM: %v", err)
+	}
+	if result.TotalTokens != 1_750 {
+		t.Fatalf("builtin Anthropic usage = %+v", result)
 	}
 }
 
@@ -225,11 +304,12 @@ func TestCallAnthropicAgentLLMConsumesSSEWithoutVendorExtensions(t *testing.T) {
 		if payload["stream"] != true {
 			t.Errorf("Anthropic stream flag = %#v", payload["stream"])
 		}
-		if payload["max_tokens"] != float64(agentLLMAnthropicMaxOutputTokens) {
+		// 任务提示词自带更小的输出上限，不应被放大到全局默认值。
+		if payload["max_tokens"] != float64(agentReviewTitleMaxOutputTokens) {
 			t.Errorf("Anthropic max_tokens = %#v", payload["max_tokens"])
 		}
 		system, _ := payload["system"].(string)
-		if !strings.Contains(system, `"bodySuggestions"`) || !strings.Contains(system, `"additionalProperties":false`) {
+		if !strings.Contains(system, `"titleSuggestions"`) || !strings.Contains(system, `"additionalProperties":false`) {
 			t.Errorf("Anthropic system prompt is missing the output schema")
 		}
 		if _, exists := payload["thinking"]; exists {
@@ -253,7 +333,7 @@ func TestCallAnthropicAgentLLMConsumesSSEWithoutVendorExtensions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, _ := buildWritingReviewPrompt("原标题", "这是原始句子。")
+	prompt := transportTestPrompt(t)
 	provider := agentLLMProvider{
 		Mode:     "byok",
 		Protocol: "anthropic",
@@ -268,7 +348,7 @@ func TestCallAnthropicAgentLLMConsumesSSEWithoutVendorExtensions(t *testing.T) {
 	if result.InputTokens != 1_500 || result.OutputTokens != 250 || result.TotalTokens != 1_750 {
 		t.Fatalf("streaming Anthropic usage = %+v", result)
 	}
-	if _, err := parseAndValidateWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
+	if _, err := validateFullWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
 		t.Fatalf("validate streaming Anthropic review: %v", err)
 	}
 }
@@ -289,7 +369,7 @@ func TestCallAnthropicAgentLLMRetriesEmptyStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, _ := buildWritingReviewPrompt("原标题", "这是原始句子。")
+	prompt := transportTestPrompt(t)
 	result, err := callAgentLLM(context.Background(), server.Client(), agentLLMProvider{
 		Mode: "builtin", Protocol: "anthropic", BaseURL: server.URL,
 		APIKey: "sk-ant-test", Model: "claude-sonnet-5",
@@ -312,7 +392,17 @@ func TestParseAnthropicEventStreamReturnsProviderError(t *testing.T) {
 	}
 }
 
-func TestGenerateValidatedWritingReviewRetriesInvalidJSON(t *testing.T) {
+// 校验失败要重试一次，并把两次调用的 token 累加后一起扣费——漏掉累加等于让用户
+// 白拿一次失败调用的额度。
+func TestExecuteWritingReviewTaskRetriesInvalidJSONAndSumsUsage(t *testing.T) {
+	const validTitleJSON = `{
+  "summary": "结构清楚，建议压缩开头并增强标题的具体性。",
+  "titleScore": 55,
+  "titleAssessment": "主题明确，但结果和受众不够具体。",
+  "titleSuggestions": [
+    {"after": "24 小时部署 Qwen：从本地到公网的完整记录", "reason": "补足时间、对象和结果。"}
+  ]
+}`
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -330,7 +420,7 @@ func TestGenerateValidatedWritingReviewRetriesInvalidJSON(t *testing.T) {
 		text := "{"
 		inputTokens, outputTokens := 100, 50
 		if requests == 2 {
-			text = validAgentReviewJSON
+			text = validTitleJSON
 			inputTokens, outputTokens = 110, 60
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -345,25 +435,35 @@ func TestGenerateValidatedWritingReviewRetriesInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prompt, _ := buildWritingReviewPrompt("原标题", "这是原始句子。")
-	provider := agentLLMProvider{
-		Mode: "builtin", Protocol: "anthropic", BaseURL: server.URL,
-		APIKey: "sk-ant-test", Model: "claude-sonnet-5",
+	const title = "原标题"
+	const content = "这是原始句子。"
+	plan, err := buildWritingReviewTaskPlan(title, content, "title")
+	if err != nil {
+		t.Fatal(err)
 	}
-	result, review, err := generateValidatedWritingReview(
-		context.Background(), server.Client(), provider, prompt, "原标题", "这是原始句子。",
+	result, err := executeWritingReviewTask(
+		context.Background(), server.Client(),
+		agentLLMProvider{
+			Mode: "builtin", Protocol: "anthropic", BaseURL: server.URL,
+			APIKey: "sk-ant-test", Model: "claude-sonnet-5",
+		},
+		plan.Tasks[0], title, content, parseMarkdownReviewBlocks(content),
 	)
 	if err != nil {
-		t.Fatalf("generate validated review: %v", err)
+		t.Fatalf("execute writing review task: %v", err)
 	}
 	if requests != 2 {
 		t.Fatalf("provider requests=%d, want 2", requests)
 	}
-	if result.InputTokens != 210 || result.OutputTokens != 110 || result.TotalTokens != 320 {
-		t.Fatalf("combined retry usage=%+v", result)
+	if result.Usage.InputTokens != 210 || result.Usage.OutputTokens != 110 || result.Usage.TotalTokens != 320 {
+		t.Fatalf("combined retry usage=%+v", result.Usage)
 	}
-	if review.TitleScore != 55 || len(review.Suggestions) != 3 {
-		t.Fatalf("validated retry review=%+v", review)
+	if result.Validated.TitleScore != 55 || len(result.Validated.Suggestions) != 1 {
+		t.Fatalf("validated retry review=%+v", result.Validated)
+	}
+	// 标题任务不评六维，不能把占位分数当成结论落库。
+	if len(result.Validated.LayoutAssessment) != 0 {
+		t.Fatalf("title task layout assessment=%+v, want empty", result.Validated.LayoutAssessment)
 	}
 }
 
@@ -384,7 +484,7 @@ func TestParseWritingReviewAcceptsStringTitleSuggestions(t *testing.T) {
   ],
   "layoutSuggestions": []
 }`
-	review, err := parseAndValidateWritingReview([]byte(raw), "原标题", "正文")
+	review, err := validateFullWritingReview([]byte(raw), "原标题", "正文")
 	if err != nil {
 		t.Fatalf("parse string title suggestions: %v", err)
 	}
@@ -416,7 +516,7 @@ func TestParseWritingReviewAcceptsBodyPatchesAlias(t *testing.T) {
   ],
   "layoutSuggestions": []
 }`
-	review, err := parseAndValidateWritingReview([]byte(raw), "原标题", "原始句子。")
+	review, err := validateFullWritingReview([]byte(raw), "原标题", "原始句子。")
 	if err != nil {
 		t.Fatalf("parse bodyPatches alias: %v", err)
 	}
@@ -495,7 +595,7 @@ func TestParseAndValidateWritingReviewRejectsUnsafePatches(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := parseAndValidateWritingReview([]byte(test.raw), "原标题", test.content)
+			_, err := validateFullWritingReview([]byte(test.raw), "原标题", test.content)
 			if !errors.Is(err, errAgentLLMInvalidResponse) {
 				t.Fatalf("error = %v, want invalid response", err)
 			}
@@ -542,7 +642,7 @@ func TestParseAndValidateWritingReviewRejectsOversizedPatches(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := parseAndValidateWritingReview([]byte(test.raw), "原标题", test.content)
+			_, err := validateFullWritingReview([]byte(test.raw), "原标题", test.content)
 			if !errors.Is(err, errAgentLLMInvalidResponse) {
 				t.Fatalf("error = %v, want invalid response", err)
 			}

@@ -546,7 +546,14 @@ function AdminContent({
       )}
 
       {activeTab === "users" && (
-        <RecentUsers users={stats.recentUsers} locale={locale} />
+        <>
+          <PaidTokenUsagePanel
+            summary={stats.paidTokenUsage}
+            users={stats.paidUsers}
+            locale={locale}
+          />
+          <RecentUsers users={stats.recentUsers} locale={locale} />
+        </>
       )}
 
       <p className="text-right text-xs" style={{ color: "var(--ink-faint)" }}>
@@ -1028,6 +1035,147 @@ function Legend({ color, label }: { color: string; label: string }) {
       <span className="h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
       {label}
     </span>
+  );
+}
+
+function PaidTokenUsagePanel({
+  summary,
+  users,
+  locale,
+}: {
+  summary: AdminStats["paidTokenUsage"];
+  users: AdminStats["paidUsers"];
+  locale: Locale;
+}) {
+  const { t } = useI18n();
+  return (
+    <section className="min-w-0">
+      <SectionTitle
+        icon={<Coins className="h-5 w-5" />}
+        title={t.admin.paidTokenUsage}
+      />
+      <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
+        {interpolate(t.admin.paidTokenUsageHint, {
+          tokens: formatNumber(summary.tokensPerCredit, locale),
+        })}
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          icon={<Users />}
+          label={t.admin.paidUserCount}
+          value={formatNumber(summary.paidUsers, locale)}
+        />
+        <MetricCard
+          icon={<BarChart3 />}
+          label={t.admin.totalTokensUsed}
+          value={formatNumber(summary.totalTokens, locale)}
+        />
+        <MetricCard
+          icon={<Coins />}
+          label={t.admin.availableTokens}
+          value={formatNumber(
+            summary.availableCredits * summary.tokensPerCredit,
+            locale,
+          )}
+        />
+        <MetricCard
+          icon={<Gauge />}
+          label={t.admin.usedCredits}
+          value={formatNumber(summary.usedCredits, locale)}
+        />
+      </div>
+      {users.length === 0 ? (
+        <EmptyCard>{t.admin.noPaidUsers}</EmptyCard>
+      ) : (
+        <PaperCard className="mt-4 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead
+                style={{
+                  background: "var(--ink-wash)",
+                  color: "var(--ink-faint)",
+                }}
+              >
+                <tr>
+                  <TableHead>{t.admin.user}</TableHead>
+                  <TableHead>{t.admin.tokenUsage}</TableHead>
+                  <TableHead>{t.admin.creditsBalance}</TableHead>
+                  <TableHead>{t.admin.updatedAt}</TableHead>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr
+                    key={user.id}
+                    className="border-t"
+                    style={{ borderColor: "var(--ink-line)" }}
+                  >
+                    <TableCell>
+                      <p
+                        className="font-medium"
+                        style={{ color: "var(--ink-black)" }}
+                      >
+                        {user.name}
+                      </p>
+                      <p
+                        className="mt-0.5 text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {user.email}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <p
+                        className="font-medium"
+                        style={{ color: "var(--ink-strong)" }}
+                      >
+                        {formatNumber(user.totalTokens, locale)}
+                      </p>
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {formatNumber(user.inputTokens, locale)} {t.admin.inputTokens}
+                        {" · "}
+                        {formatNumber(user.outputTokens, locale)} {t.admin.outputTokens}
+                      </p>
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {formatNumber(user.usedCredits, locale)} {t.admin.usedCredits}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <p
+                        className="font-medium"
+                        style={{ color: "var(--ink-strong)" }}
+                      >
+                        {formatNumber(user.availableCredits, locale)} {t.admin.available}
+                      </p>
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {formatNumber(user.balanceCredits, locale)} {t.admin.totalCredits}
+                        {" · "}
+                        {formatNumber(user.reservedCredits, locale)} {t.admin.reservedCredits}
+                      </p>
+                    </TableCell>
+                    <TableCell>{formatDateTime(user.updatedAt, locale)}</TableCell>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {summary.paidUsers > users.length && (
+            <p className="border-t px-4 py-3 text-xs" style={{ borderColor: "var(--ink-line)", color: "var(--ink-faint)" }}>
+              {t.admin.paidUsersLimited}
+            </p>
+          )}
+        </PaperCard>
+      )}
+    </section>
   );
 }
 

@@ -456,7 +456,7 @@ func TestValidateWechatCoverImageConfig(t *testing.T) {
 	complete := Config{
 		WechatCoverImageBaseURL: "https://images.example.test/v1",
 		WechatCoverImageAPIKey:  "secret",
-		WechatCoverImageModel:   "image-model",
+		WechatCoverImageModel:   "gpt-image-2.5-flare",
 	}
 	if err := complete.ValidateWechatCoverImageConfig(); err != nil || !complete.WechatCoverImageEnabled() {
 		t.Fatalf("complete WeChat cover config rejected: %v", err)
@@ -482,14 +482,14 @@ func TestLoadPopulatesWechatConfiguration(t *testing.T) {
 	t.Setenv("X_CREDENTIAL_ENCRYPTION_KEY", " x-credential-key ")
 	t.Setenv("WECHAT_COVER_IMAGE_BASE_URL", " https://images.example.test/v1 ")
 	t.Setenv("WECHAT_COVER_IMAGE_API_KEY", " image-key ")
-	t.Setenv("WECHAT_COVER_IMAGE_MODEL", " image-model ")
+	t.Setenv("WECHAT_COVER_IMAGE_MODEL", " gpt-image-2.5-flare ")
 	cfg := Load()
 	if cfg.WechatCredentialEncryptionKey != "credential-key" ||
 		cfg.ZhihuCredentialEncryptionKey != "zhihu-credential-key" ||
 		cfg.XCredentialEncryptionKey != "x-credential-key" ||
 		cfg.WechatCoverImageBaseURL != "https://images.example.test/v1" ||
 		cfg.WechatCoverImageAPIKey != "image-key" ||
-		cfg.WechatCoverImageModel != "image-model" {
+		cfg.WechatCoverImageModel != "gpt-image-2.5-flare" {
 		t.Fatalf("WeChat configuration was not fully loaded: %+v", cfg)
 	}
 }

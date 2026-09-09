@@ -830,9 +830,12 @@ func (a *App) publishXArticleOAuth2(
 	title string,
 	markdown string,
 	images []xPublishImageInput,
+	coverImageIndex *int,
 ) (xPublishResult, error) {
 	media := make([]xArticleMedia, 0, len(images))
-	for _, image := range images {
+	var coverMediaID string
+
+	for index, image := range images {
 		raw, err := a.readXImage(ctx, strings.TrimSpace(image.Source))
 		if err != nil {
 			if errors.Is(err, errXImageSourceUnavailable) {
@@ -853,12 +856,25 @@ func (a *App) publishXArticleOAuth2(
 			Caption: strings.TrimSpace(image.Alt),
 			Source:  xArticleImageSourceForMatching(image),
 		})
+
+		if coverImageIndex != nil && index == *coverImageIndex {
+			coverMediaID = mediaID
+		}
 	}
 
 	draftRequest := map[string]any{
 		"title":         title,
 		"content_state": buildXArticleContentState(markdown, media),
 	}
+
+	// 如果有封面图，添加到请求中
+	if coverMediaID != "" {
+		draftRequest["cover_media"] = map[string]string{
+			"media_category": "tweet_image",
+			"media_id":       coverMediaID,
+		}
+	}
+
 	var draft xArticleDraftResponse
 	if err := a.doXOAuth2JSON(ctx, credential, xOAuth2ArticleDraftPath, draftRequest, &draft); err != nil {
 		return xPublishResult{}, errors.Join(errXPublishFailed, err)

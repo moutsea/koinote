@@ -289,7 +289,8 @@ export const fr: Messages = {
         desc: "Copiez l’AppID et générez ou copiez l’AppSecret. WeChat peut ne l’afficher qu’une fois : enregistrez-le d’abord dans un gestionnaire de mots de passe.",
       },
     ],
-    platformScreenshotAlt: "Exemple de liste blanche IP des API sur la plateforme développeur WeChat",
+    platformScreenshotAlt:
+      "Exemple de liste blanche IP des API sur la plateforme développeur WeChat",
     platformScreenshotCaption:
       "Exemple : ajoutez l’IP de sortie de Koinote Cloud, 122.51.97.242, à la liste blanche des API.",
     ipTitle: "Pourquoi l’IP de sortie est-elle nécessaire ?",
@@ -624,7 +625,8 @@ export const fr: Messages = {
     versionDescription:
       "Comprenez les limites, instantanés de sécurité, conflits de révision et la comparaison ou restauration des versions web et Agent.",
     xTitle: "Assistant de navigateur X",
-    xDescription: "Découvrez où trouver auth_token et ct0 et comment démarrer l’assistant local dans l’application.",
+    xDescription:
+      "Découvrez où trouver auth_token et ct0 et comment démarrer l’assistant local dans l’application.",
     readGuide: "Lire le guide",
     safetyTitle: "Conseil de migration",
     safetyBody:
@@ -885,6 +887,48 @@ export const fr: Messages = {
     channel: "Canal par défaut",
     configureChannels: "Gérer les canaux de modèles",
     availableCredits: "{count} credits disponibles",
+    taskSelection: "Choisissez les axes à relire",
+    categoryTabs: "Parcourir les suggestions par catégorie",
+    allTasks: "Tout optimiser",
+    selectAllTasks: "Tout sélectionner",
+    selectTaskFirst: "Sélectionnez au moins un axe",
+    startWithCount: "Lancer la relecture ({count})",
+    alreadyRunning: "Une relecture est déjà en cours",
+    estimateLoading: "Estimation du coût…",
+    estimateFailed: "Impossible d’estimer le coût. Veuillez réessayer.",
+    estimateRetry: "Réessayer l’estimation",
+    estimateHint:
+      "Réserve jusqu’à {credits} credits. La facturation suit l’usage réel du modèle, généralement inférieur.",
+    estimateInsufficient:
+      "Il faut réserver {credits} credits, plus que votre solde. Choisissez moins d’axes ou rechargez.",
+    anchorHint:
+      "Les suggestions sont marquées dans le document : cliquez une carte pour aller au passage, ou un soulignement pour revenir.",
+    locateInDocument: "Localiser dans le document",
+    layoutDimensionHint:
+      "Cliquez une dimension pour lire son évaluation et filtrer les suggestions, puis lancez une analyse approfondie.",
+    layoutNotAssessed:
+      "L’optimisation de structure n’a pas été retenue cette fois, il n’y a donc pas d’évaluation en six dimensions.",
+    weakestDimension: "La plus faible",
+    tasks: {
+      title: {
+        label: "Optimisation du titre",
+        description: "Vérifier la clarté, l’attrait et la promesse",
+      },
+      proofread: {
+        label: "Correction",
+        description:
+          "Repérer les formulations et faits qui nuisent à la compréhension",
+      },
+      structure: {
+        label: "Optimisation de la structure",
+        description: "Vérifier la hiérarchie, l’accent et la lecture mobile",
+      },
+      paragraph: {
+        label: "Optimisation des paragraphes",
+        description:
+          "Vérifier la logique, les répétitions et l’ordre de l’argumentation",
+      },
+    },
     start: "Lancer l’analyse",
     running: "L’IA analyse votre article…",
     progress: "{completed}/{total} sous-tâches terminées",
@@ -914,18 +958,16 @@ export const fr: Messages = {
     noPreviousReviews: "Aucune analyse pour le moment.",
     previousReviews: "Analyses précédentes",
     newReview: "Nouvelle analyse",
+    rerunReview: "Nouvelle analyse",
+    rerunReviewTitle: "Choisir la portée et relancer",
     summary: "Résumé de l’analyse",
     titleReview: "Suggestions de titre",
     contentReview: "Expression du texte",
     layoutReview: "Structure et mise en page",
-    layoutAssessment: "Radar à six dimensions",
-    layoutShowCards: "Tout déployer",
-    layoutShowRadar: "Afficher le radar",
-    layoutRadarHint:
-      "Survolez une dimension pour l’examiner. Cliquez pour filtrer les suggestions, puis recliquez pour annuler.",
+    layoutAssessment: "Évaluation en six dimensions",
     deepAnalysis: "Analyse approfondie",
-    deepAnalysisTarget: "Cible de l’analyse approfondie",
     deepAnalysisStarting: "Démarrage…",
+    deepAnalysisExpandHint: "Sélectionnez cette dimension pour voir son coût.",
     deepReviewBadge: "Analyse approfondie · {dimension}",
     titleScore: "Attractivité du titre : {score}/100",
     suggestions: "Modifications proposées",
@@ -958,6 +1000,7 @@ export const fr: Messages = {
       "La structure actuelle fonctionne déjà. Aucun changement de mise en page sûr n’est nécessaire.",
     noFilteredLayoutSuggestions:
       "Cette analyse ne contient aucun changement pour « {dimension} ». Lancez une analyse approfondie ciblée.",
+    otherLayoutSuggestions: "Autres suggestions de structure",
     usage: "{credits} credits consommés",
     close: "Fermer",
     categories: {
@@ -1113,7 +1156,8 @@ export const fr: Messages = {
     zhihuDescription:
       "Associez les identifiants OpenAPI Zhihu et publiez directement vos articles.",
     x: "X",
-    xDescription: "Connectez X avec OAuth 2.0 et publiez des Articles X longs avec images.",
+    xDescription:
+      "Connectez X avec OAuth 2.0 et publiez des Articles X longs avec images.",
     freePlan: "Gratuit",
     lifetimePlan: "Membre à vie",
     upgrade: "Mettre à niveau",
@@ -1353,6 +1397,22 @@ export const fr: Messages = {
       "Nouveaux utilisateurs, membres et commandes par jour dans le fuseau du site.",
     recentUsers: "Utilisateurs récents",
     recentPayments: "Paiements récents",
+    paidTokenUsage: "Utilisation des tokens des membres payants",
+    paidTokenUsageHint: "1 crédit couvre environ {tokens} tokens ; le solde indique les crédits actuellement disponibles.",
+    paidUserCount: "Utilisateurs payants",
+    totalTokensUsed: "Tokens utilisés",
+    availableTokens: "Tokens disponibles",
+    usedCredits: "Crédits utilisés",
+    tokenUsage: "Utilisation des tokens",
+    creditsBalance: "Solde de crédits",
+    inputTokens: "entrée",
+    outputTokens: "sortie",
+    available: "disponibles",
+    totalCredits: "total",
+    reservedCredits: "réservés",
+    updatedAt: "Actualisé",
+    noPaidUsers: "Aucun utilisateur payant.",
+    paidUsersLimited: "Seuls les 100 premiers utilisateurs payants sont affichés.",
     noUsers: "Aucun utilisateur.",
     noPayments: "Aucun paiement.",
     deletedAccount: "Compte supprimé",
@@ -1676,7 +1736,8 @@ export const fr: Messages = {
     mediaWechat: "WeChat",
     mediaWechatHint: "Texte enrichi stylé",
     mediaZhihu: "Zhihu",
-    mediaZhihuHint: "Texte enrichi adapté ; la publication OpenAPI directe n’accepte pas les images",
+    mediaZhihuHint:
+      "Texte enrichi adapté ; la publication OpenAPI directe n’accepte pas les images",
     mediaJuejin: "Juejin",
     mediaJuejinHint: "Markdown natif",
     mediaX: "X",
@@ -1802,7 +1863,8 @@ export const fr: Messages = {
     zhihuAccountUnbindFailed: "Impossible de dissocier Zhihu. Réessayez.",
     zhihuAccountCancel: "Annuler",
     zhihuAppKey: "App Key Zhihu",
-    zhihuAppKeyPlaceholder: "Le token utilisateur de l’URL de votre profil Zhihu",
+    zhihuAppKeyPlaceholder:
+      "Le token utilisateur de l’URL de votre profil Zhihu",
     zhihuAppSecret: "App Secret Zhihu",
     zhihuAppSecretPlaceholder:
       "Saisissez l’App Secret complet généré par Zhihu (il ne sera plus affiché)",
@@ -1825,12 +1887,14 @@ export const fr: Messages = {
     zhihuAssistDone: "Copié — la page d’écriture Zhihu est ouverte",
     zhihuAssistFailed: "Impossible de copier ou d’ouvrir Zhihu. Réessayez.",
     xAccountTitle: "Publication X",
-    xAccountHint: "Connectez votre compte via OAuth 2.0 officiel pour publier vos textes longs et images Koinote sous forme d’Article X.",
+    xAccountHint:
+      "Connectez votre compte via OAuth 2.0 officiel pour publier vos textes longs et images Koinote sous forme d’Article X.",
     xDeveloperPortal: "Ouvrir X Developer Portal",
     xAccountLoading: "Chargement de la connexion X…",
     xAccountLoadFailed: "Impossible de charger la connexion X. Réessayez.",
     xAccountRetry: "Réessayer",
-    xAccountNotBound: "Aucun compte X n’est connecté. Autorisez d’abord l’accès avec OAuth 2.0.",
+    xAccountNotBound:
+      "Aucun compte X n’est connecté. Autorisez d’abord l’accès avec OAuth 2.0.",
     xAccountBind: "Associer X",
     xAccountSave: "Enregistrer",
     xAccountSaving: "Enregistrement…",
@@ -1842,7 +1906,8 @@ export const fr: Messages = {
     xAccountUnbindFailed: "Impossible de dissocier X.",
     xAccountCancel: "Annuler",
     xOAuth2Title: "OAuth 2.0",
-    xOAuth2Hint: "Recommandé : autorisez Koinote via X. Seuls les comptes X Premium ou Premium+ peuvent publier des Articles. Chaque publication réussie coûte 20 credits Koinote. Les jetons sont chiffrés et ne sont jamais envoyés au client.",
+    xOAuth2Hint:
+      "Recommandé : autorisez Koinote via X. Seuls les comptes X Premium ou Premium+ peuvent publier des Articles. Chaque publication réussie coûte 20 credits Koinote. Les jetons sont chiffrés et ne sont jamais envoyés au client.",
     xOAuth2Bind: "Connecter avec X",
     xOAuth2Binding: "Ouverture de X…",
     xOAuth2Connected: "Compte X connecté.",
@@ -1859,18 +1924,27 @@ export const fr: Messages = {
     xAccessTokenPlaceholder: "Votre Access Token X",
     xAccessTokenSecret: "Access Token Secret",
     xAccessTokenSecretPlaceholder: "Votre Access Token Secret X",
-    xCredentialUpdatePlaceholder: "Laisser vide pour conserver l’identifiant enregistré",
+    xCredentialUpdatePlaceholder:
+      "Laisser vide pour conserver l’identifiant enregistré",
     xPublish: "Publier sur X",
     xPublishing: "Publication sur X…",
     xPublished: "Publié sur X",
-    xPublishConfirm: "Publier le texte intégral et les images sous forme d’Article X ? Seuls les comptes X Premium ou Premium+ peuvent publier des Articles. Une publication réussie coûte 20 credits Koinote et devient immédiatement publique.",
-    xPublishHint: "Seuls les comptes X Premium et Premium+ peuvent publier un Article X complet. Chaque publication réussie coûte 20 credits Koinote et devient immédiatement publique.",
-    xPublishOAuth2BillingHint: "La publication utilise OAuth 2.0 officiel et l’API Articles de X. Koinote déduit 20 credits après une publication réussie.",
+    xPublishConfirm:
+      "Publier le texte intégral et les images sous forme d’Article X ? Seuls les comptes X Premium ou Premium+ peuvent publier des Articles. Une publication réussie coûte 20 credits Koinote et devient immédiatement publique.",
+    xPublishHint:
+      "Seuls les comptes X Premium et Premium+ peuvent publier un Article X complet. Chaque publication réussie coûte 20 credits Koinote et devient immédiatement publique.",
+    xCoverImage: "Image de couverture",
+    xPublishOAuth2BillingHint:
+      "La publication utilise OAuth 2.0 officiel et l’API Articles de X. Koinote déduit 20 credits après une publication réussie.",
     xPublishFailed: "Impossible de publier sur X. Réessayez.",
-    xPublishTooLong: "Cet article dépasse la limite de 25 publications d’un fil X. Raccourcissez-le puis réessayez.",
-    xPublishTooManyImages: "Une publication X prend actuellement en charge jusqu’à 20 images. Supprimez-en puis réessayez.",
-    xArticleInvalid: "Un Article X nécessite un titre et du texte ou une image.",
-    xArticleTooLong: "L’Article X dépasse la limite officielle de 10 000 caractères. Raccourcissez-le puis réessayez.",
+    xPublishTooLong:
+      "Cet article dépasse la limite de 25 publications d’un fil X. Raccourcissez-le puis réessayez.",
+    xPublishTooManyImages:
+      "Une publication X prend actuellement en charge jusqu’à 20 images. Supprimez-en puis réessayez.",
+    xArticleInvalid:
+      "Un Article X nécessite un titre et du texte ou une image.",
+    xArticleTooLong:
+      "L’Article X dépasse la limite officielle de 10 000 caractères. Raccourcissez-le puis réessayez.",
     wechatCoverTitle: "Choisir une couverture",
     wechatCoverModeLabel: "Source de couverture",
     wechatCoverDefault: "Couverture par défaut",
@@ -2112,7 +2186,8 @@ function hello(name) {
     invalid:
       "Ce lien d’autorisation est invalide. Revenez dans l’application et réessayez.",
     failed: "L’autorisation n’a pas pu aboutir. Veuillez réessayer.",
-    timeout: "L’autorisation a expiré. Revenez dans l’application et reconnectez-vous.",
+    timeout:
+      "L’autorisation a expiré. Revenez dans l’application et reconnectez-vous.",
   },
   desktopLocalMode: {
     badge: "Mode local",
@@ -2614,11 +2689,16 @@ function hello(name) {
     x_partial_publish:
       "Seule une partie du fil X a été publiée. Vérifiez X avant de réessayer.",
     x_oauth2_account_not_bound: "Connectez d’abord un compte X avec OAuth 2.0",
-    x_oauth2_not_configured: "OAuth 2.0 de X n’est pas configuré sur ce serveur",
-    x_oauth2_token_invalid: "L’autorisation X a expiré. Reconnectez votre compte",
-    x_article_too_long: "L’Article X dépasse la limite officielle de 10 000 caractères. Raccourcissez-le puis réessayez",
-    x_article_unavailable: "Ce compte X ou cette application développeur n’a pas accès à l’API Articles. Vérifiez X Premium et les autorisations développeur",
-    x_article_draft_only: "X a enregistré le brouillon de l’Article sans pouvoir le publier. Vérifiez vos brouillons X avant de réessayer afin d’éviter les doublons",
+    x_oauth2_not_configured:
+      "OAuth 2.0 de X n’est pas configuré sur ce serveur",
+    x_oauth2_token_invalid:
+      "L’autorisation X a expiré. Reconnectez votre compte",
+    x_article_too_long:
+      "L’Article X dépasse la limite officielle de 10 000 caractères. Raccourcissez-le puis réessayez",
+    x_article_unavailable:
+      "Ce compte X ou cette application développeur n’a pas accès à l’API Articles. Vérifiez X Premium et les autorisations développeur",
+    x_article_draft_only:
+      "X a enregistré le brouillon de l’Article sans pouvoir le publier. Vérifiez vos brouillons X avant de réessayer afin d’éviter les doublons",
     x_image_source_unavailable:
       "Une image de cet article n’est plus disponible. Téléversez-la à nouveau avant de publier",
     x_image_upload_failed:

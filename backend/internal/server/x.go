@@ -37,7 +37,7 @@ const (
 	xTweetPath             = "/2/tweets"
 	xMediaUploadURL        = "https://upload.twitter.com/1.1/media/upload.json"
 	xAccountRequestBytes   = 64 << 10
-	xPublishRequestBytes   = 3 << 20
+	xPublishRequestBytes   = 8 << 20
 	xPublishMaxPosts       = 25
 	xPublishMaxImages      = 20
 	xPostMaxRunes          = 280
@@ -95,11 +95,12 @@ type xPublishImageInput struct {
 }
 
 type xPublishInput struct {
-	Mode     string               `json:"mode,omitempty"`
-	Title    string               `json:"title,omitempty"`
-	Markdown string               `json:"markdown,omitempty"`
-	Posts    []string             `json:"posts,omitempty"`
-	Images   []xPublishImageInput `json:"images,omitempty"`
+	Mode            string               `json:"mode,omitempty"`
+	Title           string               `json:"title,omitempty"`
+	Markdown        string               `json:"markdown,omitempty"`
+	Posts           []string             `json:"posts,omitempty"`
+	Images          []xPublishImageInput `json:"images,omitempty"`
+	CoverImageIndex *int                 `json:"coverImageIndex,omitempty"`
 }
 
 type xPublishResult struct {
@@ -346,6 +347,10 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if input.CoverImageIndex != nil && (*input.CoverImageIndex < 0 || *input.CoverImageIndex >= len(input.Images)) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "x_publish_input_invalid", "Invalid X Article cover image")
+			return
+		}
 	} else {
 		if len(input.Posts) == 0 || len(input.Posts) > xPublishMaxPosts || len(input.Images) > xPublishMaxImages {
 			httpx.ErrorCode(w, http.StatusBadRequest, "x_publish_input_invalid", "Invalid X post thread")
@@ -450,7 +455,7 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	defer cancelPublish()
 	var result xPublishResult
 	if articleRequest {
-		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, articleMarkdown, input.Images)
+		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, articleMarkdown, input.Images, input.CoverImageIndex)
 	} else if input.Mode == "oauth2" {
 		result, err = a.publishXThreadOAuth2(publishContext, oauth2Credential, input.Posts, imagesByPost)
 	} else {

@@ -19,10 +19,21 @@ export function buildXArticle(
   title: string,
   markdownBody: string,
   articleImages: XArticleImage[],
+  description = "",
 ): XArticleDraft {
   const normalizedTitle = titleToXText(title);
-  const markdown = markdownBody
+  const normalizedDescription = description.trim();
+  const normalizedBody = markdownBody
     .replace(/^\uFEFF?---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, "")
+    .trim();
+  const combinedMarkdown = normalizedDescription &&
+    (normalizedBody === normalizedDescription ||
+      normalizedBody.startsWith(`${normalizedDescription}\n`))
+    ? normalizedBody
+    : [normalizedDescription, normalizedBody]
+        .filter(Boolean)
+        .join("\n\n");
+  const markdown = combinedMarkdown
     .trim();
   return {
     title: normalizedTitle,

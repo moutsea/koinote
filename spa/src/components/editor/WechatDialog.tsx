@@ -635,6 +635,7 @@ export function MediaExportDialog({
             docId={docId}
             title={exportTitle}
             markdownBody={parseArticleMetadata(currentMarkdown, title).body}
+            description={exportMetadata.digest}
             articleImages={articleImages}
             localMode={localMode}
             disabled={busy || geoLoading || geoGenerating || draftPublishing}

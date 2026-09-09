@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestBuildWritingReviewTaskPlanSplitsOnlyLongBodies(t *testing.T) {
@@ -53,6 +54,64 @@ func TestBuildWritingReviewTaskPlanSplitsOnlyLongBodies(t *testing.T) {
 	}
 	if joined.String() != strings.ReplaceAll(longContent, "\n\n", "") {
 		t.Fatalf("body chunks did not preserve every Markdown block exactly")
+	}
+}
+
+func TestBuildWritingReviewTaskPlanHonorsSelectedTasks(t *testing.T) {
+	content := "第一段。\n\n第二段。"
+	tests := []struct {
+		name       string
+		selected   []string
+		wantStages []agentReviewTaskStage
+	}{
+		{name: "title", selected: []string{"title"}, wantStages: []agentReviewTaskStage{agentReviewTaskTitle}},
+		{name: "proofread", selected: []string{"proofread"}, wantStages: []agentReviewTaskStage{agentReviewTaskBody}},
+		{name: "structure", selected: []string{"structure"}, wantStages: []agentReviewTaskStage{agentReviewTaskLayout}},
+		{name: "paragraph", selected: []string{"paragraph"}, wantStages: []agentReviewTaskStage{agentReviewTaskDocument}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			plan, err := buildWritingReviewTaskPlan("标题", content, test.selected...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(plan.Tasks) != len(test.wantStages) {
+				t.Fatalf("task count=%d, want %d; tasks=%+v", len(plan.Tasks), len(test.wantStages), plan.Tasks)
+			}
+			for index, wantStage := range test.wantStages {
+				if plan.Tasks[index].Stage != wantStage {
+					t.Fatalf("task %d stage=%s, want %s", index, plan.Tasks[index].Stage, wantStage)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildWritingReviewTaskPlanRejectsInvalidTasks(t *testing.T) {
+	if _, err := buildWritingReviewTaskPlan("标题", "正文", ""); err == nil {
+		t.Fatal("expected invalid task error")
+	}
+	if _, err := buildWritingReviewTaskPlan("标题", "正文", "unknown"); err == nil {
+		t.Fatal("expected invalid task error")
+	}
+}
+
+func TestMergeWritingReviewTaskResultsSupportsPartialPlans(t *testing.T) {
+	for _, stage := range []agentReviewTaskStage{
+		agentReviewTaskBody,
+		agentReviewTaskDocument,
+		agentReviewTaskLayout,
+	} {
+		generated := generatedWritingReview{}
+		if stage == agentReviewTaskLayout {
+			generated.LayoutAssessment = placeholderWritingReviewDimensions()
+		}
+		_, _, err := mergeWritingReviewTaskResults([]writingReviewTaskResult{{
+			Task: writingReviewTaskSpec{Stage: stage}, Generated: generated,
+		}}, "标题", "正文", nil)
+		if err != nil {
+			t.Fatalf("stage %s: %v", stage, err)
+		}
 	}
 }
 
@@ -220,7 +279,7 @@ func TestDeepWritingReviewUsesSafeExcerptFromOversizedBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, validated, err := parseWritingReviewTaskResult(task, encoded, "标题", content)
+	_, validated, err := parseWritingReviewTaskResult(task, encoded, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +299,7 @@ func TestDeepWritingReviewUsesSafeExcerptFromOversizedBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, unseenJSON, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, unseenJSON, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("unsupplied suffix error=%v, want invalid response", err)
 	}
 }
@@ -280,7 +339,7 @@ func TestWritingReviewDocumentRejectsUnsuppliedOversizedBlockSuffix(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("unsupplied document suffix error=%v, want invalid response", err)
 	}
 }
@@ -327,7 +386,7 @@ func TestBuildDeepWritingReviewTaskPlanSupportsDevelopmentalEdits(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, wrongCategoryJSON, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, wrongCategoryJSON, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("wrong focused category error=%v, want invalid response", err)
 	}
 
@@ -347,7 +406,7 @@ func TestBuildDeepWritingReviewTaskPlanSupportsDevelopmentalEdits(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated, validated, err := parseWritingReviewTaskResult(task, validJSON, "标题", content)
+	generated, validated, err := parseWritingReviewTaskResult(task, validJSON, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +416,7 @@ func TestBuildDeepWritingReviewTaskPlanSupportsDevelopmentalEdits(t *testing.T) 
 	}
 	_, merged, err := mergeWritingReviewTaskResults([]writingReviewTaskResult{{
 		Task: task, Generated: generated, Validated: validated,
-	}}, "标题", content)
+	}}, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +578,7 @@ func TestDeepWritingReviewRejectsBodyContentOutsidePromptScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "长文标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, raw, "长文标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("unseen body block error=%v, want invalid response", err)
 	}
 }
@@ -561,7 +620,7 @@ func TestWritingReviewDocumentPromptSupportsExactMultiBlockReplacement(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,7 +656,7 @@ func TestWritingReviewDocumentRejectsSeparatorOutsidePromptBudget(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("omitted separator error=%v, want invalid response", err)
 	}
 }
@@ -628,7 +687,7 @@ func TestWritingReviewBodyChunkRejectsCrossBlockSeparator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("cross-block body error=%v, want invalid response", err)
 	}
 }
@@ -671,7 +730,7 @@ func TestWritingReviewLayoutRejectsBlocksWithoutPromptSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated, validated, err := parseWritingReviewTaskResult(layoutTask, layoutJSON, "标题", content)
+	generated, validated, err := parseWritingReviewTaskResult(layoutTask, layoutJSON, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,7 +748,7 @@ func TestWritingReviewLayoutRejectsBlocksWithoutPromptSource(t *testing.T) {
 		{Task: writingReviewTaskSpec{ID: "body-1", Stage: agentReviewTaskBody}, Generated: generatedWritingReview{}},
 		{Task: layoutTask, Generated: generated},
 	}
-	_, merged, err := mergeWritingReviewTaskResults(mergedResults, "标题", content)
+	_, merged, err := mergeWritingReviewTaskResults(mergedResults, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -811,7 +870,7 @@ func TestMergeWritingReviewTaskResultsDoesNotSpendQuotaOnRejectedSuggestions(t *
 			Generated: generatedWritingReview{LayoutAssessment: placeholderWritingReviewDimensions()},
 		},
 	}
-	_, merged, err := mergeWritingReviewTaskResults(results, "标题", content)
+	_, merged, err := mergeWritingReviewTaskResults(results, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -836,7 +895,7 @@ func TestMergeWritingReviewTaskResultsIgnoresRejectedAlternativesWithSameAnchor(
 		t.Fatal(err)
 	}
 	bodyTask := writingReviewTaskSpec{ID: "body-1", Stage: agentReviewTaskBody}
-	generated, validated, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content)
+	generated, validated, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -893,7 +952,7 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+		if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 			t.Fatalf("%s anchor error=%v, want invalid response", block.Kind, err)
 		}
 	}
@@ -909,7 +968,7 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("spanning anchor error=%v, want invalid response", err)
 	}
 
@@ -923,7 +982,7 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, validated, err := parseWritingReviewTaskResult(bodyTask, ok, "标题", content)
+	_, validated, err := parseWritingReviewTaskResult(bodyTask, ok, "标题", content, nil)
 	if err != nil {
 		t.Fatalf("in-scope suggestion must survive: %v", err)
 	}
@@ -1013,7 +1072,7 @@ func TestWritingReviewBodyChunkRejectsAnchorsOutsideItsChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(first, raw, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(first, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("out-of-chunk anchor error=%v, want invalid response", err)
 	}
 }
@@ -1070,7 +1129,7 @@ func TestWritingReviewTaskDropsOnlyTheRejectedBodySuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil)
 	if err != nil {
 		t.Fatalf("one bad anchor must not fail the whole task: %v", err)
 	}
@@ -1086,8 +1145,39 @@ func TestWritingReviewTaskDropsOnlyTheRejectedBodySuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, allBad, "标题", content); !errors.Is(err, errAgentLLMInvalidResponse) {
+	if _, _, err := parseWritingReviewTaskResult(task, allBad, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 		t.Fatalf("all-rejected error=%v, want invalid response so the task retries", err)
+	}
+}
+
+func TestWritingReviewTaskPreservesSourceTaskAcrossValidation(t *testing.T) {
+	content := "正文锚点。"
+	raw, err := json.Marshal(map[string]any{
+		"bodySuggestions": []map[string]any{{
+			"category": "clarity", "before": content,
+			"after": "正文锚点已经更清楚。", "reason": "避免读者误解。",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stage := range []agentReviewTaskStage{agentReviewTaskBody, agentReviewTaskDocument} {
+		_, validated, err := parseWritingReviewTaskResult(
+			writingReviewTaskSpec{ID: string(stage), Stage: stage}, raw, "标题", content, nil,
+		)
+		if err != nil {
+			t.Fatalf("stage %s: %v", stage, err)
+		}
+		if len(validated.Suggestions) != 1 {
+			t.Fatalf("stage %s suggestions=%+v", stage, validated.Suggestions)
+		}
+		want := "proofread"
+		if stage == agentReviewTaskDocument {
+			want = "paragraph"
+		}
+		if validated.Suggestions[0].SourceTask != want {
+			t.Fatalf("stage %s source=%q, want %q", stage, validated.Suggestions[0].SourceTask, want)
+		}
 	}
 }
 
@@ -1108,7 +1198,9 @@ func TestValidateWritingReviewKeepsDocumentPatchOverOverlappingChunkEdit(t *test
 		LayoutAssessment: placeholderWritingReviewDimensions(),
 		BodySuggestions:  []generatedBodySuggestion{documentPatch, chunkEdit},
 	}
-	validated, err := validateGeneratedWritingReview(generated, "标题", content, true, nil, nil, nil, nil, nil, true)
+	validated, err := validateGeneratedWritingReview(generated, "标题", content, writingReviewValidationScope{
+		HasTitleReview: true, HasLayoutReview: true, DropRejectedSuggestions: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1138,7 +1230,9 @@ func TestMergeWritingReviewTaskResultsDropsSuggestionsBeyondDocumentLimit(t *tes
 			Summary: "Summary.", TitleScore: 100, TitleAssessment: "The title is supported.",
 			LayoutAssessment: placeholderWritingReviewDimensions(), BodySuggestions: []generatedBodySuggestion{suggestion},
 		}
-		if _, err := validateGeneratedWritingReview(generated, "Title", content, true, nil, nil, nil, nil, nil, false); err != nil {
+		if _, err := validateGeneratedWritingReview(generated, "Title", content, writingReviewValidationScope{
+			HasTitleReview: true, HasLayoutReview: true,
+		}); err != nil {
 			t.Fatalf("individual suggestion should fit: %v", err)
 		}
 	}
@@ -1170,7 +1264,7 @@ func TestMergeWritingReviewTaskResultsDropsSuggestionsBeyondDocumentLimit(t *tes
 			Generated: generatedWritingReview{LayoutAssessment: placeholderWritingReviewDimensions()},
 		},
 	}
-	_, merged, err := mergeWritingReviewTaskResults(results, "Title", content)
+	_, merged, err := mergeWritingReviewTaskResults(results, "Title", content, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1352,4 +1446,131 @@ func writingReviewTaskDimensionsForTest() []map[string]any {
 		values = append(values, map[string]any{"id": id, "label": id, "score": 80, "summary": "Sound."})
 	}
 	return values
+}
+
+// 计划里没有结构任务时，六维占位分数不能落进结果。占位值是为了通过「六维必须齐全」
+// 的校验才造出来的；漏掉这层过滤，用户只勾一个任务也会看到一张六项满分的能力图，
+// 还能据此发起一次付费的深入分析。
+func TestMergeWritingReviewTaskResultsDropsUnassessedDimensions(t *testing.T) {
+	const content = "第一段。\n\n第二段。"
+	for _, test := range []struct {
+		name          string
+		tasks         []string
+		wantDimension bool
+	}{
+		{name: "proofread only", tasks: []string{"proofread"}},
+		{name: "title only", tasks: []string{"title"}},
+		{name: "title and proofread", tasks: []string{"title", "proofread"}},
+		{name: "structure included", tasks: []string{"proofread", "structure"}, wantDimension: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			plan, err := buildWritingReviewTaskPlan("标题", content, test.tasks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results := make([]writingReviewTaskResult, 0, len(plan.Tasks))
+			for _, task := range plan.Tasks {
+				generated := generatedWritingReview{
+					Summary: "占位。", TitleScore: 100, TitleAssessment: "占位。",
+					LayoutAssessment: placeholderWritingReviewDimensions(),
+				}
+				// 结构任务给出真实评分，其余任务只带占位值。
+				if task.Stage == agentReviewTaskLayout {
+					generated.LayoutAssessment = []writingReviewDimension{}
+					for _, id := range writingReviewDimensionIDs {
+						generated.LayoutAssessment = append(generated.LayoutAssessment, writingReviewDimension{
+							ID: id, Label: "维度", Score: 42, Summary: "确实评估过。",
+						})
+					}
+				}
+				results = append(results, writingReviewTaskResult{
+					Task:      task,
+					Usage:     agentLLMResult{InputTokens: 1, OutputTokens: 1, TotalTokens: 2},
+					Generated: generated,
+				})
+			}
+			_, validated, err := mergeWritingReviewTaskResults(results, "标题", content, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !test.wantDimension {
+				if len(validated.LayoutAssessment) != 0 || validated.HasLayoutReview {
+					t.Fatalf("layoutAssessment=%+v hasLayoutReview=%v, want empty",
+						validated.LayoutAssessment, validated.HasLayoutReview)
+				}
+				return
+			}
+			if len(validated.LayoutAssessment) != len(writingReviewDimensionIDs) || !validated.HasLayoutReview {
+				t.Fatalf("layoutAssessment=%+v hasLayoutReview=%v", validated.LayoutAssessment, validated.HasLayoutReview)
+			}
+			for _, dimension := range validated.LayoutAssessment {
+				if dimension.Score != 42 || dimension.Summary != "确实评估过。" {
+					t.Fatalf("dimension %s was replaced by a placeholder: %+v", dimension.ID, dimension)
+				}
+			}
+		})
+	}
+}
+
+// 阶段内已有任务失败后，后到的成功结果不能把状态翻回 running/completed。
+func TestAgentReviewProgressKeepsStageFailedAfterLateSuccess(t *testing.T) {
+	progress := agentReviewTaskProgress{
+		TotalTasks: 2,
+		Stages: []agentReviewStageProgress{
+			{ID: agentReviewTaskBody, Status: "running", TotalTasks: 2},
+		},
+	}
+	progress.record(writingReviewTaskOutcome{
+		Result: writingReviewTaskResult{Task: writingReviewTaskSpec{Stage: agentReviewTaskBody}},
+		Err:    errAgentLLMInvalidResponse,
+	})
+	if progress.Stages[0].Status != "failed" {
+		t.Fatalf("status after failure = %q", progress.Stages[0].Status)
+	}
+	progress.record(writingReviewTaskOutcome{
+		Result: writingReviewTaskResult{Task: writingReviewTaskSpec{Stage: agentReviewTaskBody}},
+	})
+	if progress.Stages[0].Status != "failed" {
+		t.Fatalf("status after late success = %q, want failed", progress.Stages[0].Status)
+	}
+	if progress.Stages[0].CompletedTasks != 0 || progress.CompletedTasks != 0 {
+		t.Fatalf("completed counters = %d/%d", progress.Stages[0].CompletedTasks, progress.CompletedTasks)
+	}
+}
+
+// 中文提示词的预留额度不应按字节数算。按字节算会让预留是实际用量的三倍左右，
+// 余额不多的用户在发起时就被挡住，而真跑起来根本花不了那么多。
+func TestAgentReviewReservationDoesNotOvercountWideCharacters(t *testing.T) {
+	const paragraph = "这是一段完全由中文构成的正文，用来检验预留额度的折算是否合理。"
+	chinese := strings.Repeat(paragraph, 200)
+	prompt := agentLLMPrompt{System: "rule", User: chinese, MaxOutputTokens: 1_000}
+
+	tokens := agentReviewPromptTokenUpperBound(prompt)
+	// 上界仍要覆盖真实用量（中文约 1 token/字），但不能退化成字节数。
+	runes := utf8.RuneCountInString(chinese)
+	if tokens < runes {
+		t.Fatalf("token upper bound %d is below the rune count %d", tokens, runes)
+	}
+	if tokens >= len(chinese) {
+		t.Fatalf("token upper bound %d still counts bytes (%d)", tokens, len(chinese))
+	}
+	if reservation := estimateAgentReviewReservation(prompt); reservation < 1 {
+		t.Fatalf("reservation = %d, want at least 1", reservation)
+	}
+}
+
+// 内置渠道要给 system 加 cache_control：一次审阅十几个任务共用同一份 system
+// prompt，命中缓存直接省用户的 credits。BYOK 保持纯字符串，兼容网关支持不一。
+func TestAnthropicSystemBlocksCacheOnlyBuiltin(t *testing.T) {
+	builtin := anthropicSystemBlocks(agentLLMProvider{Mode: "builtin"}, "rules")
+	blocks, ok := builtin.([]map[string]any)
+	if !ok || len(blocks) != 1 {
+		t.Fatalf("builtin system = %#v", builtin)
+	}
+	if blocks[0]["text"] != "rules" || blocks[0]["cache_control"] == nil {
+		t.Fatalf("builtin system block = %#v", blocks[0])
+	}
+	if byok := anthropicSystemBlocks(agentLLMProvider{Mode: "byok"}, "rules"); byok != "rules" {
+		t.Fatalf("byok system = %#v", byok)
+	}
 }

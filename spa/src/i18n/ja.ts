@@ -283,7 +283,8 @@ export const ja: Messages = {
         desc: "AppID をコピーし、AppSecret を生成またはコピーします。一度しか表示されない場合があるため、先にパスワード管理へ保存してください。",
       },
     ],
-    platformScreenshotAlt: "WeChat 開発者プラットフォームの API IP ホワイトリスト設定例",
+    platformScreenshotAlt:
+      "WeChat 開発者プラットフォームの API IP ホワイトリスト設定例",
     platformScreenshotCaption:
       "例：Koinote Cloud の送信元 IP 122.51.97.242 を API IP ホワイトリストに追加します。",
     ipTitle: "なぜ IP ホワイトリストが必要ですか？",
@@ -610,7 +611,8 @@ export const ja: Messages = {
     versionDescription:
       "保持上限、安全スナップショット、revision 競合、Web や Agent が作った版の比較と復元を説明します。",
     xTitle: "X ローカルブラウザーアシスタント",
-    xDescription: "auth_token と ct0 の確認方法と、デスクトップアプリでの安全な起動方法を説明します。",
+    xDescription:
+      "auth_token と ct0 の確認方法と、デスクトップアプリでの安全な起動方法を説明します。",
     readGuide: "ガイドを読む",
     safetyTitle: "移行とバックアップのおすすめ",
     safetyBody:
@@ -862,6 +864,46 @@ export const ja: Messages = {
     channel: "デフォルトチャネル",
     configureChannels: "モデルチャネルを管理",
     availableCredits: "利用可能 {count} credits",
+    taskSelection: "レビューする範囲を選択",
+    categoryTabs: "カテゴリー別に提案を見る",
+    allTasks: "すべて最適化",
+    selectAllTasks: "すべて選択",
+    selectTaskFirst: "1 つ以上選択してください",
+    startWithCount: "レビューを開始（{count} 項目）",
+    alreadyRunning: "すでにレビューを実行中です",
+    estimateLoading: "コストを見積もり中…",
+    estimateFailed: "コストを見積もれませんでした。もう一度お試しください。",
+    estimateRetry: "再見積もり",
+    estimateHint:
+      "最大 {credits} credits を確保します。請求は実際のモデル使用量に基づき、通常はこれより少なくなります。",
+    estimateInsufficient:
+      "{credits} credits の確保が必要ですが、残高が足りません。項目を減らすか credits を追加してください。",
+    anchorHint:
+      "提案は本文に印を付けています。カードをクリックすると該当箇所へ移動し、波線をクリックすると提案に戻ります。",
+    locateInDocument: "本文の該当箇所へ",
+    layoutDimensionHint:
+      "項目をクリックすると評価を読み、提案を絞り込めます。そのまま詳細分析も実行できます。",
+    layoutNotAssessed:
+      "今回は構造の最適化を選んでいないため、6 項目の評価はありません。",
+    weakestDimension: "最も弱い",
+    tasks: {
+      title: {
+        label: "タイトル最適化",
+        description: "明確さ、魅力、約束との整合性を確認",
+      },
+      proofread: {
+        label: "誤字・不自然な文の確認",
+        description: "理解を妨げる表現や事実の問題を確認",
+      },
+      structure: {
+        label: "構成最適化",
+        description: "階層、強調、モバイルでの読みやすさを確認",
+      },
+      paragraph: {
+        label: "段落最適化",
+        description: "段落間の論理、重複、論証の順序を確認",
+      },
+    },
     start: "レビューを開始",
     running: "AI が文章をレビューしています…",
     progress: "{total} 個中 {completed} 個のサブタスクが完了",
@@ -891,18 +933,16 @@ export const ja: Messages = {
     noPreviousReviews: "レビューはまだありません。",
     previousReviews: "過去のレビュー",
     newReview: "新しいレビュー",
+    rerunReview: "再レビュー",
+    rerunReviewTitle: "範囲を選択して再レビュー",
     summary: "レビュー概要",
     titleReview: "タイトル提案",
     contentReview: "本文表現",
     layoutReview: "構成とレイアウト",
-    layoutAssessment: "6 項目のレーダーチャート",
-    layoutShowCards: "すべて展開",
-    layoutShowRadar: "チャート表示",
-    layoutRadarHint:
-      "項目にマウスを重ねて評価を確認し、クリックして下の提案を絞り込みます。再クリックで解除できます。",
+    layoutAssessment: "6 項目の評価",
     deepAnalysis: "詳細分析",
-    deepAnalysisTarget: "詳細分析の対象",
     deepAnalysisStarting: "開始中…",
+    deepAnalysisExpandHint: "この項目を選択すると費用を確認できます。",
     deepReviewBadge: "詳細分析 · {dimension}",
     titleScore: "タイトル魅力度 {score}/100",
     suggestions: "変更提案",
@@ -933,6 +973,7 @@ export const ja: Messages = {
       "現在の構成は適切です。安全に適用できるレイアウト変更はありません。",
     noFilteredLayoutSuggestions:
       "今回のレビューには「{dimension}」の変更提案がありません。詳細分析で再確認できます。",
+    otherLayoutSuggestions: "その他の構成提案",
     usage: "{credits} credits を消費",
     close: "閉じる",
     categories: {
@@ -1085,7 +1126,8 @@ export const ja: Messages = {
     zhihu: "Zhihu",
     zhihuDescription: "Zhihu OpenAPI を連携し、記事を直接公開します。",
     x: "X",
-    xDescription: "OAuth 2.0 で X を連携し、画像付きの長文 X Article を公開します。",
+    xDescription:
+      "OAuth 2.0 で X を連携し、画像付きの長文 X Article を公開します。",
     freePlan: "無料ユーザー",
     lifetimePlan: "永久会員",
     upgrade: "会員にアップグレード",
@@ -1318,6 +1360,22 @@ export const ja: Messages = {
     trendHint: "サイトのタイムゾーンによる日別の新規ユーザー、会員、注文です。",
     recentUsers: "最近のユーザー",
     recentPayments: "最近の支払い",
+    paidTokenUsage: "有料ユーザーの Token 使用状況",
+    paidTokenUsageHint: "1 クレジットで約 {tokens} Token を利用できます。残高は現在利用可能なクレジットです。",
+    paidUserCount: "有料ユーザー数",
+    totalTokensUsed: "累計使用 Token",
+    availableTokens: "利用可能な Token",
+    usedCredits: "使用済みクレジット",
+    tokenUsage: "Token 使用量",
+    creditsBalance: "クレジット残高",
+    inputTokens: "入力",
+    outputTokens: "出力",
+    available: "利用可能",
+    totalCredits: "合計",
+    reservedCredits: "予約済み",
+    updatedAt: "更新日時",
+    noPaidUsers: "有料ユーザーはまだいません。",
+    paidUsersLimited: "有料ユーザーは先頭 100 人のみ表示しています。",
     noUsers: "ユーザーはまだいません。",
     noPayments: "支払いはまだありません。",
     deletedAccount: "削除済みアカウント",
@@ -1768,14 +1826,18 @@ export const ja: Messages = {
     zhihuAssistPublish: "コピーして Zhihu を開く",
     zhihuAssistPublishing: "準備して Zhihu を開いています…",
     zhihuAssistDone: "コピーしました — Zhihu の執筆ページを開きました",
-    zhihuAssistFailed: "コピーまたは Zhihu の起動に失敗しました。もう一度お試しください。",
+    zhihuAssistFailed:
+      "コピーまたは Zhihu の起動に失敗しました。もう一度お試しください。",
     xAccountTitle: "X 公開",
-    xAccountHint: "X 公式 OAuth 2.0 で接続し、Koinote の長文と画像を X Article として公開します。",
+    xAccountHint:
+      "X 公式 OAuth 2.0 で接続し、Koinote の長文と画像を X Article として公開します。",
     xDeveloperPortal: "X Developer Portal を開く",
     xAccountLoading: "X 連携を読み込み中…",
-    xAccountLoadFailed: "X 連携を読み込めませんでした。もう一度お試しください。",
+    xAccountLoadFailed:
+      "X 連携を読み込めませんでした。もう一度お試しください。",
     xAccountRetry: "再試行",
-    xAccountNotBound: "X アカウントが未接続です。先に OAuth 2.0 で認証してください。",
+    xAccountNotBound:
+      "X アカウントが未接続です。先に OAuth 2.0 で認証してください。",
     xAccountBind: "X を連携",
     xAccountSave: "連携を保存",
     xAccountSaving: "保存中…",
@@ -1787,7 +1849,8 @@ export const ja: Messages = {
     xAccountUnbindFailed: "X の連携を解除できませんでした。",
     xAccountCancel: "キャンセル",
     xOAuth2Title: "OAuth 2.0",
-    xOAuth2Hint: "推奨：X の公式認証を使います。Article を公開できるのは X Premium または Premium+ のアカウントだけです。公開に成功するたび 20 Koinote credits を消費します。トークンは暗号化され、クライアントには表示されません。",
+    xOAuth2Hint:
+      "推奨：X の公式認証を使います。Article を公開できるのは X Premium または Premium+ のアカウントだけです。公開に成功するたび 20 Koinote credits を消費します。トークンは暗号化され、クライアントには表示されません。",
     xOAuth2Bind: "X で接続",
     xOAuth2Binding: "X を開いています…",
     xOAuth2Connected: "X アカウントを接続しました。",
@@ -1808,14 +1871,21 @@ export const ja: Messages = {
     xPublish: "X に公開",
     xPublishing: "X に公開中…",
     xPublished: "X に公開しました",
-    xPublishConfirm: "全文と画像を X Article として公開しますか？Article を公開できるのは X Premium または Premium+ のアカウントです。成功すると 20 Koinote credits を消費し、すぐに公開されます。",
-    xPublishHint: "X Premium または Premium+ のアカウントだけが完全な X Article を公開できます。公開に成功するたび 20 Koinote credits を消費し、すぐに一般公開されます。",
-    xPublishOAuth2BillingHint: "公開には X 公式 OAuth 2.0 と Articles API を使用します。Koinote は公開成功時に 20 credits を差し引きます。",
+    xPublishConfirm:
+      "全文と画像を X Article として公開しますか？Article を公開できるのは X Premium または Premium+ のアカウントです。成功すると 20 Koinote credits を消費し、すぐに公開されます。",
+    xPublishHint:
+      "X Premium または Premium+ のアカウントだけが完全な X Article を公開できます。公開に成功するたび 20 Koinote credits を消費し、すぐに一般公開されます。",
+    xCoverImage: "カバー画像",
+    xPublishOAuth2BillingHint:
+      "公開には X 公式 OAuth 2.0 と Articles API を使用します。Koinote は公開成功時に 20 credits を差し引きます。",
     xPublishFailed: "X に公開できませんでした。もう一度お試しください。",
-    xPublishTooLong: "この記事は X スレッドの上限 25 件を超えています。本文を短くして再試行してください。",
-    xPublishTooManyImages: "1 回の X 公開で現在サポートされる画像は 20 枚までです。画像を減らして再試行してください。",
+    xPublishTooLong:
+      "この記事は X スレッドの上限 25 件を超えています。本文を短くして再試行してください。",
+    xPublishTooManyImages:
+      "1 回の X 公開で現在サポートされる画像は 20 枚までです。画像を減らして再試行してください。",
     xArticleInvalid: "X Article にはタイトルと、本文または画像が必要です。",
-    xArticleTooLong: "X Article が公式の 10,000 文字上限を超えています。短くして再試行してください。",
+    xArticleTooLong:
+      "X Article が公式の 10,000 文字上限を超えています。短くして再試行してください。",
     wechatCoverTitle: "カバーを設定",
     wechatCoverModeLabel: "カバーのソース",
     wechatCoverDefault: "既定のカバー",
@@ -2050,7 +2120,8 @@ function hello(name) {
     signIn: "ログインして続行",
     invalid: "承認リンクが無効です。アプリに戻ってもう一度お試しください。",
     failed: "承認を完了できませんでした。もう一度お試しください。",
-    timeout: "承認がタイムアウトしました。アプリに戻ってもう一度ログインしてください。",
+    timeout:
+      "承認がタイムアウトしました。アプリに戻ってもう一度ログインしてください。",
   },
   desktopLocalMode: {
     badge: "ローカルモード",
@@ -2527,11 +2598,9 @@ function hello(name) {
       "Zhihu App Key の連携または変更には App Secret が必要です",
     zhihu_app_key_already_bound:
       "この Zhihu App Key は別の Koinote アカウントに連携済みです",
-    zhihu_credential_unavailable:
-      "Zhihu 認証情報の暗号化が設定されていません",
+    zhihu_credential_unavailable: "Zhihu 認証情報の暗号化が設定されていません",
     zhihu_account_not_bound: "先に Zhihu アカウントを連携してください",
-    zhihu_publish_input_invalid:
-      "Zhihu 記事のタイトルまたは内容が無効です",
+    zhihu_publish_input_invalid: "Zhihu 記事のタイトルまたは内容が無効です",
     zhihu_provider_unavailable:
       "Zhihu は一時的に利用できません。後でもう一度お試しください",
     zhihu_publish_failed:
@@ -2540,12 +2609,18 @@ function hello(name) {
       "現在、画像を含む記事は Zhihu に公開できません。画像を削除するか、別のプラットフォームを選択してください。",
     x_partial_publish:
       "X スレッドの一部だけが公開されました。再試行する前に X を確認してください。",
-    x_oauth2_account_not_bound: "先に OAuth 2.0 で X アカウントを接続してください",
-    x_oauth2_not_configured: "このサーバーでは X OAuth 2.0 が設定されていません",
-    x_oauth2_token_invalid: "X の認証が期限切れです。アカウントを再接続してください",
-    x_article_too_long: "X Article が公式の 10,000 文字上限を超えています。短くして再試行してください",
-    x_article_unavailable: "この X アカウントまたは開発者アプリは Articles API を利用できません。X Premium と開発者権限を確認してください",
-    x_article_draft_only: "X に Article の下書きは保存されましたが、公開できませんでした。重複を避けるため、再試行前に X の下書きを確認してください",
+    x_oauth2_account_not_bound:
+      "先に OAuth 2.0 で X アカウントを接続してください",
+    x_oauth2_not_configured:
+      "このサーバーでは X OAuth 2.0 が設定されていません",
+    x_oauth2_token_invalid:
+      "X の認証が期限切れです。アカウントを再接続してください",
+    x_article_too_long:
+      "X Article が公式の 10,000 文字上限を超えています。短くして再試行してください",
+    x_article_unavailable:
+      "この X アカウントまたは開発者アプリは Articles API を利用できません。X Premium と開発者権限を確認してください",
+    x_article_draft_only:
+      "X に Article の下書きは保存されましたが、公開できませんでした。重複を避けるため、再試行前に X の下書きを確認してください",
     x_image_source_unavailable:
       "記事内の画像が利用できません。公開前に画像を再アップロードしてください",
     x_image_upload_failed:

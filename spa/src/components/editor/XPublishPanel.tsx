@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, ExternalLink, Send } from "lucide-react";
 import {
@@ -12,12 +12,13 @@ import {
 } from "../../api";
 import { useI18n } from "../../i18n";
 import { isDesktopLocalImageURL } from "../../desktop/offlineImagesCore";
-import { buildXArticle, type XArticleImage } from "./xPublish";
+import { buildXArticle, X_MAX_IMAGES, type XArticleImage } from "./xPublish";
 
 export function XPublishPanel({
   docId,
   title,
   markdownBody,
+  description,
   articleImages,
   disabled,
   localMode,
@@ -26,6 +27,7 @@ export function XPublishPanel({
   docId: string;
   title: string;
   markdownBody: string;
+  description?: string;
   articleImages: XArticleImage[];
   disabled: boolean;
   localMode: boolean;
@@ -38,8 +40,14 @@ export function XPublishPanel({
   const [error, setError] = useState<string | null>(null);
   const [publishedURL, setPublishedURL] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [coverImageIndex, setCoverImageIndex] = useState(0);
   const checkRef = useRef<Promise<{ oauth2: XOAuth2Account | null }> | null>(null);
   const publishInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const imageCount = Math.min(articleImages.length, X_MAX_IMAGES);
+    setCoverImageIndex((current) => Math.min(current, Math.max(0, imageCount - 1)));
+  }, [articleImages.length]);
 
   async function ensureAccount(): Promise<boolean> {
     if (oauth2) return true;
@@ -79,7 +87,7 @@ export function XPublishPanel({
     try {
       if (!(await ensureAccount())) return;
       if (!window.confirm(t.editor.xPublishConfirm)) return;
-      const draft = buildXArticle(title, markdownBody, articleImages);
+      const draft = buildXArticle(title, markdownBody, articleImages, description);
       if (draft.invalid) {
         setError(t.editor.xArticleInvalid);
         return;
@@ -93,11 +101,12 @@ export function XPublishPanel({
         return;
       }
       await prepareWechatDraftDocument(docId);
-      const images: Array<{ source: string; originalSource: string; alt: string }> = [];
+      const images: Array<{ source: string; originalSource?: string; alt: string }> = [];
       for (const image of draft.images) {
+        const source = await resolveXImageSource(image.src);
         images.push({
-          source: await resolveXImageSource(image.src),
-          originalSource: image.src,
+          source,
+          ...(source === image.src ? {} : { originalSource: image.src }),
           alt: image.alt,
         });
       }
@@ -106,6 +115,7 @@ export function XPublishPanel({
         title: draft.title,
         markdown: draft.markdown,
         images,
+        coverImageIndex: images.length > 0 ? Math.min(coverImageIndex, images.length - 1) : undefined,
       });
       setPublishedURL(result.url);
     } catch (caught) {
@@ -146,6 +156,24 @@ export function XPublishPanel({
           {checking ? t.editor.xAccountLoading : publishing ? t.editor.xPublishing : publishedURL ? t.editor.xPublished : t.editor.xPublish}
         </button>
       </div>
+      {articleImages.length > 0 && (
+        <label className="mt-3 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
+          <span>{t.editor.xCoverImage}</span>
+          <select
+            aria-label={t.editor.xCoverImage}
+            value={coverImageIndex}
+            onChange={(event) => setCoverImageIndex(Number(event.target.value))}
+            disabled={disabled || checking || publishing || Boolean(publishedURL)}
+            className="rounded-lg border border-neutral-500/20 bg-transparent px-2 py-1 text-xs"
+          >
+            {Array.from({ length: Math.min(articleImages.length, X_MAX_IMAGES) }, (_, index) => (
+              <option key={index} value={index}>
+                {index + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">{t.editor.xPublishOAuth2BillingHint}</p>
       {!oauth2 && showBindPrompt && (
         <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">

@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import { useI18n } from "../../i18n";
 import {
-  downloadBlob,
   exportHTML,
   exportMarkdown,
   exportPDF,
+  saveExportBlob,
   safeFilename,
 } from "./exportDocument";
 import { MediaExportDialog } from "./WechatDialog";
@@ -144,7 +144,11 @@ export function ExportMenu({
       const blob = await buildDocx(editor, title, {
         imageFailed: t.editor.exportFailed,
       });
-      downloadBlob(blob, `${safeFilename(title, t.editor.untitled)}.docx`);
+      return saveExportBlob(
+        blob,
+        `${safeFilename(title, t.editor.untitled)}.docx`,
+        "docx",
+      );
     });
   }
 

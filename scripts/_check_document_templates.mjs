@@ -120,6 +120,15 @@ const routes = readFileSync(
   "utf8",
 );
 
+const dialogClasses = (
+  dialog.match(/role="dialog"[^>]*className="([^"]*)"/)?.[1] ?? ""
+).split(/\s+/);
+ok(
+  "模板弹窗复用主页面背景并随主题切换",
+  dialogClasses.includes("bg-[var(--background)]") &&
+    !dialogClasses.includes("bg-white") &&
+    !dialogClasses.includes("dark:bg-neutral-950"),
+);
 ok(
   "选择器按会员与本地模式统一判权",
   dialog.includes("canUseDocumentTemplate") &&

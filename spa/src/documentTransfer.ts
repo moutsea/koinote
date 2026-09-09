@@ -12,7 +12,7 @@ import {
   type SharedDocument,
   type UploadedImage,
 } from "./api";
-import { downloadBlob, safeFilename } from "./components/editor/exportDocument";
+import { saveExportBlob, safeFilename } from "./components/editor/exportDocument";
 import {
   basename,
   cleanArchivePath,
@@ -442,11 +442,12 @@ export async function exportDocumentsArchive(
   );
   const archive = await zipAsync(entries);
   const date = new Date().toISOString().slice(0, 10);
-  downloadBlob(
+  const saved = await saveExportBlob(
     new Blob([archive as BlobPart], { type: "application/zip" }),
     `koinote-export-${date}.zip`,
+    "zip",
   );
-  void trackProductEvent("first_export").catch(() => undefined);
+  if (saved) void trackProductEvent("first_export").catch(() => undefined);
 }
 
 export async function copySharedDocument(shared: SharedDocument) {

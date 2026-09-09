@@ -385,6 +385,111 @@ func grantCreditsForTest(
 	}
 }
 
+// 面板运行中要显示「本次预留了多少额度」。账户上的 reserved 是所有活动预留的
+// 聚合值，两篇文章的审阅同时跑着时，拿它当本次的上限会把另一篇的预留也算进来。
+// 所以 review 视图必须带自己那一条预留。
+func TestAgentReviewViewCarriesItsOwnReservation(t *testing.T) {
+	pool, userID := newCreditTestUser(t)
+	ctx := context.Background()
+	app := &App{db: pool}
+	grantCreditsForTest(t, pool, userID, 50, "per-review-reservation")
+
+	firstDatabaseID, firstReviewID := insertCreditTestReviewWithID(t, pool, userID, "first")
+	secondDatabaseID, secondReviewID := insertCreditTestReviewWithID(t, pool, userID, "second")
+
+	if _, err := app.reserveCredits(ctx, userID, firstDatabaseID, 7, time.Minute); err != nil {
+		t.Fatalf("reserve for first review: %v", err)
+	}
+	secondReservation, err := app.reserveCredits(ctx, userID, secondDatabaseID, 11, time.Minute)
+	if err != nil {
+		t.Fatalf("reserve for second review: %v", err)
+	}
+
+	// 账户聚合值是两条之和，正是不能拿来当「本次预留」的那个数。
+	balance, err := app.loadCreditBalance(ctx, userID)
+	if err != nil {
+		t.Fatalf("load credit balance: %v", err)
+	}
+	if balance.Reserved != 18 {
+		t.Fatalf("account reserved = %d, want 18 (7+11)", balance.Reserved)
+	}
+
+	first, err := app.loadAgentReview(ctx, userID, firstReviewID, false)
+	if err != nil {
+		t.Fatalf("load first review: %v", err)
+	}
+	if first.ReservedCredits == nil || *first.ReservedCredits != 7 {
+		t.Fatalf("first review reservedCredits = %v, want 7", first.ReservedCredits)
+	}
+	second, err := app.loadAgentReview(ctx, userID, secondReviewID, false)
+	if err != nil {
+		t.Fatalf("load second review: %v", err)
+	}
+	if second.ReservedCredits == nil || *second.ReservedCredits != 11 {
+		t.Fatalf("second review reservedCredits = %v, want 11", second.ReservedCredits)
+	}
+
+	// 预留提交之后不再占额度，视图里就该消失 —— 继续显示会让用户以为还冻结着。
+	if _, _, err := app.commitCreditReservation(
+		ctx, userID, secondReservation.ReservationID, 2_001, map[string]any{"review": "second"},
+	); err != nil {
+		t.Fatalf("commit second reservation: %v", err)
+	}
+	committed, err := app.loadAgentReview(ctx, userID, secondReviewID, false)
+	if err != nil {
+		t.Fatalf("reload second review: %v", err)
+	}
+	if committed.ReservedCredits != nil {
+		t.Fatalf("committed review reservedCredits = %v, want nil", *committed.ReservedCredits)
+	}
+	// 另一条还活着，不能被上面的提交带走
+	stillActive, err := app.loadAgentReview(ctx, userID, firstReviewID, false)
+	if err != nil {
+		t.Fatalf("reload first review: %v", err)
+	}
+	if stillActive.ReservedCredits == nil || *stillActive.ReservedCredits != 7 {
+		t.Fatalf("first review reservedCredits after other commit = %v, want 7", stillActive.ReservedCredits)
+	}
+}
+
+func insertCreditTestReviewWithID(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	userID int,
+	label string,
+) (int64, string) {
+	t.Helper()
+	ctx := context.Background()
+	docID, err := randomUUID()
+	if err != nil {
+		t.Fatalf("generate credit test document id: %v", err)
+	}
+	var documentID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO documents (doc_id, user_id, title, content)
+		VALUES ($1, $2, $3, '')
+		RETURNING id
+	`, docID, userID, label).Scan(&documentID); err != nil {
+		t.Fatalf("insert credit test document: %v", err)
+	}
+	reviewID, err := randomUUID()
+	if err != nil {
+		t.Fatalf("generate credit test review id: %v", err)
+	}
+	var databaseID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_reviews (
+			review_id, user_id, document_id, base_revision, current_revision,
+			provider_mode, provider_protocol, model, status, task_progress
+		)
+		VALUES ($1, $2, $3, 1, 1, 'builtin', 'openai', 'test-model', 'running', '{}')
+		RETURNING id
+	`, reviewID, userID, documentID).Scan(&databaseID); err != nil {
+		t.Fatalf("insert credit test review: %v", err)
+	}
+	return databaseID, reviewID
+}
+
 func insertCreditTestReview(t *testing.T, pool *pgxpool.Pool, userID int, label string) int64 {
 	t.Helper()
 	ctx := context.Background()

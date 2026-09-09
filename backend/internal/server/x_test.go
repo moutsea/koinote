@@ -337,6 +337,7 @@ func TestPublishXArticleOAuth2CreatesDraftAndPublishes(t *testing.T) {
 		"Article title",
 		"## Section\n\nArticle body",
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -388,6 +389,7 @@ func TestPublishXArticleOAuth2RejectsUnavailableImages(t *testing.T) {
 		"Article title",
 		"Article body",
 		[]xPublishImageInput{{Source: "https://images.example/missing.png"}},
+		nil,
 	)
 	if err == nil || !errors.Is(err, errXImageSourceUnavailable) {
 		t.Fatalf("publish error = %v, want unavailable image error", err)
@@ -733,6 +735,7 @@ func TestPublishXArticleOAuth2PreservesDraftOnPublishFailure(t *testing.T) {
 		"Article title",
 		"Article body",
 		nil,
+		nil,
 	)
 	if err == nil || !errors.Is(err, errXProviderUnavailable) {
 		t.Fatalf("publish error = %v", err)
@@ -976,7 +979,106 @@ func TestPublishXThreadReportsPartialProgress(t *testing.T) {
 	}
 }
 
+func TestPublishXArticleOAuth2WithCoverImage(t *testing.T) {
+	t.Parallel()
+	type recordedRequest struct {
+		path          string
+		authorization string
+		body          string
+	}
+	var requests []recordedRequest
+	imageClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Host == "img.koinote.app" {
+			// Minimal valid JPEG (1x1 red pixel)
+			jpeg := []byte{
+				0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+				0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43,
+				0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+				0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+				0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20,
+				0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29,
+				0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32,
+				0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+				0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x14, 0x00, 0x01,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x03, 0xFF, 0xC4, 0x00, 0x14, 0x10, 0x01, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00,
+				0x37, 0xFF, 0xD9,
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(jpeg)),
+				Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
+			}, nil
+		}
+		if request.URL.Path == xMediaUploadURL[len("https://upload.twitter.com"):] {
+			return jsonResponse(`{"media_id_string":"1234567890123456789"}`), nil
+		}
+		return nil, errors.New("unexpected image path")
+	})}
+	apiClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var body []byte
+		if request.Body != nil {
+			body, _ = io.ReadAll(request.Body)
+		}
+		requests = append(requests, recordedRequest{
+			path:          request.URL.Path,
+			authorization: request.Header.Get("Authorization"),
+			body:          string(body),
+		})
+		if request.URL.Path == "/2/media/upload" {
+			return jsonResponse(`{"data":{"id":"1234567890123456789"}}`), nil
+		}
+		if request.URL.Path == xOAuth2ArticleDraftPath {
+			response := jsonResponse(`{"data":{"id":"1146654567674912769","title":"Article with cover"}}`)
+			response.StatusCode = http.StatusCreated
+			return response, nil
+		}
+		if request.URL.Path == "/2/articles/1146654567674912769/publish" {
+			return jsonResponse(`{"data":{"post_id":"1346889436626259968"}}`), nil
+		}
+		return nil, errors.New("unexpected X Article path")
+	})}
+	app := &App{xImageHTTPClient: imageClient, xOAuth2HTTPClient: apiClient}
+	result, err := app.publishXArticleOAuth2(
+		context.Background(),
+		xOAuth2Credential{AccessToken: "oauth2-token"},
+		"Article with cover",
+		"Article body with ![cover](https://img.koinote.app/cover.jpg) image",
+		[]xPublishImageInput{{Source: "https://img.koinote.app/cover.jpg", OriginalSource: "https://img.koinote.app/cover.jpg", Alt: "Cover"}},
+		intPointer(0),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.DraftID != "1146654567674912769" || result.PublishedID != "1346889436626259968" {
+		t.Fatalf("unexpected Article result: %+v", result)
+	}
+	if len(requests) != 3 || requests[0].path != "/2/media/upload" || requests[1].path != xOAuth2ArticleDraftPath {
+		t.Fatalf("Article requests = %+v", requests)
+	}
+	var draft map[string]any
+	if err := json.Unmarshal([]byte(requests[1].body), &draft); err != nil {
+		t.Fatal(err)
+	}
+	coverMedia, ok := draft["cover_media"].(map[string]any)
+	if !ok {
+		t.Fatalf("draft cover_media missing or wrong type: %#v", draft["cover_media"])
+	}
+	if coverMedia["media_category"] != "tweet_image" {
+		t.Fatalf("cover_media category = %#v, want tweet_image", coverMedia["media_category"])
+	}
+	if coverMedia["media_id"] != "1234567890123456789" {
+		t.Fatalf("cover_media media_id = %#v, want 1234567890123456789", coverMedia["media_id"])
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func intPointer(value int) *int {
+	return &value
+}
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)

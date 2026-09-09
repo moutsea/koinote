@@ -285,7 +285,8 @@ export const en: Messages = {
         desc: "Copy the AppID and generate or copy the AppSecret. WeChat may show it only once, so store it in a password manager first.",
       },
     ],
-    platformScreenshotAlt: "Example of the API IP allowlist in the WeChat developer platform",
+    platformScreenshotAlt:
+      "Example of the API IP allowlist in the WeChat developer platform",
     platformScreenshotCaption:
       "Example: add Koinote Cloud's egress IP, 122.51.97.242, to the API IP allowlist.",
     ipTitle: "Why is the IP allowlist required?",
@@ -617,7 +618,8 @@ export const en: Messages = {
     versionDescription:
       "Understand retention limits, safety snapshots, revision conflicts, and how to compare or restore versions created by the web editor or agents.",
     xTitle: "X local browser helper",
-    xDescription: "Learn how to find auth_token and ct0 and start the local helper safely in the desktop app.",
+    xDescription:
+      "Learn how to find auth_token and ct0 and start the local helper safely in the desktop app.",
     readGuide: "Read the guide",
     safetyTitle: "Migration recommendation",
     safetyBody:
@@ -874,6 +876,48 @@ export const en: Messages = {
     channel: "Default channel",
     configureChannels: "Manage model channels",
     availableCredits: "{count} credits available",
+    taskSelection: "Choose what to review",
+    categoryTabs: "Browse suggestions by category",
+    allTasks: "Optimize everything",
+    selectAllTasks: "Select all",
+    selectTaskFirst: "Select at least one",
+    startWithCount: "Start review ({count})",
+    alreadyRunning: "A review is already running",
+    estimateLoading: "Estimating cost…",
+    estimateFailed: "Could not estimate the cost. Please try again.",
+    estimateRetry: "Retry estimate",
+    estimateHint:
+      "Reserves up to {credits} credits. You are charged for actual model usage, which is usually less.",
+    estimateInsufficient:
+      "This needs {credits} credits reserved, which is more than your balance. Pick fewer areas or top up.",
+    anchorHint:
+      "Suggestions are marked in the document: click a card to jump to that passage, or click an underline to come back.",
+    locateInDocument: "Locate in document",
+    layoutDimensionHint:
+      "Click a dimension to read its assessment and filter suggestions, then run a deep analysis there.",
+    layoutNotAssessed:
+      "Structure review was not selected this time, so there is no six-dimension assessment.",
+    weakestDimension: "Weakest",
+    tasks: {
+      title: {
+        label: "Title optimization",
+        description: "Review clarity, appeal, and promise",
+      },
+      proofread: {
+        label: "Proofreading",
+        description:
+          "Catch wording and factual issues that affect understanding",
+      },
+      structure: {
+        label: "Structure optimization",
+        description: "Review hierarchy, emphasis, and mobile reading",
+      },
+      paragraph: {
+        label: "Paragraph optimization",
+        description:
+          "Review logic, repetition, and argument order across paragraphs",
+      },
+    },
     start: "Start review",
     running: "AI is reviewing your article…",
     progress: "{completed}/{total} subtasks complete",
@@ -903,18 +947,16 @@ export const en: Messages = {
     noPreviousReviews: "No reviews yet.",
     previousReviews: "Previous reviews",
     newReview: "New review",
+    rerunReview: "New review",
+    rerunReviewTitle: "Select scope and re-run",
     summary: "Review summary",
     titleReview: "Title suggestions",
     contentReview: "Body copy",
     layoutReview: "Structure & layout",
-    layoutAssessment: "Six-dimension radar",
-    layoutShowCards: "Show all details",
-    layoutShowRadar: "Show radar",
-    layoutRadarHint:
-      "Hover to inspect a dimension. Click it to filter suggestions below; click again to clear.",
+    layoutAssessment: "Six-dimension assessment",
     deepAnalysis: "Deep analysis",
-    deepAnalysisTarget: "Deep analysis target",
     deepAnalysisStarting: "Starting…",
+    deepAnalysisExpandHint: "Select this dimension to view its cost.",
     deepReviewBadge: "Deep analysis · {dimension}",
     titleScore: "Title appeal {score}/100",
     suggestions: "Suggested changes",
@@ -947,6 +989,7 @@ export const en: Messages = {
       "The current structure already works. No safe layout changes are needed.",
     noFilteredLayoutSuggestions:
       "There are no {dimension} changes in this review. Run deep analysis for a focused second pass.",
+    otherLayoutSuggestions: "Other structure suggestions",
     usage: "Used {credits} credits",
     close: "Close",
     categories: {
@@ -1100,7 +1143,8 @@ export const en: Messages = {
     zhihuDescription:
       "Bind Zhihu OpenAPI credentials and publish articles directly.",
     x: "X",
-    xDescription: "Connect X with OAuth 2.0 and publish long-form X Articles with images.",
+    xDescription:
+      "Connect X with OAuth 2.0 and publish long-form X Articles with images.",
     freePlan: "Free",
     lifetimePlan: "Lifetime member",
     upgrade: "Upgrade membership",
@@ -1334,6 +1378,22 @@ export const en: Messages = {
     trendHint: "Daily new users, members, and orders in the site timezone.",
     recentUsers: "Recent users",
     recentPayments: "Recent payments",
+    paidTokenUsage: "Paid-user token usage",
+    paidTokenUsageHint: "1 credit covers about {tokens} tokens; balance shows currently available credits.",
+    paidUserCount: "Paid users",
+    totalTokensUsed: "Total tokens used",
+    availableTokens: "Available tokens",
+    usedCredits: "Credits used",
+    tokenUsage: "Token usage",
+    creditsBalance: "Credit balance",
+    inputTokens: "input",
+    outputTokens: "output",
+    available: "available",
+    totalCredits: "total",
+    reservedCredits: "reserved",
+    updatedAt: "Updated",
+    noPaidUsers: "No paid users yet.",
+    paidUsersLimited: "Only the first 100 paid users are shown.",
     noUsers: "No users yet.",
     noPayments: "No payments yet.",
     deletedAccount: "Deleted account",
@@ -1650,7 +1710,8 @@ export const en: Messages = {
     mediaWechat: "WeChat",
     mediaWechatHint: "Styled rich text",
     mediaZhihu: "Zhihu",
-    mediaZhihuHint: "Adapted rich text; OpenAPI direct publishing has no images",
+    mediaZhihuHint:
+      "Adapted rich text; OpenAPI direct publishing has no images",
     mediaJuejin: "Juejin",
     mediaJuejinHint: "Native Markdown",
     mediaX: "X",
@@ -1792,24 +1853,28 @@ export const en: Messages = {
     zhihuAssistDone: "Copied — Zhihu’s writing page is open",
     zhihuAssistFailed: "Could not copy or open Zhihu. Please try again.",
     xAccountTitle: "X publishing",
-    xAccountHint: "Connect through X's official OAuth 2.0 flow to publish Koinote long-form content and images as an X Article.",
+    xAccountHint:
+      "Connect through X's official OAuth 2.0 flow to publish Koinote long-form content and images as an X Article.",
     xDeveloperPortal: "Open X Developer Portal",
     xAccountLoading: "Loading X connection…",
     xAccountLoadFailed: "Could not load the X connection. Please try again.",
     xAccountRetry: "Retry",
-    xAccountNotBound: "No X account is connected. Authorize with OAuth 2.0 first.",
+    xAccountNotBound:
+      "No X account is connected. Authorize with OAuth 2.0 first.",
     xAccountBind: "Bind X account",
     xAccountSave: "Save connection",
     xAccountSaving: "Saving…",
     xAccountEdit: "Edit X connection",
     xAccountUnbind: "Unbind",
     xAccountUnbindConfirm: "Unbind this X account?",
-    xAccountBindFailed: "Could not bind X. Check the credentials and try again.",
+    xAccountBindFailed:
+      "Could not bind X. Check the credentials and try again.",
     xAccountSaveFailed: "Could not save the X connection. Please try again.",
     xAccountUnbindFailed: "Could not unbind X. Please try again.",
     xAccountCancel: "Cancel",
     xOAuth2Title: "OAuth 2.0",
-    xOAuth2Hint: "Recommended: authorize Koinote through X. Only X Premium or Premium+ accounts can publish Articles. Each successful publish costs 20 Koinote credits. Tokens are encrypted and never shown to the client.",
+    xOAuth2Hint:
+      "Recommended: authorize Koinote through X. Only X Premium or Premium+ accounts can publish Articles. Each successful publish costs 20 Koinote credits. Tokens are encrypted and never shown to the client.",
     xOAuth2Bind: "Connect with X",
     xOAuth2Binding: "Opening X…",
     xOAuth2Connected: "X account connected.",
@@ -1830,14 +1895,22 @@ export const en: Messages = {
     xPublish: "Publish to X",
     xPublishing: "Publishing to X…",
     xPublished: "Published to X",
-    xPublishConfirm: "Publish the full text and images as an X Article? Only X Premium or Premium+ accounts can publish Articles. A successful publish costs 20 Koinote credits and becomes public immediately.",
-    xPublishHint: "Only X Premium and Premium+ accounts can publish a complete X Article. Each successful publish costs 20 Koinote credits and becomes public immediately.",
-    xPublishOAuth2BillingHint: "Publishing uses X's official OAuth 2.0 and Articles API. Koinote deducts 20 credits after a successful publish.",
+    xPublishConfirm:
+      "Publish the full text and images as an X Article? Only X Premium or Premium+ accounts can publish Articles. A successful publish costs 20 Koinote credits and becomes public immediately.",
+    xPublishHint:
+      "Only X Premium and Premium+ accounts can publish a complete X Article. Each successful publish costs 20 Koinote credits and becomes public immediately.",
+    xCoverImage: "Cover image",
+    xPublishOAuth2BillingHint:
+      "Publishing uses X's official OAuth 2.0 and Articles API. Koinote deducts 20 credits after a successful publish.",
     xPublishFailed: "Could not publish to X. Please try again.",
-    xPublishTooLong: "This article exceeds X's 25-post thread limit. Shorten it and try again.",
-    xPublishTooManyImages: "A single X publish currently supports up to 20 images. Remove some images and try again.",
-    xArticleInvalid: "An X Article needs a title and either body text or an image.",
-    xArticleTooLong: "The X Article exceeds the official 10,000-character limit. Shorten it and try again.",
+    xPublishTooLong:
+      "This article exceeds X's 25-post thread limit. Shorten it and try again.",
+    xPublishTooManyImages:
+      "A single X publish currently supports up to 20 images. Remove some images and try again.",
+    xArticleInvalid:
+      "An X Article needs a title and either body text or an image.",
+    xArticleTooLong:
+      "The X Article exceeds the official 10,000-character limit. Shorten it and try again.",
     wechatCoverTitle: "Set article cover",
     wechatCoverModeLabel: "Cover source",
     wechatCoverDefault: "Default cover",
@@ -2543,7 +2616,8 @@ function hello(name) {
       "An article image could not be transferred to WeChat",
     wechat_draft_create_failed:
       "WeChat could not create the draft. Check API access",
-    zhihu_account_invalid: "The Zhihu App Key or App Secret has an invalid format",
+    zhihu_account_invalid:
+      "The Zhihu App Key or App Secret has an invalid format",
     zhihu_app_secret_required:
       "An App Secret is required when binding or changing the Zhihu App Key",
     zhihu_app_key_already_bound:
@@ -2551,7 +2625,8 @@ function hello(name) {
     zhihu_credential_unavailable:
       "Zhihu credential encryption is not configured",
     zhihu_account_not_bound: "Bind a Zhihu account first",
-    zhihu_publish_input_invalid: "The Zhihu article title or content is invalid",
+    zhihu_publish_input_invalid:
+      "The Zhihu article title or content is invalid",
     zhihu_provider_unavailable:
       "Zhihu is temporarily unavailable. Please try again later",
     zhihu_publish_failed:
@@ -2562,15 +2637,20 @@ function hello(name) {
       "Only part of the X thread was published. Check X before deciding whether to retry.",
     x_oauth2_account_not_bound: "Connect an X account with OAuth 2.0 first",
     x_oauth2_not_configured: "X OAuth 2.0 is not configured on this server",
-    x_oauth2_token_invalid: "X authorization expired. Connect your account again",
-    x_article_too_long: "The X Article exceeds the official 10,000-character limit. Shorten it and try again",
-    x_article_unavailable: "This X account or developer app cannot use the Articles API. Check X Premium and developer access",
-    x_article_draft_only: "X saved the Article draft but could not publish it. Check your X Article drafts before retrying to avoid duplicates",
+    x_oauth2_token_invalid:
+      "X authorization expired. Connect your account again",
+    x_article_too_long:
+      "The X Article exceeds the official 10,000-character limit. Shorten it and try again",
+    x_article_unavailable:
+      "This X account or developer app cannot use the Articles API. Check X Premium and developer access",
+    x_article_draft_only:
+      "X saved the Article draft but could not publish it. Check your X Article drafts before retrying to avoid duplicates",
     x_image_source_unavailable:
       "An image in this article is no longer available. Re-upload it before publishing",
     x_image_upload_failed:
       "X could not upload an article image. Check the image and try again",
-    x_provider_unavailable: "X is temporarily unavailable. Please try again later",
+    x_provider_unavailable:
+      "X is temporarily unavailable. Please try again later",
     x_publish_failed: "X rejected the article. Check the content and try again",
     oauth_unsupported: "Unsupported login provider",
     oauth_not_configured: "This login method is not configured yet",

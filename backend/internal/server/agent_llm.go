@@ -262,7 +262,7 @@ func callAnthropicAgentLLM(
 		"max_tokens":  maxOutputTokens,
 		"stream":      true,
 		"temperature": agentLLMTemperature(prompt),
-		"system":      systemPrompt,
+		"system":      anthropicSystemBlocks(provider, systemPrompt),
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt.User},
 		},
@@ -334,6 +334,23 @@ func callAnthropicAgentLLM(
 		OutputTokens: maxInt(outputTokens, response.Usage.OutputTokens),
 		TotalTokens:  maxInt(inputTokens, response.Usage.InputTokens) + maxInt(outputTokens, response.Usage.OutputTokens),
 	}, nil
+}
+
+// anthropicSystemBlocks 只给内置渠道加 cache_control。一次审阅要跑十几个任务，
+// 同一份 system prompt（规则 + JSON Schema）每个任务都重发一遍，而扣费按 provider
+// 上报的输入 token 走，命中缓存能直接省下用户的 credits。
+//
+// BYOK 渠道保持纯字符串：兼容网关对 system 数组和未知字段的支持参差不齐，
+// 而那条路径本来就不消耗 credits，省不到用户头上。
+func anthropicSystemBlocks(provider agentLLMProvider, systemPrompt string) any {
+	if provider.Mode != "builtin" {
+		return systemPrompt
+	}
+	return []map[string]any{{
+		"type":          "text",
+		"text":          systemPrompt,
+		"cache_control": map[string]string{"type": "ephemeral"},
+	}}
 }
 
 func agentLLMPromptOutputLimit(prompt agentLLMPrompt, fallback int) int {

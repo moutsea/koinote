@@ -199,6 +199,12 @@ fn export_platform_pdf(
             .SetShouldPrintHeaderAndFooter(false)
             .map_err(|error| error.to_string())?;
         settings
+            .SetPageWidth(210.0 / 25.4)
+            .map_err(|error| error.to_string())?;
+        settings
+            .SetPageHeight(297.0 / 25.4)
+            .map_err(|error| error.to_string())?;
+        settings
             .SetMarginTop(0.0)
             .map_err(|error| error.to_string())?;
         settings

@@ -86,6 +86,18 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		if review.TitleScore == nil || *review.TitleScore != 55 || len(review.Suggestions) != 3 {
 			t.Fatalf("title score or suggestions missing: %+v", review)
 		}
+		for _, suggestion := range review.Suggestions {
+			wantSource := ""
+			switch {
+			case suggestion.Target == "title":
+				wantSource = "title"
+			default:
+				wantSource = "paragraph"
+			}
+			if suggestion.SourceTask == nil || *suggestion.SourceTask != wantSource {
+				t.Fatalf("suggestion source task=%v, want %q: %+v", suggestion.SourceTask, wantSource, suggestion)
+			}
+		}
 		if review.TaskProgress.CompletedTasks != 4 || review.TaskProgress.TotalTasks != 4 ||
 			len(review.TaskProgress.Stages) != 4 {
 			t.Fatalf("task progress missing from completed review: %+v", review.TaskProgress)

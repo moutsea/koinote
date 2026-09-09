@@ -59,6 +59,7 @@ ok(
 );
 const xPanel = readFileSync(new URL("../spa/src/components/editor/XPublishPanel.tsx", import.meta.url), "utf8");
 const xThread = readFileSync(new URL("../spa/src/components/editor/xPublish.ts", import.meta.url), "utf8");
+const wechatGeo = readFileSync(new URL("../spa/src/components/editor/wechatGeo.ts", import.meta.url), "utf8");
 ok(
   "X 仅通过官方授权发布文章",
   /publishXArticle/.test(xPanel) && /buildXArticle/.test(xPanel) &&
@@ -74,12 +75,23 @@ ok(
 );
 ok(
   "X 文章超长或图片过多会被提示",
-  buildXArticle("标题", "正文", []).tooLong === false &&
+    buildXArticle("标题", "正文", [], "简介").markdown === "简介\n\n正文" &&
+    buildXArticle("标题", "简介\n\n正文", [], "简介").markdown === "简介\n\n正文" &&
+    buildXArticle("标题", "---\ndescription: 旧简介\n---\n正文", [], "简介").markdown === "简介\n\n正文" &&
+    buildXArticle("标题", "正文", []).tooLong === false &&
     buildXArticle("标题", "内容 ".repeat(4000), []).tooLong === true &&
     buildXArticle("标题", "正文", Array.from({ length: 21 }, (_, index) => ({
       src: `https://example.test/${index}.jpg`,
       alt: "",
     }))).tooManyImages === true,
+);
+ok(
+  "X 发布支持选择封面图片",
+  /coverImageIndex/.test(xPanel) &&
+    /setCoverImageIndex/.test(xPanel) &&
+    /X_MAX_IMAGES/.test(xPanel) &&
+    /t\.editor\.xCoverImage/.test(xPanel),
+  "封面索引不能固定为首图",
 );
 ok(
   "知乎发布在客户端和服务端拦截图片",
@@ -207,11 +219,30 @@ ok(
     /wrapWechatBody\(stage\.innerHTML, exportRules\.body\)/.test(exportWechat),
 );
 ok(
+  "GEO 前端转义与后端保持一致",
+  wechatGeo.includes(".replace(/'/g, \"&#39;\")") &&
+    wechatGeo.includes('.replace(/\"/g, "&#34;")'),
+  "单引号和双引号必须使用与 Go html.EscapeString 相同的实体",
+);
+ok(
   "客户端 PDF 选择保存位置后调用原生导出",
   /isDesktopRuntime\(\)[\s\S]*?save\(\{[\s\S]*?extensions: \["pdf"\][\s\S]*?invoke\("desktop_export_pdf"/.test(
     exportDocument,
   ),
   "客户端不应再跳到打印面板",
+);
+ok(
+  "桌面端 Markdown、HTML、Word 和 ZIP 使用原生保存",
+  /export async function saveExportBlob\(/.test(exportDocument) &&
+    /@tauri-apps\/plugin-dialog/.test(exportDocument) &&
+    /desktop_save_export/.test(exportDocument) &&
+    /exportMarkdown\([\s\S]*?saveExportBlob/.test(exportDocument) &&
+    /exportHTML\([\s\S]*?saveExportBlob/.test(exportDocument) &&
+    /saveExportBlob\([\s\S]*?\.docx/.test(menu) &&
+    /saveExportBlob\([\s\S]*?\.zip/.test(
+      readFileSync(new URL("../spa/src/documentTransfer.ts", import.meta.url), "utf8"),
+    ),
+  "桌面端不能依赖 WebView 的 Blob 下载路径",
 );
 ok(
   "网页打印继续使用浏览器管道",
@@ -277,6 +308,11 @@ ok(
     /desktop_abort_local_mode_import,[\s\S]*?desktop_export_pdf,/.test(desktopLib),
 );
 ok(
+  "Tauri 注册桌面文件导出命令",
+  /fn desktop_save_export\([\s\S]*?file_export::save_export_path/.test(desktopLib) &&
+    /desktop_save_export,/.test(desktopLib),
+);
+ok(
   "macOS PDF 导出不阻塞 WebKit 分页",
   /runOperationModalForWindow_delegate_didRunSelector_contextInfo/.test(desktopPdf) &&
     !/\.runOperation\(\)/.test(desktopPdf),
@@ -285,6 +321,8 @@ ok(
 ok(
   "原生 PDF 等待完整文件并限制异常输出",
   /setPaperSize\(NSSize::new\(595\.28, 841\.89\)\)/.test(desktopPdf) &&
+    /SetPageWidth\(210\.0 \/ 25\.4\)/.test(desktopPdf) &&
+    /SetPageHeight\(297\.0 \/ 25\.4\)/.test(desktopPdf) &&
     /tail\.windows\(5\).*b"%%EOF"/.test(desktopPdf) &&
     /MAX_PDF_OUTPUT_BYTES/.test(desktopPdf),
 );

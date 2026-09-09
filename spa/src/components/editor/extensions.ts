@@ -15,6 +15,7 @@ import { lowlight } from "./lowlight";
 import { BlockMarkdownImage } from "./markdownImage";
 import { markdownMathPlugin } from "./markdownMath";
 import { PageSearchExtension } from "./pageSearch";
+import { AgentReviewAnchorExtension } from "./agentReviewAnchors";
 import { MarkdownTable } from "./markdownTable";
 import { InlineCode } from "./inlineCode";
 import taskListPlugin from "markdown-it-task-lists";
@@ -111,6 +112,7 @@ export function createEditorExtensions(placeholder: string) {
     }),
     InlineCode,
     PageSearchExtension,
+    AgentReviewAnchorExtension,
     CodeBlockWithCopy.configure({
       lowlight,
       defaultLanguage: "plaintext",

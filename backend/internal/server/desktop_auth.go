@@ -559,6 +559,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 			parts[2] == "publish" {
 			return method == http.MethodPost
 		}
+		if len(parts) == 3 && parts[0] != "" && parts[1] == "agent-reviews" &&
+			parts[2] == "estimate" {
+			return method == http.MethodPost
+		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "x" &&
 			parts[2] == "publish" {
 			return method == http.MethodPost

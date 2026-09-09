@@ -88,6 +88,32 @@ type adminRecentUser struct {
 	LastClientAt   *time.Time `json:"lastClientAt"`
 }
 
+type adminPaidTokenUsage struct {
+	PaidUsers        int64 `json:"paidUsers"`
+	TokensPerCredit  int64 `json:"tokensPerCredit"`
+	InputTokens      int64 `json:"inputTokens"`
+	OutputTokens     int64 `json:"outputTokens"`
+	TotalTokens      int64 `json:"totalTokens"`
+	UsedCredits      int64 `json:"usedCredits"`
+	BalanceCredits   int64 `json:"balanceCredits"`
+	ReservedCredits  int64 `json:"reservedCredits"`
+	AvailableCredits int64 `json:"availableCredits"`
+}
+
+type adminPaidUser struct {
+	ID               int       `json:"id"`
+	Name             string    `json:"name"`
+	Email            string    `json:"email"`
+	InputTokens      int64     `json:"inputTokens"`
+	OutputTokens     int64     `json:"outputTokens"`
+	TotalTokens      int64     `json:"totalTokens"`
+	UsedCredits      int64     `json:"usedCredits"`
+	BalanceCredits   int64     `json:"balanceCredits"`
+	ReservedCredits  int64     `json:"reservedCredits"`
+	AvailableCredits int64     `json:"availableCredits"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
 type adminRecentPayment struct {
 	UserName  *string   `json:"userName"`
 	UserEmail *string   `json:"userEmail"`
@@ -115,6 +141,8 @@ type adminStatsResponse struct {
 	Trend          []adminTrendPoint    `json:"trend"`
 	RecentUsers    []adminRecentUser    `json:"recentUsers"`
 	RecentPayments []adminRecentPayment `json:"recentPayments"`
+	PaidTokenUsage adminPaidTokenUsage  `json:"paidTokenUsage"`
+	PaidUsers      []adminPaidUser      `json:"paidUsers"`
 	Traffic        adminTraffic         `json:"traffic"`
 	Funnel         adminFunnel          `json:"funnel"`
 	Retention      adminRetention       `json:"retention"`
@@ -212,6 +240,12 @@ func (a *App) adminStats(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	paidTokenUsage, paidUsers, err := a.loadAdminPaidTokenUsage(r.Context())
+	if err != nil {
+		log.Printf("admin stats paid token usage: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
 	funnel, err := a.loadAdminFunnel(r.Context())
 	if err != nil {
 		log.Printf("admin stats funnel: %v", err)
@@ -247,6 +281,8 @@ func (a *App) adminStats(w http.ResponseWriter, r *http.Request) {
 		Trend:          trend,
 		RecentUsers:    recentUsers,
 		RecentPayments: recentPayments,
+		PaidTokenUsage: paidTokenUsage,
+		PaidUsers:      paidUsers,
 		Traffic:        traffic,
 		Funnel:         funnel,
 		Retention:      retention,
@@ -562,4 +598,128 @@ func (a *App) loadAdminRecentPayments(ctx context.Context) ([]adminRecentPayment
 		payments = append(payments, payment)
 	}
 	return payments, rows.Err()
+}
+
+func (a *App) loadAdminPaidTokenUsage(ctx context.Context) (adminPaidTokenUsage, []adminPaidUser, error) {
+	summary := adminPaidTokenUsage{TokensPerCredit: creditTokensPerCredit}
+	if err := a.db.QueryRow(ctx, `
+		WITH paid_users AS (
+			SELECT id FROM users WHERE membership_tier = 'lifetime'
+		), review_usage AS (
+			SELECT
+				user_id,
+				COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+				COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+				COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens
+			FROM agent_reviews
+			WHERE provider_mode = 'builtin'
+			GROUP BY user_id
+		), credit_usage AS (
+			SELECT
+				user_id,
+				COALESCE(SUM(-amount) FILTER (WHERE kind = 'agent_usage'), 0)::bigint AS used_credits
+			FROM credit_transactions
+			GROUP BY user_id
+		), active_reservations AS (
+			SELECT user_id, COALESCE(SUM(reserved_credits), 0)::bigint AS reserved
+			FROM credit_reservations
+			WHERE status = 'active' AND expires_at > now()
+			GROUP BY user_id
+		)
+		SELECT
+			COUNT(*)::bigint,
+			COALESCE(SUM(review_usage.input_tokens), 0)::bigint,
+			COALESCE(SUM(review_usage.output_tokens), 0)::bigint,
+			COALESCE(SUM(review_usage.total_tokens), 0)::bigint,
+			COALESCE(SUM(credit_usage.used_credits), 0)::bigint,
+			COALESCE(SUM(credit_accounts.balance), 0)::bigint,
+			COALESCE(SUM(active_reservations.reserved), 0)::bigint,
+			COALESCE(SUM(credit_accounts.balance - COALESCE(active_reservations.reserved, 0)), 0)::bigint
+		FROM paid_users
+		LEFT JOIN credit_accounts ON credit_accounts.user_id = paid_users.id
+		LEFT JOIN review_usage ON review_usage.user_id = paid_users.id
+		LEFT JOIN credit_usage ON credit_usage.user_id = paid_users.id
+		LEFT JOIN active_reservations ON active_reservations.user_id = paid_users.id
+	`).Scan(
+		&summary.PaidUsers,
+		&summary.InputTokens,
+		&summary.OutputTokens,
+		&summary.TotalTokens,
+		&summary.UsedCredits,
+		&summary.BalanceCredits,
+		&summary.ReservedCredits,
+		&summary.AvailableCredits,
+	); err != nil {
+		return adminPaidTokenUsage{}, nil, err
+	}
+
+	rows, err := a.db.Query(ctx, `
+		WITH review_usage AS (
+			SELECT
+				user_id,
+				COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+				COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+				COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens
+			FROM agent_reviews
+			WHERE provider_mode = 'builtin'
+			GROUP BY user_id
+		), credit_usage AS (
+			SELECT
+				user_id,
+				COALESCE(SUM(-amount) FILTER (WHERE kind = 'agent_usage'), 0)::bigint AS used_credits
+			FROM credit_transactions
+			GROUP BY user_id
+		), active_reservations AS (
+			SELECT user_id, COALESCE(SUM(reserved_credits), 0)::bigint AS reserved
+			FROM credit_reservations
+			WHERE status = 'active' AND expires_at > now()
+			GROUP BY user_id
+		)
+		SELECT
+			users.id,
+			COALESCE(NULLIF(users.nickname, ''), NULLIF(users.username, ''), users.email),
+			users.email,
+			COALESCE(review_usage.input_tokens, 0),
+			COALESCE(review_usage.output_tokens, 0),
+			COALESCE(review_usage.total_tokens, 0),
+			COALESCE(credit_usage.used_credits, 0),
+			COALESCE(credit_accounts.balance, 0),
+			COALESCE(active_reservations.reserved, 0),
+			COALESCE(credit_accounts.balance - COALESCE(active_reservations.reserved, 0), 0),
+			COALESCE(credit_accounts.updated_at, users.membership_granted_at, users.created_at)
+		FROM users
+		LEFT JOIN credit_accounts ON credit_accounts.user_id = users.id
+		LEFT JOIN review_usage ON review_usage.user_id = users.id
+		LEFT JOIN credit_usage ON credit_usage.user_id = users.id
+		LEFT JOIN active_reservations ON active_reservations.user_id = users.id
+		WHERE users.membership_tier = 'lifetime'
+		ORDER BY COALESCE(credit_accounts.updated_at, users.membership_granted_at, users.created_at) DESC, users.id DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		return adminPaidTokenUsage{}, nil, err
+	}
+	defer rows.Close()
+
+	users := make([]adminPaidUser, 0)
+	for rows.Next() {
+		var user adminPaidUser
+		if err := rows.Scan(
+			&user.ID,
+			&user.Name,
+			&user.Email,
+			&user.InputTokens,
+			&user.OutputTokens,
+			&user.TotalTokens,
+			&user.UsedCredits,
+			&user.BalanceCredits,
+			&user.ReservedCredits,
+			&user.AvailableCredits,
+			&user.UpdatedAt,
+		); err != nil {
+			return adminPaidTokenUsage{}, nil, err
+		}
+		users = append(users, user)
+	}
+	return summary, users, rows.Err()
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 
 function sourceBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -24,6 +25,7 @@ const {
   isDesktopAuthenticationRejection,
   isDesktopLocalImageURL,
   imageObjectKeyFromSource,
+  installDesktopSyncQueryRefresh,
   localWebURL,
   confirmAction,
   createAsyncSerialQueue,
@@ -983,9 +985,46 @@ const documentsSource = readFileSync(
 );
 assert.match(
   documentsSource,
-  /refetchInterval:\s*desktop \? false : REMOTE_UPDATE_INTERVAL_MS[\s\S]*?refetchOnWindowFocus:\s*!desktop/,
-  "网页文档列表必须在前台轮询并在窗口聚焦时更新 revision",
+  /refetchInterval:\s*REMOTE_UPDATE_INTERVAL_MS[\s\S]*?refetchOnWindowFocus:\s*true/,
+  "文档列表必须在前台轮询并在窗口聚焦时刷新，桌面列表读取最新离线快照",
 );
+assert.doesNotMatch(
+  documentsSource,
+  /syncDesktopNow/,
+  "读取文档列表不能再次启动同步，否则完成事件会触发循环刷新",
+);
+assert.match(
+  readFileSync(new URL("../spa/src/main.tsx", import.meta.url), "utf8"),
+  /if \(desktopRuntime\) \{\s*installDesktopSyncQueryRefresh\(queryClient\);/,
+  "同步查询刷新必须在应用启动时安装，不能依赖首页或同步状态组件挂载",
+);
+
+const queryClient = new QueryClient();
+const queryTarget = new EventTarget();
+let listedDocuments = ["local-document"];
+const observer = new QueryObserver(queryClient, {
+  queryKey: ["documents"],
+  queryFn: async () => listedDocuments,
+});
+const observedLists = [];
+const unsubscribeObserver = observer.subscribe((result) => {
+  if (result.data) observedLists.push(result.data);
+});
+await observer.refetch();
+const removeSyncRefresh = installDesktopSyncQueryRefresh(queryClient, queryTarget);
+listedDocuments = ["local-document", "remote-document"];
+queryTarget.dispatchEvent(
+  new CustomEvent("koinote:desktop-sync", { detail: { state: "error" } }),
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(
+  observedLists.at(-1),
+  ["local-document", "remote-document"],
+  "同步完成事件必须刷新文档列表，即使同步结果带有维护错误",
+);
+removeSyncRefresh();
+unsubscribeObserver();
+queryClient.clear();
 
 const liveEditor = readFileSync(
   new URL("../spa/src/components/editor/LiveEditor.tsx", import.meta.url),

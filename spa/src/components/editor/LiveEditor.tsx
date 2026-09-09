@@ -74,6 +74,7 @@ export function LiveEditor({
     useRef<EditorViewportRestorePoint | null>(null);
   const conflictPromptedRef = useRef(false);
   const [editorGeneration, setEditorGeneration] = useState(0);
+  const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [agentReviewOpen, setAgentReviewOpen] = useState(false);
@@ -96,6 +97,8 @@ export function LiveEditor({
 
   const handleEditorReady = useCallback(
     (editor: Editor | null) => {
+      // 自己也留一份：AI 优化面板要用它在正文里标出建议位置。
+      setEditorInstance(editor);
       if (visible) onEditorReady?.(docId, editor);
       const restorePoint = editorViewportRestorePoint.current;
       if (!editor || !restorePoint) return;
@@ -336,6 +339,12 @@ export function LiveEditor({
     });
     setRemoteUpdateAvailable(false);
     setRemoteUpdated(false);
+    // 下面这行会换掉编辑器的 key，整个实例重建，滚动位置随之归零。落实一条 AI
+    // 建议后跳回文章开头等于让用户重新找刚才读到哪 —— 先记下视口，重建后还原。
+    editorViewportRestorePoint.current = {
+      scrollTop: scrollRef.current?.scrollTop ?? 0,
+      scrollLeft: scrollRef.current?.scrollLeft ?? 0,
+    };
     setEditorGeneration((value) => value + 1);
   }
 
@@ -458,9 +467,11 @@ export function LiveEditor({
       {visible && agentReviewOpen && !conflictOpen && (
         <AgentReviewPanel
           docId={docId}
+          documentRevision={merged.revision}
           member={member}
           localMode={localMode}
           initialReviewId={requestedReviewId}
+          editor={editorInstance}
           onPrepareReview={prepareAgentReview}
           onAcceptDocument={acceptDocument}
           onClose={() => setAgentReviewOpen(false)}

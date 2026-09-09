@@ -527,7 +527,7 @@ func TestWechatCoverGenerationChargesFixedCredits(t *testing.T) {
 		SessionSecret:           "wechat-cover-credits-test",
 		WechatCoverImageBaseURL: "https://cover-provider.example/v1",
 		WechatCoverImageAPIKey:  "cover-test-key",
-		WechatCoverImageModel:   "cover-test-model",
+		WechatCoverImageModel:   "gpt-image-2.5-flare",
 	})
 	if _, err := pool.Exec(context.Background(), `UPDATE users SET is_admin = true WHERE id = $1`, user.ID); err != nil {
 		t.Fatalf("grant test admin: %v", err)
@@ -537,14 +537,16 @@ func TestWechatCoverGenerationChargesFixedCredits(t *testing.T) {
 			t.Fatalf("unexpected cover provider request: path=%q authorization=%q", request.URL.Path, request.Header.Get("Authorization"))
 		}
 		var payload struct {
+			Model  string `json:"model"`
 			Prompt string `json:"prompt"`
 			Size   string `json:"size"`
 		}
 		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode cover provider request: %v", err)
 		}
-		if payload.Size != "1536x1024" || !strings.Contains(payload.Prompt, "Target aspect ratio: 2.35:1") {
-			t.Fatalf("cover provider composition=%q size=%q", payload.Prompt, payload.Size)
+		if payload.Model != "gpt-image-2.5-flare" || payload.Size != "1536x1024" ||
+			!strings.Contains(payload.Prompt, "Target aspect ratio: 2.35:1") {
+			t.Fatalf("cover provider model=%q composition=%q size=%q", payload.Model, payload.Prompt, payload.Size)
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -586,7 +588,7 @@ func TestWechatCoverGenerationFailureReleasesCredits(t *testing.T) {
 		SessionSecret:           "wechat-cover-release-test",
 		WechatCoverImageBaseURL: "https://cover-provider.example/v1",
 		WechatCoverImageAPIKey:  "cover-test-key",
-		WechatCoverImageModel:   "cover-test-model",
+		WechatCoverImageModel:   "gpt-image-2.5-flare",
 	})
 	if _, err := pool.Exec(context.Background(), `UPDATE users SET is_admin = true WHERE id = $1`, user.ID); err != nil {
 		t.Fatalf("grant test admin: %v", err)

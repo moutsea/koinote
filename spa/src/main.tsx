@@ -14,6 +14,7 @@ import { I18nProvider } from "./i18n";
 import { AppShell } from "./components/AppShell";
 import { HomePage } from "./pages/HomePage";
 import { isDesktopRuntime } from "./desktop/runtime";
+import { installDesktopSyncQueryRefresh } from "./desktop/syncQueries";
 import { installDropNavigationGuard } from "./dropNavigation";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const desktopRuntime = isDesktopRuntime();
 installDropNavigationGuard();
 
 if (desktopRuntime) {
+  installDesktopSyncQueryRefresh(queryClient);
   void import("./desktop/auth").then(
     ({ DESKTOP_BILLING_EVENT, initializeDesktopAuth }) => {
       window.addEventListener(DESKTOP_BILLING_EVENT, (event) => {

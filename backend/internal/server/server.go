@@ -171,6 +171,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/x/oauth2/account", a.xOAuth2AccountDelete)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
+	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews/estimate", a.agentReviewEstimate)
 	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)
 	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/apply", a.agentReviewSuggestionApply)
 	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/dismiss", a.agentReviewSuggestionDismiss)

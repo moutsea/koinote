@@ -107,6 +107,64 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	`, normalID); err != nil {
 		t.Fatalf("设置测试会员: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO credit_accounts (user_id, balance, reserved)
+		SELECT id, 119, 27 FROM users WHERE auth_user_id = $1
+		ON CONFLICT (user_id) DO UPDATE
+		SET balance = EXCLUDED.balance, reserved = EXCLUDED.reserved
+	`, normalID); err != nil {
+		t.Fatalf("设置测试会员额度: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO credit_reservations (
+			reservation_id, user_id, reserved_credits, status, expires_at
+		)
+		SELECT $1, id, 20, 'active', now() + interval '10 minutes'
+		FROM users WHERE auth_user_id = $2
+		UNION ALL
+		SELECT $3, id, 7, 'active', now() - interval '10 minutes'
+		FROM users WHERE auth_user_id = $2
+	`, "admin-active-reservation-"+suffix, normalID, "admin-expired-reservation-"+suffix); err != nil {
+		t.Fatalf("插入测试额度预留: %v", err)
+	}
+	var testDocumentID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO documents (doc_id, user_id, title, content)
+		VALUES ($1, (SELECT id FROM users WHERE auth_user_id = $2), 'Token test', '')
+		RETURNING id
+	`, normalID+"-doc", normalID).Scan(&testDocumentID); err != nil {
+		t.Fatalf("插入 token 测试文档: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_reviews (
+			review_id, user_id, document_id, base_revision, current_revision,
+			provider_mode, provider_protocol, model, status,
+			input_tokens, output_tokens, total_tokens, credits_charged
+		)
+		VALUES ($1, (SELECT id FROM users WHERE auth_user_id = $2), $3,
+			1, 1, 'builtin', 'openai', 'test-model', 'ready', 1200, 300, 1500, 1)
+	`, normalID+"-review", normalID, testDocumentID); err != nil {
+		t.Fatalf("插入 token 测试审阅: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_reviews (
+			review_id, user_id, document_id, base_revision, current_revision,
+			provider_mode, provider_protocol, model, status,
+			input_tokens, output_tokens, total_tokens, credits_charged
+		)
+		VALUES ($1, (SELECT id FROM users WHERE auth_user_id = $2), $3,
+			1, 1, 'byok', 'openai', 'byok-test-model', 'ready', 8000, 1999, 9999, 0)
+	`, normalID+"-byok-review", normalID, testDocumentID); err != nil {
+		t.Fatalf("插入 BYOK token 测试审阅: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO credit_transactions (
+			entry_id, user_id, kind, amount, balance_after, reference_key
+		)
+		VALUES ($1, (SELECT id FROM users WHERE auth_user_id = $2), 'agent_usage', -1, 119, $3)
+	`, "admin-token-entry-"+suffix, normalID, "admin-token-usage-"+suffix); err != nil {
+		t.Fatalf("插入 token 测试消费: %v", err)
+	}
 
 	app := New(config.Config{
 		SessionSecret: "secret",
@@ -160,6 +218,21 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	}
 	if recentNormal == nil || recentNormal.LastClient == nil || *recentNormal.LastClient != "desktop" || recentNormal.LastClientAt == nil {
 		t.Fatalf("最近用户应返回客户端与使用时间: %+v", recentNormal)
+	}
+	if first.PaidTokenUsage.PaidUsers < 1 || first.PaidTokenUsage.TotalTokens < 1500 ||
+		first.PaidTokenUsage.UsedCredits < 1 || first.PaidTokenUsage.AvailableCredits < 99 {
+		t.Fatalf("付费用户 token 汇总不符: %+v", first.PaidTokenUsage)
+	}
+	var paidNormal *adminPaidUser
+	for index := range first.PaidUsers {
+		if first.PaidUsers[index].Email == normalID+"@example.com" {
+			paidNormal = &first.PaidUsers[index]
+			break
+		}
+	}
+	if paidNormal == nil || paidNormal.TotalTokens != 1500 || paidNormal.UsedCredits != 1 ||
+		paidNormal.ReservedCredits != 20 || paidNormal.AvailableCredits != 99 {
+		t.Fatalf("付费用户 token 明细应排除 BYOK 审阅: %+v", paidNormal)
 	}
 
 	app.siteAnalytics = staticSiteAnalytics{traffic: siteTraffic{

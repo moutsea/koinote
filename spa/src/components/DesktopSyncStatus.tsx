@@ -1,5 +1,4 @@
 import { AlertTriangle, Check, Cloud, RefreshCw, WifiOff, X } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { REMOTE_UPDATE_INTERVAL_MS } from "../remoteUpdates";
@@ -25,7 +24,6 @@ const INITIAL: DesktopSyncSummary = {
 
 export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" | "panel" }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const [summary, setSummary] = useState(INITIAL);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [conflicts, setConflicts] = useState<DesktopConflict[]>([]);
@@ -38,12 +36,6 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
     const onStatus = (event: Event) => {
       const next = (event as CustomEvent<DesktopSyncSummary>).detail;
       setSummary(next);
-      if (next.state === "idle") {
-        void queryClient.invalidateQueries({ queryKey: ["documents"] });
-        void queryClient.invalidateQueries({ queryKey: ["document"] });
-        void queryClient.invalidateQueries({ queryKey: ["folders"] });
-        void queryClient.invalidateQueries({ queryKey: ["document-search"] });
-      }
       if (next.conflicts > 0) {
         const shouldPrompt = next.conflicts > previousConflictCount.current;
         void desktopListConflicts().then((items) => {
@@ -90,7 +82,7 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
       window.removeEventListener("focus", checkRemote);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [queryClient]);
+  }, []);
 
   useEffect(() => {
     if (!dialogOpen) return;

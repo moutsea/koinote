@@ -139,6 +139,8 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodPost, "/api/documents/doc-id/zhihu/publish/extra", false},
 		{http.MethodGet, "/api/documents/doc-id/agent-reviews", true},
 		{http.MethodPost, "/api/documents/doc-id/agent-reviews", true},
+		{http.MethodPost, "/api/documents/doc-id/agent-reviews/estimate", true},
+		{http.MethodGet, "/api/documents/doc-id/agent-reviews/estimate", false},
 		{http.MethodDelete, "/api/documents/doc-id/agent-reviews", false},
 		{http.MethodGet, "/api/agent/reviews/review-id", true},
 		{http.MethodPost, "/api/agent/reviews/review-id", false},

@@ -17,6 +17,7 @@ use tauri::{
 use tauri::{Emitter, Manager};
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+mod file_export;
 mod pdf_export;
 
 #[cfg(koinote_local)]
@@ -963,6 +964,94 @@ async fn desktop_export_pdf(window: tauri::WebviewWindow, path: String) -> Resul
     pdf_export::export_pdf(window, path).await
 }
 
+#[tauri::command]
+async fn desktop_save_export(
+    window: tauri::WebviewWindow,
+    request: tauri::ipc::Request<'_>,
+) -> Result<bool, String> {
+    let filename = request
+        .headers()
+        .get("x-koinote-export-filename")
+        .ok_or_else(|| "export_filename_missing".to_string())?
+        .to_str()
+        .map_err(|_| "export_filename_invalid".to_string())
+        .and_then(decode_export_header)?;
+    let extension = request
+        .headers()
+        .get("x-koinote-export-extension")
+        .ok_or_else(|| "export_extension_missing".to_string())?
+        .to_str()
+        .map_err(|_| "export_extension_invalid".to_string())?
+        .to_string();
+    let extension = match extension.as_str() {
+        "md" | "html" | "docx" | "zip" => extension,
+        _ => return Err("export_extension_unsupported".to_string()),
+    };
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(_) => return Err("export_payload_must_be_binary".to_string()),
+    };
+    let dialog_filename = filename.clone();
+    let dialog_extension = extension.clone();
+    let selected_path = tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::DialogExt;
+
+        window
+            .dialog()
+            .file()
+            .set_file_name(dialog_filename)
+            .add_filter(
+                dialog_extension.to_uppercase(),
+                &[dialog_extension.as_str()],
+            )
+            .blocking_save_file()
+            .map(|path| path.into_path().map_err(|error| error.to_string()))
+            .transpose()
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let Some(selected_path) = selected_path else {
+        return Ok(false);
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        file_export::save_export_path(selected_path, bytes).map(|()| true)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn decode_export_header(value: &str) -> Result<String, String> {
+    let value = value.as_bytes();
+    let mut decoded = Vec::with_capacity(value.len());
+    let mut index = 0;
+    while index < value.len() {
+        if value[index] == b'%' {
+            if index + 2 >= value.len() {
+                return Err("export_filename_invalid".to_string());
+            }
+            let high =
+                hex_value(value[index + 1]).ok_or_else(|| "export_filename_invalid".to_string())?;
+            let low =
+                hex_value(value[index + 2]).ok_or_else(|| "export_filename_invalid".to_string())?;
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(value[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).map_err(|_| "export_filename_invalid".to_string())
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -1059,6 +1148,7 @@ pub fn run() {
             desktop_finalize_local_mode_import,
             desktop_abort_local_mode_import,
             desktop_export_pdf,
+            desktop_save_export,
             desktop_set_menu_locale,
             desktop_set_menu_enabled,
         ]);
@@ -1296,5 +1386,21 @@ mod tests {
             .expect("load staged count after abort");
             assert_eq!(staged_count, 0);
         });
+    }
+
+    #[test]
+    fn export_filename_header_decodes_utf8() {
+        assert_eq!(
+            decode_export_header("%E5%AF%BC%E5%87%BA.html").unwrap(),
+            "导出.html"
+        );
+        assert_eq!(
+            decode_export_header("export%25name.html").unwrap(),
+            "export%name.html"
+        );
+        assert_eq!(
+            decode_export_header("%E5%AF%BC%E5%87%BA%ZZ.html").unwrap_err(),
+            "export_filename_invalid"
+        );
     }
 }

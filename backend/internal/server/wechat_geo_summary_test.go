@@ -417,3 +417,35 @@ func requestWechatGeoSummaryEnabled(
 	app.Routes().ServeHTTP(response, request)
 	return response
 }
+
+// 导出走前端 wechatGeo.ts，MCP 推送走后端 buildWechatGeoSection。两条路径必须产出
+// 同一份隐藏语料：样式串、空白折叠和截断规则任何一边悄悄改掉，用户在两个渠道看到
+// 的隐藏摘要就会不一致，而且没有任何报错。
+func TestWechatGeoSectionMatchesFrontendContract(t *testing.T) {
+	// 与 spa/src/components/editor/wechatGeo.ts 的 WECHAT_GEO_SECTION_STYLE 逐字一致。
+	const frontendStyle = "height:0!important;margin:0!important;padding:0!important;" +
+		"overflow:hidden!important;width:100%;position:absolute!important;visibility:hidden!important;"
+	if wechatGeoSectionStyle != frontendStyle {
+		t.Fatalf("section style drifted from the frontend:\n got %q\nwant %q", wechatGeoSectionStyle, frontendStyle)
+	}
+	// 与前端 WECHAT_GEO_MAX_CHARS 一致。
+	if wechatGeoRenderedMaxRunes != 2_400 {
+		t.Fatalf("rendered max runes = %d, want 2400", wechatGeoRenderedMaxRunes)
+	}
+
+	// 逐行折叠空白并丢掉空行，与前端 normalizeLine + filter(Boolean) 等价。
+	if got := normalizeWechatGeoCorpus("  第一行  有   空格 \n\n\n 第二行 \r\n"); got != "第一行 有 空格\n第二行" {
+		t.Fatalf("normalized corpus = %q", got)
+	}
+	// 按码点而非字节截断。
+	if got := normalizeWechatGeoCorpus(strings.Repeat("语", wechatGeoRenderedMaxRunes+50)); len([]rune(got)) != wechatGeoRenderedMaxRunes {
+		t.Fatalf("truncated corpus runes = %d, want %d", len([]rune(got)), wechatGeoRenderedMaxRunes)
+	}
+	// HTML 转义，避免摘要里的尖括号破坏外层结构。
+	if got := buildWechatGeoSection(`a<b>&"c`); !strings.Contains(got, "a&lt;b&gt;&amp;&#34;c") {
+		t.Fatalf("section did not escape HTML: %q", got)
+	}
+	if got := buildWechatGeoSection("   \n  \n"); got != "" {
+		t.Fatalf("blank corpus section = %q, want empty", got)
+	}
+}

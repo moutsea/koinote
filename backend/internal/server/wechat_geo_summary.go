@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -22,9 +23,11 @@ import (
 const (
 	wechatGeoSummaryRequestBytes = 6*maxContentBytes + 16<<10
 	wechatGeoSummaryRateLimit    = 6
-	wechatGeoSummaryRateWindow   = 5 * time.Minute
-	wechatGeoSummaryRunLimit     = 90 * time.Second
-	wechatGeoSummaryReservation  = 2 * time.Minute
+	// 编辑保存比生成频繁得多：面板里改几个字就会存一次。
+	wechatGeoSummaryUpdateRateLimit = 60
+	wechatGeoSummaryRateWindow      = 5 * time.Minute
+	wechatGeoSummaryRunLimit        = 90 * time.Second
+	wechatGeoSummaryReservation     = 2 * time.Minute
 	// 要覆盖写满的产出：summary ≤600 runes 加 6 条 topics、12 条 keywords 再加 JSON 结构。
 	// 截断会直接变成非法 JSON，而这条路径没有重试，用户看到的就是一次失败。
 	wechatGeoSummaryOutputTokens = 1_200
@@ -35,7 +38,38 @@ const (
 	wechatGeoSummaryMaxRunes     = 600
 	wechatGeoTopicMaxRunes       = 80
 	wechatGeoKeywordMaxRunes     = 40
+	// 隐藏语料的长度上限。前端 spa/src/components/editor/wechatGeo.ts 的
+	// WECHAT_GEO_MAX_CHARS 必须与此一致：导出走前端、MCP 推送走后端，两条路径
+	// 产出的隐藏语料要是同一份。
+	wechatGeoRenderedMaxRunes = 2_400
 )
+
+// wechatGeoSectionStyle 与前端 WECHAT_GEO_SECTION_STYLE 必须逐字一致。
+const wechatGeoSectionStyle = "height:0!important;margin:0!important;padding:0!important;" +
+	"overflow:hidden!important;width:100%;position:absolute!important;visibility:hidden!important;"
+
+// buildWechatGeoSection 是前端 buildWechatGeoSection 的等价实现。
+func buildWechatGeoSection(corpus string) string {
+	normalized := normalizeWechatGeoCorpus(corpus)
+	if normalized == "" {
+		return ""
+	}
+	return `<section style="` + wechatGeoSectionStyle + `"><p style="margin:0!important;padding:0!important;">` +
+		html.EscapeString(normalized) + `</p></section>`
+}
+
+// normalizeWechatGeoCorpus 与前端 normalizeWechatGeoCorpus 行为一致：逐行折叠空白、
+// 丢掉空行，再按码点截断。
+func normalizeWechatGeoCorpus(value string) string {
+	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if normalized := strings.Join(strings.Fields(line), " "); normalized != "" {
+			parts = append(parts, normalized)
+		}
+	}
+	return truncateRunes(strings.Join(parts, "\n"), wechatGeoRenderedMaxRunes)
+}
 
 const wechatGeoSummarySystemPrompt = `You produce a hidden semantic index entry for a WeChat article. The output is never
 shown to readers: it is embedded in the published page for retrieval and
@@ -266,6 +300,15 @@ func (a *App) wechatGeoSummaryUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// 这条路径不烧 credits，但仍然是逐次数据库写入，配额比生成宽松即可。
+	if !a.rateLimit().allow(
+		fmt.Sprintf("wechat-geo-summary-update:user:%d", user.ID),
+		wechatGeoSummaryUpdateRateLimit,
+		wechatGeoSummaryRateWindow,
+	) {
+		tooManyAttempts(w)
+		return
+	}
 	var input struct {
 		Text    *string `json:"text"`
 		Enabled *bool   `json:"enabled"`
@@ -289,7 +332,7 @@ func (a *App) wechatGeoSummaryUpdate(w http.ResponseWriter, r *http.Request) {
 		normalized := strings.TrimSpace(*input.Text)
 		input.Text = &normalized
 	}
-	if input.Text != nil && (*input.Text == "" || utf8.RuneCountInString(*input.Text) > 2400) {
+	if input.Text != nil && (*input.Text == "" || utf8.RuneCountInString(*input.Text) > wechatGeoRenderedMaxRunes) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Summary text is invalid")
 		return
 	}

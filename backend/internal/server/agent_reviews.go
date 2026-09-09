@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,15 +20,17 @@ import (
 )
 
 const (
-	agentReviewRequestBytes   = 4 << 10
-	agentReviewRateLimit      = 6
-	agentReviewRateWindow     = 5 * time.Minute
-	agentReviewMaxRunning     = 3
-	agentReviewListLimit      = 20
-	agentReviewRunLimit       = 15 * time.Minute
-	agentReviewReservationTTL = agentReviewRunLimit + 2*time.Minute
-	agentReviewFinalizeLimit  = 20 * time.Second
-	agentReviewStaleAfter     = agentReviewReservationTTL
+	agentReviewRequestBytes = 4 << 10
+	agentReviewRateLimit    = 6
+	// 预估是只读的，勾选任务时会连续调用，配额比发起宽松。
+	agentReviewEstimateRateLimit = 60
+	agentReviewRateWindow        = 5 * time.Minute
+	agentReviewMaxRunning        = 3
+	agentReviewListLimit         = 20
+	agentReviewRunLimit          = 15 * time.Minute
+	agentReviewReservationTTL    = agentReviewRunLimit + 2*time.Minute
+	agentReviewFinalizeLimit     = 20 * time.Second
+	agentReviewStaleAfter        = agentReviewReservationTTL
 )
 
 const expireStaleAgentReviewsSQL = `
@@ -71,30 +74,33 @@ var (
 )
 
 type agentReviewView struct {
-	ReviewID         string                      `json:"reviewId"`
-	DocumentID       string                      `json:"documentId"`
-	BaseRevision     int64                       `json:"baseRevision"`
-	CurrentRevision  int64                       `json:"currentRevision"`
-	DocumentRevision int64                       `json:"documentRevision"`
-	ProviderMode     string                      `json:"providerMode"`
-	ProviderProtocol string                      `json:"providerProtocol"`
-	ChannelID        *string                     `json:"channelId"`
-	Model            string                      `json:"model"`
-	Status           string                      `json:"status"`
-	Summary          *string                     `json:"summary"`
-	TitleScore       *int                        `json:"titleScore"`
-	TitleAssessment  *string                     `json:"titleAssessment"`
-	LayoutAssessment []writingReviewDimension    `json:"layoutAssessment"`
-	TaskProgress     agentReviewTaskProgress     `json:"taskProgress"`
-	InputTokens      int                         `json:"inputTokens"`
-	OutputTokens     int                         `json:"outputTokens"`
-	TotalTokens      int                         `json:"totalTokens"`
-	CreditsCharged   int                         `json:"creditsCharged"`
-	ErrorCode        *string                     `json:"errorCode"`
-	CreatedAt        time.Time                   `json:"createdAt"`
-	CompletedAt      *time.Time                  `json:"completedAt"`
-	UpdatedAt        time.Time                   `json:"updatedAt"`
-	Suggestions      []agentReviewSuggestionView `json:"suggestions,omitempty"`
+	ReviewID         string                   `json:"reviewId"`
+	DocumentID       string                   `json:"documentId"`
+	BaseRevision     int64                    `json:"baseRevision"`
+	CurrentRevision  int64                    `json:"currentRevision"`
+	DocumentRevision int64                    `json:"documentRevision"`
+	ProviderMode     string                   `json:"providerMode"`
+	ProviderProtocol string                   `json:"providerProtocol"`
+	ChannelID        *string                  `json:"channelId"`
+	Model            string                   `json:"model"`
+	Status           string                   `json:"status"`
+	Summary          *string                  `json:"summary"`
+	TitleScore       *int                     `json:"titleScore"`
+	TitleAssessment  *string                  `json:"titleAssessment"`
+	LayoutAssessment []writingReviewDimension `json:"layoutAssessment"`
+	TaskProgress     agentReviewTaskProgress  `json:"taskProgress"`
+	InputTokens      int                      `json:"inputTokens"`
+	OutputTokens     int                      `json:"outputTokens"`
+	TotalTokens      int                      `json:"totalTokens"`
+	CreditsCharged   int                      `json:"creditsCharged"`
+	// 本次审阅自己的预留上限。账户上的 reserved 是所有活动预留的聚合值，多个审阅
+	// 并存时拿它当「本次预留」显示会把别人的数字算进来。预留已释放或提交后为 null。
+	ReservedCredits *int                        `json:"reservedCredits"`
+	ErrorCode       *string                     `json:"errorCode"`
+	CreatedAt       time.Time                   `json:"createdAt"`
+	CompletedAt     *time.Time                  `json:"completedAt"`
+	UpdatedAt       time.Time                   `json:"updatedAt"`
+	Suggestions     []agentReviewSuggestionView `json:"suggestions,omitempty"`
 }
 
 type agentReviewTaskProgress struct {
@@ -119,6 +125,7 @@ type agentReviewSuggestionView struct {
 	Target       string     `json:"target"`
 	Kind         string     `json:"kind"`
 	Category     string     `json:"category"`
+	SourceTask   *string    `json:"sourceTask,omitempty"`
 	Operation    *string    `json:"operation"`
 	Before       string     `json:"before"`
 	After        string     `json:"after"`
@@ -141,6 +148,13 @@ type agentReviewDocument struct {
 type preparedAgentReviewSuggestion struct {
 	ID string
 	validatedWritingSuggestion
+}
+
+func nullableWritingReviewSourceTask(sourceTask string) any {
+	if sourceTask == "" {
+		return nil
+	}
+	return sourceTask
 }
 
 type lockedAgentReview struct {
@@ -182,11 +196,12 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		ProviderMode   string `json:"providerMode"`
-		ChannelID      string `json:"channelId"`
-		Depth          string `json:"depth"`
-		FocusDimension string `json:"focusDimension"`
-		SourceReviewID string `json:"sourceReviewId"`
+		ProviderMode   string   `json:"providerMode"`
+		ChannelID      string   `json:"channelId"`
+		Depth          string   `json:"depth"`
+		FocusDimension string   `json:"focusDimension"`
+		SourceReviewID string   `json:"sourceReviewId"`
+		Tasks          []string `json:"tasks"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentReviewRequestBytes)
 	decoder := json.NewDecoder(r.Body)
@@ -200,6 +215,9 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	input.Depth = strings.ToLower(strings.TrimSpace(input.Depth))
 	input.FocusDimension = strings.ToLower(strings.TrimSpace(input.FocusDimension))
 	input.SourceReviewID = strings.TrimSpace(input.SourceReviewID)
+	for index := range input.Tasks {
+		input.Tasks[index] = strings.ToLower(strings.TrimSpace(input.Tasks[index]))
+	}
 	if input.Depth == "" {
 		input.Depth = agentReviewModeStandard
 	}
@@ -222,6 +240,13 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	if input.Depth == agentReviewModeStandard && input.SourceReviewID != "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Standard review cannot set a source review")
 		return
+	}
+	if input.Depth == agentReviewModeStandard {
+		normalizedTasks, ok := normalizeAgentReviewTasks(w, input.Tasks)
+		if !ok {
+			return
+		}
+		input.Tasks = normalizedTasks
 	}
 	if input.ProviderMode == "" {
 		mode, err := a.loadAgentProviderMode(r.Context(), user.ID)
@@ -281,7 +306,7 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 			document.Title, document.Content, input.FocusDimension, deepContext,
 		)
 	} else {
-		plan, err = buildWritingReviewTaskPlan(document.Title, document.Content)
+		plan, err = buildWritingReviewTaskPlan(document.Title, document.Content, input.Tasks...)
 	}
 	if err != nil {
 		log.Printf("agent review build task plan: %v", err)
@@ -345,6 +370,139 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	go a.runAgentReview(user.ID, reviewDatabaseID, reviewID, document, provider, reservationID, plan)
 	httpx.JSON(w, http.StatusAccepted, map[string]any{"review": view})
+}
+
+// agentReviewEstimate 给发起前的花费预览用。它走 agentReviewCreate 的同一套建计划
+// 和预留估算，所以界面上显示的数字就是真正会被预留的数字——不是前端另算一份近似值。
+//
+// 只读：不建审阅、不预留、不扣费。实际扣费仍按 provider 上报的用量走，通常低于这里
+// 的预留额度，所以文案要说清这是上限而非最终花费。
+func (a *App) agentReviewEstimate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	user, ok := a.requireLifetimeMember(w, r)
+	if !ok {
+		return
+	}
+	if !a.rateLimit().allow(
+		fmt.Sprintf("agent-review-estimate:user:%d", user.ID),
+		agentReviewEstimateRateLimit,
+		agentReviewRateWindow,
+	) {
+		tooManyAttempts(w)
+		return
+	}
+	var input struct {
+		Tasks          []string `json:"tasks"`
+		Depth          string   `json:"depth"`
+		FocusDimension string   `json:"focusDimension"`
+		SourceReviewID string   `json:"sourceReviewId"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, agentReviewRequestBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil && !errors.Is(err, io.EOF) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
+		return
+	}
+	input.Depth = strings.ToLower(strings.TrimSpace(input.Depth))
+	input.FocusDimension = strings.ToLower(strings.TrimSpace(input.FocusDimension))
+	input.SourceReviewID = strings.TrimSpace(input.SourceReviewID)
+	if input.Depth == "" {
+		input.Depth = agentReviewModeStandard
+	}
+	if input.Depth != agentReviewModeStandard && input.Depth != agentReviewModeDeep {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_depth", "Review depth must be standard or deep")
+		return
+	}
+	if input.Depth == agentReviewModeDeep && (!writingReviewDimensionExists(input.FocusDimension) || input.SourceReviewID == "") {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Deep review requires a valid source review and focus dimension")
+		return
+	}
+
+	document, err := a.loadAgentReviewDocument(r.Context(), user.ID, r.PathValue("docId"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+		return
+	}
+	if err != nil {
+		log.Printf("agent review estimate load document: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	var plan writingReviewTaskPlan
+	tasks := make([]string, 0)
+	if input.Depth == agentReviewModeDeep {
+		sourceReview, loadErr := a.loadAgentReview(r.Context(), user.ID, input.SourceReviewID, true)
+		if errors.Is(loadErr, errAgentReviewNotFound) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Source review is not available for deep analysis")
+			return
+		}
+		if loadErr != nil {
+			log.Printf("agent review estimate load deep analysis source: %v", loadErr)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if sourceReview.DocumentID != document.DocID || sourceReview.Status == "running" || sourceReview.Status == "failed" {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_source", "Source review is not available for deep analysis")
+			return
+		}
+		plan, err = buildDeepWritingReviewTaskPlan(
+			document.Title,
+			document.Content,
+			input.FocusDimension,
+			writingReviewDeepContextFromReview(sourceReview, input.FocusDimension),
+		)
+	} else {
+		var ok bool
+		tasks, ok = normalizeAgentReviewTasks(w, input.Tasks)
+		if !ok {
+			return
+		}
+		plan, err = buildWritingReviewTaskPlan(document.Title, document.Content, tasks...)
+	}
+	if err != nil {
+		log.Printf("agent review estimate build plan: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"estimate": map[string]any{
+			"tasks":            tasks,
+			"totalTasks":       len(plan.Tasks),
+			"reservedCredits":  estimateAgentReviewPlanReservation(plan),
+			"documentRevision": document.Revision,
+		},
+	})
+}
+
+// normalizeAgentReviewTasks 去重并按固定顺序排列任务名，nil 表示默认全选。
+// 发起和预估共用它，避免两条路径对「合法任务组合」的理解出现分歧。
+func normalizeAgentReviewTasks(w http.ResponseWriter, values []string) ([]string, bool) {
+	const allTasks = 4
+	order := []string{"title", "proofread", "structure", "paragraph"}
+	if values == nil {
+		return order, true
+	}
+	seen := make(map[string]struct{}, allTasks)
+	for _, task := range values {
+		task = strings.ToLower(strings.TrimSpace(task))
+		if !slices.Contains(order, task) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_tasks", "Review tasks are invalid")
+			return nil, false
+		}
+		seen[task] = struct{}{}
+	}
+	if len(seen) == 0 {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_review_tasks", "At least one review task is required")
+		return nil, false
+	}
+	normalized := make([]string, 0, len(seen))
+	for _, task := range order {
+		if _, ok := seen[task]; ok {
+			normalized = append(normalized, task)
+		}
+	}
+	return normalized, true
 }
 
 func writingReviewDeepContextFromReview(
@@ -549,50 +707,6 @@ func (a *App) runAgentReview(
 		a.failAgentReview(context.Background(), userID, reviewDatabaseID, errorCode, reservationID)
 		log.Printf("agent review finalize review=%s: %v", reviewID, err)
 	}
-}
-
-func generateValidatedWritingReview(
-	ctx context.Context,
-	httpClient *http.Client,
-	provider agentLLMProvider,
-	prompt agentLLMPrompt,
-	title string,
-	content string,
-) (agentLLMResult, validatedWritingReview, error) {
-	result, err := callAgentLLM(ctx, httpClient, provider, prompt)
-	if err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	if err := requireAgentLLMUsage(provider, result); err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	validated, validationErr := parseAndValidateWritingReview(result.JSON, title, content)
-	if validationErr == nil {
-		return result, validated, nil
-	}
-	if !errors.Is(validationErr, errAgentLLMInvalidResponse) {
-		return agentLLMResult{}, validatedWritingReview{}, validationErr
-	}
-
-	retryPrompt := prompt
-	retryPrompt.User += "\n\nYour previous response was rejected by the review validator. " +
-		"Generate the complete review again as valid JSON. Do not mention this retry. " +
-		"Validator feedback: " + validationErr.Error()
-	retryResult, err := callAgentLLM(ctx, httpClient, provider, retryPrompt)
-	if err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	if err := requireAgentLLMUsage(provider, retryResult); err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	if err := addAgentLLMUsage(&retryResult, result); err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	validated, err = parseAndValidateWritingReview(retryResult.JSON, title, content)
-	if err != nil {
-		return agentLLMResult{}, validatedWritingReview{}, err
-	}
-	return retryResult, validated, nil
 }
 
 func addAgentLLMUsage(target *agentLLMResult, previous agentLLMResult) error {
@@ -941,9 +1055,6 @@ func (a *App) insertRunningAgentReview(
 }
 
 func estimateAgentReviewReservation(prompt agentLLMPrompt) int64 {
-	// BPE token count cannot exceed the UTF-8 byte count by more than small
-	// message framing overhead. Reserving bytes is intentionally conservative;
-	// only provider-reported usage is charged after a successful call.
 	credits := creditsForTokens(agentReviewPromptTokenUpperBound(prompt))
 	if credits < 1 {
 		return 1
@@ -951,10 +1062,40 @@ func estimateAgentReviewReservation(prompt agentLLMPrompt) int64 {
 	return credits
 }
 
+// 预留额度按脚本类型折算字节，而不是直接把字节数当 token 数。
+//
+// 「token 数不超过字节数」这个上界本身没错，但对中文过于宽松：一个汉字占 3 字节、
+// 约合 1 个 token，于是预留是实际用量的三倍。乘上十几个任务，余额不多的用户会在
+// 发起时就被 insufficient_credits 挡住，而真跑起来根本花不了那么多——扣费只按
+// provider 上报的用量走。这里仍然保守（系数留了充足余量），只是不再夸张。
+const (
+	agentReviewASCIIBytesPerToken = 3 // 英文经验值约 4，留一档余量
+	agentReviewWideBytesPerToken  = 2 // CJK 单字 3 字节≈1 token，留一档余量
+)
+
 func agentReviewPromptTokenUpperBound(prompt agentLLMPrompt) int {
 	schemaBytes, _ := json.Marshal(prompt.Schema)
-	return len(prompt.System) + len(prompt.User) + len(schemaBytes) +
-		agentLLMPromptOutputLimit(prompt, agentLLMMaxOutputTokens) + 512
+	inputTokens := estimateAgentPromptTokens(prompt.System) +
+		estimateAgentPromptTokens(prompt.User) +
+		estimateAgentPromptTokens(string(schemaBytes))
+	return inputTokens + agentLLMPromptOutputLimit(prompt, agentLLMMaxOutputTokens) + 512
+}
+
+// estimateAgentPromptTokens 分别统计 ASCII 与多字节字符：混合文本里两种密度差三倍，
+// 用单一系数会让中文严重高估、英文轻微低估。
+func estimateAgentPromptTokens(value string) int {
+	asciiBytes := 0
+	wideBytes := 0
+	for index := 0; index < len(value); index++ {
+		if value[index] < 0x80 {
+			asciiBytes++
+			continue
+		}
+		wideBytes++
+	}
+	tokens := (asciiBytes+agentReviewASCIIBytesPerToken-1)/agentReviewASCIIBytesPerToken +
+		(wideBytes+agentReviewWideBytesPerToken-1)/agentReviewWideBytesPerToken
+	return tokens
 }
 
 func estimateAgentReviewPlanReservation(plan writingReviewTaskPlan) int64 {
@@ -1009,6 +1150,9 @@ func (progress *agentReviewTaskProgress) record(outcome writingReviewTaskOutcome
 		stage := &progress.Stages[index]
 		if stage.ID != outcome.Result.Task.Stage {
 			continue
+		}
+		if stage.Status == "failed" {
+			return
 		}
 		stage.DurationMS += max(0, outcome.Result.Duration.Milliseconds())
 		if outcome.Err != nil {
@@ -1113,11 +1257,11 @@ func (a *App) storeAgentReviewTaskOutcome(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO agent_review_suggestions (
 				suggestion_id, review_id, ordinal, target, suggestion_kind,
-				category, operation, before_text, after_text, reason
+				category, source_task, operation, before_text, after_text, reason
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`, suggestion.ID, reviewDatabaseID, outcome.Result.Task.OrdinalBase+index,
-			suggestion.Target, suggestion.Kind, suggestion.Category, operation,
+			suggestion.Target, suggestion.Kind, suggestion.Category, nullableWritingReviewSourceTask(suggestion.SourceTask), operation,
 			suggestion.Before, suggestion.After, suggestion.Reason); err != nil {
 			return err
 		}
@@ -1194,11 +1338,11 @@ func (a *App) finalizeAgentReview(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO agent_review_suggestions (
 				suggestion_id, review_id, ordinal, target, suggestion_kind,
-				category, operation, before_text, after_text, reason
+				category, source_task, operation, before_text, after_text, reason
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`, suggestion.ID, reviewDatabaseID, ordinal, suggestion.Target, suggestion.Kind,
-			suggestion.Category, operation, suggestion.Before, suggestion.After, suggestion.Reason); err != nil {
+			suggestion.Category, nullableWritingReviewSourceTask(suggestion.SourceTask), operation, suggestion.Before, suggestion.After, suggestion.Reason); err != nil {
 			return agentReviewView{}, err
 		}
 	}
@@ -1216,6 +1360,8 @@ func (a *App) finalizeAgentReview(
 		titleScore = validated.TitleScore
 		titleAssessment = validated.TitleAssessment
 	}
+	// 结构任务没跑过时 validated.LayoutAssessment 是空数组，这里照原样写入即可：
+	// 前端据此隐藏能力图，而不是渲染一张六项满分的假图。
 	if _, err := tx.Exec(ctx, `
 		UPDATE agent_reviews
 		SET status = $2,
@@ -1288,10 +1434,15 @@ func (a *App) loadAgentReview(
 		       review.title_assessment, review.layout_assessment, review.task_progress,
 		       review.input_tokens, review.output_tokens,
 		       review.total_tokens, review.credits_charged, review.error_code,
-		       review.created_at, review.completed_at, review.updated_at
+		       review.created_at, review.completed_at, review.updated_at,
+		       reservation.reserved_credits
 		FROM agent_reviews review
 		JOIN documents document ON document.id = review.document_id
 		LEFT JOIN llm_channels channel ON channel.id = review.channel_id
+		-- credit_reservations.review_id 是 UNIQUE，这个 JOIN 不会放大行数。
+		-- 只取 active 的：已提交/已释放的预留不再占额度，显示它会误导。
+		LEFT JOIN credit_reservations reservation
+		       ON reservation.review_id = review.id AND reservation.status = 'active'
 		WHERE review.review_id = $1 AND review.user_id = $2
 	`, strings.TrimSpace(reviewID), userID).Scan(
 		&review.ReviewID,
@@ -1317,6 +1468,7 @@ func (a *App) loadAgentReview(
 		&review.CreatedAt,
 		&review.CompletedAt,
 		&review.UpdatedAt,
+		&review.ReservedCredits,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return agentReviewView{}, errAgentReviewNotFound
@@ -1346,7 +1498,7 @@ func (a *App) loadAgentReview(
 
 	rows, err := a.db.Query(ctx, `
 		SELECT suggestion.suggestion_id, suggestion.ordinal, suggestion.target,
-		       suggestion.suggestion_kind, suggestion.category, suggestion.operation,
+		       suggestion.suggestion_kind, suggestion.category, suggestion.source_task, suggestion.operation,
 		       suggestion.before_text, suggestion.after_text,
 		       suggestion.reason, suggestion.status, suggestion.applied_at
 		FROM agent_review_suggestions suggestion
@@ -1367,6 +1519,7 @@ func (a *App) loadAgentReview(
 			&suggestion.Target,
 			&suggestion.Kind,
 			&suggestion.Category,
+			&suggestion.SourceTask,
 			&suggestion.Operation,
 			&suggestion.Before,
 			&suggestion.After,

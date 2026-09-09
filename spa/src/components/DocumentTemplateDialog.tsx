@@ -121,7 +121,7 @@ export function DocumentTemplateDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="document-template-title"
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-neutral-950 sm:h-auto sm:max-h-[min(88vh,900px)] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-black/10 dark:sm:border-white/10"
+        className="relative flex h-full w-full flex-col overflow-hidden bg-[var(--background)] shadow-2xl sm:h-auto sm:max-h-[min(88vh,900px)] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-black/10 dark:sm:border-white/10"
       >
         <header className="flex shrink-0 items-start gap-4 border-b px-5 py-4 sm:px-6 sm:py-5 dark:border-white/10">
           <div className="min-w-0 flex-1">

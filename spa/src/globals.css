@@ -410,6 +410,35 @@ body {
   box-shadow: 0 0 0 2px rgb(234 88 12 / 0.25);
 }
 
+/* ---------- AI 优化建议锚点 ----------
+   审阅期间在正文里标出每条建议的位置。用下划波浪线而不是背景色：这段文字仍然
+   可读可编辑，背景色会盖掉代码、行内公式等本身带底色的内容，也容易和查找高亮
+   混淆。 */
+.kn-agent-anchor {
+  cursor: pointer;
+  text-decoration: underline wavy var(--cinnabar, #c8433c);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.22em;
+  text-decoration-skip-ink: none;
+}
+
+.kn-agent-anchor:hover {
+  background: color-mix(in srgb, var(--cinnabar, #c8433c) 10%, transparent);
+}
+
+.kn-agent-anchor-current {
+  border-radius: 0.15em;
+  background: color-mix(in srgb, var(--cinnabar, #c8433c) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cinnabar, #c8433c) 26%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-agent-anchor,
+  .kn-agent-anchor-current {
+    transition: none;
+  }
+}
+
 #koinote-print-root {
   display: none;
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"log"
 	"strings"
 	"time"
@@ -123,8 +122,10 @@ func (a *App) mcpUpdateWechatGeoSummary(
 	}
 	if input.Text != nil {
 		normalized := strings.TrimSpace(*input.Text)
-		if normalized == "" || utf8.RuneCountInString(normalized) > 2400 {
-			return nil, mcpWechatGeoSummaryOutput{}, errors.New("text must contain 1 to 2400 characters")
+		if normalized == "" || utf8.RuneCountInString(normalized) > wechatGeoRenderedMaxRunes {
+			return nil, mcpWechatGeoSummaryOutput{}, fmt.Errorf(
+				"text must contain 1 to %d characters", wechatGeoRenderedMaxRunes,
+			)
 		}
 		input.Text = &normalized
 	}
@@ -245,31 +246,16 @@ func applyMCPWechatGeoSummary(htmlContent string, view wechatGeoSummaryView) (st
 	if !view.Enabled {
 		return "", errors.New("WeChat GEO summary is disabled")
 	}
-	corpus := normalizeMCPWechatGeoCorpus(view.Text)
-	if corpus == "" {
+	// 与前端导出共用同一份 section 构造：样式串、空白折叠和截断规则都在
+	// wechat_geo_summary.go 里，改一处不会让两条路径静默分叉。
+	section := buildWechatGeoSection(view.Text)
+	if section == "" {
 		return "", errors.New("WeChat GEO summary is empty")
 	}
-	section := `<section style="height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;width:100%;position:absolute!important;visibility:hidden!important;"><p style="margin:0!important;padding:0!important;">` + html.EscapeString(corpus) + `</p></section>`
 	divider := `<hr style="border:none;border-top:1px solid #e0e0e0;margin:32px 0;">`
 	if index := strings.Index(htmlContent, "</h1>"); index >= 0 {
 		index += len("</h1>")
 		return htmlContent[:index] + divider + section + htmlContent[index:], nil
 	}
 	return divider + section + htmlContent, nil
-}
-
-func normalizeMCPWechatGeoCorpus(value string) string {
-	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
-	parts := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if normalized := strings.Join(strings.Fields(line), " "); normalized != "" {
-			parts = append(parts, normalized)
-		}
-	}
-	result := strings.Join(parts, "\n")
-	runes := []rune(result)
-	if len(runes) > 2400 {
-		return string(runes[:2400])
-	}
-	return result
 }

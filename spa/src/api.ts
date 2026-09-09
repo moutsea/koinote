@@ -800,10 +800,15 @@ export type XOAuth2Account = {
 };
 
 export function getXAccount() {
-  return apiJson<{ account: XAccount | null; oauth2: XOAuth2Account | null }>("/api/x/account");
+  return apiJson<{ account: XAccount | null; oauth2: XOAuth2Account | null }>(
+    "/api/x/account",
+  );
 }
 
-export function startXOAuth2(params?: { redirectTo?: string; client?: "desktop" | "desktop-local" }) {
+export function startXOAuth2(params?: {
+  redirectTo?: string;
+  client?: "desktop" | "desktop-local";
+}) {
   const query = new URLSearchParams();
   if (params?.redirectTo) query.set("redirectTo", params.redirectTo);
   if (params?.client) query.set("client", params.client);
@@ -812,7 +817,9 @@ export function startXOAuth2(params?: { redirectTo?: string; client?: "desktop" 
 }
 
 export function deleteXOAuth2Account() {
-  return apiJson<{ success: boolean }>("/api/x/oauth2/account", { method: "DELETE" });
+  return apiJson<{ success: boolean }>("/api/x/oauth2/account", {
+    method: "DELETE",
+  });
 }
 
 export function updateXAccount(input: {
@@ -854,12 +861,18 @@ export function publishXArticle(
     title: string;
     markdown: string;
     images?: Array<{ source: string; originalSource?: string; alt?: string }>;
+    coverImageIndex?: number;
   },
 ) {
-  return apiJson<{ published: boolean; url: string; postCount: number; contentType: "article" }>(
-    `/api/documents/${encodeURIComponent(docId)}/x/publish`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+  return apiJson<{
+    published: boolean;
+    url: string;
+    postCount: number;
+    contentType: "article";
+  }>(`/api/documents/${encodeURIComponent(docId)}/x/publish`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function generateWechatCover(
@@ -923,6 +936,7 @@ export type AgentReviewSuggestion = {
   target: "title" | "body";
   kind: "content" | "layout";
   category: string;
+  sourceTask?: "title" | "proofread" | "structure" | "paragraph" | null;
   operation:
     | "change_block_type"
     | "split_paragraph"
@@ -959,10 +973,28 @@ export type AgentReviewTaskProgress = {
   }>;
 };
 
+export type AgentReviewTask = "title" | "proofread" | "structure" | "paragraph";
+
 export type AgentReviewCreateInput = {
+  tasks?: AgentReviewTask[];
   depth?: "deep";
   focusDimension?: AgentReviewLayoutAssessment["id"];
   sourceReviewId?: string;
+};
+
+/**
+ * 发起前的花费预览。数字由后端用发起时的同一套建计划和预留估算算出，前端不另算
+ * 近似值——否则界面上写着 12，实际预留 40，用户被 insufficient_credits 挡住时
+ * 无从理解。
+ *
+ * reservedCredits 是预留上限，不是最终花费：扣费按 provider 上报的用量走，通常
+ * 明显低于这个数。
+ */
+export type AgentReviewEstimate = {
+  tasks: AgentReviewTask[];
+  totalTasks: number;
+  reservedCredits: number;
+  documentRevision: number;
 };
 
 export type AgentReview = {
@@ -992,6 +1024,13 @@ export type AgentReview = {
   outputTokens: number;
   totalTokens: number;
   creditsCharged: number;
+  /**
+   * 本次审阅自己的预留上限，预留释放或提交后为 null。
+   *
+   * 不要用账户上的 credits.reserved 代替：那是所有活动预留的聚合值，多个审阅并存
+   * 时会把别人的数字算进来。
+   */
+  reservedCredits?: number | null;
   errorCode?: string | null;
   createdAt: string;
   completedAt?: string | null;
@@ -1012,6 +1051,26 @@ export function createAgentReview(
 export function listAgentReviews(docId: string) {
   return apiJson<{ reviews: AgentReview[] }>(
     `/api/documents/${encodeURIComponent(docId)}/agent-reviews`,
+  );
+}
+
+/**
+ * signal 由调用方（React Query）给：连续勾选/取消任务会快速发出多次预估，
+ * 不取消的话前一次的响应可能后到，把界面上的数字盖回旧值。
+ */
+export function estimateAgentReview(
+  docId: string,
+  tasks: AgentReviewTask[],
+  signal?: AbortSignal,
+  options: {
+    depth?: "deep";
+    focusDimension?: AgentReviewLayoutAssessment["id"];
+    sourceReviewId?: string;
+  } = {},
+) {
+  return apiJson<{ estimate: AgentReviewEstimate }>(
+    `/api/documents/${encodeURIComponent(docId)}/agent-reviews/estimate`,
+    { method: "POST", body: JSON.stringify({ tasks, ...options }), signal },
   );
 }
 
@@ -1123,6 +1182,30 @@ export type AdminStats = {
     amount: number;
     currency: string;
     createdAt: string;
+  }>;
+  paidTokenUsage: {
+    paidUsers: number;
+    tokensPerCredit: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    usedCredits: number;
+    balanceCredits: number;
+    reservedCredits: number;
+    availableCredits: number;
+  };
+  paidUsers: Array<{
+    id: number;
+    name: string;
+    email: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    usedCredits: number;
+    balanceCredits: number;
+    reservedCredits: number;
+    availableCredits: number;
+    updatedAt: string;
   }>;
   traffic: {
     available: boolean;

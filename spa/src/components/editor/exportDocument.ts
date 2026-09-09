@@ -27,6 +27,26 @@ export function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export async function saveExportBlob(
+  blob: Blob,
+  filename: string,
+  extension: string,
+): Promise<boolean> {
+  if (!isDesktopRuntime()) {
+    downloadBlob(blob, filename);
+    return true;
+  }
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<boolean>("desktop_save_export", bytes, {
+    headers: {
+      "x-koinote-export-filename": encodeURIComponent(filename),
+      "x-koinote-export-extension": extension,
+    },
+  });
+}
+
 /** 标题转文件名：剔除路径分隔符与控制字符，避免生成非法文件名 */
 export function safeFilename(title: string, fallback: string): string {
   const cleaned = title
@@ -42,11 +62,16 @@ export function safeFilename(title: string, fallback: string): string {
 
 // ---------- Markdown ----------
 
-export function exportMarkdown(editor: Editor, title: string, fallback: string) {
+export function exportMarkdown(
+  editor: Editor,
+  title: string,
+  fallback: string,
+): Promise<boolean> {
   const markdown = editor.storage.markdown.getMarkdown() as string;
-  downloadBlob(
+  return saveExportBlob(
     new Blob([markdown], { type: "text/markdown;charset=utf-8" }),
     `${safeFilename(title, fallback)}.md`,
+    "md",
   );
 }
 
@@ -80,7 +105,11 @@ ${bodyHTML}
 </html>`;
 }
 
-export function exportHTML(editor: Editor, title: string, fallback: string) {
+export function exportHTML(
+  editor: Editor,
+  title: string,
+  fallback: string,
+): Promise<boolean> {
   const name = safeFilename(title, fallback);
   const heading = title.trim() ? `<h1>${title.replace(/</g, "&lt;")}</h1>\n` : "";
   // 导出的 .html 是静态文件，不执行 JS。公式必须在这里就渲染成 KaTeX 标签，
@@ -92,9 +121,10 @@ export function exportHTML(editor: Editor, title: string, fallback: string) {
     name,
     withHighlightedCode(renderMathInHTML(heading + editor.getHTML())),
   );
-  downloadBlob(
+  return saveExportBlob(
     new Blob([html], { type: "text/html;charset=utf-8" }),
     `${name}.html`,
+    "html",
   );
 }
 
@@ -147,6 +177,13 @@ function createPrintableSnapshot(source: HTMLElement): HTMLElement {
         "kn-page-search-title-current",
       );
       element.removeAttribute("data-page-search-index");
+    });
+  // AI 优化的建议锚点同理：它是审阅期间的临时标记，不该出现在导出的成品里。
+  documentClone
+    .querySelectorAll<HTMLElement>(".kn-agent-anchor, [data-agent-suggestion-id]")
+    .forEach((element) => {
+      element.classList.remove("kn-agent-anchor", "kn-agent-anchor-current");
+      element.removeAttribute("data-agent-suggestion-id");
     });
 
   const title = documentClone.querySelector<HTMLElement>(".kn-doc-title");
