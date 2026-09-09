@@ -26,6 +26,7 @@ const config = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
 const capability = JSON.parse(fs.readFileSync("src-tauri/capabilities/default.json", "utf8"));
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+const cargoVersion = cargo.match(/^version = "([^"]+)"/m)?.[1];
 const rust = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
 const updater = fs.readFileSync("spa/src/components/DesktopUpdater.tsx", "utf8");
 const shell = fs.readFileSync("spa/src/components/AppShell.tsx", "utf8");
@@ -36,7 +37,10 @@ const decodedPublicKey = Buffer.from(config.plugins.updater.pubkey, "base64")
   .trim()
   .split(/\r?\n/);
 
-ok("客户端版本已升级", config.version === "0.1.50");
+ok(
+  "客户端版本配置一致",
+  Boolean(cargoVersion) && config.version === cargoVersion && /^\d+\.\d+\.\d+$/.test(config.version),
+);
 ok("构建更新产物", config.bundle.createUpdaterArtifacts === true);
 ok(
   "桌面端允许受控后台压缩 Worker",
