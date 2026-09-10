@@ -305,17 +305,6 @@ export function LiveEditor({
         : doc.data
       : null;
 
-  if (!merged) return null;
-
-  async function openHistory() {
-    const saved = await saver.flush(docId);
-    if (!saved) {
-      if (saver.status(docId) === "conflict") setConflictOpen(true);
-      return;
-    }
-    setHistoryOpen(true);
-  }
-
   const prepareAgentReview = useCallback(async () => {
     const saved = await saver.flush(docId);
     if (!saved && saver.status(docId) === "conflict") {
@@ -334,6 +323,17 @@ export function LiveEditor({
       return false;
     }
   }, [acceptLatestDocument, docId, saver]);
+
+  if (!merged) return null;
+
+  async function openHistory() {
+    const saved = await saver.flush(docId);
+    if (!saved) {
+      if (saver.status(docId) === "conflict") setConflictOpen(true);
+      return;
+    }
+    setHistoryOpen(true);
+  }
 
   function acceptDocument(next: NonNullable<typeof merged>) {
     queryClient.setQueryData(["document", docId], next);
