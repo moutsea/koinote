@@ -240,6 +240,50 @@ export function AgentReviewPanel({
   // 浮层。只判 rerunOpen 会漏掉首次使用 —— 那时重新审阅按钮根本没渲染，rerunOpen
   // 恒为 false，界面会一直停在「正在预估花费…」，而这句预估正是发起前该看到的。
   const needsEstimate = rerunOpen || showLaunchGuide;
+  const estimatePreparationKey = `${documentRevision}:${selectedTasks.join(",")}`;
+  const [preparedEstimateKey, setPreparedEstimateKey] = useState("");
+  const [estimatePreparationFailed, setEstimatePreparationFailed] =
+    useState(false);
+  const [estimatePreparationAttempt, setEstimatePreparationAttempt] =
+    useState(0);
+  const estimatePreparationNeeded =
+    remoteEnabled &&
+    providerMode === "builtin" &&
+    selectedTasks.length > 0 &&
+    needsEstimate &&
+    preparedEstimateKey !== estimatePreparationKey;
+
+  useEffect(() => {
+    if (!estimatePreparationNeeded) return;
+    let active = true;
+    setEstimatePreparationFailed(false);
+    setError(null);
+    void onPrepareReview()
+      .then((prepared) => {
+        if (!active) return;
+        if (prepared) {
+          setPreparedEstimateKey(estimatePreparationKey);
+        } else {
+          setEstimatePreparationFailed(true);
+          setError(t.agentReview.saveFailed);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setEstimatePreparationFailed(true);
+        setError(t.agentReview.saveFailed);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    estimatePreparationKey,
+    estimatePreparationNeeded,
+    estimatePreparationAttempt,
+    onPrepareReview,
+    t.agentReview.saveFailed,
+  ]);
+
   const estimate = useQuery({
     queryKey: [
       "agent-review-estimate",
@@ -252,7 +296,8 @@ export function AgentReviewPanel({
       remoteEnabled &&
       providerMode === "builtin" &&
       selectedTasks.length > 0 &&
-      needsEstimate,
+      needsEstimate &&
+      preparedEstimateKey === estimatePreparationKey,
     retry: false,
     // 不缓存：预估随正文长度变，缓存窗口内编辑过文档就会显示一个对不上的数字。
     // 这个数字的全部意义是让用户掏 credits 前知道要花多少，宁可每次展开多一次请求。
@@ -550,7 +595,8 @@ export function AgentReviewPanel({
       estimate.isFetching ||
       estimate.isError ||
       reservedCredits === undefined ||
-      !estimateMatchesRevision);
+      !estimateMatchesRevision ||
+      estimatePreparationNeeded);
   const deepReservedCredits = deepEstimate.data?.estimate.reservedCredits;
   const deepEstimateMatchesRevision =
     deepEstimate.data?.estimate.documentRevision === documentRevision;
@@ -602,6 +648,15 @@ export function AgentReviewPanel({
     create.mutate(
       input.depth ? input : { ...input, tasks: input.tasks ?? selectedTasks },
     );
+  }
+
+  function retryEstimate() {
+    if (estimatePreparationFailed) {
+      setEstimatePreparationFailed(false);
+      setEstimatePreparationAttempt((value) => value + 1);
+      return;
+    }
+    void estimate.refetch();
   }
 
   async function ignoreAll() {
@@ -765,13 +820,13 @@ export function AgentReviewPanel({
                             : "var(--cinnabar)",
                         }}
                       >
-                        {estimate.isError
+                        {estimate.isError || estimatePreparationFailed
                           ? (
                               <>
                                 {t.agentReview.estimateFailed}{" "}
                                 <button
                                   type="button"
-                                  onClick={() => void estimate.refetch()}
+                                  onClick={retryEstimate}
                                   className="font-semibold underline"
                                 >
                                   {t.agentReview.estimateRetry}
@@ -886,10 +941,11 @@ export function AgentReviewPanel({
               estimateLoading={
                 estimate.isLoading ||
                 estimate.isFetching ||
-                !estimateMatchesRevision
+                !estimateMatchesRevision ||
+                estimatePreparationNeeded
               }
-              estimateError={estimate.isError}
-              onRetryEstimate={() => void estimate.refetch()}
+              estimateError={estimate.isError || estimatePreparationFailed}
+              onRetryEstimate={retryEstimate}
               affordable={affordable}
               starting={create.isPending}
               disabled={reviewStartDisabled}

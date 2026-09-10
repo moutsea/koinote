@@ -316,7 +316,7 @@ export function LiveEditor({
     setHistoryOpen(true);
   }
 
-  async function prepareAgentReview() {
+  const prepareAgentReview = useCallback(async () => {
     const saved = await saver.flush(docId);
     if (!saved && saver.status(docId) === "conflict") {
       setAgentReviewOpen(false);
@@ -324,8 +324,16 @@ export function LiveEditor({
     }
     if (!saved || !isDesktopRuntime()) return saved;
     const { desktopPrepareDocumentForRemoteMutation } = await import("../../desktop/offlineStore");
-    return desktopPrepareDocumentForRemoteMutation(docId);
-  }
+    const prepared = await desktopPrepareDocumentForRemoteMutation(docId);
+    if (!prepared) return false;
+    try {
+      const { document } = await getDocument(docId);
+      acceptLatestDocument(document);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [acceptLatestDocument, docId, saver]);
 
   function acceptDocument(next: NonNullable<typeof merged>) {
     queryClient.setQueryData(["document", docId], next);
