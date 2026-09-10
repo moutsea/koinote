@@ -475,7 +475,7 @@ export function LiveEditor({
       {visible && agentReviewOpen && !conflictOpen && (
         <AgentReviewPanel
           docId={docId}
-          documentRevision={merged.revision}
+          documentRevision={merged.remoteRevision ?? merged.revision}
           member={member}
           localMode={localMode}
           initialReviewId={requestedReviewId}

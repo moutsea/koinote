@@ -1387,6 +1387,8 @@ export type Document = {
   theme: string;
   content: string;
   revision: number;
+  /** 桌面端本地缓存对应的云端 revision；网页端不设置。 */
+  remoteRevision?: number;
   createdAt?: string | null;
   updatedAt?: string | null;
   /** null 表示未分享 */

@@ -14,6 +14,7 @@ function sourceBetween(source, startMarker, endMarker) {
 const {
   acknowledgedLocalRevision,
   canRunRemoteDocumentMutation,
+  remoteDocumentRevision,
   DESKTOP_IMAGE_MAPPING_META,
   DESKTOP_IMAGE_UPLOAD_FAILED_EVENT,
   DESKTOP_IMAGE_UPLOADED_EVENT,
@@ -355,6 +356,8 @@ assert.equal(
 assert.equal(canRunRemoteDocumentMutation({ baseRevision: 0, syncState: "clean" }), false);
 assert.equal(canRunRemoteDocumentMutation({ baseRevision: 5, syncState: "update" }), false);
 assert.equal(canRunRemoteDocumentMutation({ baseRevision: 5, syncState: "conflict" }), false);
+assert.equal(remoteDocumentRevision(18), 18, "桌面 AI 预估必须使用云端基线 revision");
+assert.equal(remoteDocumentRevision(0), undefined, "未同步文档不能伪造云端 revision");
 
 assert.equal(
   decideRemoteDocument(local, {

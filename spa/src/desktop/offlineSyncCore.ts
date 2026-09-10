@@ -126,6 +126,10 @@ export function canRunRemoteDocumentMutation(
   return local.syncState === "clean" && local.baseRevision > 0;
 }
 
+export function remoteDocumentRevision(baseRevision: number): number | undefined {
+  return baseRevision > 0 ? baseRevision : undefined;
+}
+
 export function decideRemoteDocument(
   local: OfflineDocumentSnapshot,
   remote: RemoteDocumentSnapshot,

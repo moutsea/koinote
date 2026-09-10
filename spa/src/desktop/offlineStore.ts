@@ -34,6 +34,7 @@ import {
   decideRemoteDocument,
   decideRemoteFolder,
   pulledLocalRevision,
+  remoteDocumentRevision,
   runDesktopSyncSequence,
   snapshotGuard,
 } from "./offlineSyncCore";
@@ -2559,6 +2560,7 @@ function rowToDocument(row: DocumentRow): Document {
     theme: row.theme,
     content: row.content,
     revision: row.local_revision,
+    remoteRevision: remoteDocumentRevision(row.base_revision),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     share,
