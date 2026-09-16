@@ -54,8 +54,22 @@ export function useOutline(editor: Editor | null): OutlineItem[] {
   return outline;
 }
 
-/** 跳到指定标题：定位光标并滚动到视野内 */
+/** 跳到指定标题：定位光标并把标题对齐到正文顶部 */
 export function scrollToHeading(editor: Editor | null, pos: number) {
   if (!editor) return;
-  editor.chain().focus().setTextSelection(pos + 1).scrollIntoView().run();
+  editor
+    .chain()
+    .focus(undefined, { scrollIntoView: false })
+    .setTextSelection(pos + 1)
+    .run();
+
+  const heading = editor.view.nodeDOM(pos);
+  const scrollableHeading = heading as HTMLElement | null;
+  if (
+    !scrollableHeading ||
+    typeof scrollableHeading.scrollIntoView !== "function"
+  ) {
+    return;
+  }
+  scrollableHeading.scrollIntoView({ block: "start", inline: "nearest" });
 }
