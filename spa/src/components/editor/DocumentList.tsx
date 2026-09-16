@@ -245,6 +245,8 @@ export function DocumentList({
   const onImportFiles = useCallback(
     (files: File[], targetFolderId: string | null) => {
       if (importing || files.length === 0) return;
+      setRootOverDrag(null);
+      setRootFileOver(false);
       if (targetFolderId) {
         setExpanded((prev) => new Set(prev).add(targetFolderId));
       }

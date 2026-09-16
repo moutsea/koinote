@@ -241,6 +241,12 @@ for (const [name, value] of [
       /h\.onImportFiles\(files, doc\.folderId\)/.test(treeRowSource),
   );
   ok(
+    "文件导入后清理根拖放提示",
+    /const onImportFiles = useCallback\([\s\S]*?setRootOverDrag\(null\);[\s\S]*?setRootFileOver\(false\);/.test(
+      documentListSource,
+    ),
+  );
+  ok(
     "编辑器吞掉文件树载荷而不插入 JSON",
     /handleDrop:[\s\S]*?readTreeDragPayload\(dragEvent\.dataTransfer\)[\s\S]*?event\.preventDefault\(\);\s*return true;/.test(
       markdownEditorSource,
