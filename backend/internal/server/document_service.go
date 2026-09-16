@@ -95,16 +95,27 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 
 	var doc model.Document
 	err = tx.QueryRow(ctx, `
+		WITH target_folder AS (
+			SELECT CASE
+				WHEN $6 = '' THEN NULL::integer
+				ELSE (SELECT id FROM folders WHERE folder_id = $6 AND user_id = $2)
+			END AS id
+		)
 		INSERT INTO documents (
-			doc_id, user_id, title, theme, content, folder_id, revision, created_at, updated_at
+			doc_id, user_id, title, theme, content, folder_id, sort_order, revision, created_at, updated_at
 		)
 		SELECT
 			$1, $2, $3::text, $4::text, $5::text,
-			CASE
-				WHEN $6 = '' THEN NULL
-				ELSE (SELECT id FROM folders WHERE folder_id = $6 AND user_id = $2)
-			END,
+			target_folder.id,
+			COALESCE((
+				SELECT MAX(existing.sort_order) + 1
+				FROM documents existing
+				WHERE existing.user_id = $2
+				  AND existing.trashed_at IS NULL
+				  AND existing.folder_id IS NOT DISTINCT FROM target_folder.id
+			), 0),
 			1, now(), now()
+		FROM target_folder
 		WHERE COALESCE((
 			SELECT SUM(octet_length(content) + octet_length(title))
 			FROM documents WHERE user_id = $2

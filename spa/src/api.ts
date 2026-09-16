@@ -1411,6 +1411,7 @@ export type DocumentSummary = {
   title: string;
   /** null 表示在根下 */
   folderId: string | null;
+  sortOrder: number;
   revision: number;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -1706,6 +1707,21 @@ export function moveDocument(docId: string, folderId: string | null) {
   return apiJson<{ ok: boolean }>(
     `/api/documents/${encodeURIComponent(docId)}/folder`,
     { method: "PUT", body: JSON.stringify({ folderId }) },
+  );
+}
+
+export function reorderDocuments(
+  docId: string,
+  params: { folderId: string | null; docIds: string[] },
+) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopReorderDocuments }) =>
+      desktopReorderDocuments(docId, params),
+    );
+  }
+  return apiJson<{ ok: boolean }>(
+    `/api/documents/${encodeURIComponent(docId)}/order`,
+    { method: "PUT", body: JSON.stringify(params) },
   );
 }
 

@@ -139,14 +139,40 @@ func (a *App) documentMove(w http.ResponseWriter, r *http.Request) {
 	target := derefOrEmpty(body.FolderID)
 
 	// 目标文件夹经子查询解析并带 user_id 过滤。传别人的 folderId 时子查询得 NULL，
-	// 文档会落到根下 —— 不会挂到他人的树上
-	res, err := a.db.Exec(r.Context(), `
-		UPDATE documents
-		SET folder_id = CASE
-			WHEN $3 = '' THEN NULL
-			ELSE (SELECT id FROM folders WHERE folder_id = $3 AND user_id = $2)
-		END
-		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
+	// 文档会落到根下 —— 不会挂到他人的树上。排序和移动放在同一事务里，避免新位置
+	// 在并发创建/移动时重复或短暂落到错误位置。
+	ctx := r.Context()
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		log.Printf("document move begin: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, user.ID); err != nil {
+		log.Printf("document move lock: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	res, err := tx.Exec(ctx, `
+		WITH target_folder AS (
+			SELECT CASE
+				WHEN $3 = '' THEN NULL::integer
+				ELSE (SELECT id FROM folders WHERE folder_id = $3 AND user_id = $2)
+			END AS id
+		)
+		UPDATE documents AS moving
+		SET folder_id = target_folder.id,
+		    sort_order = COALESCE((
+				SELECT MAX(existing.sort_order) + 1
+				FROM documents existing
+				WHERE existing.user_id = $2
+				  AND existing.trashed_at IS NULL
+				  AND existing.folder_id IS NOT DISTINCT FROM target_folder.id
+				  AND existing.id <> moving.id
+			), 0)
+		FROM target_folder
+		WHERE moving.doc_id = $1 AND moving.user_id = $2 AND moving.trashed_at IS NULL
 	`, docID, user.ID, target)
 	if err != nil {
 		log.Printf("document move: %v", err)
@@ -155,6 +181,11 @@ func (a *App) documentMove(w http.ResponseWriter, r *http.Request) {
 	}
 	if res.RowsAffected() == 0 {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("document move commit: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
 

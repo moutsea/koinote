@@ -84,8 +84,17 @@ func (a *App) restoreTrashedDocument(ctx context.Context, user model.User, docID
 	}
 	var doc model.Document
 	err = tx.QueryRow(ctx, `
-		UPDATE documents
-		SET trashed_at = NULL, revision = revision + 1, updated_at = now()
+		UPDATE documents AS restoring
+		SET trashed_at = NULL,
+		    sort_order = COALESCE((
+				SELECT MAX(existing.sort_order) + 1
+				FROM documents existing
+				WHERE existing.user_id = restoring.user_id
+				  AND existing.trashed_at IS NULL
+				  AND existing.id <> restoring.id
+				  AND existing.folder_id IS NOT DISTINCT FROM restoring.folder_id
+			), 0),
+		    revision = revision + 1, updated_at = now()
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NOT NULL
 		  AND ($3::bigint <= 0 OR revision = $3)
 		RETURNING doc_id, title, theme, content, revision, created_at, updated_at

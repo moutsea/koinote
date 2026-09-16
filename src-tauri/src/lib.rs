@@ -711,6 +711,8 @@ struct LocalImportDocument {
     theme: String,
     content: String,
     folder_id: Option<String>,
+    #[serde(default)]
+    sort_order: i64,
     created_at: String,
 }
 
@@ -836,10 +838,10 @@ async fn import_local_mode_batch(
         sqlx::query(
             "INSERT INTO offline_documents (
                 account_id, doc_id, title, theme, content, folder_id,
-                local_revision, base_revision, created_at, updated_at, share_json,
-                sync_state, folder_dirty, change_seq, remote_snapshot, last_error
-             ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL,
-                       'create', 0, 1, NULL, NULL)",
+                sort_order, local_revision, base_revision, created_at, updated_at, share_json,
+                sync_state, folder_dirty, order_dirty, change_seq, remote_snapshot, last_error
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL,
+                       'create', 0, 1, 1, NULL, NULL)",
         )
         .bind(&batch.staging_account)
         .bind(document.doc_id)
@@ -847,6 +849,7 @@ async fn import_local_mode_batch(
         .bind(document.theme)
         .bind(document.content)
         .bind(document.folder_id)
+        .bind(document.sort_order)
         .bind(&document.created_at)
         .bind(&document.created_at)
         .execute(&mut *transaction)
@@ -1085,6 +1088,12 @@ pub fn run() {
             sql: include_str!("../migrations/0005_document_organizer.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add_document_order",
+            sql: include_str!("../migrations/0006_document_order.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     let builder = tauri::Builder::default();
@@ -1235,6 +1244,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("extend folder table");
+        sqlx::query(include_str!("../migrations/0006_document_order.sql"))
+            .execute(&pool)
+            .await
+            .expect("extend document order columns");
         pool
     }
 
@@ -1261,6 +1274,7 @@ mod tests {
                     theme: "minimal".to_string(),
                     content: "Body".to_string(),
                     folder_id: Some("folder-1".to_string()),
+                    sort_order: 0,
                     created_at: "2026-08-17T00:00:00Z".to_string(),
                 },
                 LocalImportDocument {
@@ -1273,6 +1287,7 @@ mod tests {
                     theme: "minimal".to_string(),
                     content: "Body".to_string(),
                     folder_id: None,
+                    sort_order: 1,
                     created_at: "2026-08-17T00:00:00Z".to_string(),
                 },
             ],

@@ -16,6 +16,7 @@ import {
   listDocuments,
   listFolders,
   moveDocument,
+  reorderDocuments,
   moveFolder,
   putEditorTabs,
   renameFolder,
@@ -224,6 +225,43 @@ export function useMoveDocument() {
   return useFolderMutation((args: { docId: string; folderId: string | null }) =>
     moveDocument(args.docId, args.folderId),
   );
+}
+
+export function useReorderDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      docId: string;
+      folderId: string | null;
+      docIds: string[];
+    }) => reorderDocuments(args.docId, { folderId: args.folderId, docIds: args.docIds }),
+    onMutate: async ({ folderId, docIds }) => {
+      await queryClient.cancelQueries({ queryKey: LIST_KEY });
+      const previous = queryClient.getQueryData<DocumentSummary[]>(LIST_KEY);
+      if (previous) {
+        const ordered = docIds
+          .map((docId, index) => {
+            const document = previous.find((item) => item.docId === docId);
+            return document ? { ...document, sortOrder: index } : null;
+          })
+          .filter((document): document is DocumentSummary => Boolean(document));
+        let nextIndex = 0;
+        queryClient.setQueryData<DocumentSummary[]>(LIST_KEY, (current) =>
+          current?.map((document) => {
+            if (document.folderId !== folderId) return document;
+            return ordered[nextIndex++] ?? document;
+          }),
+        );
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(LIST_KEY, context.previous);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+    },
+  });
 }
 
 // ---------- 编辑器标签页 ----------

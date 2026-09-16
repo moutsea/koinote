@@ -58,6 +58,7 @@ type DocumentRow = {
   theme: string;
   content: string;
   folder_id: string | null;
+  sort_order: number;
   local_revision: number;
   base_revision: number;
   created_at: string | null;
@@ -65,6 +66,7 @@ type DocumentRow = {
   share_json: string | null;
   sync_state: SyncState;
   folder_dirty: number;
+  order_dirty: number;
   change_seq: number;
   remote_snapshot: string | null;
   last_error: string | null;
@@ -151,6 +153,7 @@ type DesktopLocalImportBatch = {
     theme: string;
     content: string;
     folderId: string | null;
+    sortOrder: number;
     createdAt: string;
   }>;
 };
@@ -938,7 +941,8 @@ export async function desktopListDocuments(): Promise<{ documents: DocumentSumma
   const storedRows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
     WHERE account_id = $1 AND sync_state <> 'trash'
-    ORDER BY COALESCE(updated_at, '') DESC, doc_id DESC
+    ORDER BY folder_id IS NOT NULL, folder_id, sort_order ASC,
+      COALESCE(updated_at, '') DESC, doc_id DESC
   `, [account]);
   const rows = await Promise.all(
     storedRows.map((row) => readableDocumentRow(account, row)),
@@ -948,6 +952,7 @@ export async function desktopListDocuments(): Promise<{ documents: DocumentSumma
       docId: row.doc_id,
       title: row.title,
       folderId: row.folder_id,
+      sortOrder: row.sort_order,
       revision: row.local_revision,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1056,9 +1061,14 @@ export async function desktopCreateDocument(params?: {
     await db.execute(`
       INSERT INTO offline_documents (
         account_id, doc_id, title, theme, content, folder_id,
-        local_revision, base_revision, created_at, updated_at, share_json,
+        sort_order, local_revision, base_revision, created_at, updated_at, share_json,
         sync_state, change_seq
-      ) VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, $8, NULL, $9, 1)
+      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE((
+        SELECT MAX(sibling.sort_order) + 1
+        FROM offline_documents sibling
+        WHERE sibling.account_id = $1 AND sibling.folder_id IS $6
+          AND sibling.sync_state <> 'trash'
+      ), 0), 1, $7, $8, $8, NULL, $9, 1)
     `, [
       account, document.docId, storedTitle, storedTheme, storedContent,
       params?.folderId ?? null, local ? 1 : 0, now, local ? "clean" : "create",
@@ -1179,7 +1189,7 @@ export async function desktopAcceptRemoteDocumentMutation(
       })) {
         throw new Error("document_revision_conflict");
       }
-      if (await replaceDocumentFromRemote(account, local, document, local.folder_id)) {
+      if (await replaceDocumentFromRemote(account, local, document, local.folder_id, local.sort_order)) {
         const accepted = await selectDocument(account, document.docId);
         if (!accepted) throw new Error("Document not found");
         return { document: rowToDocument(accepted) };
@@ -1267,7 +1277,15 @@ export async function desktopRestoreLocalTrashedDocument(
     const db = await database();
     const result = await db.execute(`
       UPDATE offline_documents
-      SET sync_state = 'clean', local_revision = local_revision + 1,
+      SET sort_order = COALESCE((
+            SELECT MAX(sibling.sort_order) + 1
+            FROM offline_documents sibling
+            WHERE sibling.account_id = $1
+              AND sibling.folder_id IS offline_documents.folder_id
+              AND sibling.doc_id <> $2
+              AND sibling.sync_state <> 'trash'
+          ), 0),
+          sync_state = 'clean', local_revision = local_revision + 1,
           change_seq = change_seq + 1, updated_at = $3, last_error = NULL
       WHERE account_id = $1 AND doc_id = $2 AND sync_state = 'trash'
     `, [account, docId, new Date().toISOString()]);
@@ -1441,6 +1459,7 @@ export async function desktopImportLocalMode(
               folderId: document.folder_id
                 ? folderIDs.get(document.folder_id) ?? null
                 : null,
+              sortOrder: document.sort_order,
               createdAt: now,
           });
         }
@@ -1566,11 +1585,28 @@ export async function desktopDeleteFolder(folderId: string) {
     `, [account, folderId]);
     const folder = rows[0];
     if (!folder) return { ok: true };
-    await db.execute(`
-      UPDATE offline_documents
-      SET folder_id = $3, folder_dirty = $4, change_seq = change_seq + 1
+    const movedDocuments = await db.select<Array<{ doc_id: string }>>(`
+      SELECT doc_id FROM offline_documents
       WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
-    `, [account, folderId, folder.parent_folder_id, local ? 0 : 1]);
+      ORDER BY sort_order ASC, doc_id ASC
+    `, [account, folderId]);
+    const parentOrder = await db.select<Array<{ max_order: number | null }>>(`
+      SELECT MAX(sort_order) AS max_order FROM offline_documents
+      WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
+    `, [account, folder.parent_folder_id]);
+    let nextOrder = Number(parentOrder[0]?.max_order ?? -1) + 1;
+    for (const document of movedDocuments) {
+      await db.execute(`
+        UPDATE offline_documents
+        SET folder_id = $3, sort_order = $4, folder_dirty = $5, order_dirty = $6,
+            change_seq = change_seq + 1, last_error = NULL
+        WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+      `, [
+        account, document.doc_id, folder.parent_folder_id, nextOrder,
+        local ? 0 : 1, local ? 0 : 1,
+      ]);
+      nextOrder += 1;
+    }
     await db.execute(`
       UPDATE offline_folders SET parent_folder_id = $3,
         sync_state = CASE
@@ -1662,10 +1698,56 @@ export async function desktopMoveDocument(docId: string, folderId: string | null
     const local = isLocalAccount(account);
     await db.execute(`
       UPDATE offline_documents
-      SET folder_id = $3, folder_dirty = $4, change_seq = change_seq + 1
+      SET folder_id = $3,
+          sort_order = COALESCE((
+            SELECT MAX(sibling.sort_order) + 1
+            FROM offline_documents sibling
+            WHERE sibling.account_id = $1 AND sibling.folder_id IS $3
+              AND sibling.doc_id <> $2 AND sibling.sync_state <> 'trash'
+          ), 0),
+          folder_dirty = $4, change_seq = change_seq + 1
       WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
     `, [account, docId, folderId, local ? 0 : 1]);
     if (!local) scheduleSync();
+    return { ok: true };
+  });
+}
+
+export async function desktopReorderDocuments(
+  docId: string,
+  params: { folderId: string | null; docIds: string[] },
+) {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const rows = await db.select<DocumentRow[]>(`
+      SELECT * FROM offline_documents
+      WHERE account_id = $1 AND sync_state <> 'trash'
+    `, [account]);
+    const siblings = rows
+      .filter((row) => row.folder_id === params.folderId)
+      .sort((left, right) => left.sort_order - right.sort_order || left.doc_id.localeCompare(right.doc_id));
+    const siblingIDs = siblings.map((row) => row.doc_id);
+    const expected = new Set(siblingIDs);
+    const actual = new Set(params.docIds);
+    if (
+      !siblingIDs.includes(docId) ||
+      params.docIds.length !== siblingIDs.length ||
+      expected.size !== actual.size ||
+      [...expected].some((id) => !actual.has(id))
+    ) {
+      throw new Error("order_conflict");
+    }
+    const local = isLocalAccount(account);
+    for (const [index, id] of params.docIds.entries()) {
+      await db.execute(`
+        UPDATE offline_documents
+        SET sort_order = $3, order_dirty = $4, change_seq = change_seq + 1,
+            last_error = NULL
+        WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+      `, [account, id, index, local ? 0 : 1]);
+    }
+    if (!local) scheduleDocumentSync();
     return { ok: true };
   });
 }
@@ -2007,7 +2089,7 @@ async function pushDocuments(account: string): Promise<string[]> {
   const imageUploadIssues: string[] = [];
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
-    WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1)
+    WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1)
     ORDER BY CASE sync_state WHEN 'create' THEN 0 WHEN 'update' THEN 1 WHEN 'trash' THEN 2 ELSE 3 END
   `, [account]);
   for (const row of rows) {
@@ -2087,6 +2169,32 @@ async function pushDocuments(account: string): Promise<string[]> {
           UPDATE offline_documents SET folder_dirty = 0
           WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
         `, [account, row.doc_id, current.change_seq]);
+      }
+
+      const latest = await selectDocument(account, row.doc_id);
+      if (latest?.order_dirty) {
+        const pendingSiblings = await db.select<{ count: number }[]>(`
+          SELECT COUNT(*) AS count FROM offline_documents
+          WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
+            AND (sync_state = 'create' OR folder_dirty = 1)
+        `, [account, latest.folder_id]);
+        if (Number(pendingSiblings[0]?.count ?? 0) > 0) continue;
+        const orderedRows = await db.select<{ doc_id: string }[]>(`
+          SELECT doc_id FROM offline_documents
+          WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
+          ORDER BY sort_order ASC, COALESCE(updated_at, '') DESC, doc_id DESC
+        `, [account, latest.folder_id]);
+        await remoteJSON(`/api/documents/${encodeURIComponent(row.doc_id)}/order`, {
+          method: "PUT",
+          body: JSON.stringify({
+            folderId: latest.folder_id,
+            docIds: orderedRows.map((item) => item.doc_id),
+          }),
+        });
+        await db.execute(`
+          UPDATE offline_documents SET order_dirty = 0
+          WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
+        `, [account, row.doc_id, latest.change_seq]);
       }
     } catch (error) {
       if (error instanceof OfflineImageUploadError) {
@@ -2172,21 +2280,29 @@ async function pullRemoteSnapshot(account: string) {
     if (local?.sync_state === "conflict") continue;
     if (!local) {
       const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(summary.docId)}`);
-      await insertRemoteDocument(account, remote.document, summary.folderId);
+      await insertRemoteDocument(account, remote.document, summary.folderId, summary.sortOrder);
       continue;
     }
     if (local.sync_state === "trash") continue;
     if (summary.revision === local.base_revision) {
-      if (summary.folderId !== local.folder_id && !local.folder_dirty) {
+      if (
+        (summary.folderId !== local.folder_id && !local.folder_dirty) ||
+        (summary.sortOrder !== local.sort_order && !local.order_dirty)
+      ) {
         await db.execute(`
           UPDATE offline_documents
-          SET folder_id = $3, change_seq = change_seq + 1, last_error = NULL
+          SET folder_id = CASE WHEN folder_dirty = 0 THEN $3 ELSE folder_id END,
+              sort_order = CASE WHEN order_dirty = 0 THEN $4 ELSE sort_order END,
+              change_seq = change_seq + 1, last_error = NULL
           WHERE account_id = $1 AND doc_id = $2
-            AND base_revision = $4 AND sync_state = $5 AND change_seq = $6
-            AND folder_dirty = 0
+            AND base_revision = $5 AND sync_state = $6 AND change_seq = $7
+            AND (
+              (folder_id IS NOT $3 AND folder_dirty = 0) OR
+              (sort_order IS NOT $4 AND order_dirty = 0)
+            )
         `, [
-          account, summary.docId, summary.folderId, local.base_revision,
-          local.sync_state, local.change_seq,
+          account, summary.docId, summary.folderId, summary.sortOrder,
+          local.base_revision, local.sync_state, local.change_seq,
         ]);
       }
       continue;
@@ -2224,9 +2340,9 @@ async function pullRemoteSnapshot(account: string) {
       },
     );
     if (decision === "replace-clean") {
-      await replaceDocumentFromRemote(account, local, remote.document, summary.folderId);
+      await replaceDocumentFromRemote(account, local, remote.document, summary.folderId, summary.sortOrder);
     } else if (decision === "acknowledge-local") {
-      await acknowledgeMatchingRemoteDocument(account, local, remote.document, summary.folderId);
+      await acknowledgeMatchingRemoteDocument(account, local, remote.document, summary.folderId, summary.sortOrder);
     } else if (decision === "conflict") {
       const [baseRevision, syncState, changeSeq] = snapshotGuard({
         baseRevision: local.base_revision,
@@ -2443,20 +2559,26 @@ async function reconcileFolderIdentity(
   `, [account, sent.folder_id]);
 }
 
-async function insertRemoteDocument(account: string, document: Document, folderID: string | null) {
+async function insertRemoteDocument(
+  account: string,
+  document: Document,
+  folderID: string | null,
+  sortOrder = 0,
+) {
   await cacheDocumentImages(account, document.content);
   const db = await database();
   await db.execute(`
     INSERT INTO offline_documents (
       account_id, doc_id, title, theme, content, folder_id,
       local_revision, base_revision, created_at, updated_at, share_json,
-      sync_state, folder_dirty, change_seq, remote_snapshot, last_error
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, 'clean', 0, 0, NULL, NULL)
+      sync_state, folder_dirty, order_dirty, sort_order, change_seq, remote_snapshot, last_error
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, 'clean', 0, 0, $11, 0, NULL, NULL)
     ON CONFLICT (account_id, doc_id) DO NOTHING
   `, [
     account, document.docId, document.title, document.theme, document.content, folderID,
     document.revision, document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
+    sortOrder,
   ]);
 }
 
@@ -2465,6 +2587,7 @@ async function replaceDocumentFromRemote(
   local: DocumentRow,
   document: Document,
   folderID: string | null,
+  sortOrder: number,
 ): Promise<boolean> {
   await cacheDocumentImages(account, document.content);
   const db = await database();
@@ -2475,16 +2598,18 @@ async function replaceDocumentFromRemote(
   });
   const result = await db.execute(`
     UPDATE offline_documents
-    SET title = $3, theme = $4, content = $5, folder_id = $6,
-        local_revision = $7, base_revision = $8,
-        created_at = $9, updated_at = $10, share_json = $11,
+    SET title = $3, theme = $4, content = $5,
+        folder_id = CASE WHEN folder_dirty = 0 THEN $6 ELSE folder_id END,
+        sort_order = CASE WHEN order_dirty = 0 THEN $7 ELSE sort_order END,
+        local_revision = $8, base_revision = $9,
+        created_at = $10, updated_at = $11, share_json = $12,
         sync_state = 'clean', folder_dirty = 0, change_seq = change_seq + 1,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND doc_id = $2
-      AND base_revision = $12 AND sync_state = $13 AND change_seq = $14
+      AND base_revision = $13 AND sync_state = $14 AND change_seq = $15
   `, [
     account, document.docId, document.title, document.theme, document.content, folderID,
-    pulledLocalRevision(local.local_revision, document.revision), document.revision,
+    sortOrder, pulledLocalRevision(local.local_revision, document.revision), document.revision,
     document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
     baseRevision, syncState, changeSeq,
@@ -2497,6 +2622,7 @@ async function acknowledgeMatchingRemoteDocument(
   local: DocumentRow,
   document: Document,
   folderID: string | null,
+  sortOrder: number,
 ) {
   await cacheDocumentImages(account, document.content);
   const db = await database();
@@ -2507,16 +2633,18 @@ async function acknowledgeMatchingRemoteDocument(
   });
   await db.execute(`
     UPDATE offline_documents
-    SET title = $3, theme = $4, content = $5, folder_id = $6,
-        local_revision = $7, base_revision = $8,
-        created_at = $9, updated_at = $10, share_json = $11,
+    SET title = $3, theme = $4, content = $5,
+        folder_id = CASE WHEN folder_dirty = 0 THEN $6 ELSE folder_id END,
+        sort_order = CASE WHEN order_dirty = 0 THEN $7 ELSE sort_order END,
+        local_revision = $8, base_revision = $9,
+        created_at = $10, updated_at = $11, share_json = $12,
         sync_state = 'clean', folder_dirty = 0,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND doc_id = $2
-      AND base_revision = $12 AND sync_state = $13 AND change_seq = $14
+      AND base_revision = $13 AND sync_state = $14 AND change_seq = $15
   `, [
     account, document.docId, document.title, document.theme, local.content, folderID,
-    acknowledgedLocalRevision(local.local_revision, document.revision), document.revision,
+    sortOrder, acknowledgedLocalRevision(local.local_revision, document.revision), document.revision,
     document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
     baseRevision, syncState, changeSeq,
@@ -2584,7 +2712,7 @@ async function calculateSummary(
   const db = await database();
   const counts = await db.select<{ pending: number; conflicts: number }[]>(`
     SELECT
-      (SELECT COUNT(*) FROM offline_documents WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1)) +
+      (SELECT COUNT(*) FROM offline_documents WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1)) +
       (SELECT COUNT(*) FROM offline_folders WHERE account_id = $1 AND sync_state <> 'clean') AS pending,
       (SELECT COUNT(*) FROM offline_documents WHERE account_id = $1 AND sync_state = 'conflict') AS conflicts
   `, [account]);
@@ -2595,14 +2723,14 @@ async function calculateSummary(
     SELECT COALESCE(
       (SELECT last_error FROM offline_documents
        WHERE account_id = $1 AND last_error IS NOT NULL
-         AND (sync_state <> 'clean' OR folder_dirty = 1)
+         AND (sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1)
        ORDER BY updated_at DESC LIMIT 1),
       (SELECT i.last_error FROM offline_images i
        WHERE i.account_id = $1 AND i.last_error IS NOT NULL
          AND EXISTS (
            SELECT 1 FROM offline_documents d
            WHERE d.account_id = $1
-             AND (d.sync_state <> 'clean' OR d.folder_dirty = 1)
+             AND (d.sync_state <> 'clean' OR d.folder_dirty = 1 OR d.order_dirty = 1)
              AND instr(d.content, $2 || i.image_id) > 0
          )
        ORDER BY i.created_at DESC LIMIT 1)

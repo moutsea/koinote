@@ -30,6 +30,7 @@ import {
   useFolderList,
   useMoveDocument,
   useMoveFolder,
+  useReorderDocuments,
   useRefreshDocumentList,
   useRenameFolder,
   useSyncEditorTabs,
@@ -117,6 +118,7 @@ export function EditorPage() {
   const deleteFolderMut = useDeleteFolder();
   const moveFolderMut = useMoveFolder();
   const moveDocMut = useMoveDocument();
+  const reorderDocsMut = useReorderDocuments();
   const refreshList = useRefreshDocumentList();
   const confirmDelete = useDeleteConfirm();
 
@@ -884,6 +886,13 @@ export function EditorPage() {
     [moveDocMut],
   );
 
+  const handleReorderDocuments = useCallback(
+    (docId: string, folderId: string | null, docIds: string[]) => {
+      reorderDocsMut.mutate({ docId, folderId, docIds });
+    },
+    [reorderDocsMut],
+  );
+
   const handleMoveFolder = useCallback(
     (folderId: string, parentFolderId: string | null) => {
       moveFolderMut.mutate({ folderId, parentFolderId });
@@ -967,7 +976,7 @@ export function EditorPage() {
   );
 
   /**
-   * 文件夹六种写操作的失败合成一条提示。
+   * 文件树写操作的失败合成一条提示。
    *
    * 之前全都静默吞掉了 —— 后端没起、没登录、表还没建，点按钮都是「没反应」，
    * 而这个仓库其它地方（保存、导出、上传）都会把失败说出来。
@@ -983,6 +992,7 @@ export function EditorPage() {
       deleteFolderMut,
       moveFolderMut,
       moveDocMut,
+      reorderDocsMut,
     ].find((m) => m.isError);
     if (!failed) return null;
     const err = failed.error;
@@ -997,6 +1007,7 @@ export function EditorPage() {
     deleteFolderMut,
     moveFolderMut,
     moveDocMut,
+    reorderDocsMut,
     t,
   ]);
 
@@ -1069,6 +1080,7 @@ export function EditorPage() {
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
             onMoveDoc={handleMoveDoc}
+            onReorderDocuments={handleReorderDocuments}
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
             importing={importing}
@@ -1276,6 +1288,7 @@ export function EditorPage() {
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
               onMoveDoc={handleMoveDoc}
+              onReorderDocuments={handleReorderDocuments}
               onMoveFolder={handleMoveFolder}
               onCollapse={() => setMobileDocsOpen(false)}
               importing={importing}

@@ -56,6 +56,7 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodPut, "/api/documents/doc-id", true},
 		{http.MethodDelete, "/api/documents/doc-id", true},
 		{http.MethodPut, "/api/documents/doc-id/folder", true},
+		{http.MethodPut, "/api/documents/doc-id/order", true},
 		{http.MethodPost, "/api/documents/doc-id/restore", true},
 		{http.MethodPost, "/api/documents/doc-id/share", true},
 		{http.MethodDelete, "/api/documents/doc-id/share", true},

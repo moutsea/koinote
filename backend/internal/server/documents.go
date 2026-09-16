@@ -23,7 +23,7 @@ const (
 
 // ---------- 列表 ----------
 
-// documentsList 返回当前用户的文档摘要，按最近编辑排序。不含 content。
+// documentsList 返回当前用户的文档摘要，按用户自定义顺序。不含 content。
 func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -31,11 +31,12 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := a.db.Query(r.Context(), `
-		SELECT d.doc_id, d.title, d.created_at, d.updated_at, COALESCE(f.folder_id, ''), d.revision
+		SELECT d.doc_id, d.title, d.created_at, d.updated_at, COALESCE(f.folder_id, ''),
+		       d.sort_order, d.revision
 		FROM documents d
 		LEFT JOIN folders f ON f.id = d.folder_id
 		WHERE d.user_id = $1 AND d.trashed_at IS NULL
-		ORDER BY d.updated_at DESC
+		ORDER BY d.folder_id NULLS FIRST, d.sort_order ASC, d.updated_at DESC, d.id DESC
 	`, user.ID)
 	if err != nil {
 		log.Printf("documents list: %v", err)
@@ -49,7 +50,7 @@ func (a *App) documentsList(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d model.DocumentSummary
 		var folder string
-		if err := rows.Scan(&d.DocID, &d.Title, &d.CreatedAt, &d.UpdatedAt, &folder, &d.Revision); err != nil {
+		if err := rows.Scan(&d.DocID, &d.Title, &d.CreatedAt, &d.UpdatedAt, &folder, &d.SortOrder, &d.Revision); err != nil {
 			log.Printf("documents scan: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return

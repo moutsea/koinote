@@ -42,6 +42,7 @@ type DocumentSummary struct {
 	Title string `json:"title"`
 	// nil 表示在根下
 	FolderID  *string    `json:"folderId"`
+	SortOrder int64      `json:"sortOrder"`
 	Revision  int64      `json:"revision"`
 	CreatedAt *time.Time `json:"createdAt"`
 	UpdatedAt *time.Time `json:"updatedAt"`

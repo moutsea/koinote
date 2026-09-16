@@ -41,8 +41,8 @@ type DragHover = { payload: DragPayload; local: boolean };
 /**
  * 侧栏文件树。
  *
- * 拖拽用原生 HTML5 DnD 而不是引库：只需要「拖到某个文件夹上」这一种交互，不需要
- * 同层排序、不需要跨列表、不需要触摸支持 —— 原生够用，且不增加依赖。
+ * 拖拽用原生 HTML5 DnD 而不是引库：文件夹用于归类，文档用于同级排序。原生 DnD
+ * 足够覆盖这两种交互，且不增加依赖。
  *
  * 原生 DnD 键盘不可达。文件夹的重命名与删除有按钮兜住，但「移动」目前只能靠拖 ——
  * 这是这一版的无障碍缺口，右键菜单「移动到…」待补。
@@ -60,6 +60,7 @@ export function DocumentList({
   onRenameFolder,
   onDeleteFolder,
   onMoveDoc,
+  onReorderDocuments,
   onMoveFolder,
   onCollapse,
   importing,
@@ -87,6 +88,7 @@ export function DocumentList({
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string, name: string) => void;
   onMoveDoc: (docId: string, folderId: string | null) => void;
+  onReorderDocuments: (docId: string, folderId: string | null, docIds: string[]) => void;
   onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
   importing: boolean;
@@ -237,6 +239,40 @@ export function DocumentList({
     [canDropOn, onMoveFolder, onMoveDoc],
   );
 
+  const canReorderDoc = useCallback(
+    (payload: DragPayload, targetDocId: string) => {
+      if (payload.kind !== "doc" || payload.id === targetDocId) return false;
+      const dragged = documents.find((document) => document.docId === payload.id);
+      const target = documents.find((document) => document.docId === targetDocId);
+      return Boolean(dragged && target && dragged.folderId === target.folderId);
+    },
+    [documents],
+  );
+
+  const onReorderDoc = useCallback(
+    (payload: DragPayload, targetDocId: string, position: "before" | "after") => {
+      if (payload.kind !== "doc" || !canReorderDoc(payload, targetDocId)) return;
+      const target = documents.find((document) => document.docId === targetDocId);
+      if (!target) return;
+      const dragged = documents.find((document) => document.docId === payload.id);
+      if (!dragged) return;
+      const siblings = documents.filter(
+        (document) => document.folderId === target.folderId,
+      );
+      const next = siblings.filter((document) => document.docId !== payload.id);
+      const targetIndex = next.findIndex((document) => document.docId === targetDocId);
+      if (targetIndex < 0) return;
+      next.splice(position === "before" ? targetIndex : targetIndex + 1, 0, dragged);
+      onReorderDocuments(
+        payload.id,
+        target.folderId,
+        next.map((document) => document.docId),
+      );
+      setDragging(null);
+    },
+    [canReorderDoc, documents, onReorderDocuments],
+  );
+
   const openMenu = useCallback((e: React.MouseEvent, target: MenuTarget) => {
     e.preventDefault();
     // 行上的右键不能冒泡到滚动区，否则会被根菜单接走
@@ -273,6 +309,8 @@ export function DocumentList({
     onRenameFolder,
     onDeleteFolder,
     onDrop,
+    onReorderDoc,
+    canReorderDoc,
     canDropOn,
     dragging,
     setDragging,

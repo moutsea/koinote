@@ -455,6 +455,11 @@ func (a *App) folderDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock($1)`, user.ID); err != nil {
+		log.Printf("folder delete lock: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
 
 	var internalID int
 	var parentID *int
@@ -481,10 +486,24 @@ func (a *App) folderDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	if _, err := tx.Exec(r.Context(),
-		`UPDATE documents SET folder_id = $2 WHERE folder_id = $1`,
-		internalID, parentID,
-	); err != nil {
+	if _, err := tx.Exec(r.Context(), `
+		WITH moved AS (
+			SELECT d.id,
+			       COALESCE((
+					   SELECT MAX(existing.sort_order) + 1
+					   FROM documents existing
+					   WHERE existing.user_id = d.user_id
+					     AND existing.trashed_at IS NULL
+					     AND existing.folder_id IS NOT DISTINCT FROM $2
+				   ), 0) + ROW_NUMBER() OVER (ORDER BY d.sort_order, d.id) - 1 AS next_order
+			FROM documents d
+			WHERE d.folder_id = $1
+		)
+		UPDATE documents AS d
+		SET folder_id = $2, sort_order = moved.next_order
+		FROM moved
+		WHERE d.id = moved.id
+	`, internalID, parentID); err != nil {
 		log.Printf("folder delete lift docs: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return

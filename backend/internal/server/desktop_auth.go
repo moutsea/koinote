@@ -541,6 +541,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 				return method == http.MethodGet || method == http.MethodPost
 			case "folder":
 				return method == http.MethodPut
+			case "order":
+				return method == http.MethodPut
 			case "permanent":
 				return method == http.MethodDelete
 			case "restore":

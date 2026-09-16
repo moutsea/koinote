@@ -576,7 +576,20 @@ func (a *App) mcpMoveDocuments(ctx context.Context, toolName string, rawDocIDs [
 		}
 	}
 	for _, id := range docIDs {
-		if _, err := tx.Exec(ctx, `UPDATE documents SET folder_id = $3 WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL`, id, principal.User.ID, targetID); err != nil {
+		var nextOrder int64
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(MAX(sort_order) + 1, 0)
+			FROM documents
+			WHERE user_id = $1 AND trashed_at IS NULL
+			  AND folder_id IS NOT DISTINCT FROM $2
+		`, principal.User.ID, targetID).Scan(&nextOrder); err != nil {
+			return nil, mcpMoveDocumentsOutput{}, mcpInternalError("find document order", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE documents
+			SET folder_id = $3, sort_order = $4
+			WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
+		`, id, principal.User.ID, targetID, nextOrder); err != nil {
 			return nil, mcpMoveDocumentsOutput{}, mcpInternalError("move document", err)
 		}
 	}
@@ -610,7 +623,24 @@ func (a *App) mcpDeleteFolder(ctx context.Context, _ *mcp.CallToolRequest, input
 	if _, err := tx.Exec(ctx, `UPDATE folders SET parent_id = $2, updated_at = now() WHERE parent_id = $1 AND user_id = $3`, internalID, parentID, principal.User.ID); err != nil {
 		return nil, nil, mcpInternalError("lift child folders", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE documents SET folder_id = $2 WHERE folder_id = $1 AND user_id = $3`, internalID, parentID, principal.User.ID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		WITH moved AS (
+			SELECT d.id,
+			       COALESCE((
+					   SELECT MAX(existing.sort_order) + 1
+					   FROM documents existing
+					   WHERE existing.user_id = d.user_id
+					     AND existing.trashed_at IS NULL
+					     AND existing.folder_id IS NOT DISTINCT FROM $2
+				   ), 0) + ROW_NUMBER() OVER (ORDER BY d.sort_order, d.id) - 1 AS next_order
+			FROM documents d
+			WHERE d.folder_id = $1 AND d.user_id = $3
+		)
+		UPDATE documents AS d
+		SET folder_id = $2, sort_order = moved.next_order
+		FROM moved
+		WHERE d.id = moved.id
+	`, internalID, parentID, principal.User.ID); err != nil {
 		return nil, nil, mcpInternalError("lift folder documents", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE id = $1 AND user_id = $2`, internalID, principal.User.ID); err != nil {

@@ -769,6 +769,11 @@ assert.match(
   "云端已删除的干净文档不能让文件夹归属同步永久失败",
 );
 assert.match(
+  pushDocumentsSection,
+  /if \(latest\?\.order_dirty\) \{[\s\S]*?sync_state = 'create' OR folder_dirty = 1[\s\S]*?if \(Number\(pendingSiblings\[0\]\?\.count \?\? 0\) > 0\) continue;/,
+  "排序同步必须等待同级新建或移动文档先上传，避免完整集合校验冲突",
+);
+assert.match(
   performSyncSection,
   /const message = error instanceof RemoteHTTPError[\s\S]*?error\.code \?\? `http_\$\{error\.status\}`[\s\S]*?offline \? "offline" : "error",\s*message/,
   "同步失败时必须保留远端错误码以便诊断和本地化",
@@ -806,7 +811,7 @@ assert.match(
 );
 assert.match(
   calculateSummarySection,
-  /last_error IS NOT NULL\s*AND \(sync_state <> 'clean' OR folder_dirty = 1\)/,
+  /last_error IS NOT NULL\s*AND \(sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1\)/,
   "已同步文档的陈旧错误不能污染同步状态",
 );
 assert.match(

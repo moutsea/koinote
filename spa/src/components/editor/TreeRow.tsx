@@ -5,6 +5,7 @@ import {
   FileText,
   Folder as FolderIcon,
   FolderOpen,
+  GripVertical,
   Trash2,
 } from "lucide-react";
 import { useI18n, type Locale } from "../../i18n";
@@ -66,6 +67,12 @@ export type TreeRowHandlers = {
   onDeleteFolder: (folderId: string, name: string) => void;
   /** 拖放：null 目标表示根 */
   onDrop: (payload: DragPayload, targetFolderId: string | null) => void;
+  onReorderDoc: (
+    payload: DragPayload,
+    targetDocId: string,
+    position: "before" | "after",
+  ) => void;
+  canReorderDoc: (payload: DragPayload, targetDocId: string) => boolean;
   /** 当前是否允许放到这个文件夹上。用于抑制无效目标的高亮 */
   canDropOn: (payload: DragPayload, targetFolderId: string | null) => boolean;
   dragging: DragPayload | null;
@@ -285,11 +292,39 @@ export function DocRow({
   const title = doc.title.trim() || t.editor.untitled;
   const active = doc.docId === h.activeDocId;
   const menuOpen = h.menuTargetId === doc.docId;
+  const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
 
   return (
     <li
       className="group relative"
       draggable
+      onDragOver={(e) => {
+        e.stopPropagation();
+        const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
+        if (!payload || !h.canReorderDoc(payload, doc.docId)) {
+          setDropPosition(null);
+          return;
+        }
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setDropPosition(e.clientY < rect.top + rect.height / 2 ? "before" : "after");
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setDropPosition(null);
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const position = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+        setDropPosition(null);
+        if (payload && h.canReorderDoc(payload, doc.docId)) {
+          h.onReorderDoc(payload, doc.docId, position);
+        }
+      }}
       onDragStart={(e) => {
         const payload: DragPayload = { kind: "doc", id: doc.docId };
         writeTreeDragPayload(e.dataTransfer, payload);
@@ -306,6 +341,14 @@ export function DocRow({
         })
       }
     >
+      {dropPosition && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute left-2 right-1 z-10 h-0.5 rounded-full bg-cinnabar-500 ${
+            dropPosition === "before" ? "top-0" : "bottom-0"
+          }`}
+        />
+      )}
       <button
         type="button"
         onClick={() => h.onSelectDoc(doc.docId)}
@@ -319,6 +362,10 @@ export function DocRow({
         }`}
         style={{ paddingLeft: docPad(depth) }}
       >
+        <GripVertical
+          aria-hidden
+          className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300 opacity-0 transition group-hover:opacity-100 dark:text-neutral-600"
+        />
         <FileText
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
             active ? "text-cinnabar-600 dark:text-cinnabar-400" : "text-neutral-400"

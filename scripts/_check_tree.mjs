@@ -252,6 +252,11 @@ for (const [name, value] of [
 }
 
 {
+  const tree = buildTree([], [d("d2", "后一个"), d("d1", "前一个")]);
+  eq("文档保留服务端返回的自定义顺序", tree.docs.map((doc) => doc.docId), ["d2", "d1"]);
+}
+
+{
   const folders = [f("A", "甲"), f("B", "乙", "A"), f("C", "丙", "B")];
   const docs = [d("d1", "在C", "C"), d("d2", "在根")];
   const tree = buildTree(folders, docs);
