@@ -12,6 +12,8 @@ import { useI18n, type Locale } from "../../i18n";
 import { docPad, folderPad, guideX } from "./indent";
 import type { DocNode, TreeFolder } from "./tree";
 import {
+  hasExternalFileDrag,
+  markdownFilesFromDataTransfer,
   readTreeDragPayload,
   sameTreeDragPayload,
   writeTreeDragPayload,
@@ -77,6 +79,7 @@ export type TreeRowHandlers = {
   canDropOn: (payload: DragPayload, targetFolderId: string | null) => boolean;
   dragging: DragPayload | null;
   setDragging: (p: DragPayload | null) => void;
+  onImportFiles: (files: File[], targetFolderId: string | null) => void;
   /** 右键。在行上按下时要阻止冒泡，否则会被空白处的根菜单接走 */
   onContextMenu: (e: React.MouseEvent, target: MenuTarget) => void;
   /** 菜单当前指向的行，用来给它加一个持续的高亮 */
@@ -95,6 +98,7 @@ export function FolderRow({
   const { t } = useI18n();
   const open = h.expanded.has(folder.folderId);
   const [overDrag, setOverDrag] = useState<DragHover | null>(null);
+  const [fileDragOver, setFileDragOver] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -132,6 +136,11 @@ export function FolderRow({
         // 整行都是放置区。只给图标的话命中率太低，拖起来很难受
         onDragOver={(e) => {
           e.stopPropagation();
+          if (hasExternalFileDrag(e.dataTransfer)) {
+            e.preventDefault();
+            setFileDragOver(true);
+            return;
+          }
           const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
           if (!payload || !h.canDropOn(payload, folder.folderId)) return;
           e.preventDefault(); // 不调用它，浏览器不会触发 drop
@@ -144,11 +153,21 @@ export function FolderRow({
               : { payload, local },
           );
         }}
-        onDragLeave={() => setOverDrag(null)}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setOverDrag(null);
+          setFileDragOver(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setOverDrag(null);
+          setFileDragOver(false);
+          const files = markdownFilesFromDataTransfer(e.dataTransfer);
+          if (files.length > 0) {
+            h.onImportFiles(files, folder.folderId);
+            return;
+          }
           const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
           if (payload && h.canDropOn(payload, folder.folderId)) {
             h.onDrop(payload, folder.folderId);
@@ -170,9 +189,10 @@ export function FolderRow({
           })
         }
         className={`group relative flex items-center rounded-lg transition ${
-          overDrag !== null &&
-          acceptsDrop &&
-          (!overDrag.local || sameTreeDragPayload(overDrag.payload, h.dragging))
+          fileDragOver ||
+          (overDrag !== null &&
+            acceptsDrop &&
+            (!overDrag.local || sameTreeDragPayload(overDrag.payload, h.dragging)))
             // 拖放目标环用 500 而不是 400：400 压在宣纸上只有 2.47:1，
             // 达不到非文字元素的 3:1。这个环是拖拽时唯一的落点提示，看不见就等于没有
             ? "bg-cinnabar-100 ring-1 ring-cinnabar-500 dark:bg-cinnabar-900/40"
@@ -293,13 +313,19 @@ export function DocRow({
   const active = doc.docId === h.activeDocId;
   const menuOpen = h.menuTargetId === doc.docId;
   const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
+  const [fileDragOver, setFileDragOver] = useState(false);
 
   return (
     <li
-      className="group relative"
+      className={`group relative ${fileDragOver ? "rounded-lg ring-1 ring-inset ring-cinnabar-500" : ""}`}
       draggable
       onDragOver={(e) => {
         e.stopPropagation();
+        if (hasExternalFileDrag(e.dataTransfer)) {
+          e.preventDefault();
+          setFileDragOver(true);
+          return;
+        }
         const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
         if (!payload || !h.canReorderDoc(payload, doc.docId)) {
           setDropPosition(null);
@@ -311,12 +337,19 @@ export function DocRow({
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setFileDragOver(false);
           setDropPosition(null);
         }
       }}
       onDrop={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        setFileDragOver(false);
+        const files = markdownFilesFromDataTransfer(e.dataTransfer);
+        if (files.length > 0) {
+          h.onImportFiles(files, doc.folderId);
+          return;
+        }
         const payload = readTreeDragPayload(e.dataTransfer) ?? h.dragging;
         const rect = e.currentTarget.getBoundingClientRect();
         const position = e.clientY < rect.top + rect.height / 2 ? "before" : "after";

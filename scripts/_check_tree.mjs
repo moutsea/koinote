@@ -16,6 +16,8 @@ import {
   sameTreeDragPayload,
   TREE_DRAG_MIME,
   writeTreeDragPayload,
+  hasExternalFileDrag,
+  markdownFilesFromDataTransfer,
 } from "./_tree_drag_bundle.mjs";
 import { installDropNavigationGuard } from "./_drop_navigation_bundle.mjs";
 import { readFileSync } from "node:fs";
@@ -59,6 +61,22 @@ function fakeDataTransfer() {
     },
     values,
   };
+}
+
+{
+  const transfer = { files: [{ name: "note.md" }], types: ["Files"] };
+  ok("外部文件拖放可被识别", hasExternalFileDrag(transfer));
+  eq(
+    "外部拖放只导入 Markdown 文件",
+    markdownFilesFromDataTransfer({
+      files: [{ name: "note.md" }, { name: "readme.txt" }, { name: "UPPER.MD" }],
+    }).map((file) => file.name),
+    ["note.md", "UPPER.MD"],
+  );
+  ok(
+    "没有文件时不误判外部拖放",
+    !hasExternalFileDrag({ files: [], types: ["text/plain"] }),
+  );
 }
 
 {
@@ -193,7 +211,7 @@ for (const [name, value] of [
   );
   ok(
     "文件夹 dragover 在校验前阻止根落点误亮",
-    /onDragOver=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*const payload =/.test(
+    /onDragOver=\{\(e\) => \{\s*e\.stopPropagation\(\);[\s\S]*?const payload =/.test(
       treeRowSource,
     ),
   );
@@ -208,6 +226,19 @@ for (const [name, value] of [
     /!rootOverDrag\.local \|\|\s*sameTreeDragPayload\(rootOverDrag\.payload, dragging\)/.test(
       documentListSource,
     ),
+  );
+  ok(
+    "根落点接受外部 Markdown 文件",
+    /hasExternalFileDrag\(e\.dataTransfer\)[\s\S]*?markdownFilesFromDataTransfer\(e\.dataTransfer\)[\s\S]*?onImportFiles\(files, null\)/.test(
+      documentListSource,
+    ),
+  );
+  ok(
+    "文件夹和文档落点接受外部 Markdown 文件",
+    (treeRowSource.match(/markdownFilesFromDataTransfer\(e\.dataTransfer\)/g) ?? [])
+      .length >= 2 &&
+      /h\.onImportFiles\(files, folder\.folderId\)/.test(treeRowSource) &&
+      /h\.onImportFiles\(files, doc\.folderId\)/.test(treeRowSource),
   );
   ok(
     "编辑器吞掉文件树载荷而不插入 JSON",

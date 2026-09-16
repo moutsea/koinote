@@ -189,6 +189,11 @@ assert.match(transferSource, /IMPORT_IMAGE_CONCURRENCY = 3/);
 assert.match(transferSource, /releaseUnusedImages\(\[\.\.\.uploadedImageKeys\]\)/);
 assert.match(
   transferSource,
+  /targetFolderId\?: string \| null[\s\S]*?targetFolderId === undefined/,
+  "拖入文件夹的 Markdown 应直接创建到目标文件夹",
+);
+assert.match(
+  transferSource,
   /desktopLocalImageID[\s\S]*?readLocalImageObject[\s\S]*?offline\/\$\{localImageID\}/,
   "迁移 ZIP 必须内嵌尚未上传的桌面本地图片，不能导出私有协议死链",
 );

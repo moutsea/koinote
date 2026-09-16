@@ -31,6 +31,8 @@ import {
   type TreeRowHandlers,
 } from "./TreeRow";
 import {
+  hasExternalFileDrag,
+  markdownFilesFromDataTransfer,
   readTreeDragPayload,
   sameTreeDragPayload,
   type DragPayload,
@@ -92,7 +94,7 @@ export function DocumentList({
   onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
   importing: boolean;
-  onImport: (files: File[]) => void;
+  onImport: (files: File[], targetFolderId?: string | null) => void;
   notice?: string | null;
   onOrganize: (
     plan: DocumentOrganizationPlan,
@@ -104,6 +106,7 @@ export function DocumentList({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [rootOverDrag, setRootOverDrag] = useState<DragHover | null>(null);
+  const [rootFileOver, setRootFileOver] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(
     null,
   );
@@ -239,6 +242,17 @@ export function DocumentList({
     [canDropOn, onMoveFolder, onMoveDoc],
   );
 
+  const onImportFiles = useCallback(
+    (files: File[], targetFolderId: string | null) => {
+      if (importing || files.length === 0) return;
+      if (targetFolderId) {
+        setExpanded((prev) => new Set(prev).add(targetFolderId));
+      }
+      onImport(files, targetFolderId);
+    },
+    [importing, onImport],
+  );
+
   const canReorderDoc = useCallback(
     (payload: DragPayload, targetDocId: string) => {
       if (payload.kind !== "doc" || payload.id === targetDocId) return false;
@@ -314,6 +328,7 @@ export function DocumentList({
     canDropOn,
     dragging,
     setDragging,
+    onImportFiles,
     onContextMenu: openMenu,
     menuTargetId,
   };
@@ -471,6 +486,11 @@ export function DocumentList({
           提示只在拖动中显现，静止时不该有多余的框 */}
       <div
         onDragOver={(e) => {
+          if (hasExternalFileDrag(e.dataTransfer)) {
+            e.preventDefault();
+            setRootFileOver(true);
+            return;
+          }
           const payload = readTreeDragPayload(e.dataTransfer) ?? dragging;
           if (!payload || !canDropOn(payload, null)) return;
           e.preventDefault(); // 不调用它浏览器不会触发 drop
@@ -483,10 +503,20 @@ export function DocumentList({
               : { payload, local },
           );
         }}
-        onDragLeave={() => setRootOverDrag(null)}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setRootOverDrag(null);
+          setRootFileOver(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
           setRootOverDrag(null);
+          setRootFileOver(false);
+          const files = markdownFilesFromDataTransfer(e.dataTransfer);
+          if (files.length > 0) {
+            onImportFiles(files, null);
+            return;
+          }
           const payload = readTreeDragPayload(e.dataTransfer) ?? dragging;
           if (payload && canDropOn(payload, null)) onDrop(payload, null);
         }}
@@ -494,7 +524,7 @@ export function DocumentList({
         onContextMenu={(e) => openMenu(e, { kind: "root" })}
         className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
           // 500 而不是 400，理由同 TreeRow：拖放落点提示要够 3:1
-          rootDropHovered
+          rootDropHovered || rootFileOver
             ? "rounded-lg ring-1 ring-inset ring-cinnabar-500"
             : ""
         }`}
@@ -535,9 +565,9 @@ export function DocumentList({
         )}
 
         {/* 拖动中给一条明确落点：内容可能占满滚动区，没有空白可拖 */}
-        {((dragging && rootAcceptsDrop) || rootDropHovered) && (
+        {((dragging && rootAcceptsDrop) || rootDropHovered || rootFileOver) && (
           <div className="mt-1 rounded-lg border border-dashed border-cinnabar-500 px-2 py-2 text-center text-[11px] text-cinnabar-600 dark:text-cinnabar-400">
-            {t.editor.dropToRoot}
+            {rootFileOver ? t.transfer.importDropHint : t.editor.dropToRoot}
           </div>
         )}
       </div>

@@ -26,7 +26,12 @@ assert.match(documents, /setTimeout\([\s\S]*?5_000/);
 assert.match(documentList, /onImport\(files\)/);
 assert.match(documentList, /transfer\.importButton/);
 assert.match(documentList, /accept=\{IMPORT_FILE_ACCEPT\}/);
-assert.match(editor, /importDocumentsFromFiles\(files\)/);
+assert.match(editor, /importDocumentsFromFiles\(files[\s\S]*?targetFolderId\)/);
+assert.ok(
+  (editor.match(/onImport=\{\(files, targetFolderId\) => void handleImport\(files, targetFolderId\)\}/g) ?? [])
+    .length >= 2,
+  "编辑器桌面和移动端都要转发导入目标文件夹",
+);
 assert.match(editor, /getImportErrorMessage/);
 assert.match(editor, /setTimeout\([\s\S]*?5_000/);
 assert.match(share, /copySharedDocument/);

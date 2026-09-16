@@ -1174,6 +1174,7 @@ export const zh: Messages = {
     importImageTooLarge: "{filename} 尺寸过大，浏览器无法安全完成压缩。",
     exportFailed: "导出失败，请稍后重试。",
     importHint: "支持 .md、文件夹与 ZIP；引用的图片会一起迁移。",
+    importDropHint: "松开以导入 Markdown 文件",
   },
   trashPage: {
     title: "回收站",

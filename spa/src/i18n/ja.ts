@@ -1219,6 +1219,7 @@ export const ja: Messages = {
       "{filename} の寸法が大きすぎるため、ブラウザーで安全に圧縮できません。",
     exportFailed: "エクスポートに失敗しました。もう一度お試しください。",
     importHint: ".md、フォルダー、ZIP に対応し、参照画像も一緒に移行します。",
+    importDropHint: "離して Markdown ファイルをインポート",
   },
   trashPage: {
     title: "ゴミ箱",

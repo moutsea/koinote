@@ -216,6 +216,7 @@ export type ImportDocumentsResult = {
 export async function importDocumentsFromFiles(
   files: File[],
   onProgress?: TransferProgress,
+  targetFolderId?: string | null,
 ): Promise<ImportDocumentsResult> {
   const entries = await filesToEntries(files);
   const markdownPaths = [...entries.keys()]
@@ -290,7 +291,10 @@ export async function importDocumentsFromFiles(
         const uploadedURL = uploadedImages.get(reference.resolved);
         if (uploadedURL) replacements.set(reference.original, uploadedURL);
       }
-      const folderId = await ensureFolder(dirname(planned.path));
+      const folderId =
+        targetFolderId === undefined
+          ? await ensureFolder(dirname(planned.path))
+          : targetFolderId;
       await createDocument({
         title: truncateUnicode(withoutExtension(basename(planned.path)), 200),
         content: rewriteImageReferences(planned.content, replacements),

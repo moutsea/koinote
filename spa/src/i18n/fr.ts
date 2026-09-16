@@ -1253,6 +1253,7 @@ export const fr: Messages = {
     exportFailed: "Échec de l’export. Réessayez.",
     importHint:
       "Prend en charge les fichiers .md, les dossiers et les archives ZIP ; les images référencées sont aussi migrées.",
+    importDropHint: "Relâchez pour importer les fichiers Markdown",
   },
   trashPage: {
     title: "Corbeille",

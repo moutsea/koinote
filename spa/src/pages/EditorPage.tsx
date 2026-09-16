@@ -901,12 +901,12 @@ export function EditorPage() {
   );
 
   const handleImport = useCallback(
-    async (files: File[]) => {
+    async (files: File[], targetFolderId?: string | null) => {
       setImporting(true);
       setImportNotice(null);
       setOrganizationNotice(null);
       try {
-        const result = await importDocumentsFromFiles(files);
+        const result = await importDocumentsFromFiles(files, undefined, targetFolderId);
         const success = interpolate(t.transfer.importSuccess, {
           count: String(result.imported),
         });
@@ -1084,7 +1084,7 @@ export function EditorPage() {
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
             importing={importing}
-            onImport={(files) => void handleImport(files)}
+            onImport={(files, targetFolderId) => void handleImport(files, targetFolderId)}
             notice={
               organizationNotice?.error
                 ? null
@@ -1292,7 +1292,7 @@ export function EditorPage() {
               onMoveFolder={handleMoveFolder}
               onCollapse={() => setMobileDocsOpen(false)}
               importing={importing}
-              onImport={(files) => void handleImport(files)}
+              onImport={(files, targetFolderId) => void handleImport(files, targetFolderId)}
               notice={
                 organizationNotice?.error
                   ? null

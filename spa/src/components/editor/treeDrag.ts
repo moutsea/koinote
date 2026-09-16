@@ -55,3 +55,13 @@ export function readTreeDragPayload(dataTransfer: TreeDragReader): DragPayload |
     return null;
   }
 }
+
+export function hasExternalFileDrag(dataTransfer: Pick<DataTransfer, "files" | "types">): boolean {
+  return dataTransfer.files.length > 0 || Array.from(dataTransfer.types).includes("Files");
+}
+
+export function markdownFilesFromDataTransfer(
+  dataTransfer: Pick<DataTransfer, "files">,
+): File[] {
+  return Array.from(dataTransfer.files).filter((file) => /\.md$/i.test(file.name));
+}

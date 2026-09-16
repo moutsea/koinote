@@ -1237,6 +1237,7 @@ export const en: Messages = {
     exportFailed: "Export failed. Please try again.",
     importHint:
       "Supports .md files, folders, and ZIP archives; referenced images migrate with them.",
+    importDropHint: "Release to import Markdown files",
   },
   trashPage: {
     title: "Trash",

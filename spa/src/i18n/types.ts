@@ -744,6 +744,7 @@ export interface Messages {
     importImageTooLarge: string;
     exportFailed: string;
     importHint: string;
+    importDropHint: string;
   };
   trashPage: {
     title: string;
