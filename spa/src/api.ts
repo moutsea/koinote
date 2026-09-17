@@ -590,6 +590,129 @@ export function updateAgentSettings(
   });
 }
 
+export type AgentWorkspaceFile = {
+  fileId: number;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
+export type AgentWorkspaceFileContent = AgentWorkspaceFile & {
+  contentBase64: string;
+};
+
+export type AgentWorkspace = {
+  workspaceId: number;
+  name: string;
+  description: string;
+  revision: number;
+  updatedAt: string;
+  files: AgentWorkspaceFile[];
+};
+
+export const AGENT_WORKSPACE_QUERY_KEY = ["agent-workspace"] as const;
+
+export type AgentWorkspaceSummary = AgentWorkspace & {
+  fileCount: number;
+  sizeBytes: number;
+};
+
+export function getAgentWorkspaceSettings() {
+  return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings");
+}
+export type AgentWorkspaceStorage = { usedBytes: number; quotaBytes: number; bonusBytes: number };
+export function getAgentWorkspaceStorage() { return apiJson<{ storage: AgentWorkspaceStorage }>("/api/agent/workspace/storage"); }
+export type AgentWorkspaceCommit = { commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
+export function listAgentWorkspaceCommits(workspaceId: number) { return apiJson<{ commits: AgentWorkspaceCommit[]; nextBefore?: number | null }>(`/api/agent/workspaces/${workspaceId}/commits`); }
+export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number) { return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, { method: "POST", body: JSON.stringify({ expectedRevision }) }); }
+
+export function updateAgentWorkspaceSettings(enabled: boolean) {
+  return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function listAgentWorkspaces() {
+  return apiJson<{ workspaces: AgentWorkspaceSummary[] }>("/api/agent/workspaces");
+}
+
+export function createAgentWorkspace(input: { name: string; description?: string; locale?: string }) {
+  return apiJson<{ workspace: AgentWorkspace }>("/api/agent/workspaces", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAgentWorkspaceMetadata(
+  workspaceId: number,
+  input: { expectedRevision: number; name: string; description?: string },
+) {
+  return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/metadata`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAgentWorkspace(workspaceId: number, expectedRevision: number) {
+  return apiJson<{ success: boolean }>(`/api/agent/workspaces/${workspaceId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ expectedRevision }),
+  });
+}
+
+export function getAgentWorkspace(workspaceId?: number) {
+  return apiJson<{ workspace: AgentWorkspace | null }>(
+    workspaceId ? `/api/agent/workspaces/${workspaceId}` : "/api/agent/workspace",
+  );
+}
+
+export function getAgentWorkspaceFile(fileId: number) {
+  return apiJson<{ file: AgentWorkspaceFileContent }>(
+    `/api/agent/workspace/files/${fileId}`,
+  );
+}
+
+export function updateAgentWorkspace(input: {
+  expectedRevision: number;
+  files: Array<{ path: string; contentBase64: string; mimeType?: string }>;
+  workspaceId?: number;
+}) {
+  const endpoint = input.workspaceId
+    ? `/api/agent/workspaces/${input.workspaceId}`
+    : "/api/agent/workspace";
+  const { workspaceId: _workspaceId, ...body } = input;
+  return apiJson<{ workspace: AgentWorkspace }>(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchAgentWorkspace(input: {
+  expectedRevision: number;
+  upsert?: Array<{ path: string; contentBase64: string; mimeType?: string }>;
+  delete?: string[];
+  workspaceId?: number;
+}) {
+  const endpoint = input.workspaceId
+    ? `/api/agent/workspaces/${input.workspaceId}`
+    : "/api/agent/workspace";
+  const { workspaceId: _workspaceId, ...body } = input;
+  return apiJson<{ workspace: AgentWorkspace }>(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAgentWorkspacePrompt(workspaceId?: number) {
+  return apiJson<{ version: string; prompt: string }>(
+    workspaceId
+      ? `/api/agent/workspace/prompt?workspaceId=${workspaceId}`
+      : "/api/agent/workspace/prompt",
+  );
+}
+
 export function listLLMChannels() {
   return apiJson<{ channels: LLMChannel[] }>("/api/agent/channels");
 }
@@ -676,13 +799,40 @@ export type WechatOfficialAccount = {
 export type WechatCoverRatio = "2.35:1" | "1:1";
 export type WechatCoverMode = "default" | "article" | "ai";
 
+export type WechatCoverMetadata = {
+  source: string;
+  ratio: WechatCoverRatio;
+};
+
 export type WechatGeneratedCover = {
   base64: string;
   mimeType: "image/jpeg";
   ratio: WechatCoverRatio;
   width: number;
   height: number;
+  source?: string;
 };
+
+export function getWechatCoverMetadata(docId: string) {
+  return apiJson<{ cover: WechatCoverMetadata | null }>(
+    `/api/documents/${encodeURIComponent(docId)}/export-metadata`,
+  );
+}
+
+export function updateWechatCoverMetadata(
+  docId: string,
+  cover: WechatCoverMetadata,
+  signal?: AbortSignal,
+) {
+  return apiJson<{ cover: WechatCoverMetadata }>(
+    `/api/documents/${encodeURIComponent(docId)}/export-metadata`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ coverImage: cover.source, coverRatio: cover.ratio }),
+      signal,
+    },
+  );
+}
 
 export function getWechatOfficialAccount() {
   return apiJson<{ account: WechatOfficialAccount | null }>(
@@ -878,13 +1028,18 @@ export function publishXArticle(
 export function generateWechatCover(
   prompt: string,
   ratio: WechatCoverRatio,
+  referenceImageSource?: string,
   signal?: AbortSignal,
 ) {
   return apiJson<{ cover: WechatGeneratedCover }>(
     "/api/wechat/cover/generate",
     {
       method: "POST",
-      body: JSON.stringify({ prompt, ratio }),
+      body: JSON.stringify({
+        prompt,
+        ratio,
+        ...(referenceImageSource ? { referenceImageSource } : {}),
+      }),
       signal,
     },
   );
@@ -1545,7 +1700,7 @@ export type MCPToken = {
   tokenId: string;
   name: string;
   hint: string;
-  scope: "read" | "write" | "publish";
+  scope: "read" | "write" | "publish" | "agent_read" | "agent_write";
   expiresAt?: string | null;
   lastUsedAt?: string | null;
   createdAt?: string | null;
@@ -1558,7 +1713,7 @@ export function listMCPTokens() {
 
 export function createMCPToken(params: {
   name: string;
-  scope: "read" | "write" | "publish";
+  scope: "read" | "write" | "publish" | "agent_read" | "agent_write";
   expiresInDays?: number;
   neverExpires?: boolean;
 }) {
@@ -1862,15 +2017,21 @@ export function isUploadableImage(file: File): boolean {
  */
 export type ImageUploadPurpose = "persistent" | "wechat-export";
 
+export type ImageUploadOptions = {
+  forceRemote?: boolean;
+  signal?: AbortSignal;
+};
+
 export async function uploadImage(
   file: File,
   purpose: ImageUploadPurpose = "persistent",
+  options?: ImageUploadOptions,
 ): Promise<UploadedImage> {
   if (!isUploadableImage(file)) {
     // 前端先挡一道：服务端也会拒，但等一趟往返才报错体验更差
     throw new ApiError(415, "Unsupported image type", "image_type_unsupported");
   }
-  if (isDesktopRuntime() && purpose === "persistent") {
+  if (isDesktopRuntime() && purpose === "persistent" && !options?.forceRemote) {
     try {
       let localFile = file;
       let flattenedAnimation = false;
@@ -1901,6 +2062,7 @@ export async function uploadImage(
       "Content-Type": file.type,
       "X-Koinote-Image-Purpose": purpose,
     },
+    signal: options?.signal,
     body: file,
   });
   if (!response.ok) {

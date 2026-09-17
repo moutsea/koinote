@@ -92,13 +92,15 @@ export function PaperCard({
   children,
   className = "",
   hover = false,
+  onClick,
 }: {
   children: ReactNode;
   className?: string;
   hover?: boolean;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 }) {
   return (
-    <div
+    <div onClick={onClick}
       className={`rounded-xl border ${
         hover ? "transition hover:-translate-y-0.5 hover:shadow-lg" : ""
       } ${className}`}

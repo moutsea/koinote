@@ -521,6 +521,59 @@ func TestWechatCoverGenerationEndpoint(t *testing.T) {
 	}
 }
 
+func TestWechatCoverGenerationIncludesReferenceImage(t *testing.T) {
+	coverData := testWechatCoverJPEG(t)
+	referenceData := testWechatCoverJPEG(t)
+	preparedReference, err := prepareWechatContentImage(referenceData)
+	if err != nil {
+		t.Fatalf("prepare reference image: %v", err)
+	}
+	app := &App{cfg: config.Config{
+		WechatCoverImageBaseURL: "https://cover-provider.example/v1",
+		WechatCoverImageAPIKey:  "cover-test-key",
+		WechatCoverImageModel:   "gpt-image-2.5-flare",
+	}}
+	app.wechatCoverHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/v1/images/edits" ||
+			!strings.HasPrefix(request.Header.Get("Content-Type"), "multipart/form-data;") {
+			return nil, fmt.Errorf("unexpected reference image request: path=%q content-type=%q", request.URL.Path, request.Header.Get("Content-Type"))
+		}
+		if err := request.ParseMultipartForm(wechatContentImageMaxBytes); err != nil {
+			return nil, err
+		}
+		file, header, err := request.FormFile("image")
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		reference, err := io.ReadAll(file)
+		if err != nil {
+			return nil, err
+		}
+		if header.Filename != "reference.jpg" || !bytes.Equal(reference, preparedReference) ||
+			request.FormValue("model") != "gpt-image-2.5-flare" ||
+			request.FormValue("n") != "1" || request.FormValue("size") != "1536x1024" ||
+			!strings.Contains(request.FormValue("prompt"), "A calm writing desk") {
+			return nil, fmt.Errorf("reference image payload mismatch")
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"b64_json":"` + base64.StdEncoding.EncodeToString(coverData) + `"}]}`)),
+		}, nil
+	})}
+
+	_, err = app.generateWechatCover(
+		context.Background(),
+		"A calm writing desk",
+		wechatCoverRatioWide,
+		"data:image/jpeg;base64,"+base64.StdEncoding.EncodeToString(referenceData),
+	)
+	if err != nil {
+		t.Fatalf("cover generation with reference image: %v", err)
+	}
+}
+
 func TestWechatCoverGenerationChargesFixedCredits(t *testing.T) {
 	coverData := testWechatCoverJPEG(t)
 	app, pool, user, _ := newAgentReviewCreateTest(t, config.Config{

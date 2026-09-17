@@ -54,6 +54,18 @@ func (a *App) mcpHandler() http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if principal.isAgentWorkspace() {
+			enabled, enabledErr := a.agentWorkspaceEnabled(r.Context(), principal.User.ID)
+			if enabledErr != nil {
+				log.Printf("mcp agent workspace enabled check: %v", enabledErr)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			if !enabled {
+				http.Error(w, "Agent workspace is disabled", http.StatusForbidden)
+				return
+			}
+		}
 		key := "mcp:token:" + strconv.FormatInt(principal.TokenID, 10)
 		if !a.rateLimit().allow(key, mcpRequestsPerMinute, time.Minute) {
 			w.Header().Set("Retry-After", "60")
@@ -90,6 +102,10 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 		Name: "koinote", Title: "Koinote Documents", Version: mcpServerVersion,
 		WebsiteURL: strings.TrimRight(a.cfg.AppURL, "/"),
 	}, nil)
+	if principal.isAgentWorkspace() {
+		a.addAgentWorkspaceMCPTools(server, principal)
+		return server
+	}
 
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false)}
 	mcp.AddTool(server, &mcp.Tool{

@@ -139,6 +139,7 @@ function parseSettingsSearch(search: Record<string, unknown>): {
   section?:
     | "general"
     | "membership"
+    | "agent"
     | "ai"
     | "invitations"
     | "wechat"
@@ -153,6 +154,7 @@ function parseSettingsSearch(search: Record<string, unknown>): {
     section:
       section === "general" ||
       section === "membership" ||
+      section === "agent" ||
       section === "ai" ||
       section === "invitations" ||
       section === "wechat" ||
@@ -167,6 +169,12 @@ function parseSettingsSearch(search: Record<string, unknown>): {
         : undefined,
     session_id:
       typeof search.session_id === "string" ? search.session_id : undefined,
+  };
+}
+
+function parseAgentWorkspaceSearch(search: Record<string, unknown>): { from?: "hub" | "settings" } {
+  return {
+    from: search.from === "hub" || search.from === "settings" ? search.from : undefined,
   };
 }
 
@@ -241,6 +249,31 @@ const settingsRoute = createRoute({
   component: lazyRouteComponent(
     () => import("./pages/SettingsPage"),
     "SettingsPage",
+  ),
+});
+const agentWorkspaceRepositoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent/workspaces/$workspaceId",
+  validateSearch: parseAgentWorkspaceSearch,
+  component: lazyRouteComponent(
+    () => import("./pages/AgentWorkspaceRepositoryPage"),
+    "AgentWorkspaceRepositoryPage",
+  ),
+});
+const agentWorkspaceSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent/settings",
+  component: lazyRouteComponent(
+    () => import("./pages/AgentWorkspaceSettingsPage"),
+    "AgentWorkspaceSettingsPage",
+  ),
+});
+const agentWorkspaceRepositoriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent/workspaces",
+  component: lazyRouteComponent(
+    () => import("./pages/AgentWorkspaceRepositoriesPage"),
+    "AgentWorkspaceRepositoriesPage",
   ),
 });
 const aiSettingsRoute = createRoute({
@@ -328,6 +361,9 @@ const routeTree = rootRoute.addChildren([
   registerRoute,
   dashboardRoute,
   settingsRoute,
+  agentWorkspaceRepositoriesRoute,
+  agentWorkspaceSettingsRoute,
+  agentWorkspaceRepositoryRoute,
   aiSettingsRoute,
   mcpActivityRoute,
   documentsRoute,

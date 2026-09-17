@@ -159,6 +159,8 @@ func (a *App) purgeDocument(ctx context.Context, user userRef, docID, confirmati
 			SELECT content FROM documents WHERE id = $1
 			UNION ALL
 			SELECT content FROM document_versions WHERE document_id = $1
+			UNION ALL
+			SELECT wechat_cover_image FROM document_export_metadata WHERE document_id = $1
 		)
 		SELECT DISTINCT 'u/' || matches[1] || '/' || matches[2] || '.' || matches[3]
 		FROM document_contents

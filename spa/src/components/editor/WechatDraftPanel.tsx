@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ImagePlus, Loader2, Send } from "lucide-react";
+import { CheckCircle2, ImagePlus, Loader2, Send, X } from "lucide-react";
 import {
   AGENT_CREDITS_QUERY_KEY,
   ApiError,
   createWechatDraft,
   generateWechatCover,
   getWechatOfficialAccounts,
+  isUploadableImage,
+  uploadImage,
   type WechatCoverRatio,
   type WechatCoverMode,
   type WechatGeneratedCover,
@@ -24,7 +26,9 @@ export function WechatDraftPanel({
   digest,
   disabled,
   articleImages,
+  savedCover,
   prepareHTML,
+  onCoverPersist,
   onPublishingChange,
 }: {
   accounts?: WechatOfficialAccount[];
@@ -34,7 +38,13 @@ export function WechatDraftPanel({
   digest?: string;
   disabled: boolean;
   articleImages: Array<{ src: string; alt: string }>;
+  savedCover?: { source: string; ratio?: WechatCoverRatio };
   prepareHTML: () => Promise<string | null>;
+  onCoverPersist?: (
+    source: string,
+    ratio: WechatCoverRatio,
+    signal?: AbortSignal,
+  ) => Promise<void> | void;
   onPublishingChange?: (publishing: boolean) => void;
 }) {
   const { t } = useI18n();
@@ -51,8 +61,12 @@ export function WechatDraftPanel({
       "",
   );
   const [prompt, setPrompt] = useState("");
-  const [ratio, setRatio] = useState<WechatCoverRatio>("2.35:1");
-  const [coverMode, setCoverMode] = useState<WechatCoverMode>("default");
+  const [ratio, setRatio] = useState<WechatCoverRatio>(
+    savedCover?.ratio === "1:1" ? "1:1" : "2.35:1",
+  );
+  const [coverMode, setCoverMode] = useState<WechatCoverMode>(
+    savedCover?.source ? "ai" : "default",
+  );
   const [selectedImageSource, setSelectedImageSource] = useState<string | null>(
     articleImages[0]?.src ?? null,
   );
@@ -60,8 +74,24 @@ export function WechatDraftPanel({
     null,
   );
   const [defaultCoverGenerating, setDefaultCoverGenerating] = useState(false);
-  const [cover, setCover] = useState<WechatGeneratedCover | null>(null);
+  const [cover, setCover] = useState<WechatGeneratedCover | null>(
+    savedCover?.source
+      ? {
+          base64: "",
+          mimeType: "image/jpeg",
+          ratio: savedCover.ratio === "1:1" ? "1:1" : "2.35:1",
+          width: savedCover.ratio === "1:1" ? 560 : 940,
+          height: savedCover.ratio === "1:1" ? 560 : 400,
+          source: savedCover.source,
+        }
+      : null,
+  );
   const [coverGenerating, setCoverGenerating] = useState(false);
+  const [referenceImage, setReferenceImage] = useState<{
+    source: string;
+    name: string;
+  } | null>(null);
+  const [referenceUploading, setReferenceUploading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +153,21 @@ export function WechatDraftPanel({
   }, [articleImages, selectedImageSource]);
 
   useEffect(() => {
+    if (!savedCover?.source) return;
+    const savedRatio = savedCover.ratio === "1:1" ? "1:1" : "2.35:1";
+    setRatio(savedRatio);
+    setCoverMode("ai");
+    setCover({
+      base64: "",
+      mimeType: "image/jpeg",
+      ratio: savedRatio,
+      width: savedRatio === "1:1" ? 560 : 940,
+      height: savedRatio === "1:1" ? 560 : 400,
+      source: savedCover.source,
+    });
+  }, [savedCover?.ratio, savedCover?.source]);
+
+  useEffect(() => {
     let cancelled = false;
     setDefaultCover(null);
     setDefaultCoverGenerating(true);
@@ -152,11 +197,30 @@ export function WechatDraftPanel({
       const result = await generateWechatCover(
         prompt.trim(),
         ratio,
+        referenceImage?.source,
         controller.signal,
       );
+      if (controller.signal.aborted) return;
       setCover(result.cover);
       setCoverMode("ai");
       void queryClient.invalidateQueries({ queryKey: AGENT_CREDITS_QUERY_KEY });
+      try {
+        const coverFile = new File(
+          [decodeBase64Image(result.cover.base64)],
+          "koinote-ai-cover.jpg",
+          { type: result.cover.mimeType },
+        );
+        const uploaded = await uploadImage(coverFile, "persistent", {
+          forceRemote: true,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        await onCoverPersist?.(uploaded.url, ratio, controller.signal);
+      } catch {
+        if (!controller.signal.aborted) {
+          setError(t.editor.wechatCoverPersistenceFailed);
+        }
+      }
     } catch (caught) {
       if (!controller.signal.aborted) {
         setError(
@@ -166,6 +230,26 @@ export function WechatDraftPanel({
     } finally {
       if (coverAbortRef.current === controller) coverAbortRef.current = null;
       setCoverGenerating(false);
+    }
+  }
+
+  async function selectReferenceImage(file: File | undefined) {
+    if (!file) return;
+    if (!isUploadableImage(file) || file.size > 5 * 1024 * 1024) {
+      setError(t.editor.wechatCoverReferenceInvalid);
+      return;
+    }
+    setError(null);
+    setReferenceUploading(true);
+    try {
+      const uploaded = await uploadImage(file, "wechat-export");
+      setReferenceImage({ source: uploaded.url, name: file.name });
+    } catch (caught) {
+      setError(
+        apiErrorText(caught, t.editor.wechatCoverReferenceUploadFailed, t.errors),
+      );
+    } finally {
+      setReferenceUploading(false);
     }
   }
 
@@ -201,7 +285,14 @@ export function WechatDraftPanel({
           ? { coverBase64: defaultCover.base64, coverRatio: defaultCover.ratio }
           : {}),
         ...(coverMode === "ai" && cover
-          ? { coverBase64: cover.base64, coverRatio: cover.ratio }
+          ? {
+              ...(cover.base64
+                ? { coverBase64: cover.base64 }
+                : cover.source
+                  ? { coverImageSource: cover.source }
+                  : {}),
+              coverRatio: cover.ratio,
+            }
           : {}),
         ...(coverMode === "article" && selectedArticleImage
           ? { coverImageSource: selectedArticleImage.src, coverRatio: ratio }
@@ -242,7 +333,8 @@ export function WechatDraftPanel({
     }
   }
 
-  const controlsDisabled = disabled || coverGenerating || publishing;
+  const controlsDisabled =
+    disabled || coverGenerating || publishing || referenceUploading;
   const titleInvalid =
     title.trim().length === 0 || [...title.trim()].length > 64;
   const coverOptions: Array<{
@@ -474,6 +566,36 @@ export function WechatDraftPanel({
               placeholder={t.editor.wechatCoverPromptPlaceholder}
               className="mt-3 w-full resize-y rounded-lg border border-black/10 bg-transparent px-2.5 py-2 text-xs leading-relaxed outline-none transition focus:border-emerald-500/50 disabled:opacity-60 dark:border-white/15"
             />
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-black/10 px-2.5 py-1.5 transition hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5">
+                <ImagePlus className="h-3.5 w-3.5" />
+                {t.editor.wechatCoverReferenceUpload}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  className="sr-only"
+                  disabled={controlsDisabled}
+                  onChange={(event) => {
+                    void selectReferenceImage(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {referenceImage && (
+                <span className="inline-flex max-w-full items-center gap-1 rounded-lg bg-black/5 px-2 py-1 dark:bg-white/10">
+                  <span className="max-w-48 truncate">{referenceImage.name}</span>
+                  <button
+                    type="button"
+                    aria-label={t.editor.wechatCoverReferenceRemove}
+                    disabled={controlsDisabled}
+                    onClick={() => setReferenceImage(null)}
+                    className="rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+            </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
@@ -495,7 +617,7 @@ export function WechatDraftPanel({
             {cover && (
               <div className="mt-3 overflow-hidden rounded-lg border border-black/10 bg-black/5 dark:border-white/10">
                 <img
-                  src={`data:${cover.mimeType};base64,${cover.base64}`}
+                  src={cover.source || `data:${cover.mimeType};base64,${cover.base64}`}
                   alt={t.editor.wechatCoverPreview}
                   className="block h-auto w-full object-cover"
                 />
@@ -563,4 +685,13 @@ function apiErrorText(
 ): string {
   const code = error instanceof ApiError ? error.code : undefined;
   return (code && errors[code]) || fallback;
+}
+
+function decodeBase64Image(value: string): ArrayBuffer {
+  const binary = window.atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer.slice(0) as ArrayBuffer;
 }

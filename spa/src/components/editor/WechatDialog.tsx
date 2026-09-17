@@ -18,9 +18,12 @@ import {
   AGENT_CREDITS_QUERY_KEY,
   ApiError,
   generateWechatGeoSummary,
+  getWechatCoverMetadata,
   getWechatGeoSummary,
   trackProductEvent,
   updateWechatGeoSummary,
+  updateWechatCoverMetadata,
+  type WechatCoverMetadata,
   type WechatOfficialAccount,
 } from "../../api";
 import { buildWechatHTML } from "./exportWechat";
@@ -96,6 +99,11 @@ export function MediaExportDialog({
   // 与 note 分开：图片抓不到和公式降级可能同时发生，共用一个槽会互相顶掉，
   // 而被顶掉的恰好是更严重的那条
   const [imageWarning, setImageWarning] = useState<string | null>(null);
+  const [savedCoverMetadata, setSavedCoverMetadata] = useState<
+    WechatCoverMetadata | null
+  >(null);
+  const [coverMetadataLoading, setCoverMetadataLoading] = useState(true);
+  const savedCover = savedCoverMetadata ?? undefined;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const geoTouchedRef = useRef(false);
   const geoSavePromiseRef = useRef<Promise<boolean> | null>(null);
@@ -172,6 +180,29 @@ export function MediaExportDialog({
     t.errors,
     title,
   ]);
+
+  useEffect(() => {
+    if (!member || localMode) {
+      setSavedCoverMetadata(null);
+      setCoverMetadataLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCoverMetadataLoading(true);
+    void getWechatCoverMetadata(docId)
+      .then((result) => {
+        if (!cancelled) setSavedCoverMetadata(result.cover);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t.errors.server_error);
+      })
+      .finally(() => {
+        if (!cancelled) setCoverMetadataLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, localMode, member, t.errors.server_error]);
 
   async function persistGeoText(): Promise<boolean> {
     if (geoSavePromiseRef.current) return geoSavePromiseRef.current;
@@ -637,6 +668,11 @@ export function MediaExportDialog({
             markdownBody={parseArticleMetadata(currentMarkdown, title).body}
             description={exportMetadata.digest}
             articleImages={articleImages}
+            generatedCover={
+              savedCover
+                ? { src: savedCover.source, alt: t.editor.wechatCoverAi }
+                : undefined
+            }
             localMode={localMode}
             disabled={busy || geoLoading || geoGenerating || draftPublishing}
             onPublishingChange={setDraftPublishing}
@@ -745,6 +781,7 @@ export function MediaExportDialog({
               digest={exportMetadata.digest}
               disabled={
                 busy ||
+                coverMetadataLoading ||
                 geoClosing ||
                 geoLoading ||
                 geoGenerating ||
@@ -754,7 +791,16 @@ export function MediaExportDialog({
                 [...exportMetadata.digest].length > 128
               }
               articleImages={articleImages}
+              savedCover={savedCover}
               prepareHTML={prepareWechatDraftHTML}
+              onCoverPersist={async (source, ratio, signal) => {
+                const result = await updateWechatCoverMetadata(
+                  docId,
+                  { source, ratio },
+                  signal,
+                );
+                if (!signal?.aborted) setSavedCoverMetadata(result.cover);
+              }}
               onPublishingChange={setDraftPublishing}
             />
           )}

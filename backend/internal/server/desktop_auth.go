@@ -452,6 +452,16 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/settings":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/workspace/settings":
+		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/workspaces":
+		return method == http.MethodGet || method == http.MethodPost
+	case "/api/agent/workspace":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodPatch
+	case "/api/agent/workspaces/":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete
+	case "/api/agent/workspace/prompt":
+		return method == http.MethodGet
 	case "/api/agent/credits":
 		return method == http.MethodGet
 	case "/api/agent/credits/checkout", "/api/agent/credits/checkout/confirm":
@@ -510,6 +520,28 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return rest != "" && !strings.Contains(rest, "/") &&
 			(method == http.MethodPut || method == http.MethodDelete)
 	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/workspaces/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) >= 2 && parts[0] != "" && parts[1] == "commits" {
+			if len(parts) == 2 {
+				return method == http.MethodGet
+			}
+			if parts[2] == "" {
+				return false
+			}
+			if len(parts) == 3 {
+				return method == http.MethodGet
+			}
+			return len(parts) == 4 && ((parts[3] == "file" && method == http.MethodGet) || (parts[3] == "restore" && method == http.MethodPost))
+		}
+		if len(parts) == 1 && parts[0] != "" {
+			return method == http.MethodGet || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete
+		}
+		return len(parts) == 2 && parts[0] != "" && parts[1] == "metadata" && method == http.MethodPut
+	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/workspace/files/"); found {
+		return rest != "" && !strings.Contains(rest, "/") && method == http.MethodGet
+	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/reviews/"); found {
 		parts := strings.Split(rest, "/")
 		if len(parts) == 1 && parts[0] != "" {
@@ -550,6 +582,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 			case "versions":
 				return method == http.MethodGet
 			case "wechat-geo-summary":
+				return method == http.MethodGet || method == http.MethodPut
+			case "export-metadata":
 				return method == http.MethodGet || method == http.MethodPut
 			case "wechat-draft":
 				return method == http.MethodPost

@@ -18,12 +18,18 @@ import { desktopAPIOrigin, isDesktopRuntime } from "../desktop/runtime";
 const MCP_TOKENS_KEY = ["mcp-tokens"] as const;
 type ExpiryChoice = 30 | 90 | 180 | 365 | "never";
 
-export function MCPAccessCard({ user }: { user: User }) {
+export function MCPAccessCard({ user, agentOnly = false, workspaceEnabled = true, title, description }: {
+  user: User;
+  agentOnly?: boolean;
+  workspaceEnabled?: boolean;
+  title?: string;
+  description?: string;
+}) {
   const { t, locale } = useI18n();
   const queryClient = useQueryClient();
-  const active = user.membershipTier === "lifetime";
-  const [name, setName] = useState("Codex");
-  const [scope, setScope] = useState<"read" | "write" | "publish">("write");
+  const active = user.membershipTier === "lifetime" && (!agentOnly || workspaceEnabled);
+  const [name, setName] = useState(agentOnly ? "Agent sync" : "Codex");
+  const [scope, setScope] = useState<"read" | "write" | "publish" | "agent_read" | "agent_write">(agentOnly ? "agent_write" : "write");
   const [expiryChoice, setExpiryChoice] = useState<ExpiryChoice>(90);
   const [editingExpiry, setEditingExpiry] = useState<{ tokenId: string; choice: ExpiryChoice } | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
@@ -87,6 +93,8 @@ export function MCPAccessCard({ user }: { user: User }) {
     }
   }
 
+  const visibleTokens = tokens.data?.tokens.filter((token) => !agentOnly || token.scope === "agent_read" || token.scope === "agent_write");
+
   return (
     <PaperCard>
       <div className="p-6 sm:p-7">
@@ -99,13 +107,13 @@ export function MCPAccessCard({ user }: { user: User }) {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="kn-heading-cn text-lg font-bold" style={{ color: "var(--ink-black)" }}>
-              {t.mcp.title}
+              {title ?? (agentOnly ? t.agentWorkspace.tokenTitle : t.mcp.title)}
             </h2>
             <p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
-              {active ? t.mcp.description : t.mcp.membersOnly}
+              {active ? (description ?? (agentOnly ? t.agentWorkspace.tokenDescription : t.mcp.description)) : t.mcp.membersOnly}
             </p>
           </div>
-          {active && (
+          {active && !agentOnly && (
             <Link
               to="/mcp/activity"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--ink-wash)]"
@@ -142,13 +150,15 @@ export function MCPAccessCard({ user }: { user: User }) {
                 <span className="mb-1.5 block">{t.mcp.scope}</span>
                 <select
                   value={scope}
-                  onChange={(event) => setScope(event.target.value as "read" | "write" | "publish")}
+                  onChange={(event) => setScope(event.target.value as "read" | "write" | "publish" | "agent_read" | "agent_write")}
                   className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
                   style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                 >
-                  <option value="read">{t.mcp.readOnly}</option>
-                  <option value="write">{t.mcp.readWrite}</option>
-                  <option value="publish">{t.mcp.publishOnly}</option>
+                  {!agentOnly && <option value="read">{t.mcp.readOnly}</option>}
+                  {!agentOnly && <option value="write">{t.mcp.readWrite}</option>}
+                  {!agentOnly && <option value="publish">{t.mcp.publishOnly}</option>}
+                  {(agentOnly || scope === "agent_read") && <option value="agent_read">{t.mcp.agentRead}</option>}
+                  {(agentOnly || scope === "agent_write") && <option value="agent_write">{t.mcp.agentWrite}</option>}
                 </select>
               </label>
               <label className="text-xs" style={{ color: "var(--ink-mid)" }}>
@@ -190,7 +200,20 @@ export function MCPAccessCard({ user }: { user: User }) {
                   {t.mcp.secretStored}
                 </p>
                 <SecretRow value={secret} copied={copied === "secret"} onCopy={() => void copy(secret, "secret")} />
-                <TokenConfigurations secret={secret} endpoint={endpoint} copyKeyPrefix="created" copied={copied} onCopy={copy} />
+                <TokenConfigurations
+                  secret={secret}
+                  endpoint={endpoint}
+                  apiBaseURL={endpoint.replace(/\/mcp$/, "")}
+                  agentOnly={agentOnly}
+                  apiTitle={t.agentWorkspace.apiTitle}
+                  apiDescription={t.agentWorkspace.apiDescription}
+                  apiExample={t.agentWorkspace.apiExample}
+                  mcpTitle={t.agentWorkspace.mcpTitle}
+                  mcpDescription={t.agentWorkspace.mcpDescription}
+                  copyKeyPrefix="created"
+                  copied={copied}
+                  onCopy={copy}
+                />
               </div>
             )}
 
@@ -202,14 +225,14 @@ export function MCPAccessCard({ user }: { user: User }) {
                 <p className="mt-3 text-sm" style={{ color: "var(--ink-faint)" }}>{t.mcp.loading}</p>
               ) : tokens.isError ? (
                 <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>{t.mcp.loadFailed}</p>
-              ) : tokens.data?.tokens.length ? (
+              ) : visibleTokens?.length ? (
                 <div className="mt-3 divide-y" style={{ borderColor: "var(--ink-line)" }}>
-                  {tokens.data.tokens.map((token) => (
+                  {visibleTokens.map((token) => (
                     <div key={token.tokenId} className="flex flex-wrap items-center gap-3 py-3 text-sm">
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium" style={{ color: "var(--ink-strong)" }}>{token.name}</p>
                         <p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>
-                          {token.hint} · {token.scope === "write" ? t.mcp.readWrite : token.scope === "publish" ? t.mcp.publishOnly : t.mcp.readOnly}
+                          {token.hint} · {token.scope === "write" ? t.mcp.readWrite : token.scope === "publish" ? t.mcp.publishOnly : token.scope === "agent_read" ? t.mcp.agentRead : token.scope === "agent_write" ? t.mcp.agentWrite : t.mcp.readOnly}
                           {token.expiresAt
                             ? ` · ${t.mcp.expires} ${new Date(token.expiresAt).toLocaleDateString(locale)}`
                             : ` · ${t.mcp.neverExpires}`}
@@ -324,6 +347,13 @@ export function MCPAccessCard({ user }: { user: User }) {
                           <TokenConfigurations
                             secret={revealedSecrets[token.tokenId]}
                             endpoint={endpoint}
+                            apiBaseURL={endpoint.replace(/\/mcp$/, "")}
+                            agentOnly={token.scope === "agent_read" || token.scope === "agent_write"}
+                            apiTitle={t.agentWorkspace.apiTitle}
+                            apiDescription={t.agentWorkspace.apiDescription}
+                            apiExample={t.agentWorkspace.apiExample}
+                            mcpTitle={t.agentWorkspace.mcpTitle}
+                            mcpDescription={t.agentWorkspace.mcpDescription}
                             copyKeyPrefix={`token-${token.tokenId}`}
                             copied={copied}
                             onCopy={copy}
@@ -381,16 +411,32 @@ function SecretRow({ value, copied, onCopy }: { value: string; copied: boolean; 
 function TokenConfigurations({
   secret,
   endpoint,
+  apiBaseURL,
+  agentOnly,
+  apiTitle,
+  apiDescription,
+  apiExample,
+  mcpTitle,
+  mcpDescription,
   copyKeyPrefix,
   copied,
   onCopy,
 }: {
   secret: string;
   endpoint: string;
+  apiBaseURL: string;
+  agentOnly: boolean;
+  apiTitle: string;
+  apiDescription: string;
+  apiExample: string;
+  mcpTitle: string;
+  mcpDescription: string;
   copyKeyPrefix: string;
   copied: string | null;
   onCopy: (value: string, key: string) => Promise<void>;
 }) {
+  const [configurationTab, setConfigurationTab] = useState<"api" | "mcp">("api");
+  const api = `Base URL: ${apiBaseURL}\nHeader: Authorization: Bearer ${secret}\n\n# List your Skills/Agent repositories\ncurl --fail --header "Authorization: Bearer ${secret}" "${apiBaseURL}/api/agent/workspaces"`;
   const codex = `export KOINOTE_MCP_TOKEN='${secret}'\n\n[mcp_servers.koinote]\nurl = "${endpoint}"\nbearer_token_env_var = "KOINOTE_MCP_TOKEN"`;
   const claude = `claude mcp add --transport http koinote ${endpoint} --header "Authorization: Bearer ${secret}"`;
   const openCode = `export KOINOTE_MCP_TOKEN='${secret}'\n\n{
@@ -407,17 +453,56 @@ function TokenConfigurations({
   }
 }`;
   const openClaw = `export KOINOTE_MCP_TOKEN='${secret}'\n\nopenclaw mcp add koinote \\
-  --url ${endpoint} \\
-  --transport streamable-http \\
-  --header "Authorization=Bearer \${KOINOTE_MCP_TOKEN}"\n\nopenclaw mcp doctor koinote --probe`;
+ --url ${endpoint} \\
+ --transport streamable-http \\
+ --header "Authorization=Bearer \${KOINOTE_MCP_TOKEN}"\n\nopenclaw mcp doctor koinote --probe`;
   const generic = `Transport: Streamable HTTP\nURL: ${endpoint}\nHeader: Authorization: Bearer ${secret}`;
+  const mcpConfigurations = <>
+    <ConfigBlock title="Codex" value={codex} copied={copied === `${copyKeyPrefix}-codex`} onCopy={() => void onCopy(codex, `${copyKeyPrefix}-codex`)} />
+    <ConfigBlock title="Claude Code" value={claude} copied={copied === `${copyKeyPrefix}-claude`} onCopy={() => void onCopy(claude, `${copyKeyPrefix}-claude`)} />
+    <ConfigBlock title="OpenCode" value={openCode} copied={copied === `${copyKeyPrefix}-opencode`} onCopy={() => void onCopy(openCode, `${copyKeyPrefix}-opencode`)} />
+    <ConfigBlock title="OpenClaw" value={openClaw} copied={copied === `${copyKeyPrefix}-openclaw`} onCopy={() => void onCopy(openClaw, `${copyKeyPrefix}-openclaw`)} />
+    <ConfigBlock title="Other MCP clients" value={generic} copied={copied === `${copyKeyPrefix}-generic`} onCopy={() => void onCopy(generic, `${copyKeyPrefix}-generic`)} />
+  </>;
   return (
     <>
-      <ConfigBlock title="Codex" value={codex} copied={copied === `${copyKeyPrefix}-codex`} onCopy={() => void onCopy(codex, `${copyKeyPrefix}-codex`)} />
-      <ConfigBlock title="Claude Code" value={claude} copied={copied === `${copyKeyPrefix}-claude`} onCopy={() => void onCopy(claude, `${copyKeyPrefix}-claude`)} />
-      <ConfigBlock title="OpenCode" value={openCode} copied={copied === `${copyKeyPrefix}-opencode`} onCopy={() => void onCopy(openCode, `${copyKeyPrefix}-opencode`)} />
-      <ConfigBlock title="OpenClaw" value={openClaw} copied={copied === `${copyKeyPrefix}-openclaw`} onCopy={() => void onCopy(openClaw, `${copyKeyPrefix}-openclaw`)} />
-      <ConfigBlock title="Other MCP clients" value={generic} copied={copied === `${copyKeyPrefix}-generic`} onCopy={() => void onCopy(generic, `${copyKeyPrefix}-generic`)} />
+      {agentOnly ? (
+        <div className="mt-4">
+          <div role="tablist" aria-label={`${apiTitle} / ${mcpTitle}`} className="flex border-b" style={{ borderColor: "var(--ink-line)" }}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={configurationTab === "api"}
+              onClick={() => setConfigurationTab("api")}
+              className="flex-1 border-b-2 px-3 py-2 text-xs font-semibold transition"
+              style={{ borderColor: configurationTab === "api" ? "var(--ink-strong)" : "transparent", color: configurationTab === "api" ? "var(--ink-strong)" : "var(--ink-faint)" }}
+            >
+              {apiTitle}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={configurationTab === "mcp"}
+              onClick={() => setConfigurationTab("mcp")}
+              className="flex-1 border-b-2 px-3 py-2 text-xs font-semibold transition"
+              style={{ borderColor: configurationTab === "mcp" ? "var(--ink-strong)" : "transparent", color: configurationTab === "mcp" ? "var(--ink-strong)" : "var(--ink-faint)" }}
+            >
+              {mcpTitle}
+            </button>
+          </div>
+          {configurationTab === "api" ? (
+            <section role="tabpanel" className="pt-1">
+              <p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{apiDescription}</p>
+              <ConfigBlock title={apiExample} value={api} copied={copied === `${copyKeyPrefix}-api`} onCopy={() => void onCopy(api, `${copyKeyPrefix}-api`)} />
+            </section>
+          ) : (
+            <section role="tabpanel" className="pt-1">
+              <p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{mcpDescription}</p>
+              {mcpConfigurations}
+            </section>
+          )}
+        </div>
+      ) : mcpConfigurations}
     </>
   );
 }

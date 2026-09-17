@@ -20,6 +20,7 @@ export function XPublishPanel({
   markdownBody,
   description,
   articleImages,
+  generatedCover,
   disabled,
   localMode,
   onPublishingChange,
@@ -29,6 +30,7 @@ export function XPublishPanel({
   markdownBody: string;
   description?: string;
   articleImages: XArticleImage[];
+  generatedCover?: XArticleImage;
   disabled: boolean;
   localMode: boolean;
   onPublishingChange?: (publishing: boolean) => void;
@@ -43,11 +45,17 @@ export function XPublishPanel({
   const [coverImageIndex, setCoverImageIndex] = useState(0);
   const checkRef = useRef<Promise<{ oauth2: XOAuth2Account | null }> | null>(null);
   const publishInFlightRef = useRef(false);
+  const imagesForPublish = generatedCover
+    ? [
+        generatedCover,
+        ...articleImages.filter((image) => image.src !== generatedCover.src),
+      ].slice(0, X_MAX_IMAGES)
+    : articleImages;
+  const imageCount = Math.min(imagesForPublish.length, X_MAX_IMAGES);
 
   useEffect(() => {
-    const imageCount = Math.min(articleImages.length, X_MAX_IMAGES);
     setCoverImageIndex((current) => Math.min(current, Math.max(0, imageCount - 1)));
-  }, [articleImages.length]);
+  }, [imageCount]);
 
   async function ensureAccount(): Promise<boolean> {
     if (oauth2) return true;
@@ -87,7 +95,7 @@ export function XPublishPanel({
     try {
       if (!(await ensureAccount())) return;
       if (!window.confirm(t.editor.xPublishConfirm)) return;
-      const draft = buildXArticle(title, markdownBody, articleImages, description);
+      const draft = buildXArticle(title, markdownBody, imagesForPublish, description);
       if (draft.invalid) {
         setError(t.editor.xArticleInvalid);
         return;
@@ -156,7 +164,7 @@ export function XPublishPanel({
           {checking ? t.editor.xAccountLoading : publishing ? t.editor.xPublishing : publishedURL ? t.editor.xPublished : t.editor.xPublish}
         </button>
       </div>
-      {articleImages.length > 0 && (
+      {(articleImages.length > 0 || generatedCover) && (
         <label className="mt-3 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
           <span>{t.editor.xCoverImage}</span>
           <select
@@ -166,11 +174,16 @@ export function XPublishPanel({
             disabled={disabled || checking || publishing || Boolean(publishedURL)}
             className="rounded-lg border border-neutral-500/20 bg-transparent px-2 py-1 text-xs"
           >
-            {Array.from({ length: Math.min(articleImages.length, X_MAX_IMAGES) }, (_, index) => (
-              <option key={index} value={index}>
-                {index + 1}
-              </option>
-            ))}
+            {Array.from(
+              { length: imageCount },
+              (_, index) => (
+                <option key={index} value={index}>
+                  {generatedCover && index === 0
+                    ? t.editor.wechatCoverAi
+                    : `${t.editor.xCoverImage} ${index + 1}`}
+                </option>
+              ),
+            )}
           </select>
         </label>
       )}

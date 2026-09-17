@@ -127,7 +127,12 @@ export function parseArticleMetadata(markdown: string, fallbackTitle: string): {
   const lines = normalized.split("\n");
   if (lines.length < 3 || lines[0].trim() !== "---") {
     return {
-      metadata: { title: fallbackTitle.trim(), author: "", digest: "", hasFrontmatter: false },
+      metadata: {
+        title: fallbackTitle.trim(),
+        author: "",
+        digest: "",
+        hasFrontmatter: false,
+      },
       body: markdown,
       frontmatterKeys: [],
     };
@@ -135,7 +140,12 @@ export function parseArticleMetadata(markdown: string, fallbackTitle: string): {
   const closing = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
   if (closing < 0) {
     return {
-      metadata: { title: fallbackTitle.trim(), author: "", digest: "", hasFrontmatter: false },
+      metadata: {
+        title: fallbackTitle.trim(),
+        author: "",
+        digest: "",
+        hasFrontmatter: false,
+      },
       body: markdown,
       frontmatterKeys: [],
     };

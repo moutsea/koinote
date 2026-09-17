@@ -122,6 +122,20 @@ func TestMCPOriginValidation(t *testing.T) {
 }
 
 func TestMCPScopeControlsExposedTools(t *testing.T) {
+	agentReadTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "agent_read"})
+	wantAgentRead := []string{"create_agent_workspace", "get_agent_workspace", "get_agent_workspace_prompt", "list_agent_workspaces", "manage_agent_workspace", "read_agent_workspace_file"}
+	slices.Sort(wantAgentRead)
+	if !slices.Equal(agentReadTools, wantAgentRead) {
+		t.Fatalf("agent read scope 工具 = %v，期望 %v", agentReadTools, wantAgentRead)
+	}
+
+	agentWriteTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "agent_write"})
+	wantAgentWrite := append(slices.Clone(wantAgentRead), "update_agent_workspace")
+	slices.Sort(wantAgentWrite)
+	if !slices.Equal(agentWriteTools, wantAgentWrite) {
+		t.Fatalf("agent write scope 工具 = %v，期望 %v", agentWriteTools, wantAgentWrite)
+	}
+
 	readTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "read"})
 	wantRead := []string{
 		"compare_document_versions",

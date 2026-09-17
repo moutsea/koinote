@@ -370,6 +370,9 @@ export function AppShell() {
                   versionLabel={t.nav.versionHistoryGuide}
                   wechatLabel={t.settingsPage.wechat}
                 />
+                <HeaderLink to="/agent/workspaces" active={isUnder(pathname, "/agent/workspaces")}>
+                  {t.agentWorkspace.repositoryHubTitle}
+                </HeaderLink>
                 <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
                   {t.nav.pricing}
                 </HeaderLink>
@@ -391,6 +394,9 @@ export function AppShell() {
                   versionLabel={t.nav.versionHistoryGuide}
                   wechatLabel={t.settingsPage.wechat}
                 />
+                <HeaderLink to="/agent/workspaces" active={isUnder(pathname, "/agent/workspaces")}>
+                  {t.agentWorkspace.repositoryHubTitle}
+                </HeaderLink>
                 <HeaderLink to="/pricing" active={isUnder(pathname, "/pricing")}>
                   {t.nav.pricing}
                 </HeaderLink>
@@ -1114,7 +1120,7 @@ function HeaderLink({
   active,
   children,
 }: {
-  to: "/editor" | "/documents" | "/pricing";
+  to: "/editor" | "/documents" | "/pricing" | "/agent/workspaces";
   active: boolean;
   children: React.ReactNode;
 }) {

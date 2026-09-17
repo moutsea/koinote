@@ -26,6 +26,7 @@ import { useSession } from "../auth";
 import { AccountDeletionCard } from "../components/AccountDeletionCard";
 import { AgentCreditsCard } from "../components/AgentCreditsCard";
 import { AgentModelSettingsCard } from "../components/AgentModelSettingsCard";
+import { AgentWorkspaceCard } from "../components/AgentWorkspaceCard";
 import { Avatar } from "../components/Avatar";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { InvitationCard } from "../components/InvitationCard";
@@ -46,6 +47,7 @@ import { useI18n, type Locale } from "../i18n";
 type SettingsSection =
   | "general"
   | "membership"
+  | "agent"
   | "ai"
   | "invitations"
   | "wechat"
@@ -101,6 +103,12 @@ export function SettingsPage() {
       ) : (
         <LockKeyhole className="h-4 w-4" />
       ),
+    },
+    {
+      id: "agent",
+      label: t.agentWorkspace.title,
+      description: t.agentWorkspace.description,
+      icon: <ShieldCheck className="h-4 w-4" />,
     },
     {
       id: "wechat",
@@ -257,6 +265,14 @@ function SettingsSectionContent({
         <div id="agent-credits" className="scroll-mt-20">
           <AgentCreditsCard user={user} />
         </div>
+      </div>
+    );
+  }
+
+  if (section === "agent") {
+    return (
+      <div id="agent-workspace" className="scroll-mt-20">
+        <AgentWorkspaceCard user={user} />
       </div>
     );
   }

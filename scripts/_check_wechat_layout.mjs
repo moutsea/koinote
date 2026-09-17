@@ -43,7 +43,6 @@ body: 发布前请检查图片。
 const parsed = parseArticleMetadata(markdown, "文档标题");
 ok("识别 frontmatter 标题", parsed.metadata.title === "Frontmatter 标题");
 ok("frontmatter 从正文移除", !parsed.body.includes("author: Koinote"));
-
 const frontmatterDOM = parseHTML('<div id="frontmatter"><h1>Frontmatter 标题</h1><hr><p>title: Frontmatter 标题</p><p>author: Koinote</p><hr><p>正文</p></div>').document;
 const frontmatterStage = frontmatterDOM.getElementById("frontmatter");
 removeWechatFrontmatterNodes(frontmatterStage);

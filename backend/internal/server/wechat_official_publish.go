@@ -36,7 +36,7 @@ import (
 
 const (
 	wechatCoverPromptMaxRunes       = 1200
-	wechatCoverGenerateRequestBytes = 8 << 10
+	wechatCoverGenerateRequestBytes = wechatDraftRequestMaxBytes
 	wechatCoverProviderMaxBytes     = 30 << 20
 	wechatGeneratedCoverMaxBytes    = 20 << 20
 	wechatThumbMaxBytes             = 64 << 10
@@ -121,18 +121,20 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Prompt string `json:"prompt"`
-		Ratio  string `json:"ratio"`
+		Prompt               string `json:"prompt"`
+		Ratio                string `json:"ratio"`
+		ReferenceImageSource string `json:"referenceImageSource"`
 	}
 	if !decodeWechatJSONBody(w, r, wechatCoverGenerateRequestBytes, &input) {
 		return
 	}
 	input.Prompt = strings.TrimSpace(input.Prompt)
+	input.ReferenceImageSource = strings.TrimSpace(input.ReferenceImageSource)
 	if input.Ratio == "" {
 		input.Ratio = wechatCoverRatioWide
 	}
 	if input.Prompt == "" || utf8.RuneCountInString(input.Prompt) > wechatCoverPromptMaxRunes ||
-		!validWechatCoverRatio(input.Ratio) {
+		!validWechatCoverRatio(input.Ratio) || !validWechatImageSourceLength(input.ReferenceImageSource) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Invalid cover prompt or ratio")
 		return
 	}
@@ -169,7 +171,12 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	}()
 	generationContext, cancelGeneration := context.WithTimeout(r.Context(), wechatCoverGenerationRunLimit)
 	defer cancelGeneration()
-	cover, err := a.generateWechatCover(generationContext, input.Prompt, input.Ratio)
+	cover, err := a.generateWechatCover(
+		generationContext,
+		input.Prompt,
+		input.Ratio,
+		input.ReferenceImageSource,
+	)
 	if err != nil {
 		log.Printf("wechat cover generate: %v", err)
 		writeWechatPublishError(w, err)
@@ -206,7 +213,12 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *App) generateWechatCover(ctx context.Context, prompt, ratio string) (wechatCoverImage, error) {
+func (a *App) generateWechatCover(
+	ctx context.Context,
+	prompt string,
+	ratio string,
+	referenceImageSource string,
+) (wechatCoverImage, error) {
 	endpoint, err := wechatCoverGenerationEndpoint(a.cfg.WechatCoverImageBaseURL)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
@@ -219,21 +231,60 @@ func (a *App) generateWechatCover(ctx context.Context, prompt, ratio string) (we
 	if ratio == wechatCoverRatioSquare {
 		composition = "Target aspect ratio: 1:1 (square). Keep the subject and every essential detail comfortably inside the frame."
 	}
-	payload, err := json.Marshal(map[string]any{
-		"model":  a.cfg.WechatCoverImageModel,
-		"prompt": "Create a polished WeChat Official Account article cover. No logos, watermarks, QR codes, or unreadable text. " + composition + " User brief: " + prompt,
-		"n":      1,
-		"size":   size,
-	})
-	if err != nil {
-		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+	providerPrompt := "Create a polished WeChat Official Account article cover. No logos, watermarks, QR codes, or unreadable text. " + composition
+	var payload bytes.Buffer
+	contentType := "application/json"
+	if referenceImageSource != "" {
+		raw, readErr := a.readWechatArticleImage(ctx, referenceImageSource)
+		if readErr != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, readErr)
+		}
+		prepared, prepareErr := prepareWechatContentImage(raw)
+		if prepareErr != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, prepareErr)
+		}
+		endpoint = strings.TrimSuffix(endpoint, "/generations") + "/edits"
+		writer := multipart.NewWriter(&payload)
+		for name, value := range map[string]string{
+			"model":  a.cfg.WechatCoverImageModel,
+			"prompt": providerPrompt + " Use the supplied reference image for visual direction while creating a new original cover. User brief: " + prompt,
+			"n":      "1",
+			"size":   size,
+		} {
+			if err := writer.WriteField(name, value); err != nil {
+				return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+			}
+		}
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", `form-data; name="image"; filename="reference.jpg"`)
+		header.Set("Content-Type", "image/jpeg")
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		if _, err := part.Write(prepared); err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		if err := writer.Close(); err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		contentType = writer.FormDataContentType()
+	} else {
+		if err := json.NewEncoder(&payload).Encode(map[string]any{
+			"model":  a.cfg.WechatCoverImageModel,
+			"prompt": providerPrompt + " User brief: " + prompt,
+			"n":      1,
+			"size":   size,
+		}); err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &payload)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
 	request.Header.Set("Authorization", "Bearer "+a.cfg.WechatCoverImageAPIKey)
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", contentType)
 	request.Header.Set("Accept", "application/json")
 	client := a.wechatCoverHTTPClient
 	if client == nil {
@@ -335,7 +386,12 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 	input.Digest = strings.TrimSpace(input.Digest)
 	input.HTML = strings.TrimSpace(input.HTML)
 	input.CoverMode = strings.TrimSpace(input.CoverMode)
+	input.CoverBase64 = strings.TrimSpace(input.CoverBase64)
 	input.CoverImageSource = strings.TrimSpace(input.CoverImageSource)
+	if !validWechatImageSourceLength(input.CoverImageSource) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Invalid cover image source")
+		return
+	}
 	if input.CoverMode == "" && strings.TrimSpace(input.CoverBase64) != "" {
 		input.CoverMode = wechatCoverModeAI
 	}
@@ -359,16 +415,20 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Article cover image is required")
 		return
 	}
-	if input.CoverMode != wechatCoverModeArticle && input.CoverImageSource != "" {
+	if input.CoverMode != wechatCoverModeArticle && input.CoverMode != wechatCoverModeAI && input.CoverImageSource != "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Unexpected article cover image")
 		return
 	}
-	if input.CoverMode == wechatCoverModeAI && strings.TrimSpace(input.CoverBase64) == "" {
+	if input.CoverMode == wechatCoverModeAI && strings.TrimSpace(input.CoverBase64) == "" && input.CoverImageSource == "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "AI cover image is required")
 		return
 	}
 	if input.CoverMode != wechatCoverModeAI && input.CoverMode != wechatCoverModeDefault && strings.TrimSpace(input.CoverBase64) != "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Unexpected cover image")
+		return
+	}
+	if input.CoverMode == wechatCoverModeAI && input.CoverBase64 != "" && input.CoverImageSource != "" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Multiple AI cover images supplied")
 		return
 	}
 	if input.CoverMode != "" {
@@ -398,6 +458,15 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 	if !owned {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return
+	}
+	if input.CoverMode == wechatCoverModeAI && input.CoverImageSource != "" {
+		metadata, metadataErr := a.loadDocumentWechatCoverMetadata(
+			r.Context(), user.ID, r.PathValue("docId"),
+		)
+		if metadataErr != nil || metadata == nil || metadata.Source != input.CoverImageSource {
+			httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "AI cover image is not saved for this document")
+			return
+		}
 	}
 	account, err := a.resolveWechatOfficialAccountRef(r.Context(), user.ID, input.AccountID)
 	if err != nil {
@@ -466,6 +535,12 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cover, _, _, err = prepareWechatThumb(selectedImage, input.CoverRatio)
+	} else if len(cover) == 0 && input.CoverMode == wechatCoverModeAI && input.CoverImageSource != "" {
+		var coverRaw []byte
+		coverRaw, err = a.readWechatArticleImage(r.Context(), input.CoverImageSource)
+		if err == nil {
+			cover, _, _, err = prepareWechatThumb(coverRaw, input.CoverRatio)
+		}
 	} else if len(cover) == 0 && input.CoverMode == "" && len(selectedImage) > 0 {
 		cover, _, _, err = prepareWechatThumb(selectedImage, wechatCoverRatioWide)
 	} else if len(cover) == 0 {
@@ -842,7 +917,14 @@ func (a *App) readWechatArticleImage(ctx context.Context, source string) ([]byte
 		}
 		return data, nil
 	}
-	return a.downloadWechatImage(ctx, source, wechatRemoteImageMaxBytes)
+	return a.downloadWechatImage(ctx, normalizeMCPWechatImageSource(source, a.cfg.WorkerURL, a.cfg.AppURL), wechatRemoteImageMaxBytes)
+}
+
+func validWechatImageSourceLength(source string) bool {
+	if strings.HasPrefix(strings.ToLower(source), "data:") {
+		return len(source) <= base64.StdEncoding.EncodedLen(wechatRemoteImageMaxBytes)+128
+	}
+	return len(source) <= documentExportImageSourceMaxBytes
 }
 
 func (a *App) downloadWechatImage(ctx context.Context, source string, maxBytes int64) ([]byte, error) {

@@ -293,7 +293,7 @@ func (a *App) generateWechatCoverForMCP(ctx context.Context, userID int, prompt,
 	}()
 	generationContext, cancel := context.WithTimeout(ctx, wechatCoverGenerationRunLimit)
 	defer cancel()
-	cover, err := a.generateWechatCover(generationContext, prompt, ratio)
+	cover, err := a.generateWechatCover(generationContext, prompt, ratio, "")
 	if err != nil {
 		return nil, err
 	}

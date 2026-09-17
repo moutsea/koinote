@@ -22,6 +22,7 @@ const routes = read("backend/internal/server/server.go");
 const admin = read("backend/internal/server/admin.go");
 const account = read("backend/internal/server/wechat_official_account.go");
 const publish = read("backend/internal/server/wechat_official_publish.go");
+const xPublishPanel = read("spa/src/components/editor/XPublishPanel.tsx");
 const config = read("backend/internal/config/config.go");
 const deploy = read(".github/workflows/deploy.yml");
 const proxyService = read(
@@ -185,7 +186,9 @@ ok(
 );
 ok(
   "封面默认 2.35:1",
-  draftPanel.includes('useState<WechatCoverRatio>("2.35:1")'),
+  /useState<WechatCoverRatio>\(\s*savedCover\?\.ratio === "1:1" \? "1:1" : "2\.35:1"/.test(
+    draftPanel,
+  ),
 );
 ok("封面比例包含 1:1", draftPanel.includes('["2.35:1", "1:1"]'));
 ok(
@@ -224,13 +227,51 @@ ok(
 );
 ok(
   "草稿面板支持三种封面来源",
-  draftPanel.includes('useState<WechatCoverMode>("default")') &&
+  /useState<WechatCoverMode>\(\s*savedCover\?\.source \? "ai" : "default"/.test(
+    draftPanel,
+  ) &&
     draftPanel.includes('value: "default"') &&
     draftPanel.includes('value: "article"') &&
     draftPanel.includes('value: "ai"') &&
     dialog.includes("extractWechatArticleImages(editor)") &&
     api.includes("coverMode?: WechatCoverMode") &&
-    api.includes("coverImageSource?: string"),
+    api.includes("coverImageSource?: string") &&
+    draftPanel.includes("savedCover") &&
+    dialog.includes("updateWechatCoverMetadata") &&
+    dialog.includes("getWechatCoverMetadata") &&
+    dialog.includes("onCoverPersist"),
+);
+ok(
+  "AI 封面保存到云端并写入文档",
+  /uploadImage\(coverFile, "persistent", \{\s*forceRemote: true,/.test(
+    draftPanel,
+  ) &&
+    draftPanel.includes("setCover(result.cover);") &&
+    draftPanel.includes("signal: controller.signal,") &&
+    draftPanel.includes("onCoverPersist?.(uploaded.url, ratio,") &&
+    dialog.includes("onCoverPersist"),
+);
+ok(
+  "AI 封面支持参考图上传",
+  api.includes("referenceImageSource") &&
+    draftPanel.includes('uploadImage(file, "wechat-export")') &&
+    draftPanel.includes("referenceImage?.source") &&
+    publish.includes("ReferenceImageSource") &&
+    publish.includes('+ "/edits"') &&
+    publish.includes(`writer.CreatePart(header)`),
+);
+ok(
+  "保存的 AI 封面可用于 X 发布",
+  dialog.includes("generatedCover") &&
+    /imagesForPublish = generatedCover/.test(xPublishPanel) &&
+    xPublishPanel.includes(".slice(0, X_MAX_IMAGES)"),
+);
+ok(
+  "AI 封面元信息独立于文档正文存储",
+  routes.includes('"GET /api/documents/{docId}/export-metadata"') &&
+    routes.includes('"PUT /api/documents/{docId}/export-metadata"') &&
+    api.includes("/api/documents/${encodeURIComponent(docId)}/export-metadata") &&
+    publish.includes("loadDocumentWechatCoverMetadata"),
 );
 ok(
   "默认封面包含 Logo 和文章标题",
