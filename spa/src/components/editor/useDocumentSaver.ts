@@ -55,6 +55,8 @@ type Entry = {
   inFlight: Promise<boolean> | null;
   /** 冲突后用户明确选择覆盖远端时，强制为被覆盖的远端状态留一版历史 */
   forceVersion: boolean;
+  /** 备份写入失败时也保留冲突类型，供标题回滚重新备份。 */
+  revisionConflict?: boolean;
 };
 
 export type DocumentSaver = {
@@ -62,6 +64,8 @@ export type DocumentSaver = {
   seed: (docId: string, snapshot: DocumentSnapshot) => void;
   /** 记下改动并排入防抖队列 */
   queue: (docId: string, patch: DocPatch) => void;
+  /** 撤回一次失败的标题提交；保留期间发生的正文、主题和其他标题编辑。 */
+  rollbackTitle: (docId: string, attemptedTitle: string, before: DocumentSnapshot, wasDirty: boolean) => void;
   /** 立刻存并返回是否落库成功。换主题、删除、淘汰实例时用 */
   flush: (docId: string) => Promise<boolean>;
   /** 把页面内所有待存内容落库。桌面端登出前用作数据安全屏障。 */
@@ -208,11 +212,13 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
             if (now) {
               now.pending.revision = response.document.revision;
               now.forceVersion = false;
+              now.revisionConflict = false;
             }
           } catch (error) {
             // dirty 保持 true：待存内容留着，下次 flush 会重试。
             if (entries.current.has(docId)) {
               const revisionConflict = isDocumentRevisionConflict(error);
+              current.revisionConflict = revisionConflict;
               const backedUp = storeConflictDraft(
                 docId,
                 current.pending,
@@ -267,6 +273,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       if (!existing.dirty && !existing.inFlight) {
         existing.pending = { ...snapshot };
         existing.forceVersion = false;
+        existing.revisionConflict = false;
       }
       return;
     }
@@ -311,6 +318,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       dirty: recovered,
       inFlight: null,
       forceVersion: false,
+      revisionConflict: conflicted,
     });
     if (recovered) setStatus(docId, conflicted ? "conflict" : "backed-up");
   }, [setStatus]);
@@ -348,6 +356,31 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     const results = await Promise.all([...entries.current.keys()].map(flush));
     return results.every(Boolean);
   }, [flush]);
+
+  const rollbackTitle = useCallback((
+    docId: string,
+    attemptedTitle: string,
+    before: DocumentSnapshot,
+    wasDirty: boolean,
+  ) => {
+    const entry = entries.current.get(docId);
+    if (!entry || entry.inFlight || entry.pending.title !== attemptedTitle) return;
+    entry.pending = { ...entry.pending, title: before.title };
+    // 若保存链曾成功过一趟，远端可能已有新标题，仍需保留回滚为待存改动。
+    entry.dirty = wasDirty || entry.pending.revision !== before.revision ||
+      entry.pending.content !== before.content || entry.pending.theme !== before.theme;
+    if (entry.dirty) {
+      const conflict = entry.revisionConflict ?? false;
+      const backedUp = storeConflictDraft(docId, entry.pending, conflict);
+      setStatus(docId, conflict ? "conflict" : backedUp ? "backed-up" : "failed");
+    } else {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.timer = null;
+      entry.titleDirty = false;
+      clearStoredDraft(docId);
+      setStatus(docId, "idle");
+    }
+  }, [clearStoredDraft, setStatus, storeConflictDraft]);
 
   const forget = useCallback(
     async (docId: string) => {
@@ -474,6 +507,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     () => ({
       seed,
       queue,
+      rollbackTitle,
       flush,
       flushAll,
       peek,
@@ -489,6 +523,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [
       seed,
       queue,
+      rollbackTitle,
       flush,
       flushAll,
       peek,

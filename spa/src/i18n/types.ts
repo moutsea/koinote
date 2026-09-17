@@ -1313,8 +1313,17 @@ export interface Messages {
     themeNone: string;
     tabsLabel: string;
     closeTab: string;
+    closeAllTabs: string;
+    closingTabs: string;
+    tabsClosed: string;
+    tabsCloseFailed: string;
+    undoCloseTabs: string;
+    noOpenTabs: string;
+    dismissTabsNotice: string;
     newFolder: string;
     renameFolder: string;
+    renameDocument: string;
+    renameDocumentFailed: string;
     deleteFolder: string;
     deleteFolderConfirm: string;
     untitledFolder: string;

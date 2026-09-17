@@ -83,6 +83,39 @@ export function close(
 /** 文档被删除：从两份状态里一起摘掉，逻辑与关标签相同 */
 export const removeDeleted = close;
 
+/** 批量摘掉已安全保存的标签，只激活最终留下的文档。 */
+export function closeMany(state: TabState, docIds: Iterable<string>): TabState {
+  const removed = new Set(docIds);
+  const openTabs = state.openTabs.filter((id) => !removed.has(id));
+  const activeDocId = state.activeDocId && openTabs.includes(state.activeDocId)
+    ? state.activeDocId
+    : openTabs[0] ?? null;
+  const liveIds = state.liveIds.filter((id) => !removed.has(id));
+  const next = { openTabs, liveIds, activeDocId };
+  return activeDocId ? activate(next, activeDocId).next : next;
+}
+
+/** 撤销只恢复仍存在的文档，并保留关闭之后新打开的标签。 */
+export function restoreClosedTabs(
+  current: TabState,
+  before: TabState,
+  closedIds: string[],
+  availableIds: Iterable<string>,
+): { next: TabState; evicted: string[] } {
+  const available = new Set(availableIds);
+  const restored = new Set(closedIds.filter((id) => available.has(id)));
+  if (restored.size === 0) return { next: current, evicted: [] };
+  const wanted = new Set([...current.openTabs, ...restored]);
+  const openTabs = [
+    ...before.openTabs.filter((id) => wanted.has(id)),
+    ...current.openTabs.filter((id) => !before.openTabs.includes(id)),
+  ];
+  const activeDocId = before.activeDocId && openTabs.includes(before.activeDocId)
+    ? before.activeDocId
+    : current.activeDocId ?? openTabs[0];
+  return activate({ ...current, openTabs }, activeDocId);
+}
+
 /**
  * 用最新文档列表回收已经不存在的标签。
  *

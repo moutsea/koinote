@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds paid-member WeChat draft delivery, improves WeChat export readability, and hardens organizer folder synchronization."
+          notes="Koinote Desktop $version adds close-all tabs with undo, document renaming in the file tree, and Markdown imports by dropping files into the editor. It also fixes extra blank lines when pasting on Windows and improves rename recovery and keyboard shortcuts."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,7 +239,12 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          此版本向付费会员开放微信公众号绑定与草稿箱同步，并新增知乎 OpenAPI 直发与网页辅助发布；同时优化微信公众号主题导出，修复文档整理后的文件夹身份合并与桌面同步问题。
+          - 标签栏新增一键关闭全部标签和撤销，保存失败的文档会保持打开。
+          - 文件树支持文档重命名：右键菜单、铅笔按钮、双击、F2，或选中后再次点击名称。
+          - Markdown 文件可以拖入右侧文档区域导入，空白工作区也支持。
+          - 修复 Windows 粘贴时出现多余空行，并保留代码、表格和有意插入的空行。
+          - 修复重命名失败后的取消与重试、编辑器路由恢复及快捷键处理，并防止撤销关闭后误删文档。
+          - 调整微信草稿同步的加载指示位置，避免遮挡关闭按钮。
 
           从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -253,7 +258,12 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          This release opens WeChat account binding and draft delivery to paid members, adds Zhihu OpenAPI and assisted publishing, and hardens WeChat export themes, organizer folder reconciliation, and desktop synchronization.
+          - Close all tabs in one action and undo the closure; documents that fail to save remain open.
+          - Rename documents in the file tree using the context menu, pencil button, double-click, F2, or another click on the selected name.
+          - Import Markdown files by dropping them into the editor, including an empty workspace.
+          - Fix extra blank lines when pasting on Windows while preserving code, tables, and intentional blank lines.
+          - Improve rename cancellation and retry, editor route restoration, and keyboard shortcuts; prevent accidental document deletion after undoing tab closure.
+          - Keep the WeChat draft synchronization spinner clear of the close button.
 
           Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
 

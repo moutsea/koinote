@@ -6,6 +6,8 @@ import {
   Folder as FolderIcon,
   FolderOpen,
   GripVertical,
+  Loader2,
+  Pencil,
   Trash2,
 } from "lucide-react";
 import { useI18n, type Locale } from "../../i18n";
@@ -61,6 +63,9 @@ export type TreeRowHandlers = {
    */
   autoEditFolderId?: string | null;
   onAutoEditDone?: () => void;
+  autoEditDocId?: string | null;
+  onDocEditStarted?: () => void;
+  onRenameDoc: (docId: string, title: string) => Promise<boolean>;
   expanded: Set<string>;
   onToggle: (folderId: string) => void;
   onSelectDoc: (docId: string) => void;
@@ -314,11 +319,76 @@ export function DocRow({
   const menuOpen = h.menuTargetId === doc.docId;
   const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
   const [fileDragOver, setFileDragOver] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(doc.title);
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const editingRef = useRef(false);
+  const renameBusyRef = useRef(false);
+  const originalTitleRef = useRef(doc.title);
+
+  function beginRename() {
+    if (renameBusyRef.current) return;
+    originalTitleRef.current = doc.title;
+    setDraft(doc.title);
+    editingRef.current = true;
+    setEditing(true);
+    setRenameError(false);
+  }
+
+  useEffect(() => {
+    if (h.autoEditDocId === doc.docId) {
+      beginRename();
+      h.onDocEditStarted?.();
+    }
+  }, [h.autoEditDocId, doc.docId]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  async function commitRename() {
+    if (!editingRef.current || renameBusyRef.current) return;
+    const next = draft.trim();
+    if (!next || (next === originalTitleRef.current.trim() && !renameError)) {
+      editingRef.current = false;
+      setEditing(false);
+      return;
+    }
+    renameBusyRef.current = true;
+    setRenaming(true);
+    setRenameError(false);
+    try {
+      const saved = await h.onRenameDoc(doc.docId, next);
+      if (saved) {
+        editingRef.current = false;
+        setEditing(false);
+      } else {
+        setRenameError(true);
+      }
+    } catch {
+      setRenameError(true);
+    } finally {
+      renameBusyRef.current = false;
+      setRenaming(false);
+    }
+  }
 
   return (
     <li
       className={`group relative ${fileDragOver ? "rounded-lg ring-1 ring-inset ring-cinnabar-500" : ""}`}
-      draggable
+      draggable={!editing}
+      onKeyDown={(event) => {
+        if (event.key === "F2" && !editing) {
+          event.preventDefault();
+          event.stopPropagation();
+          beginRename();
+        }
+      }}
       onDragOver={(e) => {
         e.stopPropagation();
         if (hasExternalFileDrag(e.dataTransfer)) {
@@ -382,11 +452,42 @@ export function DocRow({
           }`}
         />
       )}
-      <button
+      {editing ? (
+        <div className="flex min-h-10 items-center gap-2 rounded-lg py-1.5 pr-2" style={{ paddingLeft: docPad(depth) }}>
+          <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          <input
+            ref={inputRef}
+            value={draft}
+            readOnly={renaming}
+            aria-label={t.editor.renameDocument}
+            aria-invalid={renameError}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => void commitRename()}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+              if (event.key === "Enter") {
+                event.stopPropagation();
+                event.preventDefault();
+                void commitRename();
+              }
+              if (event.key === "Escape" && !renameBusyRef.current) {
+                event.stopPropagation();
+                event.preventDefault();
+                editingRef.current = false;
+                setEditing(false);
+                setRenameError(false);
+              }
+            }}
+            className="min-w-0 flex-1 rounded border border-cinnabar-500 bg-[var(--background)] px-1 py-0.5 text-sm outline-none"
+          />
+          {renaming && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-neutral-400" />}
+        </div>
+      ) : <button
         type="button"
         onClick={() => h.onSelectDoc(doc.docId)}
         aria-current={active ? "true" : undefined}
-        className={`flex w-full items-start gap-2 rounded-lg py-1.5 pr-8 text-left transition ${
+        onDoubleClick={beginRename}
+        className={`flex w-full items-start gap-2 rounded-lg py-1.5 pr-14 text-left transition ${
           active
             ? "bg-cinnabar-50 text-cinnabar-800 dark:bg-cinnabar-950/50 dark:text-cinnabar-200"
             : menuOpen
@@ -405,25 +506,43 @@ export function DocRow({
           }`}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm">{title}</span>
+          <span
+            className="block truncate text-sm"
+            onClick={(event) => {
+              // 首次点击仍打开文档；已选中时，再点名称才进入重命名。
+              // 图标、日期和键盘激活继续沿用整行的打开行为。
+              if (!active || event.detail === 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.stopPropagation();
+              beginRename();
+            }}
+          >
+            {title}
+          </span>
           {doc.updatedAt && (
             <span className="mt-0.5 block text-[11px] text-neutral-400">
               {new Date(doc.updatedAt).toLocaleDateString(DATE_LOCALE[locale])}
             </span>
           )}
         </span>
-      </button>
+      </button>}
+
+      {renameError && <p role="alert" className="px-3 pb-1 text-xs text-red-600 dark:text-red-400">{t.editor.renameDocumentFailed}</p>}
 
       {/* 删除按钮：悬停或键盘聚焦时出现，避免误触 */}
+      {!editing && <span className="absolute right-1 top-1.5 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+      <button type="button" onClick={beginRename} aria-label={t.editor.renameDocument} title={t.editor.renameDocument} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 hover:bg-black/10 hover:text-neutral-700 dark:hover:bg-white/15 dark:hover:text-neutral-200">
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
       <button
         type="button"
         onClick={() => h.onDeleteDoc(doc.docId, title)}
         aria-label={t.editor.deleteDocument}
         title={t.editor.deleteDocument}
-        className="absolute right-1 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+        className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
+      </span>}
     </li>
   );
 }

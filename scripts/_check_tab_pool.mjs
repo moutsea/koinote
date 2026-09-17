@@ -5,9 +5,13 @@ import {
   LIVE_LIMIT,
   activate,
   close,
+  closeMany,
+  restoreClosedTabs,
   hydrate,
   removeUnavailable,
 } from "./_tab_pool_bundle.mjs";
+
+import { isUntouchedNewDocument, saveTabsForClosing } from "./_close_tabs_bundle.mjs";
 
 let pass = 0,
   fail = 0;
@@ -303,6 +307,57 @@ for (const [tabs, active] of [
       ),
   );
 }
+
+
+// 批量关闭、异步保存屏障和撤销。
+const original = { openTabs: ["a", "b", "c"], liveIds: ["c", "b", "a"], activeDocId: "c" };
+eq("全部关闭清空标签与挂载池", closeMany(original, original.openTabs), EMPTY_TABS);
+const partial = closeMany(original, ["a", "c"]);
+eq("保存失败的标签保持打开且激活", partial, { openTabs: ["b"], liveIds: ["b"], activeDocId: "b" });
+eq("恢复原顺序与当前标签", restoreClosedTabs(partial, original, ["a", "c"], ["a", "b", "c"]).next.openTabs, original.openTabs);
+eq("撤销恢复之前的当前标签", restoreClosedTabs(EMPTY_TABS, original, original.openTabs, original.openTabs).next.activeDocId, "c");
+const openedLater = activate(partial, "d").next;
+r = restoreClosedTabs(openedLater, original, ["a", "c"], ["a", "b", "c", "d"]);
+eq("撤销保留新打开的标签", r.next.openTabs, ["a", "b", "c", "d"]);
+ok("撤销不会重复打开同一标签", new Set(r.next.openTabs).size === r.next.openTabs.length);
+ok("撤销遵守挂载池上限", r.next.liveIds.length <= LIVE_LIMIT);
+r = restoreClosedTabs(partial, original, ["a", "c"], ["b", "c"]);
+eq("撤销不复活已删除文档", r.next.openTabs, ["b", "c"]);
+eq("所有关闭文档已删除时不改变当前状态", restoreClosedTabs(partial, original, ["a", "c"], ["b"]).next, partial);
+eq("关闭期间打开的新标签不被摘掉", closeMany(activate(original, "d").next, original.openTabs).openTabs, ["d"]);
+
+let release;
+const waiting = new Promise((resolve) => { release = resolve; });
+const dirty = new Set();
+const saveWork = saveTabsForClosing(["saved", "failed", "rejected", "edited", "waiting", "saving"], {
+  flush: async (id) => {
+    if (id === "failed") return false;
+    if (id === "rejected") throw new Error("offline");
+    if (id === "waiting") await waiting;
+    return true;
+  },
+  isDirty: (id) => dirty.has(id),
+  isSaving: (id) => id === "saving",
+});
+let completed = false;
+void saveWork.then(() => { completed = true; });
+await Promise.resolve();
+ok("关闭等待仍在进行的保存", !completed);
+dirty.add("edited");
+release();
+eq("失败、保存中及再次编辑的标签不能关闭", await saveWork, ["saved", "waiting"]);
+
+// 已写过的本次新建文档：全部关闭清掉快照后，撤销出的后台标签尚未加载。
+const authored = activate(activate(EMPTY_TABS, "authored").next, "current").next;
+const restored = restoreClosedTabs(closeMany(authored, authored.openTabs), authored, authored.openTabs, authored.openTabs).next;
+ok("撤销后的后台文档尚未重新挂载", !restored.liveIds.includes("authored"));
+const closeSaver = { peek: () => null, isDirty: () => false, isSaving: () => false };
+ok("缺失快照不能把已有正文的文档当作空白删除", !isUntouchedNewDocument("authored", new Set(["authored"]), closeSaver));
+const emptySnapshot = { title: "", content: "", theme: "", revision: 1 };
+ok("已确认未编辑的新空白文档仍可清理", isUntouchedNewDocument("new", new Set(["new"]), { ...closeSaver, peek: () => emptySnapshot }));
+ok("历史空白文档不会删除", !isUntouchedNewDocument("old", new Set(), { ...closeSaver, peek: () => emptySnapshot }));
+ok("保存中的空白文档不能删除", !isUntouchedNewDocument("new", new Set(["new"]), { ...closeSaver, peek: () => emptySnapshot, isSaving: () => true }));
+ok("未保存的空白文档不能删除", !isUntouchedNewDocument("new", new Set(["new"]), { ...closeSaver, peek: () => emptySnapshot, isDirty: () => true }));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

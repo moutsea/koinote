@@ -60,6 +60,7 @@ export function DocumentList({
   onCreateFolder,
   onDelete,
   onRenameFolder,
+  onRenameDoc,
   onDeleteFolder,
   onMoveDoc,
   onReorderDocuments,
@@ -88,6 +89,7 @@ export function DocumentList({
   onCreateFolder: (parentFolderId?: string | null) => void;
   onDelete: (docId: string, title: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
+  onRenameDoc: (docId: string, title: string) => Promise<boolean>;
   onDeleteFolder: (folderId: string, name: string) => void;
   onMoveDoc: (docId: string, folderId: string | null) => void;
   onReorderDocuments: (docId: string, folderId: string | null, docIds: string[]) => void;
@@ -118,6 +120,7 @@ export function DocumentList({
    * 会变成两套编辑入口。
    */
   const [renameRequestId, setRenameRequestId] = useState<string | null>(null);
+  const [renameDocRequestId, setRenameDocRequestId] = useState<string | null>(null);
   const [organizerMenuOpen, setOrganizerMenuOpen] = useState(false);
   const [pendingOrganizerStrategy, setPendingOrganizerStrategy] =
     useState<DocumentOrganizerStrategy | null>(null);
@@ -314,6 +317,8 @@ export function DocumentList({
     activeDocId,
     // 新建后的自动改名和菜单里的手动改名进的是同一个态
     autoEditFolderId: autoEditFolderId ?? renameRequestId,
+    autoEditDocId: renameDocRequestId,
+    onDocEditStarted: () => setRenameDocRequestId(null),
     onAutoEditDone: () => {
       setRenameRequestId(null);
       onAutoEditDone?.();
@@ -323,6 +328,7 @@ export function DocumentList({
     onSelectDoc: onSelect,
     onDeleteDoc: onDelete,
     onRenameFolder,
+    onRenameDoc,
     onDeleteFolder,
     onDrop,
     onReorderDoc,
@@ -394,6 +400,12 @@ export function DocumentList({
       // 文档渲染在 depth，装着它的文件夹就在 depth - 1；根下的文档容器是 null
       return [
         ...createItems(target.folderId, target.depth - 1),
+        {
+          key: "rename-doc",
+          label: t.editor.renameDocument,
+          icon: <Pencil className="h-3.5 w-3.5" />,
+          onSelect: () => setRenameDocRequestId(target.docId),
+        },
         {
           key: "delete",
           label: t.editor.deleteDocument,

@@ -34,6 +34,7 @@ import { applyUploadedImageMappingToEditor } from "./imageUploadMapping";
 import { DocumentFindBar } from "./DocumentFindBar";
 import { readTreeDragPayload } from "./treeDrag";
 import { copyPlainText, selectedCodeBlockText } from "./codeBlockCopy";
+import { normalizeClipboardHTML } from "./clipboardPaste";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { cellAround, CellSelection } from "@tiptap/pm/tables";
 import { TextSelection } from "@tiptap/pm/state";
@@ -326,6 +327,7 @@ export default function MarkdownEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: { class: editorContentClass(themeId) },
+      transformPastedHTML: normalizeClipboardHTML,
       clipboardTextSerializer: (slice) => {
         const instance = editorRef.current;
         const tableMarkdown = instance
@@ -365,7 +367,10 @@ export default function MarkdownEditor({
 
         // 2) HTML 里带 base64 图 —— 必须在解析前接手，否则 allowBase64: false
         //    会让解析器把这些节点直接丢掉
-        const html = event.clipboardData?.getData("text/html");
+        const rawHTML = event.clipboardData?.getData("text/html");
+        // Custom image/table paste paths also need the same normalization as
+        // ProseMirror's default HTML paste path.
+        const html = rawHTML ? normalizeClipboardHTML(rawHTML) : rawHTML;
         if (html && pasteHtmlWithDataUris(html)) {
           event.preventDefault();
           return true;

@@ -180,13 +180,10 @@ const editorRoute = createRoute({
   ),
 });
 const editorDocRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/editor/$docId",
+  // 文档与空白工作区共享 EditorPage，关闭最后一个标签时保存层和撤销状态仍存活。
+  getParentRoute: () => editorRoute,
+  path: "$docId",
   validateSearch: parseEditorSearch,
-  component: lazyRouteComponent(
-    () => import("./pages/EditorPage"),
-    "EditorPage",
-  ),
 });
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -320,8 +317,7 @@ const routeTree = rootRoute.addChildren([
   aiOptimizationCaseRoute,
   wechatOfficialAccountGuideRoute,
   changelogRoute,
-  editorRoute,
-  editorDocRoute,
+  editorRoute.addChildren([editorDocRoute]),
   loginRoute,
   desktopAuthorizeRoute,
   desktopBillingReturnRoute,

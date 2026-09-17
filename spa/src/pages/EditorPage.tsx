@@ -9,10 +9,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import type { EditorEvents } from "@tiptap/core";
-import { FolderTree, ListTree, Share2 } from "lucide-react";
+import { FolderTree, ListTree, Plus, Share2, X } from "lucide-react";
 import { LiveEditor } from "../components/editor/LiveEditor";
 import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
 import { DocumentList } from "../components/editor/DocumentList";
+import { DocumentImportDropZone } from "../components/editor/DocumentImportDropZone";
 import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
 import { OutlinePanel } from "../components/editor/OutlinePanel";
 import { ResizablePanel } from "../components/editor/ResizablePanel";
@@ -36,6 +37,8 @@ import {
   useSyncEditorTabs,
 } from "../documents";
 import { TabBar } from "../components/editor/TabBar";
+import { isUntouchedNewDocument, saveTabsForClosing } from "../components/editor/closeTabs";
+import { renameDocumentTitle } from "../components/editor/renameDocument";
 import { useDocumentSaver } from "../components/editor/useDocumentSaver";
 import { isSaveShortcut } from "../components/editor/saveShortcut";
 import {
@@ -52,13 +55,15 @@ import {
   EMPTY_TABS,
   activate,
   close,
+  closeMany,
+  restoreClosedTabs,
   hydrate,
   removeDeleted,
   removeUnavailable,
   type TabState,
 } from "../components/editor/tabPool";
 import { useSession } from "../auth";
-import { ApiError } from "../api";
+import { ApiError, getDocument } from "../api";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { useDesktopMenuActions } from "../desktop/menu";
@@ -131,6 +136,7 @@ export function EditorPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
   const [importNotice, setImportNotice] = useState<{
     error: boolean;
     message: string;
@@ -150,6 +156,18 @@ export function EditorPage() {
   const tabStateRef = useRef(tabState);
   tabStateRef.current = tabState;
   const saver = useDocumentSaver(refreshList);
+  const [closingAll, setClosingAll] = useState(false);
+  const closingAllRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [closedTabsNotice, setClosedTabsNotice] = useState<{
+    before: TabState;
+    closedIds: string[];
+    failed: number;
+  } | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const prepareEditorRouteExit = useCallback(
     async ({ next }: { next: { pathname: string } }) => {
@@ -313,11 +331,19 @@ export function EditorPage() {
       !loggedIn ||
       activeDocId ||
       createFromRoute ||
-      !documents ||
-      bootstrapped.current
+      !documents
     )
       return;
     if (create.isPending) return;
+
+    // 普通返回 /editor 时恢复当前标签的地址；全部关闭后的标签状态为空，
+    // 因而仍由 bootstrapped 保持空白工作区。
+    const currentTab = tabStateRef.current.activeDocId;
+    if (currentTab) {
+      void navigate({ to: "/editor/$docId", params: { docId: currentTab }, replace: true });
+      return;
+    }
+    if (bootstrapped.current) return;
 
     if (documents.length > 0) {
       bootstrapped.current = true;
@@ -560,6 +586,7 @@ export function EditorPage() {
 
   const handleCloseTab = useCallback(
     (docId: string) => {
+      if (closingAllRef.current) return;
       editorSelections.current.delete(docId);
       /**
        * 点「+」会立刻 POST 建一篇真文档，所以关标签只摘标签的话，一篇没动过的空
@@ -569,12 +596,7 @@ export function EditorPage() {
        * 「本次会话新建」这条是关键 —— 少了它，关掉一篇从服务端载入的旧空文档的
        * 标签会把那篇真删了。
        */
-      const snapshot = saver.peek(docId);
-      const untouched =
-        createdHere.current.has(docId) &&
-        !saver.isDirty(docId) &&
-        !snapshot?.title.trim() &&
-        !snapshot?.content.trim();
+      const untouched = isUntouchedNewDocument(docId, createdHere.current, saver);
 
       if (untouched) {
         // drop 而不是 forget：forget 会先 PUT 一次，而这篇马上就要删了
@@ -611,6 +633,68 @@ export function EditorPage() {
     },
     [saver, navigate, remove],
   );
+
+  const handleCloseAllTabs = useCallback(async () => {
+    if (closingAllRef.current) return;
+    closingAllRef.current = true;
+    // 用户已明确操作本地标签，迟到的会话恢复不能再把旧标签组覆盖回来。
+    hydrated.current = true;
+    setClosingAll(true);
+    setClosedTabsNotice(null);
+    const before = tabStateRef.current;
+    try {
+      const savedIds = await saveTabsForClosing(before.openTabs, saverRef.current);
+      if (!mountedRef.current) return;
+      const current = tabStateRef.current;
+      const closedIds = savedIds.filter((id) => current.openTabs.includes(id) &&
+        !saverRef.current.isDirty(id) && !saverRef.current.isSaving(id));
+      const closedSet = new Set(closedIds);
+      const failed = before.openTabs.filter((id) => current.openTabs.includes(id) && !closedSet.has(id)).length;
+      const next = closeMany(current, closedIds);
+
+      // 批量关闭只操作标签，不删除文档；新建的空白文档也能随撤销重新打开。
+      for (const id of closedIds) {
+        saverRef.current.drop(id);
+        createdHere.current.delete(id);
+        editorSelections.current.delete(id);
+      }
+      if (current.activeDocId && closedSet.has(current.activeDocId)) {
+        justClosed.current = current.activeDocId;
+      }
+      if (!next.activeDocId) bootstrapped.current = true;
+      tabStateRef.current = next;
+      setTabState(next);
+      setClosedTabsNotice({ before, closedIds, failed });
+      if (next.activeDocId !== current.activeDocId) {
+        if (next.activeDocId) {
+          await navigate({ to: "/editor/$docId", params: { docId: next.activeDocId } });
+        } else {
+          await navigate({ to: "/editor" });
+        }
+      }
+    } finally {
+      closingAllRef.current = false;
+      if (mountedRef.current) setClosingAll(false);
+    }
+  }, [navigate]);
+
+  const handleUndoCloseTabs = useCallback(() => {
+    if (!closedTabsNotice || closingAllRef.current) return;
+    const { next, evicted } = restoreClosedTabs(
+      tabStateRef.current,
+      closedTabsNotice.before,
+      closedTabsNotice.closedIds,
+      (documents ?? []).map((document) => document.docId),
+    );
+    for (const id of evicted) void saverRef.current.flush(id);
+    justClosed.current = null;
+    tabStateRef.current = next;
+    setTabState(next);
+    setClosedTabsNotice(null);
+    if (next.activeDocId) {
+      void navigate({ to: "/editor/$docId", params: { docId: next.activeDocId } });
+    }
+  }, [closedTabsNotice, documents, navigate]);
 
   const handleCreate = useCallback(
     (folderId?: string | null) => {
@@ -865,6 +949,22 @@ export function EditorPage() {
     [renameFolderMut],
   );
 
+  const handleRenameDoc = useCallback(async (docId: string, title: string) => {
+    if (closingAllRef.current) return false;
+    try {
+      const saved = await renameDocumentTitle(docId, title, saverRef.current, async (id) => {
+        const result = await getDocument(id);
+        return result.document;
+      }, () => !tabStateRef.current.liveIds.includes(docId));
+      if (saved) handleTitleChange(docId, saverRef.current.peek(docId)?.title ?? title);
+      // 保留正文的失败/冲突草稿必须有可操作的恢复入口，尤其是未挂载的文档。
+      if (!saved && saverRef.current.isDirty(docId)) handleSelect(docId);
+      return saved;
+    } catch {
+      return false; // 行内输入框保留新名称并显示失败信息，允许重试。
+    }
+  }, [handleSelect, handleTitleChange]);
+
   const handleDeleteFolder = useCallback(
     async (folderId: string, name: string) => {
       // 说清楚「里面的东西不会被删」—— 否则用户不敢删，或者删了以为丢了正文
@@ -902,6 +1002,8 @@ export function EditorPage() {
 
   const handleImport = useCallback(
     async (files: File[], targetFolderId?: string | null) => {
+      if (importingRef.current || files.length === 0) return;
+      importingRef.current = true;
       setImporting(true);
       setImportNotice(null);
       setOrganizationNotice(null);
@@ -930,6 +1032,7 @@ export function EditorPage() {
           message: getImportErrorMessage(error, t.transfer),
         });
       } finally {
+        importingRef.current = false;
         setImporting(false);
       }
     },
@@ -1078,6 +1181,7 @@ export function EditorPage() {
             onCreateFolder={handleCreateFolder}
             onDelete={handleDelete}
             onRenameFolder={handleRenameFolder}
+            onRenameDoc={handleRenameDoc}
             onDeleteFolder={handleDeleteFolder}
             onMoveDoc={handleMoveDoc}
             onReorderDocuments={handleReorderDocuments}
@@ -1106,7 +1210,11 @@ export function EditorPage() {
       ) : null}
 
       {/* 右：正文。大纲作为正文的一部分渲染在其内部，不再是独立的一列。 */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <DocumentImportDropZone
+        importing={importing}
+        notice={importNotice}
+        onImport={(files) => void handleImport(files, null)}
+      >
         {/* 面板都收起、或文档尚未就绪时，展开入口需要独立一行兜住；
             文档就绪后按钮并入标题栏（见下方 leadingControls）。 */}
         {(!docsOpen || !outlineOpen) && !doc.data && (
@@ -1136,10 +1244,21 @@ export function EditorPage() {
           dirtyOf={saver.isDirty}
           onSelect={handleSelect}
           onClose={handleCloseTab}
+          onCloseAll={() => void handleCloseAllTabs()}
+          closingAll={closingAll}
           onCreate={handleCreate}
           creating={create.isPending}
           desktopShortcuts={isDesktopRuntime()}
         />
+
+        {!activeDocId && tabState.openTabs.length === 0 && !create.isPending && (
+          <div className="flex min-h-64 flex-1 flex-col items-center justify-center gap-4 px-6 pb-20 text-center">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{t.editor.noOpenTabs}</p>
+            <button type="button" onClick={() => handleCreate(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-2 text-xs text-neutral-600 transition hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10">
+              <Plus className="h-3.5 w-3.5" />{t.editor.newDocument}
+            </button>
+          </div>
+        )}
 
         {/* 加载与错误态盖在池子上方，池子本身继续挂着 ——
             否则切到一篇还在拉取的文档会把其他标签的实例一起卸载 */}
@@ -1232,7 +1351,21 @@ export function EditorPage() {
             }
           />
         ))}
-      </div>
+        {closedTabsNotice && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
+            <div className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-black/10 bg-[var(--ink-paper-soft)] px-3 py-2.5 text-xs shadow-lg dark:border-white/10">
+              <span role="status" className="min-w-0 text-neutral-600 dark:text-neutral-300">
+                {closedTabsNotice.closedIds.length > 0 && interpolate(t.editor.tabsClosed, { count: closedTabsNotice.closedIds.length })}
+                {closedTabsNotice.failed > 0 && ` ${interpolate(t.editor.tabsCloseFailed, { count: closedTabsNotice.failed })}`}
+              </span>
+              {closedTabsNotice.closedIds.length > 0 && (
+                <button type="button" disabled={closingAll} onClick={handleUndoCloseTabs} className="shrink-0 rounded px-1 py-1 font-medium text-cinnabar-600 hover:underline disabled:opacity-50 dark:text-cinnabar-400">{t.editor.undoCloseTabs}</button>
+              )}
+              <button type="button" onClick={() => setClosedTabsNotice(null)} aria-label={t.editor.dismissTabsNotice} className="shrink-0 rounded p-1 text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+        )}
+      </DocumentImportDropZone>
 
       {!localMode && shareOpen && doc.data && (
         <ShareDialog
@@ -1286,6 +1419,7 @@ export function EditorPage() {
               onCreateFolder={handleCreateFolder}
               onDelete={handleDelete}
               onRenameFolder={handleRenameFolder}
+              onRenameDoc={handleRenameDoc}
               onDeleteFolder={handleDeleteFolder}
               onMoveDoc={handleMoveDoc}
               onReorderDocuments={handleReorderDocuments}
