@@ -183,13 +183,9 @@ export function ExportMenu({
       setMediaOpen(false);
       setWechatDraftOpen(true);
     } catch (caught) {
-      const message = exportErrorText(
-        caught,
-        t.editor.wechatAccountLoadFailed,
-        t.errors,
-      );
-      setError(message);
-      return message;
+      // 只把错误交回调用方（导出弹窗）显示。菜单自己的浮层是 z-40，会被弹窗的
+      // 半透明遮罩压成一个发暗的红框，而且关窗后还留着不清
+      return exportErrorText(caught, t.editor.wechatAccountLoadFailed, t.errors);
     } finally {
       setWechatDraftOpening(false);
     }

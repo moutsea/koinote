@@ -88,6 +88,7 @@ export function MediaExportDialog({
   const [geoTextSaving, setGeoTextSaving] = useState(false);
   const [geoPreferenceSaving, setGeoPreferenceSaving] = useState(false);
   const [geoClosing, setGeoClosing] = useState(false);
+  const [draftOpening, setDraftOpening] = useState(false);
   const [draftPublishing, setDraftPublishing] = useState(false);
   const [geoDirty, setGeoDirty] = useState(false);
   const [geoStale, setGeoStale] = useState(false);
@@ -410,13 +411,19 @@ export function MediaExportDialog({
   }
 
   async function openWechatDraftDialog() {
-    if (!onOpenWechatDraft || geoClosing || closeInFlightRef.current) return;
+    if (
+      !onOpenWechatDraft ||
+      geoClosing ||
+      draftOpening ||
+      closeInFlightRef.current
+    )
+      return;
     if (!member) {
       setWechatUpgradePromptOpen(true);
       return;
     }
     closeInFlightRef.current = true;
-    setGeoClosing(true);
+    setDraftOpening(true);
     try {
       if (member && !localMode && !(await persistGeoText())) return;
       await geoPreferenceQueueRef.current;
@@ -424,7 +431,7 @@ export function MediaExportDialog({
       if (draftError) setError(draftError);
     } finally {
       closeInFlightRef.current = false;
-      setGeoClosing(false);
+      setDraftOpening(false);
     }
   }
 
@@ -474,8 +481,11 @@ export function MediaExportDialog({
     }
   }
 
+  // 刻意不拦 busy：复制路径（buildWechatHTML → uploadImage）没有超时也没有
+  // AbortSignal，网络挂起时 busy 会一直是 true，拦住关闭就等于把用户锁在弹窗里。
+  // 代价是复制中途关窗会丢掉图片与公式警告 —— 比关不掉弹窗轻
   async function closeDialog() {
-    if (draftPublishing || closeInFlightRef.current) return;
+    if (draftPublishing || draftOpening || closeInFlightRef.current) return;
     closeInFlightRef.current = true;
     setGeoClosing(true);
     geoGenerateAbortRef.current?.abort();
@@ -528,7 +538,12 @@ export function MediaExportDialog({
           <button
             type="button"
             onClick={() => void closeDialog()}
-            disabled={geoClosing || draftPublishing}
+            disabled={
+              geoClosing ||
+              draftOpening ||
+              wechatDraftOpening ||
+              draftPublishing
+            }
             aria-label={t.editor.shareClose}
             className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
@@ -859,6 +874,8 @@ export function MediaExportDialog({
                 busy ||
                 geoLoading ||
                 geoGenerating ||
+                draftOpening ||
+                wechatDraftOpening ||
                 (platform === "wechat" &&
                   member &&
                   !localMode &&
@@ -901,11 +918,12 @@ export function MediaExportDialog({
                   geoLoading ||
                   geoGenerating ||
                   geoClosing ||
+                  draftOpening ||
                   wechatDraftOpening
                 }
                 className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/10 disabled:opacity-60 dark:border-emerald-400/35 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
               >
-                {geoClosing || wechatDraftOpening ? (
+                {draftOpening || wechatDraftOpening ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Send className="h-3.5 w-3.5" />
@@ -916,7 +934,12 @@ export function MediaExportDialog({
           <button
             type="button"
             onClick={() => void closeDialog()}
-            disabled={geoClosing || draftPublishing}
+            disabled={
+              geoClosing ||
+              draftOpening ||
+              wechatDraftOpening ||
+              draftPublishing
+            }
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-black/5 disabled:opacity-60 dark:hover:bg-white/10"
           >
             {geoClosing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

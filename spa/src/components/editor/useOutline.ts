@@ -63,13 +63,16 @@ export function scrollToHeading(editor: Editor | null, pos: number) {
     .setTextSelection(pos + 1)
     .run();
 
-  const heading = editor.view.nodeDOM(pos);
-  const scrollableHeading = heading as HTMLElement | null;
-  if (
-    !scrollableHeading ||
-    typeof scrollableHeading.scrollIntoView !== "function"
-  ) {
-    return;
-  }
-  scrollableHeading.scrollIntoView({ block: "start", inline: "nearest" });
+  window.requestAnimationFrame(() => {
+    if (editor.isDestroyed) return;
+    const heading = editor.view.nodeDOM(pos);
+    const scrollableHeading = heading as HTMLElement | null;
+    if (
+      !scrollableHeading ||
+      typeof scrollableHeading.scrollIntoView !== "function"
+    ) {
+      return;
+    }
+    scrollableHeading.scrollIntoView({ block: "start", inline: "nearest" });
+  });
 }

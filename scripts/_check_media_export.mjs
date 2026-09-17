@@ -28,6 +28,43 @@ const desktopLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.u
 const desktopPdf = readFileSync(new URL("../src-tauri/src/pdf_export.rs", import.meta.url), "utf8");
 const xAccountPanel = readFileSync(new URL("../spa/src/components/editor/XAccountPanel.tsx", import.meta.url), "utf8");
 
+/**
+ * 取出 `disabled={...}` 里的状态名集合。
+ *
+ * 按标识符比对而不是按源码文本比对：prettier 会随条件数量改变换行，
+ * 门禁关心的是"哪些状态会禁用这个按钮"，不该被格式化和条件顺序绑死。
+ */
+function disabledGuards(source) {
+  const guards = [];
+  const marker = "disabled={";
+  for (let at = source.indexOf(marker); at !== -1; at = source.indexOf(marker, at + 1)) {
+    let depth = 1;
+    let cursor = at + marker.length;
+    while (cursor < source.length && depth > 0) {
+      if (source[cursor] === "{") depth += 1;
+      else if (source[cursor] === "}") depth -= 1;
+      cursor += 1;
+    }
+    guards.push(
+      new Set(source.slice(at + marker.length, cursor - 1).match(/[A-Za-z_$][\w$]*/g) ?? []),
+    );
+  }
+  return guards;
+}
+
+/** 紧跟在某段标记之后的第一个 disabled 守卫，用来定位具体某个按钮 */
+function guardAfter(source, anchor) {
+  const at = source.indexOf(anchor);
+  if (at === -1) return null;
+  return disabledGuards(source.slice(at))[0] ?? null;
+}
+
+const covers = (guard, states) => guard !== null && states.every((state) => guard.has(state));
+
+/** 守卫里不应出现的状态。用来挡住恒为假的死条件 —— 它们读起来像保护，其实不生效 */
+const excludes = (guard, states) =>
+  guard !== null && states.every((state) => !guard.has(state));
+
 ok("微信公众号使用富文本", mediaExportFormat("wechat") === "rich-text");
 ok("知乎使用富文本", mediaExportFormat("zhihu") === "rich-text");
 ok("掘金使用 Markdown", mediaExportFormat("juejin") === "markdown");
@@ -180,7 +217,7 @@ ok(
 );
 ok(
   "GEO 关闭先保存但不会把用户困在弹窗中",
-  /async function closeDialog\(\) \{[\s\S]{0,220}if \(!closeSaveFailedRef\.current && !\(await persistGeoText\(\)\)\) \{\s*closeSaveFailedRef\.current = true;\s*return;/.test(dialog) &&
+  /async function closeDialog\(\) \{[\s\S]{0,400}if \(!closeSaveFailedRef\.current && !\(await persistGeoText\(\)\)\) \{\s*closeSaveFailedRef\.current = true;\s*return;/.test(dialog) &&
     /closeSaveFailedRef\.current = false;\s*setGeoText\(event\.target\.value\)/.test(dialog) &&
     /if \(e\.key === "Escape"\) \{[\s\S]{0,240}closeDialogRef\.current\(\)/.test(dialog) &&
     (dialog.match(/onClick=\{\(\) => void closeDialog\(\)\}/g) ?? []).length === 2 &&
@@ -188,12 +225,49 @@ ok(
     /async function generateGeoSummary\(\) \{[\s\S]{0,400}if \(!\(await persistGeoText\(\)\)\) return;/.test(dialog),
   "首次关闭保存失败时提示错误，再次关闭必须允许放弃修改",
 );
+// 两个关闭入口（右上角 X 与底部按钮）应当被同一组进行中状态禁用
+const closeGuards = dialog
+  .split("onClick={() => void closeDialog()}")
+  .slice(1)
+  .map((chunk) => disabledGuards(chunk)[0] ?? null);
+
 ok(
   "GEO 关闭保存期间提供反馈并阻止重复提交",
   /closeInFlightRef\.current/.test(dialog) &&
     /setGeoClosing\(true\)/.test(dialog) &&
-    /disabled=\{geoClosing \|\| draftPublishing\}/.test(dialog) &&
+    closeGuards.length >= 2 &&
+    closeGuards.every((guard) => covers(guard, ["geoClosing", "draftPublishing"])) &&
     /geoClosing \? t\.editor\.wechatGeoSaving : t\.editor\.shareClose/.test(dialog),
+);
+ok(
+  "草稿同步使用独立加载态",
+  /const \[draftOpening, setDraftOpening\] = useState\(false\)/.test(dialog) &&
+    /setDraftOpening\(true\)/.test(dialog) &&
+    covers(guardAfter(dialog, "void openWechatDraftDialog()"), [
+      "draftOpening",
+      "wechatDraftOpening",
+    ]) &&
+    /\{draftOpening \|\| wechatDraftOpening \? \(\s*<Loader2/.test(dialog),
+  "转圈只出现在同步按钮自己的图标位，不能借用 geoClosing 顶掉关闭按钮",
+);
+ok(
+  "草稿准备期间禁用复制按钮",
+  covers(guardAfter(dialog, "onClick={run}"), [
+    "draftOpening",
+    "wechatDraftOpening",
+  ]) &&
+    // geoClosing 为真时 closeInFlightRef 也为真，唯一出路是 onClose() 卸载组件，
+    // 用户没有窗口能看到这个禁用态 —— 加进来是死条件
+    excludes(guardAfter(dialog, "onClick={run}"), ["geoClosing"]),
+  "复制与草稿准备共用 error/note/imageWarning，同时进行会互相顶掉提示",
+);
+ok(
+  "关闭弹窗不受复制影响，避免网络挂起把用户锁死",
+  closeGuards.every((guard) => guard !== null && !guard.has("busy")) &&
+    !/if \([^)]*\bbusy\b[^)]*\) return;\s*closeInFlightRef\.current = true;/.test(
+      dialog,
+    ),
+  "复制路径没有超时也没有 AbortSignal，busy 可能永久为真",
 );
 ok(
   "GEO 关闭或卸载会取消仍在生成的付费请求",

@@ -35,6 +35,31 @@ const multiAccountMigration = read(
   "backend/migrations/0040_wechat_official_multi_accounts.sql",
 );
 
+/**
+ * 两个关闭入口（右上角 X 与底部按钮）各自 disabled 里的状态名集合。
+ *
+ * 按标识符比对而不是按源码文本比对：prettier 会随条件数量改变换行，
+ * 门禁关心的是"哪些状态会禁用关闭"，不该被格式化和条件顺序绑死。
+ */
+const closeGuards = dialog
+  .split("onClick={() => void closeDialog()}")
+  .slice(1)
+  .map((chunk) => {
+    const marker = "disabled={";
+    const at = chunk.indexOf(marker);
+    if (at === -1) return new Set();
+    let depth = 1;
+    let cursor = at + marker.length;
+    while (cursor < chunk.length && depth > 0) {
+      if (chunk[cursor] === "{") depth += 1;
+      else if (chunk[cursor] === "}") depth -= 1;
+      cursor += 1;
+    }
+    return new Set(
+      chunk.slice(at + marker.length, cursor - 1).match(/[A-Za-z_$][\w$]*/g) ?? [],
+    );
+  });
+
 for (const endpoint of [
   "/api/wechat/account",
   "/api/wechat/accounts",
@@ -202,8 +227,11 @@ ok(
   "创建草稿期间禁止关闭弹窗以避免重复提交",
   draftPanel.includes("onPublishingChange?.(true)") &&
     draftPanel.includes("onPublishingChange?.(false)") &&
-    dialog.includes("if (draftPublishing || closeInFlightRef.current) return") &&
-    dialog.includes("disabled={geoClosing || draftPublishing}"),
+    /async function closeDialog\(\) \{\s*(?:\/\/[^\n]*\n\s*)*if \([^)]*draftPublishing[^)]*\)\s*return;/.test(
+      dialog,
+    ) &&
+    closeGuards.length >= 2 &&
+    closeGuards.every((guard) => guard.has("draftPublishing")),
 );
 ok(
   "草稿创建成功后禁止重复提交",
