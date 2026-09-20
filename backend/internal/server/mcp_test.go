@@ -150,7 +150,7 @@ func TestMCPScopeControlsExposedTools(t *testing.T) {
 	wantWrite := append(slices.Clone(wantRead),
 		"append_to_document", "apply_text_patch", "batch_move_documents", "create_document", "create_folder", "delete_folder",
 		"generate_wechat_geo_summary", "update_wechat_geo_summary",
-		"move_document", "move_folder", "rename_folder", "restore_document_version", "restore_trashed_document", "trash_document",
+		"move_document", "move_folder", "rename_folder", "restore_document_version", "restore_trashed_document", "sync_document_to_feishu", "trash_document",
 		"update_document", "update_document_history_settings", "update_document_metadata")
 	slices.Sort(wantWrite)
 	if !slices.Equal(writeTools, wantWrite) {
@@ -759,7 +759,7 @@ func TestMCPDocumentsEndToEnd(t *testing.T) {
 		"delete_folder", "find_text_in_document", "get_document", "get_document_context", "get_document_history_settings",
 		"get_agent_credits", "get_document_outline", "get_document_version", "list_document_versions", "list_document_themes", "list_documents", "list_folders",
 		"get_wechat_geo_summary", "generate_wechat_geo_summary", "update_wechat_geo_summary", "list_trashed_documents", "list_wechat_accounts", "move_document", "move_folder", "rename_folder", "restore_document_version",
-		"restore_trashed_document", "search_documents", "trash_document", "update_document", "update_document_history_settings",
+		"restore_trashed_document", "search_documents", "sync_document_to_feishu", "trash_document", "update_document", "update_document_history_settings",
 		"update_document_metadata", "compare_document_versions",
 	})
 	publishSession, err := connectMCPClient(context.Background(), server.URL+"/mcp", publishToken.Secret)

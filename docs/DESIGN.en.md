@@ -580,6 +580,12 @@ and public shares are excluded, so prompt injection cannot broaden data access a
 accounts. Scope isolation—not an “untrusted content” sentence—is the effective write
 boundary.
 
+Write tokens also expose `sync_document_to_feishu`. The account must first be bound through
+Settings → Feishu; the tool reuses the browser sync path's account lock, rate limiting, token
+refresh, image upload, and link persistence. It creates or updates a Feishu document from the
+Koinote title and Markdown as a one-way operation, without reading or merging Feishu edits.
+OAuth binding remains a web or desktop flow; MCP does not handle the OAuth callback.
+
 Audit rows contain only user, token, tool name, document ID, success/error, and duration;
 they never contain document text or plaintext tokens. The backend removes rows older than
 180 days once per day so operational metadata cannot grow without bound. Business errors give the agent an

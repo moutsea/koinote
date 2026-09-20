@@ -148,7 +148,7 @@ export const ja: Messages = {
       "Codex、Claude Code、OpenCode、OpenClaw、または Streamable HTTP MCP 対応クライアントを Koinote に接続できます。",
     overviewTitle: "仕組み",
     overviewBody:
-      "通常のドキュメントツールのモデル機能は Agent 側が提供します。Koinote は認証、ツール、競合検出、監査を担当し、GEO 要約の生成時だけ設定済みの内蔵モデルまたは BYOK チャネルを呼び出します。",
+      "通常のドキュメントツールのモデル機能は Agent 側が提供します。Koinote は認証、ツール、競合検出、監査を担当し、GEO 要約の生成時だけ設定済みの内蔵モデルまたは BYOK チャネルを呼び出します。Feishu を連携すると、書き込みトークンで sync_document_to_feishu を呼び出し、Feishu ドキュメントを作成または更新できます。",
     setupTitle: "準備",
     setupSteps: [
       { title: "永久会員を有効化", desc: "MCP は永久会員向け機能です。" },
@@ -175,7 +175,7 @@ export const ja: Messages = {
     verifyLabel: "設定後に試せるプロンプト",
     usageTitle: "Agent からの使い方",
     usageBody:
-      "特別な構文は不要です。Koinote を操作すると伝えれば Agent が MCP ツールを選びます。置換やゴミ箱操作では対象文書と結果を明確にしてください。公開専用トークンでは、指定した文書を連携済み WeChat 公式アカウントの下書きへ送るほか、GEO 要約の生成・管理も依頼できます。送信時に GEO を含めることを明示してください。",
+      "特別な構文は不要です。Koinote を操作すると伝えれば Agent が MCP ツールを選びます。Feishu 連携後は sync_document_to_feishu を呼び出して Koinote から Feishu へ一方向同期できます。置換やゴミ箱操作では対象文書と結果を明確にしてください。公開専用トークンでは、指定した文書を連携済み WeChat 公式アカウントの下書きへ送るほか、GEO 要約の生成・管理も依頼できます。送信時に GEO を含めることを明示してください。",
     prompts: [
       "Koinote で最近更新した 5 件のドキュメントを一覧にして。",
       "リモートワークの記事を書いて Koinote に保存して。",
@@ -185,7 +185,7 @@ export const ja: Messages = {
     permissionsTitle: "権限と削除の境界",
     permissions: [
       "読み取り専用トークンは一覧、検索、本文と履歴の閲覧ができます。",
-      "読み書きトークンは作成、追記、更新、履歴復元、ゴミ箱への移動と復元ができます。",
+      "読み書きトークンは作成、追記、更新、履歴復元、ゴミ箱への移動と復元ができます。Feishu 連携後は sync_document_to_feishu で Feishu ドキュメントを作成・更新できます。",
       "公開専用トークンは文書を読み取り、push_wechat_draft で公式アカウントの下書きを作成できますが、Koinote 文書の変更・削除はできません。",
       "読み書きと公開専用トークンは WeChat GEO 要約を生成・管理できます。内蔵モデルの生成は credits を消費し、下書きには明示しない限り含まれません。",
       "Agent は完全削除できません。完全削除は Web のゴミ箱で確認が必要です。",

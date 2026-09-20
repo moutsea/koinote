@@ -275,6 +275,8 @@ openclaw mcp doctor koinote --probe
 网页回收站提供标题确认；普通删除保留 30 天。整篇更新、追加、移入回收站和恢复都要求最新 revision；网页端使用同一套乐观锁并在冲突时提供
 本地/远端合并界面。详细取舍见[设计文档](docs/DESIGN.zh.md#mcp-文档访问)。
 
+读写令牌还可以调用 `sync_document_to_feishu`，从 Koinote 一键创建或更新已绑定的飞书文档。使用前请先在「设置 → 飞书」完成账号绑定；该工具只做 Koinote 到飞书的单向同步，以 Koinote 标题和正文覆盖飞书内容，不处理双向同步或冲突合并。
+
 需要向微信公众号草稿箱推送时，请创建“仅发布”令牌。Agent 可先调用 `list_wechat_accounts` 选择默认账号或指定账号；该令牌只能读取文档并调用
 `push_wechat_draft`，不会获得修改文档或删除文档的权限；推送会在服务端生成基础 HTML，不会套用文档的 Koinote 微信主题，并使用已绑定的公众号上传文章图片，属于外部副作用。每次成功推送消耗 20 credits。
 封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面额外消耗 20 credits）。

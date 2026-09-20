@@ -75,13 +75,15 @@ type validatedWritingSuggestion struct {
 }
 
 type validatedWritingReview struct {
-	Summary          string
-	HasTitleReview   bool
-	HasLayoutReview  bool
-	TitleScore       int
-	TitleAssessment  string
-	LayoutAssessment []writingReviewDimension
-	Suggestions      []validatedWritingSuggestion
+	Summary                  string
+	HasTitleReview           bool
+	HasLayoutReview          bool
+	TitleScore               int
+	TitleAssessment          string
+	LayoutAssessment         []writingReviewDimension
+	Suggestions              []validatedWritingSuggestion
+	DroppedBodySuggestions   int
+	DroppedLayoutSuggestions int
 }
 
 var writingSuggestionCategories = map[string]struct{}{
@@ -389,6 +391,8 @@ func parseAndValidateWritingReviewWithScopes(
 		finalContentBytes = nextContentBytes
 		boundedLayoutRanges = append(boundedLayoutRanges, suggestion)
 	}
+	validated.DroppedBodySuggestions = len(generated.BodySuggestions) - len(boundedBodyRanges)
+	validated.DroppedLayoutSuggestions = len(generated.LayoutSuggestions) - len(boundedLayoutRanges)
 	validated.Suggestions = append(validated.Suggestions, boundedBodyRanges...)
 	validated.Suggestions = append(validated.Suggestions, boundedLayoutRanges...)
 	return validated, nil

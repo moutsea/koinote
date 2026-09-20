@@ -407,6 +407,10 @@ func (a *App) decryptFeishuCredential(userID int, field string, ciphertext []byt
 }
 
 func writeFeishuError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errDocumentNotFound) {
+		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+		return
+	}
 	status, code := 502, "feishu_sync_failed"
 	for _, known := range []error{errFeishuNotConfigured, errFeishuNotBound, errFeishuTokenInvalid, errFeishuBusy, errFeishuServerBusy, errFeishuContentLimit, errFeishuImage} {
 		if errors.Is(err, known) {

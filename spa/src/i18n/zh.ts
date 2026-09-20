@@ -147,7 +147,7 @@ export const zh: Messages = {
       "Koinote 提供标准 Streamable HTTP MCP 接口。配置一次后，你可以直接让 Codex、Claude Code、OpenCode、OpenClaw 或其他兼容客户端查找、创建和修改文档。",
     overviewTitle: "它如何工作",
     overviewBody:
-      "常规文档工具由你的 Agent 提供模型能力，Koinote 只负责令牌鉴权、文档工具、并发冲突检测和审计记录。若调用 GEO 摘要生成工具，Koinote 会按你的设置调用内置模型或 BYOK 渠道。",
+      "常规文档工具由你的 Agent 提供模型能力，Koinote 只负责令牌鉴权、文档工具、并发冲突检测和审计记录。若调用 GEO 摘要生成工具，Koinote 会按你的设置调用内置模型或 BYOK 渠道。绑定飞书账号后，读写令牌还可以调用 sync_document_to_feishu 一键创建或更新飞书文档。",
     setupTitle: "开始之前",
     setupSteps: [
       { title: "开通终生会员", desc: "MCP 是终生会员权益。" },
@@ -174,7 +174,7 @@ export const zh: Messages = {
     verifyLabel: "配置后可用这些提示词验证",
     usageTitle: "如何让 Agent 使用",
     usageBody:
-      "配置完成后不需要特殊语法，直接在对话里说明要操作 Koinote。Agent 会自行选择合适的 MCP 工具；涉及覆盖或移入回收站时，建议明确文档标题和期望结果。使用仅发布令牌时，可以要求 Agent 将指定文章推送到已绑定的微信公众号草稿箱，也可以让它生成或维护 GEO 摘要；推送时需明确要求携带 GEO。",
+      "配置完成后不需要特殊语法，直接在对话里说明要操作 Koinote。Agent 会自行选择合适的 MCP 工具；涉及覆盖或移入回收站时，建议明确文档标题和期望结果。绑定飞书后，可以要求 Agent 调用 sync_document_to_feishu 将文档单向同步到飞书；同步会以 Koinote 内容为准。使用仅发布令牌时，可以要求 Agent 将指定文章推送到已绑定的微信公众号草稿箱，也可以让它生成或维护 GEO 摘要；推送时需明确要求携带 GEO。",
     prompts: [
       "列出我在 Koinote 最近修改的 5 篇文档。",
       "写一篇关于远程工作的文章，并保存到 Koinote。",
@@ -184,7 +184,7 @@ export const zh: Messages = {
     permissionsTitle: "权限与删除边界",
     permissions: [
       "只读令牌可列出、搜索、读取文档与历史版本，不能改动内容。",
-      "读写令牌可以创建、追加、更新、恢复版本，以及移入或移出回收站。",
+      "读写令牌可以创建、追加、更新、恢复版本，以及移入或移出回收站；绑定飞书后还可以调用 sync_document_to_feishu 创建或更新飞书文档。",
       "仅发布令牌可以读取文档并调用 push_wechat_draft 创建公众号草稿，但不能修改或删除 Koinote 文档。",
       "读写和仅发布令牌可以生成或维护微信公众号 GEO 摘要；内置模型会消耗 credits，推送草稿默认不携带摘要。",
       "Agent 不能永久删除文档；永久删除只能在网页回收站中二次确认。",

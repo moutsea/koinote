@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -299,8 +300,12 @@ func TestDeepWritingReviewUsesSafeExcerptFromOversizedBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, unseenJSON, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("unsupplied suffix error=%v, want invalid response", err)
+	_, validated, err = parseWritingReviewTaskResult(task, unseenJSON, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("unsupplied suffix must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("unsupplied suffix suggestions=%+v, want none", validated.Suggestions)
 	}
 }
 
@@ -339,8 +344,12 @@ func TestWritingReviewDocumentRejectsUnsuppliedOversizedBlockSuffix(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("unsupplied document suffix error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("unsupplied document suffix must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("unsupplied document suffix suggestions=%+v, want none", validated.Suggestions)
 	}
 }
 
@@ -578,8 +587,12 @@ func TestDeepWritingReviewRejectsBodyContentOutsidePromptScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "长文标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("unseen body block error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "长文标题", content, nil)
+	if err != nil {
+		t.Fatalf("unseen body block must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("unseen body block suggestions=%+v, want none", validated.Suggestions)
 	}
 }
 
@@ -656,8 +669,12 @@ func TestWritingReviewDocumentRejectsSeparatorOutsidePromptBudget(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("omitted separator error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("omitted separator must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("omitted separator suggestions=%+v, want none", validated.Suggestions)
 	}
 }
 
@@ -687,8 +704,12 @@ func TestWritingReviewBodyChunkRejectsCrossBlockSeparator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("cross-block body error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(task, raw, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("cross-block body must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("cross-block body suggestions=%+v, want none", validated.Suggestions)
 	}
 }
 
@@ -952,8 +973,12 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-			t.Fatalf("%s anchor error=%v, want invalid response", block.Kind, err)
+		_, validated, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil)
+		if err != nil {
+			t.Fatalf("%s anchor must be dropped without failing the task: %v", block.Kind, err)
+		}
+		if len(validated.Suggestions) != 0 {
+			t.Fatalf("%s anchor suggestions=%+v, want none", block.Kind, validated.Suggestions)
 		}
 	}
 
@@ -968,8 +993,12 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("spanning anchor error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(bodyTask, raw, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("spanning anchor must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("spanning anchor suggestions=%+v, want none", validated.Suggestions)
 	}
 
 	// 本块内的正常改写仍然放行
@@ -982,7 +1011,7 @@ func TestWritingReviewBodyChunkRejectsAnchorsInsideSkippedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, validated, err := parseWritingReviewTaskResult(bodyTask, ok, "标题", content, nil)
+	_, validated, err = parseWritingReviewTaskResult(bodyTask, ok, "标题", content, nil)
 	if err != nil {
 		t.Fatalf("in-scope suggestion must survive: %v", err)
 	}
@@ -1072,8 +1101,15 @@ func TestWritingReviewBodyChunkRejectsAnchorsOutsideItsChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(first, raw, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("out-of-chunk anchor error=%v, want invalid response", err)
+	_, validated, err := parseWritingReviewTaskResult(first, raw, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("out-of-chunk anchor must be dropped without failing the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("out-of-chunk anchor suggestions=%+v, want none", validated.Suggestions)
+	}
+	if validated.DroppedBodySuggestions != 1 {
+		t.Fatalf("dropped body suggestions=%d, want one", validated.DroppedBodySuggestions)
 	}
 }
 
@@ -1136,6 +1172,9 @@ func TestWritingReviewTaskDropsOnlyTheRejectedBodySuggestion(t *testing.T) {
 	if len(validated.Suggestions) != 1 || validated.Suggestions[0].Before != "第一段落用于承载可用的锚点。" {
 		t.Fatalf("validated=%+v", validated.Suggestions)
 	}
+	if validated.DroppedBodySuggestions != 1 {
+		t.Fatalf("dropped body suggestions=%d, want one", validated.DroppedBodySuggestions)
+	}
 
 	allBad, err := json.Marshal(map[string]any{
 		"bodySuggestions": []map[string]any{
@@ -1145,8 +1184,47 @@ func TestWritingReviewTaskDropsOnlyTheRejectedBodySuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := parseWritingReviewTaskResult(task, allBad, "标题", content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("all-rejected error=%v, want invalid response so the task retries", err)
+	_, validated, err = parseWritingReviewTaskResult(task, allBad, "标题", content, nil)
+	if err != nil {
+		t.Fatalf("all-rejected suggestions must not fail the task: %v", err)
+	}
+	if len(validated.Suggestions) != 0 {
+		t.Fatalf("all-rejected suggestions=%+v, want none", validated.Suggestions)
+	}
+	if validated.DroppedBodySuggestions != 1 {
+		t.Fatalf("dropped body suggestions=%d, want one", validated.DroppedBodySuggestions)
+	}
+}
+
+func TestWritingReviewTaskDoesNotRetryWhenAllBodySuggestionsAreDropped(t *testing.T) {
+	var requests int
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"content":[{"type":"text","text":"{\"bodySuggestions\":[{\"category\":\"clarity\",\"before\":\"不存在的锚点\",\"after\":\"无关紧要\",\"reason\":\"锚点不存在\"}]}"}],"stop_reason":"end_turn"}`)
+	}))
+	defer provider.Close()
+
+	plan, err := buildWritingReviewTaskPlan("标题", "正文", "proofread")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := executeWritingReviewTask(
+		context.Background(), provider.Client(), agentLLMProvider{
+			Mode: "byok", Protocol: "anthropic", BaseURL: provider.URL, Model: "test-model",
+		}, plan.Tasks[0], "标题", "正文", parseMarkdownReviewBlocks("正文"),
+	)
+	if err != nil {
+		t.Fatalf("all-rejected body suggestions must complete the task: %v", err)
+	}
+	if requests != 1 {
+		t.Fatalf("provider requests=%d, want one request", requests)
+	}
+	if len(result.Validated.Suggestions) != 0 {
+		t.Fatalf("validated suggestions=%+v, want none", result.Validated.Suggestions)
+	}
+	if result.Validated.DroppedBodySuggestions != 1 {
+		t.Fatalf("dropped body suggestions=%d, want one", result.Validated.DroppedBodySuggestions)
 	}
 }
 
@@ -1535,6 +1613,25 @@ func TestAgentReviewProgressKeepsStageFailedAfterLateSuccess(t *testing.T) {
 	}
 	if progress.Stages[0].CompletedTasks != 0 || progress.CompletedTasks != 0 {
 		t.Fatalf("completed counters = %d/%d", progress.Stages[0].CompletedTasks, progress.CompletedTasks)
+	}
+}
+
+func TestAgentReviewProgressRecordsDroppedSuggestions(t *testing.T) {
+	progress := agentReviewTaskProgress{
+		TotalTasks: 1,
+		Stages: []agentReviewStageProgress{{ID: agentReviewTaskBody, Status: "running", TotalTasks: 1}},
+	}
+	progress.record(writingReviewTaskOutcome{
+		Result: writingReviewTaskResult{
+			Task: writingReviewTaskSpec{Stage: agentReviewTaskBody},
+			Validated: validatedWritingReview{
+				DroppedBodySuggestions: 2, DroppedLayoutSuggestions: 1,
+			},
+		},
+	})
+	stage := progress.Stages[0]
+	if stage.DroppedBodySuggestions != 2 || stage.DroppedLayoutSuggestions != 1 {
+		t.Fatalf("dropped counters=%d/%d, want 2/1", stage.DroppedBodySuggestions, stage.DroppedLayoutSuggestions)
 	}
 }
 

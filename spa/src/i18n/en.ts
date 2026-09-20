@@ -149,7 +149,7 @@ export const en: Messages = {
       "Connect Codex, Claude Code, OpenCode, OpenClaw, or any compatible Streamable HTTP MCP client to Koinote.",
     overviewTitle: "How it works",
     overviewBody:
-      "Your agent provides the model capability for normal document tools. Koinote handles authorization, document tools, revision conflicts, and audit records; GEO summary generation can call the built-in model or your configured BYOK channel.",
+      "Your agent provides the model capability for normal document tools. Koinote handles authorization, document tools, revision conflicts, and audit records; GEO summary generation can call the built-in model or your configured BYOK channel. After you bind Feishu, a write token can also call sync_document_to_feishu to create or update a Feishu document.",
     setupTitle: "Before you start",
     setupSteps: [
       { title: "Activate Lifetime", desc: "MCP is a Lifetime benefit." },
@@ -177,7 +177,7 @@ export const en: Messages = {
     verifyLabel: "Try these prompts after setup",
     usageTitle: "Using Koinote from an agent",
     usageBody:
-      "No special syntax is required. Say that you want to work with Koinote and the agent will select the MCP tools. Name the document and desired outcome explicitly for replacement or trash operations. With a publish-only token, you can ask the agent to push a named document to the bound WeChat Official Account draft box or generate and maintain its GEO summary; explicitly request GEO when pushing.",
+      "No special syntax is required. Say that you want to work with Koinote and the agent will select the MCP tools. After binding Feishu, ask it to call sync_document_to_feishu to perform a one-way Koinote-to-Feishu sync; Koinote remains the source of truth. Name the document and desired outcome explicitly for replacement or trash operations. With a publish-only token, you can ask the agent to push a named document to the bound WeChat Official Account draft box or generate and maintain its GEO summary; explicitly request GEO when pushing.",
     prompts: [
       "List the five documents I edited most recently in Koinote.",
       "Write an article about remote work and save it to Koinote.",
@@ -187,7 +187,7 @@ export const en: Messages = {
     permissionsTitle: "Permissions and deletion boundaries",
     permissions: [
       "Read-only tokens can list, search, and read documents and history, but cannot change content.",
-      "Read/write tokens can create, append, update, restore versions, and move documents into or out of trash.",
+      "Read/write tokens can create, append, update, restore versions, and move documents into or out of trash; after Feishu is bound, they can also call sync_document_to_feishu to create or update a Feishu document.",
       "Publish-only tokens can read documents and call push_wechat_draft to create an Official Account draft, but cannot modify or delete Koinote documents.",
       "Read/write and publish-only tokens can generate or maintain a WeChat GEO summary; built-in generation consumes credits, and drafts omit it unless requested.",
       "Agents cannot permanently delete documents; that requires confirmation in the web trash page.",

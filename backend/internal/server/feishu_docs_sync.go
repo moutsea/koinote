@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"koinote/backend/internal/httpx"
+	"koinote/backend/internal/model"
 )
 
 var feishuIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,200}$`)
@@ -62,53 +63,60 @@ func (a *App) feishuDocumentSync(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), feishuSyncTimeout)
 	defer cancel()
-	connection, release, err := a.lockFeishuAccount(ctx, user.ID)
+	result, err := a.syncFeishuDocument(ctx, user, r.PathValue("docId"))
 	if err != nil {
 		writeFeishuError(w, err)
 		return
 	}
+	httpx.JSON(w, 200, result)
+}
+
+func (a *App) syncFeishuDocument(ctx context.Context, user model.User, documentID string) (feishuSyncResult, error) {
+	if !a.cfg.FeishuDocsEnabled() {
+		return feishuSyncResult{}, errFeishuNotConfigured
+	}
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return feishuSyncResult{}, errDocumentNotFound
+	}
+	connection, release, err := a.lockFeishuAccount(ctx, user.ID)
+	if err != nil {
+		return feishuSyncResult{}, err
+	}
 	defer release()
-	documentID := r.PathValue("docId")
 	var title, content string
 	var revision int64
 	err = connection.QueryRow(ctx, `SELECT title,content,revision FROM documents WHERE doc_id=$1 AND user_id=$2 AND trashed_at IS NULL`, documentID, user.ID).Scan(&title, &content, &revision)
 	if errors.Is(err, pgx.ErrNoRows) {
-		httpx.ErrorCode(w, 404, "not_found", "Document not found")
-		return
+		return feishuSyncResult{}, errDocumentNotFound
 	}
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	if strings.TrimSpace(title) == "" {
 		title = "Untitled"
 	}
 	credential, err := a.loadFeishuCredential(ctx, connection, user.ID)
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	converted, err := a.convertFeishuDocument(ctx, credential.AccessToken, content)
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	batches, err := prepareFeishuBatches(converted)
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	images, err := a.prepareFeishuImages(ctx, converted)
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	var remoteID string
 	err = connection.QueryRow(ctx, `SELECT feishu_document_id FROM feishu_document_links WHERE user_id=$1 AND document_id=$2 AND app_id=$3 AND open_id=$4`, user.ID, documentID, a.cfg.FeishuClientID, credential.OpenID).Scan(&remoteID)
 	created := errors.Is(err, pgx.ErrNoRows)
 	if err != nil && !created {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
 	for attempt := 0; attempt < 2; attempt++ {
 		if created {
@@ -119,21 +127,18 @@ func (a *App) feishuDocumentSync(w http.ResponseWriter, r *http.Request) {
 			}
 			err = a.feishuJSON(ctx, credential.AccessToken, http.MethodPost, "/docx/v1/documents", map[string]string{"title": title}, &result)
 			if err != nil {
-				writeFeishuError(w, err)
-				return
+				return feishuSyncResult{}, err
 			}
 			remoteID = result.Document.ID
 			if !feishuIDPattern.MatchString(remoteID) {
-				writeFeishuError(w, errors.New("Feishu document ID missing"))
-				return
+				return feishuSyncResult{}, errors.New("Feishu document ID missing")
 			}
 			persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			_, err = connection.Exec(persistCtx, `INSERT INTO feishu_document_links (user_id,document_id,app_id,open_id,feishu_document_id) VALUES ($1,$2,$3,$4,$5)
 				ON CONFLICT (user_id,document_id,app_id,open_id) DO UPDATE SET feishu_document_id=EXCLUDED.feishu_document_id,source_revision=0,synced_at=NULL`, user.ID, documentID, a.cfg.FeishuClientID, credential.OpenID, remoteID)
 			persistCancel()
 			if err != nil {
-				writeFeishuError(w, err)
-				return
+				return feishuSyncResult{}, err
 			}
 		}
 		err = a.replaceFeishuDocument(ctx, credential.AccessToken, remoteID, title, batches, images)
@@ -142,17 +147,15 @@ func (a *App) feishuDocumentSync(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err != nil {
-			writeFeishuError(w, err)
-			return
+			return feishuSyncResult{}, err
 		}
 		break
 	}
 	_, err = connection.Exec(ctx, `UPDATE feishu_document_links SET source_revision=$5,synced_at=now() WHERE user_id=$1 AND document_id=$2 AND app_id=$3 AND open_id=$4`, user.ID, documentID, a.cfg.FeishuClientID, credential.OpenID, revision)
 	if err != nil {
-		writeFeishuError(w, err)
-		return
+		return feishuSyncResult{}, err
 	}
-	httpx.JSON(w, 200, feishuSyncResult{URL: feishuDocumentURL(remoteID), Created: created, Revision: revision})
+	return feishuSyncResult{URL: feishuDocumentURL(remoteID), Created: created, Revision: revision}, nil
 }
 
 func (a *App) convertFeishuDocument(ctx context.Context, token, content string) (feishuConversion, error) {

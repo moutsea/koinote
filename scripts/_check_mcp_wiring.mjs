@@ -207,8 +207,18 @@ ok(
     "apply_text_patch",
     "generate_wechat_geo_summary",
     "update_wechat_geo_summary",
+    "sync_document_to_feishu",
   ].every((name) => new RegExp(`Name: [\\"']${name}[\\"']`).test(mcp)),
   "新增工具必须同时注册并进入 read/write 工具清单",
+);
+ok(
+  "MCP 支持单向同步飞书文档",
+  /Name: [\"']sync_document_to_feishu[\"']/.test(mcp) &&
+    /func \(a \*App\) mcpSyncDocumentToFeishu/.test(
+      readFileSync(new URL("../backend/internal/server/mcp_feishu.go", import.meta.url), "utf8"),
+    ) &&
+    /sync_document_to_feishu/.test(readme),
+  "读写令牌应复用已有飞书同步服务，并在文档中说明绑定和单向覆盖语义",
 );
 ok(
   "MCP 提供主题目录和 credits 查询",

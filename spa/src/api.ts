@@ -970,6 +970,8 @@ export type AgentReviewTaskProgress = {
     completedTasks: number;
     totalTasks: number;
     durationMs: number;
+    droppedBodySuggestions?: number;
+    droppedLayoutSuggestions?: number;
   }>;
 };
 

@@ -563,7 +563,11 @@ includes("首轮诊断注入长度有硬上界", tasks, "agentReviewPriorFinding
 // 逐条丢弃：一条锚点写错不能连累同一份响应里写对的建议。
 includes("单条建议不合法只丢这一条", prompt, "if dropRejectedSuggestions {");
 includes("重叠时保留优先级更高的一条", prompt, "writingSuggestionOverlapsAny(candidate, acceptedBody)");
-includes("正文建议全被丢弃才判定响应不可用", tasks, "every body suggestion was rejected");
+assert.doesNotMatch(
+  tasks,
+  /writingReviewHasBodySuggestion|every body suggestion was rejected/,
+  "正文建议全部被丢弃时不应使整个审阅失败",
+);
 includes("审阅详情使用共享失败原因映射", panel, "agentReviewFailureTranslationCode(");
 includes("深入分析来源失效有明确提示", zh, "invalid_agent_review_source");
 

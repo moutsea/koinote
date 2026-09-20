@@ -112,11 +112,13 @@ type agentReviewTaskProgress struct {
 }
 
 type agentReviewStageProgress struct {
-	ID             agentReviewTaskStage `json:"id"`
-	Status         string               `json:"status"`
-	CompletedTasks int                  `json:"completedTasks"`
-	TotalTasks     int                  `json:"totalTasks"`
-	DurationMS     int64                `json:"durationMs"`
+	ID                       agentReviewTaskStage `json:"id"`
+	Status                   string               `json:"status"`
+	CompletedTasks           int                  `json:"completedTasks"`
+	TotalTasks               int                  `json:"totalTasks"`
+	DurationMS               int64                `json:"durationMs"`
+	DroppedBodySuggestions   int                  `json:"droppedBodySuggestions,omitempty"`
+	DroppedLayoutSuggestions int                  `json:"droppedLayoutSuggestions,omitempty"`
 }
 
 type agentReviewSuggestionView struct {
@@ -668,6 +670,19 @@ func (a *App) runAgentReview(
 		},
 		func(outcome writingReviewTaskOutcome) error {
 			progress.record(outcome)
+			if outcome.Err == nil &&
+				(outcome.Result.Validated.DroppedBodySuggestions > 0 || outcome.Result.Validated.DroppedLayoutSuggestions > 0) {
+				log.Printf(
+					"agent review suggestions dropped review=%s task=%s stage=%s body=%d/%d layout=%d/%d",
+					reviewID,
+					outcome.Result.Task.ID,
+					outcome.Result.Task.Stage,
+					outcome.Result.Validated.DroppedBodySuggestions,
+					len(outcome.Result.Generated.BodySuggestions),
+					outcome.Result.Validated.DroppedLayoutSuggestions,
+					len(outcome.Result.Generated.LayoutSuggestions),
+				)
+			}
 			persistCtx, persistCancel := context.WithTimeout(context.Background(), agentReviewFinalizeLimit)
 			defer persistCancel()
 			if err := a.storeAgentReviewTaskOutcome(
@@ -1161,6 +1176,8 @@ func (progress *agentReviewTaskProgress) record(outcome writingReviewTaskOutcome
 		}
 		stage.CompletedTasks++
 		progress.CompletedTasks++
+		stage.DroppedBodySuggestions += outcome.Result.Validated.DroppedBodySuggestions
+		stage.DroppedLayoutSuggestions += outcome.Result.Validated.DroppedLayoutSuggestions
 		if stage.CompletedTasks >= stage.TotalTasks {
 			stage.Status = "completed"
 		} else {

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Koinote",
-  "version": "0.1.61",
+  "version": "0.1.62",
   "identifier": "app.koinote.desktop",
   "build": {
     "frontendDist": "../spa/dist",

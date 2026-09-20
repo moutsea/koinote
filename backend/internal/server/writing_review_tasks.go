@@ -1243,8 +1243,14 @@ func runWritingReviewTaskWave(
 			}
 		}
 		if outcome.Err != nil {
-			if primaryErr == nil || (errors.Is(primaryErr, context.Canceled) && !errors.Is(outcome.Err, context.Canceled)) {
-				primaryErr = outcome.Err
+			taskErr := fmt.Errorf(
+				"writing review task %s (%s): %w",
+				outcome.Result.Task.ID,
+				outcome.Result.Task.Stage,
+				outcome.Err,
+			)
+			if primaryErr == nil || (errors.Is(primaryErr, context.Canceled) && !errors.Is(taskErr, context.Canceled)) {
+				primaryErr = taskErr
 			}
 			cancel()
 		}
@@ -1377,23 +1383,9 @@ func parseWritingReviewTaskResult(
 	if err != nil {
 		return generatedWritingReview{}, validatedWritingReview{}, err
 	}
-	// 但正文建议整份被丢光说明这次响应确实不可用，仍然报错以触发重试。
-	// 排版建议本来就是设计成逐条丢弃的（引用了不可编辑的块等），不在此列。
-	if len(generated.BodySuggestions) > 0 && !writingReviewHasBodySuggestion(validated) {
-		return generatedWritingReview{}, validatedWritingReview{}, fmt.Errorf(
-			"%w: every body suggestion was rejected", errAgentLLMInvalidResponse,
-		)
-	}
+	// 正文建议是可选结果。模型偶尔会引用不在当前分块中的文字，或生成重复锚点；
+	// 这些条目已经逐条丢弃，不能再让它们把标题和结构审阅一并判失败。
 	return generated, validated, nil
-}
-
-func writingReviewHasBodySuggestion(validated validatedWritingReview) bool {
-	for _, suggestion := range validated.Suggestions {
-		if suggestion.Kind == "content" && suggestion.Target == "body" {
-			return true
-		}
-	}
-	return false
 }
 
 func decodeStrictWritingReviewTask(raw []byte, target any) error {

@@ -263,6 +263,11 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 			Description: "Apply one or more unique exact-text replacements to a document only if expectedRevision still matches. Read the document again after a conflict or ambiguous anchor.",
 			Annotations: destructive,
 		}, a.mcpApplyTextPatch)
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "sync_document_to_feishu", Title: "Sync a document to Feishu",
+			Description: "Create or update the authenticated member's bound Feishu document from a Koinote document. This is a one-way external write: Koinote content replaces the linked Feishu document body. Requires a Feishu account binding in Settings → Feishu.",
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), IdempotentHint: true, OpenWorldHint: boolPtr(true)},
+		}, a.mcpSyncDocumentToFeishu)
 		addWechatGeoTools(destructive)
 	}
 	if principal.canPublish() {

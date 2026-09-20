@@ -151,7 +151,7 @@ export const fr: Messages = {
       "Connectez Codex, Claude Code, OpenCode, OpenClaw ou tout client MCP Streamable HTTP compatible à Koinote.",
     overviewTitle: "Fonctionnement",
     overviewBody:
-      "Pour les outils documentaires habituels, le modèle est fourni par votre agent. Koinote gère l’autorisation, les outils, les conflits et l’audit ; la génération d’un résumé GEO peut appeler le modèle intégré ou votre canal BYOK configuré.",
+      "Pour les outils documentaires habituels, le modèle est fourni par votre agent. Koinote gère l’autorisation, les outils, les conflits et l’audit ; la génération d’un résumé GEO peut appeler le modèle intégré ou votre canal BYOK configuré. Après avoir lié Feishu, un jeton d’écriture peut aussi appeler sync_document_to_feishu pour créer ou mettre à jour un document Feishu.",
     setupTitle: "Avant de commencer",
     setupSteps: [
       {
@@ -181,7 +181,7 @@ export const fr: Messages = {
     verifyLabel: "Exemples à essayer",
     usageTitle: "Utilisation depuis un agent",
     usageBody:
-      "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille. Avec un jeton de publication seule, demandez à l’agent d’envoyer un document nommé vers les brouillons du compte WeChat lié ou de générer et gérer son résumé GEO ; demandez explicitement l’inclusion du GEO lors de l’envoi.",
+      "Aucune syntaxe spéciale n’est requise. Demandez simplement à l’agent d’utiliser Koinote et précisez le document pour les remplacements ou la corbeille. Après avoir lié Feishu, demandez-lui d’appeler sync_document_to_feishu pour effectuer une synchronisation à sens unique de Koinote vers Feishu. Avec un jeton de publication seule, demandez à l’agent d’envoyer un document nommé vers les brouillons du compte WeChat lié ou de générer et gérer son résumé GEO ; demandez explicitement l’inclusion du GEO lors de l’envoi.",
     prompts: [
       "Liste mes cinq documents Koinote modifiés le plus récemment.",
       "Rédige un article sur le travail à distance et enregistre-le dans Koinote.",
@@ -191,7 +191,7 @@ export const fr: Messages = {
     permissionsTitle: "Permissions et suppression",
     permissions: [
       "Les jetons en lecture seule peuvent lister, rechercher et lire les documents et l’historique.",
-      "Les jetons en écriture peuvent créer, ajouter, mettre à jour, restaurer et gérer la corbeille.",
+      "Les jetons en écriture peuvent créer, ajouter, mettre à jour, restaurer et gérer la corbeille ; après liaison de Feishu, ils peuvent aussi appeler sync_document_to_feishu pour créer ou mettre à jour un document Feishu.",
       "Les jetons de publication seule peuvent lire les documents et appeler push_wechat_draft pour créer un brouillon WeChat, sans modifier ni supprimer les documents Koinote.",
       "Les jetons d’écriture et de publication seule peuvent générer ou gérer un résumé GEO WeChat ; le modèle intégré consomme des credits et les brouillons l’omettront sauf demande explicite.",
       "Un agent ne peut pas supprimer définitivement un document ; cette action reste dans l’interface web.",

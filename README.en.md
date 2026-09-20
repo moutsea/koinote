@@ -295,6 +295,8 @@ revision; the browser editor uses the same optimistic lock and offers a local/re
 UI on conflict. See the [design notes](docs/DESIGN.en.md#mcp-document-access) for the
 trade-offs.
 
+Write tokens can also call `sync_document_to_feishu` to create or update a bound Feishu document from Koinote. Bind the Feishu account first under Settings → Feishu. This is a one-way sync: the Koinote title and Markdown replace the Feishu body, with no bidirectional sync or conflict merging.
+
 ## AI optimization
 
 Lifetime members can open **AI optimization** from the editor toolbar. The editor saves
