@@ -153,6 +153,7 @@ export function EditorPage() {
       : null;
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
+  const [mobileOutlineOpen, setMobileOutlineOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const importingRef = useRef(false);
   const [importNotice, setImportNotice] = useState<{
@@ -305,12 +306,15 @@ export function EditorPage() {
   }, [saver]);
 
   useEffect(() => {
-    if (!mobileDocsOpen) return;
+    if (!mobileDocsOpen && !mobileOutlineOpen) return;
     const releaseModal = pushModal();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileDocsOpen(false);
+      if (event.key === "Escape") {
+        setMobileDocsOpen(false);
+        setMobileOutlineOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
@@ -318,7 +322,7 @@ export function EditorPage() {
       window.removeEventListener("keydown", closeOnEscape);
       releaseModal();
     };
-  }, [mobileDocsOpen]);
+  }, [mobileDocsOpen, mobileOutlineOpen]);
 
   useEffect(() => {
     if (!importNotice) return;
@@ -1279,7 +1283,7 @@ export function EditorPage() {
           label={t.editor.outlinePanel}
           icon={<ListTree className="h-4 w-4" />}
           onClick={() => setOutlineOpen(true)}
-          className="hidden xl:flex"
+          className="hidden lg:flex"
         />
       )}
     </>
@@ -1354,16 +1358,32 @@ export function EditorPage() {
           </div>
         )}
 
-        <div className="flex items-center border-b border-black/5 px-2 py-1.5 dark:border-white/10 lg:hidden">
+        <div className="flex items-center gap-1 border-b border-black/5 px-2 py-1.5 dark:border-white/10 lg:hidden">
           <button
             type="button"
-            onClick={() => setMobileDocsOpen(true)}
+            onClick={() => {
+              setMobileOutlineOpen(false);
+              setMobileDocsOpen(true);
+            }}
             aria-label={t.editor.documentsPanel}
             aria-expanded={mobileDocsOpen}
             className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-neutral-100"
           >
             <FolderTree className="h-4 w-4" />
             {t.editor.documentsPanel}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileDocsOpen(false);
+              setMobileOutlineOpen(true);
+            }}
+            aria-label={t.editor.outlinePanel}
+            aria-expanded={mobileOutlineOpen}
+            className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-neutral-100"
+          >
+            <ListTree className="h-4 w-4" />
+            {t.editor.outlinePanel}
           </button>
         </div>
 
@@ -1483,7 +1503,7 @@ export function EditorPage() {
                   minWidth={140}
                   maxWidth={360}
                   ariaLabel={t.editor.resizeOutline}
-                  className="hidden xl:block"
+                  className="hidden lg:block"
                   bordered={false}
                 >
                   <OutlinePanel
@@ -1590,6 +1610,33 @@ export function EditorPage() {
               onOrganize={handleOrganize}
               autoEditFolderId={autoEditFolderId}
               onAutoEditDone={() => setAutoEditFolderId(null)}
+            />
+          </aside>
+        </div>
+      )}
+
+      {mobileOutlineOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label={t.editor.collapsePanel}
+            onClick={() => setMobileOutlineOpen(false)}
+            className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.editor.outlinePanel}
+            className="relative ml-auto h-full w-[min(86vw,20rem)] border-l bg-white shadow-2xl dark:border-white/10 dark:bg-neutral-950"
+            style={{ borderColor: "var(--ink-line)" }}
+          >
+            <OutlinePanel
+              outline={outline}
+              onJump={(position) => {
+                if (editor) scrollToHeading(editor, position);
+                setMobileOutlineOpen(false);
+              }}
+              onCollapse={() => setMobileOutlineOpen(false)}
             />
           </aside>
         </div>
