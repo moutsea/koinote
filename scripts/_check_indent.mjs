@@ -42,8 +42,8 @@ for (let d = 0; d < 8; d += 1) {
 for (let d = 0; d < 8; d += 1) {
   ok(`depth ${d}: 文件夹逐层右移`, folderPad(d + 1) > folderPad(d));
   ok(`depth ${d}: 文档逐层右移`, docPad(d + 1) > docPad(d));
-  eq(`depth ${d}: 文件夹步长`, folderPad(d + 1) - folderPad(d), 28);
-  eq(`depth ${d}: 文档步长`, docPad(d + 1) - docPad(d), 28);
+  eq(`depth ${d}: 文件夹步长`, folderPad(d + 1) - folderPad(d), 16);
+  eq(`depth ${d}: 文档步长`, docPad(d + 1) - docPad(d), 16);
 }
 
 // 步长下限：小于等于 14 的话子文档就顶不到父文件夹图标右边，层级看起来是平的
