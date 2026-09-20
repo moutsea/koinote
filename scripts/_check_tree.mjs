@@ -89,6 +89,42 @@ function fakeDataTransfer() {
   ok("写入 Koinote 自定义 MIME", transfer.values.has(TREE_DRAG_MIME));
 }
 
+{
+  const transfer = fakeDataTransfer();
+  const payload = { kind: "doc", id: "doc-1", ids: ["doc-1", "doc-2", "doc-3"] };
+  writeTreeDragPayload(transfer, payload);
+  eq("拖动多选文档可恢复完整载荷", readTreeDragPayload(transfer), payload);
+  ok(
+    "多选文档载荷按集合比较",
+    sameTreeDragPayload(payload, { kind: "doc", id: "doc-1", ids: ["doc-3", "doc-1", "doc-2"] }),
+  );
+}
+
+{
+  const transfer = fakeDataTransfer();
+  const payload = {
+    kind: "doc",
+    id: "doc-1",
+    selection: [
+      { kind: "doc", id: "doc-1" },
+      { kind: "folder", id: "folder-1" },
+    ],
+  };
+  writeTreeDragPayload(transfer, payload);
+  eq("混合选择拖放可恢复完整载荷", readTreeDragPayload(transfer), payload);
+  ok(
+    "混合选择载荷按集合比较",
+    sameTreeDragPayload(payload, {
+      kind: "doc",
+      id: "doc-1",
+      selection: [
+        { kind: "folder", id: "folder-1" },
+        { kind: "doc", id: "doc-1" },
+      ],
+    }),
+  );
+}
+
 eq(
   "不同对象中的同一树载荷按值相等",
   sameTreeDragPayload(

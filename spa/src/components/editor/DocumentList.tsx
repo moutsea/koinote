@@ -5,12 +5,14 @@ import {
   ChevronLeft,
   FilePlus,
   FolderCog,
+  FolderInput,
   FolderPlus,
   LoaderCircle,
   Pencil,
   Plus,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import type { ApplyDocumentOrganizationResult } from "../../documentOrganizer";
 import { interpolate, useI18n } from "../../i18n";
@@ -23,7 +25,13 @@ import {
   type DocumentOrganizationPlan,
   type DocumentOrganizerStrategy,
 } from "./documentOrganizerCore";
-import { buildTree, canCreateSubfolder, canDropDoc, canDropFolder } from "./tree";
+import {
+  buildTree,
+  canCreateSubfolder,
+  canDropDoc,
+  canDropFolder,
+  type TreeLevel,
+} from "./tree";
 import {
   FolderRow,
   DocRow,
@@ -35,10 +43,22 @@ import {
   markdownFilesFromDataTransfer,
   readTreeDragPayload,
   sameTreeDragPayload,
+  documentIds,
   type DragPayload,
 } from "./treeDrag";
+import {
+  flattenVisibleTree,
+  compactTreeSelection,
+  rangeSelectionKeys,
+  replaceRangeSelection,
+  treeSelectionKey,
+  type TreeSelectionItem,
+} from "./treeSelection";
+import { isModalOpen } from "../../modalStack";
 
 type DragHover = { payload: DragPayload; local: boolean };
+
+const EMPTY_SELECTION_KEYS = new Set<string>();
 
 /**
  * 侧栏文件树。
@@ -46,8 +66,8 @@ type DragHover = { payload: DragPayload; local: boolean };
  * 拖拽用原生 HTML5 DnD 而不是引库：文件夹用于归类，文档用于同级排序。原生 DnD
  * 足够覆盖这两种交互，且不增加依赖。
  *
- * 原生 DnD 键盘不可达。文件夹的重命名与删除有按钮兜住，但「移动」目前只能靠拖 ——
- * 这是这一版的无障碍缺口，右键菜单「移动到…」待补。
+ * 原生 DnD 键盘不可达。选择工具栏提供批量删除和「移动到…」入口，单项拖放仍保留
+ * 作为快速整理方式。
  */
 export function DocumentList({
   documents,
@@ -59,10 +79,12 @@ export function DocumentList({
   onCreate,
   onCreateFolder,
   onDelete,
+  onDeleteMany,
   onRenameFolder,
   onRenameDoc,
   onDeleteFolder,
   onMoveDoc,
+  onMoveMany,
   onReorderDocuments,
   onMoveFolder,
   onCollapse,
@@ -88,10 +110,12 @@ export function DocumentList({
   onCreate: (folderId?: string | null) => void;
   onCreateFolder: (parentFolderId?: string | null) => void;
   onDelete: (docId: string, title: string) => void;
+  onDeleteMany: (items: TreeSelectionItem[]) => Promise<boolean> | boolean;
   onRenameFolder: (folderId: string, name: string) => void;
   onRenameDoc: (docId: string, title: string) => Promise<boolean>;
   onDeleteFolder: (folderId: string, name: string) => void;
   onMoveDoc: (docId: string, folderId: string | null) => void;
+  onMoveMany: (items: TreeSelectionItem[], folderId: string | null) => Promise<boolean> | boolean;
   onReorderDocuments: (docId: string, folderId: string | null, docIds: string[]) => void;
   onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
@@ -105,10 +129,38 @@ export function DocumentList({
   const { locale, t } = useI18n();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const organizerMenuRef = useRef<HTMLDivElement | null>(null);
+  const selectionAreaRef = useRef<HTMLDivElement | null>(null);
+  const treeRef = useRef<HTMLUListElement | null>(null);
+  const selectionMoveMenuRef = useRef<HTMLDivElement | null>(null);
+  const selectionMoveTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [rootOverDrag, setRootOverDrag] = useState<DragHover | null>(null);
   const [rootFileOver, setRootFileOver] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+  const selectionRangeRef = useRef<Set<string>>(new Set());
+  const [selectionBox, setSelectionBox] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const marqueeRef = useRef<{
+    startX: number;
+    startY: number;
+    baseKeys: Set<string>;
+    additive: boolean;
+    active: boolean;
+    rows: Array<{
+      key: string;
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    }>;
+  } | null>(null);
+  const [selectionMoveMenuOpen, setSelectionMoveMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(
     null,
   );
@@ -128,6 +180,298 @@ export function DocumentList({
     useState<DocumentOrganizerStrategy | null>(null);
 
   const tree = useMemo(() => buildTree(folders, documents), [folders, documents]);
+  const visibleItems = useMemo(
+    () => flattenVisibleTree(tree, expanded),
+    [expanded, tree],
+  );
+  const allSelectionItems = useMemo<TreeSelectionItem[]>(
+    () => [
+      ...folders.map((folder) => ({ kind: "folder" as const, id: folder.folderId })),
+      ...documents.map((document) => ({
+        kind: "doc" as const,
+        id: document.docId,
+        revision: document.revision,
+      })),
+    ],
+    [documents, folders],
+  );
+  const allSelectionKeys = useMemo(
+    () => new Set(allSelectionItems.map(treeSelectionKey)),
+    [allSelectionItems],
+  );
+  const documentByID = useMemo(
+    () => new Map(documents.map((document) => [document.docId, document])),
+    [documents],
+  );
+  const selectedItems = useMemo(
+    () => allSelectionItems.filter((item) => selectedKeys.has(treeSelectionKey(item))),
+    [allSelectionItems, selectedKeys],
+  );
+  const movableSelectedItems = useMemo(
+    () => compactTreeSelection(selectedItems, folders, documents),
+    [documents, folders, selectedItems],
+  );
+  const displayedSelectedKeys = selectedItems.length > 1 ? selectedKeys : EMPTY_SELECTION_KEYS;
+  const folderTargets = useMemo(() => {
+    const targets: { id: string; name: string; depth: number }[] = [];
+    const visit = (level: TreeLevel, depth: number) => {
+      for (const folder of level.folders) {
+        targets.push({
+          id: folder.folderId,
+          name: folder.name.trim() || t.editor.untitledFolder,
+          depth,
+        });
+        visit(folder, depth + 1);
+      }
+    };
+    visit(tree, 0);
+    return targets;
+  }, [t.editor.untitledFolder, tree]);
+
+  useEffect(() => {
+    setSelectedKeys((previous) => {
+      const next = new Set([...previous].filter((key) => allSelectionKeys.has(key)));
+      return next.size === previous.size ? previous : next;
+    });
+    setSelectionAnchor((previous) =>
+      previous && allSelectionKeys.has(previous) ? previous : null,
+    );
+  }, [allSelectionKeys]);
+
+  useEffect(() => {
+    if (selectedItems.length === 0) setSelectionMoveMenuOpen(false);
+  }, [selectedItems.length]);
+
+  useEffect(() => {
+    if (!selectionMoveMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!selectionMoveMenuRef.current?.contains(event.target as Node)) {
+        setSelectionMoveMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSelectionMoveMenuOpen(false);
+        selectionMoveTriggerRef.current?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectionMoveMenuOpen]);
+
+  useEffect(() => {
+    if (!selectionMoveMenuOpen) return;
+    selectionMoveMenuRef.current?.querySelector<HTMLButtonElement>(
+      'button[role="menuitem"]:not([disabled])',
+    )?.focus();
+  }, [selectionMoveMenuOpen]);
+
+  const onSelectionMoveMenuKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSelectionMoveMenuOpen(false);
+      selectionMoveTriggerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const buttons = Array.from(
+      selectionMoveMenuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="menuitem"]:not([disabled])',
+      ) ?? [],
+    );
+    if (buttons.length === 0) return;
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    buttons[(current + step + buttons.length) % buttons.length]?.focus();
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedKeys(new Set());
+    setSelectionAnchor(null);
+    selectionRangeRef.current.clear();
+    setSelectionMoveMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (selectedItems.length === 0) return;
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !isModalOpen() &&
+        !selectionMoveMenuOpen &&
+        !organizerMenuOpen
+      ) {
+        clearSelection();
+      }
+    };
+    window.addEventListener("keydown", clearOnEscape);
+    return () => window.removeEventListener("keydown", clearOnEscape);
+  }, [clearSelection, organizerMenuOpen, selectionMoveMenuOpen, selectedItems.length]);
+
+  const onSelectItem = useCallback(
+    (
+      item: TreeSelectionItem,
+      event: React.MouseEvent | React.KeyboardEvent,
+    ) => {
+      const key = treeSelectionKey(item);
+      if (event.shiftKey) {
+        const previousRange = new Set(selectionRangeRef.current);
+        const nextRange = rangeSelectionKeys(visibleItems, selectionAnchor, key);
+        setSelectedKeys((previous) => {
+          return replaceRangeSelection(previous, previousRange, nextRange);
+        });
+        selectionRangeRef.current = new Set(nextRange);
+        if (!selectionAnchor) setSelectionAnchor(key);
+      } else if (event.ctrlKey || event.metaKey) {
+        setSelectedKeys((previous) => {
+          const next = new Set(previous);
+          if (next.has(key)) next.delete(key);
+          else next.add(key);
+          return next;
+        });
+        selectionRangeRef.current.clear();
+        setSelectionAnchor(key);
+      } else {
+        setSelectedKeys(new Set([key]));
+        selectionRangeRef.current = new Set([key]);
+        setSelectionAnchor(key);
+      }
+    },
+    [selectionAnchor, visibleItems],
+  );
+
+  const selectionMoveAllowed = useCallback(
+    (targetFolderId: string | null) => {
+      if (movableSelectedItems.length === 0) return false;
+      let hasMove = false;
+      for (const item of movableSelectedItems) {
+        if (item.kind === "doc") {
+          const document = documentByID.get(item.id);
+          if (!document) return false;
+          if (document.folderId !== targetFolderId) hasMove = true;
+          continue;
+        }
+        const result = canDropFolder(folders, item.id, targetFolderId);
+        if (result.reason === "noop") continue;
+        if (!result.ok) return false;
+        hasMove = true;
+      }
+      return hasMove;
+    },
+    [documentByID, folders, movableSelectedItems],
+  );
+
+  const beginSelectionBox = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || event.pointerType !== "mouse" || !event.isPrimary) return;
+      const target = event.target as Element;
+      if (target.closest("[data-tree-item]") || target.closest("button, input")) return;
+      const area = selectionAreaRef.current;
+      if (!area) return;
+      const rect = area.getBoundingClientRect();
+      if (
+        (event.clientX >= rect.left + area.clientWidth && event.clientX <= rect.right) ||
+        (event.clientY >= rect.top + area.clientHeight && event.clientY <= rect.bottom)
+      ) return;
+      const additive = event.ctrlKey || event.metaKey;
+      marqueeRef.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        baseKeys: additive ? new Set(selectedKeys) : new Set(),
+        additive,
+        active: false,
+        rows: Array.from(area.querySelectorAll<HTMLElement>("[data-tree-item-key]")).map((row) => {
+          const rowRect = row.getBoundingClientRect();
+          return {
+            key: row.dataset.treeItemKey!,
+            left: rowRect.left,
+            right: rowRect.right,
+            top: rowRect.top,
+            bottom: rowRect.bottom,
+          };
+        }),
+      };
+      setSelectionBox({
+        left: event.clientX - rect.left + area.scrollLeft,
+        top: event.clientY - rect.top + area.scrollTop,
+        width: 0,
+        height: 0,
+      });
+    },
+    [selectedKeys],
+  );
+
+  const selectionBoxActive = selectionBox !== null;
+  useEffect(() => {
+    if (!selectionBoxActive) return;
+    const update = (event: PointerEvent) => {
+      const marquee = marqueeRef.current;
+      const area = selectionAreaRef.current;
+      if (!marquee || !area) return;
+      const distance = Math.hypot(
+        event.clientX - marquee.startX,
+        event.clientY - marquee.startY,
+      );
+      if (!marquee.active && distance < 4) return;
+      if (!marquee.active) {
+        marquee.active = true;
+        if (!marquee.additive) {
+          setSelectedKeys(new Set());
+          setSelectionAnchor(null);
+          selectionRangeRef.current.clear();
+        }
+      }
+      event.preventDefault();
+      const rect = area.getBoundingClientRect();
+      const leftClient = Math.min(marquee.startX, event.clientX);
+      const rightClient = Math.max(marquee.startX, event.clientX);
+      const topClient = Math.min(marquee.startY, event.clientY);
+      const bottomClient = Math.max(marquee.startY, event.clientY);
+      setSelectionBox({
+        left: leftClient - rect.left + area.scrollLeft,
+        top: topClient - rect.top + area.scrollTop,
+        width: rightClient - leftClient,
+        height: bottomClient - topClient,
+      });
+      const next = new Set(marquee.baseKeys);
+      marquee.rows.forEach((rowRect) => {
+        const intersects =
+          rowRect.left < rightClient &&
+          rowRect.right > leftClient &&
+          rowRect.top < bottomClient &&
+          rowRect.bottom > topClient;
+        if (intersects) next.add(rowRect.key);
+      });
+      setSelectedKeys(next);
+    };
+    const finish = () => {
+      const marquee = marqueeRef.current;
+      if (marquee && !marquee.active && !marquee.additive) {
+        setSelectedKeys(new Set());
+        setSelectionAnchor(null);
+        selectionRangeRef.current.clear();
+      }
+      marqueeRef.current = null;
+      setSelectionBox(null);
+    };
+    window.addEventListener("pointermove", update);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", finish);
+    return () => {
+      window.removeEventListener("pointermove", update);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", finish);
+    };
+  }, [selectionBoxActive]);
   const organizerPlans = useMemo(() => {
     const labels = t.editor.organizer;
     const sharedLabels = {
@@ -188,7 +532,10 @@ export function DocumentList({
       }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeOrganizerMenu();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeOrganizerMenu();
+      }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     window.addEventListener("keydown", closeOnEscape);
@@ -225,11 +572,110 @@ export function DocumentList({
     });
   }, []);
 
+  const focusVisibleItem = useCallback((key: string) => {
+    const row = Array.from(
+      treeRef.current?.querySelectorAll<HTMLElement>("[data-tree-item-key]") ?? [],
+    ).find((candidate) => candidate.dataset.treeItemKey === key);
+    row?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  }, []);
+
+  const onTreeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLUListElement>) => {
+      if (event.defaultPrevented) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+      const row = target.closest<HTMLElement>("[data-tree-item-key]");
+      const key = row?.dataset.treeItemKey;
+      if (!key) return;
+      const index = visibleItems.findIndex((item) => treeSelectionKey(item) === key);
+      if (index < 0) return;
+      const item = visibleItems[index];
+      const focusAndSelect = (nextIndex: number) => {
+        const next = visibleItems[nextIndex];
+        if (!next) return;
+        event.preventDefault();
+        focusVisibleItem(treeSelectionKey(next));
+        if (event.shiftKey || (!event.ctrlKey && !event.metaKey)) {
+          onSelectItem(next, event);
+        }
+      };
+
+      if (event.key === "ArrowDown") {
+        focusAndSelect(Math.min(index + 1, visibleItems.length - 1));
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        focusAndSelect(Math.max(index - 1, 0));
+        return;
+      }
+      if (event.key === "Home") {
+        focusAndSelect(0);
+        return;
+      }
+      if (event.key === "End") {
+        focusAndSelect(visibleItems.length - 1);
+        return;
+      }
+      if (event.key === "ArrowRight" && item.kind === "folder") {
+        if (!expanded.has(item.id)) {
+          event.preventDefault();
+          onToggle(item.id);
+          return;
+        }
+        const child = visibleItems[index + 1];
+        if (child && child.depth > item.depth) {
+          event.preventDefault();
+          focusVisibleItem(treeSelectionKey(child));
+        }
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        if (item.kind === "folder" && expanded.has(item.id)) {
+          event.preventDefault();
+          onToggle(item.id);
+          return;
+        }
+        for (let parentIndex = index - 1; parentIndex >= 0; parentIndex -= 1) {
+          if (visibleItems[parentIndex].depth < item.depth) {
+            event.preventDefault();
+            focusVisibleItem(treeSelectionKey(visibleItems[parentIndex]));
+            return;
+          }
+        }
+      }
+    },
+    [expanded, focusVisibleItem, onSelectItem, onToggle, visibleItems],
+  );
+
   const canDropOn = useCallback(
-    (payload: DragPayload, targetFolderId: string | null) =>
-      payload.kind === "folder"
-        ? canDropFolder(folders, payload.id, targetFolderId).ok
-        : canDropDoc(documents, payload.id, targetFolderId).ok,
+    (payload: DragPayload, targetFolderId: string | null) => {
+      if (payload.selection) {
+        const items = compactTreeSelection(payload.selection, folders, documents);
+        if (items.length === 0) return false;
+        let hasMove = false;
+        for (const item of items) {
+          const result =
+            item.kind === "folder"
+              ? canDropFolder(folders, item.id, targetFolderId)
+              : canDropDoc(documents, item.id, targetFolderId);
+          if (result.reason === "noop") continue;
+          if (!result.ok) return false;
+          hasMove = true;
+        }
+        return hasMove;
+      }
+      if (payload.kind === "folder") {
+        return canDropFolder(folders, payload.id, targetFolderId).ok;
+      }
+      let hasMove = false;
+      for (const docId of documentIds(payload)) {
+        const result = canDropDoc(documents, docId, targetFolderId);
+        if (result.reason === "noop") continue;
+        if (!result.ok) return false;
+        hasMove = true;
+      }
+      return hasMove;
+    },
     [folders, documents],
   );
 
@@ -237,12 +683,31 @@ export function DocumentList({
     (payload: DragPayload, targetFolderId: string | null) => {
       setDragging(null);
       if (!canDropOn(payload, targetFolderId)) return;
-      if (payload.kind === "folder") onMoveFolder(payload.id, targetFolderId);
-      else onMoveDoc(payload.id, targetFolderId);
+      if (payload.selection) {
+        void onMoveMany(
+          compactTreeSelection(payload.selection, folders, documents),
+          targetFolderId,
+        );
+      } else if (payload.kind === "folder") onMoveFolder(payload.id, targetFolderId);
+      else {
+        const docIds = documentIds(payload);
+        if (docIds.length > 1) {
+          void onMoveMany(
+            docIds.map((id) => ({
+              kind: "doc" as const,
+              id,
+              revision: documentByID.get(id)?.revision,
+            })),
+            targetFolderId,
+          );
+        } else {
+          onMoveDoc(payload.id, targetFolderId);
+        }
+      }
       // 放进去就展开，否则拖进去的东西「消失」了，还得自己点开才看得见
       if (targetFolderId) setExpanded((prev) => new Set(prev).add(targetFolderId));
     },
-    [canDropOn, onMoveFolder, onMoveDoc],
+    [canDropOn, documentByID, documents, folders, onMoveFolder, onMoveDoc, onMoveMany],
   );
 
   const onImportFiles = useCallback(
@@ -260,10 +725,21 @@ export function DocumentList({
 
   const canReorderDoc = useCallback(
     (payload: DragPayload, targetDocId: string) => {
-      if (payload.kind !== "doc" || payload.id === targetDocId) return false;
-      const dragged = documents.find((document) => document.docId === payload.id);
+      if (
+        payload.kind !== "doc" ||
+        payload.id === targetDocId ||
+        payload.selection?.some((item) => item.kind === "folder")
+      ) return false;
       const target = documents.find((document) => document.docId === targetDocId);
-      return Boolean(dragged && target && dragged.folderId === target.folderId);
+      const dragged = documentIds(payload)
+        .map((docId) => documents.find((document) => document.docId === docId))
+        .filter((document): document is (typeof documents)[number] => Boolean(document));
+      return Boolean(
+        target &&
+          dragged.length === documentIds(payload).length &&
+          !documentIds(payload).includes(targetDocId) &&
+          dragged.every((document) => document.folderId === target.folderId),
+      );
     },
     [documents],
   );
@@ -273,15 +749,17 @@ export function DocumentList({
       if (payload.kind !== "doc" || !canReorderDoc(payload, targetDocId)) return;
       const target = documents.find((document) => document.docId === targetDocId);
       if (!target) return;
-      const dragged = documents.find((document) => document.docId === payload.id);
-      if (!dragged) return;
+      const movingIds = documentIds(payload);
+      const moving = new Set(movingIds);
       const siblings = documents.filter(
         (document) => document.folderId === target.folderId,
       );
-      const next = siblings.filter((document) => document.docId !== payload.id);
+      const dragged = siblings.filter((document) => moving.has(document.docId));
+      if (dragged.length !== movingIds.length) return;
+      const next = siblings.filter((document) => !moving.has(document.docId));
       const targetIndex = next.findIndex((document) => document.docId === targetDocId);
       if (targetIndex < 0) return;
-      next.splice(position === "before" ? targetIndex : targetIndex + 1, 0, dragged);
+      next.splice(position === "before" ? targetIndex : targetIndex + 1, 0, ...dragged);
       onReorderDocuments(
         payload.id,
         target.folderId,
@@ -326,6 +804,10 @@ export function DocumentList({
     expanded,
     onToggle,
     onSelectDoc: onSelect,
+    selectedKeys,
+    displayedSelectedKeys,
+    dragSelection: selectedItems,
+    onSelectItem,
     onDeleteDoc: onDelete,
     onRenameFolder,
     onRenameDoc,
@@ -467,6 +949,95 @@ export function DocumentList({
         </button>
       </div>
 
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {selectedItems.length > 0
+          ? interpolate(t.editor.selectedItems, { count: selectedItems.length })
+          : ""}
+      </span>
+
+      {selectedItems.length > 1 && (
+        <div className="relative mx-2 mb-2 flex items-center gap-1 rounded-lg border border-cinnabar-200 bg-cinnabar-50/70 px-2 py-1.5 dark:border-cinnabar-900 dark:bg-cinnabar-950/30">
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-cinnabar-800 dark:text-cinnabar-200">
+            {interpolate(t.editor.selectedItems, { count: selectedItems.length })}
+          </span>
+          <div ref={selectionMoveMenuRef} className="relative">
+            <button
+              type="button"
+              ref={selectionMoveTriggerRef}
+              aria-label={t.editor.moveSelected}
+              aria-haspopup="menu"
+              aria-expanded={selectionMoveMenuOpen}
+              title={t.editor.moveSelected}
+              onClick={() => setSelectionMoveMenuOpen((open) => !open)}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-cinnabar-700 hover:bg-cinnabar-100 dark:text-cinnabar-300 dark:hover:bg-cinnabar-900/60"
+            >
+              <FolderInput className="h-3.5 w-3.5" />
+            </button>
+            {selectionMoveMenuOpen && (
+              <div
+                role="menu"
+                aria-label={t.editor.moveSelected}
+                onKeyDown={onSelectionMoveMenuKeyDown}
+                className="absolute left-0 top-full z-40 mt-1 max-h-64 min-w-48 overflow-y-auto rounded-xl border border-black/10 bg-[var(--background)] p-1 shadow-xl dark:border-white/10"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!selectionMoveAllowed(null)}
+                  onClick={() => {
+                    void Promise.resolve(onMoveMany(movableSelectedItems, null)).then((success) => {
+                      if (success) clearSelection();
+                    });
+                  }}
+                  className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-black/5 disabled:opacity-40 dark:text-neutral-200 dark:hover:bg-white/10"
+                >
+                  {t.editor.rootFolder}
+                </button>
+                {folderTargets.map((folder) => (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    role="menuitem"
+                    disabled={!selectionMoveAllowed(folder.id)}
+                    onClick={() => {
+                      void Promise.resolve(onMoveMany(movableSelectedItems, folder.id)).then((success) => {
+                        if (success) clearSelection();
+                      });
+                    }}
+                    style={{ paddingLeft: `${10 + folder.depth * 12}px` }}
+                    className="flex w-full items-center rounded-lg py-1.5 pr-2.5 text-left text-xs text-neutral-700 hover:bg-black/5 disabled:opacity-40 dark:text-neutral-200 dark:hover:bg-white/10"
+                  >
+                    {folder.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label={t.editor.deleteSelected}
+            title={t.editor.deleteSelected}
+            onClick={() => {
+              void Promise.resolve(onDeleteMany(selectedItems)).then((success) => {
+                if (success) clearSelection();
+              });
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={t.editor.clearSelection}
+            title={t.editor.clearSelection}
+            onClick={clearSelection}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="px-3 pb-2">
         <input
           ref={importInputRef}
@@ -499,6 +1070,8 @@ export function DocumentList({
       {/* 整个滚动区都是「根」的放置区：拖到空白处即移出文件夹。
           提示只在拖动中显现，静止时不该有多余的框 */}
       <div
+        ref={selectionAreaRef}
+        onPointerDown={beginSelectionBox}
         onDragOver={(e) => {
           if (hasExternalFileDrag(e.dataTransfer)) {
             e.preventDefault();
@@ -536,13 +1109,21 @@ export function DocumentList({
         }}
         // 空白处右键 = 根菜单。行上的右键已经 stopPropagation，不会走到这里
         onContextMenu={(e) => openMenu(e, { kind: "root" })}
-        className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
-          // 500 而不是 400，理由同 TreeRow：拖放落点提示要够 3:1
+        className={`relative min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${
+          selectionBoxActive ? "select-none" : ""
+        } ${
           rootDropHovered || rootFileOver
             ? "rounded-lg ring-1 ring-inset ring-cinnabar-500"
             : ""
         }`}
       >
+        {selectionBox && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute z-20 rounded-sm border border-cinnabar-500 bg-cinnabar-500/10"
+            style={selectionBox}
+          />
+        )}
         {error && (
           <p
             role="alert"
@@ -568,7 +1149,14 @@ export function DocumentList({
             {t.editor.emptyDocuments}
           </p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul
+            ref={treeRef}
+            role="tree"
+            aria-label={t.editor.documentsPanel}
+            aria-multiselectable="true"
+            onKeyDown={onTreeKeyDown}
+            className="space-y-0.5"
+          >
             {tree.folders.map((folder) => (
               <FolderRow key={folder.folderId} folder={folder} depth={0} h={handlers} />
             ))}

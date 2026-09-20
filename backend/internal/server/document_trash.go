@@ -34,8 +34,19 @@ func (a *App) trashDocument(ctx context.Context, user model.User, docID string, 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, user.ID); err != nil {
 		return trashedDocument{}, err
 	}
+	out, err := trashDocumentTx(ctx, tx, user, docID, expectedRevision)
+	if err != nil {
+		return trashedDocument{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return trashedDocument{}, err
+	}
+	return out, nil
+}
+
+func trashDocumentTx(ctx context.Context, tx pgx.Tx, user model.User, docID string, expectedRevision int64) (trashedDocument, error) {
 	var out trashedDocument
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		UPDATE documents
 		SET trashed_at = now(), revision = revision + 1, updated_at = now()
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
@@ -65,9 +76,6 @@ func (a *App) trashDocument(ctx context.Context, user model.User, docID string, 
 		return trashedDocument{}, err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM editor_tabs WHERE user_id = $1 AND doc_id = $2`, user.ID, out.DocID); err != nil {
-		return trashedDocument{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return trashedDocument{}, err
 	}
 	return out, nil

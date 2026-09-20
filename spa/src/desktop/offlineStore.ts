@@ -6,6 +6,7 @@ import type {
   Folder,
   TrashedDocumentSummary,
   UploadedImage,
+  TreeMutationItem,
 } from "../api";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -14,6 +15,7 @@ import {
   MAX_IMPORT_UPLOAD_IMAGE_BYTES,
 } from "../documentTransferCore";
 import { imageFetchURL } from "../components/editor/imageLoading";
+import { MAX_FOLDER_DEPTH } from "../components/editor/tree";
 import { getStoredDesktopSession } from "./auth";
 import { prepareDesktopSync } from "./logoutGuard";
 import { desktopFetch } from "./network";
@@ -213,6 +215,12 @@ async function accountID(): Promise<string> {
 
 function isLocalAccount(account: string): boolean {
   return account === DESKTOP_LOCAL_ACCOUNT_ID;
+}
+
+function desktopOperationError(code: string): Error & { code: string } {
+  const error = new Error(code) as Error & { code: string };
+  error.code = code;
+  return error;
 }
 
 async function storedLocalValue(account: string, value: string): Promise<string> {
@@ -1552,7 +1560,67 @@ export async function desktopRenameFolder(folderId: string, name: string): Promi
 }
 
 export async function desktopMoveFolder(folderId: string, parentFolderId: string | null) {
-  return mutateFolder(folderId, `parent_folder_id = $3`, [parentFolderId]);
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const local = isLocalAccount(account);
+    const rows = await db.select<Pick<FolderRow, "folder_id" | "parent_folder_id">[]>(`
+      SELECT folder_id, parent_folder_id FROM offline_folders
+      WHERE account_id = $1 AND sync_state <> 'delete'
+    `, [account]);
+    const parentOf = new Map(rows.map((row) => [row.folder_id, row.parent_folder_id]));
+    if (!parentOf.has(folderId)) throw desktopOperationError("not_found");
+    if (parentFolderId !== null && !parentOf.has(parentFolderId)) {
+      throw desktopOperationError("not_found");
+    }
+    if (folderId === parentFolderId) throw desktopOperationError("invalid_move");
+
+    const walked = new Set<string>();
+    let depth = 1;
+    let current = parentFolderId;
+    while (current !== null) {
+      if (current === folderId || walked.has(current)) {
+        throw desktopOperationError("invalid_move");
+      }
+      walked.add(current);
+      depth += 1;
+      const parent = parentOf.get(current);
+      if (parent === undefined) throw desktopOperationError("not_found");
+      current = parent;
+    }
+    let subtreeHeight = 0;
+    for (const candidate of rows) {
+      if (candidate.folder_id === folderId) continue;
+      const candidateWalked = new Set<string>();
+      let ancestor = candidate.parent_folder_id;
+      let distance = 1;
+      while (ancestor !== null && !candidateWalked.has(ancestor)) {
+        if (ancestor === folderId) {
+          subtreeHeight = Math.max(subtreeHeight, distance);
+          break;
+        }
+        candidateWalked.add(ancestor);
+        ancestor = parentOf.get(ancestor) ?? null;
+        distance += 1;
+      }
+    }
+    if (depth + subtreeHeight > MAX_FOLDER_DEPTH) {
+      throw desktopOperationError("too_deep");
+    }
+
+    await db.execute(`
+      UPDATE offline_folders SET parent_folder_id = $3,
+        sync_state = CASE
+          WHEN $4 = 1 THEN 'clean'
+          WHEN sync_state = 'create' THEN 'create'
+          ELSE 'update'
+        END,
+        change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
+      WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'delete'
+    `, [account, folderId, parentFolderId, local ? 1 : 0]);
+    if (!local) scheduleSync();
+    return { ok: true };
+  });
 }
 
 async function mutateFolder(folderId: string, assignment: string, values: unknown[]) {
@@ -1705,10 +1773,248 @@ export async function desktopMoveDocument(docId: string, folderId: string | null
             WHERE sibling.account_id = $1 AND sibling.folder_id IS $3
               AND sibling.doc_id <> $2 AND sibling.sync_state <> 'trash'
           ), 0),
-          folder_dirty = $4, change_seq = change_seq + 1
+          folder_dirty = $4, order_dirty = $5, change_seq = change_seq + 1
       WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
-    `, [account, docId, folderId, local ? 0 : 1]);
+    `, [account, docId, folderId, local ? 0 : 1, local ? 0 : 1]);
     if (!local) scheduleSync();
+    return { ok: true };
+  });
+}
+
+function sameOptionalString(left: string | null, right: string | null): boolean {
+  return left === right;
+}
+
+function localFolderDepth(
+  parents: Map<string, string | null>,
+  folderId: string | null,
+): number {
+  let depth = 0;
+  const seen = new Set<string>();
+  let current = folderId;
+  while (current !== null) {
+    if (seen.has(current) || !parents.has(current)) return Number.POSITIVE_INFINITY;
+    seen.add(current);
+    depth += 1;
+    current = parents.get(current) ?? null;
+  }
+  return depth;
+}
+
+function localFolderDescendant(
+  parents: Map<string, string | null>,
+  root: string,
+  candidate: string,
+): boolean {
+  const seen = new Set<string>();
+  let current: string | null = candidate;
+  while (current !== null) {
+    if (current === root) return true;
+    if (seen.has(current)) return false;
+    seen.add(current);
+    current = parents.get(current) ?? null;
+  }
+  return false;
+}
+
+function localFolderChildren(
+  parents: Map<string, string | null>,
+): Map<string, string[]> {
+  const children = new Map<string, string[]>();
+  for (const [folderId, parentId] of parents) {
+    if (!parentId) continue;
+    const siblings = children.get(parentId) ?? [];
+    siblings.push(folderId);
+    children.set(parentId, siblings);
+  }
+  return children;
+}
+
+function localFolderSubtreeHeight(
+  children: Map<string, string[]>,
+  root: string,
+): number {
+  const visit = (folderId: string, path: Set<string>): number => {
+    if (path.has(folderId)) return 0;
+    const nextPath = new Set(path).add(folderId);
+    return Math.max(
+      0,
+      ...(children.get(folderId) ?? []).map(
+        (child) => 1 + visit(child, nextPath),
+      ),
+    );
+  };
+  return visit(root, new Set());
+}
+
+export async function desktopMoveMany(
+  items: TreeMutationItem[],
+  folderId: string | null,
+) {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const local = isLocalAccount(account);
+    const folderRows = await db.select<
+      Pick<FolderRow, "folder_id" | "parent_folder_id" | "sync_state">[]
+    >(`
+      SELECT folder_id, parent_folder_id, sync_state FROM offline_folders
+      WHERE account_id = $1 AND sync_state <> 'delete'
+    `, [account]);
+    const folderByID = new Map(folderRows.map((row) => [row.folder_id, row]));
+    if (folderId !== null && !folderByID.has(folderId)) {
+      throw desktopOperationError("not_found");
+    }
+    const parents = new Map(folderRows.map((row) => [row.folder_id, row.parent_folder_id]));
+    const children = localFolderChildren(parents);
+    const docRows = await db.select<Pick<DocumentRow, "doc_id" | "folder_id">[]>(`
+      SELECT doc_id, folder_id FROM offline_documents
+      WHERE account_id = $1 AND sync_state <> 'trash'
+    `, [account]);
+    const docByID = new Map(docRows.map((row) => [row.doc_id, row.folder_id]));
+    const seen = new Set<string>();
+    const movingFolders: string[] = [];
+    const movingDocs: string[] = [];
+    for (const item of items) {
+      const key = `${item.kind}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (item.kind === "folder") {
+        const folder = folderByID.get(item.id);
+        if (!folder) throw desktopOperationError("not_found");
+        if (item.id === folderId) throw desktopOperationError("invalid_move");
+        if (folderId && localFolderDescendant(parents, item.id, folderId)) {
+          throw desktopOperationError("invalid_move");
+        }
+        if (sameOptionalString(folder.parent_folder_id, folderId)) continue;
+        const targetDepth = localFolderDepth(parents, folderId);
+        if (targetDepth + 1 + localFolderSubtreeHeight(children, item.id) > MAX_FOLDER_DEPTH) {
+          throw desktopOperationError("too_deep");
+        }
+        movingFolders.push(item.id);
+      } else {
+        const currentFolder = docByID.get(item.id);
+        if (currentFolder === undefined) throw desktopOperationError("not_found");
+        if (!sameOptionalString(currentFolder, folderId)) movingDocs.push(item.id);
+      }
+    }
+
+    for (const movingFolder of movingFolders) {
+      const folder = folderByID.get(movingFolder)!;
+      await db.execute(`
+        UPDATE offline_folders SET parent_folder_id = $3,
+          sync_state = CASE
+            WHEN $4 = 1 THEN 'clean'
+            WHEN sync_state = 'create' THEN 'create'
+            ELSE 'update'
+          END,
+          change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
+        WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'delete'
+      `, [account, movingFolder, folderId, local ? 1 : 0]);
+      folder.parent_folder_id = folderId;
+    }
+    for (const docId of movingDocs) {
+      await db.execute(`
+        UPDATE offline_documents
+        SET folder_id = $3,
+            sort_order = COALESCE((
+              SELECT MAX(sibling.sort_order) + 1
+              FROM offline_documents sibling
+              WHERE sibling.account_id = $1 AND sibling.folder_id IS $3
+                AND sibling.doc_id <> $2 AND sibling.sync_state <> 'trash'
+            ), 0),
+            folder_dirty = $4, order_dirty = $5,
+            change_seq = change_seq + 1, last_error = NULL
+        WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+      `, [account, docId, folderId, local ? 0 : 1, local ? 0 : 1]);
+    }
+    if (!local && (movingFolders.length > 0 || movingDocs.length > 0)) scheduleSync();
+    return { ok: true };
+  });
+}
+
+export async function desktopDeleteMany(items: TreeMutationItem[]) {
+  return serializeMutation(async () => {
+    const account = await accountID();
+    const db = await database();
+    const local = isLocalAccount(account);
+    const seen = new Set<string>();
+    const docIDs: string[] = [];
+    const folderIDs: string[] = [];
+    for (const item of items) {
+      const key = `${item.kind}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (item.kind === "doc") docIDs.push(item.id);
+      else folderIDs.push(item.id);
+    }
+    const docRows = await db.select<Pick<DocumentRow, "doc_id">[]>(`
+      SELECT doc_id FROM offline_documents
+      WHERE account_id = $1 AND sync_state <> 'trash'
+    `, [account]);
+    const knownDocs = new Set(docRows.map((row) => row.doc_id));
+    if (docIDs.some((id) => !knownDocs.has(id))) throw desktopOperationError("not_found");
+    const folderRows = await db.select<FolderRow[]>(`
+      SELECT * FROM offline_folders
+      WHERE account_id = $1 AND sync_state <> 'delete'
+    `, [account]);
+    const knownFolders = new Set(folderRows.map((row) => row.folder_id));
+    if (folderIDs.some((id) => !knownFolders.has(id))) {
+      throw desktopOperationError("not_found");
+    }
+    for (const docId of docIDs) {
+      await db.execute(`
+        UPDATE offline_documents
+        SET sync_state = 'trash', change_seq = change_seq + 1,
+            updated_at = $3, last_error = NULL
+        WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+      `, [account, docId, new Date().toISOString()]);
+    }
+    for (const folderId of folderIDs) {
+      const rows = await db.select<FolderRow[]>(`
+        SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2
+      `, [account, folderId]);
+      const folder = rows[0];
+      if (!folder) throw desktopOperationError("not_found");
+      const movedDocuments = await db.select<Array<{ doc_id: string }>>(`
+        SELECT doc_id FROM offline_documents
+        WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
+        ORDER BY sort_order ASC, doc_id ASC
+      `, [account, folderId]);
+      const parentOrder = await db.select<Array<{ max_order: number | null }>>(`
+        SELECT MAX(sort_order) AS max_order FROM offline_documents
+        WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
+      `, [account, folder.parent_folder_id]);
+      let nextOrder = Number(parentOrder[0]?.max_order ?? -1) + 1;
+      for (const document of movedDocuments) {
+        await db.execute(`
+          UPDATE offline_documents
+          SET folder_id = $3, sort_order = $4, folder_dirty = $5, order_dirty = $6,
+              change_seq = change_seq + 1, last_error = NULL
+          WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+        `, [account, document.doc_id, folder.parent_folder_id, nextOrder, local ? 0 : 1, local ? 0 : 1]);
+        nextOrder += 1;
+      }
+      await db.execute(`
+        UPDATE offline_folders SET parent_folder_id = $3,
+          sync_state = CASE
+            WHEN $4 = 1 THEN 'clean'
+            WHEN sync_state = 'create' THEN 'create'
+            ELSE 'update'
+          END,
+          change_seq = change_seq + 1
+        WHERE account_id = $1 AND parent_folder_id = $2 AND sync_state <> 'delete'
+      `, [account, folderId, folder.parent_folder_id, local ? 1 : 0]);
+      if (local || folder.sync_state === "create") {
+        await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, folderId]);
+      } else {
+        await db.execute(`
+          UPDATE offline_folders SET sync_state = 'delete', change_seq = change_seq + 1
+          WHERE account_id = $1 AND folder_id = $2
+        `, [account, folderId]);
+      }
+    }
+    if (!local && (docIDs.length > 0 || folderIDs.length > 0)) scheduleSync();
     return { ok: true };
   });
 }
@@ -2084,8 +2390,98 @@ async function pushFolders(account: string) {
   }
 }
 
+async function pushPendingDocumentTreeMoves(account: string) {
+  const db = await database();
+  const rows = await db.select<DocumentRow[]>(`
+    SELECT * FROM offline_documents
+    WHERE account_id = $1 AND sync_state = 'clean' AND folder_dirty = 1
+    ORDER BY sort_order ASC, doc_id ASC
+  `, [account]);
+  const groups = new Map<string, DocumentRow[]>();
+  for (const row of rows) {
+    const key = row.folder_id ?? "";
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const folderId = group[0]?.folder_id ?? null;
+    const items: TreeMutationItem[] = group.map((row) => ({
+      kind: "doc",
+      id: row.doc_id,
+      ...(row.base_revision > 0 ? { revision: row.base_revision } : {}),
+    }));
+    try {
+      await remoteJSON("/api/tree/move", {
+        method: "POST",
+        body: JSON.stringify({ items, folderId }),
+      });
+    } catch (error) {
+      if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
+      for (const item of items) {
+        await remoteJSON(`/api/documents/${encodeURIComponent(item.id)}/folder`, {
+          method: "PUT",
+          body: JSON.stringify({ folderId }),
+        });
+      }
+    }
+    for (const row of group) {
+      await db.execute(`
+        UPDATE offline_documents
+        SET folder_dirty = 0, order_dirty = 0
+        WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
+          AND sync_state = 'clean' AND folder_dirty = 1
+      `, [account, row.doc_id, row.change_seq]);
+    }
+  }
+}
+
+async function pushPendingDocumentTrash(account: string) {
+  const db = await database();
+  const rows = await db.select<DocumentRow[]>(`
+    SELECT * FROM offline_documents
+    WHERE account_id = $1 AND sync_state = 'trash'
+  `, [account]);
+  const remoteRows = rows.filter((row) => row.base_revision > 0);
+  const localRows = rows.filter((row) => row.base_revision <= 0);
+  for (const row of localRows) {
+    await db.execute(`DELETE FROM offline_documents WHERE account_id = $1 AND doc_id = $2`, [account, row.doc_id]);
+  }
+  if (remoteRows.length === 0) return;
+  const items: TreeMutationItem[] = remoteRows.map((row) => ({
+    kind: "doc",
+    id: row.doc_id,
+    revision: row.base_revision,
+  }));
+  try {
+    await remoteJSON("/api/tree/delete", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  } catch (error) {
+    if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
+    for (const item of items) {
+      try {
+        await remoteJSON(`/api/documents/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      } catch (fallbackError) {
+        if (!(fallbackError instanceof RemoteHTTPError) || fallbackError.status !== 404) {
+          throw fallbackError;
+        }
+      }
+    }
+  }
+  for (const row of remoteRows) {
+    await db.execute(`
+      DELETE FROM offline_documents
+      WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3 AND sync_state = 'trash'
+    `, [account, row.doc_id, row.change_seq]);
+  }
+}
+
 async function pushDocuments(account: string): Promise<string[]> {
   const db = await database();
+  await pushPendingDocumentTreeMoves(account);
+  await pushPendingDocumentTrash(account);
   const imageUploadIssues: string[] = [];
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
@@ -2179,8 +2575,8 @@ async function pushDocuments(account: string): Promise<string[]> {
             AND (sync_state = 'create' OR folder_dirty = 1)
         `, [account, latest.folder_id]);
         if (Number(pendingSiblings[0]?.count ?? 0) > 0) continue;
-        const orderedRows = await db.select<{ doc_id: string }[]>(`
-          SELECT doc_id FROM offline_documents
+        const orderedRows = await db.select<{ doc_id: string; change_seq: number }[]>(`
+          SELECT doc_id, change_seq FROM offline_documents
           WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
           ORDER BY sort_order ASC, COALESCE(updated_at, '') DESC, doc_id DESC
         `, [account, latest.folder_id]);
@@ -2191,10 +2587,12 @@ async function pushDocuments(account: string): Promise<string[]> {
             docIds: orderedRows.map((item) => item.doc_id),
           }),
         });
-        await db.execute(`
-          UPDATE offline_documents SET order_dirty = 0
-          WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
-        `, [account, row.doc_id, latest.change_seq]);
+        for (const orderedRow of orderedRows) {
+          await db.execute(`
+            UPDATE offline_documents SET order_dirty = 0
+            WHERE account_id = $1 AND doc_id = $2 AND change_seq = $3
+          `, [account, orderedRow.doc_id, orderedRow.change_seq]);
+        }
       }
     } catch (error) {
       if (error instanceof OfflineImageUploadError) {

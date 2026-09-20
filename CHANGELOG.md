@@ -6,9 +6,14 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
-### Planned
+### Added
 
-- Future user-facing changes will be recorded here.
+- Added Shift/Ctrl multi-selection, keyboard navigation, and bulk move/delete to the document tree.
+- Added editor tab actions for closing related tabs and creating a new document.
+
+### Fixed
+
+- Batched tree mutations now share document revision checks and preserve image reclamation during permanent cleanup.
 
 ## [0.7.0] - 2026-09-01
 

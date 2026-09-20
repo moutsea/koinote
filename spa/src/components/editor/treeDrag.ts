@@ -1,12 +1,33 @@
+import type { TreeSelectionItem } from "./treeSelection";
+
 export type DragPayload =
-  | { kind: "doc"; id: string }
-  | { kind: "folder"; id: string };
+  | { kind: "doc"; id: string; ids?: string[]; selection?: TreeSelectionItem[] }
+  | { kind: "folder"; id: string; selection?: TreeSelectionItem[] };
+
+export function documentIds(payload: DragPayload): string[] {
+  if (payload.kind !== "doc") return [];
+  return [...new Set([payload.id, ...(payload.ids ?? [])])];
+}
 
 export function sameTreeDragPayload(
   left: DragPayload | null | undefined,
   right: DragPayload | null | undefined,
 ): boolean {
-  return Boolean(left && right && left.kind === right.kind && left.id === right.id);
+  if (!left || !right || left.kind !== right.kind || left.id !== right.id) return false;
+  if (left.selection || right.selection) {
+    const leftSelection = (left.selection ?? [{ kind: left.kind, id: left.id }])
+      .map((item) => `${item.kind}:${item.id}`)
+      .sort();
+    const rightSelection = (right.selection ?? [{ kind: right.kind, id: right.id }])
+      .map((item) => `${item.kind}:${item.id}`)
+      .sort();
+    return leftSelection.length === rightSelection.length &&
+      leftSelection.every((key, index) => key === rightSelection[index]);
+  }
+  if (left.kind !== "doc" || right.kind !== "doc") return true;
+  const leftIds = documentIds(left).sort();
+  const rightIds = documentIds(right).sort();
+  return leftIds.length === rightIds.length && leftIds.every((id, index) => id === rightIds[index]);
 }
 
 export const TREE_DRAG_MIME = "application/x-koinote-tree-item";
@@ -20,13 +41,46 @@ function parseTreeDragPayload(value: string): DragPayload | null {
   try {
     const parsed: unknown = JSON.parse(value);
     if (!parsed || typeof parsed !== "object") return null;
-    const candidate = parsed as { kind?: unknown; id?: unknown };
+    const candidate = parsed as {
+      kind?: unknown;
+      id?: unknown;
+      ids?: unknown;
+      selection?: unknown;
+    };
     if (candidate.kind !== "doc" && candidate.kind !== "folder") return null;
     if (typeof candidate.id !== "string" || candidate.id.trim() === "") return null;
-    return { kind: candidate.kind, id: candidate.id };
+    if (candidate.kind === "folder") {
+      const selection = parseSelection(candidate.selection);
+      return {
+        kind: "folder",
+        id: candidate.id,
+        ...(selection ? { selection } : {}),
+      };
+    }
+    const ids = Array.isArray(candidate.ids)
+      ? [...new Set(candidate.ids.filter((id): id is string => typeof id === "string" && id.trim() !== ""))]
+      : [];
+    const selection = parseSelection(candidate.selection);
+    return {
+      kind: "doc",
+      id: candidate.id,
+      ...(ids.length > 1 ? { ids: [candidate.id, ...ids.filter((id) => id !== candidate.id)] } : {}),
+      ...(selection ? { selection } : {}),
+    };
   } catch {
     return null;
   }
+}
+
+function parseSelection(value: unknown): TreeSelectionItem[] | null {
+  if (!Array.isArray(value)) return null;
+  const items = value.filter((item): item is TreeSelectionItem => {
+    if (!item || typeof item !== "object") return false;
+    const candidate = item as { kind?: unknown; id?: unknown };
+    return (candidate.kind === "doc" || candidate.kind === "folder") &&
+      typeof candidate.id === "string" && candidate.id.trim() !== "";
+  });
+  return items.length > 1 ? items : null;
 }
 
 export function writeTreeDragPayload(

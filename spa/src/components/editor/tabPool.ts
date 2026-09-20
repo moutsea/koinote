@@ -25,6 +25,28 @@ export const EMPTY_TABS: TabState = {
   activeDocId: null,
 };
 
+export type TabCloseScope = "current" | "others" | "left" | "right" | "all";
+
+export function tabsToClose(
+  tabs: string[],
+  docId: string | null,
+  scope: TabCloseScope,
+): string[] {
+  if (scope === "all") return [...tabs];
+  const index = docId === null ? -1 : tabs.indexOf(docId);
+  if (index === -1) return [];
+  switch (scope) {
+    case "current":
+      return tabs.slice(index, index + 1);
+    case "others":
+      return tabs.filter((id) => id !== docId);
+    case "left":
+      return tabs.slice(0, index);
+    case "right":
+      return tabs.slice(index + 1);
+  }
+}
+
 /**
  * 激活（或打开）一篇文档。
  *
@@ -83,14 +105,19 @@ export function close(
 /** 文档被删除：从两份状态里一起摘掉，逻辑与关标签相同 */
 export const removeDeleted = close;
 
-/** 批量摘掉已安全保存的标签，只激活最终留下的文档。 */
+/** 批量摘掉已安全保存的标签，只激活最终留下的相邻文档。 */
 export function closeMany(state: TabState, docIds: Iterable<string>): TabState {
-  const removed = new Set(docIds);
-  const openTabs = state.openTabs.filter((id) => !removed.has(id));
-  const activeDocId = state.activeDocId && openTabs.includes(state.activeDocId)
-    ? state.activeDocId
-    : openTabs[0] ?? null;
-  const liveIds = state.liveIds.filter((id) => !removed.has(id));
+  const closing = new Set(docIds);
+  const openTabs = state.openTabs.filter((id) => !closing.has(id));
+  let activeDocId = state.activeDocId;
+  if (activeDocId && !openTabs.includes(activeDocId)) {
+    const index = state.openTabs.indexOf(activeDocId);
+    activeDocId =
+      state.openTabs.slice(index + 1).find((id) => !closing.has(id)) ??
+      state.openTabs.slice(0, index).reverse().find((id) => !closing.has(id)) ??
+      null;
+  }
+  const liveIds = state.liveIds.filter((id) => !closing.has(id));
   const next = { openTabs, liveIds, activeDocId };
   return activeDocId ? activate(next, activeDocId).next : next;
 }

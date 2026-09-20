@@ -188,6 +188,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/folders/{folderId}/empty", a.folderDeleteEmptyOrganizer)
 	mux.HandleFunc("PUT /api/folders/{folderId}/parent", a.folderMove)
 	mux.HandleFunc("PUT /api/documents/{docId}/folder", a.documentMove)
+	mux.HandleFunc("POST /api/tree/move", a.treeBatchMove)
+	mux.HandleFunc("POST /api/tree/delete", a.treeBatchDelete)
 	mux.HandleFunc("PUT /api/documents/{docId}/order", a.documentOrder)
 
 	mux.HandleFunc("GET /api/editor/tabs", a.editorTabsGet)

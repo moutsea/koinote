@@ -4,9 +4,14 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
-### Planned
+### Added
 
-- Les prochains changements destinés aux utilisateurs seront ajoutés ici.
+- Ajout de la sélection multiple avec Shift/Ctrl, de la navigation au clavier et du déplacement ou de la suppression groupés dans l’arborescence.
+- Ajout d’actions de fermeture des onglets associés et de création d’un nouveau document.
+
+### Fixed
+
+- Les opérations groupées sur l’arborescence réutilisent désormais le contrôle de révision et préservent la récupération des images lors de la suppression définitive.
 
 ## [0.7.0] - 2026-09-01
 

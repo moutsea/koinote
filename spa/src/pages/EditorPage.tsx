@@ -23,14 +23,17 @@ import { scrollToHeading, useOutline } from "../components/editor/useOutline";
 import {
   useCreateDocument,
   useCreateFolder,
+  useDeleteTreeItems,
   useTrashDocument,
   useDeleteFolder,
   useDocument,
   useDocumentList,
+  useDocumentMutationBatch,
   useEditorTabs,
   useFolderList,
   useMoveDocument,
   useMoveFolder,
+  useMoveTreeItems,
   useReorderDocuments,
   useRefreshDocumentList,
   useRenameFolder,
@@ -54,7 +57,6 @@ import {
 import {
   EMPTY_TABS,
   activate,
-  close,
   closeMany,
   restoreClosedTabs,
   hydrate,
@@ -92,6 +94,10 @@ import {
   shouldPreserveEditorFocusAfterBlur,
   type EditorTabSelection,
 } from "../components/editor/editorTabSelection";
+import {
+  compactTreeSelection,
+  type TreeSelectionItem,
+} from "../components/editor/treeSelection";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -101,6 +107,15 @@ type ActiveEditor = {
   docId: string;
   editor: Editor;
 };
+
+function errorCodeOf(error: unknown): string | undefined {
+  if (error instanceof ApiError && error.code) return error.code;
+  if (error instanceof Error) {
+    const code = (error as Error & { code?: unknown }).code;
+    if (typeof code === "string" && code) return code;
+  }
+  return undefined;
+}
 
 export function EditorPage() {
   const { locale, t } = useI18n();
@@ -121,11 +136,14 @@ export function EditorPage() {
   const createFolder = useCreateFolder();
   const renameFolderMut = useRenameFolder();
   const deleteFolderMut = useDeleteFolder();
+  const deleteTreeMut = useDeleteTreeItems();
   const moveFolderMut = useMoveFolder();
   const moveDocMut = useMoveDocument();
+  const moveTreeMut = useMoveTreeItems();
   const reorderDocsMut = useReorderDocuments();
   const refreshList = useRefreshDocumentList();
   const confirmDelete = useDeleteConfirm();
+  const beginDocumentMutationBatch = useDocumentMutationBatch();
 
   const [activeEditor, setActiveEditor] = useState<ActiveEditor | null>(null);
   const editorSelections = useRef<Map<string, EditorTabSelection>>(new Map());
@@ -584,49 +602,57 @@ export function EditorPage() {
     [liveTitles, documents],
   );
 
-  const handleCloseTab = useCallback(
-    (docId: string) => {
+  const handleCloseTabs = useCallback(
+    (docIds: string[]) => {
       if (closingAllRef.current) return;
-      editorSelections.current.delete(docId);
-      /**
-       * 点「+」会立刻 POST 建一篇真文档，所以关标签只摘标签的话，一篇没动过的空
-       * 文档会永久留在侧栏里。这里把它删掉。
-       *
-       * 三个条件都要满足才删：本次会话新建的、没有未落库的改动、标题与正文都空。
-       * 「本次会话新建」这条是关键 —— 少了它，关掉一篇从服务端载入的旧空文档的
-       * 标签会把那篇真删了。
-       */
-      const untouched = isUntouchedNewDocument(docId, createdHere.current, saver);
+      const current = tabStateRef.current;
+      const requested = new Set(docIds);
+      const removed = current.openTabs.filter((id) => requested.has(id));
+      if (removed.length === 0) return;
+      const next = closeMany(current, removed);
 
-      if (untouched) {
-        // drop 而不是 forget：forget 会先 PUT 一次，而这篇马上就要删了
-        saver.drop(docId);
-        createdHere.current.delete(docId);
-        remove.mutate(docId);
-      } else {
-        // 先把待存内容存掉再摘标签，否则防抖窗口内的编辑就没了
-        void saver.forget(docId);
+      for (const docId of removed) {
+        editorSelections.current.delete(docId);
+        /**
+         * 点「+」会立刻 POST 建一篇真文档，所以关标签只摘标签的话，一篇没动过的空
+         * 文档会永久留在侧栏里。这里把它删掉。
+         *
+         * 三个条件都要满足才删：本次会话新建的、没有未落库的改动、标题与正文都空。
+         * 「本次会话新建」这条是关键 —— 少了它，关掉一篇从服务端载入的旧空文档的
+         * 标签会把那篇真删了。
+         */
+        const untouched = isUntouchedNewDocument(docId, createdHere.current, saver);
+
+        if (untouched) {
+          // drop 而不是 forget：forget 会先 PUT 一次，而这篇马上就要删了
+          saver.drop(docId);
+          createdHere.current.delete(docId);
+          remove.mutate(docId);
+        } else {
+          // 先把待存内容存掉再摘标签，否则防抖窗口内的编辑就没了
+          void saver.forget(docId);
+        }
       }
 
       // 闸门要在改地址之前立起来，挡住 activeDocId 还没更新的那几帧
-      if (docId === tabStateRef.current.activeDocId) {
-        justClosed.current = docId;
+      if (current.activeDocId && removed.includes(current.activeDocId)) {
+        justClosed.current = current.activeDocId;
       }
 
-      const { next, evicted } = close(tabStateRef.current, docId);
-      for (const id of evicted) void saver.flush(id);
+      tabStateRef.current = next;
       setTabState(next);
 
       // navigate 放在 updater 外面：updater 在 StrictMode 下会跑两次，
       // 副作用写在里面就会发两次导航
-      if (next.activeDocId !== tabStateRef.current.activeDocId) {
+      if (next.activeDocId !== current.activeDocId) {
         if (next.activeDocId) {
           void navigate({
             to: "/editor/$docId",
             params: { docId: next.activeDocId },
           });
         } else {
-          bootstrapped.current = false;
+          // Closing the last tab intentionally leaves an explicit empty editor state.
+          bootstrapped.current = true;
           void navigate({ to: "/editor" });
         }
       }
@@ -695,6 +721,11 @@ export function EditorPage() {
       void navigate({ to: "/editor/$docId", params: { docId: next.activeDocId } });
     }
   }, [closedTabsNotice, documents, navigate]);
+
+  const handleCloseTab = useCallback(
+    (docId: string) => handleCloseTabs([docId]),
+    [handleCloseTabs],
+  );
 
   const handleCreate = useCallback(
     (folderId?: string | null) => {
@@ -926,6 +957,78 @@ export function EditorPage() {
     [confirmDelete, remove, activeDocId, documents, navigate, saver, t],
   );
 
+  const handleDeleteMany = useCallback(
+    async (items: TreeSelectionItem[]) => {
+      if (items.length === 0) return false;
+      if (
+        !(await confirmAction(
+          interpolate(t.editor.deleteSelectedConfirm, { count: items.length }),
+        ))
+      )
+        return false;
+
+      const releaseMutationBatch = beginDocumentMutationBatch();
+      try {
+      const docIds = items.filter((item) => item.kind === "doc").map((item) => item.id);
+      for (const docId of docIds) {
+        const saved = await saver.flush(docId);
+        if (!saved) {
+          window.alert(t.editor.deleteSaveFailed);
+          return false;
+        }
+      }
+
+      let failedError: unknown = null;
+      try {
+        await deleteTreeMut.mutateAsync(items);
+      } catch (error) {
+        failedError = error;
+      }
+      const deletedDocIds = failedError ? new Set<string>() : new Set(docIds);
+
+      for (const docId of deletedDocIds) {
+        saver.drop(docId);
+        createdHere.current.delete(docId);
+        editorSelections.current.delete(docId);
+      }
+      setTabState((previous) => {
+        let next = previous;
+        for (const docId of deletedDocIds) next = removeDeleted(next, docId).next;
+        return next;
+      });
+
+      if (failedError) {
+        const code = errorCodeOf(failedError);
+        window.alert((code && t.errors[code]) || t.auth.requestFailed);
+      }
+
+      if (!activeDocId || !deletedDocIds.has(activeDocId)) return !failedError;
+      const rest = (documents ?? []).filter((document) => !deletedDocIds.has(document.docId));
+      bootstrapped.current = false;
+      if (rest.length > 0) {
+        void navigate({
+          to: "/editor/$docId",
+          params: { docId: rest[0].docId },
+        });
+      } else {
+        void navigate({ to: "/editor" });
+      }
+      return !failedError;
+      } finally {
+        releaseMutationBatch();
+      }
+    },
+    [
+      activeDocId,
+      beginDocumentMutationBatch,
+      deleteTreeMut,
+      documents,
+      navigate,
+      saver,
+      t,
+    ],
+  );
+
   // ---------- 文件夹 ----------
 
   // 新建成功后让那一行直接进入改名态：名字是空的，不聚焦的话用户得先猜到
@@ -984,6 +1087,31 @@ export function EditorPage() {
       moveDocMut.mutate({ docId, folderId });
     },
     [moveDocMut],
+  );
+
+  const handleMoveMany = useCallback(
+    async (items: TreeSelectionItem[], folderId: string | null) => {
+      const movableItems = compactTreeSelection(items, folderList.data ?? [], documents ?? []);
+      if (movableItems.length === 0) return true;
+      const releaseMutationBatch = beginDocumentMutationBatch();
+      try {
+        await moveTreeMut.mutateAsync({ items: movableItems, folderId });
+        return true;
+      } catch (error) {
+        const code = errorCodeOf(error);
+        window.alert((code && t.errors[code]) || t.auth.requestFailed);
+        return false;
+      } finally {
+        releaseMutationBatch();
+      }
+    },
+    [
+      beginDocumentMutationBatch,
+      folderList.data,
+      moveTreeMut,
+      t.auth.requestFailed,
+      t.errors,
+    ],
   );
 
   const handleReorderDocuments = useCallback(
@@ -1099,8 +1227,9 @@ export function EditorPage() {
     ].find((m) => m.isError);
     if (!failed) return null;
     const err = failed.error;
-    if (err instanceof ApiError && err.code && t.errors[err.code]) {
-      return t.errors[err.code];
+    const code = errorCodeOf(err);
+    if (code && t.errors[code]) {
+      return t.errors[code];
     }
     return t.auth.requestFailed;
   }, [
@@ -1180,10 +1309,12 @@ export function EditorPage() {
             onCreate={handleCreate}
             onCreateFolder={handleCreateFolder}
             onDelete={handleDelete}
+            onDeleteMany={handleDeleteMany}
             onRenameFolder={handleRenameFolder}
             onRenameDoc={handleRenameDoc}
             onDeleteFolder={handleDeleteFolder}
             onMoveDoc={handleMoveDoc}
+            onMoveMany={handleMoveMany}
             onReorderDocuments={handleReorderDocuments}
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
@@ -1246,6 +1377,7 @@ export function EditorPage() {
           onClose={handleCloseTab}
           onCloseAll={() => void handleCloseAllTabs()}
           closingAll={closingAll}
+          onCloseTabs={handleCloseTabs}
           onCreate={handleCreate}
           creating={create.isPending}
           desktopShortcuts={isDesktopRuntime()}
@@ -1262,7 +1394,7 @@ export function EditorPage() {
 
         {/* 加载与错误态盖在池子上方，池子本身继续挂着 ——
             否则切到一篇还在拉取的文档会把其他标签的实例一起卸载 */}
-        {doc.isLoading || (!activeDocId && create.isPending) ? (
+        {list.isLoading || doc.isLoading || (!activeDocId && create.isPending) ? (
           <Centered>{t.editor.loading}</Centered>
         ) : doc.isError ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-24 text-center">
@@ -1273,6 +1405,18 @@ export function EditorPage() {
               className="text-sm font-medium text-cinnabar-600 hover:underline"
             >
               {t.editor.backToList}
+            </button>
+          </div>
+        ) : !activeDocId ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-24 text-center">
+            <p className="text-sm text-neutral-500">{t.editor.noOpenDocument}</p>
+            <button
+              type="button"
+              onClick={() => handleCreate(null)}
+              disabled={create.isPending}
+              className="rounded-full bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cinnabar-500 disabled:opacity-50"
+            >
+              {t.editor.newDocument}
             </button>
           </div>
         ) : null}
@@ -1418,10 +1562,12 @@ export function EditorPage() {
               }}
               onCreateFolder={handleCreateFolder}
               onDelete={handleDelete}
+              onDeleteMany={handleDeleteMany}
               onRenameFolder={handleRenameFolder}
               onRenameDoc={handleRenameDoc}
               onDeleteFolder={handleDeleteFolder}
               onMoveDoc={handleMoveDoc}
+              onMoveMany={handleMoveMany}
               onReorderDocuments={handleReorderDocuments}
               onMoveFolder={handleMoveFolder}
               onCollapse={() => setMobileDocsOpen(false)}

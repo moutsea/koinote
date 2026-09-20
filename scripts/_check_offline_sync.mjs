@@ -80,6 +80,36 @@ for (const required of [
     `自动目录身份合并缺少：${required}`,
   );
 }
+const moveFolderSource = sourceBetween(
+  offlineStoreSource,
+  "export async function desktopMoveFolder",
+  "async function mutateFolder",
+);
+assert.match(
+  moveFolderSource,
+  /SELECT folder_id, parent_folder_id FROM offline_folders[\s\S]*?sync_state <> 'delete'/,
+  "桌面移动文件夹必须基于当前账户的有效目录校验目标",
+);
+assert.match(
+  moveFolderSource,
+  /folderId === parentFolderId[\s\S]*?current === folderId[\s\S]*?subtreeHeight[\s\S]*?depth \+ subtreeHeight > MAX_FOLDER_DEPTH/,
+  "桌面移动文件夹必须拒绝自环、子孙环和超深目录",
+);
+const moveDocumentSource = sourceBetween(
+  offlineStoreSource,
+  "export async function desktopMoveDocument",
+  "export async function desktopReorderDocuments",
+);
+assert.match(
+  moveDocumentSource,
+  /folder_dirty = \$4, order_dirty = \$5/,
+  "桌面移动文档必须标记排序脏状态以同步完整同级顺序",
+);
+assert.match(
+  offlineStoreSource,
+  /orderedRows[\s\S]*?for \(const orderedRow of orderedRows\)[\s\S]*?order_dirty = 0[\s\S]*?orderedRow\.change_seq/,
+  "完整排序同步成功后必须清掉未并发修改的同级排序脏标记",
+);
 
 const localImageID = "550e8400-e29b-41d4-a716-446655440000";
 const localImageURL = desktopLocalImageURL(localImageID);

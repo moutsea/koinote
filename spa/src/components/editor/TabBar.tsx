@@ -1,5 +1,17 @@
-import { CopyX, Loader2, Plus, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CopyX,
+  FilePlus,
+  ListX,
+  MoreHorizontal,
+  Plus,
+  X,
+} from "lucide-react";
 import { useI18n } from "../../i18n";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { tabsToClose, type TabCloseScope } from "./tabPool";
 import type { SaveStatus } from "./useDocumentSaver";
 
 /**
@@ -19,6 +31,7 @@ export function TabBar({
   dirtyOf,
   onSelect,
   onClose,
+  onCloseTabs,
   onCloseAll,
   closingAll,
   onCreate,
@@ -32,8 +45,9 @@ export function TabBar({
   dirtyOf: (docId: string) => boolean;
   onSelect: (docId: string) => void;
   onClose: (docId: string) => void;
-  onCloseAll: () => void;
-  closingAll: boolean;
+  onCloseTabs: (docIds: string[]) => void;
+  onCloseAll?: () => void;
+  closingAll?: boolean;
   /**
    * 签名要和 EditorPage 的 handleCreate 一致（带上那个可选参数），不能简写成
    * `() => void`。写成无参的话，`onClick={onCreate}` 这种绑定在类型上是合法的
@@ -45,6 +59,19 @@ export function TabBar({
   desktopShortcuts: boolean;
 }) {
   const { t } = useI18n();
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    docId: string | null;
+    source: "toolbar" | "tab";
+  } | null>(null);
+  const menuTrigger = useRef<HTMLElement | null>(null);
+  const closeMenu = useCallback(() => {
+    setMenu(null);
+    if (document.activeElement?.getAttribute("role") === "menuitem") {
+      menuTrigger.current?.focus({ preventScroll: true });
+    }
+  }, []);
   const closeLabel = desktopShortcuts
     ? `${t.editor.closeTab} (⌘W / Ctrl+W)`
     : t.editor.closeTab;
@@ -52,7 +79,58 @@ export function TabBar({
     ? `${t.editor.newDocument} (⌘N / Ctrl+N)`
     : t.editor.newDocument;
 
-  if (tabs.length === 0) return null;
+  const menuItems: ContextMenuItem[] = menu
+    ? [
+        {
+          key: "new-document",
+          label: newDocumentLabel,
+          icon: <FilePlus className="h-3.5 w-3.5" />,
+          disabled: creating,
+          onSelect: () => onCreate(null),
+        },
+        ...([
+          {
+            key: "current",
+            label: closeLabel,
+            icon: <X className="h-3.5 w-3.5" />,
+            separatorBefore: true,
+          },
+          {
+            key: "others",
+            label: t.editor.closeOtherTabs,
+            icon: <CopyX className="h-3.5 w-3.5" />,
+          },
+          {
+            key: "left",
+            label: t.editor.closeTabsToLeft,
+            icon: <ArrowLeft className="h-3.5 w-3.5" />,
+          },
+          {
+            key: "right",
+            label: t.editor.closeTabsToRight,
+            icon: <ArrowRight className="h-3.5 w-3.5" />,
+          },
+          {
+            key: "all",
+            label: t.editor.closeAllTabs,
+            icon: <ListX className="h-3.5 w-3.5" />,
+            separatorBefore: true,
+          },
+        ] satisfies (Omit<ContextMenuItem, "onSelect"> & { key: TabCloseScope })[]).map(
+          (item) => {
+            const docIds = tabsToClose(tabs, menu.docId, item.key);
+            return {
+              ...item,
+              disabled: docIds.length === 0 || Boolean(closingAll),
+              onSelect: () => {
+                if (item.key === "all" && onCloseAll) onCloseAll();
+                else onCloseTabs(docIds);
+              },
+            };
+          },
+        ),
+      ]
+    : [];
 
   return (
     <div className="flex shrink-0 items-stretch border-b border-black/5 dark:border-white/10">
@@ -63,6 +141,7 @@ export function TabBar({
       >
         {tabs.map((docId) => {
           const active = docId === activeDocId;
+          const menuOpen = menu?.source === "tab" && menu.docId === docId;
           const status = statusOf(docId);
           const failed = ["failed", "backed-up", "conflict"].includes(status);
           return (
@@ -73,7 +152,26 @@ export function TabBar({
               aria-selected={active}
               tabIndex={active ? 0 : -1}
               onClick={() => onSelect(docId)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                menuTrigger.current = event.currentTarget;
+                setMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  docId,
+                  source: "tab",
+                });
+              }}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+                  e.preventDefault();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  menuTrigger.current = e.currentTarget;
+                  setMenu({ x: rect.left, y: rect.bottom, docId, source: "tab" });
+                  return;
+                }
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelect(docId);
@@ -89,6 +187,8 @@ export function TabBar({
               className={`group flex max-w-44 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border-b-2 px-2.5 py-1.5 text-xs transition ${
                 active
                   ? "border-cinnabar-500 bg-black/[0.03] font-medium dark:bg-white/[0.06]"
+                  : menuOpen
+                    ? "border-cinnabar-500 bg-black/[0.04] font-medium dark:border-cinnabar-500 dark:bg-white/[0.08]"
                   : "border-transparent text-neutral-500 hover:bg-black/[0.02] dark:text-neutral-400 dark:hover:bg-white/[0.03]"
               }`}
             >
@@ -114,7 +214,10 @@ export function TabBar({
               </span>
 
               {/* 未保存圆点。占位固定宽度，避免出现/消失时标签宽度跳动 */}
-              <span aria-hidden="true" className="flex h-3 w-3 shrink-0 items-center justify-center">
+              <span
+                aria-hidden="true"
+                className="flex h-3 w-3 shrink-0 items-center justify-center"
+              >
                 {dirtyOf(docId) && !failed && (
                   <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
                 )}
@@ -144,7 +247,9 @@ export function TabBar({
             </div>
           );
         })}
+      </div>
 
+      <div className="flex shrink-0 items-center gap-0.5 px-1.5 pt-1">
         <button
           type="button"
           // 必须包一层箭头函数并显式传 null：直接写 onClick={onCreate} 会把 React
@@ -159,22 +264,41 @@ export function TabBar({
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
+        <button
+          type="button"
+          aria-label={t.editor.tabActions}
+          aria-haspopup="menu"
+          aria-expanded={menu?.source === "toolbar"}
+          title={t.editor.tabActions}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            if (menu?.source === "toolbar") {
+              closeMenu();
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            menuTrigger.current = event.currentTarget;
+            setMenu({
+              x: rect.right,
+              y: rect.bottom + 4,
+              docId: activeDocId,
+              source: "toolbar",
+            });
+          }}
+          className="my-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
       </div>
-      {(tabs.length > 1 || closingAll) && (
-        <div className="my-1.5 flex shrink-0 items-center border-l border-black/10 px-1.5 dark:border-white/10">
-          <button
-            type="button"
-            onClick={onCloseAll}
-            disabled={closingAll}
-            aria-label={`${t.editor.closeAllTabs} (${tabs.length})`}
-            title={`${t.editor.closeAllTabs} (${tabs.length})`}
-            aria-busy={closingAll}
-            className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg px-2 text-xs text-neutral-500 transition hover:bg-black/5 hover:text-neutral-800 disabled:cursor-wait disabled:opacity-60 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-neutral-200 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          >
-            {closingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CopyX className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{closingAll ? t.editor.closingTabs : t.editor.closeAllTabs}</span>
-          </button>
-        </div>
+      {menu && (
+        <ContextMenu
+          key={`${menu.source}:${menu.docId}:${menu.x}:${menu.y}`}
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onClose={closeMenu}
+          ariaLabel={t.editor.tabActions}
+        />
       )}
     </div>
   );

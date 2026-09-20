@@ -70,6 +70,8 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodDelete, "/api/folders/folder-id", true},
 		{http.MethodDelete, "/api/folders/folder-id/empty", true},
 		{http.MethodPut, "/api/folders/folder-id/parent", true},
+		{http.MethodPost, "/api/tree/move", true},
+		{http.MethodPost, "/api/tree/delete", true},
 		{http.MethodGet, "/api/editor/tabs", true},
 		{http.MethodPut, "/api/editor/tabs", true},
 		{http.MethodGet, "/api/storage/usage", true},

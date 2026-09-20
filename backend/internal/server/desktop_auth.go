@@ -482,6 +482,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/documents/search", "/api/documents/trash":
 		return method == http.MethodGet
+	case "/api/tree/move", "/api/tree/delete":
+		return method == http.MethodPost
 	}
 	if rest, found := strings.CutPrefix(path, "/api/wechat/accounts/"); found {
 		parts := strings.Split(rest, "/")

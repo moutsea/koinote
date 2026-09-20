@@ -146,6 +146,16 @@ for (const [label, source, token] of [
 // 浅色下这几处一律从 500 起，不能用 400 —— 见下面那条反向断言
 atLeast("cinnabar-500 环 on 宣纸", SCALE[500], PAPER_LIGHT, 3);
 atLeast("cinnabar-600 图标 on 宣纸", SCALE[600], PAPER_LIGHT, 3);
+atLeast("cinnabar-500 标签目标环 on 玄墨", SCALE[500], PAPER_DARK, 3);
+
+const tabMenuHighlight =
+  'border-cinnabar-500 bg-black/[0.04] font-medium dark:border-cinnabar-500 dark:bg-white/[0.08]';
+if (tabBar.includes(tabMenuHighlight)) {
+  pass += 1;
+} else {
+  fail += 1;
+  console.error("FAIL  标签右键目标高亮必须使用 cinnabar-500");
+}
 
 // 反向断言：400 在宣纸上「够不着」3:1。
 //

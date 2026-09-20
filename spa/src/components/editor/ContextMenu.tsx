@@ -8,6 +8,7 @@ export type ContextMenuItem = {
   /** 删除这类不可逆操作，标红并放在分隔线之后 */
   danger?: boolean;
   disabled?: boolean;
+  separatorBefore?: boolean;
 };
 
 /**
@@ -73,13 +74,13 @@ export function ContextMenu({
     // 滚动时菜单会和它指向的那一行脱开，直接关掉
     const onScroll = () => onClose();
     window.addEventListener("mousedown", onPointerDown);
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", onScroll);
     // capture：侧栏内部的滚动不冒泡到 window
     window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("mousedown", onPointerDown);
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("resize", onScroll);
       window.removeEventListener("scroll", onScroll, true);
     };
@@ -117,7 +118,8 @@ export function ContextMenu({
     >
       {items.map((item, i) => {
         // 危险项前面加分隔线，和上面的常规操作分开
-        const divider = item.danger && !items[i - 1]?.danger && i > 0;
+        const divider =
+          i > 0 && (item.separatorBefore || (item.danger && !items[i - 1]?.danger));
         return (
           <div key={item.key}>
             {divider && <div className="my-1 h-px bg-black/10 dark:bg-white/10" />}

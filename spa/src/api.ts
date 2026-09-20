@@ -1710,6 +1710,36 @@ export function moveDocument(docId: string, folderId: string | null) {
   );
 }
 
+export type TreeMutationItem = {
+  kind: "doc" | "folder";
+  id: string;
+  revision?: number;
+};
+
+export function moveTreeItems(items: TreeMutationItem[], folderId: string | null) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopMoveMany }) =>
+      desktopMoveMany(items, folderId),
+    );
+  }
+  return apiJson<{ ok: boolean }>("/api/tree/move", {
+    method: "POST",
+    body: JSON.stringify({ items, folderId }),
+  });
+}
+
+export function deleteTreeItems(items: TreeMutationItem[]) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopDeleteMany }) =>
+      desktopDeleteMany(items),
+    );
+  }
+  return apiJson<{ ok: boolean }>("/api/tree/delete", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+}
+
 export function reorderDocuments(
   docId: string,
   params: { folderId: string | null; docIds: string[] },

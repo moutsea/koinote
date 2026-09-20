@@ -9,6 +9,7 @@ import {
   restoreClosedTabs,
   hydrate,
   removeUnavailable,
+  tabsToClose,
 } from "./_tab_pool_bundle.mjs";
 
 import { isUntouchedNewDocument, saveTabsForClosing } from "./_close_tabs_bundle.mjs";
@@ -79,6 +80,36 @@ eq("标签栏累积全部", big.openTabs, ["a", "b", "c", "d", "e", "f", "g"]);
 
 // ---------- close ----------
 
+const tabOrder = ["a", "b", "c", "d"];
+eq("关闭当前标签", tabsToClose(tabOrder, "c", "current"), ["c"]);
+eq("关闭其他标签", tabsToClose(tabOrder, "c", "others"), ["a", "b", "d"]);
+eq("关闭左侧标签", tabsToClose(tabOrder, "c", "left"), ["a", "b"]);
+eq("关闭右侧标签", tabsToClose(tabOrder, "c", "right"), ["d"]);
+eq("关闭全部标签", tabsToClose(tabOrder, "c", "all"), tabOrder);
+eq("无当前标签时批量范围为空", tabsToClose(tabOrder, null, "others"), []);
+eq("全部范围忽略不存在的当前标签", tabsToClose(tabOrder, "missing", "all"), tabOrder);
+
+r = closeMany(
+  { openTabs: tabOrder, liveIds: ["c", "b", "a"], activeDocId: "c" },
+  ["a", "b", "d"],
+);
+eq("批量关闭后保留当前标签", r, {
+  openTabs: ["c"],
+  liveIds: ["c"],
+  activeDocId: "c",
+});
+eq("批量关闭返回已移除标签", tabOrder.filter((id) => !r.openTabs.includes(id)), ["a", "b", "d"]);
+
+r = closeMany(
+  { openTabs: tabOrder, liveIds: ["c", "b", "a"], activeDocId: "c" },
+  tabOrder,
+);
+eq("批量关闭全部后清空状态", r, {
+  openTabs: [],
+  liveIds: [],
+  activeDocId: null,
+});
+
 const four = { openTabs: ["a", "b", "c", "d"], liveIds: ["d", "c", "b"], activeDocId: "d" };
 
 // 关非当前标签：当前不变
@@ -92,6 +123,13 @@ r = close({ openTabs: ["a", "b", "c"], liveIds: ["b"], activeDocId: "b" }, "b");
 eq("关当前后激活右边", r.next.activeDocId, "c");
 eq("关当前后标签栏", r.next.openTabs, ["a", "c"]);
 ok("新当前在池内", r.next.liveIds.includes("c"));
+
+r = closeMany(
+  { openTabs: ["a", "b", "c", "d"], liveIds: ["b", "a"], activeDocId: "b" },
+  ["b"],
+);
+eq("批量关闭中间当前标签优先激活右侧", r.activeDocId, "c");
+eq("批量关闭中间当前标签保留两侧", r.openTabs, ["a", "c", "d"]);
 
 // 关最右的当前标签：退到左边
 r = close({ openTabs: ["a", "b", "c"], liveIds: ["c"], activeDocId: "c" }, "c");

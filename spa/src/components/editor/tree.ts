@@ -35,6 +35,7 @@ export type FolderNode = {
 export type DocNode = {
   docId: string;
   title: string;
+  revision?: number;
   updatedAt?: string | null;
   /** null = 根下 */
   folderId: string | null;

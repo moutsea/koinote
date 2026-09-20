@@ -103,6 +103,23 @@ func (a *App) folderMove(w http.ResponseWriter, r *http.Request) {
 			httpx.ErrorCode(w, http.StatusBadRequest, "too_deep", "Folder nesting is too deep")
 			return
 		}
+		var subtreeHeight int
+		if err := a.db.QueryRow(r.Context(), `
+			WITH RECURSIVE sub AS (
+				SELECT id, 0 AS depth FROM folders WHERE id = $1
+				UNION ALL
+				SELECT f.id, sub.depth + 1 FROM folders f JOIN sub ON f.parent_id = sub.id
+			)
+			SELECT COALESCE(MAX(depth), 0) FROM sub
+		`, selfID).Scan(&subtreeHeight); err != nil {
+			log.Printf("folder move subtree depth: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if depth+1+subtreeHeight > maxFolderDepth {
+			httpx.ErrorCode(w, http.StatusBadRequest, "too_deep", "Folder nesting is too deep")
+			return
+		}
 	}
 
 	if _, err := a.db.Exec(r.Context(),

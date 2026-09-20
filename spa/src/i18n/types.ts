@@ -1040,9 +1040,16 @@ export interface Messages {
     outlinePanel: string;
     newDocument: string;
     deleteDocument: string;
+    selectedItems: string;
+    moveSelected: string;
+    deleteSelected: string;
+    deleteSelectedConfirm: string;
+    clearSelection: string;
+    rootFolder: string;
     deleteConfirm: string; // 用 {title} 占位
     deleteSaveFailed: string;
     emptyDocuments: string;
+    noOpenDocument: string;
     emptyOutline: string;
     collapsePanel: string;
     expandPanel: string;
@@ -1320,6 +1327,10 @@ export interface Messages {
     undoCloseTabs: string;
     noOpenTabs: string;
     dismissTabsNotice: string;
+    tabActions: string;
+    closeOtherTabs: string;
+    closeTabsToLeft: string;
+    closeTabsToRight: string;
     newFolder: string;
     renameFolder: string;
     renameDocument: string;

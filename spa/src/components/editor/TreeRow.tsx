@@ -13,6 +13,7 @@ import {
 import { useI18n, type Locale } from "../../i18n";
 import { docPad, folderPad, guideX } from "./indent";
 import type { DocNode, TreeFolder } from "./tree";
+import { treeSelectionKey, type TreeSelectionItem } from "./treeSelection";
 import {
   hasExternalFileDrag,
   markdownFilesFromDataTransfer,
@@ -69,6 +70,13 @@ export type TreeRowHandlers = {
   expanded: Set<string>;
   onToggle: (folderId: string) => void;
   onSelectDoc: (docId: string) => void;
+  selectedKeys: Set<string>;
+  displayedSelectedKeys: Set<string>;
+  dragSelection: TreeSelectionItem[];
+  onSelectItem: (
+    item: TreeSelectionItem,
+    event: React.MouseEvent | React.KeyboardEvent,
+  ) => void;
   onDeleteDoc: (docId: string, title: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string, name: string) => void;
@@ -128,6 +136,10 @@ export function FolderRow({
     : false;
   // 菜单打开时这一行保持高亮：菜单在指针位置弹出，不标出来的话看不清操作的是哪一行
   const menuOpen = h.menuTargetId === folder.folderId;
+  const selected = h.selectedKeys.has(treeSelectionKey({ kind: "folder", id: folder.folderId }));
+  const displayedSelected = h.displayedSelectedKeys.has(
+    treeSelectionKey({ kind: "folder", id: folder.folderId }),
+  );
 
   function commitRename() {
     setEditing(false);
@@ -136,7 +148,11 @@ export function FolderRow({
   }
 
   return (
-    <li>
+    <li
+      role="treeitem"
+      aria-selected={selected}
+      aria-expanded={open}
+    >
       <div
         // 整行都是放置区。只给图标的话命中率太低，拖起来很难受
         onDragOver={(e) => {
@@ -180,7 +196,13 @@ export function FolderRow({
         }}
         draggable={!editing}
         onDragStart={(e) => {
-          const payload: DragPayload = { kind: "folder", id: folder.folderId };
+          const selected = h.dragSelection;
+          const payload: DragPayload =
+            selected.length > 1 && selected.some(
+              (item) => item.kind === "folder" && item.id === folder.folderId,
+            )
+              ? { kind: "folder", id: folder.folderId, selection: selected }
+              : { kind: "folder", id: folder.folderId };
           writeTreeDragPayload(e.dataTransfer, payload);
           h.setDragging(payload);
         }}
@@ -193,6 +215,8 @@ export function FolderRow({
             depth,
           })
         }
+        data-tree-item
+        data-tree-item-key={treeSelectionKey({ kind: "folder", id: folder.folderId })}
         className={`group relative flex items-center rounded-lg transition ${
           fileDragOver ||
           (overDrag !== null &&
@@ -201,7 +225,9 @@ export function FolderRow({
             // 拖放目标环用 500 而不是 400：400 压在宣纸上只有 2.47:1，
             // 达不到非文字元素的 3:1。这个环是拖拽时唯一的落点提示，看不见就等于没有
             ? "bg-cinnabar-100 ring-1 ring-cinnabar-500 dark:bg-cinnabar-900/40"
-            : menuOpen
+            : displayedSelected
+              ? "bg-cinnabar-100/80 ring-1 ring-inset ring-cinnabar-600 dark:bg-cinnabar-900/60 dark:ring-cinnabar-500"
+              : menuOpen
               ? "bg-black/5 dark:bg-white/10"
               : "hover:bg-black/5 dark:hover:bg-white/10"
         }`}
@@ -209,7 +235,22 @@ export function FolderRow({
       >
         <button
           type="button"
-          onClick={() => h.onToggle(folder.folderId)}
+          onClick={(event) => {
+            const item = { kind: "folder", id: folder.folderId } as const;
+            h.onSelectItem(item, event);
+            if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+              h.onToggle(folder.folderId);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              (event.key === " " || event.key === "Enter") &&
+              (event.shiftKey || event.ctrlKey || event.metaKey)
+            ) {
+              event.preventDefault();
+              h.onSelectItem({ kind: "folder", id: folder.folderId }, event);
+            }
+          }}
           aria-label={name}
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left"
@@ -285,7 +326,7 @@ export function FolderRow({
       </div>
 
       {open && (
-        <ul className="relative">
+        <ul role="group" className="relative">
           {/* 竖线落在本行 chevron 的中心，把子项在视觉上收到这个文件夹下面 */}
           <span
             aria-hidden
@@ -317,6 +358,10 @@ export function DocRow({
   const title = doc.title.trim() || t.editor.untitled;
   const active = doc.docId === h.activeDocId;
   const menuOpen = h.menuTargetId === doc.docId;
+  const selected = h.selectedKeys.has(treeSelectionKey({ kind: "doc", id: doc.docId }));
+  const displayedSelected = h.displayedSelectedKeys.has(
+    treeSelectionKey({ kind: "doc", id: doc.docId }),
+  );
   const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -380,7 +425,17 @@ export function DocRow({
 
   return (
     <li
-      className={`group relative ${fileDragOver ? "rounded-lg ring-1 ring-inset ring-cinnabar-500" : ""}`}
+      role="treeitem"
+      aria-selected={selected}
+      data-tree-item
+      data-tree-item-key={treeSelectionKey({ kind: "doc", id: doc.docId })}
+      className={`group relative ${
+        fileDragOver
+          ? "rounded-lg ring-1 ring-inset ring-cinnabar-500"
+          : displayedSelected
+            ? "rounded-lg bg-cinnabar-100/80 ring-1 ring-inset ring-cinnabar-600 dark:bg-cinnabar-900/60 dark:ring-cinnabar-500"
+            : ""
+      }`}
       draggable={!editing}
       onKeyDown={(event) => {
         if (event.key === "F2" && !editing) {
@@ -429,7 +484,16 @@ export function DocRow({
         }
       }}
       onDragStart={(e) => {
-        const payload: DragPayload = { kind: "doc", id: doc.docId };
+        const selectedItems = h.dragSelection;
+        const selectedDocIds = selectedItems
+          .filter((item): item is { kind: "doc"; id: string } => item.kind === "doc")
+          .map((item) => item.id);
+        const payload: DragPayload =
+          selectedItems.length > 1 && selectedItems.some(
+            (item) => item.kind === "doc" && item.id === doc.docId,
+          )
+            ? { kind: "doc", id: doc.docId, ids: selectedDocIds, selection: selectedItems }
+            : { kind: "doc", id: doc.docId };
         writeTreeDragPayload(e.dataTransfer, payload);
         h.setDragging(payload);
       }}
@@ -484,7 +548,22 @@ export function DocRow({
         </div>
       ) : <button
         type="button"
-        onClick={() => h.onSelectDoc(doc.docId)}
+        onClick={(event) => {
+          const item = { kind: "doc", id: doc.docId } as const;
+          h.onSelectItem(item, event);
+          if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+            h.onSelectDoc(doc.docId);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (
+            (event.key === " " || event.key === "Enter") &&
+            (event.shiftKey || event.ctrlKey || event.metaKey)
+          ) {
+            event.preventDefault();
+            h.onSelectItem({ kind: "doc", id: doc.docId }, event);
+          }
+        }}
         aria-current={active ? "true" : undefined}
         onDoubleClick={beginRename}
         className={`flex w-full items-start gap-2 rounded-lg py-1.5 pr-14 text-left transition ${

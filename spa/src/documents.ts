@@ -2,12 +2,15 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
+import { useCallback } from "react";
 import {
   createDocument,
   createFolder,
   createShare,
+  deleteTreeItems,
   listTrashedDocuments,
   permanentlyDeleteDocument,
   deleteFolder,
@@ -16,6 +19,7 @@ import {
   listDocuments,
   listFolders,
   moveDocument,
+  moveTreeItems,
   reorderDocuments,
   moveFolder,
   putEditorTabs,
@@ -30,12 +34,66 @@ import {
   type EditorTabs,
   type Folder,
   type ShareAccess,
+  type TreeMutationItem,
 } from "./api";
 import { REMOTE_UPDATE_INTERVAL_MS } from "./remoteUpdates";
 
 // 列表与单篇分开缓存：列表频繁失效（标题/时间会变），单篇按 docId 各自独立。
 const LIST_KEY = ["documents"] as const;
 const docKey = (docId: string) => ["document", docId] as const;
+
+type MutationBatchState = {
+  depth: number;
+  pending: boolean;
+};
+
+const mutationBatchStates = new WeakMap<QueryClient, MutationBatchState>();
+
+function mutationBatchState(queryClient: QueryClient): MutationBatchState {
+  const existing = mutationBatchStates.get(queryClient);
+  if (existing) return existing;
+  const created = { depth: 0, pending: false };
+  mutationBatchStates.set(queryClient, created);
+  return created;
+}
+
+function invalidateList(queryClient: ReturnType<typeof useQueryClient>) {
+  const batch = mutationBatchStates.get(queryClient);
+  if (batch && batch.depth > 0) {
+    batch.pending = true;
+    return;
+  }
+  void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+}
+
+function invalidateFoldersAndList(queryClient: ReturnType<typeof useQueryClient>) {
+  const batch = mutationBatchStates.get(queryClient);
+  if (batch && batch.depth > 0) {
+    batch.pending = true;
+    return;
+  }
+  void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY });
+  void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+}
+
+export function useDocumentMutationBatch() {
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    const batch = mutationBatchState(queryClient);
+    batch.depth += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      batch.depth = Math.max(0, batch.depth - 1);
+      if (batch.depth === 0 && batch.pending) {
+        batch.pending = false;
+        void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY });
+        void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      }
+    };
+  }, [queryClient]);
+}
 
 export function useDocumentList(
   enabled: boolean,
@@ -87,7 +145,7 @@ export function useTrashDocument() {
     mutationFn: (docId: string) => trashDocument(docId),
     onSuccess: (_result, docId) => {
       queryClient.removeQueries({ queryKey: docKey(docId) });
-      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      invalidateList(queryClient);
     },
   });
 }
@@ -191,8 +249,7 @@ function useFolderMutation<TArgs, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY });
-      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      invalidateFoldersAndList(queryClient);
     },
   });
 }
@@ -214,6 +271,14 @@ export function useDeleteFolder() {
   return useFolderMutation((folderId: string) => deleteFolder(folderId));
 }
 
+export function useDeleteTreeItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (items: TreeMutationItem[]) => deleteTreeItems(items),
+    onSuccess: () => invalidateFoldersAndList(queryClient),
+  });
+}
+
 export function useMoveFolder() {
   return useFolderMutation(
     (args: { folderId: string; parentFolderId: string | null }) =>
@@ -225,6 +290,15 @@ export function useMoveDocument() {
   return useFolderMutation((args: { docId: string; folderId: string | null }) =>
     moveDocument(args.docId, args.folderId),
   );
+}
+
+export function useMoveTreeItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ items, folderId }: { items: TreeMutationItem[]; folderId: string | null }) =>
+      moveTreeItems(items, folderId),
+    onSuccess: () => invalidateFoldersAndList(queryClient),
+  });
 }
 
 export function useReorderDocuments() {
