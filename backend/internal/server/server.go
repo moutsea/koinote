@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -39,6 +40,10 @@ type App struct {
 	xImageHTTPClient        *http.Client
 	xTrustedImageHTTPClient *http.Client
 	xOAuth2HTTPClient       *http.Client
+	feishuDocsHTTPClient    *http.Client
+	feishuAccountSlots      chan struct{}
+	feishuRequestMu         sync.Mutex
+	feishuNextRequest       time.Time
 	wechatTokenMu           sync.Mutex
 	wechatTokens            map[string]wechatAccessToken
 	wechatTokenRefreshes    map[wechatTokenRefreshKey]*wechatTokenRefresh
@@ -66,6 +71,8 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		xImageHTTPClient:        newSafeLLMHTTPClient(),
 		xTrustedImageHTTPClient: newTrustedXImageHTTPClient(),
 		xOAuth2HTTPClient:       newXAPIHTTPClient(),
+		feishuDocsHTTPClient:    newFeishuDocsHTTPClient(),
+		feishuAccountSlots:      make(chan struct{}, feishuAccountConcurrency),
 		wechatTokens:            make(map[string]wechatAccessToken),
 		wechatTokenRefreshes:    make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
 		xOAuth2Refreshes:        make(map[int]*xOAuth2Refresh),
@@ -169,6 +176,12 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/x/oauth2/desktop-start", a.xOAuth2DesktopStart)
 	mux.HandleFunc("GET /api/x/oauth2/callback", a.xOAuth2Callback)
 	mux.HandleFunc("DELETE /api/x/oauth2/account", a.xOAuth2AccountDelete)
+	mux.HandleFunc("GET /api/feishu/oauth/start", a.feishuOAuthStart)
+	mux.HandleFunc("GET /api/feishu/oauth/desktop-start", a.feishuOAuthDesktopStart)
+	mux.HandleFunc("GET /api/feishu/oauth/callback", a.feishuOAuthCallback)
+	mux.HandleFunc("GET /api/feishu/account", a.feishuAccountGet)
+	mux.HandleFunc("DELETE /api/feishu/account", a.feishuAccountDelete)
+	mux.HandleFunc("POST /api/documents/{docId}/feishu-sync", a.feishuDocumentSync)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
 	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews/estimate", a.agentReviewEstimate)

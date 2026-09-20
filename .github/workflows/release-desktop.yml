@@ -207,7 +207,7 @@ jobs:
             test -f "release-artifacts/$updater" || { echo "缺更新包 $updater"; exit 1; }
             test -f "release-artifacts/$updater.sig" || { echo "缺更新签名 $updater.sig"; exit 1; }
           done
-          release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           notes="Koinote Desktop $version adds close-all tabs with undo, document renaming in the file tree, and Markdown imports by dropping files into the editor. It also fixes extra blank lines when pasting on Windows and improves rename recovery and keyboard shortcuts."
           jq -n \
@@ -246,7 +246,7 @@ jobs:
           - 修复重命名失败后的取消与重试、编辑器路由恢复及快捷键处理，并防止撤销关闭后误删文档。
           - 调整微信草稿同步的加载指示位置，避免遮挡关闭按钮。
 
-          从 0.1.4 起，客户端会在启动后自动检查 GitHub Releases，也可以在账户菜单中手动检查、下载并重启安装更新。
+          从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
           - **macOS Apple 芯片**：文件名包含 \`aarch64\`
           - **macOS Intel 芯片**：文件名包含 \`x64\`
@@ -265,10 +265,46 @@ jobs:
           - Improve rename cancellation and retry, editor route restoration, and keyboard shortcuts; prevent accidental document deletion after undoing tab closure.
           - Keep the WeChat draft synchronization spinner clear of the close button.
 
-          Starting with 0.1.4, the client checks GitHub Releases automatically and can download, install, and restart from the account menu.
+          Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 
           These Alpha installers do not use paid platform certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
           EOF
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: 上传桌面更新包到 R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in release-artifacts/*; do
+            name=$(basename "$file")
+            [ "$name" = "latest.json" ] && continue
+            case "$name" in
+              *.sig|*.txt) content_type="text/plain; charset=utf-8"; cache_control="public, max-age=31536000, immutable" ;;
+              *.app.tar.gz) content_type="application/gzip"; cache_control="public, max-age=31536000, immutable" ;;
+              *.dmg) content_type="application/x-apple-diskimage"; cache_control="public, max-age=31536000, immutable" ;;
+              *.msi) content_type="application/x-msi"; cache_control="public, max-age=31536000, immutable" ;;
+              *.exe) content_type="application/vnd.microsoft.portable-executable"; cache_control="public, max-age=31536000, immutable" ;;
+              *) echo "未知桌面产物类型：$name"; exit 1 ;;
+            esac
+            npx wrangler r2 object put \
+              "koinote-desktop-releases/desktop-updates/$name" \
+              --remote --file "$file" --content-type "$content_type" \
+              --cache-control "$cache_control" -y
+          done
+          npx wrangler r2 object put \
+            "koinote-desktop-releases/desktop-updates/latest.json" \
+            --remote --file release-artifacts/latest.json \
+            --content-type "application/json" \
+            --cache-control "public, max-age=30, must-revalidate" -y
 
       - name: 创建 GitHub Release
         env:

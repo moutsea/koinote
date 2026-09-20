@@ -59,6 +59,9 @@ jobs:
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
           X_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.X_CREDENTIAL_ENCRYPTION_KEY }}
+          FEISHU_CLIENT_ID: ${{ vars.FEISHU_CLIENT_ID }}
+          FEISHU_CLIENT_SECRET: ${{ secrets.FEISHU_CLIENT_SECRET }}
+          FEISHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.FEISHU_CREDENTIAL_ENCRYPTION_KEY }}
           X_OAUTH2_CLIENT_ID: ${{ vars.X_OAUTH2_CLIENT_ID }}
           X_OAUTH2_CLIENT_SECRET: ${{ secrets.X_OAUTH2_CLIENT_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -97,6 +100,14 @@ jobs:
           [ -n "$X_OAUTH2_CLIENT_SECRET" ] && x_oauth2_count=$((x_oauth2_count + 1))
           if [ "$x_oauth2_count" -ne 0 ] && [ "$x_oauth2_count" -ne 2 ]; then
             echo "X_OAUTH2_CLIENT_ID 与 X_OAUTH2_CLIENT_SECRET 必须同时配置或同时留空"
+            exit 1
+          fi
+          feishu_count=0
+          [ -n "$FEISHU_CLIENT_ID" ] && feishu_count=$((feishu_count + 1))
+          [ -n "$FEISHU_CLIENT_SECRET" ] && feishu_count=$((feishu_count + 1))
+          [ -n "$FEISHU_CREDENTIAL_ENCRYPTION_KEY" ] && feishu_count=$((feishu_count + 1))
+          if [ "$feishu_count" -ne 0 ] && [ "$feishu_count" -ne 3 ]; then
+            echo "FEISHU_CLIENT_ID、FEISHU_CLIENT_SECRET、FEISHU_CREDENTIAL_ENCRYPTION_KEY 必须同时配置或同时留空"
             exit 1
           fi
           if { [ -n "$BOT_WEBHOOK" ] && [ -z "$BOT_WEBHOOK_SECRET" ]; } || \
@@ -232,6 +243,9 @@ jobs:
           WECHAT_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.WECHAT_CREDENTIAL_ENCRYPTION_KEY }}
           ZHIHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ZHIHU_CREDENTIAL_ENCRYPTION_KEY }}
           X_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.X_CREDENTIAL_ENCRYPTION_KEY }}
+          FEISHU_CLIENT_ID: ${{ vars.FEISHU_CLIENT_ID }}
+          FEISHU_CLIENT_SECRET: ${{ secrets.FEISHU_CLIENT_SECRET }}
+          FEISHU_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.FEISHU_CREDENTIAL_ENCRYPTION_KEY }}
           X_OAUTH2_CLIENT_ID: ${{ vars.X_OAUTH2_CLIENT_ID }}
           X_OAUTH2_CLIENT_SECRET: ${{ secrets.X_OAUTH2_CLIENT_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -261,6 +275,9 @@ jobs:
             "$WECHAT_CREDENTIAL_ENCRYPTION_KEY" \
             "$ZHIHU_CREDENTIAL_ENCRYPTION_KEY" \
             "$X_CREDENTIAL_ENCRYPTION_KEY" \
+            "$FEISHU_CLIENT_ID" \
+            "$FEISHU_CLIENT_SECRET" \
+            "$FEISHU_CREDENTIAL_ENCRYPTION_KEY" \
             "$X_OAUTH2_CLIENT_ID" \
             "$X_OAUTH2_CLIENT_SECRET" \
             "$STRIPE_SECRET_KEY" \
@@ -291,6 +308,9 @@ jobs:
                 IFS= read -r wechat_credential_encryption_key
                 IFS= read -r zhihu_credential_encryption_key
                 IFS= read -r x_credential_encryption_key
+                IFS= read -r feishu_client_id
+                IFS= read -r feishu_client_secret
+                IFS= read -r feishu_credential_encryption_key
                 IFS= read -r x_oauth2_client_id
                 IFS= read -r x_oauth2_client_secret
                 IFS= read -r stripe_secret_key
@@ -322,6 +342,14 @@ jobs:
                 [ -n "$x_oauth2_client_secret" ] && x_oauth2_count=$((x_oauth2_count + 1))
                 if [ "$x_oauth2_count" -ne 0 ] && [ "$x_oauth2_count" -ne 2 ]; then
                   echo "X OAuth 2.0 配置不完整"
+                  exit 1
+                fi
+                feishu_count=0
+                [ -n "$feishu_client_id" ] && feishu_count=$((feishu_count + 1))
+                [ -n "$feishu_client_secret" ] && feishu_count=$((feishu_count + 1))
+                [ -n "$feishu_credential_encryption_key" ] && feishu_count=$((feishu_count + 1))
+                if [ "$feishu_count" -ne 0 ] && [ "$feishu_count" -ne 3 ]; then
+                  echo "飞书文档配置不完整"
                   exit 1
                 fi
                 test -n "$llm_credential_encryption_key"
@@ -379,15 +407,18 @@ jobs:
                 [ -n "$wechat_api_proxy_url" ] && replace_wechat_proxy=1
                 replace_x_oauth2=0
                 [ "$x_oauth2_count" -eq 2 ] && replace_x_oauth2=1
+                replace_feishu=0
+                [ "$feishu_count" -eq 3 ] && replace_feishu=1
                 # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
-                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" "
+                awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" -v replace_feishu="$replace_feishu" "
                   /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|X_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
                   replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
                   replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
                   replace_wechat_proxy == 1 && /^WECHAT_API_PROXY_URL=/ { next }
                   replace_x_oauth2 == 1 && /^(X_OAUTH2_CLIENT_ID|X_OAUTH2_CLIENT_SECRET)=/ { next }
+                  replace_feishu == 1 && /^(FEISHU_CLIENT_ID|FEISHU_CLIENT_SECRET|FEISHU_CREDENTIAL_ENCRYPTION_KEY)=/ { next }
                   replace_analytics == 1 && /^CLOUDFLARE_ANALYTICS_TOKEN=/ { next }
                   replace_bot == 1 && /^(BOT_WEBHOOK|BOT_WEBHOOK_SECRET)=/ { next }
                   replace_announcement_llm == 1 && /^(ANNOUNCEMENT_LLM_BASE_URL|ANNOUNCEMENT_LLM_API_KEY|ANNOUNCEMENT_LLM_MODEL)=/ { next }
@@ -402,6 +433,11 @@ jobs:
                 if [ "$replace_x_oauth2" -eq 1 ]; then
                   printf "X_OAUTH2_CLIENT_ID=%s\n" "$x_oauth2_client_id" >> "$temp_file"
                   printf "X_OAUTH2_CLIENT_SECRET=%s\n" "$x_oauth2_client_secret" >> "$temp_file"
+                fi
+                if [ "$replace_feishu" -eq 1 ]; then
+                  printf "FEISHU_CLIENT_ID=%s\n" "$feishu_client_id" >> "$temp_file"
+                  printf "FEISHU_CLIENT_SECRET=%s\n" "$feishu_client_secret" >> "$temp_file"
+                  printf "FEISHU_CREDENTIAL_ENCRYPTION_KEY=%s\n" "$feishu_credential_encryption_key" >> "$temp_file"
                 fi
                 printf "STRIPE_SECRET_KEY=%s\n" "$stripe_secret_key" >> "$temp_file"
                 printf "STRIPE_WEBHOOK_SECRET=%s\n" "$stripe_webhook_secret" >> "$temp_file"

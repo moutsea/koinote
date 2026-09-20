@@ -43,7 +43,8 @@ returns a short-lived desktop session through `koinote://auth` with PKCE.
 
 Download the desktop client through the [Koinote download link](https://koinote.app/download),
 which redirects to the latest GitHub Release. Releases include macOS Apple Silicon, macOS Intel,
-and Windows x64 installers plus SHA-256 checksums. Alpha installers do not yet use paid platform
+and Windows x64 installers plus SHA-256 checksums. The client checks the Cloudflare R2 update
+service automatically. Alpha installers do not yet use paid platform
 certificates. macOS builds are ad-hoc signed but do not have Apple Developer ID signing or
 notarization, so macOS will still show a security warning on first launch.
 
@@ -436,6 +437,22 @@ namespace; neither the password nor its derived key is uploaded, and the key is 
 Closing the app requires another unlock. A forgotten password cannot be recovered, so users should
 export ZIP backups regularly.
 
+Official releases use `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to
+generate updater signatures, then upload the manifest and installers to the Cloudflare R2 bucket
+`koinote-desktop-releases`, served through `https://downloads.koinote.app/desktop-updates/`. GitHub Releases
+remain available for manual downloads and rollback. Before publishing a client from a fork,
+generate a new Tauri signing key, store the private key in GitHub Secrets under the same names,
+and replace the updater public key and endpoint in `src-tauri/tauri.conf.json`, plus the R2 bucket
+and custom domain in the release workflow. Do not reuse Koinote's official key or Release URL.
+
+The release workflow also needs `CLOUDFLARE_API_TOKEN` with Cloudflare `Workers R2 Storage Edit`
+permission and `CLOUDFLARE_ACCOUNT_ID` as GitHub Actions Secrets. A self-hosted deployment must create the
+bucket and connect the `downloads.koinote.app` custom domain to it. The release workflow uploads
+directly with Wrangler and does not need to bind the release bucket to the application Worker.
+The manifest is short-lived while versioned installers are immutable and served with HTTP Range
+support. The current client retries interrupted downloads; a future client can use the same
+endpoint for true resume support.
+
 ## Before you self-host
 
 These directly affect security. Worth reading before you deploy.
@@ -667,6 +684,9 @@ Required repository secrets:
 | `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed                           |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated BYOK API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
+| `FEISHU_CLIENT_ID`             | Feishu Open Platform app ID; configure it together with the next two values to enable document sync                   |
+| `FEISHU_CLIENT_SECRET`         | Feishu Open Platform app secret; used only by the backend for OAuth code exchange                                    |
+| `FEISHU_CREDENTIAL_ENCRYPTION_KEY` | Dedicated AES-GCM key for Feishu OAuth tokens; required when Feishu document sync is enabled                         |
 | `STRIPE_SECRET_KEY`            | Stripe server key; start with `sk_test_...`, switch to live mode before real charges                                        |
 | `STRIPE_WEBHOOK_SECRET`        | Signing secret for `/api/billing/webhook` (`whsec_...`)                                                                     |
 | `STRIPE_LIFETIME_PRODUCT_ID`   | Lifetime Product ID (`prod_...`); amounts come from the backend allowlist                                                   |
@@ -696,6 +716,26 @@ Variables. If the whole optional group is absent, deployments preserve any exist
 Set Feishu notifications with `gh secret set BOT_WEBHOOK` and
 `gh secret set BOT_WEBHOOK_SECRET`. If both are absent, deployment preserves any existing
 Feishu settings in the VPS `.env`.
+
+Feishu document sync uses a separate Open Platform app. Configure `FEISHU_CLIENT_ID`,
+`FEISHU_CLIENT_SECRET`, and `FEISHU_CREDENTIAL_ENCRYPTION_KEY` together, and register
+`{APP_URL}/api/feishu/oauth/callback` as the app callback URL. Enable `docx:document`,
+`docx:document.block:convert`, and `docs:document.media:upload`, and allow `offline_access`
+so the server can refresh user tokens. Keep the dedicated encryption key stable.
+Connecting Feishu and syncing documents require Lifetime membership, enforced by both the UI and the server.
+Members connect their account under Settings → Feishu, then choose “Sync to Feishu” in the editor export menu.
+If Feishu confirms that a linked document was deleted or no longer exists, the next sync creates a replacement and updates the link. Permission and temporary network errors preserve the existing link.
+The first sync creates a document; later syncs update the same document. Koinote's title and content
+replace the Feishu version, including edits made in Feishu. This first phase is manual, one-way sync;
+it does not merge conflicts, sync back to Koinote, select folders, or map a knowledge base.
+Publish the app and include pilot users in its availability scope. Custom enterprise apps suit pilots within one enterprise;
+customers in other enterprises require a store app and the corresponding installation and authorization.
+Limits are 5,000 blocks, 20 images (10 MB each and 50 MB total), and 1,000 blocks per nested structure.
+Feishu sync, OAuth callbacks, and disconnect operations share three concurrent slots per backend instance to preserve database capacity for other requests. Retry later if the service is busy.
+Sync requests time out after 110 seconds so the backend returns a structured error before Cloudflare's proxy read timeout. Changing `FEISHU_CLIENT_ID` does not migrate existing account bindings or document links; clean up old records as needed and reconnect accounts.
+Writes use several requests. Failed syncs attempt to remove newly inserted content; network interruptions may leave partial content,
+which a subsequent sync replaces in the same document. In GitHub Actions, store `FEISHU_CLIENT_ID` as a Variable and the other two
+values as Secrets. When all three are absent, deployment preserves existing VPS configuration.
 
 The second command shows only the secret name and update time; it cannot read the
 secret value. Before deploying, the workflow checks that every required secret exists.

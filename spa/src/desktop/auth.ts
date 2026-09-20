@@ -123,6 +123,14 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
       );
       continue;
     }
+    if (callback.hostname === "feishu-oauth") {
+      window.dispatchEvent(
+        new CustomEvent("koinote:feishu-oauth-complete", {
+          detail: { status: callback.searchParams.get("status") ?? "" },
+        }),
+      );
+      continue;
+    }
     if (callback.hostname !== "auth") continue;
     try {
       await exchangeDesktopCallback(callback);

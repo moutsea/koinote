@@ -40,7 +40,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4NDgzODY3QzFFRTMzODEKUldTQk0rN0JaemhJT042RTUvQU5HZkNLUnd1WUQrVVFGTVEweHE1Wm0zbmJkTkZJdHBOaTlmUUIK",
       "endpoints": [
-        "https://github.com/moutsea/koinote/releases/latest/download/latest.json"
+        "https://downloads.koinote.app/desktop-updates/latest.json"
       ]
     }
   },

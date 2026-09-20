@@ -187,6 +187,7 @@ assert.match(
 );
 
 const exportMenuSource = read("spa/src/components/editor/ExportMenu.tsx");
+const exportRunner = exportMenuSource.match(/\basync function run\([\s\S]*?\n {2}\}/)?.[0] ?? "";
 assert.doesNotMatch(
   exportMenuSource,
   /action === "export-[^"]+"[^\n]*setOpen\(true\)/,
@@ -215,8 +216,8 @@ assert.match(
   "native menu exports must not run concurrently",
 );
 assert.match(
-  exportMenuSource,
-  /setError\(null\);\s*if \(busyRef\.current\) return;/,
+  exportRunner,
+  /setError\(null\);[\s\S]*?if \(busyRef\.current\) return;/,
   "an ignored concurrent export click must still dismiss stale errors",
 );
 

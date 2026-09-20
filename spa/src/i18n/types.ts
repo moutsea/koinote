@@ -659,6 +659,8 @@ export interface Messages {
     aiDescription: string;
     invitations: string;
     invitationsDescription: string;
+    media: string;
+    mediaDescription: string;
     wechat: string;
     wechatDescription: string;
     zhihu: string;
@@ -674,6 +676,37 @@ export interface Messages {
     invitedUsersEmpty: string;
     invitedAt: string;
     invitationReward: string;
+  };
+  feishu: {
+    name: string;
+    description: string;
+    membersOnly: string;
+    accountHint: string;
+    openPlatform: string;
+    bind: string;
+    unbind: string;
+    unbindConfirm: string;
+    notBound: string;
+    unavailable: string;
+    connected: string;
+    loading: string;
+    retry: string;
+    failed: string;
+    sync: string;
+    syncing: string;
+    syncHint: string;
+    formats: string;
+    created: string;
+    updated: string;
+    open: string;
+    close: string;
+    saveFailed: string;
+    tokenInvalid: string;
+    busy: string;
+    serverBusy: string;
+    contentLimit: string;
+    imageFailed: string;
+    permissionDenied: string;
   };
   documentsPage: {
     title: string;

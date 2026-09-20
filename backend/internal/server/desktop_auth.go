@@ -468,6 +468,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
 	case "/api/x/oauth2/start":
 		return method == http.MethodGet
+	case "/api/feishu/oauth/start":
+		return method == http.MethodGet
+	case "/api/feishu/account":
+		return method == http.MethodGet || method == http.MethodDelete
 	case "/api/x/oauth2/account":
 		return method == http.MethodDelete
 	case "/api/wechat/accounts":
@@ -556,6 +560,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 			case "wechat-geo-summary":
 				return method == http.MethodGet || method == http.MethodPut
 			case "wechat-draft":
+				return method == http.MethodPost
+			case "feishu-sync":
 				return method == http.MethodPost
 			}
 		}

@@ -43,8 +43,8 @@
 ### 下载桌面客户端
 
 [官网下载入口](https://koinote.app/download)会跳转到最新 GitHub Release，提供 macOS Apple
-芯片、macOS Intel 和 Windows x64 安装包及 SHA-256 校验文件。客户端启动后自动检查更新，也可
-在账户菜单手动检查；更新包使用独立的 Tauri 签名验证。
+芯片、macOS Intel 和 Windows x64 安装包及 SHA-256 校验文件。客户端启动后通过 Cloudflare R2
+自动检查更新，也可在账户菜单手动检查；更新包使用独立的 Tauri 签名验证。
 
 Alpha 安装包尚未购买平台证书，macOS 只做 ad-hoc 签名，首次运行会看到安全提醒：请右键应用
 选择“打开”，或在“系统设置 → 隐私与安全性”中选择“仍要打开”。若提示应用“已损坏”，先核对
@@ -428,9 +428,18 @@ OAuth 回调。桌面端 SQLite 保存离线文档与图片副本，但不保存
 也不会写入磁盘；关闭客户端后必须重新输入密码。忘记密码无法恢复，因此应定期导出 ZIP 备份。
 
 官方 Release 使用 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-生成更新签名，并发布 `latest.json`。Fork 仓库发布自己的客户端前，必须生成新的 Tauri
-签名密钥，把私钥写入同名 GitHub Secrets，并替换 `src-tauri/tauri.conf.json` 中的
-`plugins.updater.pubkey` 与更新地址；不要复用 Koinote 官方公钥和 Release 地址。
+生成更新签名，并把更新清单和安装包上传到 Cloudflare R2 的
+`koinote-desktop-releases` 桶，再由 `https://downloads.koinote.app/desktop-updates/` 公开读取。
+GitHub Release 仍会同步保留，供人工下载和故障回滚。Fork 仓库发布自己的客户端前，必须
+生成新的 Tauri 签名密钥，把私钥写入同名 GitHub Secrets，并替换
+`src-tauri/tauri.conf.json` 中的 `plugins.updater.pubkey`、更新地址和发布工作流里的
+R2 桶；不要复用 Koinote 官方公钥和 Release 地址。
+
+发布工作流还需要带有 Cloudflare `Workers R2 Storage Edit` 权限的
+`CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 两个 GitHub Actions Secret。自建时先创建桶，
+并将自定义域名 `downloads.koinote.app` 连接到该桶；发布工作流直接通过 Wrangler 上传，
+不需要把发布桶绑定到应用 Worker。更新清单使用短缓存，带版本号的安装包使用长期不可变
+缓存，并支持 HTTP Range 请求；当前客户端在下载中断后自动重试，后续可直接扩展断点续传。
 
 ### 微信导出检查与结构化排版
 
@@ -662,6 +671,22 @@ event: checkout.session.async_payment_succeeded
 生产环境会拒绝启动）。通知只含站内用户 ID、金额、币种和订单号，失败按退避重试，
 不影响已发放的权益。
 
+飞书文档同步使用独立的开放平台应用：同时配置 `FEISHU_CLIENT_ID`、
+`FEISHU_CLIENT_SECRET`、`FEISHU_CREDENTIAL_ENCRYPTION_KEY`，并将
+`{APP_URL}/api/feishu/oauth/callback` 登记为应用回调地址。应用需要开通
+`docx:document`、`docx:document.block:convert`、`docs:document.media:upload` 权限，
+并允许申请 `offline_access`，以便用户授权后自动刷新 token。加密密钥应独立生成并长期保留。
+飞书账号绑定和文档同步仅向终生会员开放，前后端均校验会员身份。会员在「设置 → 飞书」绑定账号后，可从编辑器导出菜单「同步到飞书」发起同步。
+首次创建文档，后续更新同一篇文档；每次以 Koinote 的标题和正文为准，会覆盖飞书侧的修改。
+如果飞书明确返回原文档已删除或不存在，下次同步会自动创建新文档并更新关联；权限不足或临时网络错误会保留原关联。
+第一阶段只提供主动单向同步，不处理双向同步、冲突合并、知识库映射或飞书目录选择。
+请发布应用并将试用用户加入应用可用范围；企业自建应用适合本企业内试点，跨企业客户需要商店应用及相应安装授权。
+同步支持最多 5,000 个内容块、20 张图片（单张 10 MB、累计 50 MB），单个嵌套结构最多 1,000 块。
+每个后端实例的飞书同步、授权回调和解绑共用 3 个并发名额，繁忙时请稍后重试，以免占满业务数据库连接。
+同步超时为 110 秒，以确保经 Cloudflare 代理时先由后端返回结构化错误；如果更换 `FEISHU_CLIENT_ID`，已有绑定和文档关联不会自动迁移，需按需清理旧数据并重新绑定。
+飞书写入分多次请求完成；失败时会尽力清理本次新增内容，网络中断时可能留下部分内容，再次同步会覆盖同一文档。
+GitHub Actions 中将 `FEISHU_CLIENT_ID` 配为 Variable，其余两项配为 Secret；三项留空时部署保留 VPS 上已有配置。
+
 检查是否开通请用 `npx wrangler email sending list` 和
 `npx wrangler email sending dns get "$KOINOTE_DOMAIN"`。Email Sending 会把退信 MX 与
 SPF 放在 `cf-bounce.<域名>`，DKIM 放在 `cf-bounce._domainkey.<域名>`；根域没有 MX
@@ -689,6 +714,9 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
 | `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` | 知乎 OpenAPI AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                         |
 | `X_CREDENTIAL_ENCRYPTION_KEY`     | X API 凭证独立加密密钥；生产必填，轮换前必须迁移既有密文                                      |
+| `FEISHU_CLIENT_ID`                | 飞书开放平台应用 ID；与下面两项同时配置即可启用一键创建/更新飞书文档                       |
+| `FEISHU_CLIENT_SECRET`            | 飞书开放平台应用 Secret；只在后端用于 OAuth 授权码交换                                     |
+| `FEISHU_CREDENTIAL_ENCRYPTION_KEY` | 飞书 OAuth token 的独立 AES-GCM 加密密钥；生产启用飞书文档时必填                          |
 | `X_OAUTH2_CLIENT_ID`              | X Developer Portal OAuth 2.0 Client ID；与 Secret 同时配置                                     |
 | `X_OAUTH2_CLIENT_SECRET`          | X Developer Portal OAuth 2.0 Client Secret；回调地址为 `{APP_URL}/api/x/oauth2/callback`       |
 | `STRIPE_SECRET_KEY`            | Stripe 服务端密钥；先用 `sk_test_...`，正式收款前换 live mode                                       |

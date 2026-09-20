@@ -370,6 +370,43 @@ func TestLoadPopulatesFeishuConfiguration(t *testing.T) {
 	}
 }
 
+func TestFeishuDocsConfigurationMustBeComplete(t *testing.T) {
+	complete := Config{
+		FeishuClientID:                "cli_test",
+		FeishuClientSecret:            "secret",
+		FeishuCredentialEncryptionKey: "encryption-key",
+	}
+	if err := complete.ValidateFeishuDocsConfig(); err != nil || !complete.FeishuDocsEnabled() {
+		t.Fatalf("完整飞书文档配置未启用: err=%v cfg=%+v", err, complete)
+	}
+	for _, cfg := range []Config{
+		{FeishuClientID: "cli_test"},
+		{FeishuClientSecret: "secret"},
+		{FeishuCredentialEncryptionKey: "encryption-key"},
+	} {
+		if err := cfg.ValidateFeishuDocsConfig(); err == nil {
+			t.Fatalf("不完整的飞书文档配置应报错: %+v", cfg)
+		}
+		if cfg.FeishuDocsEnabled() {
+			t.Fatalf("不完整的飞书文档配置不应启用: %+v", cfg)
+		}
+	}
+	if err := (Config{}).ValidateFeishuDocsConfig(); err != nil {
+		t.Fatalf("空配置应保持可选功能关闭: %v", err)
+	}
+}
+
+func TestLoadPopulatesFeishuDocsConfiguration(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("FEISHU_CLIENT_ID", " cli_test ")
+	t.Setenv("FEISHU_CLIENT_SECRET", " secret ")
+	t.Setenv("FEISHU_CREDENTIAL_ENCRYPTION_KEY", " encryption-key ")
+	cfg := Load()
+	if cfg.FeishuClientID != "cli_test" || cfg.FeishuClientSecret != "secret" || cfg.FeishuCredentialEncryptionKey != "encryption-key" {
+		t.Fatalf("飞书文档配置未完整加载: %+v", cfg)
+	}
+}
+
 func TestLoadPopulatesCloudflareAnalyticsConfiguration(t *testing.T) {
 	chdir(t, t.TempDir())
 	t.Setenv("APP_URL", "https://notes.example.com:8443/app")

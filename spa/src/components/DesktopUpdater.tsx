@@ -9,6 +9,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DESKTOP_UPDATE_CHECK_EVENT } from "../desktop/updaterEvents";
 import {
+  DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS,
+  DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS,
+  DESKTOP_UPDATE_DOWNLOAD_TIMEOUT_MS,
   DESKTOP_UPDATE_TIMER_TICK_MS,
   desktopUpdateCheckDue,
   nextDesktopUpdateCheckAt,
@@ -25,6 +28,29 @@ type UpdatePhase =
   | "installing"
   | "current"
   | "failed";
+
+async function downloadAndInstallWithRetry(
+  update: Update,
+  onEvent: (progress: DownloadEvent) => void,
+): Promise<void> {
+  for (let attempt = 0; attempt < DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      await update.download(onEvent, {
+        timeout: DESKTOP_UPDATE_DOWNLOAD_TIMEOUT_MS,
+      });
+      break;
+    } catch (error) {
+      if (attempt + 1 >= DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS) throw error;
+      await new Promise<void>((resolve) => {
+        window.setTimeout(
+          resolve,
+          DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS[attempt] ?? 3_000,
+        );
+      });
+    }
+  }
+  await update.install();
+}
 
 export function DesktopUpdater() {
   const { t } = useI18n();
@@ -125,9 +151,7 @@ export function DesktopUpdater() {
     setContentLength(null);
     contentLengthRef.current = null;
     try {
-      await availableUpdate.downloadAndInstall(handleDownloadEvent, {
-        timeout: 120_000,
-      });
+      await downloadAndInstallWithRetry(availableUpdate, handleDownloadEvent);
       await relaunch();
     } catch {
       setPhase("failed");

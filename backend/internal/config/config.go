@@ -33,7 +33,10 @@ type Config struct {
 	ZhihuCredentialEncryptionKey string
 	// XCredentialEncryptionKey 只用于加密用户绑定的 X API 凭证。
 	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地测试。
-	XCredentialEncryptionKey string
+	XCredentialEncryptionKey      string
+	FeishuClientID                string
+	FeishuClientSecret            string
+	FeishuCredentialEncryptionKey string
 	// X OAuth 2.0 应用凭证只用于服务端授权码交换，不能下发给 SPA 或桌面客户端。
 	XOAuth2ClientID     string
 	XOAuth2ClientSecret string
@@ -166,12 +169,15 @@ func Load() Config {
 		XCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("X_CREDENTIAL_ENCRYPTION_KEY"),
 		),
-		XOAuth2ClientID:     strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_ID")),
-		XOAuth2ClientSecret: strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_SECRET")),
-		NodeEnv:             nodeEnv,
-		AutoMigrate:         getenv("AUTO_MIGRATE", "true") == "true",
-		MigrationsDir:       getenv("MIGRATIONS_DIR", "migrations"),
-		WorkerURL:           strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
+		FeishuClientID:                strings.TrimSpace(os.Getenv("FEISHU_CLIENT_ID")),
+		FeishuClientSecret:            strings.TrimSpace(os.Getenv("FEISHU_CLIENT_SECRET")),
+		FeishuCredentialEncryptionKey: strings.TrimSpace(os.Getenv("FEISHU_CREDENTIAL_ENCRYPTION_KEY")),
+		XOAuth2ClientID:               strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_ID")),
+		XOAuth2ClientSecret:           strings.TrimSpace(os.Getenv("X_OAUTH2_CLIENT_SECRET")),
+		NodeEnv:                       nodeEnv,
+		AutoMigrate:                   getenv("AUTO_MIGRATE", "true") == "true",
+		MigrationsDir:                 getenv("MIGRATIONS_DIR", "migrations"),
+		WorkerURL:                     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 
@@ -375,6 +381,26 @@ func (c Config) FeishuEnabled() bool {
 		return false
 	}
 	return validBotWebhook(c.BotWebhook)
+}
+
+func (c Config) FeishuDocsEnabled() bool {
+	return c.FeishuClientID != "" && c.FeishuClientSecret != "" && c.FeishuCredentialEncryptionKey != ""
+}
+
+func (c Config) ValidateFeishuDocsConfig() error {
+	configured := 0
+	for _, value := range []string{c.FeishuClientID, c.FeishuClientSecret, c.FeishuCredentialEncryptionKey} {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured == 0 {
+		return nil
+	}
+	if configured != 3 {
+		return fmt.Errorf("FEISHU_CLIENT_ID、FEISHU_CLIENT_SECRET、FEISHU_CREDENTIAL_ENCRYPTION_KEY 必须同时配置或同时留空")
+	}
+	return nil
 }
 
 func validBotWebhook(rawURL string) bool {

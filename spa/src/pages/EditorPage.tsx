@@ -1455,6 +1455,7 @@ export function EditorPage() {
                     themeId={activeSnapshot?.theme ?? doc.data.theme ?? ""}
                     member={session.data?.user?.membershipTier === "lifetime"}
                     localMode={localMode}
+                    onBeforeExternalExport={() => saver.flush(liveId)}
                   />
                   {!localMode && <button
                     type="button"

@@ -2,6 +2,9 @@ import fs from "node:fs";
 
 const {
   DESKTOP_UPDATE_CHECK_INTERVAL_MS,
+  DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS,
+  DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS,
+  DESKTOP_UPDATE_DOWNLOAD_TIMEOUT_MS,
   DESKTOP_UPDATE_RETRY_INTERVAL_MS,
   desktopUpdateCheckDue,
   nextDesktopUpdateCheckAt,
@@ -49,7 +52,7 @@ ok(
 ok("配置 macOS 26 原生图标", config.bundle.icon.includes("icons/AppIcon.icon"));
 ok("原生图标使用深色底", composerIcon.fill?.solid === "srgb:0.12157,0.13725,0.15686,1.00000");
 ok("原生图标包含水墨前景", composerIcon.groups?.[0]?.layers?.[0]?.["image-name"] === "mark.png" && fs.existsSync("src-tauri/icons/AppIcon.icon/Assets/mark.png"));
-ok("配置 GitHub 更新清单", config.plugins.updater.endpoints.includes("https://github.com/moutsea/koinote/releases/latest/download/latest.json"));
+ok("配置 R2 更新清单", config.plugins.updater.endpoints.includes("https://downloads.koinote.app/desktop-updates/latest.json"));
 ok(
   "配置完整 Minisign 更新公钥",
   decodedPublicKey.length === 2
@@ -68,6 +71,13 @@ includes("注册 process 插件", rust, "tauri_plugin_process::init()");
 includes("启动后自动检查", updater, "window.setTimeout(() => void runCheck(false), 2_000)");
 ok("定时检查间隔为六小时", DESKTOP_UPDATE_CHECK_INTERVAL_MS === 6 * 60 * 60 * 1_000);
 ok("失败后半小时重试", DESKTOP_UPDATE_RETRY_INTERVAL_MS === 30 * 60 * 1_000);
+ok("下载超时为五分钟", DESKTOP_UPDATE_DOWNLOAD_TIMEOUT_MS === 5 * 60 * 1_000);
+ok("下载失败自动重试三次", DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS === 3);
+ok(
+  "下载重试采用递增等待",
+  DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS.length === 2
+    && DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS[0] < DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS[1],
+);
 ok("未安排检查时立即执行", desktopUpdateCheckDue(null, 1_000));
 ok("未到检查时间不执行", !desktopUpdateCheckDue(2_000, 1_999));
 ok("到达检查时间立即执行", desktopUpdateCheckDue(2_000, 2_000));
@@ -82,13 +92,18 @@ includes("恢复联网时补检", updater, 'window.addEventListener("online", ha
 includes("回到前台时补检", updater, 'document.addEventListener("visibilitychange", handleVisibilityChange)');
 includes("更新弹窗打开时避免重复请求", updater, "(!interactive && availableUpdateRef.current)");
 includes("支持手动检查事件", updater, "DESKTOP_UPDATE_CHECK_EVENT");
-includes("下载并安装更新", updater, "availableUpdate.downloadAndInstall");
+includes("下载更新包", updater, "update.download");
+includes("安装已下载更新", updater, "update.install");
+includes("下载失败自动重试", updater, "downloadAndInstallWithRetry");
 includes("安装前保存编辑内容", updater, "await prepareDesktopLogout()");
 includes("安装后重启", updater, "await relaunch()");
 includes("显示下载进度", updater, 'event.event === "Progress"');
 includes("桌面外壳懒加载更新器", shell, 'import("./DesktopUpdater")');
 includes("账户菜单可检查更新", shell, "requestDesktopUpdateCheck()");
 includes("发布流程读取签名私钥", workflow, "TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}");
+includes("发布流程上传 R2", workflow, "koinote-desktop-releases/desktop-updates");
+includes("发布清单使用 R2 自定义域", workflow, "https://downloads.koinote.app/desktop-updates");
+includes("R2 清单最后上传", workflow, "release-artifacts/latest.json");
 includes("使用支持 Icon Composer 的 macOS 构建机", workflow, "os: macos-26");
 includes("绕过 Tauri actool 临时目录缺陷", workflow, "预编译 macOS 原生图标");
 includes("预编译 Assets.car", workflow, "actool src-tauri/icons/AppIcon.icon");

@@ -34,6 +34,8 @@ const initialMigration = read(
 const multiAccountMigration = read(
   "backend/migrations/0040_wechat_official_multi_accounts.sql",
 );
+const wechatDraftEntry =
+  exportMenu.match(/\basync function openWechatDraft\b[\s\S]*?\n {2}\}/)?.[0] ?? "";
 
 /**
  * 两个关闭入口（右上角 X 与底部按钮）各自 disabled 里的状态名集合。
@@ -75,7 +77,8 @@ for (const endpoint of [
 
 ok(
   "草稿同步入口支持网页和桌面运行时",
-  !exportMenu.includes("isDesktopRuntime()") &&
+  wechatDraftEntry.includes("prepareWechatDraftDocument(docId)") &&
+    !/\bisDesktopRuntime\s*\(/.test(wechatDraftEntry) &&
     exportMenu.includes("onOpenWechatDraft") &&
     dialog.includes("onOpenWechatDraft") &&
     dialog.includes('platform === "wechat"'),

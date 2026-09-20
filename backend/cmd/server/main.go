@@ -69,6 +69,9 @@ func main() {
 	if err := cfg.ValidateFeishuConfig(); err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.ValidateFeishuDocsConfig(); err != nil {
+		log.Fatal(err)
+	}
 	if err := cfg.ValidateAnnouncementLLMConfig(); err != nil {
 		log.Fatal(err)
 	}

@@ -141,9 +141,12 @@ function parseSettingsSearch(search: Record<string, unknown>): {
     | "membership"
     | "ai"
     | "invitations"
+    | "media"
     | "wechat"
     | "zhihu"
-    | "x";
+    | "x"
+    | "feishu";
+  platform?: "wechat" | "zhihu" | "x";
   checkout?: string;
   credit_checkout?: string;
   session_id?: string;
@@ -155,10 +158,18 @@ function parseSettingsSearch(search: Record<string, unknown>): {
       section === "membership" ||
       section === "ai" ||
       section === "invitations" ||
+      section === "media" ||
       section === "wechat" ||
       section === "zhihu" ||
-      section === "x"
+      section === "x" ||
+      section === "feishu"
         ? section
+        : undefined,
+    platform:
+      search.platform === "wechat" ||
+      search.platform === "zhihu" ||
+      search.platform === "x"
+        ? search.platform
         : undefined,
     checkout: typeof search.checkout === "string" ? search.checkout : undefined,
     credit_checkout:

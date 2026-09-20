@@ -14,6 +14,7 @@ function ok(label, condition, detail) {
 }
 
 const menu = readFileSync(new URL("../spa/src/components/editor/ExportMenu.tsx", import.meta.url), "utf8");
+const exportRunner = menu.match(/\basync function run\([\s\S]*?\n {2}\}/)?.[0] ?? "";
 const dialog = readFileSync(new URL("../spa/src/components/editor/WechatDialog.tsx", import.meta.url), "utf8");
 const zhihuPanel = readFileSync(new URL("../spa/src/components/editor/ZhihuPublishPanel.tsx", import.meta.url), "utf8");
 const zhihuServer = readFileSync(new URL("../backend/internal/server/zhihu.go", import.meta.url), "utf8");
@@ -337,7 +338,7 @@ ok(
 );
 ok(
   "忽略并发导出前会清理旧错误",
-  /setError\(null\);\s*if \(busyRef\.current\) return;/.test(menu),
+  /setError\(null\);[\s\S]*?if \(busyRef\.current\) return;/.test(exportRunner),
   "旧错误不能因为本次点击被 busy 守卫忽略而继续显示",
 );
 ok(

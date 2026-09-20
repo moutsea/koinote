@@ -15,10 +15,12 @@ import {
   KeyRound,
   LockKeyhole,
   MessageCircle,
+  MessageSquare,
   Send,
   Settings,
   ShieldCheck,
   Twitter,
+  Cloud,
   UserRound,
 } from "lucide-react";
 import type { User } from "../api";
@@ -39,6 +41,7 @@ import { StorageCard } from "../components/StorageCard";
 import { WechatOfficialAccountPanel } from "../components/editor/WechatOfficialAccountPanel";
 import { ZhihuAccountPanel } from "../components/editor/ZhihuAccountPanel";
 import { XAccountPanel } from "../components/editor/XAccountPanel";
+import { FeishuAccountPanel } from "../components/editor/FeishuAccountPanel";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { openKoinoteWebPath } from "../externalNavigation";
 import { useI18n, type Locale } from "../i18n";
@@ -48,9 +51,10 @@ type SettingsSection =
   | "membership"
   | "ai"
   | "invitations"
-  | "wechat"
-  | "zhihu"
-  | "x";
+  | "media"
+  | "feishu";
+
+type MediaPlatform = "wechat" | "zhihu" | "x";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -61,7 +65,10 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function SettingsPage() {
   const session = useSession();
-  const search = useSearch({ strict: false }) as { section?: SettingsSection };
+  const search = useSearch({ strict: false }) as {
+    section?: SettingsSection | MediaPlatform;
+    platform?: MediaPlatform;
+  };
   const { t } = useI18n();
 
   if (session.isLoading) {
@@ -73,7 +80,12 @@ export function SettingsPage() {
     return <SettingsLoginRequired />;
   }
 
-  const section = search.section ?? "general";
+  const legacyPlatform =
+    search.section === "wechat" || search.section === "zhihu" || search.section === "x"
+      ? search.section
+      : undefined;
+  const section = legacyPlatform ? "media" : (search.section ?? "general");
+  const platform = legacyPlatform ?? search.platform ?? "wechat";
   const sections: Array<{
     id: SettingsSection;
     label: string;
@@ -103,22 +115,16 @@ export function SettingsPage() {
       ),
     },
     {
-      id: "wechat",
-      label: t.settingsPage.wechat,
-      description: t.settingsPage.wechatDescription,
-      icon: <MessageCircle className="h-4 w-4" />,
+      id: "media",
+      label: t.settingsPage.media,
+      description: t.settingsPage.mediaDescription,
+      icon: <MessageSquare className="h-4 w-4" />,
     },
     {
-      id: "zhihu",
-      label: t.settingsPage.zhihu,
-      description: t.settingsPage.zhihuDescription,
-      icon: <Send className="h-4 w-4" />,
-    },
-    {
-      id: "x",
-      label: t.settingsPage.x,
-      description: t.settingsPage.xDescription,
-      icon: <Twitter className="h-4 w-4" />,
+      id: "feishu",
+      label: t.feishu.name,
+      description: t.feishu.description,
+      icon: <Cloud className="h-4 w-4" />,
     },
     {
       id: "invitations",
@@ -192,7 +198,7 @@ export function SettingsPage() {
             description={activeSection.description}
           />
           <div className="mt-5">
-            <SettingsSectionContent section={section} user={user} />
+            <SettingsSectionContent section={activeSection.id} platform={platform} user={user} />
           </div>
         </section>
       </div>
@@ -202,9 +208,11 @@ export function SettingsPage() {
 
 function SettingsSectionContent({
   section,
+  platform,
   user,
 }: {
   section: SettingsSection;
+  platform: MediaPlatform;
   user: User;
 }) {
   if (section === "general") {
@@ -261,24 +269,85 @@ function SettingsSectionContent({
     );
   }
 
-  if (section === "wechat") {
+  if (section === "media") {
+    return <MediaSettingsPanel platform={platform} user={user} />;
+  }
+
+  if (section === "feishu") {
     return (
-      <WechatOfficialAccountPanel
+      <FeishuAccountPanel
         member={user.membershipTier === "lifetime"}
         localMode={Boolean(user.isLocalMode)}
       />
     );
   }
 
-  if (section === "zhihu") {
-    return <ZhihuAccountPanel localMode={Boolean(user.isLocalMode)} />;
-  }
-
-  if (section === "x") {
-    return <XAccountPanel localMode={Boolean(user.isLocalMode)} />;
-  }
-
   return <InvitationCard />;
+}
+
+function MediaSettingsPanel({ platform, user }: { platform: MediaPlatform; user: User }) {
+  const { t } = useI18n();
+  const platforms: Array<{
+    id: MediaPlatform;
+    label: string;
+    description: string;
+    icon: ReactNode;
+  }> = [
+    {
+      id: "wechat",
+      label: t.settingsPage.wechat,
+      description: t.settingsPage.wechatDescription,
+      icon: <MessageCircle className="h-4 w-4" />,
+    },
+    {
+      id: "zhihu",
+      label: t.settingsPage.zhihu,
+      description: t.settingsPage.zhihuDescription,
+      icon: <Send className="h-4 w-4" />,
+    },
+    {
+      id: "x",
+      label: t.settingsPage.x,
+      description: t.settingsPage.xDescription,
+      icon: <Twitter className="h-4 w-4" />,
+    },
+  ];
+  const activePlatform = platforms.find((item) => item.id === platform) ?? platforms[0];
+
+  return (
+    <div className="space-y-4">
+      <nav aria-label={t.settingsPage.media} className="flex flex-wrap gap-2 border-b pb-3" style={{ borderColor: "var(--ink-line)" }}>
+        {platforms.map((item) => {
+          const active = item.id === platform;
+          return (
+            <Link
+              key={item.id}
+              to="/settings"
+              search={{ section: "media", platform: item.id }}
+              aria-current={active ? "page" : undefined}
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition hover:bg-[var(--ink-wash)]"
+              style={{
+                background: active ? "var(--cinnabar-soft)" : undefined,
+                color: active ? "var(--cinnabar)" : "var(--ink-mid)",
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <p className="text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{activePlatform.description}</p>
+      {platform === "wechat" && (
+        <WechatOfficialAccountPanel
+          member={user.membershipTier === "lifetime"}
+          localMode={Boolean(user.isLocalMode)}
+        />
+      )}
+      {platform === "zhihu" && <ZhihuAccountPanel localMode={Boolean(user.isLocalMode)} />}
+      {platform === "x" && <XAccountPanel localMode={Boolean(user.isLocalMode)} />}
+    </div>
+  );
 }
 
 function SettingsSectionHeader({

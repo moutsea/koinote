@@ -7,6 +7,9 @@ import {
   FileDown,
   FileText,
   FileType,
+  Cloud,
+  ExternalLink,
+  X,
   MessageSquare,
 } from "lucide-react";
 import { useI18n } from "../../i18n";
@@ -25,7 +28,14 @@ import {
   trackProductEvent,
   type WechatOfficialAccount,
 } from "../../api";
+import {
+  feishuErrorText,
+  getFeishuAccount,
+  syncFeishuDocument,
+  type FeishuSyncResult,
+} from "../../feishu";
 import { useDesktopMenuActions } from "../../desktop/menu";
+import { isDesktopRuntime } from "../../desktop/runtime";
 
 function exportErrorText(
   error: unknown,
@@ -50,6 +60,7 @@ export function ExportMenu({
   themeId,
   member,
   localMode,
+  onBeforeExternalExport,
 }: {
   editor: Editor | null;
   docId: string;
@@ -58,6 +69,7 @@ export function ExportMenu({
   themeId: string;
   member: boolean;
   localMode: boolean;
+  onBeforeExternalExport: () => Promise<boolean>;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -70,6 +82,7 @@ export function ExportMenu({
   const [wechatDraftOpening, setWechatDraftOpening] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feishuResult, setFeishuResult] = useState<FeishuSyncResult | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const busyRef = useRef(false);
 
@@ -106,6 +119,7 @@ export function ExportMenu({
     action: () => void | boolean | Promise<void | boolean>,
   ) {
     setError(null);
+    setFeishuResult(null);
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(kind);
@@ -116,12 +130,42 @@ export function ExportMenu({
       }
       setOpen(false);
     } catch (caught) {
+      setOpen(false);
       // 导出失败必须显形，静默失败会让用户以为文件已经下载了
-      setError(exportErrorText(caught, t.editor.exportFailed, t.errors));
+      setError(
+        kind === "feishu"
+          ? feishuErrorText(caught, t.feishu)
+          : exportErrorText(caught, t.editor.exportFailed, t.errors),
+      );
     } finally {
       busyRef.current = false;
       setBusy(null);
     }
+  }
+
+  function runFeishuSync() {
+    if (localMode) return;
+    if (!member) {
+      setOpen(false);
+      void navigate({ to: "/pricing" });
+      return;
+    }
+    void run("feishu", async () => {
+      const saved = await onBeforeExternalExport();
+      if (saved === false) {
+        throw new ApiError(409, "Document save required", "feishu_save_required");
+      }
+      const account = await getFeishuAccount();
+      if (!account.configured) {
+        throw new ApiError(503, "Feishu not configured", "feishu_not_configured");
+      }
+      if (!account.account) {
+        await navigate({ to: "/settings", search: { section: "feishu" } });
+        return false;
+      }
+      const result = await syncFeishuDocument(docId);
+      setFeishuResult(result);
+    });
   }
 
   function runMarkdownExport() {
@@ -199,6 +243,8 @@ export function ExportMenu({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          setError(null);
+          setFeishuResult(null);
           setOpen((v) => !v);
         }}
         title={t.editor.exportLabel}
@@ -214,7 +260,7 @@ export function ExportMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-9 z-40 min-w-52 overflow-hidden rounded-xl border border-black/10 bg-[var(--background)] py-1 shadow-lg dark:border-white/15"
+          className="absolute right-0 top-9 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-black/10 bg-[var(--background)] py-1 shadow-lg dark:border-white/15"
         >
           <Item
             icon={<FileText className="h-3.5 w-3.5" />}
@@ -245,6 +291,17 @@ export function ExportMenu({
             disabled={busy !== null}
             onClick={runPDFExport}
           />
+          {!localMode && (
+            <Item
+              icon={<Cloud className="h-3.5 w-3.5" />}
+              label={t.feishu.sync}
+              hint={member ? t.feishu.syncHint : t.feishu.membersOnly}
+              busy={busy === "feishu"}
+              busyLabel={t.feishu.syncing}
+              disabled={busy !== null}
+              onClick={runFeishuSync}
+            />
+          )}
           <Item
             icon={<MessageSquare className="h-3.5 w-3.5" />}
             label={t.editor.mediaExport}
@@ -258,10 +315,40 @@ export function ExportMenu({
         </div>
       )}
 
+      {feishuResult && (
+        <div
+          role="status"
+          className="absolute right-0 top-9 z-40 w-72 max-w-[calc(100vw-2rem)] rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 shadow dark:bg-emerald-950 dark:text-emerald-300"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p>{feishuResult.created ? t.feishu.created : t.feishu.updated}</p>
+            <button type="button" aria-label={t.feishu.close} onClick={() => setFeishuResult(null)} className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          <a
+            href={feishuResult.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              if (!isDesktopRuntime()) return;
+              event.preventDefault();
+              void import("@tauri-apps/plugin-opener")
+                .then(({ openUrl }) => openUrl(feishuResult.url))
+                .catch(() => {
+                  setFeishuResult(null);
+                  setError(t.feishu.failed);
+                });
+            }}
+            className="mt-1 inline-flex items-center gap-1 underline"
+          >
+            {t.feishu.open}<ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+
       {error && (
         <p
           role="alert"
-          className="absolute right-0 top-9 z-40 whitespace-nowrap rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 shadow dark:bg-red-950/60 dark:text-red-400"
+          className="absolute right-0 top-9 z-40 w-72 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 shadow dark:bg-red-950 dark:text-red-400"
         >
           {error}
         </p>
@@ -302,6 +389,7 @@ function Item({
   label,
   hint,
   busy,
+  busyLabel,
   disabled,
   onClick,
 }: {
@@ -309,6 +397,7 @@ function Item({
   label: string;
   hint?: string;
   busy?: boolean;
+  busyLabel?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -324,7 +413,7 @@ function Item({
       <span className="mt-0.5 shrink-0 text-neutral-400">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm">
-          {busy ? t.editor.exporting : label}
+          {busy ? busyLabel ?? t.editor.exporting : label}
         </span>
         {hint && (
           <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
