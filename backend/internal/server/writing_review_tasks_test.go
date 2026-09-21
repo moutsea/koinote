@@ -138,6 +138,17 @@ func TestWritingReviewDimensionAcceptsProviderScoreKeyAlias(t *testing.T) {
 	}
 }
 
+func TestWritingReviewDimensionIgnoresProviderCommentFields(t *testing.T) {
+	raw := []byte(`{"layoutAssessment":[{"id":"hierarchy","label":"层级","score":80,"score-comment":"稳定。","summary":"层级清楚。"},{"id":"readability","label":"可读性","score":80,"summary":"阅读顺畅。"},{"id":"emphasis","label":"重点","score":80,"summary":"重点明确。"},{"id":"rhythm","label":"节奏","score":80,"summary":"节奏自然。"},{"id":"modules","label":"模块","score":80,"summary":"模块合理。"},{"id":"mobile","label":"移动端","score":80,"summary":"移动端友好。"}],"layoutSuggestions":[]}`)
+	var review generatedLayoutReview
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("decode provider comment field: %v", err)
+	}
+	if review.LayoutAssessment[0].Score != 80 || len(review.LayoutAssessment) != len(writingReviewDimensionIDs) {
+		t.Fatalf("decoded layout assessment=%+v", review.LayoutAssessment)
+	}
+}
+
 func TestMergeWritingReviewTaskResultsSupportsPartialPlans(t *testing.T) {
 	for _, stage := range []agentReviewTaskStage{
 		agentReviewTaskBody,

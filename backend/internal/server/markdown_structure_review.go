@@ -32,7 +32,6 @@ type writingReviewDimension struct {
 
 func (dimension *writingReviewDimension) UnmarshalJSON(data []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	var value struct {
 		ID       string `json:"id"`
 		Label    string `json:"label"`
