@@ -678,6 +678,7 @@ func marshalWritingReviewTaskPrompt(
 	if err != nil {
 		return agentLLMPrompt{}, fmt.Errorf("encode writing review task: %w", err)
 	}
+	system += "\n\nJSON encoding requirement: return valid JSON. Escape every double quote inside a string value as \\\"; never place a raw double quote inside a string."
 	return agentLLMPrompt{
 		System: system, User: prefix + string(encoded), Schema: schema,
 		MaxOutputTokens: maxOutputTokens, Temperature: temperature,
@@ -1389,16 +1390,74 @@ func parseWritingReviewTaskResult(
 }
 
 func decodeStrictWritingReviewTask(raw []byte, target any) error {
+	if err := decodeStrictWritingReviewTaskBytes(raw, target); err == nil {
+		return nil
+	} else if repaired, ok := repairAgentJSONQuotes(raw); ok {
+		if repairedErr := decodeStrictWritingReviewTaskBytes(repaired, target); repairedErr == nil {
+			return nil
+		}
+		return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, err)
+	} else {
+		return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, err)
+	}
+}
+
+func decodeStrictWritingReviewTaskBytes(raw []byte, target any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, err)
+		return err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("%w: task contains trailing JSON", errAgentLLMInvalidResponse)
+		return errors.New("task contains trailing JSON")
 	}
 	return nil
+}
+
+func repairAgentJSONQuotes(raw []byte) ([]byte, bool) {
+	repaired := make([]byte, 0, len(raw)+16)
+	inString := false
+	escaped := false
+	changed := false
+	for index, value := range raw {
+		if !inString {
+			repaired = append(repaired, value)
+			if value == '"' {
+				inString = true
+			}
+			continue
+		}
+		if escaped {
+			repaired = append(repaired, value)
+			escaped = false
+			continue
+		}
+		if value == '\\' {
+			repaired = append(repaired, value)
+			escaped = true
+			continue
+		}
+		if value != '"' {
+			repaired = append(repaired, value)
+			continue
+		}
+		next := index + 1
+		for next < len(raw) && (raw[next] == ' ' || raw[next] == '\t' || raw[next] == '\r' || raw[next] == '\n') {
+			next++
+		}
+		if next == len(raw) || raw[next] == ',' || raw[next] == '}' || raw[next] == ']' || raw[next] == ':' {
+			repaired = append(repaired, value)
+			inString = false
+			continue
+		}
+		repaired = append(repaired, '\\', '"')
+		changed = true
+	}
+	if inString || !changed {
+		return nil, false
+	}
+	return repaired, true
 }
 
 func validateGeneratedWritingReview(

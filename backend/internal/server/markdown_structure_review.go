@@ -2,7 +2,10 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -25,6 +28,35 @@ type writingReviewDimension struct {
 	Label   string `json:"label"`
 	Score   int    `json:"score"`
 	Summary string `json:"summary"`
+}
+
+func (dimension *writingReviewDimension) UnmarshalJSON(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var value struct {
+		ID       string `json:"id"`
+		Label    string `json:"label"`
+		Score    *int   `json:"score"`
+		ScoreKey *int   `json:"score-key"`
+		Summary  string `json:"summary"`
+	}
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("layout assessment contains trailing JSON")
+	}
+	score := 0
+	if value.Score != nil {
+		score = *value.Score
+	} else if value.ScoreKey != nil {
+		score = *value.ScoreKey
+	}
+	*dimension = writingReviewDimension{
+		ID: value.ID, Label: value.Label, Score: score, Summary: value.Summary,
+	}
+	return nil
 }
 
 type markdownReviewBlock struct {

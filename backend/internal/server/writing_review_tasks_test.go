@@ -97,6 +97,36 @@ func TestBuildWritingReviewTaskPlanRejectsInvalidTasks(t *testing.T) {
 	}
 }
 
+func TestDecodeStrictWritingReviewTaskRepairsUnescapedQuotes(t *testing.T) {
+	raw := []byte(`{"summary":"标题清晰但笼统，"一次真实的部署记录"没有说明读者能获得的具体收获。","titleScore":42,"titleAssessment":"标题需要更具体。","titleSuggestions":[]}`)
+	var review generatedTitleReview
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("decode repaired title review: %v", err)
+	}
+	if !strings.Contains(review.Summary, `"一次真实的部署记录"`) {
+		t.Fatalf("repaired summary=%q", review.Summary)
+	}
+}
+
+func TestDecodeStrictWritingReviewTaskKeepsUnknownFieldsRejected(t *testing.T) {
+	raw := []byte(`{"summary":"摘要","titleScore":80,"titleAssessment":"清楚。","titleSuggestions":[],"unexpected":"field"}`)
+	var review generatedTitleReview
+	if err := decodeStrictWritingReviewTask(raw, &review); !errors.Is(err, errAgentLLMInvalidResponse) {
+		t.Fatalf("unknown field error=%v, want invalid response", err)
+	}
+}
+
+func TestWritingReviewDimensionAcceptsProviderScoreKeyAlias(t *testing.T) {
+	raw := []byte(`{"layoutAssessment":[{"id":"hierarchy","label":"层级","score-key":80,"summary":"层级清楚。"},{"id":"readability","label":"可读性","score":80,"summary":"阅读顺畅。"},{"id":"emphasis","label":"重点","score":80,"summary":"重点明确。"},{"id":"rhythm","label":"节奏","score":80,"summary":"节奏自然。"},{"id":"modules","label":"模块","score":80,"summary":"模块合理。"},{"id":"mobile","label":"移动端","score":80,"summary":"移动端友好。"}],"layoutSuggestions":[]}`)
+	var review generatedLayoutReview
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("decode score-key alias: %v", err)
+	}
+	if len(review.LayoutAssessment) != len(writingReviewDimensionIDs) || review.LayoutAssessment[0].Score != 80 {
+		t.Fatalf("layout assessment=%+v", review.LayoutAssessment)
+	}
+}
+
 func TestMergeWritingReviewTaskResultsSupportsPartialPlans(t *testing.T) {
 	for _, stage := range []agentReviewTaskStage{
 		agentReviewTaskBody,
