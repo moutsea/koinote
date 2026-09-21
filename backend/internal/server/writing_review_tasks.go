@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1390,19 +1391,37 @@ func parseWritingReviewTaskResult(
 }
 
 func decodeStrictWritingReviewTask(raw []byte, target any) error {
-	if err := decodeStrictWritingReviewTaskBytes(raw, target); err == nil {
+	firstErr := decodeStrictWritingReviewTaskBytes(raw, target)
+	if firstErr == nil {
 		return nil
-	} else if repaired, ok := repairAgentJSONQuotes(raw); ok {
-		if repairedErr := decodeStrictWritingReviewTaskBytes(repaired, target); repairedErr == nil {
-			return nil
-		}
-		return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, err)
-	} else {
-		return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, err)
 	}
+	inputs := [][]byte{raw}
+	if repaired, ok := repairAgentJSONQuotes(raw); ok {
+		inputs = append(inputs, repaired)
+	}
+	seen := make(map[string]struct{}, len(inputs)*2)
+	for _, input := range inputs {
+		for _, candidate := range append([][]byte{input}, extractAgentJSONObjects(input)...) {
+			key := string(candidate)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			if err := decodeStrictWritingReviewTaskBytes(candidate, target); err == nil {
+				return nil
+			}
+			if repaired, ok := repairAgentJSONQuotes(candidate); ok {
+				if err := decodeStrictWritingReviewTaskBytes(repaired, target); err == nil {
+					return nil
+				}
+			}
+		}
+	}
+	return fmt.Errorf("%w: decode task JSON: %v", errAgentLLMInvalidResponse, firstErr)
 }
 
 func decodeStrictWritingReviewTaskBytes(raw []byte, target any) error {
+	resetAgentJSONTarget(target)
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -1413,6 +1432,62 @@ func decodeStrictWritingReviewTaskBytes(raw []byte, target any) error {
 		return errors.New("task contains trailing JSON")
 	}
 	return nil
+}
+
+func resetAgentJSONTarget(target any) {
+	value := reflect.ValueOf(target)
+	if value.Kind() != reflect.Pointer || value.IsNil() || !value.Elem().CanSet() {
+		return
+	}
+	value.Elem().Set(reflect.Zero(value.Elem().Type()))
+}
+
+func extractAgentJSONObjects(raw []byte) [][]byte {
+	objects := make([][]byte, 0)
+	for start, value := range raw {
+		if value != '{' {
+			continue
+		}
+		if end, ok := findAgentJSONObjectEnd(raw, start); ok {
+			objects = append(objects, raw[start:end])
+		}
+	}
+	return objects
+}
+
+func findAgentJSONObjectEnd(raw []byte, start int) (int, bool) {
+	depth := 0
+	inString := false
+	escaped := false
+	for index := start; index < len(raw); index++ {
+		value := raw[index]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if value == '\\' {
+				escaped = true
+				continue
+			}
+			if value == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch value {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return index + 1, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func repairAgentJSONQuotes(raw []byte) ([]byte, bool) {

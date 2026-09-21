@@ -108,6 +108,17 @@ func TestDecodeStrictWritingReviewTaskRepairsUnescapedQuotes(t *testing.T) {
 	}
 }
 
+func TestDecodeStrictWritingReviewTaskUsesLaterCorrectedJSON(t *testing.T) {
+	raw := []byte("模型先返回了错误结果：{\"summary\":\"摘要\",\"titleScore:60\":0}\n```json\n{\"summary\":\"修正后的摘要\",\"titleScore\":80,\"titleAssessment\":\"清楚。\",\"titleSuggestions\":[]}\n```")
+	var review generatedTitleReview
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("decode later corrected JSON: %v", err)
+	}
+	if review.Summary != "修正后的摘要" || review.TitleScore != 80 {
+		t.Fatalf("decoded review=%+v", review)
+	}
+}
+
 func TestDecodeStrictWritingReviewTaskKeepsUnknownFieldsRejected(t *testing.T) {
 	raw := []byte(`{"summary":"摘要","titleScore":80,"titleAssessment":"清楚。","titleSuggestions":[],"unexpected":"field"}`)
 	var review generatedTitleReview
