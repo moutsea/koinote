@@ -519,6 +519,9 @@ body {
     padding-right: 0 !important;
     padding-left: 0 !important;
   }
+  html.koinote-printing .koinote-doc-title-cover-controls {
+    display: none !important;
+  }
   html.koinote-printing .koinote-print-image {
     display: block;
     width: 100%;

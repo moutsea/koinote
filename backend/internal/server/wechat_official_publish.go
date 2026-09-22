@@ -324,6 +324,9 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !a.requireMediaPlatformEnabled(w, r, user.ID, "wechat") {
+		return
+	}
 	var input struct {
 		AccountID        string `json:"accountId"`
 		Title            string `json:"title"`

@@ -432,6 +432,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/account":
 		return method == http.MethodDelete
+	case "/api/media/settings":
+		return method == http.MethodGet || method == http.MethodPut
+	case "/api/media/custom-platforms":
+		return method == http.MethodPost
 	case "/api/billing/status", "/api/invitations", "/api/storage/usage":
 		return method == http.MethodGet
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
@@ -516,6 +520,9 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return rest != "" && !strings.Contains(rest, "/") &&
 			(method == http.MethodPut || method == http.MethodDelete)
 	}
+	if rest, found := strings.CutPrefix(path, "/api/media/custom-platforms/"); found {
+		return rest != "" && !strings.Contains(rest, "/") && (method == http.MethodPut || method == http.MethodDelete)
+	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/reviews/"); found {
 		parts := strings.Split(rest, "/")
 		if len(parts) == 1 && parts[0] != "" {
@@ -575,6 +582,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "x" &&
 			parts[2] == "publish" {
+			return method == http.MethodPost
+		}
+		if len(parts) == 4 && parts[0] != "" && parts[1] == "media" &&
+			parts[2] != "" && parts[3] == "publish" {
 			return method == http.MethodPost
 		}
 		if len(parts) == 3 && parts[0] != "" && parts[1] == "wechat-geo-summary" &&

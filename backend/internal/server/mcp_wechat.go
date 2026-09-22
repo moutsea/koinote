@@ -85,6 +85,13 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 	started := time.Now()
 	result := "error"
 	defer func() { a.auditMCPCall(principal, "push_wechat_draft", input.DocID, result, started) }()
+	enabled, err := a.loadBuiltInMediaSettings(ctx, principal.User.ID)
+	if err != nil {
+		return nil, mcpWechatDraftOutput{}, errors.New("could not load publishing platform settings")
+	}
+	if !enabled.WechatEnabled {
+		return nil, mcpWechatDraftOutput{}, errors.New("WeChat publishing is disabled")
+	}
 	doc, err := a.loadMCPDocument(ctx, principal.User.ID, input.DocID)
 	if err != nil {
 		return nil, mcpWechatDraftOutput{}, err

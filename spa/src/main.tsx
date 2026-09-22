@@ -145,8 +145,9 @@ function parseSettingsSearch(search: Record<string, unknown>): {
     | "wechat"
     | "zhihu"
     | "x"
+    | "custom"
     | "feishu";
-  platform?: "wechat" | "zhihu" | "x";
+  platform?: "wechat" | "zhihu" | "x" | "custom";
   checkout?: string;
   credit_checkout?: string;
   session_id?: string;
@@ -162,13 +163,15 @@ function parseSettingsSearch(search: Record<string, unknown>): {
       section === "wechat" ||
       section === "zhihu" ||
       section === "x" ||
+      section === "custom" ||
       section === "feishu"
         ? section
         : undefined,
     platform:
       search.platform === "wechat" ||
       search.platform === "zhihu" ||
-      search.platform === "x"
+      search.platform === "x" ||
+      search.platform === "custom"
         ? search.platform
         : undefined,
     checkout: typeof search.checkout === "string" ? search.checkout : undefined,

@@ -1375,6 +1375,85 @@ export function trackProductEvent(event: "first_export") {
   });
 }
 
+export type MediaPlatformSettings = {
+  wechatEnabled: boolean;
+  zhihuEnabled: boolean;
+  xEnabled: boolean;
+};
+
+export type CustomMediaPlatform = {
+  platformId: string;
+  name: string;
+  endpointUrl: string;
+  authTokenHint: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MediaPlatformSettingsResponse = {
+  settings: MediaPlatformSettings;
+  customPlatforms: CustomMediaPlatform[];
+};
+
+export const MEDIA_PLATFORM_SETTINGS_QUERY_KEY = ["media-platform-settings"] as const;
+
+export function getMediaPlatformSettings() {
+  return apiJson<MediaPlatformSettingsResponse>("/api/media/settings");
+}
+
+export function updateMediaPlatformSettings(settings: MediaPlatformSettings) {
+  return apiJson<MediaPlatformSettingsResponse>("/api/media/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export type CustomMediaPlatformInput = {
+  name: string;
+  endpointUrl: string;
+  authToken?: string;
+  clearAuthToken?: boolean;
+  enabled: boolean;
+};
+
+export function createCustomMediaPlatform(input: CustomMediaPlatformInput) {
+  return apiJson<{ platform: CustomMediaPlatform }>("/api/media/custom-platforms", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCustomMediaPlatform(platformId: string, input: CustomMediaPlatformInput) {
+  return apiJson<{ platform: CustomMediaPlatform }>(
+    `/api/media/custom-platforms/${encodeURIComponent(platformId)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+}
+
+export function deleteCustomMediaPlatform(platformId: string) {
+  return apiJson<{ success: boolean }>(
+    `/api/media/custom-platforms/${encodeURIComponent(platformId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function publishCustomMediaPlatform(
+  docId: string,
+  platformId: string,
+  input: {
+    title: string;
+    markdown: string;
+    html: string;
+    coverImageSource?: string;
+  },
+) {
+  return apiJson<{ published: boolean; url: string }>(
+    `/api/documents/${encodeURIComponent(docId)}/media/${encodeURIComponent(platformId)}/publish`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
 // ---------- 文档 ----------
 
 // 曾有第三档 "public"，与 "link" 行为完全相同，已删。

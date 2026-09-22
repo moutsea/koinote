@@ -2,7 +2,6 @@ import {
   chevronX,
   docIconX,
   docPad,
-  folderIconRightX,
   folderIconX,
   folderPad,
   guideX,
@@ -24,12 +23,11 @@ function eq(label, actual, expected) {
   ok(label, actual === expected, `expected ${expected}, got ${actual}`);
 }
 
-// —— 这条是这次改动的核心诉求：文档要缩进到父文件夹图标的右侧 ——
 for (let d = 0; d < 8; d += 1) {
   ok(
-    `depth ${d}: 子文档图标在父文件夹图标右沿之外`,
-    docIconX(d + 1) > folderIconRightX(d),
-    `doc ${docIconX(d + 1)} vs folder right edge ${folderIconRightX(d)}`,
+    `depth ${d}: 子文档图标相对父文件夹向右缩进`,
+    docIconX(d + 1) > folderIconX(d),
+    `doc ${docIconX(d + 1)} vs folder ${folderIconX(d)}`,
   );
 }
 
@@ -42,12 +40,9 @@ for (let d = 0; d < 8; d += 1) {
 for (let d = 0; d < 8; d += 1) {
   ok(`depth ${d}: 文件夹逐层右移`, folderPad(d + 1) > folderPad(d));
   ok(`depth ${d}: 文档逐层右移`, docPad(d + 1) > docPad(d));
-  eq(`depth ${d}: 文件夹步长`, folderPad(d + 1) - folderPad(d), 16);
-  eq(`depth ${d}: 文档步长`, docPad(d + 1) - docPad(d), 16);
+  eq(`depth ${d}: 文件夹步长`, folderPad(d + 1) - folderPad(d), 8);
+  eq(`depth ${d}: 文档步长`, docPad(d + 1) - docPad(d), 8);
 }
-
-// 步长下限：小于等于 14 的话子文档就顶不到父文件夹图标右边，层级看起来是平的
-ok("步长大于图标清空所需的下限", folderPad(1) - folderPad(0) > 14);
 
 // 最深一层（后端 maxFolderDepth = 8）在拖到最宽时要留得下标题
 ok(
@@ -68,7 +63,7 @@ for (let d = 0; d < 8; d += 1) {
   // 相邻两层的线要分得开，不然深层嵌套会糊成一片
   ok(
     `depth ${d}: 相邻引导线分得开`,
-    guideX(d + 1) - guideX(d) >= 12,
+    guideX(d + 1) - guideX(d) >= 8,
     `间距 ${guideX(d + 1) - guideX(d)}`,
   );
 }

@@ -16,6 +16,7 @@ function ok(label, condition, detail) {
 const menu = readFileSync(new URL("../spa/src/components/editor/ExportMenu.tsx", import.meta.url), "utf8");
 const exportRunner = menu.match(/\basync function run\([\s\S]*?\n {2}\}/)?.[0] ?? "";
 const dialog = readFileSync(new URL("../spa/src/components/editor/WechatDialog.tsx", import.meta.url), "utf8");
+const retiredPlatform = ["jue", "jin"].join("");
 const zhihuPanel = readFileSync(new URL("../spa/src/components/editor/ZhihuPublishPanel.tsx", import.meta.url), "utf8");
 const zhihuServer = readFileSync(new URL("../backend/internal/server/zhihu.go", import.meta.url), "utf8");
 const exportMedia = readFileSync(new URL("../spa/src/components/editor/exportMedia.ts", import.meta.url), "utf8");
@@ -69,10 +70,9 @@ const excludes = (guard, states) =>
 
 ok("微信公众号使用富文本", mediaExportFormat("wechat") === "rich-text");
 ok("知乎使用富文本", mediaExportFormat("zhihu") === "rich-text");
-ok("掘金使用 Markdown", mediaExportFormat("juejin") === "markdown");
 ok("X 使用服务端文章发布格式", mediaExportFormat("x") === "markdown");
 ok(
-  "掘金 Markdown 包含文档标题",
+  "Markdown 包含文档标题",
   buildMediaMarkdown("一篇文章", "正文内容") === "# 一篇文章\n\n正文内容",
   "标题应作为一级标题放在正文之前",
 );
@@ -93,8 +93,15 @@ ok(
   "顶层导出菜单只保留自媒体入口",
 );
 ok(
-  "平台选择包含全部目标",
-  /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']juejin["']/.test(dialog) && /["']x["']/.test(dialog),
+  "平台选择包含三个内置目标且移除旧平台",
+  /["']wechat["']/.test(dialog) && /["']zhihu["']/.test(dialog) && /["']x["']/.test(dialog) &&
+    !new RegExp(`["']${retiredPlatform}["']`).test(dialog) && /customPlatforms\.map/.test(dialog),
+);
+ok(
+  "关闭全部内置平台后可使用自定义平台",
+  /enabledPlatforms/.test(menu) && /customPlatforms/.test(menu) &&
+    /showMediaExport/.test(menu) && /isCustomPlatform/.test(dialog) &&
+    /runCustomPlatform/.test(dialog),
 );
 const xPanel = readFileSync(new URL("../spa/src/components/editor/XPublishPanel.tsx", import.meta.url), "utf8");
 const xThread = readFileSync(new URL("../spa/src/components/editor/xPublish.ts", import.meta.url), "utf8");
@@ -173,7 +180,7 @@ ok(
 );
 ok(
   "知乎不显示重复的通用复制按钮",
-  /!draftOnly && platform !== "zhihu"/.test(dialog),
+  /!draftOnly && !isCustomPlatform && platform !== "zhihu"/.test(dialog),
   "知乎平台只保留面板中的直发和复制并打开知乎按钮",
 );
 ok(

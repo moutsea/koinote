@@ -19,7 +19,9 @@ import {
   ApiError,
   generateWechatGeoSummary,
   getWechatGeoSummary,
+  publishCustomMediaPlatform,
   trackProductEvent,
+  type CustomMediaPlatform,
   updateWechatGeoSummary,
   type WechatOfficialAccount,
 } from "../../api";
@@ -34,7 +36,7 @@ import { isDesktopLocalImageURL } from "../../desktop/offlineImagesCore";
 /**
  * 导出到自媒体平台。
  *
- * 微信与知乎使用内联样式富文本；掘金原生支持 Markdown，X 使用服务端线程发布以保留图片。
+ * 微信与知乎使用内联样式富文本；X 使用服务端文章发布以保留图片；自定义平台使用统一 API 合约。
  * 不带主题选择也不带预览：主题是文档属性，在编辑区已经生效了。
  */
 export function MediaExportDialog({
@@ -49,6 +51,9 @@ export function MediaExportDialog({
   wechatAccounts,
   onOpenWechatDraft,
   wechatDraftOpening = false,
+  enabledPlatforms,
+  customPlatforms = [],
+  onBeforeExternalExport,
   onClose,
 }: {
   editor: Editor;
@@ -62,6 +67,9 @@ export function MediaExportDialog({
   wechatAccounts?: WechatOfficialAccount[];
   onOpenWechatDraft?: () => Promise<string | undefined>;
   wechatDraftOpening?: boolean;
+  enabledPlatforms?: MediaPlatform[];
+  customPlatforms?: CustomMediaPlatform[];
+  onBeforeExternalExport: () => Promise<boolean>;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -78,6 +86,7 @@ export function MediaExportDialog({
     parseArticleMetadata(currentMarkdown, title).body,
   );
   const [platform, setPlatform] = useState<MediaPlatform>("wechat");
+  const [customPlatformId, setCustomPlatformId] = useState<string | null>(null);
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -99,6 +108,42 @@ export function MediaExportDialog({
   // 与 note 分开：图片抓不到和公式降级可能同时发生，共用一个槽会互相顶掉，
   // 而被顶掉的恰好是更严重的那条
   const [imageWarning, setImageWarning] = useState<string | null>(null);
+  const selectedCustomPlatform = customPlatforms.find((item) => item.platformId === customPlatformId) ?? null;
+  const availablePlatforms = useMemo(
+    () => enabledPlatforms ?? (["wechat", "zhihu", "x"] as MediaPlatform[]),
+    [enabledPlatforms],
+  );
+  const isCustomPlatform = selectedCustomPlatform !== null;
+  const builtInPlatformOptions = useMemo(
+    () =>
+      ([
+        ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
+        ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
+        ["x", t.editor.mediaX, t.editor.mediaXHint],
+      ] as const).filter(([value]) => availablePlatforms.includes(value)),
+    [availablePlatforms, t.editor.mediaWechat, t.editor.mediaWechatHint, t.editor.mediaZhihu, t.editor.mediaZhihuHint, t.editor.mediaX, t.editor.mediaXHint],
+  );
+
+  useEffect(() => {
+    if (draftOnly) {
+      setPlatform("wechat");
+      setCustomPlatformId(null);
+      return;
+    }
+    if (customPlatformId && selectedCustomPlatform) return;
+    if (availablePlatforms.includes(platform)) {
+      setCustomPlatformId(null);
+      return;
+    }
+    if (availablePlatforms[0]) {
+      setPlatform(availablePlatforms[0]);
+      setCustomPlatformId(null);
+      return;
+    }
+    if (customPlatforms[0]) {
+      setCustomPlatformId(customPlatforms[0].platformId);
+    }
+  }, [availablePlatforms, customPlatformId, customPlatforms, draftOnly, platform, selectedCustomPlatform]);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const geoTouchedRef = useRef(false);
   const geoSavePromiseRef = useRef<Promise<boolean> | null>(null);
@@ -247,6 +292,7 @@ export function MediaExportDialog({
   }
 
   async function run() {
+    if (isCustomPlatform) return;
     setError(null);
     setNote(null);
     setImageWarning(null);
@@ -322,6 +368,41 @@ export function MediaExportDialog({
         isLocalModeNetworkDisabled(error)
           ? t.desktopLocalMode.networkDisabled
           : t.editor.exportFailed,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runCustomPlatform() {
+    if (!selectedCustomPlatform) return;
+    setError(null);
+    setNote(null);
+    setImageWarning(null);
+    setDone(false);
+    setBusy(true);
+    try {
+      if (!(await onBeforeExternalExport())) {
+        setError(t.editor.saveFailed);
+        return;
+      }
+      const html = await prepareZhihuHTML(true, true);
+      if (!html) return;
+      const result = await publishCustomMediaPlatform(docId, selectedCustomPlatform.platformId, {
+        title: exportTitle,
+        markdown: exportPlainText,
+        html,
+        ...(coverImageSource?.trim() ? { coverImageSource: coverImageSource.trim() } : {}),
+      });
+      void trackProductEvent("first_export").catch(() => undefined);
+      setDone(true);
+      setNote(result.url ? `${t.editor.mediaPublished}: ${result.url}` : t.editor.mediaPublished);
+    } catch (caught) {
+      const code = caught instanceof ApiError ? caught.code : undefined;
+      setError(
+        isLocalModeNetworkDisabled(caught)
+          ? t.desktopLocalMode.networkDisabled
+          : (code && t.errors[code]) || t.editor.mediaPublishFailed,
       );
     } finally {
       setBusy(false);
@@ -557,21 +638,14 @@ export function MediaExportDialog({
           </button>
         </div>
 
-        {!draftOnly && (
+        {!draftOnly && (builtInPlatformOptions.length > 0 || customPlatforms.length > 0) && (
           <div
-            className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4"
+            className="mt-4 grid grid-cols-3 gap-2"
             role="radiogroup"
             aria-label={t.editor.mediaPlatformLabel}
           >
-            {(
-              [
-                ["wechat", t.editor.mediaWechat, t.editor.mediaWechatHint],
-                ["zhihu", t.editor.mediaZhihu, t.editor.mediaZhihuHint],
-                ["juejin", t.editor.mediaJuejin, t.editor.mediaJuejinHint],
-                ["x", t.editor.mediaX, t.editor.mediaXHint],
-              ] as const
-            ).map(([value, label, hint]) => {
-              const selected = platform === value;
+            {builtInPlatformOptions.map(([value, label, hint]) => {
+              const selected = !isCustomPlatform && platform === value;
               return (
                 <button
                   key={value}
@@ -580,13 +654,14 @@ export function MediaExportDialog({
                   aria-checked={selected}
                   onClick={() => {
                     setPlatform(value);
+                    setCustomPlatformId(null);
                     setDone(false);
                     setBytes(null);
                     setError(null);
                     setNote(null);
                     setImageWarning(null);
                   }}
-                  className="rounded-xl border px-3 py-3 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/5"
+                  className="min-w-0 break-words rounded-xl border px-2 py-3 text-left transition hover:bg-black/[0.03] sm:px-3 dark:hover:bg-white/5"
                   style={{
                     borderColor: selected
                       ? "var(--ink-strong)"
@@ -609,12 +684,43 @@ export function MediaExportDialog({
                 </button>
               );
             })}
+            {customPlatforms.map((item) => {
+              const selected = selectedCustomPlatform?.platformId === item.platformId;
+              return (
+                <button
+                  key={item.platformId}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    setCustomPlatformId(item.platformId);
+                    setDone(false);
+                    setBytes(null);
+                    setError(null);
+                    setNote(null);
+                    setImageWarning(null);
+                  }}
+                  className="min-w-0 break-words rounded-xl border px-2 py-3 text-left transition hover:bg-black/[0.03] sm:px-3 dark:hover:bg-white/5"
+                  style={{
+                    borderColor: selected ? "var(--ink-strong)" : "var(--ink-line)",
+                    background: selected ? "var(--ink-wash)" : "transparent",
+                  }}
+                >
+                  <span className="block text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>
+                    {item.name}
+                  </span>
+                  <span className="mt-1 block text-[11px] leading-4" style={{ color: "var(--ink-faint)" }}>
+                    {t.editor.mediaCustomHint}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
         {/* 当前用的是哪套主题。改主题要回编辑区改 —— 那里改完立刻能看见效果，
             在这个弹窗里改反而看不见 */}
-        {mediaExportFormat(platform) === "rich-text" && (
+        {!isCustomPlatform && mediaExportFormat(platform) === "rich-text" && (
           <p className="mt-4 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-neutral-500 dark:bg-white/5 dark:text-neutral-400">
             {t.editor.wechatThemeLabel}
             <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">
@@ -628,14 +734,14 @@ export function MediaExportDialog({
           </p>
         )}
 
-        {platform === "wechat" && (
+        {!isCustomPlatform && platform === "wechat" && (
           <WechatPreflightPanel
             markdown={currentMarkdown}
             title={exportTitle}
           />
         )}
 
-        {!draftOnly && platform === "zhihu" && !localMode && (
+        {!draftOnly && !isCustomPlatform && platform === "zhihu" && !localMode && (
           <ZhihuPublishPanel
             docId={docId}
             title={exportTitle}
@@ -647,7 +753,7 @@ export function MediaExportDialog({
           />
         )}
 
-        {!draftOnly && platform === "x" && (
+        {!draftOnly && !isCustomPlatform && platform === "x" && (
           <XPublishPanel
             docId={docId}
             title={exportTitle}
@@ -661,7 +767,7 @@ export function MediaExportDialog({
           />
         )}
 
-        {platform === "wechat" && member && !localMode && (
+        {!isCustomPlatform && platform === "wechat" && member && !localMode && (
           <div className="mt-3 rounded-xl border border-black/10 px-3 py-3 dark:border-white/10">
             <label className="flex cursor-pointer items-start gap-2.5">
               <input
@@ -862,7 +968,11 @@ export function MediaExportDialog({
           </div>
         )}
 
-        {platform !== "x" && (
+        {isCustomPlatform ? (
+          <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">
+            {t.editor.mediaCustomHint}
+          </p>
+        ) : platform !== "x" && (
           <p className="mt-4 text-[11px] leading-relaxed text-neutral-400">
             {mediaExportFormat(platform) === "markdown"
               ? t.editor.mediaMarkdownNote
@@ -871,7 +981,7 @@ export function MediaExportDialog({
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {!draftOnly && platform !== "zhihu" && platform !== "x" && (
+          {!draftOnly && !isCustomPlatform && platform !== "zhihu" && platform !== "x" && (
             <button
               type="button"
               onClick={run}
@@ -909,6 +1019,18 @@ export function MediaExportDialog({
                   {t.editor.mediaCopy}
                 </>
               )}
+            </button>
+          )}
+          {!draftOnly && isCustomPlatform && (
+            <button
+              type="button"
+              onClick={() => void runCustomPlatform()}
+              disabled={busy || draftOpening || wechatDraftOpening}
+              className="flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
+              style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : done ? <Check className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+              {busy ? t.editor.mediaWorking : done ? t.editor.mediaPublished : t.editor.mediaCustomSync}
             </button>
           )}
           {!draftOnly &&

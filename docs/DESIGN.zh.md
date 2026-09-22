@@ -706,7 +706,9 @@ canonical 与 OpenGraph/Twitter 卡片；口令档的 meta 只回 `protected=tru
 | `.html`    | 自包含单文件，样式内联，KaTeX 的 CSS 引 CDN，公式在生成时渲染 |
 | `.docx`    | `docx` 库，走 ProseMirror 文档树构建                          |
 | `.pdf`     | 系统原生打印管道 + `@media print`                             |
-| 自媒体平台 | 微信公众号复制富文本并可保存草稿；知乎支持 OpenAPI 直发或网页辅助发布；X 通过 OAuth 2.0 发布 Article；掘金复制原生 Markdown |
+| 自媒体平台 | 微信公众号复制富文本并可保存草稿；知乎支持 OpenAPI 直发或网页辅助发布；X 通过 OAuth 2.0 发布 Article；支持配置自定义 HTTPS API 平台 |
+
+自媒体设置中的微信公众号、知乎和 X 开关同时由客户端和服务端执行：关闭后入口隐藏，直接调用发布接口也会返回 `media_platform_disabled`。自定义平台另有独立的启用开关。自定义平台配置保存在 `custom_media_platforms`，Bearer 令牌使用独立的 `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` 做 AES-GCM 加密，生产环境必须持久化该密钥；轮换密钥会使既有令牌无法解密，需要重新配置。自定义 API 只允许公网 HTTPS 地址，保存时和发请求前都会做 SSRF 地址校验。
 
 知乎发布当前只接受不含图片的文章。客户端和后端都会在调用知乎接口前拦截 `<img>`，
 避免发布成功后图片无法显示。没有 OpenAPI 凭证或文章含图片时，可使用客户端复制正文并打开

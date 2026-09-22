@@ -24,7 +24,8 @@ type Config struct {
 	MCPTokenEncryptionKey string
 	// LLMCredentialEncryptionKey 只用于加密会员保存的 BYOK API Key，不能与
 	// 会话、MCP token 或第三方服务密钥复用。
-	LLMCredentialEncryptionKey string
+	LLMCredentialEncryptionKey         string
+	CustomMediaCredentialEncryptionKey string
 	// WechatCredentialEncryptionKey 只用于加密用户绑定的微信公众号 AppSecret。
 	// 各环境都必须显式配置，不能回退或复用 SessionSecret。
 	WechatCredentialEncryptionKey string
@@ -159,6 +160,9 @@ func Load() Config {
 		MCPTokenEncryptionKey: strings.TrimSpace(os.Getenv("MCP_TOKEN_ENCRYPTION_KEY")),
 		LLMCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("LLM_CREDENTIAL_ENCRYPTION_KEY"),
+		),
+		CustomMediaCredentialEncryptionKey: strings.TrimSpace(
+			os.Getenv("CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY"),
 		),
 		WechatCredentialEncryptionKey: strings.TrimSpace(
 			os.Getenv("WECHAT_CREDENTIAL_ENCRYPTION_KEY"),

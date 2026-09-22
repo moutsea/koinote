@@ -31,8 +31,8 @@ what you type turns into typeset text as you go.
 
 Five things set it apart from a local editor: **paste an image and it uploads**
 (to your own R2 bucket, so the document holds a clean URL rather than a wall of
-base64), **export to publishing platforms** (rich text for WeChat and Zhihu, Markdown
-for Juejin), **documents live in the cloud** (multi-device, shareable), **safe MCP
+base64), **export to publishing platforms** (rich text for WeChat and Zhihu, X Articles,
+and configurable custom HTTPS APIs), **documents live in the cloud** (multi-device, shareable), **safe MCP
 access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**, and
 **review-first AI optimization** for members: the model proposes title, body, and
 layout diffs, while the user decides which changes to apply.
@@ -129,7 +129,7 @@ notarization, so macOS will still show a security warning on first launch.
 | HTML                     | One HTML file with embedded document styles; KaTeX CSS and images remain external |
 | DOCX                     | Built from the document tree; formulas keep their LaTeX source                    |
 | PDF                      | Saves directly on desktop; web opens the print dialog. Text remains selectable and searchable |
-| **Publishing platforms** | WeChat drafts; Zhihu OpenAPI direct or assisted web publishing (rich text); native Markdown for Juejin |
+| **Publishing platforms** | WeChat drafts; Zhihu OpenAPI direct or assisted web publishing (rich text); X Articles; configurable custom HTTPS APIs |
 
 Zhihu articles can be published directly after binding OpenAPI credentials in Settings.
 The current publisher rejects articles containing images before sending them to Zhihu;
@@ -476,6 +476,10 @@ everyone out and an email-path secret leak cannot become session forgery.
 member BYOK API keys and must not reuse session, MCP, or provider credentials. Rotating it
 without migrating stored ciphertext makes existing channels undecryptable.
 
+**Production requires a separate, persistent `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY`.** It encrypts
+Bearer tokens for custom publishing platforms. Rotating it without migrating stored ciphertext makes
+existing tokens undecryptable and requires users to configure them again.
+
 **The built-in AI provider is an optional all-or-nothing configuration group.**
 `AGENT_LLM_PROTOCOL`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL` must all
 be configured or all be empty; production accepts HTTPS only. BYOK endpoints also reject local,
@@ -688,6 +692,7 @@ Required repository secrets:
 | `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed                           |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated BYOK API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
+| `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | Dedicated custom publishing token encryption key; keep it stable or migrate ciphertext before rotation          |
 | `FEISHU_CLIENT_ID`             | Feishu Open Platform app ID; configure it together with the next two values to enable document sync                   |
 | `FEISHU_CLIENT_SECRET`         | Feishu Open Platform app secret; used only by the backend for OAuth code exchange                                    |
 | `FEISHU_CREDENTIAL_ENCRYPTION_KEY` | Dedicated AES-GCM key for Feishu OAuth tokens; required when Feishu document sync is enabled                         |

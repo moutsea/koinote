@@ -315,6 +315,9 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !a.requireMediaPlatformEnabled(w, r, user.ID, "x") {
+		return
+	}
 	var input xPublishInput
 	if !decodeXJSONBody(w, r, xPublishRequestBytes, &input) {
 		return

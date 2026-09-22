@@ -40,6 +40,7 @@ type App struct {
 	xImageHTTPClient        *http.Client
 	xTrustedImageHTTPClient *http.Client
 	xOAuth2HTTPClient       *http.Client
+	mediaHTTPClient         *http.Client
 	feishuDocsHTTPClient    *http.Client
 	feishuAccountSlots      chan struct{}
 	feishuRequestMu         sync.Mutex
@@ -71,6 +72,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		xImageHTTPClient:        newSafeLLMHTTPClient(),
 		xTrustedImageHTTPClient: newTrustedXImageHTTPClient(),
 		xOAuth2HTTPClient:       newXAPIHTTPClient(),
+		mediaHTTPClient:         newSafeLLMHTTPClient(),
 		feishuDocsHTTPClient:    newFeishuDocsHTTPClient(),
 		feishuAccountSlots:      make(chan struct{}, feishuAccountConcurrency),
 		wechatTokens:            make(map[string]wechatAccessToken),
@@ -119,6 +121,11 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/desktop/token", a.desktopToken)
 	mux.HandleFunc("POST /api/auth/desktop/revoke", a.desktopRevoke)
 	mux.HandleFunc("DELETE /api/account", a.accountDelete)
+	mux.HandleFunc("GET /api/media/settings", a.mediaPlatformSettingsGet)
+	mux.HandleFunc("PUT /api/media/settings", a.mediaPlatformSettingsPut)
+	mux.HandleFunc("POST /api/media/custom-platforms", a.customMediaPlatformCreate)
+	mux.HandleFunc("PUT /api/media/custom-platforms/{platformId}", a.customMediaPlatformUpdate)
+	mux.HandleFunc("DELETE /api/media/custom-platforms/{platformId}", a.customMediaPlatformDelete)
 
 	mux.HandleFunc("GET /api/billing/status", a.billingStatus)
 	mux.HandleFunc("GET /api/billing/pricing", a.billingPricing)
@@ -169,6 +176,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/zhihu/account", a.zhihuAccountPut)
 	mux.HandleFunc("DELETE /api/zhihu/account", a.zhihuAccountDelete)
 	mux.HandleFunc("POST /api/documents/{docId}/x/publish", a.xPublish)
+	mux.HandleFunc("POST /api/documents/{docId}/media/{platformId}/publish", a.customMediaPlatformPublish)
 	mux.HandleFunc("GET /api/x/account", a.xAccountGet)
 	mux.HandleFunc("PUT /api/x/account", a.xAccountPut)
 	mux.HandleFunc("DELETE /api/x/account", a.xAccountDelete)

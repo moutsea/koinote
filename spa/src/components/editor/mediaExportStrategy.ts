@@ -1,8 +1,8 @@
-export type MediaPlatform = "wechat" | "zhihu" | "juejin" | "x";
+export type MediaPlatform = "wechat" | "zhihu" | "x";
 export type MediaExportFormat = "rich-text" | "markdown";
 
 export function mediaExportFormat(platform: MediaPlatform): MediaExportFormat {
-  return platform === "juejin" || platform === "x" ? "markdown" : "rich-text";
+  return platform === "x" ? "markdown" : "rich-text";
 }
 
 export function buildMediaMarkdown(title: string, body: string): string {

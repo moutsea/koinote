@@ -849,7 +849,9 @@ user-confirmed rich text through the backend, while the assisted browser flow st
 | `.html`              | Self-contained single file, styles inlined, KaTeX CSS from a CDN, formulas rendered at generation time |
 | `.docx`              | The `docx` library, built from the ProseMirror document tree                                           |
 | `.pdf`               | The system print pipeline + `@media print`                                                             |
-| Publishing platforms | Rich text for WeChat / Zhihu (OpenAPI or assisted web flow) and native Markdown for Juejin             |
+| Publishing platforms | Rich text for WeChat / Zhihu (OpenAPI or assisted web flow), X Articles, and configurable custom HTTPS API platforms |
+
+The WeChat, Zhihu, and X switches in publishing settings are enforced by both the client and the backend: disabling a platform hides its entry and direct publish requests return `media_platform_disabled`. Custom platforms have their own enabled flag. Custom platform records live in `custom_media_platforms`; Bearer tokens use AES-GCM with the separate `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY`, which must be persistent in production. Rotating that key makes existing tokens undecipherable and requires reconfiguration. Custom endpoints must be public HTTPS URLs, and SSRF address checks run both when saving an endpoint and immediately before sending a request.
 
 Zhihu OpenAPI publishing currently rejects articles with images before making the request.
 The assisted browser flow copies the themed title and article body (including images) and opens

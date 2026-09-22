@@ -42,6 +42,9 @@ func main() {
 	if cfg.IsProduction() && cfg.LLMCredentialEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 LLM_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}
+	if cfg.IsProduction() && cfg.CustomMediaCredentialEncryptionKey == "" {
+		log.Fatal("生产环境必须设置独立的 CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
+	}
 	if cfg.IsProduction() && cfg.WechatCredentialEncryptionKey == "" {
 		log.Fatal("生产环境必须设置独立的 WECHAT_CREDENTIAL_ENCRYPTION_KEY。生成一个：openssl rand -base64 48")
 	}

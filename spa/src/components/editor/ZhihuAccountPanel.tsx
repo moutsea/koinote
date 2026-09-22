@@ -9,6 +9,7 @@ import {
   type ZhihuAccount,
 } from "../../api";
 import { useI18n } from "../../i18n";
+import { MediaPlatformToggle } from "./MediaPlatformToggle";
 
 export function ZhihuAccountPanel({ localMode }: { localMode: boolean }) {
   const { t } = useI18n();
@@ -133,6 +134,12 @@ export function ZhihuAccountPanel({ localMode }: { localMode: boolean }) {
           </a>
         </div>
       </div>
+
+      <MediaPlatformToggle
+        platform="zhihuEnabled"
+        label={t.settingsPage.zhihu}
+        description={t.settingsPage.mediaPlatformsDescription}
+      />
 
       {loading ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-neutral-400">

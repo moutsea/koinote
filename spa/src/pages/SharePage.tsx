@@ -290,14 +290,29 @@ function SharedView({ shared }: { shared: SharedDocument }) {
             {copying ? t.editor.copyingToMine : t.editor.copyToMine}
           </button>
         ) : (
-          <a
-            href={`/login?redirectTo=${encodeURIComponent(window.location.pathname)}`}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: "var(--cinnabar)" }}
-          >
-            <Copy className="h-4 w-4" />
-            {t.editor.loginToCopy}
-          </a>
+          <>
+            <p
+              className="max-w-md text-sm leading-6"
+              style={{ color: "var(--ink-mid)" }}
+            >
+              {t.editor.sharedSignupPrompt}
+            </p>
+            <a
+              href={`/register?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "var(--cinnabar)" }}
+            >
+              {t.editor.sharedSignup}
+            </a>
+            <a
+              href={`/login?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              className="inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            >
+              <Copy className="h-4 w-4" />
+              {t.editor.loginToCopy}
+            </a>
+          </>
         )}
         {copyNotice && (
           <p

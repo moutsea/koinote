@@ -28,7 +28,7 @@
 和本地 Markdown 编辑器的五个区别：
 
 - **图片粘贴即上传** —— 存进自己的 R2 图床，正文里是干净链接而不是一坨 base64
-- **一键导出到自媒体** —— 微信公众号复制内联富文本并可保存到草稿箱，知乎可在确认后直接发布，掘金复制原生 Markdown；网页端和桌面端均可绑定最多 5 个公众号、设置默认账号；封面可用 Koinote Logo+标题、正文图片或 AI 生成
+- **一键导出到自媒体** —— 微信公众号复制内联富文本并可保存到草稿箱，知乎可在确认后直接发布，X 支持文章发布；可在设置中开启或关闭平台，也能配置自定义 HTTPS API；网页端和桌面端均可绑定最多 5 个公众号、设置默认账号；封面可用 Koinote Logo+标题、正文图片或 AI 生成
 - **文档在云端** —— 多设备同步、可分享
 - **Agent 通过 MCP 读写文档** —— Codex、Claude Code、OpenCode、OpenClaw 等客户端
 - **AI 审阅式优化**（会员）—— 模型先给出标题、正文和排版 Diff，用户逐条决定是否应用
@@ -117,7 +117,7 @@ xattr -dr com.apple.quarantine /Applications/Koinote.app
 | HTML           | 单 HTML 文件，正文样式内嵌；KaTeX CSS 与图片仍使用外部地址 |
 | DOCX           | 走文档树构建，公式保留 LaTeX 源码                          |
 | PDF            | 桌面端直接保存；浏览器端打开系统打印面板。文字可选、可搜索 |
-| **自媒体平台** | 微信公众号草稿箱、知乎 OpenAPI 直发或网页辅助发布、X Article 直接发布（图片由服务端上传）；掘金复制原生 Markdown |
+| **自媒体平台** | 微信公众号草稿箱、知乎 OpenAPI 直发或网页辅助发布、X Article 直接发布（图片由服务端上传）；支持开关和自定义 HTTPS API 平台 |
 
 「我的文档」还支持批量迁移：可导入单个 `.md`、带图片的文件夹或 ZIP，也可把全部
 文档、文件夹结构和引用图片一次导出为可再次导入的 ZIP。
@@ -397,7 +397,7 @@ API Key 只由后端读取。绑定前还要在微信公众平台把后端出口
 `ZHIHU_CREDENTIAL_ENCRYPTION_KEY`；开发环境留空时复用 `SESSION_SECRET`。在知乎开放平台
 申请 OpenAPI 凭证后，进入设置中的“知乎”绑定 App Key 和 App Secret。发布前会弹出确认，
 确认后直接调用知乎发布接口，不会写入知乎草稿箱。当前知乎发布暂不支持包含图片的文章，
-含图片时会在发布前提示；需要图片的文章请先使用微信公众号或掘金等其他导出方式。
+含图片时会在发布前提示；需要图片的文章请先使用微信公众号或其他支持图片的导出方式。
 
 如果微信 API 需要经专用中转机访问，本地 Docker 后端可把
 `WECHAT_API_PROXY_URL` 设为 `http://host.docker.internal:18080`，并在宿主机建立
@@ -489,6 +489,9 @@ body: 发布前请检查图片和链接。
 **生产环境的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于会员 BYOK
 API Key 的 AES-GCM 加密，不能复用会话、MCP 或模型服务密钥。直接轮换会让既有渠道无法解密，
 轮换前必须先做密文迁移。
+
+**生产环境的 `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于自定义自媒体平台
+Bearer 令牌的 AES-GCM 加密。直接轮换会让既有令牌无法解密，轮换前必须先迁移密文或让用户重新配置。
 
 **生产环境的 `WECHAT_CREDENTIAL_ENCRYPTION_KEY` 同样必须独立且持久。** 它只用于
 公众号 AppSecret 的 AES-GCM 加密，不能复用会话、BYOK 或封面模型 API Key；直接轮换会让
@@ -714,6 +717,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
+| `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | 自定义自媒体平台令牌独立加密密钥；生产必填，轮换前必须迁移既有密文                    |
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
 | `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` | 知乎 OpenAPI AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                         |
 | `X_CREDENTIAL_ENCRYPTION_KEY`     | X API 凭证独立加密密钥；生产必填，轮换前必须迁移既有密文                                      |

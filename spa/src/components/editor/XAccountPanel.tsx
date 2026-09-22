@@ -3,6 +3,7 @@ import { ExternalLink, Link2, Loader2 } from "lucide-react";
 import { ApiError, deleteXOAuth2Account, getXAccount, startXOAuth2, type XOAuth2Account } from "../../api";
 import { useI18n } from "../../i18n";
 import { desktopFlavor, isDesktopRuntime } from "../../desktop/runtime";
+import { MediaPlatformToggle } from "./MediaPlatformToggle";
 
 export function XAccountPanel({ localMode }: { localMode: boolean }) {
   const { t } = useI18n();
@@ -119,6 +120,11 @@ export function XAccountPanel({ localMode }: { localMode: boolean }) {
           <a href="https://developer.x.com/en/portal/dashboard" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold underline">{t.editor.xDeveloperPortal} <ExternalLink className="h-3 w-3" /></a>
         </div>
       </div>
+      <MediaPlatformToggle
+        platform="xEnabled"
+        label={t.settingsPage.x}
+        description={t.settingsPage.mediaPlatformsDescription}
+      />
       <div className="mt-5 rounded-lg border border-black/5 bg-white/60 px-3.5 py-3 dark:border-white/10 dark:bg-white/5">
         <div className="flex items-center justify-between gap-3">
           <div>

@@ -12,6 +12,7 @@ import {
   Crown,
   ExternalLink,
   Gift,
+  Globe2,
   KeyRound,
   LockKeyhole,
   MessageCircle,
@@ -42,6 +43,7 @@ import { WechatOfficialAccountPanel } from "../components/editor/WechatOfficialA
 import { ZhihuAccountPanel } from "../components/editor/ZhihuAccountPanel";
 import { XAccountPanel } from "../components/editor/XAccountPanel";
 import { FeishuAccountPanel } from "../components/editor/FeishuAccountPanel";
+import { MediaPlatformSettingsCard } from "../components/MediaPlatformSettingsCard";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { openKoinoteWebPath } from "../externalNavigation";
 import { useI18n, type Locale } from "../i18n";
@@ -54,7 +56,7 @@ type SettingsSection =
   | "media"
   | "feishu";
 
-type MediaPlatform = "wechat" | "zhihu" | "x";
+type MediaPlatform = "wechat" | "zhihu" | "x" | "custom";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -81,7 +83,10 @@ export function SettingsPage() {
   }
 
   const legacyPlatform =
-    search.section === "wechat" || search.section === "zhihu" || search.section === "x"
+    search.section === "wechat" ||
+    search.section === "zhihu" ||
+    search.section === "x" ||
+    search.section === "custom"
       ? search.section
       : undefined;
   const section = legacyPlatform ? "media" : (search.section ?? "general");
@@ -270,7 +275,11 @@ function SettingsSectionContent({
   }
 
   if (section === "media") {
-    return <MediaSettingsPanel platform={platform} user={user} />;
+    return (
+      <div className="space-y-4">
+        <MediaSettingsPanel platform={platform} user={user} />
+      </div>
+    );
   }
 
   if (section === "feishu") {
@@ -311,6 +320,12 @@ function MediaSettingsPanel({ platform, user }: { platform: MediaPlatform; user:
       description: t.settingsPage.xDescription,
       icon: <Twitter className="h-4 w-4" />,
     },
+    {
+      id: "custom",
+      label: t.settingsPage.customMediaTitle,
+      description: t.settingsPage.customMediaDescription,
+      icon: <Globe2 className="h-4 w-4" />,
+    },
   ];
   const activePlatform = platforms.find((item) => item.id === platform) ?? platforms[0];
 
@@ -337,7 +352,9 @@ function MediaSettingsPanel({ platform, user }: { platform: MediaPlatform; user:
           );
         })}
       </nav>
-      <p className="text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{activePlatform.description}</p>
+      {platform !== "custom" && (
+        <p className="text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{activePlatform.description}</p>
+      )}
       {platform === "wechat" && (
         <WechatOfficialAccountPanel
           member={user.membershipTier === "lifetime"}
@@ -346,6 +363,7 @@ function MediaSettingsPanel({ platform, user }: { platform: MediaPlatform; user:
       )}
       {platform === "zhihu" && <ZhihuAccountPanel localMode={Boolean(user.isLocalMode)} />}
       {platform === "x" && <XAccountPanel localMode={Boolean(user.isLocalMode)} />}
+      {platform === "custom" && <MediaPlatformSettingsCard localMode={Boolean(user.isLocalMode)} />}
     </div>
   );
 }

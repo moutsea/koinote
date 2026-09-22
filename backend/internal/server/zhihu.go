@@ -203,6 +203,9 @@ func (a *App) zhihuPublish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !a.requireMediaPlatformEnabled(w, r, user.ID, "zhihu") {
+		return
+	}
 	var input struct {
 		Title string `json:"title"`
 		HTML  string `json:"html"`

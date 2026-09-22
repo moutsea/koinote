@@ -11,6 +11,7 @@ import {
   type WechatOfficialAccount,
 } from "../../api";
 import { useI18n } from "../../i18n";
+import { MediaPlatformToggle } from "./MediaPlatformToggle";
 
 export function WechatOfficialAccountPanel({
   member,
@@ -200,6 +201,13 @@ export function WechatOfficialAccountPanel({
         <p className="mt-1.5 text-sm leading-6 text-amber-700 dark:text-amber-300">
           {t.editor.wechatOfficialMembersOnly}
         </p>
+        {!localMode && (
+          <MediaPlatformToggle
+            platform="wechatEnabled"
+            label={t.settingsPage.wechat}
+            description={t.settingsPage.mediaPlatformsDescription}
+          />
+        )}
         <Link
           to="/pricing"
           className="mt-4 inline-flex rounded-full bg-[var(--cinnabar)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
@@ -248,6 +256,12 @@ export function WechatOfficialAccountPanel({
           </Link>
         </div>
       </div>
+
+      <MediaPlatformToggle
+        platform="wechatEnabled"
+        label={t.settingsPage.wechat}
+        description={t.settingsPage.mediaPlatformsDescription}
+      />
 
       {accountLoading ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-neutral-400">

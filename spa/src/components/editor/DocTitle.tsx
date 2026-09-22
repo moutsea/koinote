@@ -40,16 +40,30 @@ export function DocTitle({
     // 18px 16px），选择器权重比 Tailwind 的类高，会把内缩顶掉，标题左边缘
     // 就比正文往外凸 8px。
     <div
-      className={`koinote-doc-title-wrap flex items-start gap-2 px-2 ${
+      className={`koinote-doc-title-wrap px-2 ${
         overlay ? "koinote-doc-title-overlay" : ""
       }`}
     >
+      {onOpenCover && (
+        <div className="koinote-doc-title-cover-controls mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenCover}
+            title={t.editor.wechatCoverTitle}
+            aria-label={t.editor.wechatCoverTitle}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+          >
+            <ImageIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">{t.editor.wechatCoverTitle}</span>
+          </button>
+        </div>
+      )}
       {/*
         data-title 供 ::after 镜像读取。镜像量出行数，网格行高随之变化，
         textarea 被拉伸填满 —— 所以它永远刚好装下全部文本。
       */}
       <div
-        className={`kn-doc-title min-w-0 flex-1 ${
+        className={`kn-doc-title min-w-0 ${
           overlay ? "kn-doc-title-cover" : ""
         }`}
         data-title={value}
@@ -78,18 +92,6 @@ export function DocTitle({
           spellCheck={false}
         />
       </div>
-      {onOpenCover && (
-        <button
-          type="button"
-          onClick={onOpenCover}
-          title={t.editor.wechatCoverTitle}
-          aria-label={t.editor.wechatCoverTitle}
-          className="mt-1.5 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
-        >
-          <ImageIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">{t.editor.wechatCoverTitle}</span>
-        </button>
-      )}
     </div>
   );
 }

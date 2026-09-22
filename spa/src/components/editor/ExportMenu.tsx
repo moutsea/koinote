@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Code2,
@@ -24,10 +25,14 @@ import { MediaExportDialog } from "./WechatDialog";
 import {
   ApiError,
   getWechatOfficialAccounts,
+  getMediaPlatformSettings,
+  MEDIA_PLATFORM_SETTINGS_QUERY_KEY,
   prepareWechatDraftDocument,
   trackProductEvent,
+  type CustomMediaPlatform,
   type WechatOfficialAccount,
 } from "../../api";
+import type { MediaPlatform } from "./mediaExportStrategy";
 import {
   feishuErrorText,
   getFeishuAccount,
@@ -87,13 +92,32 @@ export function ExportMenu({
   const [feishuResult, setFeishuResult] = useState<FeishuSyncResult | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const busyRef = useRef(false);
+  const mediaSettingsQuery = useQuery({
+    queryKey: MEDIA_PLATFORM_SETTINGS_QUERY_KEY,
+    queryFn: getMediaPlatformSettings,
+    enabled: !localMode,
+    retry: false,
+  });
+  const enabledPlatforms: MediaPlatform[] | undefined = mediaSettingsQuery.data
+    ? [
+        ...(mediaSettingsQuery.data.settings.wechatEnabled ? ["wechat" as const] : []),
+        ...(mediaSettingsQuery.data.settings.zhihuEnabled ? ["zhihu" as const] : []),
+        ...(mediaSettingsQuery.data.settings.xEnabled ? ["x" as const] : []),
+      ]
+    : undefined;
+  const customPlatforms: CustomMediaPlatform[] =
+    mediaSettingsQuery.data?.customPlatforms.filter((item) => item.enabled) ?? [];
+  const showMediaExport =
+    !mediaSettingsQuery.isSuccess ||
+    (enabledPlatforms?.length ?? 0) > 0 ||
+    customPlatforms.length > 0;
 
   useDesktopMenuActions((action) => {
     if (action === "export-markdown") runMarkdownExport();
     if (action === "export-html") runHTMLExport();
     if (action === "export-docx") runDOCXExport();
     if (action === "export-pdf") runPDFExport();
-    if (action === "export-media" && editor && !busyRef.current) {
+    if (action === "export-media" && showMediaExport && editor && !busyRef.current) {
       setOpen(false);
       setMediaOpen(true);
     }
@@ -305,16 +329,18 @@ export function ExportMenu({
               onClick={runFeishuSync}
             />
           )}
-          <Item
-            icon={<MessageSquare className="h-3.5 w-3.5" />}
-            label={t.editor.mediaExport}
-            hint={t.editor.mediaExportHint}
-            disabled={busy !== null}
-            onClick={() => {
-              setOpen(false);
-              setMediaOpen(true);
-            }}
-          />
+          {showMediaExport && (
+            <Item
+              icon={<MessageSquare className="h-3.5 w-3.5" />}
+              label={t.editor.mediaExport}
+              hint={t.editor.mediaExportHint}
+              disabled={busy !== null}
+              onClick={() => {
+                setOpen(false);
+                setMediaOpen(true);
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -367,6 +393,9 @@ export function ExportMenu({
           themeId={themeId}
           member={member}
           localMode={localMode}
+          enabledPlatforms={enabledPlatforms}
+          customPlatforms={customPlatforms}
+          onBeforeExternalExport={onBeforeExternalExport}
           onOpenWechatDraft={openWechatDraft}
           wechatDraftOpening={wechatDraftOpening}
           onClose={() => setMediaOpen(false)}
@@ -381,6 +410,9 @@ export function ExportMenu({
           themeId={themeId}
           member={member}
           localMode={localMode}
+          enabledPlatforms={enabledPlatforms}
+          customPlatforms={customPlatforms}
+          onBeforeExternalExport={onBeforeExternalExport}
           wechatAccounts={wechatAccounts}
           draftOnly
           onClose={() => setWechatDraftOpen(false)}
