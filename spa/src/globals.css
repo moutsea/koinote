@@ -386,6 +386,22 @@ body {
   opacity: 1;
 }
 
+.koinote-doc-title-overlay {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.koinote-doc-title-overlay .kn-doc-title > textarea::placeholder {
+  color: rgb(255 255 255 / 0.75);
+}
+
+.kn-doc-title-cover {
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+
 /* ---------- 当前文档查找 ---------- */
 .kn-page-search-match {
   border-radius: 0.15em;

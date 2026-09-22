@@ -299,7 +299,7 @@ export const en: Messages = {
       "Open Koinote in your browser or desktop app and sign in with a Lifetime member account.",
       "Go to Settings → WeChat and enter a label, AppID, and AppSecret for each account. You can bind up to 5 accounts and choose one as the default.",
       "Open any document, choose Export to social platforms, select WeChat Official Account, then choose Sync to account drafts. Select the target account in the draft panel; Koinote uses the default when you do not choose another.",
-      "A cover is optional. If you want an AI cover, enter a prompt and choose 2.35:1 or 1:1. Each successfully generated cover costs 20 credits; regenerating is charged separately.",
+      "A cover is optional. If you want an AI cover, enter a prompt and choose a preset or custom W:H ratio. Each successfully generated cover costs 20 credits; regenerating is charged separately.",
       "Choose Save to WeChat drafts without generating an AI cover, then select the default cover or any image from the article. Article images are transferred to WeChat before the draft is created; Koinote never publishes the article directly.",
     ],
     billingTitle: "Cost and access",
@@ -1122,6 +1122,7 @@ export const en: Messages = {
     goLogin: "Go to login",
   },
   feishu: {
+    coverSyncFailed: "The content was synced, but the cover failed. Check the cover image and sync again.",
     name: "Feishu",
     description: "Connect Feishu to create or update cloud documents.",
     membersOnly: "Connecting Feishu and syncing documents require Lifetime membership.",
@@ -1387,7 +1388,7 @@ export const en: Messages = {
     trafficUpstreamError:
       "Cloudflare Analytics could not be reached. Business metrics remain available.",
     trafficNote:
-      "UV and PV use Cloudflare edge HTTP Analytics and may include legitimate crawlers and allowed automated traffic.",
+      "UV and PV come from Cloudflare edge requests without reliable bot filtering. They may include crawlers and automated requests and do not represent human-only traffic.",
     pageViews: "Page views",
     uniqueVisitors: "Unique visitors",
     requests: "HTTP requests",
@@ -1971,8 +1972,17 @@ export const en: Messages = {
     wechatCoverCreditCost: "20 credits per cover",
     wechatCoverGenerate: "Generate cover",
     wechatCoverRegenerate: "Regenerate",
+    wechatCoverSave: "Save cover",
     wechatCoverPreview: "WeChat cover preview",
     wechatCoverGenerateFailed: "Could not generate the cover. Try again later",
+    wechatCoverChange: "Change",
+    wechatCoverSet: "Set cover",
+    wechatCoverUnset: "No cover selected. The first article image or default cover will be used.",
+    wechatCoverLoading: "Loading article cover…",
+    wechatCoverLoadFailed: "Could not load the article cover. Please retry.",
+    wechatCoverImageFailed: "Could not load the cover image. Check your network or choose another image.",
+    wechatCoverDraftOnly: "Applies only to this WeChat draft; the article cover stays unchanged.",
+    wechatCoverUse: "Use this cover",
     wechatTitleLimit:
       "A WeChat draft title must contain 1–64 characters. Update the article title first.",
     wechatDraftCreate: "Save to WeChat drafts",

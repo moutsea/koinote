@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	webVersionSnapshotInterval = 5 * time.Minute
+	webVersionSnapshotInterval  = 5 * time.Minute
+	maxDocumentCoverSourceBytes = 2048
 )
 
 var (
@@ -21,6 +23,7 @@ var (
 	errDocumentIDConflict        = errors.New("document id conflict")
 	errDocumentQuotaExceeded     = errors.New("document storage quota exceeded")
 	errDocumentRevisionConflict  = errors.New("document revision conflict")
+	errDocumentCoverInvalid      = errors.New("document cover invalid")
 	errDocumentVersionNotFound   = errors.New("document version not found")
 	errDocumentNotTrashed        = errors.New("document is not in trash")
 	errDocumentPurgeConfirmation = errors.New("document purge confirmation does not match")
@@ -36,12 +39,16 @@ const (
 )
 
 type createDocumentParams struct {
-	User     model.User
-	DocID    string
-	Title    string
-	Theme    *string
-	Content  string
-	FolderID *string
+	User             model.User
+	DocID            string
+	Title            string
+	Theme            *string
+	Content          string
+	FolderID         *string
+	CoverMode        string
+	CoverRatio       string
+	CoverImageSource string
+	CoverPrompt      string
 }
 
 type updateDocumentParams struct {
@@ -54,6 +61,10 @@ type updateDocumentParams struct {
 	Source           documentMutationSource
 	SourceTokenID    *int64
 	ForceVersion     bool
+	CoverMode        *string
+	CoverRatio       *string
+	CoverImageSource *string
+	CoverPrompt      *string
 }
 
 type storedDocument struct {
@@ -63,10 +74,49 @@ type storedDocument struct {
 }
 
 type documentUpdateResult struct {
-	Document        model.Document
-	PreviousContent string
-	PrunedContents  []string
-	ContentChanged  bool
+	Document                 model.Document
+	PreviousContent          string
+	PrunedContents           []string
+	ContentChanged           bool
+	PreviousCoverImageSource string
+	CoverChanged             bool
+}
+
+func documentCoverValues(previous model.Document, params updateDocumentParams) (string, string, string, string) {
+	mode := previous.CoverMode
+	if params.CoverMode != nil {
+		mode = strings.TrimSpace(*params.CoverMode)
+	}
+	if mode == "" {
+		mode = wechatCoverModeDefault
+	}
+	ratio := previous.CoverRatio
+	if params.CoverRatio != nil {
+		ratio = strings.TrimSpace(*params.CoverRatio)
+	}
+	if ratio == "" {
+		ratio = wechatCoverRatioWide
+	}
+	imageSource := previous.CoverImageSource
+	if params.CoverImageSource != nil {
+		imageSource = strings.TrimSpace(*params.CoverImageSource)
+	}
+	prompt := previous.CoverPrompt
+	if params.CoverPrompt != nil {
+		prompt = strings.TrimSpace(*params.CoverPrompt)
+	}
+	if mode != wechatCoverModeAI {
+		prompt = ""
+	}
+	return mode, ratio, imageSource, prompt
+}
+
+func validDocumentCoverValues(mode, ratio, imageSource, prompt string) bool {
+	return validWechatCoverMode(mode) && validWechatCoverRatio(ratio) &&
+		len(imageSource) <= maxDocumentCoverSourceBytes &&
+		!strings.HasPrefix(strings.ToLower(imageSource), "data:") &&
+		utf8.RuneCountInString(prompt) <= wechatCoverPromptMaxRunes &&
+		(mode != wechatCoverModeArticle || strings.TrimSpace(imageSource) != "")
 }
 
 func (a *App) createDocument(ctx context.Context, params createDocumentParams) (model.Document, error) {
@@ -81,6 +131,22 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 	theme := defaultDocumentTheme
 	if params.Theme != nil {
 		theme = normalizeDocumentTheme(*params.Theme)
+	}
+	coverMode := strings.TrimSpace(params.CoverMode)
+	if coverMode == "" {
+		coverMode = wechatCoverModeDefault
+	}
+	coverRatio := strings.TrimSpace(params.CoverRatio)
+	if coverRatio == "" {
+		coverRatio = wechatCoverRatioWide
+	}
+	coverImageSource := strings.TrimSpace(params.CoverImageSource)
+	coverPrompt := strings.TrimSpace(params.CoverPrompt)
+	if !validDocumentCoverValues(coverMode, coverRatio, coverImageSource, coverPrompt) {
+		return model.Document{}, errDocumentCoverInvalid
+	}
+	if coverMode != wechatCoverModeAI {
+		coverPrompt = ""
 	}
 
 	tx, err := a.db.Begin(ctx)
@@ -102,48 +168,50 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 			END AS id
 		)
 		INSERT INTO documents (
-			doc_id, user_id, title, theme, content, folder_id, sort_order, revision, created_at, updated_at
+			doc_id, user_id, title, theme, content, folder_id, cover_mode, cover_ratio, cover_image_source, cover_prompt, sort_order, revision, created_at, updated_at
 		)
 		SELECT
 			$1, $2, $3::text, $4::text, $5::text,
 			target_folder.id,
+			$7::text, $8::text, $9::text, $10::text,
 			COALESCE((
 				SELECT MAX(existing.sort_order) + 1
 				FROM documents existing
 				WHERE existing.user_id = $2
 				  AND existing.trashed_at IS NULL
 				  AND existing.folder_id IS NOT DISTINCT FROM target_folder.id
-			), 0),
+		), 0),
 			1, now(), now()
 		FROM target_folder
 		WHERE COALESCE((
-			SELECT SUM(octet_length(content) + octet_length(title))
+			SELECT SUM(octet_length(content) + octet_length(title) + octet_length(cover_image_source) + octet_length(cover_prompt))
 			FROM documents WHERE user_id = $2
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM image_objects
 			WHERE user_id = $2 AND purpose = 'persistent'
-		), 0) + octet_length($5::text) + octet_length($3::text) <= $7
+		), 0) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
 		ON CONFLICT (doc_id) DO NOTHING
-		RETURNING doc_id, title, theme, content, revision, created_at, updated_at
-	`, docID, params.User.ID, params.Title, theme, params.Content, derefOrEmpty(params.FolderID), a.storageQuotaFor(params.User)).Scan(
-		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
+		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
+	`, docID, params.User.ID, params.Title, theme, params.Content, derefOrEmpty(params.FolderID), coverMode, coverRatio, coverImageSource, coverPrompt, a.storageQuotaFor(params.User)).Scan(
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if params.DocID != "" {
 			var existing model.Document
 			var folderID string
 			lookupErr := tx.QueryRow(ctx, `
-				SELECT d.doc_id, d.title, d.theme, d.content, d.revision,
+				SELECT d.doc_id, d.title, d.theme, d.content, d.cover_mode, d.cover_ratio, d.cover_image_source, d.cover_prompt, d.revision,
 				       d.created_at, d.updated_at, COALESCE(f.folder_id, '')
 				FROM documents d
 				LEFT JOIN folders f ON f.id = d.folder_id
 				WHERE d.doc_id = $1 AND d.user_id = $2 AND d.trashed_at IS NULL
 			`, docID, params.User.ID).Scan(
 				&existing.DocID, &existing.Title, &existing.Theme, &existing.Content,
+				&existing.CoverMode, &existing.CoverRatio, &existing.CoverImageSource, &existing.CoverPrompt,
 				&existing.Revision, &existing.CreatedAt, &existing.UpdatedAt, &folderID,
 			)
 			if lookupErr == nil && existing.Title == params.Title && existing.Theme == theme &&
-				existing.Content == params.Content && folderID == derefOrEmpty(params.FolderID) {
+				existing.Content == params.Content && existing.CoverMode == coverMode && existing.CoverRatio == coverRatio && existing.CoverImageSource == coverImageSource && existing.CoverPrompt == coverPrompt && folderID == derefOrEmpty(params.FolderID) {
 				return existing, nil
 			}
 			if lookupErr == nil || errors.Is(lookupErr, pgx.ErrNoRows) {
@@ -193,14 +261,14 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 
 	var previous storedDocument
 	err := tx.QueryRow(ctx, `
-		SELECT id, doc_id, title, theme, content, revision, created_at, updated_at,
+		SELECT id, doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at,
 		       last_web_version_at
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 		FOR UPDATE
 	`, params.DocID, params.User.ID).Scan(
 		&previous.ID, &previous.Doc.DocID, &previous.Doc.Title, &previous.Doc.Theme,
-		&previous.Doc.Content, &previous.Doc.Revision, &previous.Doc.CreatedAt,
+		&previous.Doc.Content, &previous.Doc.CoverMode, &previous.Doc.CoverRatio, &previous.Doc.CoverImageSource, &previous.Doc.CoverPrompt, &previous.Doc.Revision, &previous.Doc.CreatedAt,
 		&previous.Doc.UpdatedAt, &previous.LastWebVersionAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -209,23 +277,29 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 	if err != nil {
 		return documentUpdateResult{}, err
 	}
+	coverMode, coverRatio, coverImageSource, coverPrompt := documentCoverValues(previous.Doc, params)
+	if !validDocumentCoverValues(coverMode, coverRatio, coverImageSource, coverPrompt) {
+		return documentUpdateResult{}, errDocumentCoverInvalid
+	}
 	if previous.Doc.Revision != params.ExpectedRevision {
-		if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content {
+		if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content &&
+			previous.Doc.CoverMode == coverMode && previous.Doc.CoverRatio == coverRatio && previous.Doc.CoverImageSource == coverImageSource && previous.Doc.CoverPrompt == coverPrompt {
 			return documentUpdateResult{Document: previous.Doc}, nil
 		}
 		return documentUpdateResult{}, errDocumentRevisionConflict
 	}
-	if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content {
+	if previous.Doc.Title == params.Title && previous.Doc.Theme == params.Theme && previous.Doc.Content == params.Content &&
+		previous.Doc.CoverMode == coverMode && previous.Doc.CoverRatio == coverRatio && previous.Doc.CoverImageSource == coverImageSource && previous.Doc.CoverPrompt == coverPrompt {
 		return documentUpdateResult{Document: previous.Doc}, nil
 	}
 
-	oldBytes := len(previous.Doc.Title) + len(previous.Doc.Content)
-	newBytes := len(params.Title) + len(params.Content)
+	oldBytes := len(previous.Doc.Title) + len(previous.Doc.Content) + len(previous.Doc.CoverImageSource) + len(previous.Doc.CoverPrompt)
+	newBytes := len(params.Title) + len(params.Content) + len(coverImageSource) + len(coverPrompt)
 	if newBytes > oldBytes {
 		var fits bool
 		if err := tx.QueryRow(ctx, `
 			SELECT COALESCE((
-				SELECT SUM(octet_length(content) + octet_length(title))
+				SELECT SUM(octet_length(content) + octet_length(title) + octet_length(cover_image_source) + octet_length(cover_prompt))
 				FROM documents WHERE user_id = $1 AND id <> $2
 			), 0) + COALESCE((
 				SELECT SUM(bytes) FROM image_objects
@@ -292,6 +366,7 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 	err = tx.QueryRow(ctx, `
 		UPDATE documents
 		SET title = $3, theme = $4, content = $5,
+		    cover_mode = $9, cover_ratio = $10, cover_image_source = $11, cover_prompt = $12,
 		    revision = revision + 1,
 		    updated_at = now(),
 		    last_web_version_at = CASE
@@ -300,11 +375,11 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 		        ELSE last_web_version_at
 		    END
 		WHERE id = $1 AND user_id = $2 AND revision = $7 AND trashed_at IS NULL
-		RETURNING doc_id, title, theme, content, revision, created_at, updated_at
+		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
 	`, previous.ID, params.User.ID, params.Title, params.Theme, params.Content,
 		storeVersion && params.Source == documentSourceWeb, params.ExpectedRevision,
-		params.Source != documentSourceWeb).Scan(
-		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
+		params.Source != documentSourceWeb, coverMode, coverRatio, coverImageSource, coverPrompt).Scan(
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return documentUpdateResult{}, errDocumentRevisionConflict
@@ -352,15 +427,17 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 	}
 
 	return documentUpdateResult{
-		Document:        doc,
-		PreviousContent: previous.Doc.Content,
-		PrunedContents:  prunedContents,
-		ContentChanged:  previous.Doc.Content != params.Content,
+		Document:                 doc,
+		PreviousContent:          previous.Doc.Content,
+		PrunedContents:           prunedContents,
+		ContentChanged:           previous.Doc.Content != params.Content,
+		PreviousCoverImageSource: previous.Doc.CoverImageSource,
+		CoverChanged:             previous.Doc.CoverMode != doc.CoverMode || previous.Doc.CoverRatio != doc.CoverRatio || previous.Doc.CoverImageSource != doc.CoverImageSource || previous.Doc.CoverPrompt != doc.CoverPrompt,
 	}, nil
 }
 
 func (a *App) finishDocumentUpdate(ctx context.Context, user model.User, result documentUpdateResult) {
-	if !result.ContentChanged && len(result.PrunedContents) == 0 {
+	if !result.ContentChanged && !result.CoverChanged && len(result.PrunedContents) == 0 {
 		return
 	}
 	gcCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
@@ -369,6 +446,10 @@ func (a *App) finishDocumentUpdate(ctx context.Context, user model.User, result 
 	if result.ContentChanged {
 		a.cancelPendingImageDeletions(gcCtx, ref, result.Document.Content)
 		a.enqueueOrphanedImages(gcCtx, ref, result.PreviousContent)
+	}
+	if result.CoverChanged {
+		a.cancelPendingImageDeletions(gcCtx, ref, result.Document.CoverImageSource)
+		a.enqueueOrphanedImages(gcCtx, ref, result.PreviousCoverImageSource)
 	}
 	if len(result.PrunedContents) > 0 {
 		a.enqueueOrphanedImages(gcCtx, ref, strings.Join(result.PrunedContents, "\n"))

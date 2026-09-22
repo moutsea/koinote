@@ -41,6 +41,7 @@ export function MediaExportDialog({
   editor,
   docId,
   title,
+  coverImageSource,
   themeId,
   member,
   localMode,
@@ -53,6 +54,7 @@ export function MediaExportDialog({
   editor: Editor;
   docId: string;
   title: string;
+  coverImageSource?: string;
   themeId: string;
   member: boolean;
   localMode: boolean;
@@ -649,6 +651,7 @@ export function MediaExportDialog({
           <XPublishPanel
             docId={docId}
             title={exportTitle}
+            coverImageSource={coverImageSource}
             markdownBody={parseArticleMetadata(currentMarkdown, title).body}
             description={exportMetadata.digest}
             articleImages={articleImages}
@@ -753,11 +756,13 @@ export function MediaExportDialog({
           !localMode &&
           member && (
             <WechatDraftPanel
+              key={docId}
               accounts={wechatAccounts}
               docId={docId}
               title={exportTitle}
               author={exportMetadata.author}
               digest={exportMetadata.digest}
+              member={member}
               disabled={
                 busy ||
                 geoClosing ||

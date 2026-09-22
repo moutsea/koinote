@@ -1134,6 +1134,7 @@ export const fr: Messages = {
     goLogin: "Aller à la connexion",
   },
   feishu: {
+    coverSyncFailed: "Le contenu a été synchronisé, mais pas la couverture. Vérifiez l’image et relancez la synchronisation.",
     name: "Feishu",
     description: "Connectez Feishu pour créer ou mettre à jour des documents.",
     membersOnly: "La connexion à Feishu et la synchronisation des documents nécessitent un abonnement à vie.",
@@ -1405,7 +1406,7 @@ export const fr: Messages = {
     trafficUpstreamError:
       "Cloudflare Analytics est inaccessible. Les données métier restent disponibles.",
     trafficNote:
-      "Les UV et PV proviennent de Cloudflare HTTP Analytics et peuvent inclure des robots légitimes et du trafic automatisé autorisé.",
+      "Les UV et PV proviennent des requêtes en périphérie Cloudflare sans filtrage fiable des robots. Ils peuvent inclure des robots et des requêtes automatisées et ne représentent pas uniquement le trafic humain.",
     pageViews: "Pages vues",
     uniqueVisitors: "Visiteurs uniques",
     requests: "Requêtes HTTP",
@@ -2005,6 +2006,15 @@ export const fr: Messages = {
     wechatCoverCreditCost: "20 credits par couverture",
     wechatCoverGenerate: "Générer",
     wechatCoverRegenerate: "Régénérer",
+    wechatCoverSave: "Enregistrer la couverture",
+    wechatCoverChange: "Modifier",
+    wechatCoverSet: "Choisir une couverture",
+    wechatCoverUnset: "Aucune couverture choisie. La première image de l’article ou la couverture par défaut sera utilisée.",
+    wechatCoverLoading: "Chargement de la couverture…",
+    wechatCoverLoadFailed: "Impossible de charger la couverture. Réessayez.",
+    wechatCoverImageFailed: "Impossible de charger l’image de couverture. Vérifiez votre connexion ou choisissez une autre image.",
+    wechatCoverDraftOnly: "Uniquement pour ce brouillon WeChat, sans modifier la couverture de l’article.",
+    wechatCoverUse: "Utiliser cette couverture",
     wechatCoverPreview: "Aperçu de la couverture WeChat",
     wechatCoverGenerateFailed:
       "Impossible de générer la couverture. Réessayez plus tard",

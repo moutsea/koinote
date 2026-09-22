@@ -1,4 +1,4 @@
-const KOINOTE_IMAGE_ORIGIN = "https://img.koinote.app";
+export const KOINOTE_IMAGE_ORIGIN = "https://img.koinote.app";
 const KOINOTE_IMAGE_PATH =
   /^\/u\/([A-Za-z0-9_-]{1,128})\/([0-9a-f]{8,64})\.(png|jpg|gif|webp)$/;
 

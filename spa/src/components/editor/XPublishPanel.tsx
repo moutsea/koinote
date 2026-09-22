@@ -17,6 +17,7 @@ import { buildXArticle, X_MAX_IMAGES, type XArticleImage } from "./xPublish";
 export function XPublishPanel({
   docId,
   title,
+  coverImageSource,
   markdownBody,
   description,
   articleImages,
@@ -26,6 +27,7 @@ export function XPublishPanel({
 }: {
   docId: string;
   title: string;
+  coverImageSource?: string;
   markdownBody: string;
   description?: string;
   articleImages: XArticleImage[];
@@ -40,14 +42,33 @@ export function XPublishPanel({
   const [error, setError] = useState<string | null>(null);
   const [publishedURL, setPublishedURL] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const [coverImageIndex, setCoverImageIndex] = useState(0);
+  const normalizedCoverImageSource = normalizeXImageSource(coverImageSource);
+  const [coverImageIndex, setCoverImageIndex] = useState(() =>
+    documentCoverIndex(articleImages, normalizedCoverImageSource),
+  );
+  const coverSelectionKey = [
+    normalizedCoverImageSource,
+    articleImages.some((image) => image.src === normalizedCoverImageSource),
+  ].join("\u0000");
+  const previousCoverSelectionKey = useRef(coverSelectionKey);
   const checkRef = useRef<Promise<{ oauth2: XOAuth2Account | null }> | null>(null);
   const publishInFlightRef = useRef(false);
 
   useEffect(() => {
-    const imageCount = Math.min(articleImages.length, X_MAX_IMAGES);
+    const imageCount = Math.min(
+      imagesWithDocumentCover(articleImages, normalizedCoverImageSource).length,
+      X_MAX_IMAGES + 1,
+    );
     setCoverImageIndex((current) => Math.min(current, Math.max(0, imageCount - 1)));
-  }, [articleImages.length]);
+  }, [articleImages.length, normalizedCoverImageSource]);
+
+  useEffect(() => {
+    if (previousCoverSelectionKey.current === coverSelectionKey) return;
+    previousCoverSelectionKey.current = coverSelectionKey;
+    if (normalizedCoverImageSource) {
+      setCoverImageIndex(documentCoverIndex(articleImages, normalizedCoverImageSource));
+    }
+  }, [articleImages, normalizedCoverImageSource, coverSelectionKey]);
 
   async function ensureAccount(): Promise<boolean> {
     if (oauth2) return true;
@@ -87,7 +108,12 @@ export function XPublishPanel({
     try {
       if (!(await ensureAccount())) return;
       if (!window.confirm(t.editor.xPublishConfirm)) return;
-      const draft = buildXArticle(title, markdownBody, articleImages, description);
+      const draft = buildXArticle(
+        title,
+        markdownBody,
+        articleImages,
+        description,
+      );
       if (draft.invalid) {
         setError(t.editor.xArticleInvalid);
         return;
@@ -110,12 +136,16 @@ export function XPublishPanel({
           alt: image.alt,
         });
       }
+      const candidates = imagesWithDocumentCover(articleImages, normalizedCoverImageSource);
+      const selectedCover = candidates[Math.min(coverImageIndex, candidates.length - 1)];
+      const bodyCoverIndex = selectedCover ? draft.images.findIndex((image) => image.src === selectedCover.src) : -1;
       const result = await publishXArticle(docId, {
         mode: "oauth2",
         title: draft.title,
         markdown: draft.markdown,
         images,
-        coverImageIndex: images.length > 0 ? Math.min(coverImageIndex, images.length - 1) : undefined,
+        coverImageIndex: bodyCoverIndex >= 0 ? bodyCoverIndex : undefined,
+        coverImageSource: selectedCover && bodyCoverIndex < 0 ? await resolveXImageSource(selectedCover.src) : undefined,
       });
       setPublishedURL(result.url);
     } catch (caught) {
@@ -156,7 +186,7 @@ export function XPublishPanel({
           {checking ? t.editor.xAccountLoading : publishing ? t.editor.xPublishing : publishedURL ? t.editor.xPublished : t.editor.xPublish}
         </button>
       </div>
-      {articleImages.length > 0 && (
+      {imagesWithDocumentCover(articleImages, normalizedCoverImageSource).length > 0 && (
         <label className="mt-3 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
           <span>{t.editor.xCoverImage}</span>
           <select
@@ -166,7 +196,7 @@ export function XPublishPanel({
             disabled={disabled || checking || publishing || Boolean(publishedURL)}
             className="rounded-lg border border-neutral-500/20 bg-transparent px-2 py-1 text-xs"
           >
-            {Array.from({ length: Math.min(articleImages.length, X_MAX_IMAGES) }, (_, index) => (
+            {Array.from({ length: Math.min(imagesWithDocumentCover(articleImages, normalizedCoverImageSource).length, X_MAX_IMAGES + 1) }, (_, index) => (
               <option key={index} value={index}>
                 {index + 1}
               </option>
@@ -185,6 +215,37 @@ export function XPublishPanel({
       {error && <p role="alert" className="mt-3 text-[11px] leading-relaxed text-red-600 dark:text-red-400">{error}</p>}
     </section>
   );
+}
+
+function imagesWithDocumentCover(
+  articleImages: XArticleImage[],
+  coverImageSource?: string,
+): XArticleImage[] {
+  const source = coverImageSource?.trim() ?? "";
+  if (!source || articleImages.some((image) => image.src === source)) return articleImages;
+  return [{ src: source, alt: "" }, ...articleImages];
+}
+
+function normalizeXImageSource(source?: string): string {
+  const value = source?.trim() ?? "";
+  if (!value || /^(?:data:|koinote-local-image:)/i.test(value)) return value;
+  try {
+    return new URL(value, window.location.origin).toString();
+  } catch {
+    return value;
+  }
+}
+
+function documentCoverIndex(
+  articleImages: XArticleImage[],
+  coverImageSource?: string,
+): number {
+  const source = coverImageSource?.trim() ?? "";
+  if (!source) return 0;
+  const index = imagesWithDocumentCover(articleImages, source).findIndex(
+    (image) => image.src === source,
+  );
+  return index >= 0 ? index : 0;
 }
 
 async function resolveXImageSource(source: string): Promise<string> {

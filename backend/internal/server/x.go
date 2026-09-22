@@ -95,12 +95,13 @@ type xPublishImageInput struct {
 }
 
 type xPublishInput struct {
-	Mode            string               `json:"mode,omitempty"`
-	Title           string               `json:"title,omitempty"`
-	Markdown        string               `json:"markdown,omitempty"`
-	Posts           []string             `json:"posts,omitempty"`
-	Images          []xPublishImageInput `json:"images,omitempty"`
-	CoverImageIndex *int                 `json:"coverImageIndex,omitempty"`
+	Mode             string               `json:"mode,omitempty"`
+	Title            string               `json:"title,omitempty"`
+	Markdown         string               `json:"markdown,omitempty"`
+	Posts            []string             `json:"posts,omitempty"`
+	Images           []xPublishImageInput `json:"images,omitempty"`
+	CoverImageIndex  *int                 `json:"coverImageIndex,omitempty"`
+	CoverImageSource string               `json:"coverImageSource,omitempty"`
 }
 
 type xPublishResult struct {
@@ -330,6 +331,11 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	imagesByPost := make(map[int][]xPublishImageInput)
 	articleMarkdown := ""
 	if articleRequest {
+		input.CoverImageSource = strings.TrimSpace(input.CoverImageSource)
+		if input.CoverImageIndex != nil && input.CoverImageSource != "" {
+			httpx.ErrorCode(w, http.StatusBadRequest, "x_publish_input_invalid", "Choose one X Article cover")
+			return
+		}
 		input.Title = strings.TrimSpace(input.Title)
 		articleMarkdown = stripXArticleFrontmatter(input.Markdown)
 		input.Markdown = normalizeXArticleMarkdown(input.Markdown)
@@ -455,7 +461,7 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 	defer cancelPublish()
 	var result xPublishResult
 	if articleRequest {
-		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, articleMarkdown, input.Images, input.CoverImageIndex)
+		result, err = a.publishXArticleOAuth2(publishContext, oauth2Credential, input.Title, articleMarkdown, input.Images, input.CoverImageIndex, input.CoverImageSource)
 	} else if input.Mode == "oauth2" {
 		result, err = a.publishXThreadOAuth2(publishContext, oauth2Credential, input.Posts, imagesByPost)
 	} else {

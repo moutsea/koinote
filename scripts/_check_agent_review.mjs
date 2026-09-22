@@ -346,6 +346,8 @@ includes("标题建议单独分组", panel, 'item.target === "title"');
 // 四类建议纵向铺开会让用户滚很久才找到想看的那一类，改成分类切页：一次只渲染一类。
 includes("建议按类别切页而不是全部铺开", panel, 'role="tablist"');
 includes("切页条固定在滚动区顶部", panel, 'className="sticky top-0');
+includes("切页条隐藏横向滚动条", panel, "[scrollbar-width:none]");
+includes("切页条禁止纵向溢出", panel, "overflow-y-hidden");
 includes("页签标出该类待处理条数", panel, 'section.suggestions.filter(');
 includes("一次只渲染当前类别", panel, 'activeKey === "proofread"');
 assert.ok(

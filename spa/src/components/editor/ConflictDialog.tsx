@@ -18,7 +18,7 @@ export function ConflictDialog({
   onAcceptRemote: (document: Document) => void;
   onOverwrite: (
     remoteRevision: number,
-    patch: Pick<DocumentSnapshot, "title" | "content" | "theme">,
+    patch: Pick<DocumentSnapshot, "title" | "content" | "theme" | "coverMode" | "coverRatio" | "coverImageSource" | "coverPrompt">,
   ) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -56,6 +56,10 @@ export function ConflictDialog({
       title: merged.title,
       content: merged.content,
       theme: merged.theme,
+      coverMode: merged.coverMode,
+      coverRatio: merged.coverRatio,
+      coverImageSource: merged.coverImageSource,
+      coverPrompt: merged.coverPrompt,
     });
     if (!saved) {
       setError(true);

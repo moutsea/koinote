@@ -666,7 +666,8 @@ func TestPrepareWechatThumbRatiosAndLimit(t *testing.T) {
 		want  float64
 	}{
 		{wechatCoverRatioWide, 2.35},
-		{wechatCoverRatioSquare, 1},
+		{"1:1", 1},
+		{"3:2", 1.5},
 	} {
 		data, width, height, err := prepareWechatThumb(encoded.Bytes(), test.ratio)
 		if err != nil {
@@ -684,6 +685,46 @@ func TestPrepareWechatThumbRatiosAndLimit(t *testing.T) {
 	}
 }
 
+func TestWechatCoverRatioValidation(t *testing.T) {
+	for _, ratio := range []string{"2.35:1", "3:2", "16:9", "7.5:4", "0.5:1", "1:0.5"} {
+		if !validWechatCoverRatio(ratio) {
+			t.Errorf("validWechatCoverRatio(%q) = false", ratio)
+		}
+	}
+	for _, ratio := range []string{"0:1", "1:0", "1:101", "1/1", "-1:1", "1:1.234", "100:1", "1:100"} {
+		if validWechatCoverRatio(ratio) {
+			t.Errorf("validWechatCoverRatio(%q) = true", ratio)
+		}
+	}
+}
+
+func TestWechatCoverCropRetainsPixelsForExtremeRatios(t *testing.T) {
+	source := image.NewRGBA(image.Rect(0, 0, 20, 20))
+	for row := 0; row < 20; row++ {
+		for column := 0; column < 20; column++ {
+			source.SetRGBA(column, row, color.RGBA{R: 255, A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, source, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, ratio := range []string{"6.9:1", "1:2.9"} {
+		data, width, height, err := prepareWechatThumb(encoded.Bytes(), ratio)
+		if err != nil {
+			t.Fatalf("prepare %s: %v", ratio, err)
+		}
+		decoded, err := jpeg.Decode(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		red, green, blue, _ := decoded.At(width/2, height/2).RGBA()
+		if red < 60000 || green > 3000 || blue > 3000 {
+			t.Fatalf("prepare %s lost source pixels: %d, %d, %d", ratio, red, green, blue)
+		}
+	}
+}
+
 func TestDefaultWechatCoverIsValid(t *testing.T) {
 	for _, test := range []struct {
 		ratio      string
@@ -691,7 +732,7 @@ func TestDefaultWechatCoverIsValid(t *testing.T) {
 		wantHeight int
 	}{
 		{ratio: wechatCoverRatioWide, wantWidth: 940, wantHeight: 400},
-		{ratio: wechatCoverRatioSquare, wantWidth: 560, wantHeight: 560},
+		{ratio: "1:1", wantWidth: 560, wantHeight: 560},
 	} {
 		data, err := defaultWechatCover("一篇没有 AI 封面的文章", test.ratio)
 		if err != nil {
@@ -805,9 +846,18 @@ func TestPrepareWechatContentImageSupportsTallImages(t *testing.T) {
 
 func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 	pool := newGCTestPool(t)
+	coverData := testWechatCoverJPEG(t)
+	coverDataURL := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(coverData)
+	expectedCover, _, _, err := prepareWechatThumb(coverData, "3:2")
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		name        string
 		failDraft   bool
+		coverMode   string
+		coverSource string
+		savedSource string
 		credits     int64
 		wantStatus  int
 		wantCode    string
@@ -816,6 +866,15 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 		{name: "successful sync charges 20", credits: 20, wantStatus: http.StatusOK, wantBalance: 0},
 		{name: "draft failure releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_draft_create_failed", wantBalance: 20},
 		{name: "insufficient credits blocks provider calls", credits: 1, wantStatus: http.StatusPaymentRequired, wantCode: "insufficient_credits", wantBalance: 1},
+		{name: "saved default cover", coverMode: "default", coverSource: "https://images.example.test/cover.jpg", savedSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
+		{name: "saved relative default cover", coverMode: "default", coverSource: "https://img.koinote.app/u/test-user/12345678abcdef00.png", savedSource: "/images/u/test-user/12345678abcdef00.png", credits: 20, wantStatus: http.StatusOK},
+		{name: "arbitrary default URL rejected", coverMode: "default", coverSource: "https://images.example.test/probe.jpg", credits: 20, wantStatus: http.StatusBadRequest, wantCode: "wechat_cover_input_invalid", wantBalance: 20},
+		{name: "generated default cover", coverMode: "default", coverSource: coverDataURL, credits: 20, wantStatus: http.StatusOK},
+		{name: "saved AI cover", coverMode: "ai", coverSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
+		{name: "article cover removed from body", coverMode: "article", coverSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
+		{name: "resolved desktop cover", coverMode: "article", coverSource: coverDataURL, credits: 20, wantStatus: http.StatusOK},
+		{name: "draft only generated cover", coverMode: "ai", coverSource: coverDataURL, credits: 20, wantStatus: http.StatusOK},
+		{name: "invalid cover releases credits", coverMode: "article", coverSource: "data:image/jpeg;base64,invalid", credits: 20, wantStatus: http.StatusBadRequest, wantCode: "wechat_cover_input_invalid", wantBalance: 20},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -824,6 +883,15 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 				InternalToken:                 "wechat-credit-test-internal",
 				WechatCredentialEncryptionKey: "wechat-credit-test-key",
 			}, pool)
+			imageReads := 0
+			app.wechatImageHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				imageReads++
+				if request.URL.String() != test.coverSource {
+					t.Fatalf("unexpected cover request: %s", request.URL)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(coverData))}, nil
+			})}
+			var uploadedCover []byte
 			app.wechatAPIHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
 				response := func(body string) (*http.Response, error) {
 					return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
@@ -832,6 +900,15 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 				case "/cgi-bin/stable_token":
 					return response(`{"access_token":"wechat-credit-token","expires_in":7200}`)
 				case "/cgi-bin/material/add_material":
+					file, _, readErr := request.FormFile("media")
+					if readErr != nil {
+						t.Fatalf("read cover upload: %v", readErr)
+					}
+					defer file.Close()
+					uploadedCover, readErr = io.ReadAll(file)
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
 					return response(`{"media_id":"wechat-credit-thumb"}`)
 				case "/cgi-bin/material/del_material":
 					return response(`{}`)
@@ -860,14 +937,28 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 			}, ciphertext); err != nil {
 				t.Fatalf("create WeChat account: %v", err)
 			}
-			doc, err := app.createDocument(context.Background(), createDocumentParams{User: user, Title: "Credit test", Content: "Article body"})
+			savedSource := test.savedSource
+			if savedSource == "" {
+				savedSource = "https://images.example.test/original.jpg"
+			}
+			doc, err := app.createDocument(context.Background(), createDocumentParams{
+				User: user, Title: "Credit test", Content: "Article body",
+				CoverMode: "ai", CoverRatio: "1:1", CoverImageSource: savedSource, CoverPrompt: "Original cover",
+			})
 			if err != nil {
 				t.Fatalf("create document: %v", err)
+			}
+			requestBody, err := json.Marshal(map[string]any{
+				"accountId": accountID, "title": "Credit test", "html": "<p>Article body</p>",
+				"coverMode": test.coverMode, "coverImageSource": test.coverSource, "coverRatio": "3:2",
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
 			request := httptest.NewRequest(
 				http.MethodPost,
 				"/api/documents/"+doc.DocID+"/wechat-draft",
-				strings.NewReader(fmt.Sprintf(`{"accountId":%q,"title":"Credit test","html":"<p>Article body</p>"}`, accountID)),
+				bytes.NewReader(requestBody),
 			)
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("x-koinote-internal-token", "wechat-credit-test-internal")
@@ -876,6 +967,20 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 			app.Routes().ServeHTTP(response, request)
 			if response.Code != test.wantStatus {
 				t.Fatalf("draft status=%d want=%d body=%s", response.Code, test.wantStatus, response.Body.String())
+			}
+			if test.coverMode == "default" && test.wantStatus == http.StatusBadRequest && (imageReads != 0 || len(uploadedCover) != 0) {
+				t.Fatal("rejected default URL must not trigger image downloads or uploads")
+			}
+			if test.coverSource != "" && test.wantStatus == http.StatusOK && !bytes.Equal(uploadedCover, expectedCover) {
+				t.Fatal("uploaded cover does not match the selected image and ratio")
+			}
+			var storedMode, storedRatio, storedSource, storedPrompt string
+			var storedRevision int64
+			if err := pool.QueryRow(context.Background(), `SELECT cover_mode, cover_ratio, cover_image_source, cover_prompt, revision FROM documents WHERE doc_id = $1`, doc.DocID).Scan(&storedMode, &storedRatio, &storedSource, &storedPrompt, &storedRevision); err != nil {
+				t.Fatal(err)
+			}
+			if storedMode != doc.CoverMode || storedRatio != doc.CoverRatio || storedSource != doc.CoverImageSource || storedPrompt != doc.CoverPrompt || storedRevision != doc.Revision {
+				t.Fatal("publishing a draft changed the article cover or revision")
 			}
 			if test.wantCode != "" {
 				var payload struct {

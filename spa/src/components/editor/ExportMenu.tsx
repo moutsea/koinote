@@ -57,6 +57,7 @@ export function ExportMenu({
   editor,
   docId,
   title,
+  coverImageSource,
   themeId,
   member,
   localMode,
@@ -65,6 +66,7 @@ export function ExportMenu({
   editor: Editor | null;
   docId: string;
   title: string;
+  coverImageSource?: string;
   /** 文档当前的排版主题，微信导出直接用它 —— 不在导出弹窗里二次选择 */
   themeId: string;
   member: boolean;
@@ -222,6 +224,7 @@ export function ExportMenu({
         await navigate({ to: "/settings", search: { section: "wechat" } });
         return undefined;
       }
+      if (!(await onBeforeExternalExport())) return t.editor.saveFailed;
       await prepareWechatDraftDocument(docId);
       setWechatAccounts(result.accounts);
       setMediaOpen(false);
@@ -324,6 +327,7 @@ export function ExportMenu({
             <p>{feishuResult.created ? t.feishu.created : t.feishu.updated}</p>
             <button type="button" aria-label={t.feishu.close} onClick={() => setFeishuResult(null)} className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-3.5 w-3.5" /></button>
           </div>
+          {feishuResult.coverSyncFailed && <p className="mt-1 text-amber-700 dark:text-amber-300">{t.feishu.coverSyncFailed}</p>}
           <a
             href={feishuResult.url}
             target="_blank"
@@ -359,6 +363,7 @@ export function ExportMenu({
           editor={editor}
           docId={docId}
           title={title}
+          coverImageSource={coverImageSource}
           themeId={themeId}
           member={member}
           localMode={localMode}
@@ -372,6 +377,7 @@ export function ExportMenu({
           editor={editor}
           docId={docId}
           title={title}
+          coverImageSource={coverImageSource}
           themeId={themeId}
           member={member}
           localMode={localMode}

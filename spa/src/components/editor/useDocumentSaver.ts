@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError } from "../../api";
+import { ApiError, type WechatCoverMode, type WechatCoverRatio } from "../../api";
 import { conflictDraftKey } from "../../conflictDrafts";
 import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { useSaveDocument } from "../../documents";
@@ -30,6 +30,10 @@ export type DocPatch = Partial<{
   title: string;
   content: string;
   theme: string;
+  coverMode: WechatCoverMode;
+  coverRatio: WechatCoverRatio;
+  coverImageSource: string;
+  coverPrompt: string;
 }>;
 
 /** PUT 要求 title/content/theme 一起给，所以待存内容始终是完整三元组 */
@@ -37,6 +41,10 @@ export type DocumentSnapshot = {
   title: string;
   content: string;
   theme: string;
+  coverMode?: WechatCoverMode;
+  coverRatio?: WechatCoverRatio;
+  coverImageSource?: string;
+  coverPrompt?: string;
   revision: number;
 };
 
@@ -105,6 +113,10 @@ function sameStoredDraft(
     left.title === right.title &&
     left.content === right.content &&
     left.theme === right.theme &&
+    left.coverMode === right.coverMode &&
+    left.coverRatio === right.coverRatio &&
+    left.coverImageSource === right.coverImageSource &&
+    left.coverPrompt === right.coverPrompt &&
     left.revision === right.revision &&
     left.conflict === right.conflict
   );
@@ -205,6 +217,10 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
               title: sent.title,
               content: sent.content,
               theme: sent.theme,
+              coverMode: sent.coverMode,
+              coverRatio: sent.coverRatio,
+              coverImageSource: sent.coverImageSource,
+              coverPrompt: sent.coverPrompt,
               expectedRevision: sent.revision,
               forceVersion: current.forceVersion,
             });
@@ -241,7 +257,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
           const changedDuringFlight =
             now.pending.title !== sent.title ||
             now.pending.content !== sent.content ||
-            now.pending.theme !== sent.theme;
+            now.pending.theme !== sent.theme ||
+            now.pending.coverMode !== sent.coverMode ||
+            now.pending.coverRatio !== sent.coverRatio ||
+            now.pending.coverImageSource !== sent.coverImageSource ||
+            now.pending.coverPrompt !== sent.coverPrompt;
           if (changedDuringFlight) {
             // 继续同一条 Promise 保存最新快照。flush 因此是屏障，不会在第二趟
             // 请求发出前就提前 resolve。
@@ -295,6 +315,10 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
               title: parsed.title,
               content: parsed.content,
               theme: parsed.theme,
+              coverMode: parsed.coverMode,
+              coverRatio: parsed.coverRatio,
+              coverImageSource: parsed.coverImageSource,
+              coverPrompt: parsed.coverPrompt,
               revision: parsed.revision,
             };
             recovered = true;
@@ -368,7 +392,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     entry.pending = { ...entry.pending, title: before.title };
     // 若保存链曾成功过一趟，远端可能已有新标题，仍需保留回滚为待存改动。
     entry.dirty = wasDirty || entry.pending.revision !== before.revision ||
-      entry.pending.content !== before.content || entry.pending.theme !== before.theme;
+      entry.pending.content !== before.content || entry.pending.theme !== before.theme ||
+      entry.pending.coverMode !== before.coverMode ||
+      entry.pending.coverRatio !== before.coverRatio ||
+      entry.pending.coverImageSource !== before.coverImageSource ||
+      entry.pending.coverPrompt !== before.coverPrompt;
     if (entry.dirty) {
       const conflict = entry.revisionConflict ?? false;
       const backedUp = storeConflictDraft(docId, entry.pending, conflict);
@@ -466,8 +494,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
         entry.pending.content,
         new Map([[localURL, remoteURL]]),
       );
-      if (content === entry.pending.content) return false;
-      entry.pending = { ...entry.pending, content };
+      const coverImageSource = entry.pending.coverImageSource === localURL
+        ? remoteURL
+        : entry.pending.coverImageSource;
+      if (content === entry.pending.content && coverImageSource === entry.pending.coverImageSource) return false;
+      entry.pending = { ...entry.pending, content, coverImageSource };
       return true;
     },
     [],

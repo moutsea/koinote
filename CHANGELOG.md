@@ -8,11 +8,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
+- Documents can save default, article-image, or AI covers with custom ratios and reuse them when syncing to X, Feishu, and WeChat. Switching documents restores the previous reading position.
 - Added Shift/Ctrl multi-selection, keyboard navigation, and bulk move/delete to the document tree.
 - Added editor tab actions for closing related tabs and creating a new document.
 
 ### Fixed
 
+- Fixed missing titles after cover load failures, stale default-cover titles, duplicate X cover images in article bodies, stale WeChat draft covers, and Feishu cover failures blocking body sync. Cover metadata now has size and storage quota limits.
 - Batched tree mutations now share document revision checks and preserve image reclamation during permanent cleanup.
 
 ## [0.7.0] - 2026-09-01

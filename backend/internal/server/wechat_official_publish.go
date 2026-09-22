@@ -17,6 +17,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -27,6 +28,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
 
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -58,9 +61,14 @@ const (
 	wechatDraftReservationTTL       = 30 * time.Minute
 )
 
+var wechatCoverRatioPattern = regexp.MustCompile(`^((?:0\.[0-9]{1,2}|[1-9][0-9]*(?:\.[0-9]{1,2})?)):((?:0\.[0-9]{1,2}|[1-9][0-9]*(?:\.[0-9]{1,2})?))$`)
+
 const (
 	wechatCoverRatioWide   = "2.35:1"
-	wechatCoverRatioSquare = "1:1"
+	wechatCoverMinWidth    = 320
+	wechatCoverMaxWidth    = 940
+	wechatCoverMinHeight   = 136
+	wechatCoverMaxHeight   = 940
 	wechatCoverModeDefault = "default"
 	wechatCoverModeArticle = "article"
 	wechatCoverModeAI      = "ai"
@@ -211,14 +219,15 @@ func (a *App) generateWechatCover(ctx context.Context, prompt, ratio string) (we
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
+	ratioWidth, ratioHeight, ok := parseWechatCoverRatio(ratio)
+	if !ok {
+		return wechatCoverImage{}, errors.New("invalid cover ratio")
+	}
 	size := "1536x1024"
-	if ratio == wechatCoverRatioSquare {
+	if ratioWidth == ratioHeight {
 		size = "1024x1024"
 	}
-	composition := "Target aspect ratio: 2.35:1 (ultra-wide banner). Keep the subject and every essential detail inside the central safe area because the result will be prepared for WeChat's wide thumbnail."
-	if ratio == wechatCoverRatioSquare {
-		composition = "Target aspect ratio: 1:1 (square). Keep the subject and every essential detail comfortably inside the frame."
-	}
+	composition := fmt.Sprintf("Target aspect ratio: %s. Keep the subject and every essential detail comfortably inside the frame; the result will be center-cropped to this ratio.", ratio)
 	payload, err := json.Marshal(map[string]any{
 		"model":  a.cfg.WechatCoverImageModel,
 		"prompt": "Create a polished WeChat Official Account article cover. No logos, watermarks, QR codes, or unreadable text. " + composition + " User brief: " + prompt,
@@ -359,11 +368,11 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Article cover image is required")
 		return
 	}
-	if input.CoverMode != wechatCoverModeArticle && input.CoverImageSource != "" {
+	if input.CoverMode != wechatCoverModeArticle && input.CoverMode != wechatCoverModeAI && input.CoverMode != wechatCoverModeDefault && input.CoverImageSource != "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Unexpected article cover image")
 		return
 	}
-	if input.CoverMode == wechatCoverModeAI && strings.TrimSpace(input.CoverBase64) == "" {
+	if input.CoverMode == wechatCoverModeAI && strings.TrimSpace(input.CoverBase64) == "" && strings.TrimSpace(input.CoverImageSource) == "" {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "AI cover image is required")
 		return
 	}
@@ -384,19 +393,28 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusTooManyRequests, "too_many_requests", "Too many WeChat draft requests")
 		return
 	}
-	var owned bool
+	var savedCoverSource string
 	if err := a.db.QueryRow(r.Context(), `
-		SELECT EXISTS (
-			SELECT 1 FROM documents
+		SELECT cover_image_source FROM documents
 			WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
-		)
-	`, strings.TrimSpace(r.PathValue("docId")), user.ID).Scan(&owned); err != nil {
+	`, strings.TrimSpace(r.PathValue("docId")), user.ID).Scan(&savedCoverSource); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+			return
+		}
 		log.Printf("wechat draft document ownership: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	if !owned {
-		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
+	savedCoverSource = strings.TrimSpace(savedCoverSource)
+	if savedURL, parseErr := url.Parse(savedCoverSource); parseErr == nil && savedURL.Scheme == "" && savedURL.Host == "" && strings.HasPrefix(savedURL.Path, "/images/") {
+		if key := strings.TrimPrefix(savedURL.Path, "/images/"); isSafeImageKey(key) {
+			savedCoverSource = "https://" + xTrustedImageHost + "/" + key
+		}
+	}
+	if input.CoverMode == wechatCoverModeDefault && input.CoverImageSource != "" &&
+		!strings.HasPrefix(input.CoverImageSource, "data:") && input.CoverImageSource != strings.TrimSpace(savedCoverSource) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Default cover must match the saved document cover")
 		return
 	}
 	account, err := a.resolveWechatOfficialAccountRef(r.Context(), user.ID, input.AccountID)
@@ -444,15 +462,24 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if input.CoverMode == wechatCoverModeArticle && !wechatHTMLHasImageSource(input.HTML, input.CoverImageSource) {
-		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Article cover image is not in the article")
-		return
+	articleCoverInBody := input.CoverMode == wechatCoverModeArticle && wechatHTMLHasImageSource(input.HTML, input.CoverImageSource)
+	if len(cover) == 0 && input.CoverImageSource != "" && !articleCoverInBody {
+		coverRaw, readErr := a.readWechatArticleImage(r.Context(), input.CoverImageSource)
+		if readErr != nil {
+			httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Invalid cover image")
+			return
+		}
+		cover, _, _, err = prepareWechatThumb(coverRaw, input.CoverRatio)
+		if err != nil {
+			httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Invalid cover image")
+			return
+		}
 	}
 	content, selectedImage, err := a.transferWechatDraftImagesWithCoverImage(
 		r.Context(),
 		account,
 		input.HTML,
-		input.CoverMode == wechatCoverModeArticle,
+		articleCoverInBody,
 		input.CoverImageSource,
 	)
 	if err != nil {
@@ -505,7 +532,28 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func validWechatCoverRatio(ratio string) bool {
-	return ratio == wechatCoverRatioWide || ratio == wechatCoverRatioSquare
+	_, _, ok := parseWechatCoverRatio(ratio)
+	return ok
+}
+
+func parseWechatCoverRatio(ratio string) (int, int, bool) {
+	matches := wechatCoverRatioPattern.FindStringSubmatch(strings.TrimSpace(ratio))
+	if len(matches) != 3 {
+		return 0, 0, false
+	}
+	widthValue, errWidth := strconv.ParseFloat(matches[1], 64)
+	heightValue, errHeight := strconv.ParseFloat(matches[2], 64)
+	if errWidth != nil || errHeight != nil || widthValue <= 0 || heightValue <= 0 || widthValue > 100 || heightValue > 100 {
+		return 0, 0, false
+	}
+	ratioValue := widthValue / heightValue
+	if ratioValue < float64(wechatCoverMinWidth)/float64(wechatCoverMaxHeight) ||
+		ratioValue > float64(wechatCoverMaxWidth)/float64(wechatCoverMinHeight) {
+		return 0, 0, false
+	}
+	width := int(math.Round(widthValue * 100))
+	height := int(math.Round(heightValue * 100))
+	return width, height, width > 0 && height > 0
 }
 
 func validWechatCoverMode(mode string) bool {
@@ -535,7 +583,8 @@ func decodeWechatCoverInput(encoded string) ([]byte, error) {
 }
 
 func prepareWechatThumb(raw []byte, ratio string) ([]byte, int, int, error) {
-	if !validWechatCoverRatio(ratio) {
+	ratioWidth, ratioHeight, ok := parseWechatCoverRatio(ratio)
+	if !ok {
 		return nil, 0, 0, errors.New("invalid cover ratio")
 	}
 	configuration, _, err := image.DecodeConfig(bytes.NewReader(raw))
@@ -547,14 +596,10 @@ func prepareWechatThumb(raw []byte, ratio string) ([]byte, int, int, error) {
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	targetRatio := 2.35
-	targetWidth, targetHeight := 940, 400
-	if ratio == wechatCoverRatioSquare {
-		targetRatio = 1
-		targetWidth, targetHeight = 560, 560
-	}
+	targetRatio := float64(ratioWidth) / float64(ratioHeight)
+	targetWidth, targetHeight := wechatCoverDimensions(ratioWidth, ratioHeight)
 	cropped := centerCropImage(source, targetRatio)
-	for targetWidth >= 320 && targetHeight >= 136 {
+	for targetWidth >= wechatCoverMinWidth && targetHeight >= wechatCoverMinHeight {
 		resized := resizeImageOnWhite(cropped, targetWidth, targetHeight)
 		for quality := 88; quality >= 38; quality -= 5 {
 			var output bytes.Buffer
@@ -573,8 +618,10 @@ func prepareWechatThumb(raw []byte, ratio string) ([]byte, int, int, error) {
 
 func defaultWechatCover(title string, ratios ...string) ([]byte, error) {
 	width, height := 940, 400
-	if len(ratios) > 0 && ratios[0] == wechatCoverRatioSquare {
-		width, height = 560, 560
+	if len(ratios) > 0 {
+		if ratioWidth, ratioHeight, ok := parseWechatCoverRatio(ratios[0]); ok {
+			width, height = wechatCoverDimensions(ratioWidth, ratioHeight)
+		}
 	}
 	seed := sha256.Sum256([]byte(title))
 	cover := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -596,17 +643,30 @@ func defaultWechatCover(title string, ratios ...string) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
+func wechatCoverDimensions(widthRatio, heightRatio int) (int, int) {
+	if widthRatio == heightRatio {
+		return 560, 560
+	}
+	width := wechatCoverMaxWidth
+	height := int(math.Round(float64(width) * float64(heightRatio) / float64(widthRatio)))
+	if height > wechatCoverMaxHeight {
+		height = wechatCoverMaxHeight
+		width = int(math.Round(float64(height) * float64(widthRatio) / float64(heightRatio)))
+	}
+	return width, height
+}
+
 func centerCropImage(source image.Image, targetRatio float64) image.Image {
 	bounds := source.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 	currentRatio := float64(width) / float64(height)
 	if currentRatio > targetRatio {
-		cropWidth := int(float64(height) * targetRatio)
+		cropWidth := max(1, int(float64(height)*targetRatio))
 		left := bounds.Min.X + (width-cropWidth)/2
 		return cropImage(source, image.Rect(left, bounds.Min.Y, left+cropWidth, bounds.Max.Y))
 	}
 	if currentRatio < targetRatio {
-		cropHeight := int(float64(width) / targetRatio)
+		cropHeight := max(1, int(float64(width)/targetRatio))
 		top := bounds.Min.Y + (height-cropHeight)/2
 		return cropImage(source, image.Rect(bounds.Min.X, top, bounds.Max.X, top+cropHeight))
 	}

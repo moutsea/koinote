@@ -638,7 +638,9 @@ Today's UV and PV are optional Cloudflare edge HTTP Analytics. Create a dedicate
 with `Zone / Analytics / Read`, restricting Zone Resources to the Koinote
 zone, and store it as `CLOUDFLARE_ANALYTICS_TOKEN`. Do not reuse the cache-purge-only
 `CLOUDFLARE_CACHE_PURGE_TOKEN`. If the token is absent or Cloudflare is temporarily
-unavailable, only the traffic cards degrade; the business metrics remain available.
+unavailable, only the traffic cards degrade; the business metrics remain available. This
+aggregate has no reliable bot filtering and may include crawlers and automated requests;
+it must not be interpreted as human UV or PV.
 
 Create this endpoint in Stripe Dashboard and subscribe it to
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`:

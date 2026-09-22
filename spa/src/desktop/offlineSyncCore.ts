@@ -2,6 +2,10 @@ export type OfflineDocumentSnapshot = {
   title: string;
   theme: string;
   content: string;
+  coverMode?: string;
+  coverRatio?: string;
+  coverImageSource?: string;
+  coverPrompt?: string;
   folderId: string | null;
   localRevision: number;
   baseRevision: number;
@@ -13,6 +17,10 @@ export type RemoteDocumentSnapshot = {
   title: string;
   theme: string;
   content: string;
+  coverMode?: string;
+  coverRatio?: string;
+  coverImageSource?: string;
+  coverPrompt?: string;
   folderId: string | null;
   revision: number;
 };
@@ -143,6 +151,10 @@ export function decideRemoteDocument(
     local.title === remote.title &&
     local.theme === remote.theme &&
     local.content === remote.content &&
+    (local.coverMode ?? "default") === (remote.coverMode ?? "default") &&
+    (local.coverRatio ?? "2.35:1") === (remote.coverRatio ?? "2.35:1") &&
+    (local.coverImageSource ?? "") === (remote.coverImageSource ?? "") &&
+    (local.coverPrompt ?? "") === (remote.coverPrompt ?? "") &&
     local.folderId === remote.folderId
   ) {
     return "acknowledge-local";

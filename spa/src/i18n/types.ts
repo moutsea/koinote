@@ -678,6 +678,7 @@ export interface Messages {
     invitationReward: string;
   };
   feishu: {
+    coverSyncFailed: string;
     name: string;
     description: string;
     membersOnly: string;
@@ -1309,8 +1310,17 @@ export interface Messages {
     wechatCoverCreditCost: string;
     wechatCoverGenerate: string;
     wechatCoverRegenerate: string;
+    wechatCoverSave: string;
     wechatCoverPreview: string;
     wechatCoverGenerateFailed: string;
+    wechatCoverChange: string;
+    wechatCoverSet: string;
+    wechatCoverUnset: string;
+    wechatCoverLoading: string;
+    wechatCoverLoadFailed: string;
+    wechatCoverImageFailed: string;
+    wechatCoverDraftOnly: string;
+    wechatCoverUse: string;
     wechatTitleLimit: string;
     wechatDraftCreate: string;
     wechatDraftCreating: string;

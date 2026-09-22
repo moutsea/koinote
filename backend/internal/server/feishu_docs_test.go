@@ -305,6 +305,10 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 	if _, err := pool.Exec(context.Background(), `UPDATE users SET membership_tier='lifetime' WHERE id=$1`, user.ID); err != nil {
 		t.Fatal(err)
 	}
+	const coverSource = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+	if _, err := pool.Exec(context.Background(), `UPDATE documents SET cover_image_source=$2 WHERE doc_id=$1`, documentID, coverSource); err != nil {
+		t.Fatal(err)
+	}
 	app := New(config.Config{InternalToken: "test-internal", FeishuClientID: "cli_test", FeishuClientSecret: "test-secret", FeishuCredentialEncryptionKey: "test-key"}, pool)
 	connection, release, err := app.lockFeishuAccount(context.Background(), user.ID)
 	if err != nil {
@@ -319,6 +323,8 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 	var children []string
 	var convertedContents []string
 	var remoteTitle string
+	coverUpdated := false
+	coverFailure := ""
 	app.feishuDocsHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		app.feishuRequestMu.Lock()
 		app.feishuNextRequest = time.Time{}
@@ -344,6 +350,34 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 			blockID := "block-" + strconv.Itoa(len(convertedContents))
 			children = append(children, blockID)
 			return jsonResponse(`{"code":0,"data":{"block_id_relations":[{"temporary_block_id":"text","block_id":"` + blockID + `"}]}}`), nil
+		case strings.HasSuffix(request.URL.Path, "/upload_all"):
+			if err := request.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatal(err)
+			}
+			defer request.MultipartForm.RemoveAll()
+			if request.FormValue("parent_type") != "docx_image" || request.FormValue("parent_node") != "remote" || request.FormValue("extra") != `{"drive_route_token":"remote"}` {
+				t.Fatalf("invalid cover upload parent: %v", request.MultipartForm.Value)
+			}
+			if coverFailure == "upload" {
+				return nil, errors.New("cover upload unavailable")
+			}
+			return jsonResponse(`{"code":0,"data":{"file_token":"cover-token"}}`), nil
+		case request.Method == http.MethodPatch && request.URL.Path == "/open-apis/docx/v1/documents/remote":
+			if coverFailure == "update" {
+				return nil, errors.New("cover update unavailable")
+			}
+			var body struct {
+				UpdateCover struct {
+					Cover struct {
+						Token string `json:"token"`
+					} `json:"cover"`
+				} `json:"update_cover"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			coverUpdated = body.UpdateCover.Cover.Token == "cover-token"
+			return jsonResponse(`{"code":0,"data":{}}`), nil
 		case request.Method == http.MethodPatch:
 			var body struct {
 				Update struct {
@@ -357,7 +391,9 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Fatal(err)
 			}
-			remoteTitle = body.Update.Elements[0].Text.Content
+			if len(body.Update.Elements) > 0 {
+				remoteTitle = body.Update.Elements[0].Text.Content
+			}
 			return jsonResponse(`{"code":0,"data":{}}`), nil
 		case request.Method == http.MethodDelete:
 			var body struct {
@@ -385,14 +421,17 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 		if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &result) != nil || result.Created != wantCreated || result.URL != feishuDocumentURL("remote") {
 			t.Fatalf("sync response %d: %s", recorder.Code, recorder.Body.String())
 		}
+		if result.CoverSyncFailed != (coverFailure != "") {
+			t.Fatalf("cover failure was not reported: %+v", result)
+		}
 	}
 	requestSync(true)
 	if _, err := pool.Exec(context.Background(), `UPDATE documents SET title='Updated title',content='Second content',revision=revision+1 WHERE doc_id=$1`, documentID); err != nil {
 		t.Fatal(err)
 	}
 	requestSync(false)
-	if createdCount != 1 || !slices.Equal(children, []string{"block-2"}) || remoteTitle != "Updated title" || !slices.Equal(convertedContents, []string{"First content", "Second content"}) {
-		t.Fatalf("unexpected sync result: created=%d children=%v title=%s converted=%v", createdCount, children, remoteTitle, convertedContents)
+	if createdCount != 1 || !coverUpdated || !slices.Equal(children, []string{"block-2"}) || remoteTitle != "Updated title" || !slices.Equal(convertedContents, []string{"First content", "Second content"}) {
+		t.Fatalf("unexpected sync result: created=%d cover=%v children=%v title=%s converted=%v", createdCount, coverUpdated, children, remoteTitle, convertedContents)
 	}
 	var revision int64
 	if err := pool.QueryRow(context.Background(), `SELECT source_revision FROM feishu_document_links WHERE user_id=$1 AND document_id=$2`, user.ID, documentID).Scan(&revision); err != nil || revision != 2 {
@@ -409,6 +448,18 @@ func TestFeishuCreateAndUpdateSameDocument(t *testing.T) {
 	app.Routes().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusNotFound || len(convertedContents) != 2 {
 		t.Fatalf("cross-account sync reached provider: %d %s", recorder.Code, recorder.Body.String())
+	}
+	for _, failure := range []string{"upload", "update", "read"} {
+		coverFailure = failure
+		if failure == "read" {
+			if _, err := pool.Exec(context.Background(), `UPDATE documents SET cover_image_source='data:image/png;base64,invalid' WHERE doc_id=$1`, documentID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		requestSync(false)
+		if !slices.Equal(children, []string{"block-" + strconv.Itoa(len(convertedContents))}) {
+			t.Fatalf("cover %s failure rolled back body: %v", failure, children)
+		}
 	}
 }
 

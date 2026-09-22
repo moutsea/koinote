@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bot, History, RefreshCw } from "lucide-react";
@@ -18,8 +18,9 @@ import {
   consumeAgentReviewOpen,
 } from "../../agentReviewNotifications";
 import { useDesktopMenuActions } from "../../desktop/menu";
-import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
+import { isDesktopLocalImageURL, replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
+import { DocumentCoverDialog } from "./DocumentCoverDialog";
 
 type EditorViewportRestorePoint = {
   scrollTop: number;
@@ -34,7 +35,7 @@ type EditorViewportRestorePoint = {
  *
  * 非当前实例用 display:none 藏起来而不是卸载：这正是多开的意义所在，切回来时
  * 撕销历史、光标位置都还在。代价是滚动位置 —— display:none 之后部分浏览器会把
- * scrollTop 归零，所以手动存取（见下方 scroll ref）。
+ * scrollTop 归零，滚动位置由 MarkdownEditor 按文档记录并恢复。
  */
 export function LiveEditor({
   docId,
@@ -49,6 +50,7 @@ export function LiveEditor({
   leadingControls,
   trailingControls,
   outlineSlot,
+  scrollStorageScope,
 }: {
   docId: string;
   remoteRevision?: number;
@@ -63,21 +65,23 @@ export function LiveEditor({
   leadingControls?: React.ReactNode;
   trailingControls?: React.ReactNode;
   outlineSlot?: React.ReactNode;
+  scrollStorageScope?: string;
 }) {
   const doc = useDocument(docId);
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const scrollTop = useRef(0);
   const editorContentRef = useRef<string | null>(null);
   const editorViewportRestorePoint =
     useRef<EditorViewportRestorePoint | null>(null);
   const conflictPromptedRef = useRef(false);
   const [editorGeneration, setEditorGeneration] = useState(0);
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
+  const [articleImagesVersion, setArticleImagesVersion] = useState(0);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [agentReviewOpen, setAgentReviewOpen] = useState(false);
+  const [coverOpen, setCoverOpen] = useState(false);
   const [requestedReviewId, setRequestedReviewId] = useState("");
   const [seededDocId, setSeededDocId] = useState<string | null>(null);
   const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
@@ -135,6 +139,10 @@ export function LiveEditor({
       title: document.title,
       content: document.content,
       theme: document.theme ?? "",
+      coverMode: document.coverMode ?? "default",
+      coverRatio: document.coverRatio ?? "2.35:1",
+      coverImageSource: document.coverImageSource ?? "",
+      coverPrompt: document.coverPrompt ?? "",
       revision: document.revision,
     });
     queryClient.setQueryData(["document", docId], document);
@@ -162,6 +170,41 @@ export function LiveEditor({
   const handleContentLoaded = useCallback((content: string) => {
     editorContentRef.current = content;
   }, []);
+
+  const articleImages = useMemo(() => {
+    if (!editorInstance) return [];
+    const container = document.createElement("div");
+    container.innerHTML = editorInstance.getHTML();
+    return Array.from(container.querySelectorAll("img")).flatMap((image) => {
+      const source = image.getAttribute("src")?.trim() ?? "";
+      if (!source) return [];
+      try {
+        const normalized = new URL(source, window.location.origin).toString();
+        if (!/^(?:https?:|data:)/i.test(normalized) && !isDesktopLocalImageURL(normalized)) return [];
+        return [{ src: normalized, alt: image.getAttribute("alt")?.trim() ?? "" }];
+      } catch {
+        return [];
+      }
+    });
+  }, [articleImagesVersion, editorInstance, editorGeneration, coverOpen]);
+
+  useEffect(() => {
+    if (!editorInstance || !coverOpen) return;
+    const refreshArticleImages = () => {
+      setArticleImagesVersion((version) => version + 1);
+    };
+    editorInstance.on("update", refreshArticleImages);
+    return () => {
+      editorInstance.off("update", refreshArticleImages);
+    };
+  }, [coverOpen, editorInstance]);
+
+  const saveCover = useCallback((next: Parameters<typeof DocumentCoverDialog>[0]["initial"]) => {
+    saver.queue(docId, next);
+    queryClient.setQueryData<NonNullable<typeof doc.data>>(["document", docId], (current) =>
+      current ? { ...current, ...next } : current,
+    );
+  }, [docId, queryClient, saver]);
 
   const handleImageSourceMapped = useCallback(
     (localURL: string, remoteURL: string) => {
@@ -203,6 +246,10 @@ export function LiveEditor({
       title: doc.data.title,
       content: doc.data.content,
       theme: doc.data.theme ?? "",
+      coverMode: doc.data.coverMode ?? "default",
+      coverRatio: doc.data.coverRatio ?? "2.35:1",
+      coverImageSource: doc.data.coverImageSource ?? "",
+      coverPrompt: doc.data.coverPrompt ?? "",
       revision: doc.data.revision,
     });
     setSeededDocId(docId);
@@ -221,7 +268,11 @@ export function LiveEditor({
           current?.revision === document.revision &&
           current.title === document.title &&
           current.theme === document.theme &&
-          current.content === document.content
+          current.content === document.content &&
+          current.coverMode === (document.coverMode ?? "default") &&
+          current.coverRatio === (document.coverRatio ?? "2.35:1") &&
+          current.coverImageSource === (document.coverImageSource ?? "") &&
+          current.coverPrompt === (document.coverPrompt ?? "")
         ) {
           return;
         }
@@ -271,17 +322,6 @@ export function LiveEditor({
       disposed = true;
     };
   }, [acceptLatestDocument, doc.data?.revision, docId, remoteRevision, saver]);
-
-  // 隐藏前记住滚动位置，显示后还原
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (visible) {
-      el.scrollTop = scrollTop.current;
-    } else {
-      scrollTop.current = el.scrollTop;
-    }
-  }, [visible]);
 
   // 传给编辑器的 document 要合并未落库的改动，否则重新挂载会退回服务端那份，
   // 用户看到自己刚写的字消失
@@ -343,6 +383,10 @@ export function LiveEditor({
       title: next.title,
       content: next.content,
       theme: next.theme ?? "",
+      coverMode: next.coverMode ?? "default",
+      coverRatio: next.coverRatio ?? "2.35:1",
+      coverImageSource: next.coverImageSource ?? "",
+      coverPrompt: next.coverPrompt ?? "",
       revision: next.revision,
     });
     setRemoteUpdateAvailable(false);
@@ -395,6 +439,8 @@ export function LiveEditor({
         onImageSourceMapped={handleImageSourceMapped}
         onFlush={() => void saver.flush(docId)}
         onEditorReady={handleEditorReady}
+        onOpenCover={() => setCoverOpen(true)}
+        scrollStorageScope={scrollStorageScope}
         scrollContainerRef={scrollRef}
         visible={visible}
         leadingControls={leadingControls}
@@ -439,6 +485,21 @@ export function LiveEditor({
         }
         outlineSlot={outlineSlot}
       />
+      {visible && coverOpen && (
+        <DocumentCoverDialog
+          title={merged.title}
+          member={member}
+          articleImages={articleImages}
+          initial={{
+            coverMode: merged.coverMode ?? "default",
+            coverRatio: merged.coverRatio ?? "2.35:1",
+            coverImageSource: merged.coverImageSource ?? "",
+            coverPrompt: merged.coverPrompt ?? "",
+          }}
+          onSave={saveCover}
+          onClose={() => setCoverOpen(false)}
+        />
+      )}
       {visible && conflictOpen && (
         <ConflictDialog
           docId={docId}

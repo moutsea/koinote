@@ -64,6 +64,11 @@ ok(
   "只等待第一趟请求仍会漏掉 in-flight 期间的新改动",
 );
 ok(
+  "封面字段会随正文一起保存",
+  /theme:\s*sent\.theme,[\s\S]{0,220}coverMode:\s*sent\.coverMode,[\s\S]{0,180}coverRatio:\s*sent\.coverRatio,[\s\S]{0,180}coverImageSource:\s*sent\.coverImageSource,[\s\S]{0,180}coverPrompt:\s*sent\.coverPrompt/.test(bareSaver),
+  "封面设置不能只更新编辑器内存，必须进入同一个文档保存请求",
+);
+ok(
   "flush 把保存结果返回调用方",
   /const flush[\s\S]{0,500}return doSave\(docId\)/.test(bareSaver),
   "删除流程必须能区分保存成功和失败",
@@ -136,7 +141,7 @@ ok(
 );
 ok(
   "图床地址映射会同步进保存器基线",
-  /const applyImageMapping[\s\S]{0,900}replaceDesktopLocalImageURLs[\s\S]{0,500}entry\.pending\s*=\s*\{\s*\.\.\.entry\.pending,\s*content\s*\}/.test(bareSaver),
+  /const applyImageMapping[\s\S]{0,900}replaceDesktopLocalImageURLs[\s\S]{0,500}entry\.pending\s*=\s*\{\s*\.\.\.entry\.pending,\s*content\s*,\s*coverImageSource\s*\}/.test(bareSaver),
   "只替换编辑器节点会让同步层再次把整篇文档当成远端更新并重建编辑器",
 );
 ok(

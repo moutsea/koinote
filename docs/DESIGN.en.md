@@ -701,11 +701,12 @@ Today's UV and PV come from Cloudflare GraphQL Analytics API
 `httpRequests1hGroups`. The query deliberately has no time dimension and requests one aggregate, so
 `uniq.uniques` is deduplicated over the whole requested interval rather than incorrectly
 adding minute-bucket uniques. It uses a dedicated least-privilege
-`CLOUDFLARE_ANALYTICS_TOKEN`, filters by hostname, and caches results for one minute.
-Missing configuration, permission errors, or Cloudflare timeouts set
-`traffic.available=false` while PostgreSQL business metrics still return successfully.
-These are edge HTTP metrics and may include legitimate crawlers and allowed automation;
-they are not equivalent to client-instrumented user sessions.
+`CLOUDFLARE_ANALYTICS_TOKEN`. Results are cached for one minute. Only established time
+filters are used; an unverified `requestSource` filter must not be added to this aggregate dataset.
+Missing configuration, permission errors,
+or Cloudflare timeouts set `traffic.available=false` while PostgreSQL business metrics still
+return successfully. This aggregate has no reliable bot filtering and may include crawlers
+and automated requests; it must not be interpreted as human UV or PV.
 
 In-app announcements keep authorization and source-of-truth state in the backend as well.
 `announcements` stores kind, version, and publication time; `announcement_translations`
@@ -907,10 +908,23 @@ resolved DNS addresses, disable redirects, and cap response sizes. If draft crea
 fails, the backend makes a best-effort deletion of the newly uploaded orphan thumbnail.
 
 Cover generation calls an OpenAI-compatible Images API only from the backend. It
-supports `2.35:1` (default) and `1:1`; each generated cover costs a fixed 20 credits.
+supports presets and custom `W:H` ratios (default `2.35:1`). Both components must be positive,
+at most 100, and have at most two decimal places; the ratio must be between `320/940` and
+`940/136`. Each generated cover costs a fixed 20 credits.
 Go center-crops, resizes, and compresses the result into a WeChat-compatible JPEG
 thumbnail. The provider API key never reaches the SPA, Worker, or desktop client. This
 feature is lifetime-member-only and user-rate-limited.
+
+Document covers use four columns introduced in PostgreSQL migration `0051` and SQLite
+migration `0007`: `cover_mode`, `cover_ratio`, `cover_image_source`, and `cover_prompt`.
+Fully local mode keeps mode/ratio as plaintext UI settings and encrypts source/prompt,
+which contain image locations and user input. Sources are limited to 2048 bytes and cannot
+contain data URIs; generated images must be uploaded before their URLs are saved. Prompts
+are limited to 1200 Unicode characters. Both source and prompt count toward cloud storage.
+`document_versions` does not include covers: restoring history restores title, theme, and
+body while retaining the current cover. X uses separate `cover_media`, outside the 20 body
+image limit. Feishu attempts the cover after saving the body and reports cover failures
+without rolling back the body. Opening a WeChat draft waits for pending editor saves.
 
 The WeChat editor's behaviour dictates every part of the implementation:
 

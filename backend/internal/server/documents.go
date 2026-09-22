@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	maxTitleRunes   = 200
-	maxContentBytes = 1 << 20 // 1 MiB，单篇 Markdown 的上限
+	maxTitleRunes           = 200
+	maxContentBytes         = 1 << 20 // 1 MiB，单篇 Markdown 的上限
+	maxDocumentRequestBytes = 6*maxContentBytes + (64 << 10)
 )
 
 // ---------- 列表 ----------
@@ -84,13 +85,23 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	// FolderID 让「在这个文件夹里新建文档」一次请求完成。先建到根下再调移动接口也能
 	// 做到，但那样新文档会先在根下闪一下，且移动失败时它就留在根下了。
 	var body struct {
-		DocID    string  `json:"docId"`
-		Title    string  `json:"title"`
-		Theme    *string `json:"theme"`
-		Content  string  `json:"content"`
-		FolderID *string `json:"folderId"`
+		DocID            string  `json:"docId"`
+		Title            string  `json:"title"`
+		Theme            *string `json:"theme"`
+		Content          string  `json:"content"`
+		FolderID         *string `json:"folderId"`
+		CoverMode        string  `json:"coverMode"`
+		CoverRatio       string  `json:"coverRatio"`
+		CoverImageSource string  `json:"coverImageSource"`
+		CoverPrompt      string  `json:"coverPrompt"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxDocumentRequestBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "content_too_large", "Document request too large")
+			return
+		}
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
 		return
 	}
@@ -112,7 +123,12 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	doc, err := a.createDocument(r.Context(), createDocumentParams{
 		User: user, DocID: body.DocID, Title: title, Theme: theme, Content: content, FolderID: body.FolderID,
+		CoverMode: body.CoverMode, CoverRatio: body.CoverRatio, CoverImageSource: body.CoverImageSource, CoverPrompt: body.CoverPrompt,
 	})
+	if errors.Is(err, errDocumentCoverInvalid) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "document_cover_invalid", "Invalid document cover")
+		return
+	}
 	if errors.Is(err, errDocumentQuotaExceeded) {
 		httpx.ErrorCode(w, http.StatusConflict, "storage_quota_exceeded",
 			"Cloud storage quota exceeded")
@@ -149,12 +165,12 @@ func (a *App) documentGet(w http.ResponseWriter, r *http.Request) {
 	var shareToken, shareAccess, sharePasswordHash sql.NullString
 	var shareViewCount int64
 	err := a.db.QueryRow(r.Context(), `
-		SELECT doc_id, title, theme, content, revision, created_at, updated_at,
+		SELECT doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at,
 		       share_token, share_access, share_password_hash, share_view_count
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, docID, user.ID).Scan(
-		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 		&shareToken, &shareAccess, &sharePasswordHash, &shareViewCount,
 	)
 	// 他人文档与不存在的文档一律 404，不泄露「该文档存在」
@@ -194,13 +210,23 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Title            string `json:"title"`
-		Theme            string `json:"theme"`
-		Content          string `json:"content"`
-		ExpectedRevision int64  `json:"expectedRevision"`
-		ForceVersion     bool   `json:"forceVersion"`
+		Title            string  `json:"title"`
+		Theme            string  `json:"theme"`
+		Content          string  `json:"content"`
+		ExpectedRevision int64   `json:"expectedRevision"`
+		ForceVersion     bool    `json:"forceVersion"`
+		CoverMode        *string `json:"coverMode"`
+		CoverRatio       *string `json:"coverRatio"`
+		CoverImageSource *string `json:"coverImageSource"`
+		CoverPrompt      *string `json:"coverPrompt"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxDocumentRequestBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "content_too_large", "Document request too large")
+			return
+		}
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
 		return
 	}
@@ -219,6 +245,8 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		User: user, DocID: docID, Title: title, Theme: theme, Content: content,
 		ExpectedRevision: body.ExpectedRevision, Source: documentSourceWeb,
 		ForceVersion: body.ForceVersion,
+		CoverMode:    body.CoverMode, CoverRatio: body.CoverRatio,
+		CoverImageSource: body.CoverImageSource, CoverPrompt: body.CoverPrompt,
 	})
 	if errors.Is(err, errDocumentNotFound) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
@@ -230,6 +258,10 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, errDocumentRevisionConflict) {
 		httpx.ErrorCode(w, http.StatusConflict, "document_revision_conflict", "Document changed elsewhere")
+		return
+	}
+	if errors.Is(err, errDocumentCoverInvalid) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "document_cover_invalid", "Invalid document cover")
 		return
 	}
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -36,9 +37,10 @@ type feishuBlockBatch struct {
 }
 
 type feishuSyncResult struct {
-	URL      string `json:"url"`
-	Created  bool   `json:"created"`
-	Revision int64  `json:"revision"`
+	URL             string `json:"url"`
+	Created         bool   `json:"created"`
+	Revision        int64  `json:"revision"`
+	CoverSyncFailed bool   `json:"coverSyncFailed,omitempty"`
 }
 
 const feishuSyncTimeout = 110 * time.Second
@@ -84,9 +86,9 @@ func (a *App) syncFeishuDocument(ctx context.Context, user model.User, documentI
 		return feishuSyncResult{}, err
 	}
 	defer release()
-	var title, content string
+	var title, content, coverImageSource string
 	var revision int64
-	err = connection.QueryRow(ctx, `SELECT title,content,revision FROM documents WHERE doc_id=$1 AND user_id=$2 AND trashed_at IS NULL`, documentID, user.ID).Scan(&title, &content, &revision)
+	err = connection.QueryRow(ctx, `SELECT title,content,cover_image_source,revision FROM documents WHERE doc_id=$1 AND user_id=$2 AND trashed_at IS NULL`, documentID, user.ID).Scan(&title, &content, &coverImageSource, &revision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return feishuSyncResult{}, errDocumentNotFound
 	}
@@ -155,7 +157,16 @@ func (a *App) syncFeishuDocument(ctx context.Context, user model.User, documentI
 	if err != nil {
 		return feishuSyncResult{}, err
 	}
-	return feishuSyncResult{URL: feishuDocumentURL(remoteID), Created: created, Revision: revision}, nil
+	result := feishuSyncResult{URL: feishuDocumentURL(remoteID), Created: created, Revision: revision}
+	if strings.TrimSpace(coverImageSource) != "" {
+		coverCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err := a.syncFeishuCover(coverCtx, credential.AccessToken, remoteID, coverImageSource); err != nil {
+			log.Printf("feishu cover sync: %v", err)
+			result.CoverSyncFailed = true
+		}
+	}
+	return result, nil
 }
 
 func (a *App) convertFeishuDocument(ctx context.Context, token, content string) (feishuConversion, error) {
@@ -390,6 +401,42 @@ func (a *App) replaceFeishuDocument(ctx context.Context, token, documentID, titl
 		oldCount -= count
 	}
 	return nil
+}
+
+func (a *App) syncFeishuCover(ctx context.Context, token, documentID, source string) error {
+	cover, err := a.readFeishuCoverImage(ctx, source)
+	if err != nil {
+		return err
+	}
+	coverToken, err := a.uploadFeishuImage(ctx, token, documentID, documentID, cover)
+	if err != nil {
+		return err
+	}
+	return a.feishuJSON(ctx, token, http.MethodPatch, "/docx/v1/documents/"+url.PathEscape(documentID), map[string]any{
+		"update_cover": map[string]any{
+			"cover": map[string]string{"token": coverToken},
+		},
+	}, nil)
+}
+
+func (a *App) readFeishuCoverImage(ctx context.Context, source string) ([]byte, error) {
+	source = strings.TrimSpace(source)
+	if strings.HasPrefix(source, "/") {
+		base := strings.TrimRight(strings.TrimSpace(a.cfg.AppURL), "/")
+		if base == "" {
+			return nil, errFeishuImage
+		}
+		source = base + source
+	}
+	data, err := a.readXImage(ctx, source)
+	if err != nil || len(data) == 0 {
+		return nil, errFeishuImage
+	}
+	contentType := http.DetectContentType(data)
+	if contentType != "image/png" && contentType != "image/jpeg" && contentType != "image/gif" && contentType != "image/webp" {
+		return nil, errFeishuImage
+	}
+	return data, nil
 }
 
 func (a *App) uploadFeishuImage(ctx context.Context, token, documentID, blockID string, data []byte) (string, error) {

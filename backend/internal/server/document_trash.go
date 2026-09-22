@@ -105,9 +105,9 @@ func (a *App) restoreTrashedDocument(ctx context.Context, user model.User, docID
 		    revision = revision + 1, updated_at = now()
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NOT NULL
 		  AND ($3::bigint <= 0 OR revision = $3)
-		RETURNING doc_id, title, theme, content, revision, created_at, updated_at
+		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
 	`, strings.TrimSpace(docID), user.ID, expectedRevision).Scan(
-		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision,
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision,
 		&doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -174,6 +174,8 @@ func (a *App) purgeDocument(ctx context.Context, user userRef, docID, confirmati
 	rows, err := tx.Query(ctx, `
 		WITH document_contents AS (
 			SELECT content FROM documents WHERE id = $1
+			UNION ALL
+			SELECT cover_image_source FROM documents WHERE id = $1
 			UNION ALL
 			SELECT content FROM document_versions WHERE document_id = $1
 		)

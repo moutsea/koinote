@@ -6,11 +6,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Added
 
+- Les documents peuvent conserver une couverture par défaut, issue de l’article ou générée par IA, avec un ratio personnalisé, et la réutiliser sur X, Feishu et WeChat. Le changement de document restaure la position de lecture précédente.
 - Ajout de la sélection multiple avec Shift/Ctrl, de la navigation au clavier et du déplacement ou de la suppression groupés dans l’arborescence.
 - Ajout d’actions de fermeture des onglets associés et de création d’un nouveau document.
 
 ### Fixed
 
+- Correction des titres masqués lors d’un échec de chargement de couverture, des titres obsolètes sur les couvertures par défaut, des couvertures dupliquées dans le corps sur X, des anciennes couvertures dans les brouillons WeChat et du blocage de la synchronisation du corps sur Feishu. Les métadonnées de couverture respectent désormais des limites de taille et de stockage.
 - Les opérations groupées sur l’arborescence réutilisent désormais le contrôle de révision et préservent la récupération des images lors de la suppression définitive.
 
 ## [0.7.0] - 2026-09-01

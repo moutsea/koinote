@@ -673,7 +673,14 @@ export type WechatOfficialAccount = {
   updatedAt: string;
 };
 
-export type WechatCoverRatio = "2.35:1" | "1:1";
+export type WechatCoverRatio = string;
+export const WECHAT_COVER_RATIO_PRESETS: WechatCoverRatio[] = [
+  "2.35:1",
+  "1:1",
+  "3:2",
+  "4:3",
+  "16:9",
+];
 export type WechatCoverMode = "default" | "article" | "ai";
 
 export type WechatGeneratedCover = {
@@ -862,6 +869,7 @@ export function publishXArticle(
     markdown: string;
     images?: Array<{ source: string; originalSource?: string; alt?: string }>;
     coverImageIndex?: number;
+    coverImageSource?: string;
   },
 ) {
   return apiJson<{
@@ -1388,6 +1396,10 @@ export type Document = {
   /** 微信排版主题 id，空串表示不套主题 */
   theme: string;
   content: string;
+  coverMode?: WechatCoverMode;
+  coverRatio?: WechatCoverRatio;
+  coverImageSource?: string;
+  coverPrompt?: string;
   revision: number;
   /** 桌面端本地缓存对应的云端 revision；网页端不设置。 */
   remoteRevision?: number;
@@ -1498,6 +1510,10 @@ export function updateDocument(
     theme?: string;
     expectedRevision: number;
     forceVersion?: boolean;
+    coverMode?: WechatCoverMode;
+    coverRatio?: WechatCoverRatio;
+    coverImageSource?: string;
+    coverPrompt?: string;
   },
 ) {
   if (isDesktopRuntime()) {

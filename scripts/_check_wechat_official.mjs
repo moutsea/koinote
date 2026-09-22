@@ -14,6 +14,8 @@ const dialog = read("spa/src/components/editor/WechatDialog.tsx");
 const panel = read("spa/src/components/editor/WechatOfficialAccountPanel.tsx");
 const draftPanel = read("spa/src/components/editor/WechatDraftPanel.tsx");
 const coverGenerator = read("spa/src/components/editor/wechatCover.ts");
+const coverDialog = read("spa/src/components/editor/DocumentCoverDialog.tsx");
+const coverInput = read("spa/src/components/editor/wechatDraftCover.ts");
 const exportMenu = read("spa/src/components/editor/ExportMenu.tsx");
 const settings = read("spa/src/pages/SettingsPage.tsx");
 const main = read("spa/src/main.tsx");
@@ -213,18 +215,21 @@ ok(
 );
 ok(
   "封面默认 2.35:1",
-  draftPanel.includes('useState<WechatCoverRatio>("2.35:1")'),
+  draftPanel.includes('coverRatio: document.coverRatio ?? "2.35:1"'),
 );
-ok("封面比例包含 1:1", draftPanel.includes('["2.35:1", "1:1"]'));
+ok(
+  "封面比例包含 1:1 及常见比例",
+  coverDialog.includes("WECHAT_COVER_RATIO_PRESETS") &&
+    api.includes('"1:1"') &&
+    api.includes('"3:2"'),
+);
 ok(
   "生成封面显示 20 credits",
-  draftPanel.includes("t.editor.wechatCoverCreditCost"),
+  coverDialog.includes("t.editor.wechatCoverCreditCost"),
 );
 ok(
   "关闭草稿弹窗会取消进行中的 AI 封面生成",
-  /useEffect\(\s*\(\) => \(\) => \{\s*coverAbortRef\.current\?\.abort\(\);\s*\},\s*\[\],\s*\);/.test(
-    draftPanel,
-  ),
+  /return \(\) => \{[^}]*abortRef\.current\?\.abort\(\)/.test(coverDialog),
 );
 ok(
   "创建草稿期间禁止关闭弹窗以避免重复提交",
@@ -255,28 +260,40 @@ ok(
 );
 ok(
   "草稿面板支持三种封面来源",
-  draftPanel.includes('useState<WechatCoverMode>("default")') &&
-    draftPanel.includes('value: "default"') &&
-    draftPanel.includes('value: "article"') &&
-    draftPanel.includes('value: "ai"') &&
+  draftPanel.includes('purpose="wechat-draft"') &&
+    coverDialog.includes('value: "default"') &&
+    coverDialog.includes('value: "article"') &&
+    coverDialog.includes('value: "ai"') &&
     dialog.includes("extractWechatArticleImages(editor)") &&
     api.includes("coverMode?: WechatCoverMode") &&
     api.includes("coverImageSource?: string"),
 );
 ok(
   "默认封面包含 Logo 和文章标题",
-  draftPanel.includes('from "./wechatCover"') &&
+  coverDialog.includes('from "./wechatCover"') &&
     coverGenerator.includes("createDefaultWechatCover") &&
     coverGenerator.includes('image.src = "/logo.png"') &&
-    draftPanel.includes('coverMode === "default" && defaultCover'),
+    coverDialog.includes("createDefaultWechatCover(title, ratio)"),
 );
 ok(
   "封面比例同时应用于默认封面和正文图片",
-  draftPanel.includes(
-    'style={{ aspectRatio: ratio === "1:1" ? "1" : "2.35 / 1" }}',
-  ) &&
-    /coverMode === \"article\"[\s\S]*coverRatio: ratio/.test(draftPanel) &&
+  coverDialog.includes('style={{ aspectRatio: ratio.replace(":", " / ") }}') &&
+    coverInput.includes("coverRatio: cover.coverRatio") &&
     publish.includes("defaultWechatCover(input.Title, input.CoverRatio)"),
+);
+ok(
+  "草稿封面从文档初始化并接收临时选择",
+  draftPanel.includes("getDocument(docId)") &&
+    draftPanel.includes('coverImageSource: document.coverImageSource ?? ""') &&
+    draftPanel.includes("setCoverState(next)"),
+);
+ok(
+  "封面选项放在修改弹框中，草稿选择不持久上传",
+  !draftPanel.includes('role="radiogroup"') &&
+    draftPanel.includes("t.editor.wechatCoverChange") &&
+    draftPanel.includes('purpose="wechat-draft"') &&
+    /purpose === "document"[^\n]*generatedCover/.test(coverDialog) &&
+    coverDialog.includes("t.editor.wechatCoverUse"),
 );
 ok(
   "后端校验并处理正文图片封面",
@@ -413,4 +430,6 @@ ok(
   ),
 );
 
+await import("./_check_wechat_draft_cover.mjs");
+await import("./_check_document_cover.mjs");
 console.log(`微信公众号草稿：${passed} 通过，0 失败`);

@@ -28,6 +28,7 @@ const globals = readFileSync(new URL("../spa/src/globals.css", import.meta.url),
 const desktopLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const desktopPdf = readFileSync(new URL("../src-tauri/src/pdf_export.rs", import.meta.url), "utf8");
 const xAccountPanel = readFileSync(new URL("../spa/src/components/editor/XAccountPanel.tsx", import.meta.url), "utf8");
+const xPublishPanel = readFileSync(new URL("../spa/src/components/editor/XPublishPanel.tsx", import.meta.url), "utf8");
 
 /**
  * 取出 `disabled={...}` 里的状态名集合。
@@ -130,6 +131,13 @@ ok(
     /X_MAX_IMAGES/.test(xPanel) &&
     /t\.editor\.xCoverImage/.test(xPanel),
   "封面索引不能固定为首图",
+);
+ok(
+  "X 发布优先使用文档封面",
+  /coverImageSource/.test(dialog) &&
+    /imagesWithDocumentCover/.test(xPublishPanel) &&
+    /documentCoverIndex/.test(xPublishPanel),
+  "用户设置的文档封面应进入 X 媒体列表并成为默认封面",
 );
 ok(
   "知乎发布在客户端和服务端拦截图片",

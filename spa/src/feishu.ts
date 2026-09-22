@@ -3,7 +3,7 @@ import { isDesktopRuntime } from "./desktop/runtime";
 import type { Messages } from "./i18n/types";
 
 export type FeishuAccount = { openId: string; name: string };
-export type FeishuSyncResult = { url: string; created: boolean; revision: number };
+export type FeishuSyncResult = { url: string; created: boolean; revision: number; coverSyncFailed?: boolean };
 
 export function getFeishuAccount() {
   return apiJson<{ account: FeishuAccount | null; configured: boolean }>("/api/feishu/account");

@@ -1,11 +1,12 @@
 import type { WechatCoverRatio, WechatGeneratedCover } from "../../api";
+import { COVER_MAX_SIDE, parseCoverRatio } from "./coverRatio";
 
 export async function createDefaultWechatCover(
   title: string,
   ratio: WechatCoverRatio,
 ): Promise<WechatGeneratedCover | null> {
-  const width = ratio === "1:1" ? 560 : 940;
-  const height = ratio === "1:1" ? 560 : 400;
+  const [ratioWidth, ratioHeight] = parseCoverRatio(ratio) ?? [235, 100];
+  const [width, height] = coverDimensions(ratioWidth, ratioHeight);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -22,9 +23,10 @@ export async function createDefaultWechatCover(
   context.strokeRect(18, 18, width - 36, height - 36);
 
   const logo = await loadWechatCoverLogo();
-  const logoSize = ratio === "1:1" ? 128 : 104;
-  const logoX = ratio === "1:1" ? (width - logoSize) / 2 : 58;
-  const logoY = ratio === "1:1" ? 66 : (height - logoSize) / 2;
+  const square = ratioWidth === ratioHeight;
+  const logoSize = square ? 128 : Math.max(84, Math.min(104, Math.round(height * 0.28)));
+  const logoX = square ? (width - logoSize) / 2 : 58;
+  const logoY = square ? 66 : (height - logoSize) / 2;
   if (logo) {
     context.drawImage(logo, logoX, logoY, logoSize, logoSize);
   } else {
@@ -46,9 +48,9 @@ export async function createDefaultWechatCover(
   }
 
   const safeTitle = title.trim() || "Koinote";
-  const titleSize = ratio === "1:1" ? 34 : 38;
+  const titleSize = square ? 34 : Math.max(28, Math.min(38, Math.round(height * 0.095)));
   const titleMaxWidth =
-    ratio === "1:1" ? width - 88 : width - logoX - logoSize - 88;
+    square ? width - 88 : width - logoX - logoSize - 88;
   const titleLines = wrapWechatCoverTitle(
     context,
     safeTitle,
@@ -59,10 +61,10 @@ export async function createDefaultWechatCover(
   context.fillStyle = "#163d31";
   context.font = `700 ${titleSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   context.textBaseline = "middle";
-  context.textAlign = ratio === "1:1" ? "center" : "left";
-  const titleX = ratio === "1:1" ? width / 2 : logoX + logoSize + 42;
+  context.textAlign = square ? "center" : "left";
+  const titleX = square ? width / 2 : logoX + logoSize + 42;
   const lineHeight = titleSize * 1.28;
-  const titleCenterY = ratio === "1:1" ? 336 : height / 2;
+  const titleCenterY = square ? Math.round(height * 0.6) : height / 2;
   const firstLineY = titleCenterY - ((titleLines.length - 1) * lineHeight) / 2;
   titleLines.forEach((line, index) => {
     context.fillText(line, titleX, firstLineY + index * lineHeight);
@@ -71,8 +73,8 @@ export async function createDefaultWechatCover(
   context.fillStyle = "rgba(22, 101, 79, 0.7)";
   context.font =
     "600 14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-  context.textAlign = ratio === "1:1" ? "center" : "left";
-  context.fillText("KOINOTE", titleX, ratio === "1:1" ? 405 : height - 48);
+  context.textAlign = square ? "center" : "left";
+  context.fillText("KOINOTE", titleX, square ? Math.round(height * 0.72) : height - 48);
 
   let dataUrl: string;
   try {
@@ -89,6 +91,17 @@ export async function createDefaultWechatCover(
     width,
     height,
   };
+}
+
+function coverDimensions(widthRatio: number, heightRatio: number): [number, number] {
+  if (widthRatio === heightRatio) return [560, 560];
+  let width = COVER_MAX_SIDE;
+  let height = Math.round((width * heightRatio) / widthRatio);
+  if (height > COVER_MAX_SIDE) {
+    height = COVER_MAX_SIDE;
+    width = Math.round((height * widthRatio) / heightRatio);
+  }
+  return [width, height];
 }
 
 function loadWechatCoverLogo(): Promise<HTMLImageElement | null> {

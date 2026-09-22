@@ -6,6 +6,7 @@ import type {
   Folder,
   TrashedDocumentSummary,
   UploadedImage,
+  WechatCoverMode,
   TreeMutationItem,
 } from "../api";
 import { invoke } from "@tauri-apps/api/core";
@@ -59,6 +60,10 @@ type DocumentRow = {
   title: string;
   theme: string;
   content: string;
+  cover_mode: string;
+  cover_ratio: string;
+  cover_image_source: string;
+  cover_prompt: string;
   folder_id: string | null;
   sort_order: number;
   local_revision: number;
@@ -154,6 +159,10 @@ type DesktopLocalImportBatch = {
     title: string;
     theme: string;
     content: string;
+    coverMode: string;
+    coverRatio: string;
+    coverImageSource: string;
+    coverPrompt: string;
     folderId: string | null;
     sortOrder: number;
     createdAt: string;
@@ -227,6 +236,11 @@ async function storedLocalValue(account: string, value: string): Promise<string>
   return isLocalAccount(account) ? encryptDesktopLocalValue(value) : value;
 }
 
+async function readableLocalOptionalValue(value: string, key?: CryptoKey): Promise<string> {
+  if (value === "") return "";
+  return decryptDesktopLocalValue(value, key);
+}
+
 async function readableDocumentRow(
   account: string,
   row: DocumentRow,
@@ -238,6 +252,8 @@ async function readableDocumentRow(
     title: await decryptDesktopLocalValue(row.title, key),
     theme: await decryptDesktopLocalValue(row.theme, key),
     content: await decryptDesktopLocalValue(row.content, key),
+    cover_image_source: await readableLocalOptionalValue(row.cover_image_source, key),
+    cover_prompt: await readableLocalOptionalValue(row.cover_prompt, key),
     share_json: null,
     remote_snapshot: null,
   };
@@ -677,10 +693,11 @@ async function applyUploadedImageMapping(
   const result = await db.execute(`
     UPDATE offline_documents
     SET content = replace(content, $2, $3),
+        cover_image_source = replace(cover_image_source, $2, $3),
         sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
         change_seq = change_seq + 1,
         last_error = NULL
-    WHERE account_id = $1 AND instr(content, $2) > 0
+    WHERE account_id = $1 AND (instr(content, $2) > 0 OR instr(cover_image_source, $2) > 0)
   `, [account, localURL, remoteURL]);
   if (result.rowsAffected > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
@@ -723,9 +740,17 @@ async function prepareDocumentContentForRemote(
   return replaceDesktopLocalImageURLs(content, replacements);
 }
 
-async function cacheDocumentImages(account: string, content: string): Promise<void> {
+async function prepareDocumentCoverForRemote(account: string, source: string): Promise<string> {
+  const imageID = desktopLocalImageID(source);
+  if (!imageID) return source;
+  const row = await selectOfflineImageByID(account, imageID);
+  if (!row) throw new OfflineImageUploadError("local_image_missing");
+  return uploadOfflineImage(account, row);
+}
+
+async function cacheDocumentImages(account: string, content: string, extraSource = ""): Promise<void> {
   const remoteSources = [...new Set(
-    imageReferences(content).filter((source) => imageObjectKeyFromSource(source)),
+    [...imageReferences(content), extraSource].filter((source) => imageObjectKeyFromSource(source)),
   )];
   await forEachConcurrent(
     remoteSources,
@@ -754,12 +779,12 @@ async function cacheAllDocumentImages(account: string): Promise<void> {
     usage.remoteCacheBytes >=
     DESKTOP_REMOTE_IMAGE_CACHE_LIMIT_BYTES - MAX_IMPORT_UPLOAD_IMAGE_BYTES
   ) return;
-  const rows = await db.select<Pick<DocumentRow, "content">[]>(`
-    SELECT content FROM offline_documents
+  const rows = await db.select<Pick<DocumentRow, "content" | "cover_image_source">[]>(`
+    SELECT content, cover_image_source FROM offline_documents
     WHERE account_id = $1 AND sync_state <> 'trash'
   `, [account]);
   for (const row of rows) {
-    await cacheDocumentImages(account, row.content);
+    await cacheDocumentImages(account, row.content, row.cover_image_source);
   }
 }
 
@@ -834,6 +859,7 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
           WHERE d.account_id = $1
             AND (
               instr(d.content, $3 || offline_images.image_id) > 0 OR
+              instr(d.cover_image_source, $3 || offline_images.image_id) > 0 OR
               instr(d.remote_snapshot, $3 || offline_images.image_id) > 0
             )
         )
@@ -843,18 +869,19 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
 
 async function localReferencedImageIDs(account: string): Promise<Set<string>> {
   const db = await database();
-  const rows = await db.select<Array<Pick<DocumentRow, "content">>>(`
-    SELECT content FROM offline_documents WHERE account_id = $1
+  const rows = await db.select<Array<Pick<DocumentRow, "content" | "cover_image_source">>>(`
+    SELECT content, cover_image_source FROM offline_documents WHERE account_id = $1
   `, [account]);
-  const contents = await Promise.all(
-    rows.map((row) => decryptDesktopLocalValue(row.content)),
+  const references = await Promise.all(
+    rows.map(async (row) => [
+      ...imageReferences(await decryptDesktopLocalValue(row.content)),
+      await readableLocalOptionalValue(row.cover_image_source),
+    ]),
   );
   return new Set(
-    contents.flatMap((content) =>
-      imageReferences(content)
-        .map(desktopLocalImageID)
-        .filter((value): value is string => Boolean(value)),
-    ),
+    references.flat()
+      .map(desktopLocalImageID)
+      .filter((value): value is string => Boolean(value)),
   );
 }
 
@@ -890,9 +917,11 @@ async function cleanupUnusedOfflineImages(account: string): Promise<void> {
         SELECT 1 FROM offline_documents d
         WHERE d.account_id = $1 AND (
           instr(d.content, $2 || i.image_id) > 0 OR
+          instr(d.cover_image_source, $2 || i.image_id) > 0 OR
           instr(d.remote_snapshot, $2 || i.image_id) > 0 OR
           (i.object_key IS NOT NULL AND (
             instr(d.content, i.object_key) > 0 OR
+            instr(d.cover_image_source, i.object_key) > 0 OR
             instr(d.remote_snapshot, i.object_key) > 0
           ))
         )
@@ -911,9 +940,11 @@ async function cleanupUnusedOfflineImages(account: string): Promise<void> {
           SELECT 1 FROM offline_documents d
           WHERE d.account_id = $1 AND (
             instr(d.content, $3 || offline_images.image_id) > 0 OR
+            instr(d.cover_image_source, $3 || offline_images.image_id) > 0 OR
             instr(d.remote_snapshot, $3 || offline_images.image_id) > 0 OR
             (offline_images.object_key IS NOT NULL AND (
               instr(d.content, offline_images.object_key) > 0 OR
+              instr(d.cover_image_source, offline_images.object_key) > 0 OR
               instr(d.remote_snapshot, offline_images.object_key) > 0
             ))
           )
@@ -1026,7 +1057,7 @@ export async function desktopGetDocument(docId: string): Promise<{ document: Doc
   const row = await selectDocument(account, docId);
   if (row && row.sync_state !== "trash") {
     if (!isLocalAccount(account) && navigator.onLine) {
-      void cacheDocumentImages(account, row.content);
+      void cacheDocumentImages(account, row.content, row.cover_image_source);
     }
     return { document: rowToDocument(row) };
   }
@@ -1056,29 +1087,35 @@ export async function desktopCreateDocument(params?: {
       title: params?.title?.trim() ?? "",
       theme: params?.theme ?? DEFAULT_DOCUMENT_THEME,
       content: params?.content ?? "",
+      coverMode: "default",
+      coverRatio: "2.35:1",
+      coverImageSource: "",
+      coverPrompt: "",
       revision: 1,
       createdAt: now,
       updatedAt: now,
       share: null,
     };
-    const [storedTitle, storedTheme, storedContent] = await Promise.all([
+    const [storedTitle, storedTheme, storedContent, storedCoverSource, storedCoverPrompt] = await Promise.all([
       storedLocalValue(account, document.title),
       storedLocalValue(account, document.theme),
       storedLocalValue(account, document.content),
+      storedLocalValue(account, document.coverImageSource ?? ""),
+      storedLocalValue(account, document.coverPrompt ?? ""),
     ]);
     await db.execute(`
       INSERT INTO offline_documents (
-        account_id, doc_id, title, theme, content, folder_id,
+        account_id, doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, folder_id,
         sort_order, local_revision, base_revision, created_at, updated_at, share_json,
         sync_state, change_seq
-      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE((
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE((
         SELECT MAX(sibling.sort_order) + 1
         FROM offline_documents sibling
-        WHERE sibling.account_id = $1 AND sibling.folder_id IS $6
+        WHERE sibling.account_id = $1 AND sibling.folder_id IS $10
           AND sibling.sync_state <> 'trash'
-      ), 0), 1, $7, $8, $8, NULL, $9, 1)
+      ), 0), 1, $11, $12, $12, NULL, $13, 1)
     `, [
-      account, document.docId, storedTitle, storedTheme, storedContent,
+      account, document.docId, storedTitle, storedTheme, storedContent, document.coverMode, document.coverRatio, storedCoverSource, storedCoverPrompt,
       params?.folderId ?? null, local ? 1 : 0, now, local ? "clean" : "create",
     ]);
     if (!local) scheduleSync();
@@ -1092,6 +1129,10 @@ export async function desktopUpdateDocument(
     title: string;
     content: string;
     theme?: string;
+    coverMode?: string;
+    coverRatio?: string;
+    coverImageSource?: string;
+    coverPrompt?: string;
     expectedRevision: number;
   },
 ): Promise<{ document: Document }> {
@@ -1100,17 +1141,27 @@ export async function desktopUpdateDocument(
     const db = await database();
     const now = new Date().toISOString();
     const local = isLocalAccount(account);
-    const [storedTitle, storedContent, storedTheme] = await Promise.all([
+    const [storedTitle, storedContent, storedTheme, storedCoverSource, storedCoverPrompt] = await Promise.all([
       storedLocalValue(account, params.title.trim()),
       storedLocalValue(account, params.content),
       params.theme === undefined
         ? Promise.resolve<string | null>(null)
         : storedLocalValue(account, params.theme),
+      params.coverImageSource === undefined
+        ? Promise.resolve<string | null>(null)
+        : storedLocalValue(account, params.coverImageSource),
+      params.coverPrompt === undefined
+        ? Promise.resolve<string | null>(null)
+        : storedLocalValue(account, params.coverPrompt),
     ]);
     const result = await db.execute(`
       UPDATE offline_documents
       SET title = $3, content = $4,
           theme = CASE WHEN $5 IS NULL THEN theme ELSE $5 END,
+          cover_mode = CASE WHEN $9 IS NULL THEN cover_mode ELSE $9 END,
+          cover_ratio = CASE WHEN $10 IS NULL THEN cover_ratio ELSE $10 END,
+          cover_image_source = CASE WHEN $11 IS NULL THEN cover_image_source ELSE $11 END,
+          cover_prompt = CASE WHEN $12 IS NULL THEN cover_prompt ELSE $12 END,
           local_revision = local_revision + 1,
           updated_at = $6,
           sync_state = CASE
@@ -1129,7 +1180,8 @@ export async function desktopUpdateDocument(
         AND sync_state <> 'trash'
     `, [
       account, docId, storedTitle, storedContent, storedTheme, now,
-      params.expectedRevision, local ? 1 : 0,
+      params.expectedRevision, local ? 1 : 0, params.coverMode ?? null,
+      params.coverRatio ?? null, storedCoverSource, storedCoverPrompt,
     ]);
     if (result.rowsAffected !== 1) throw new Error("document_revision_conflict");
     const row = await selectDocument(account, docId);
@@ -1189,7 +1241,11 @@ export async function desktopAcceptRemoteDocumentMutation(
         local.base_revision === document.revision &&
         local.title === document.title &&
         local.theme === document.theme &&
-        local.content === document.content;
+        local.content === document.content &&
+        local.cover_mode === (document.coverMode ?? "default") &&
+        local.cover_ratio === (document.coverRatio ?? "2.35:1") &&
+        local.cover_image_source === (document.coverImageSource ?? "") &&
+        local.cover_prompt === (document.coverPrompt ?? "");
       if (matchesRemote) return { document: rowToDocument(local) };
       if (!canRunRemoteDocumentMutation({
         baseRevision: local.base_revision,
@@ -1376,7 +1432,7 @@ export async function desktopImportLocalMode(
             key,
           );
           documentCount += 1;
-          for (const reference of imageReferences(document.content)) {
+          for (const reference of [...imageReferences(document.content), document.cover_image_source]) {
             const imageID = desktopLocalImageID(reference);
             if (imageID) referencedImageIDs.add(imageID);
           }
@@ -1464,6 +1520,10 @@ export async function desktopImportLocalMode(
               title: document.title,
               theme: document.theme,
               content: replaceDesktopLocalImageURLs(document.content, imageURLs),
+              coverMode: document.cover_mode,
+              coverRatio: document.cover_ratio,
+              coverImageSource: replaceDesktopLocalImageURLs(document.cover_image_source, imageURLs),
+              coverPrompt: document.cover_prompt,
               folderId: document.folder_id
                 ? folderIDs.get(document.folder_id) ?? null
                 : null,
@@ -2157,18 +2217,20 @@ export async function resolveDesktopConflict(docId: string, choice: "local" | "r
     const remote = JSON.parse(row.remote_snapshot) as Document;
     const db = await database();
     if (choice === "remote") {
-      await cacheDocumentImages(account, remote.content);
+      await cacheDocumentImages(account, remote.content, remote.coverImageSource ?? "");
       await db.execute(`
         UPDATE offline_documents
         SET title = $3, theme = $4, content = $5,
-            local_revision = $6, base_revision = $7,
-            created_at = $8, updated_at = $9, share_json = $10,
+            cover_mode = $6, cover_ratio = $7, cover_image_source = $8, cover_prompt = $9,
+            local_revision = $10, base_revision = $11,
+            created_at = $12, updated_at = $13, share_json = $14,
             sync_state = 'clean', folder_dirty = 0,
             change_seq = change_seq + 1, remote_snapshot = NULL, last_error = NULL
         WHERE account_id = $1 AND doc_id = $2
-          AND sync_state = 'conflict' AND change_seq = $11
+          AND sync_state = 'conflict' AND change_seq = $15
       `, [
         account, docId, remote.title, remote.theme, remote.content,
+        remote.coverMode ?? "default", remote.coverRatio ?? "2.35:1", remote.coverImageSource ?? "", remote.coverPrompt ?? "",
         pulledLocalRevision(row.local_revision, remote.revision), remote.revision,
         remote.createdAt ?? null, remote.updatedAt ?? null,
         remote.share ? JSON.stringify(remote.share) : null, row.change_seq,
@@ -2506,7 +2568,8 @@ async function pushDocuments(account: string): Promise<string[]> {
 
     try {
       const remoteContent = await prepareDocumentContentForRemote(account, row.content);
-      const remoteRow = { ...row, content: remoteContent };
+      const remoteCoverSource = await prepareDocumentCoverForRemote(account, row.cover_image_source);
+      const remoteRow = { ...row, content: remoteContent, cover_image_source: remoteCoverSource };
       let remote: Document | null = null;
       if (row.sync_state === "create") {
         remote = (await remoteJSON<{ document: Document }>("/api/documents", {
@@ -2514,6 +2577,8 @@ async function pushDocuments(account: string): Promise<string[]> {
           body: JSON.stringify({
             docId: row.doc_id, title: row.title, theme: row.theme,
             content: remoteRow.content, folderId: row.folder_id,
+            coverMode: row.cover_mode, coverRatio: row.cover_ratio,
+            coverImageSource: remoteRow.cover_image_source, coverPrompt: row.cover_prompt,
           }),
         })).document;
       } else if (row.sync_state === "update") {
@@ -2522,6 +2587,8 @@ async function pushDocuments(account: string): Promise<string[]> {
             method: "PUT",
             body: JSON.stringify({
               title: row.title, theme: row.theme, content: remoteRow.content,
+              coverMode: row.cover_mode, coverRatio: row.cover_ratio,
+              coverImageSource: remoteRow.cover_image_source, coverPrompt: row.cover_prompt,
               expectedRevision: row.base_revision,
             }),
           })).document;
@@ -2610,7 +2677,7 @@ async function pushDocuments(account: string): Promise<string[]> {
         error.code === "document_revision_conflict"
       ) {
         const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(row.doc_id)}`);
-        await cacheDocumentImages(account, remote.document.content);
+        await cacheDocumentImages(account, remote.document.content, remote.document.coverImageSource ?? "");
         await db.execute(`
           UPDATE offline_documents
           SET sync_state = 'conflict', remote_snapshot = $3, last_error = $4
@@ -2639,6 +2706,8 @@ async function recoverDeletedRemoteDocument(row: DocumentRow): Promise<Document>
           title: row.title,
           theme: row.theme,
           content: row.content,
+          coverMode: row.cover_mode, coverRatio: row.cover_ratio,
+          coverImageSource: row.cover_image_source, coverPrompt: row.cover_prompt,
           expectedRevision: restored.document.revision,
         }),
       },
@@ -2652,6 +2721,8 @@ async function recoverDeletedRemoteDocument(row: DocumentRow): Promise<Document>
         title: row.title,
         theme: row.theme,
         content: row.content,
+        coverMode: row.cover_mode, coverRatio: row.cover_ratio,
+        coverImageSource: row.cover_image_source, coverPrompt: row.cover_prompt,
         folderId: row.folder_id,
       }),
     })).document;
@@ -2706,13 +2777,15 @@ async function pullRemoteSnapshot(account: string) {
       continue;
     }
     const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(summary.docId)}`);
-    await cacheDocumentImages(account, remote.document.content);
+    await cacheDocumentImages(account, remote.document.content, remote.document.coverImageSource ?? "");
     let comparableLocalContent = local.content;
+    let comparableLocalCoverSource = local.cover_image_source;
     try {
       comparableLocalContent = await prepareDocumentContentForRemote(
         account,
         local.content,
       );
+      comparableLocalCoverSource = await prepareDocumentCoverForRemote(account, local.cover_image_source);
     } catch (error) {
       if (!(error instanceof OfflineImageUploadError)) throw error;
       // 本地占位地址必然与远端正文不同，后面的决策会保留双方并进入冲突；
@@ -2723,6 +2796,10 @@ async function pullRemoteSnapshot(account: string) {
         title: local.title,
         theme: local.theme,
         content: comparableLocalContent,
+        coverMode: local.cover_mode,
+        coverRatio: local.cover_ratio,
+        coverImageSource: comparableLocalCoverSource,
+        coverPrompt: local.cover_prompt,
         folderId: local.folder_id,
         localRevision: local.local_revision,
         baseRevision: local.base_revision,
@@ -2733,6 +2810,10 @@ async function pullRemoteSnapshot(account: string) {
         title: remote.document.title,
         theme: remote.document.theme,
         content: remote.document.content,
+        coverMode: remote.document.coverMode,
+        coverRatio: remote.document.coverRatio,
+        coverImageSource: remote.document.coverImageSource,
+        coverPrompt: remote.document.coverPrompt,
         folderId: summary.folderId,
         revision: remote.document.revision,
       },
@@ -2840,9 +2921,13 @@ async function acknowledgeDocument(account: string, sent: DocumentRow, remote: D
     SET title = CASE WHEN change_seq = $3 THEN $4 ELSE title END,
         theme = CASE WHEN change_seq = $3 THEN $5 ELSE theme END,
         content = CASE WHEN change_seq = $3 THEN $6 ELSE content END,
+        cover_mode = CASE WHEN change_seq = $3 THEN $12 ELSE cover_mode END,
+        cover_ratio = CASE WHEN change_seq = $3 THEN $13 ELSE cover_ratio END,
+        cover_image_source = CASE WHEN change_seq = $3 THEN $14 ELSE cover_image_source END,
+        cover_prompt = CASE WHEN change_seq = $3 THEN $15 ELSE cover_prompt END,
         local_revision = CASE
           WHEN sync_state IN ('trash', 'conflict') THEN local_revision
-          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6)
+          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6 AND cover_mode = $12 AND cover_ratio = $13 AND cover_image_source = $14 AND cover_prompt = $15)
             THEN $7
           ELSE local_revision
         END,
@@ -2855,7 +2940,7 @@ async function acknowledgeDocument(account: string, sent: DocumentRow, remote: D
         share_json = CASE WHEN change_seq = $3 THEN $11 ELSE share_json END,
         sync_state = CASE
           WHEN sync_state IN ('trash', 'conflict') THEN sync_state
-          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6)
+          WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6 AND cover_mode = $12 AND cover_ratio = $13 AND cover_image_source = $14 AND cover_prompt = $15)
             THEN 'clean'
           ELSE 'update'
         END,
@@ -2873,6 +2958,8 @@ async function acknowledgeDocument(account: string, sent: DocumentRow, remote: D
     acknowledgedLocalRevision(sent.local_revision, remote.revision), remote.revision,
     remote.createdAt ?? null, remote.updatedAt ?? null,
     remote.share ? JSON.stringify(remote.share) : null,
+    remote.coverMode ?? "default", remote.coverRatio ?? "2.35:1",
+    remote.coverImageSource ?? "", remote.coverPrompt ?? "",
   ]);
 }
 
@@ -2963,17 +3050,18 @@ async function insertRemoteDocument(
   folderID: string | null,
   sortOrder = 0,
 ) {
-  await cacheDocumentImages(account, document.content);
+  await cacheDocumentImages(account, document.content, document.coverImageSource ?? "");
   const db = await database();
   await db.execute(`
     INSERT INTO offline_documents (
-      account_id, doc_id, title, theme, content, folder_id,
+      account_id, doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, folder_id,
       local_revision, base_revision, created_at, updated_at, share_json,
       sync_state, folder_dirty, order_dirty, sort_order, change_seq, remote_snapshot, last_error
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, 'clean', 0, 0, $11, 0, NULL, NULL)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14, 'clean', 0, 0, $15, 0, NULL, NULL)
     ON CONFLICT (account_id, doc_id) DO NOTHING
   `, [
-    account, document.docId, document.title, document.theme, document.content, folderID,
+    account, document.docId, document.title, document.theme, document.content,
+    document.coverMode ?? "default", document.coverRatio ?? "2.35:1", document.coverImageSource ?? "", document.coverPrompt ?? "", folderID,
     document.revision, document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
     sortOrder,
@@ -2987,7 +3075,7 @@ async function replaceDocumentFromRemote(
   folderID: string | null,
   sortOrder: number,
 ): Promise<boolean> {
-  await cacheDocumentImages(account, document.content);
+  await cacheDocumentImages(account, document.content, document.coverImageSource ?? "");
   const db = await database();
   const [baseRevision, syncState, changeSeq] = snapshotGuard({
     baseRevision: local.base_revision,
@@ -2997,16 +3085,18 @@ async function replaceDocumentFromRemote(
   const result = await db.execute(`
     UPDATE offline_documents
     SET title = $3, theme = $4, content = $5,
-        folder_id = CASE WHEN folder_dirty = 0 THEN $6 ELSE folder_id END,
-        sort_order = CASE WHEN order_dirty = 0 THEN $7 ELSE sort_order END,
-        local_revision = $8, base_revision = $9,
-        created_at = $10, updated_at = $11, share_json = $12,
+        cover_mode = $6, cover_ratio = $7, cover_image_source = $8, cover_prompt = $9,
+        folder_id = CASE WHEN folder_dirty = 0 THEN $10 ELSE folder_id END,
+        sort_order = CASE WHEN order_dirty = 0 THEN $11 ELSE sort_order END,
+        local_revision = $12, base_revision = $13,
+        created_at = $14, updated_at = $15, share_json = $16,
         sync_state = 'clean', folder_dirty = 0, change_seq = change_seq + 1,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND doc_id = $2
-      AND base_revision = $13 AND sync_state = $14 AND change_seq = $15
+      AND base_revision = $17 AND sync_state = $18 AND change_seq = $19
   `, [
-    account, document.docId, document.title, document.theme, document.content, folderID,
+    account, document.docId, document.title, document.theme, document.content,
+    document.coverMode ?? "default", document.coverRatio ?? "2.35:1", document.coverImageSource ?? "", document.coverPrompt ?? "", folderID,
     sortOrder, pulledLocalRevision(local.local_revision, document.revision), document.revision,
     document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
@@ -3022,7 +3112,7 @@ async function acknowledgeMatchingRemoteDocument(
   folderID: string | null,
   sortOrder: number,
 ) {
-  await cacheDocumentImages(account, document.content);
+  await cacheDocumentImages(account, document.content, document.coverImageSource ?? "");
   const db = await database();
   const [baseRevision, syncState, changeSeq] = snapshotGuard({
     baseRevision: local.base_revision,
@@ -3032,16 +3122,18 @@ async function acknowledgeMatchingRemoteDocument(
   await db.execute(`
     UPDATE offline_documents
     SET title = $3, theme = $4, content = $5,
-        folder_id = CASE WHEN folder_dirty = 0 THEN $6 ELSE folder_id END,
-        sort_order = CASE WHEN order_dirty = 0 THEN $7 ELSE sort_order END,
-        local_revision = $8, base_revision = $9,
-        created_at = $10, updated_at = $11, share_json = $12,
+        cover_mode = $6, cover_ratio = $7, cover_image_source = $8, cover_prompt = $9,
+        folder_id = CASE WHEN folder_dirty = 0 THEN $10 ELSE folder_id END,
+        sort_order = CASE WHEN order_dirty = 0 THEN $11 ELSE sort_order END,
+        local_revision = $12, base_revision = $13,
+        created_at = $14, updated_at = $15, share_json = $16,
         sync_state = 'clean', folder_dirty = 0,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND doc_id = $2
-      AND base_revision = $13 AND sync_state = $14 AND change_seq = $15
+      AND base_revision = $17 AND sync_state = $18 AND change_seq = $19
   `, [
-    account, document.docId, document.title, document.theme, local.content, folderID,
+    account, document.docId, document.title, document.theme, local.content,
+    document.coverMode ?? "default", document.coverRatio ?? "2.35:1", document.coverImageSource ?? "", document.coverPrompt ?? "", folderID,
     sortOrder, acknowledgedLocalRevision(local.local_revision, document.revision), document.revision,
     document.createdAt ?? null, document.updatedAt ?? null,
     document.share ? JSON.stringify(document.share) : null,
@@ -3085,6 +3177,10 @@ function rowToDocument(row: DocumentRow): Document {
     title: row.title,
     theme: row.theme,
     content: row.content,
+    coverMode: row.cover_mode as WechatCoverMode,
+    coverRatio: row.cover_ratio,
+    coverImageSource: row.cover_image_source,
+    coverPrompt: row.cover_prompt,
     revision: row.local_revision,
     remoteRevision: remoteDocumentRevision(row.base_revision),
     createdAt: row.created_at,
@@ -3129,7 +3225,10 @@ async function calculateSummary(
            SELECT 1 FROM offline_documents d
            WHERE d.account_id = $1
              AND (d.sync_state <> 'clean' OR d.folder_dirty = 1 OR d.order_dirty = 1)
-             AND instr(d.content, $2 || i.image_id) > 0
+             AND (
+               instr(d.content, $2 || i.image_id) > 0 OR
+               instr(d.cover_image_source, $2 || i.image_id) > 0
+             )
          )
        ORDER BY i.created_at DESC LIMIT 1)
     ) AS error_code

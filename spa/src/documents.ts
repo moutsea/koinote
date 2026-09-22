@@ -200,6 +200,10 @@ export function useSaveDocument() {
       title,
       content,
       theme,
+      coverMode,
+      coverRatio,
+      coverImageSource,
+      coverPrompt,
       expectedRevision,
       forceVersion,
     }: {
@@ -207,6 +211,10 @@ export function useSaveDocument() {
       title: string;
       content: string;
       theme?: string;
+      coverMode?: string;
+      coverRatio?: string;
+      coverImageSource?: string;
+      coverPrompt?: string;
       expectedRevision: number;
       forceVersion?: boolean;
     }) =>
@@ -214,6 +222,10 @@ export function useSaveDocument() {
         title,
         content,
         theme,
+        coverMode: coverMode as import("./api").WechatCoverMode | undefined,
+        coverRatio,
+        coverImageSource,
+        coverPrompt,
         expectedRevision,
         forceVersion,
       }),

@@ -710,6 +710,10 @@ struct LocalImportDocument {
     title: String,
     theme: String,
     content: String,
+    cover_mode: String,
+    cover_ratio: String,
+    cover_image_source: String,
+    cover_prompt: String,
     folder_id: Option<String>,
     #[serde(default)]
     sort_order: i64,
@@ -838,9 +842,10 @@ async fn import_local_mode_batch(
         sqlx::query(
             "INSERT INTO offline_documents (
                 account_id, doc_id, title, theme, content, folder_id,
+                cover_mode, cover_ratio, cover_image_source, cover_prompt,
                 sort_order, local_revision, base_revision, created_at, updated_at, share_json,
                 sync_state, folder_dirty, order_dirty, change_seq, remote_snapshot, last_error
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL,
                        'create', 0, 1, 1, NULL, NULL)",
         )
         .bind(&batch.staging_account)
@@ -849,6 +854,10 @@ async fn import_local_mode_batch(
         .bind(document.theme)
         .bind(document.content)
         .bind(document.folder_id)
+        .bind(document.cover_mode)
+        .bind(document.cover_ratio)
+        .bind(document.cover_image_source)
+        .bind(document.cover_prompt)
         .bind(document.sort_order)
         .bind(&document.created_at)
         .bind(&document.created_at)
@@ -1094,6 +1103,12 @@ pub fn run() {
             sql: include_str!("../migrations/0006_document_order.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "add_document_covers",
+            sql: include_str!("../migrations/0007_document_covers.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     let builder = tauri::Builder::default();
@@ -1248,6 +1263,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("extend document order columns");
+        sqlx::query(include_str!("../migrations/0007_document_covers.sql"))
+            .execute(&pool)
+            .await
+            .expect("extend document cover columns");
         pool
     }
 
@@ -1273,6 +1292,10 @@ mod tests {
                     title: "One".to_string(),
                     theme: "minimal".to_string(),
                     content: "Body".to_string(),
+                    cover_mode: "ai".to_string(),
+                    cover_ratio: "3:2".to_string(),
+                    cover_image_source: "koinote-local-image://image-1".to_string(),
+                    cover_prompt: "Imported cover".to_string(),
                     folder_id: Some("folder-1".to_string()),
                     sort_order: 0,
                     created_at: "2026-08-17T00:00:00Z".to_string(),
@@ -1286,6 +1309,10 @@ mod tests {
                     title: "Two".to_string(),
                     theme: "minimal".to_string(),
                     content: "Body".to_string(),
+                    cover_mode: "default".to_string(),
+                    cover_ratio: "2.35:1".to_string(),
+                    cover_image_source: String::new(),
+                    cover_prompt: String::new(),
                     folder_id: None,
                     sort_order: 1,
                     created_at: "2026-08-17T00:00:00Z".to_string(),
@@ -1329,6 +1356,20 @@ mod tests {
             .await
             .expect("load imported organizer kind");
             assert_eq!(organizer_kind.as_deref(), Some("activity"));
+            let cover: (String, String, String, String) = sqlx::query_as(
+                "SELECT cover_mode, cover_ratio, cover_image_source, cover_prompt
+                 FROM offline_documents
+                 WHERE account_id = 'account-1' AND doc_id = 'document-1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("load imported cover");
+            assert_eq!(cover, (
+                "ai".to_string(),
+                "3:2".to_string(),
+                "koinote-local-image://image-1".to_string(),
+                "Imported cover".to_string(),
+            ));
         });
     }
 

@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds close-all tabs with undo, document renaming in the file tree, and Markdown imports by dropping files into the editor. It also fixes extra blank lines when pasting on Windows and improves rename recovery and keyboard shortcuts."
+          notes="Koinote Desktop $version adds persistent document covers with custom ratios, cover reuse when syncing to X, Feishu, and WeChat, and per-document reading-position restoration. It also hardens cover validation and quotas, keeps titles editable when cover images fail, separates X cover media from article images, and lets Feishu body sync succeed when cover sync fails."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,12 +239,12 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 标签栏新增一键关闭全部标签和撤销，保存失败的文档会保持打开。
-          - 文件树支持文档重命名：右键菜单、铅笔按钮、双击、F2，或选中后再次点击名称。
-          - Markdown 文件可以拖入右侧文档区域导入，空白工作区也支持。
-          - 修复 Windows 粘贴时出现多余空行，并保留代码、表格和有意插入的空行。
-          - 修复重命名失败后的取消与重试、编辑器路由恢复及快捷键处理，并防止撤销关闭后误删文档。
-          - 调整微信草稿同步的加载指示位置，避免遮挡关闭按钮。
+          - 新增文档封面：支持默认、正文图片和 AI 封面、自定义比例、大小限制与存储配额。
+          - X 同步使用独立封面媒体，不会把封面重复追加到正文或挤占正文图片额度。
+          - 飞书正文同步成功后再同步封面，封面失败会提示但不会回滚正文。
+          - 微信草稿打开前等待编辑器保存，封面地址校验更严格。
+          - 切换文档、标签回收或重新挂载编辑器后恢复每篇文档的阅读位置。
+          - 封面加载失败时仍保留可编辑标题与封面设置入口。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -258,12 +258,12 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Close all tabs in one action and undo the closure; documents that fail to save remain open.
-          - Rename documents in the file tree using the context menu, pencil button, double-click, F2, or another click on the selected name.
-          - Import Markdown files by dropping them into the editor, including an empty workspace.
-          - Fix extra blank lines when pasting on Windows while preserving code, tables, and intentional blank lines.
-          - Improve rename cancellation and retry, editor route restoration, and keyboard shortcuts; prevent accidental document deletion after undoing tab closure.
-          - Keep the WeChat draft synchronization spinner clear of the close button.
+          - Add persistent document covers with default, article-image, and AI sources, custom ratios, size limits, and storage-quota accounting.
+          - Use separate cover media for X so the cover is not appended to the article body or counted against its image limit.
+          - Sync the Feishu body before its cover; a cover failure is reported without rolling back the body.
+          - Wait for editor saves before opening a WeChat draft and apply stricter cover-source validation.
+          - Restore each document's reading position after switching documents, recycling tabs, or remounting the editor.
+          - Keep the editable title and cover settings reachable when a cover image cannot be loaded.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

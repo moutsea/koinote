@@ -66,6 +66,8 @@ import {
   shouldInterceptTablePaste,
 } from "./tableActions";
 import { TableContextToolbar } from "./TableContextToolbar";
+import { DocumentCoverPreview } from "./DocumentCoverPreview";
+import { trackDocumentScrollPosition } from "./documentScrollPosition";
 
 /**
  * 没套主题时标题的排版。
@@ -103,6 +105,8 @@ export default function MarkdownEditor({
   outlineSlot,
   leadingControls,
   trailingControls,
+  onOpenCover,
+  scrollStorageScope,
 }: {
   document: Document;
   /** 保存状态由页面给 —— 待存内容不再随实例存亡，见 useDocumentSaver */
@@ -116,6 +120,7 @@ export default function MarkdownEditor({
   onEditorReady?: (editor: Editor | null) => void;
   /** 滚动容器。多开时由外层持有，用于在标签隐藏/显示间存取滚动位置 */
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  scrollStorageScope?: string;
   /** 主题样式是全局规则，隐藏的标签不能继续挂载，否则会覆盖当前文档 */
   visible?: boolean;
   /** 大纲渲染在正文区左侧、标题栏之下——它是正文的一部分，不是独立侧栏 */
@@ -124,6 +129,7 @@ export default function MarkdownEditor({
   leadingControls?: React.ReactNode;
   /** 标题栏右侧的控件（分享、导出） */
   trailingControls?: React.ReactNode;
+  onOpenCover?: () => void;
 }) {
   const { t } = useI18n();
   const [charCount, setCharCount] = useState(0);
@@ -448,14 +454,13 @@ export default function MarkdownEditor({
       const scrollContainer = scrollContainerRef?.current;
       const scrollTop = scrollContainer?.scrollTop;
       const scrollLeft = scrollContainer?.scrollLeft;
-      if (
-        applyUploadedImageMappingToEditor(
-          editor,
-          detail.localURL,
-          detail.remoteURL,
-        )
-      ) {
-        onImageSourceMapped?.(detail.localURL, detail.remoteURL);
+      const mapped = applyUploadedImageMappingToEditor(
+        editor,
+        detail.localURL,
+        detail.remoteURL,
+      );
+      onImageSourceMapped?.(detail.localURL, detail.remoteURL);
+      if (mapped) {
         // 图片上传完成只是把本地占位地址换成图床地址，不是用户主动导航。
         // ProseMirror 更新图片节点时可能把当前选区滚回可视区，React NodeView
         // 随后更新又可能触发一次浏览器滚动锚定；同步恢复并在下一帧再校正一次，
@@ -516,6 +521,12 @@ export default function MarkdownEditor({
     setCharCount(editor.getText().length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, document.docId]);
+
+  useEffect(() => {
+    const container = scrollContainerRef?.current;
+    if (!editor || !visible || !container) return;
+    return trackDocumentScrollPosition(document.docId, container, scrollStorageScope);
+  }, [editor, document.docId, scrollStorageScope, visible, scrollContainerRef]);
 
   useEffect(() => setTitle(document.title), [document.docId, document.title]);
   useEffect(
@@ -789,15 +800,26 @@ export default function MarkdownEditor({
               data-koinote-print-source
               className={`mx-auto w-full max-w-3xl px-4 ${themeId ? THEME_SCOPE : ""}`}
             >
-              {/* 标题在作用域容器内、正文之前：这样它拿得到主题的 h1 规则，
-                  且与正文同宽同左边缘 —— 它本来就是这篇文档的第一个 h1 */}
-              <div className={themeId ? "" : DEFAULT_TITLE_CLASS}>
-                <DocTitle
-                  value={title}
+              {document.coverImageSource?.trim() ? (
+                <DocumentCoverPreview
+                  title={title}
+                  coverRatio={document.coverRatio ?? "2.35:1"}
+                  coverImageSource={document.coverImageSource}
+                  fallbackTitleClassName={themeId ? "" : DEFAULT_TITLE_CLASS}
                   onChange={handleTitleChange}
                   onEnter={focusBody}
+                  onOpenCover={onOpenCover}
                 />
-              </div>
+              ) : (
+                <div className={themeId ? "" : DEFAULT_TITLE_CLASS}>
+                  <DocTitle
+                    value={title}
+                    onChange={handleTitleChange}
+                    onEnter={focusBody}
+                    onOpenCover={onOpenCover}
+                  />
+                </div>
+              )}
               <EditorContent editor={editor} />
             </div>
           </div>

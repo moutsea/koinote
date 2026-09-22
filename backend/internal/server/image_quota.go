@@ -69,7 +69,7 @@ func (a *App) storageQuotaFor(user model.User) int64 {
 // 分开而不是只给一个总数：用户看到"满了"之后要知道该删什么。只报总数的话，
 // 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
 type storageBreakdown struct {
-	// DocumentBytes 是文档正文与标题的字节数（Postgres 里的 text）
+	// DocumentBytes 是文档正文、标题、封面地址与提示词的字节数（Postgres 里的 text）
 	DocumentBytes int64
 	// ImageBytes 是图床对象的字节数（R2）
 	ImageBytes int64
@@ -107,7 +107,7 @@ func storageUsageForQuerier(
 	err := querier.QueryRow(ctx, `
 		SELECT
 			COALESCE((
-				SELECT SUM(octet_length(content) + octet_length(title))
+				SELECT SUM(octet_length(content) + octet_length(title) + octet_length(cover_image_source) + octet_length(cover_prompt))
 				FROM documents WHERE user_id = $1
 			), 0),
 			COALESCE((
@@ -181,7 +181,7 @@ func (a *App) recordImageObject(
 				(SELECT SUM(bytes) FROM image_objects
 				 WHERE user_id = $2 AND purpose = 'persistent'), 0)
 			+ COALESCE(
-				(SELECT SUM(octet_length(content) + octet_length(title))
+				(SELECT SUM(octet_length(content) + octet_length(title) + octet_length(cover_image_source) + octet_length(cover_prompt))
 				 FROM documents WHERE user_id = $2), 0)
 			+ $3::bigint <= $4
 		) OR (

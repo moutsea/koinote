@@ -127,6 +127,9 @@ function blockFor(
   // textarea 与镜像用 font:inherit 继承排版部分。
   if (rules.h1) {
     parts.push(`${scope} .kn-doc-title{${rules.h1}}`);
+    parts.push(
+      `${scope} .kn-doc-title.kn-doc-title-cover{background:transparent!important;color:#fff!important;padding:0!important;border:0!important;box-shadow:none!important;margin:0!important;}`,
+    );
     // 首个标题不该顶着工具栏。主题的 h1 margin-top 是给"正文中间的 h1"定的
     // （34~42px），标题在最上面，那个上边距会白留一大片。
     parts.push(`${scope} .kn-doc-title{margin-top:0;}`);

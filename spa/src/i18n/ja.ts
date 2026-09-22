@@ -1108,6 +1108,7 @@ export const ja: Messages = {
     goLogin: "ログインへ",
   },
   feishu: {
+    coverSyncFailed: "本文は同期されましたが、カバーの同期に失敗しました。画像を確認して再同期してください。",
     name: "Feishu",
     description: "Feishu アカウントを連携し、クラウド文書を作成・更新します。",
     membersOnly: "Feishu アカウントの連携と文書の同期には永久会員資格が必要です。",
@@ -1369,7 +1370,7 @@ export const ja: Messages = {
     trafficUpstreamError:
       "Cloudflare Analytics への接続に失敗しました。ビジネス指標は利用できます。",
     trafficNote:
-      "UV / PV は Cloudflare エッジ HTTP Analytics の集計で、正当なクローラーや許可された自動通信を含む場合があります。",
+      "UV / PV は Cloudflare のエッジリクエストの集計です。信頼できるボット除外は行っておらず、クローラーや自動リクエストが含まれるため、人間だけのアクセス数ではありません。",
     pageViews: "PV",
     uniqueVisitors: "UV",
     requests: "HTTP リクエスト",
@@ -1946,6 +1947,15 @@ export const ja: Messages = {
     wechatCoverCreditCost: "カバー 1 枚につき 20 credits",
     wechatCoverGenerate: "カバーを生成",
     wechatCoverRegenerate: "再生成",
+    wechatCoverSave: "カバーを保存",
+    wechatCoverChange: "変更",
+    wechatCoverSet: "カバーを設定",
+    wechatCoverUnset: "カバー未設定。本文の最初の画像または既定のカバーが使用されます。",
+    wechatCoverLoading: "記事のカバーを読み込み中…",
+    wechatCoverLoadFailed: "記事のカバーを読み込めませんでした。再試行してください。",
+    wechatCoverImageFailed: "カバー画像を読み込めませんでした。接続を確認するか別の画像を選択してください。",
+    wechatCoverDraftOnly: "この WeChat 下書きにのみ適用し、記事のカバーは変更しません。",
+    wechatCoverUse: "このカバーを使用",
     wechatCoverPreview: "WeChat カバープレビュー",
     wechatCoverGenerateFailed:
       "カバーを生成できませんでした。後でもう一度お試しください",

@@ -44,6 +44,7 @@ import { isUntouchedNewDocument, saveTabsForClosing } from "../components/editor
 import { renameDocumentTitle } from "../components/editor/renameDocument";
 import { useDocumentSaver } from "../components/editor/useDocumentSaver";
 import { isSaveShortcut } from "../components/editor/saveShortcut";
+import { pruneDocumentScrollPositions } from "../components/editor/documentScrollPosition";
 import {
   adjacentTabId,
   detectEditorShortcutPlatform,
@@ -340,6 +341,10 @@ export function EditorPage() {
   const bootstrapped = useRef(false);
 
   const documents = list.data;
+  useEffect(() => {
+    if (!loggedIn || !documents || !list.isSuccess || !list.isFetchedAfterMount || list.isFetching) return;
+    pruneDocumentScrollPositions(documents.map((document) => document.docId), session.data?.user?.authUserId ?? "");
+  }, [documents, loggedIn, list.isSuccess, list.isFetchedAfterMount, list.isFetching, session.data?.user?.authUserId]);
 
   useEffect(() => {
     if (!createFromRoute) return;
@@ -1455,6 +1460,7 @@ export function EditorPage() {
             }
             saver={saver}
             onEditorReady={handleEditorReady}
+            scrollStorageScope={session.data?.user?.authUserId ?? ""}
             onTitleChange={handleTitleChange}
             leadingControls={
               (!docsOpen || !outlineOpen) && (
@@ -1472,6 +1478,7 @@ export function EditorPage() {
                     editor={editor}
                     docId={liveId}
                     title={activeSnapshot?.title ?? doc.data.title}
+                    coverImageSource={activeSnapshot?.coverImageSource ?? doc.data.coverImageSource}
                     themeId={activeSnapshot?.theme ?? doc.data.theme ?? ""}
                     member={session.data?.user?.membershipTier === "lifetime"}
                     localMode={localMode}

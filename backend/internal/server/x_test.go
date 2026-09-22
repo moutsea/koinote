@@ -338,6 +338,7 @@ func TestPublishXArticleOAuth2CreatesDraftAndPublishes(t *testing.T) {
 		"## Section\n\nArticle body",
 		nil,
 		nil,
+		"",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -390,6 +391,7 @@ func TestPublishXArticleOAuth2RejectsUnavailableImages(t *testing.T) {
 		"Article body",
 		[]xPublishImageInput{{Source: "https://images.example/missing.png"}},
 		nil,
+		"",
 	)
 	if err == nil || !errors.Is(err, errXImageSourceUnavailable) {
 		t.Fatalf("publish error = %v, want unavailable image error", err)
@@ -533,6 +535,25 @@ func TestBuildXArticleContentStateFallsBackByRemainingImageOrder(t *testing.T) {
 		if len(items) != 1 || items[0]["media_id"] != wantMedia[index] {
 			t.Errorf("entity %d media = %#v, want %q", index, items, wantMedia[index])
 		}
+	}
+}
+
+func TestBuildXArticleContentStateMatchesRelativeAndAbsoluteImageSources(t *testing.T) {
+	state := buildXArticleContentState(
+		"![Body](/images/u/user/body.png)",
+		[]xArticleMedia{
+			{ID: "cover", Source: "https://img.koinote.app/u/user/cover.png"},
+			{ID: "body", Source: "https://koinote.app/images/u/user/body.png"},
+		},
+	)
+	entities := state["entities"].([]map[string]any)
+	if len(entities) != 2 {
+		t.Fatalf("content entities = %#v", entities)
+	}
+	imageData := entities[0]["value"].(map[string]any)["data"].(map[string]any)
+	items := imageData["media_items"].([]map[string]string)
+	if len(items) != 1 || items[0]["media_id"] != "body" {
+		t.Fatalf("body media = %#v, want body image", items)
 	}
 }
 
@@ -736,6 +757,7 @@ func TestPublishXArticleOAuth2PreservesDraftOnPublishFailure(t *testing.T) {
 		"Article body",
 		nil,
 		nil,
+		"",
 	)
 	if err == nil || !errors.Is(err, errXProviderUnavailable) {
 		t.Fatalf("publish error = %v", err)
@@ -1048,6 +1070,7 @@ func TestPublishXArticleOAuth2WithCoverImage(t *testing.T) {
 		"Article body with ![cover](https://img.koinote.app/cover.jpg) image",
 		[]xPublishImageInput{{Source: "https://img.koinote.app/cover.jpg", OriginalSource: "https://img.koinote.app/cover.jpg", Alt: "Cover"}},
 		intPointer(0),
+		"",
 	)
 	if err != nil {
 		t.Fatal(err)

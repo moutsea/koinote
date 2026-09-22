@@ -654,7 +654,8 @@ Cloudflare 边缘 HTTP Analytics：创建一个独立 Token，权限设为
 `Zone / Analytics / Read`，Zone Resources 只包含 Koinote 的 Zone，然后将
 它保存为 `CLOUDFLARE_ANALYTICS_TOKEN`。不要复用只有 Cache Purge 权限的
 `CLOUDFLARE_CACHE_PURGE_TOKEN`。未配置或 Cloudflare 暂时失败时，只有流量卡片显示不可用，
-其余管理数据仍正常展示。
+其余管理数据仍正常展示。此统计没有可靠的机器人过滤，可能包含爬虫和自动化请求，
+不能作为真人 UV / PV 使用。
 
 Stripe Dashboard 还需创建 webhook endpoint：
 

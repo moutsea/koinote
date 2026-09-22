@@ -831,25 +831,33 @@ func (a *App) publishXArticleOAuth2(
 	markdown string,
 	images []xPublishImageInput,
 	coverImageIndex *int,
+	coverImageSource string,
 ) (xPublishResult, error) {
 	media := make([]xArticleMedia, 0, len(images))
 	var coverMediaID string
 
-	for index, image := range images {
-		raw, err := a.readXImage(ctx, strings.TrimSpace(image.Source))
+	uploadImage := func(source string) (string, error) {
+		raw, err := a.readXImage(ctx, strings.TrimSpace(source))
 		if err != nil {
 			if errors.Is(err, errXImageSourceUnavailable) {
-				return xPublishResult{}, errors.Join(errXImageSourceUnavailable, err)
+				return "", errors.Join(errXImageSourceUnavailable, err)
 			}
-			return xPublishResult{}, errors.Join(errXImageFailed, err)
+			return "", errors.Join(errXImageFailed, err)
 		}
 		prepared, err := prepareWechatContentImage(raw)
 		if err != nil || len(prepared) > xUploadImageMaxBytes {
-			return xPublishResult{}, errors.Join(errXImageFailed, errors.New("image cannot fit X limits"))
+			return "", errors.Join(errXImageFailed, errors.New("image cannot fit X limits"))
 		}
 		mediaID, err := a.uploadXImageOAuth2(ctx, credential, prepared)
 		if err != nil {
-			return xPublishResult{}, errors.Join(errXImageFailed, err)
+			return "", errors.Join(errXImageFailed, err)
+		}
+		return mediaID, nil
+	}
+	for index, image := range images {
+		mediaID, err := uploadImage(image.Source)
+		if err != nil {
+			return xPublishResult{}, err
 		}
 		media = append(media, xArticleMedia{
 			ID:      mediaID,
@@ -857,8 +865,15 @@ func (a *App) publishXArticleOAuth2(
 			Source:  xArticleImageSourceForMatching(image),
 		})
 
-		if coverImageIndex != nil && index == *coverImageIndex {
+		if (coverImageIndex != nil && index == *coverImageIndex) || (coverImageSource != "" && strings.TrimSpace(image.Source) == coverImageSource) {
 			coverMediaID = mediaID
+		}
+	}
+	if coverImageSource != "" && coverMediaID == "" {
+		var err error
+		coverMediaID, err = uploadImage(coverImageSource)
+		if err != nil {
+			return xPublishResult{}, err
 		}
 	}
 
@@ -1087,7 +1102,7 @@ func xArticleImageSourcesEqual(left, right string) bool {
 	}
 	if leftURL.Scheme != "" || rightURL.Scheme != "" {
 		if leftURL.Scheme == "" || rightURL.Scheme == "" {
-			return false
+			return leftURL.Path == rightURL.Path && leftURL.RawQuery == rightURL.RawQuery
 		}
 		return strings.EqualFold(leftURL.Scheme, rightURL.Scheme) &&
 			strings.EqualFold(leftURL.Host, rightURL.Host) &&

@@ -42,7 +42,8 @@ func TestCloudflareAnalyticsQueriesTotalsAndCaches(t *testing.T) {
 		}
 		if !strings.Contains(body.Query, "httpRequests1hGroups") ||
 			strings.Contains(body.Query, "clientRequestHTTPHost") ||
-			strings.Contains(body.Query, "dimensions") {
+			strings.Contains(body.Query, "dimensions") ||
+			strings.Contains(body.Query, "requestSource") {
 			t.Fatalf("应查询无分桶总计，实际 query: %s", body.Query)
 		}
 		if body.Variables["zoneTag"] != "zone-id" {

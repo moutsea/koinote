@@ -23,7 +23,7 @@ type mcpPushWechatDraftInput struct {
 	Author           string `json:"author,omitempty" jsonschema:"Optional WeChat draft author, up to 16 characters."`
 	Digest           string `json:"digest,omitempty" jsonschema:"Optional WeChat draft digest, up to 128 characters."`
 	CoverMode        string `json:"coverMode,omitempty" jsonschema:"Cover source: default, article, or ai. Defaults to default."`
-	CoverRatio       string `json:"coverRatio,omitempty" jsonschema:"Cover ratio: 2.35:1 or 1:1. Defaults to 2.35:1."`
+	CoverRatio       string `json:"coverRatio,omitempty" jsonschema:"Cover ratio in W:H format, for example 2.35:1, 1:1, or 3:2. Defaults to 2.35:1."`
 	CoverImageSource string `json:"coverImageSource,omitempty" jsonschema:"Existing article image URL to use when coverMode is article."`
 	CoverPrompt      string `json:"coverPrompt,omitempty" jsonschema:"Prompt used when coverMode is ai. AI generation consumes 20 credits."`
 	IncludeGeo       bool   `json:"includeGeo,omitempty" jsonschema:"Whether to include the current non-stale, enabled WeChat GEO summary in the draft. Defaults to false."`
@@ -100,7 +100,7 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 		ratio = wechatCoverRatioWide
 	}
 	if !validWechatCoverRatio(ratio) {
-		return nil, mcpWechatDraftOutput{}, errors.New("coverRatio must be 2.35:1 or 1:1")
+		return nil, mcpWechatDraftOutput{}, errors.New("coverRatio must use the W:H format with a supported thumbnail aspect ratio")
 	}
 	coverMode := strings.TrimSpace(input.CoverMode)
 	if coverMode == "" {

@@ -146,6 +146,10 @@ func (a *App) enqueueOrphanedImageKeysChecked(ctx context.Context, user userRef,
 			FROM documents
 			WHERE user_id = $1
 			UNION ALL
+			SELECT cover_image_source
+			FROM documents
+			WHERE user_id = $1
+			UNION ALL
 			SELECT v.content
 			FROM document_versions v
 			JOIN documents d ON d.id = v.document_id
@@ -409,6 +413,10 @@ func (a *App) referencedImageKeys(ctx context.Context, userIDs []int64, keys []s
 			FROM unnest($1::bigint[], $2::text[]) AS candidate(user_id, object_key)
 		), owned_contents AS (
 			SELECT document.user_id, document.content
+			FROM documents AS document
+			WHERE document.user_id IN (SELECT DISTINCT user_id FROM candidates)
+			UNION ALL
+			SELECT document.user_id, document.cover_image_source
 			FROM documents AS document
 			WHERE document.user_id IN (SELECT DISTINCT user_id FROM candidates)
 			UNION ALL

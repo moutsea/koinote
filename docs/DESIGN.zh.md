@@ -589,10 +589,10 @@ Stripe Customer ID、Checkout Session ID 或内部鉴权标识。
 
 今日 UV / PV 通过 Cloudflare GraphQL Analytics API 的 `httpRequests1hGroups` 查询。
 查询不带时间维度且只取聚合结果，因此 `uniq.uniques` 是整段时间的去重结果，不能把小时桶的 UV 相加。
-它使用独立的最小权限 `CLOUDFLARE_ANALYTICS_TOKEN`，并按 hostname 过滤同一 Zone 下的流量。
-结果缓存一分钟。Token 缺失、权限错误或 Cloudflare 超时时只让 `traffic.available=false`，
-PostgreSQL 业务统计仍返回 200。这个 UV / PV 是边缘 HTTP 口径，可能包含合法爬虫与已放行
-的自动流量，不等同于客户端埋点的真实用户会话。
+它使用独立的最小权限 `CLOUDFLARE_ANALYTICS_TOKEN`，结果缓存一分钟。
+查询只使用已采用的时间过滤字段；未验证的 `requestSource` 过滤不能加到此预聚合数据集。
+Token 缺失、权限错误或 Cloudflare 超时时只让 `traffic.available=false`，PostgreSQL 业务统计仍
+返回 200。此聚合统计没有可靠的机器人过滤，可能包含爬虫和自动化请求，不能作为真人 UV / PV。
 
 站内提醒同样把权限与真值放在后端。`announcements` 保存发布类型、版本号和发布时间，
 `announcement_translations` 一次性保存 `en/zh/fr/ja` 四份内容，`announcement_reads`
@@ -747,10 +747,20 @@ AES-GCM 加密。发布时仍复用同一套微信 HTML 构建器，但不在正
 复用私网/回环地址阻断、DNS 解析校验、禁止重定向和响应体上限，避免把草稿接口变成 SSRF 原语。
 草稿失败时会尽力删除刚上传的孤立封面素材。
 
-封面生成只在后端调用 OpenAI-compatible Images API，支持 `2.35:1`（默认）和 `1:1`，
+封面生成只在后端调用 OpenAI-compatible Images API，支持预设比例和自定义 `W:H`（默认 `2.35:1`），
+两项均为正数、最多两位小数且不超过 100，宽高比范围为 `320/940` 至 `940/136`。
 每生成一张固定消耗 20 credits。
 模型返回图像后由 Go 居中裁切、缩放并压成微信缩略图接受的 JPEG；API Key 不进入 SPA、Worker
 或客户端。该能力仅对终生会员开放并按用户限流。
+
+文档封面保存在 PostgreSQL 迁移 `0051` 和 SQLite 迁移 `0007` 引入的四列：
+`cover_mode`、`cover_ratio`、`cover_image_source`、`cover_prompt`。完全本地模式中，
+mode/ratio 是明文界面配置，source/prompt 含图片位置和用户输入，因此加密保存。
+封面地址最多 2048 字节，拒绝内嵌 data URI；生成图片须先上传，再保存地址。
+提示词最多 1200 个 Unicode 字符，地址和提示词均计入云存储配额。
+`document_versions` 不保存封面；恢复历史仅还原标题、主题与正文，保留当前封面。
+X 使用独立的 `cover_media`，封面不占正文的 20 张图片额度；飞书在正文保存后尝试设置封面，
+封面失败会提示但不回滚正文。打开微信草稿前会等待编辑器保存完成。
 
 微信编辑器的行为决定了实现的每一处：
 

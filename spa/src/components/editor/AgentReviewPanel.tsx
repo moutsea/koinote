@@ -1663,7 +1663,7 @@ function ReviewDetail({
         <div
           role="tablist"
           aria-label={t.agentReview.categoryTabs}
-          className="sticky top-0 z-[1] -mx-4 mt-5 flex gap-1 overflow-x-auto border-b px-4 pb-0 sm:-mx-5 sm:px-5"
+          className="sticky top-0 z-[1] -mx-4 mt-5 flex min-w-0 gap-1 overflow-x-auto overflow-y-hidden border-b px-4 pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-5 sm:px-5"
           style={{
             borderColor: "var(--ink-line)",
             background: "var(--ink-paper)",

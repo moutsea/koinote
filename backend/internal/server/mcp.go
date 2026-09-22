@@ -874,10 +874,10 @@ func (a *App) mcpRestoreTrashedDocument(ctx context.Context, _ *mcp.CallToolRequ
 func (a *App) loadMCPDocument(ctx context.Context, userID int, docID string) (model.Document, error) {
 	var doc model.Document
 	err := a.db.QueryRow(ctx, `
-		SELECT doc_id, title, theme, content, revision, created_at, updated_at
+		SELECT doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
 		FROM documents WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, strings.TrimSpace(docID), userID).Scan(
-		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.Revision,
+		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision,
 		&doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

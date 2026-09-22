@@ -8,11 +8,15 @@ type Document struct {
 	DocID string `json:"docId"`
 	Title string `json:"title"`
 	// Theme 是微信排版主题 id，空串表示不套主题。取值由 server 侧白名单约束。
-	Theme     string     `json:"theme"`
-	Content   string     `json:"content"`
-	Revision  int64      `json:"revision"`
-	CreatedAt *time.Time `json:"createdAt"`
-	UpdatedAt *time.Time `json:"updatedAt"`
+	Theme            string     `json:"theme"`
+	Content          string     `json:"content"`
+	CoverMode        string     `json:"coverMode"`
+	CoverRatio       string     `json:"coverRatio"`
+	CoverImageSource string     `json:"coverImageSource"`
+	CoverPrompt      string     `json:"coverPrompt,omitempty"`
+	Revision         int64      `json:"revision"`
+	CreatedAt        *time.Time `json:"createdAt"`
+	UpdatedAt        *time.Time `json:"updatedAt"`
 	// Share 为空表示未分享。仅在文档主人自己读取时下发。
 	Share *DocumentShare `json:"share"`
 }
