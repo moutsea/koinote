@@ -75,6 +75,36 @@ queue remains; compare real draft upload logs before any permanent switch.
 The temporary HTTPS listener, three-day test certificate, and UFW rule were
 removed after measurement. The original SSH route remained healthy.
 
+### Real 16-image draft trial
+
+On 2026-09-24, the same article was tested through the existing SSH relay and
+the direct HTTPS relay. Both runs used the same WeChat account and the **same
+16 prepared-image SHA-256 hashes**. The SSH figures come from cache timestamps
+recorded during the user's preceding sync on 2026-09-23; its full request time
+was not captured. For the HTTPS run, the 16 cache entries were backed up and
+temporarily cleared, so all images had to upload again. The backend used a
+temporary trust bundle containing the relay trial certificate, without
+disabling certificate validation.
+
+| Route | First-to-last image cache write | Full draft request |
+| --- | ---: | ---: |
+| SSH tunnel (historical run) | 137.12 s | Not recorded; user reported over 2 min |
+| Direct HTTPS (fresh run) | 16.24 s | About 42.6 s, browser click to credit commit |
+
+The direct route reduced the observed image-upload window by about 88%, or
+8.4x. The comparison is from different times and includes image-cache database
+writes rather than isolated network transfer timing, so it does not establish
+the precise SSH overhead. It does demonstrate a large improvement for this
+real workload. The HTTPS run created a draft successfully; only the normal
+20-credit draft charge was recorded. The original SSH backend configuration,
+all 16 cache rows, firewall rule, and relay service state were restored after
+the trial. The production backend remains on the SSH route.
+
+Before a permanent switch, provision a publicly trusted relay certificate
+with automated renewal and restart, and verify renewal. IP-address certificates
+currently require Certbot 5.4+ and the `shortlived` profile, with a lifetime
+of about six days. Keep the SSH tunnel available as the rollback path.
+
 For local Docker development, forward the relay proxy to the host and set
 `WECHAT_API_PROXY_URL=http://host.docker.internal:18080`:
 
