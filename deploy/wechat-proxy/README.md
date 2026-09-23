@@ -57,13 +57,23 @@ the two image upload workers) with `request_ms` (token acquisition and upload)
 for similar uncached drafts before and after changing the proxy URL. Switch
 back to `http://172.18.0.1:18080` if the direct path fails or offers no benefit.
 
-On 2026-09-24, a temporary HTTPS listener passed a local CONNECT probe, but
-the Koinote host timed out connecting to relay TCP 18443. The relay's UFW
-allow rule recorded zero packets while relay TCP 80 remained reachable. This
-points to an upstream cloud ingress rule. The temporary listener, certificate,
-and UFW rule were removed; the SSH tunnel and loopback proxy remained healthy.
-Open TCP 18443 in the relay provider's security group for the Koinote host
-IP only before repeating the comparison.
+On 2026-09-24, the first trial was blocked by the relay provider's cloud
+ingress rule. After TCP 18443 was allowed from the Koinote host, both routes
+returned a successful CONNECT to the same WeChat API endpoint. Measurements
+were taken from the Koinote host, alternating route order:
+
+| Requests at once | SSH tunnel | Direct HTTPS | Measure |
+| --- | ---: | ---: | --- |
+| 1 | 1.08 s | 1.33 s | Median of six requests per route |
+| 2 | 2.09 s | 1.39 s | Median wall time of four pairs per route |
+| 4 | 2.08 s | 1.47 s | Mean wall time of two groups per route |
+
+These are small unauthenticated API requests, **not** real image uploads.
+Direct HTTPS improved concurrent request completion, while the existing SSH
+route was faster for one request. The application's two-worker image upload
+queue remains; compare real draft upload logs before any permanent switch.
+The temporary HTTPS listener, three-day test certificate, and UFW rule were
+removed after measurement. The original SSH route remained healthy.
 
 For local Docker development, forward the relay proxy to the host and set
 `WECHAT_API_PROXY_URL=http://host.docker.internal:18080`:
@@ -74,4 +84,5 @@ ssh -N -L 0.0.0.0:18080:127.0.0.1:18080 root@<relay-host>
 
 The relay's firewall should allow SSH only from the Koinote host where
 possible. The WireGuard UDP rule is restricted to `172.245.27.245`; the
-proxy's TCP port is never opened to the public network.
+plain HTTP CONNECT port is never opened to the public network. A direct HTTPS
+listener must be restricted to the Koinote host at both cloud ingress and UFW.
