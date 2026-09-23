@@ -1156,6 +1156,10 @@ export interface Messages {
     sharedPasswordSubmit: string;
     sharedOpenApp: string;
     sharedViews: string;
+    sharedPreviewTitle: string;
+    sharedPreviewPrompt: string;
+    sharedReadFull: string;
+    sharedLoginToRead: string;
     copyToMine: string;
     copyingToMine: string;
     copiedToMine: string;

@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +89,50 @@ func TestShareResponseHeaders(t *testing.T) {
 	}
 	if got := rec.Header().Get("X-Robots-Tag"); !strings.Contains(got, "noindex") {
 		t.Errorf("分享页应带 noindex，实际 %q", got)
+	}
+}
+
+func TestSharePreviewNeverReturnsSecondHalf(t *testing.T) {
+	for _, content := range []string{
+		"", "甲", "甲乙", "一二三四五六七八", "# 标题\n\n第一段内容\n\n第二段内容",
+		"![图片](https://example.com/a.png)\n\n后半部分",
+	} {
+		preview := sharePreview(content)
+		if !strings.HasPrefix(content, preview) {
+			t.Fatalf("预览必须是正文前缀: %q", content)
+		}
+		if len([]rune(preview)) > len([]rune(content))/2 {
+			t.Fatalf("预览超过一半: %q -> %q", content, preview)
+		}
+	}
+	if got := sharePreview("甲乙丙丁\n戊己庚辛壬癸"); got != "甲乙丙丁" {
+		t.Fatalf("应在接近中点的换行处截断，实际 %q", got)
+	}
+}
+
+func TestWriteSharedDocumentPreviewExcludesHiddenContent(t *testing.T) {
+	doc := sharedDocument{Title: "标题", Content: "公开内容\n\n隐藏内容隐藏内容", ViewCount: 1}
+	for _, preview := range []bool{true, false} {
+		rec := httptest.NewRecorder()
+		writeSharedDocument(rec, doc, preview)
+		var body struct {
+			Document struct {
+				Content   string `json:"content"`
+				IsPreview bool   `json:"isPreview"`
+			} `json:"document"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Document.IsPreview != preview {
+			t.Fatalf("isPreview=%t，期望 %t", body.Document.IsPreview, preview)
+		}
+		if preview && strings.Contains(rec.Body.String(), "隐藏内容") {
+			t.Fatalf("匿名响应泄露后半篇: %s", rec.Body.String())
+		}
+		if !preview && body.Document.Content != doc.Content {
+			t.Fatalf("登录用户应取得全文: %q", body.Document.Content)
+		}
 	}
 }
 

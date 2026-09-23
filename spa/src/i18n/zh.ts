@@ -1623,11 +1623,11 @@ export const zh: Messages = {
     share: "分享",
     shareTitle: "分享此文档",
     shareAccessLink: "知道链接的人可访问",
-    shareAccessLinkHint: "链接随机不可猜，但拿到即可打开",
+    shareAccessLinkHint: "持有链接可预览前半篇，登录后可查看全文",
     shareTokenRotated:
       "已生成新链接：口令保护被移除，原链接立即失效。若你已把旧链接发给别人，请重新分享。",
     shareAccessPassword: "需要口令",
-    shareAccessPasswordHint: "访问者需输入口令，至少 6 位",
+    shareAccessPasswordHint: "访问者需输入至少 6 位口令；登录后可查看全文",
     sharePasswordPlaceholder: "设置访问口令",
     shareEnable: "开启分享",
     shareUpdate: "更新设置",
@@ -1647,6 +1647,10 @@ export const zh: Messages = {
     sharedPasswordSubmit: "查看",
     sharedOpenApp: "了解 Koinote",
     sharedViews: "阅读 {count} 次",
+    sharedPreviewTitle: "继续阅读全文",
+    sharedPreviewPrompt: "你已读完前半篇。注册或登录后，即可查看剩余内容。",
+    sharedReadFull: "注册并阅读全文",
+    sharedLoginToRead: "登录查看全文",
     copyToMine: "复制到我的 Koinote",
     copyingToMine: "正在复制…",
     copiedToMine: "已复制，正在打开文档…",
@@ -2305,7 +2309,7 @@ function hello(name) {
         {
           title: "分享链接",
           body: [
-            "开启分享后，持有链接的人即可查看该文档，无需登录。设置访问密码可以再加一层保护，但链接一旦泄露就等同于内容泄露 —— 请自行判断哪些内容适合分享。",
+            "开启分享后，持有链接的人无需登录即可预览文档前半部分；注册或登录后可查看全文。设置访问密码可以再加一层保护。请自行判断哪些内容适合分享。",
             "你可以随时撤销分享或重置链接，撤销后旧链接立即失效。",
           ],
         },

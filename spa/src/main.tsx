@@ -231,7 +231,7 @@ const registerRoute = createRoute({
     "RegisterRoute",
   ),
 });
-// 公开分享页：无需登录，token 即凭证
+// 公开分享页：无需登录即可预览，全文仍由后端校验会话
 const shareRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/share/$token",

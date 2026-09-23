@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Copy, Eye, FileText, LoaderCircle, Lock } from "lucide-react";
+import { Copy, Eye, FileText, LoaderCircle, Lock, LogIn } from "lucide-react";
 import {
   ApiError,
   getSharedDocument,
@@ -33,22 +33,28 @@ export function SharePage() {
   const { t } = useI18n();
   const params = useParams({ strict: false }) as { token?: string };
   const token = params.token;
+  const session = useSession();
+  const viewerKey = session.data?.user?.authUserId ?? "guest";
 
   // 口令验证成功后的正文放在本地，优先于查询结果
-  const [unlocked, setUnlocked] = useState<SharedDocument | null>(null);
+  const [unlocked, setUnlocked] = useState<{
+    viewerKey: string;
+    document: SharedDocument;
+  } | null>(null);
 
   const query = useQuery({
-    queryKey: ["share", token ?? ""],
+    queryKey: ["share", token ?? "", viewerKey],
     queryFn: () => getSharedDocument(token!),
-    enabled: Boolean(token),
+    enabled: Boolean(token) && !session.isPending,
     retry: false,
     refetchOnWindowFocus: false,
   });
 
-  const shared = unlocked ?? query.data?.document;
-  const needsPassword = !unlocked && query.data?.requiresPassword === true;
+  const currentUnlock = unlocked?.viewerKey === viewerKey ? unlocked.document : null;
+  const shared = currentUnlock ?? query.data?.document;
+  const needsPassword = !currentUnlock && query.data?.requiresPassword === true;
 
-  if (query.isLoading) {
+  if (session.isPending || query.isLoading) {
     return <Centered>{t.editor.loading}</Centered>;
   }
 
@@ -71,7 +77,7 @@ export function SharePage() {
   }
 
   if (needsPassword && token) {
-    return <PasswordGate token={token} onUnlock={(doc) => setUnlocked(doc)} />;
+    return <PasswordGate token={token} onUnlock={(doc) => setUnlocked({ viewerKey, document: doc })} />;
   }
 
   if (!shared) {
@@ -267,6 +273,46 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         <EditorContent editor={editor} />
       </div>
 
+      {shared.isPreview && (
+        <section
+          className="mt-10 rounded-xl border px-5 py-8 text-center sm:px-8"
+          style={{
+            borderColor: "var(--ink-line)",
+            background: "var(--ink-paper-soft)",
+          }}
+        >
+          <span
+            className="mx-auto flex h-11 w-11 items-center justify-center rounded-full"
+            style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+          >
+            <Lock className="h-5 w-5" />
+          </span>
+          <h2 className="kn-heading-cn mt-4 text-lg font-semibold" style={{ color: "var(--ink-black)" }}>
+            {t.editor.sharedPreviewTitle}
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+            {t.editor.sharedPreviewPrompt}
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href={`/register?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "var(--cinnabar)" }}
+            >
+              {t.editor.sharedReadFull}
+            </a>
+            <a
+              href={`/login?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              className="inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash-strong)]"
+              style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
+            >
+              <LogIn className="h-4 w-4" />
+              {t.editor.sharedLoginToRead}
+            </a>
+          </div>
+        </section>
+      )}
+
       {/* 分享页自己收尾，不挂全站页脚（见 AppShell 的 FOOTERLESS_PREFIXES）：
           这是给外人读一篇文档的落地页，末尾塞一堆站内导航是喧宾夺主 */}
       <footer
@@ -274,7 +320,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
         style={{ borderColor: "var(--ink-line)" }}
       >
         <InkSeal className="h-8 px-0.5 text-[10px]" />
-        {session.data?.user ? (
+        {!shared.isPreview && session.data?.user ? (
           <button
             type="button"
             onClick={() => void copyToMine()}
@@ -289,7 +335,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
             )}
             {copying ? t.editor.copyingToMine : t.editor.copyToMine}
           </button>
-        ) : (
+        ) : !shared.isPreview ? (
           <>
             <p
               className="max-w-md text-sm leading-6"
@@ -313,7 +359,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
               {t.editor.loginToCopy}
             </a>
           </>
-        )}
+        ) : null}
         {copyNotice && (
           <p
             role="status"

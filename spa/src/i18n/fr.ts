@@ -1758,12 +1758,12 @@ export const fr: Messages = {
     shareTitle: "Partager ce document",
     shareAccessLink: "Toute personne ayant le lien",
     shareAccessLinkHint:
-      "Le lien est aléatoire et indevinable, mais fonctionne pour quiconque l'obtient",
+      "Le lien permet de lire la première moitié ; connectez-vous pour voir le document entier",
     shareTokenRotated:
       "Un nouveau lien a été généré : la suppression du mot de passe a invalidé immédiatement l'ancien lien. Si vous l'avez déjà envoyé, partagez à nouveau.",
     shareAccessPassword: "Mot de passe requis",
     shareAccessPasswordHint:
-      "Les visiteurs doivent saisir un mot de passe, au moins 6 caractères",
+      "Un mot de passe d’au moins 6 caractères est requis ; connectez-vous pour lire le document entier",
     sharePasswordPlaceholder: "Définir un mot de passe d'accès",
     shareEnable: "Activer le partage",
     shareUpdate: "Mettre à jour",
@@ -1783,6 +1783,10 @@ export const fr: Messages = {
     sharedPasswordSubmit: "Afficher",
     sharedOpenApp: "À propos de Koinote",
     sharedViews: "{count} lectures",
+    sharedPreviewTitle: "Poursuivre la lecture",
+    sharedPreviewPrompt: "Vous avez atteint la fin de l'aperçu. Créez un compte ou connectez-vous pour lire la suite.",
+    sharedReadFull: "S'inscrire pour tout lire",
+    sharedLoginToRead: "Se connecter pour tout lire",
     copyToMine: "Copier dans mon Koinote",
     copyingToMine: "Copie…",
     copiedToMine: "Copié. Ouverture du document…",
@@ -2510,7 +2514,7 @@ function hello(name) {
         {
           title: "Liens de partage",
           body: [
-            "Une fois le partage activé, toute personne disposant du lien peut consulter le document sans se connecter. Un mot de passe ajoute une protection, mais un lien divulgué équivaut à un document divulgué : jugez vous-même de ce qu’il est approprié de partager.",
+            "Une fois le partage activé, toute personne disposant du lien peut consulter la première moitié du document sans se connecter. La lecture intégrale nécessite un compte et une connexion. Un mot de passe ajoute une protection ; choisissez avec soin ce que vous partagez.",
             "Vous pouvez révoquer le partage ou régénérer le lien à tout moment ; les anciens liens cessent immédiatement de fonctionner.",
           ],
         },

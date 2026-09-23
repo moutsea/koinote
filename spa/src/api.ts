@@ -1493,6 +1493,8 @@ export type SharedDocument = {
   title: string;
   theme?: string;
   content: string;
+  /** 未登录时服务端只返回前半篇；不得把预览用于全文复制。 */
+  isPreview: boolean;
   updatedAt?: string | null;
   ownerName?: string;
   viewCount: number;

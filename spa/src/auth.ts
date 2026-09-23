@@ -23,6 +23,7 @@ export function useLogout() {
   return async () => {
     const clearClientSession = () => {
       clearAllConflictDrafts();
+      queryClient.removeQueries({ queryKey: ["share"] });
       queryClient.setQueryData(["session"], undefined);
       queryClient.removeQueries({ queryKey: ["session"] });
     };
