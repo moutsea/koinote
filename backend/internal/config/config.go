@@ -90,8 +90,8 @@ type Config struct {
 	WechatCoverImageBaseURL string
 	WechatCoverImageAPIKey  string
 	WechatCoverImageModel   string
-	// WechatAPIProxyURL 是可选的 HTTP(S) CONNECT 代理。生产环境通过 WireGuard
-	// 指向专用微信中转机的私网地址，微信 API 的 TLS 仍由本后端端到端终止。
+	// WechatAPIProxyURL 是可选的 HTTP(S) CONNECT 代理。公网直连中转机须使用
+	// HTTPS；微信 API 的 TLS 仍由本后端端到端终止。
 	WechatAPIProxyURL string
 
 	// 飞书付款通知沿用 Kimiseek 的机器人配置名。两项同时配置才启用；
