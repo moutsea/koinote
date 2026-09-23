@@ -1,5 +1,5 @@
 [Unit]
-Description=Koinote WeChat API HTTPS CONNECT proxy (direct-path trial)
+Description=Koinote WeChat API HTTPS CONNECT proxy
 After=network-online.target
 Wants=network-online.target
 

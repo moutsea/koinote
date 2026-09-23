@@ -10,13 +10,13 @@ Run `GO111MODULE=off go test -race ./deploy/wechat-proxy` from the repository ro
 deploying a proxy change. The relay binary and `koinote-wechat-proxy` systemd service must
 be updated separately from the main backend deployment; keep the previous binary for rollback.
 
-The intended production path is WireGuard (`10.77.0.1/24` on the relay and
-`10.77.0.2/24` on the Koinote host). The relay listens on `10.77.0.1:18080`
-by default. The current relay provider does not pass UDP 51820, so production
-currently uses the checked-in SSH tunnel unit: the proxy listens on the relay's
-loopback address and the Koinote Docker host forwards `172.18.0.1:18080` to it.
+The original production path used the checked-in SSH tunnel unit: the proxy
+listened on the relay's loopback address and the Koinote Docker host forwarded
+`172.18.0.1:18080` to it. WireGuard was planned, but the relay provider did
+not pass UDP 51820. Production now uses the direct HTTPS listener on port
+18443; the SSH tunnel remains available for rollback.
 
-## Direct HTTPS trial
+## Direct HTTPS relay
 
 `koinote-wechat-proxy-https.service` runs a **second** listener, so the existing
 SSH path remains available for immediate rollback. Its environment file sets:
@@ -30,13 +30,53 @@ WECHAT_PROXY_TLS_KEY=/etc/koinote/wechat-relay/proxy-https-key.pem
 
 The process refuses a public listener without both TLS and a client CIDR
 allowlist. Also restrict TCP 18443 at the relay firewall to the Koinote host.
-The certificate must contain the relay's IP address or hostname in its SAN,
-and the Koinote host must trust its issuer. A public certificate makes Go's
-existing `WECHAT_API_PROXY_URL=https://<relay>:18443` work without backend
-changes. [Let's Encrypt IP certificates](https://letsencrypt.org/2026/03/11/shorter-certs-certbot/)
-are available but expire after six days, so their renewal and a service restart
-must be automated. A private test certificate can instead be passed to curl
-with `--proxy-cacert` for a network comparison without changing the backend.
+The certificate must contain the relay's IP address in its SAN. A publicly
+trusted certificate lets the backend use
+`WECHAT_API_PROXY_URL=https://<relay-ip>:18443` without a custom trust bundle.
+[Let's Encrypt IP certificates](https://letsencrypt.org/2026/03/11/shorter-certs-certbot/)
+expire after about six days, so automatic renewal and a service restart are
+mandatory. A private test certificate can instead be passed to curl with
+`--proxy-cacert` for a short trial.
+
+### Production certificate and renewal
+
+The relay's port 80 nginx default server serves only
+`/.well-known/acme-challenge/` from `/var/www/koinote-acme`; every other path
+still returns 404. Before requesting a certificate, verify that a temporary
+file under that webroot is reachable at
+`http://<relay-ip>/.well-known/acme-challenge/<filename>` from outside the
+relay. Use Certbot 5.4 or newer (the production relay uses the official 5.8
+snap). First test issuance with `--staging` and a separate config directory,
+then issue the trusted certificate:
+
+```sh
+certbot certonly --preferred-profile shortlived --webroot \
+  --webroot-path /var/www/koinote-acme --ip-address <relay-ip> \
+  --cert-name <relay-ip> --non-interactive --agree-tos \
+  --register-unsafely-without-email
+```
+
+Install `https-cert-deploy-hook.sh` as executable at
+`/etc/letsencrypt/renewal-hooks/deploy/koinote-wechat-proxy-https` before
+issuance. It checks the new certificate and key, copies them to the
+`koinote-wechat-proxy` group's restricted directory, and restarts the HTTPS
+service only when that certificate was renewed. Adjust the hook's expected
+lineage if the relay IP changes. The Certbot snap's `snap.certbot.renew.timer`
+must be enabled and active. Verify the renewal path with:
+
+```sh
+certbot renew --dry-run --cert-name <relay-ip> --non-interactive
+```
+
+The dry run can pause for a random delay of several minutes. After it passes,
+check that `systemctl is-active koinote-wechat-proxy-https.service` returns
+`active`, and use the Koinote host to make a CONNECT request **without**
+`--proxy-cacert`. Restrict both the relay's cloud ingress rule and UFW port
+18443 rule to the Koinote host's public IP. Set the same HTTPS URL in the
+production `.env` and the repository's `WECHAT_API_PROXY_URL` deployment
+variable, then recreate the backend container and check its health. Roll back
+by restoring `WECHAT_API_PROXY_URL=http://172.18.0.1:18080` in both places and
+recreating the backend; leave the SSH tunnel service running.
 
 Compare the old and new routes **from the Koinote host**, using the same
 WeChat API endpoint and similar concurrency. Curl reports the proxy CONNECT
@@ -98,12 +138,9 @@ the precise SSH overhead. It does demonstrate a large improvement for this
 real workload. The HTTPS run created a draft successfully; only the normal
 20-credit draft charge was recorded. The original SSH backend configuration,
 all 16 cache rows, firewall rule, and relay service state were restored after
-the trial. The production backend remains on the SSH route.
-
-Before a permanent switch, provision a publicly trusted relay certificate
-with automated renewal and restart, and verify renewal. IP-address certificates
-currently require Certbot 5.4+ and the `shortlived` profile, with a lifetime
-of about six days. Keep the SSH tunnel available as the rollback path.
+the trial. Later on 2026-09-24, the trusted certificate, automated renewal
+hook, and direct HTTPS listener were installed. The renewal dry run passed and
+production switched to HTTPS. The SSH tunnel remains running for rollback.
 
 For local Docker development, forward the relay proxy to the host and set
 `WECHAT_API_PROXY_URL=http://host.docker.internal:18080`:
