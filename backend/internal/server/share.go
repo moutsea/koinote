@@ -439,7 +439,10 @@ func sharePreview(content string) string {
 	end := cutoff
 	for i := cutoff - 1; i >= cutoff*4/5; i-- {
 		if runes[i] == '\n' {
-			end = i
+			// 图片替代文字和链接标签可以跨行；只在语法单元之外按行截断。
+			if shareSafeInlineCutoff(runes, i) == i {
+				end = i
+			}
 			break
 		}
 	}
@@ -449,53 +452,58 @@ func sharePreview(content string) string {
 	return strings.TrimRight(string(runes[:end]), " \t\r\n")
 }
 
-// 没有接近中点的完整行可截时，至少不要把图片或链接截成半个地址。
-// 括号按层级配对，兼容常见的带括号图片文件名和转义字符。
+// 单次扫描完整的图片和链接，找到所有跨过 cutoff 的语法单元中最早的起点。
+// 括号按层级配对，兼容嵌套标签、带括号的地址和转义字符。
 func shareSafeInlineCutoff(source []rune, cutoff int) int {
-	for i := 0; i < cutoff; i++ {
-		start := i
-		if source[i] == '!' && i+1 < len(source) && source[i+1] == '[' {
+	end := cutoff
+	var starts []int
+	for i := 0; i < len(source); {
+		switch source[i] {
+		case '\\':
+			i += min(2, len(source)-i)
+		case '!':
+			if i+1 < len(source) && source[i+1] == '[' {
+				starts = append(starts, i)
+				i += 2
+			} else {
+				i++
+			}
+		case '[':
+			starts = append(starts, i)
 			i++
-		} else if source[i] != '[' {
-			continue
-		}
-		brackets := 1
-		j := i + 1
-		for ; j < len(source) && brackets > 0; j++ {
-			if source[j] == '\\' && j+1 < len(source) {
-				j++
+		case ']':
+			if len(starts) == 0 || i+1 >= len(source) || source[i+1] != '(' {
+				if len(starts) > 0 {
+					starts = starts[:len(starts)-1]
+				}
+				i++
 				continue
 			}
-			switch source[j] {
-			case '[':
-				brackets++
-			case ']':
-				brackets--
+			start := starts[len(starts)-1]
+			starts = starts[:len(starts)-1]
+			i += 2
+			parens := 1
+			for i < len(source) && parens > 0 {
+				if source[i] == '\\' && i+1 < len(source) {
+					i += 2
+					continue
+				}
+				switch source[i] {
+				case '(':
+					parens++
+				case ')':
+					parens--
+				}
+				i++
 			}
-		}
-		if brackets != 0 || j >= len(source) || source[j] != '(' {
-			continue
-		}
-		parens := 1
-		j++
-		for ; j < len(source) && parens > 0; j++ {
-			if source[j] == '\\' && j+1 < len(source) {
-				j++
-				continue
+			if parens == 0 && start < cutoff && i > cutoff && start < end {
+				end = start
 			}
-			switch source[j] {
-			case '(':
-				parens++
-			case ')':
-				parens--
-			}
+		default:
+			i++
 		}
-		if parens == 0 && j > cutoff {
-			return start
-		}
-		i = j - 1
 	}
-	return cutoff
+	return end
 }
 
 var markdownDecorationPattern = regexp.MustCompile(`(?m)(!?)\[([^\]]*)\]\([^)]*\)|^\s{0,3}#{1,6}\s*|[*_~` + "`" + `>|-]+`)

@@ -120,6 +120,8 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 		{"标题后图片地址中点", "# 标题\n\n![图](https://example.com/very/long/image-(1).png)\n\n结尾", "# 标题"},
 		{"链接地址中点", "开头 [文章](https://example.com/very/long/path/to/article) 结尾", "开头"},
 		{"首个内容就是图片", "![图](https://example.com/very/long/image-(1).png) 结尾", ""},
+		{"换行位于图片替代文字内", "序文 ![123456789012345\nalt](x) 1234567890", "序文"},
+		{"嵌套标签跨越中点", "开头 [外层 [内层](x)](https://example.com/long/path) 结尾", "开头"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,6 +138,14 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 	completeImage := "![图](https://example.com/a.png) " + strings.Repeat("后", 100)
 	if got := sharePreview(completeImage); !strings.Contains(got, "![图](https://example.com/a.png)") {
 		t.Fatalf("中点之前的完整图片应保留，实际 %q", got)
+	}
+}
+
+func TestSharePreviewManyUnclosedBrackets(t *testing.T) {
+	// 公开分享可能包含大量不成对的 Markdown 标记；截断检查必须保持线性。
+	content := strings.Repeat("[", 200_000)
+	if got := sharePreview(content); len(got) != len(content)/2 {
+		t.Fatalf("未闭合方括号应按中点截断，实际长度 %d", len(got))
 	}
 }
 
