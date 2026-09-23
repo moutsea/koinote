@@ -101,6 +101,12 @@ func TestWechatPublishErrorPreservesAccountAndPersistenceFailures(t *testing.T) 
 			wantStatus: http.StatusBadGateway,
 			wantCode:   "wechat_provider_error",
 		},
+		{
+			name:       "provider unavailable during draft creation",
+			err:        errors.Join(errWechatDraftCreateFailed, errWechatProviderUnavailable),
+			wantStatus: http.StatusBadGateway,
+			wantCode:   "wechat_provider_unavailable",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -870,7 +876,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 		wantBalance int64
 	}{
 		{name: "successful sync charges 20", credits: 20, wantStatus: http.StatusOK, wantBalance: 0},
-		{name: "draft failure releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_draft_create_failed", wantBalance: 20},
+		{name: "draft provider error releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
 		{name: "insufficient credits blocks provider calls", credits: 1, wantStatus: http.StatusPaymentRequired, wantCode: "insufficient_credits", wantBalance: 1},
 		{name: "saved default cover", coverMode: "default", coverSource: "https://images.example.test/cover.jpg", savedSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
 		{name: "saved relative default cover", coverMode: "default", coverSource: "https://img.koinote.app/u/test-user/12345678abcdef00.png", savedSource: "/images/u/test-user/12345678abcdef00.png", credits: 20, wantStatus: http.StatusOK},

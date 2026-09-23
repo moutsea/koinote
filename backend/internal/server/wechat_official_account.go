@@ -986,18 +986,22 @@ func (a *App) wechatPostJSON(ctx context.Context, path, accessToken string, inpu
 	if err != nil || len(responseBody) > wechatProviderResponseBytes {
 		return errWechatProviderUnavailable
 	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("%w: HTTP %d", errWechatProviderUnavailable, response.StatusCode)
-	}
 	var providerStatus struct {
 		ErrCode int    `json:"errcode"`
 		ErrMsg  string `json:"errmsg"`
 	}
 	if err := json.Unmarshal(responseBody, &providerStatus); err != nil {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			log.Printf("wechat API %s returned HTTP %d with a non-JSON response", path, response.StatusCode)
+		}
 		return errWechatProviderUnavailable
 	}
 	if providerStatus.ErrCode != 0 {
 		return &wechatProviderError{Code: providerStatus.ErrCode, Message: providerStatus.ErrMsg}
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		log.Printf("wechat API %s returned HTTP %d", path, response.StatusCode)
+		return fmt.Errorf("%w: HTTP %d", errWechatProviderUnavailable, response.StatusCode)
 	}
 	if output != nil {
 		if err := json.Unmarshal(responseBody, output); err != nil {

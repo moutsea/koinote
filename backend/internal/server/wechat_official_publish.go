@@ -1114,6 +1114,8 @@ func writeWechatPublishError(w http.ResponseWriter, err error) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_image_unreachable", "An article image cannot be downloaded")
 	case errors.Is(err, errWechatContentImageFailed):
 		httpx.ErrorCode(w, http.StatusBadGateway, "wechat_content_image_failed", "An article image could not be transferred to WeChat")
+	case errors.Is(err, errWechatProviderUnavailable):
+		writeWechatOfficialError(w, err)
 	case errors.Is(err, errWechatDraftCreateFailed):
 		httpx.ErrorCode(w, http.StatusBadGateway, "wechat_draft_create_failed", "WeChat could not create the draft")
 	default:
