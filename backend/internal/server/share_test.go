@@ -110,6 +110,35 @@ func TestSharePreviewNeverReturnsSecondHalf(t *testing.T) {
 	}
 }
 
+func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"图片地址中点", "开头 ![图](https://example.com/very/long/image-(1).png) 结尾", "开头"},
+		{"标题后图片地址中点", "# 标题\n\n![图](https://example.com/very/long/image-(1).png)\n\n结尾", "# 标题"},
+		{"链接地址中点", "开头 [文章](https://example.com/very/long/path/to/article) 结尾", "开头"},
+		{"首个内容就是图片", "![图](https://example.com/very/long/image-(1).png) 结尾", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sharePreview(tc.content); got != tc.want {
+				t.Fatalf("预览不能截出残缺的 Markdown: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	longParagraph := "短标题\n" + strings.Repeat("正文", 100)
+	if got := sharePreview(longParagraph); len([]rune(got)) < 50 {
+		t.Fatalf("长段落应继续预览到接近中点，实际只剩 %q", got)
+	}
+	completeImage := "![图](https://example.com/a.png) " + strings.Repeat("后", 100)
+	if got := sharePreview(completeImage); !strings.Contains(got, "![图](https://example.com/a.png)") {
+		t.Fatalf("中点之前的完整图片应保留，实际 %q", got)
+	}
+}
+
 func TestWriteSharedDocumentPreviewExcludesHiddenContent(t *testing.T) {
 	doc := sharedDocument{Title: "标题", Content: "公开内容\n\n隐藏内容隐藏内容", ViewCount: 1}
 	for _, preview := range []bool{true, false} {

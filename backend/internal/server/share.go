@@ -428,8 +428,8 @@ func writeSharedDocument(w http.ResponseWriter, doc sharedDocument, preview bool
 	})
 }
 
-// sharePreview 最多返回 Markdown 源码的前半段。优先在接近中点的换行处收尾，
-// 让标题、段落和图片语法尽量完整；长单行则按 Unicode 字符截断。
+// sharePreview 最多返回 Markdown 源码的前半段。优先在接近中点的行末截断；
+// 长行仍可按 Unicode 字符截断，但不会把图片、链接切成半个地址。
 func sharePreview(content string) string {
 	runes := []rune(content)
 	cutoff := len(runes) / 2
@@ -443,7 +443,59 @@ func sharePreview(content string) string {
 			break
 		}
 	}
+	if end == cutoff {
+		end = shareSafeInlineCutoff(runes, cutoff)
+	}
 	return strings.TrimRight(string(runes[:end]), " \t\r\n")
+}
+
+// 没有接近中点的完整行可截时，至少不要把图片或链接截成半个地址。
+// 括号按层级配对，兼容常见的带括号图片文件名和转义字符。
+func shareSafeInlineCutoff(source []rune, cutoff int) int {
+	for i := 0; i < cutoff; i++ {
+		start := i
+		if source[i] == '!' && i+1 < len(source) && source[i+1] == '[' {
+			i++
+		} else if source[i] != '[' {
+			continue
+		}
+		brackets := 1
+		j := i + 1
+		for ; j < len(source) && brackets > 0; j++ {
+			if source[j] == '\\' && j+1 < len(source) {
+				j++
+				continue
+			}
+			switch source[j] {
+			case '[':
+				brackets++
+			case ']':
+				brackets--
+			}
+		}
+		if brackets != 0 || j >= len(source) || source[j] != '(' {
+			continue
+		}
+		parens := 1
+		j++
+		for ; j < len(source) && parens > 0; j++ {
+			if source[j] == '\\' && j+1 < len(source) {
+				j++
+				continue
+			}
+			switch source[j] {
+			case '(':
+				parens++
+			case ')':
+				parens--
+			}
+		}
+		if parens == 0 && j > cutoff {
+			return start
+		}
+		i = j - 1
+	}
+	return cutoff
 }
 
 var markdownDecorationPattern = regexp.MustCompile(`(?m)(!?)\[([^\]]*)\]\([^)]*\)|^\s{0,3}#{1,6}\s*|[*_~` + "`" + `>|-]+`)

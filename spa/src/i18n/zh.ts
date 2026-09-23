@@ -1648,7 +1648,7 @@ export const zh: Messages = {
     sharedOpenApp: "了解 Koinote",
     sharedViews: "阅读 {count} 次",
     sharedPreviewTitle: "继续阅读全文",
-    sharedPreviewPrompt: "你已读完前半篇。注册或登录后，即可查看剩余内容。",
+    sharedPreviewPrompt: "预览到此结束。注册或登录后，即可查看剩余内容。",
     sharedReadFull: "注册并阅读全文",
     sharedLoginToRead: "登录查看全文",
     copyToMine: "复制到我的 Koinote",

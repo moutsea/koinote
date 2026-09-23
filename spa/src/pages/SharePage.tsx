@@ -38,6 +38,7 @@ export function SharePage() {
 
   // 口令验证成功后的正文放在本地，优先于查询结果
   const [unlocked, setUnlocked] = useState<{
+    token: string;
     viewerKey: string;
     document: SharedDocument;
   } | null>(null);
@@ -50,7 +51,9 @@ export function SharePage() {
     refetchOnWindowFocus: false,
   });
 
-  const currentUnlock = unlocked?.viewerKey === viewerKey ? unlocked.document : null;
+  const currentUnlock = unlocked && unlocked.token === token && unlocked.viewerKey === viewerKey
+    ? unlocked.document
+    : null;
   const shared = currentUnlock ?? query.data?.document;
   const needsPassword = !currentUnlock && query.data?.requiresPassword === true;
 
@@ -77,14 +80,14 @@ export function SharePage() {
   }
 
   if (needsPassword && token) {
-    return <PasswordGate token={token} onUnlock={(doc) => setUnlocked({ viewerKey, document: doc })} />;
+    return <PasswordGate key={token} token={token} onUnlock={(doc) => setUnlocked({ token, viewerKey, document: doc })} />;
   }
 
   if (!shared) {
     return <Centered>{t.editor.loading}</Centered>;
   }
 
-  return <SharedView shared={shared} />;
+  return <SharedView key={`${token}:${viewerKey}:${shared.isPreview}`} shared={shared} />;
 }
 
 function PasswordGate({
