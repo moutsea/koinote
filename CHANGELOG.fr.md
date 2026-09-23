@@ -11,6 +11,10 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Ajout de la sélection multiple avec Shift/Ctrl, de la navigation au clavier et du déplacement ou de la suppression groupés dans l’arborescence.
 - Ajout d’actions de fermeture des onglets associés et de création d’un nouveau document.
 
+### Changed
+
+- La synchronisation des brouillons WeChat réutilise les images déjà envoyées selon le compte et leur contenu, réduisant l’attente lors des synchronisations répétées et des nouvelles tentatives, sans modifier la qualité ni les couvertures. Aucune mise à jour du client n’est nécessaire.
+
 ### Fixed
 
 - Correction des délais d’expiration des brouillons WeChat riches en images grâce aux envois parallèles limités, aux signaux de maintien de la passerelle et aux connexions relais qui expirent uniquement lorsqu’elles sont inactives. Les clients existants restent compatibles.

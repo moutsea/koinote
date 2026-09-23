@@ -866,26 +866,6 @@ func (a *App) requestWechatStableToken(
 	}, nil
 }
 
-func (a *App) wechatAccessTokenForAccount(ctx context.Context, account wechatOfficialAccountRef, force bool) (string, error) {
-	credential, err := a.loadWechatOfficialCredential(ctx, account)
-	if err != nil {
-		return "", err
-	}
-	return a.wechatAccessTokenForCredential(ctx, credential, force)
-}
-
-func (a *App) wechatAccessTokenForAccountAfterFailure(
-	ctx context.Context,
-	account wechatOfficialAccountRef,
-	failedToken string,
-) (string, error) {
-	credential, err := a.loadWechatOfficialCredential(ctx, account)
-	if err != nil {
-		return "", err
-	}
-	return a.refreshWechatAccessToken(ctx, credential, true, failedToken)
-}
-
 func (a *App) wechatAccessTokenForCredential(
 	ctx context.Context,
 	credential wechatOfficialCredential,

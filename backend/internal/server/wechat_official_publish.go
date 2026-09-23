@@ -788,17 +788,45 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 }
 
 func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficialAccountRef, preparations []wechatDraftImagePreparation) ([]string, error) {
+	if len(preparations) == 0 {
+		return nil, nil
+	}
+	credential, err := a.loadWechatOfficialCredential(ctx, account)
+	if err != nil {
+		return nil, errors.Join(errWechatContentImageFailed, err)
+	}
+	hashes := make([]string, len(preparations))
+	firstIndexes := make(map[string]int, len(preparations))
+	for index, preparation := range preparations {
+		hashes[index] = fmt.Sprintf("%x", sha256.Sum256(preparation.Prepared))
+		if _, found := firstIndexes[hashes[index]]; !found {
+			firstIndexes[hashes[index]] = index
+		}
+	}
+	cached := a.loadWechatImageUploadCache(ctx, account, credential.AppID, hashes)
 	uploadContext, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	results := make([]string, len(preparations))
 	jobs := make(chan int, len(preparations))
+	var cachedCount, uploadCount, uploadBytes int
 	for index := range preparations {
+		if cachedURL := cached[hashes[index]]; cachedURL != "" {
+			results[index] = cachedURL
+			cachedCount++
+			continue
+		}
+		if firstIndexes[hashes[index]] != index {
+			continue
+		}
 		jobs <- index
+		uploadCount++
+		uploadBytes += len(preparations[index].Prepared)
 	}
 	close(jobs)
+	log.Printf("wechat draft image cache: count=%d cached=%d uploads=%d upload_bytes=%d", len(preparations), cachedCount, uploadCount, uploadBytes)
 
 	var workers sync.WaitGroup
-	for worker := 0; worker < min(wechatDraftImageUploadWorkers, len(preparations)); worker++ {
+	for worker := 0; worker < min(wechatDraftImageUploadWorkers, uploadCount); worker++ {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
@@ -807,7 +835,7 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 					return
 				}
 				preparation := preparations[index]
-				err := a.withWechatAccessToken(uploadContext, account, func(token string) error {
+				err := a.withWechatCredentialAccessToken(uploadContext, credential, func(token string) error {
 					var response struct {
 						URL string `json:"url"`
 					}
@@ -817,19 +845,26 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 					if strings.TrimSpace(response.URL) == "" {
 						return errWechatContentImageFailed
 					}
-					results[index] = response.URL
+					results[index] = strings.TrimSpace(response.URL)
 					return nil
 				})
 				if err != nil {
 					cancel(wechatArticleImageContext(index, preparation.Source, "upload", err))
 					return
 				}
+				a.storeWechatImageUploadCache(ctx, account, credential.AppID, hashes[index], results[index])
 			}
 		}()
 	}
 	workers.Wait()
+	if uploadCount > 0 {
+		a.pruneWechatImageUploadCache(ctx, account)
+	}
 	if err := context.Cause(uploadContext); err != nil {
 		return nil, errors.Join(errWechatContentImageFailed, err)
+	}
+	for index, hash := range hashes {
+		results[index] = results[firstIndexes[hash]]
 	}
 	return results, nil
 }
@@ -1070,7 +1105,15 @@ func (a *App) deleteWechatMaterialBestEffort(ctx context.Context, account wechat
 }
 
 func (a *App) withWechatAccessToken(ctx context.Context, account wechatOfficialAccountRef, action func(string) error) error {
-	token, err := a.wechatAccessTokenForAccount(ctx, account, false)
+	credential, err := a.loadWechatOfficialCredential(ctx, account)
+	if err != nil {
+		return err
+	}
+	return a.withWechatCredentialAccessToken(ctx, credential, action)
+}
+
+func (a *App) withWechatCredentialAccessToken(ctx context.Context, credential wechatOfficialCredential, action func(string) error) error {
+	token, err := a.wechatAccessTokenForCredential(ctx, credential, false)
 	if err != nil {
 		return err
 	}
@@ -1078,7 +1121,7 @@ func (a *App) withWechatAccessToken(ctx context.Context, account wechatOfficialA
 	if !isWechatAccessTokenError(err) {
 		return err
 	}
-	token, refreshErr := a.wechatAccessTokenForAccountAfterFailure(ctx, account, token)
+	token, refreshErr := a.refreshWechatAccessToken(ctx, credential, true, token)
 	if refreshErr != nil {
 		return refreshErr
 	}

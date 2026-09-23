@@ -13,6 +13,10 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Added Shift/Ctrl multi-selection, keyboard navigation, and bulk move/delete to the document tree.
 - Added editor tab actions for closing related tabs and creating a new document.
 
+### Changed
+
+- WeChat draft sync reuses uploaded article images by account and image content, reducing repeat-sync and retry delays without changing image quality or covers. Existing clients need no update.
+
 ### Fixed
 
 - Fixed WeChat draft timeouts for image-heavy articles with bounded parallel uploads, gateway heartbeats, and relay connections that expire only when idle. Existing clients remain compatible.

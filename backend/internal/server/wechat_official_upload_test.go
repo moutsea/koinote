@@ -287,7 +287,11 @@ func TestWechatDraftImageTransferDeduplicatesAndPreservesCover(t *testing.T) {
 		if selectCover {
 			wantCover = secondImage.Bytes()
 		}
-		if !bytes.Equal(cover, wantCover) || downloads.Load() != 2 || uploads.Load() != 2 {
+		wantUploads := int32(2)
+		if selectCover {
+			wantUploads = 0
+		}
+		if !bytes.Equal(cover, wantCover) || downloads.Load() != 2 || uploads.Load() != wantUploads {
 			t.Fatalf("selected cover preserved=%t downloads=%d uploads=%d", bytes.Equal(cover, wantCover), downloads.Load(), uploads.Load())
 		}
 	}

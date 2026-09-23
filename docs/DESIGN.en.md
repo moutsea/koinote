@@ -913,6 +913,19 @@ Remote downloads reject private and loopback networks, validate
 resolved DNS addresses, disable redirects, and cap response sizes. If draft creation
 fails, the backend makes a best-effort deletion of the newly uploaded orphan thumbnail.
 
+Article upload results persist in `wechat_image_upload_cache` (migration `0053`),
+scoped to the user's bound account, AppID, and SHA-256 of the prepared image bytes.
+Identical images at different URLs are uploaded once per batch. Sources are still
+downloaded, validated, and prepared on each sync, so changed content at the same URL
+is uploaded again without changing image quality or cover cropping. Cache entries
+expire after 30 days; after uploads, expired entries are removed and the account keeps
+its latest 2,000 entries. Account or user deletion cascades to the cache. Cache operations
+have a two-second deadline and failures fall back to ordinary uploads. Each successful
+image is saved immediately so failed batches can reuse completed images on retry.
+Logs include cache hits, upload counts, and upload bytes, without URLs or tokens.
+This speeds up repeated syncs and retries; initial syncs still transfer every image,
+and permanent thumbnails retain their separate upload and cleanup lifecycle.
+
 For long draft requests, the Worker negotiates `application/x-koinote-wechat-draft` with
 the backend. Heartbeats are flushed every 10 seconds, followed by the real HTTP status
 and JSON result. The Worker caps this stream at 64 KiB and restores the ordinary JSON
