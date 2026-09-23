@@ -24,4 +24,4 @@ jobs:
           printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
             "root@$HOST" \
-            'cd /opt/koinote && docker compose logs --since=24h --no-color backend 2>/dev/null | grep -Ei "wechat (draft|api)|draft/add|wechat provider" | tail -200 || true'
+            'cd /opt/koinote && docker compose logs --since=24h --no-color backend 2>/dev/null | grep -E -A 8 -B 2 "wechat draft image transfer" | tail -240 || true'
