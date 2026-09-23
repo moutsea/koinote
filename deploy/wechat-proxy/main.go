@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,8 +31,9 @@ const (
 var errUnsupportedProxyRequest = errors.New("only the WeChat HTTPS CONNECT target is allowed")
 
 type proxy struct {
-	dialer net.Dialer
-	sem    chan struct{}
+	dialer         net.Dialer
+	sem            chan struct{}
+	allowedClients []netip.Prefix
 }
 
 func newProxy() *proxy {
@@ -61,6 +64,10 @@ func (p *proxy) serve(ctx context.Context, listener net.Listener) error {
 			log.Printf("accept failed: %v", err)
 			continue
 		}
+		if !p.allowsClient(conn.RemoteAddr()) {
+			_ = conn.Close()
+			continue
+		}
 		select {
 		case p.sem <- struct{}{}:
 		case <-ctx.Done():
@@ -78,6 +85,43 @@ func (p *proxy) serve(ctx context.Context, listener net.Listener) error {
 			p.handle(conn)
 		}()
 	}
+}
+
+func parseAllowedClients(raw string) ([]netip.Prefix, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var prefixes []netip.Prefix
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		prefix, err := netip.ParsePrefix(part)
+		if err != nil || prefix.Masked().Addr().IsUnspecified() {
+			return nil, fmt.Errorf("invalid WECHAT_PROXY_ALLOWED_CIDRS entry %q", part)
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
+}
+
+func (p *proxy) allowsClient(remote net.Addr) bool {
+	if len(p.allowedClients) == 0 {
+		return true
+	}
+	host, _, err := net.SplitHostPort(remote.String())
+	if err != nil {
+		return false
+	}
+	address, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	address = address.Unmap()
+	for _, prefix := range p.allowedClients {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *proxy) handle(client net.Conn) {
@@ -225,20 +269,59 @@ func remoteAddress(conn net.Conn) string {
 	return "unknown"
 }
 
+func newProxyListener(address, certPath, keyPath string, allowedClients []netip.Prefix) (net.Listener, error) {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("invalid WECHAT_PROXY_LISTEN: %w", err)
+	}
+	listenIP, err := netip.ParseAddr(host)
+	if err != nil {
+		return nil, fmt.Errorf("WECHAT_PROXY_LISTEN must use an IP address: %w", err)
+	}
+	if (certPath == "") != (keyPath == "") {
+		return nil, errors.New("WECHAT_PROXY_TLS_CERT and WECHAT_PROXY_TLS_KEY must be configured together")
+	}
+	if !listenIP.IsPrivate() && !listenIP.IsLoopback() && (certPath == "" || len(allowedClients) == 0) {
+		return nil, errors.New("public WeChat proxy listeners require TLS and WECHAT_PROXY_ALLOWED_CIDRS")
+	}
+	var listener net.Listener
+	if certPath != "" {
+		certificate, err := tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			return nil, fmt.Errorf("load WeChat proxy TLS certificate: %w", err)
+		}
+		listener, err = tls.Listen("tcp", address, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}, NextProtos: []string{"http/1.1"}})
+	} else {
+		listener, err = net.Listen("tcp", address)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("listen on %s: %w", address, err)
+	}
+	return listener, nil
+}
+
 func run() error {
 	address := strings.TrimSpace(os.Getenv("WECHAT_PROXY_LISTEN"))
 	if address == "" {
 		address = defaultListenAddress
 	}
-	listener, err := net.Listen("tcp", address)
+	allowedClients, err := parseAllowedClients(os.Getenv("WECHAT_PROXY_ALLOWED_CIDRS"))
 	if err != nil {
-		return fmt.Errorf("listen on %s: %w", address, err)
+		return err
+	}
+	certPath := strings.TrimSpace(os.Getenv("WECHAT_PROXY_TLS_CERT"))
+	keyPath := strings.TrimSpace(os.Getenv("WECHAT_PROXY_TLS_KEY"))
+	listener, err := newProxyListener(address, certPath, keyPath, allowedClients)
+	if err != nil {
+		return err
 	}
 	defer listener.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log.Printf("WeChat CONNECT proxy listening on %s", address)
-	return newProxy().serve(ctx, listener)
+	log.Printf("WeChat CONNECT proxy listening on %s tls=%t allowlist=%d", address, certPath != "", len(allowedClients))
+	p := newProxy()
+	p.allowedClients = allowedClients
+	return p.serve(ctx, listener)
 }
 
 func main() {

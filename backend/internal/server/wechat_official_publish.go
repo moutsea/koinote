@@ -825,6 +825,7 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 	close(jobs)
 	log.Printf("wechat draft image cache: count=%d cached=%d uploads=%d upload_bytes=%d", len(preparations), cachedCount, uploadCount, uploadBytes)
 
+	batchStart := time.Now()
 	var workers sync.WaitGroup
 	for worker := 0; worker < min(wechatDraftImageUploadWorkers, uploadCount); worker++ {
 		workers.Add(1)
@@ -834,6 +835,8 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 				if uploadContext.Err() != nil {
 					return
 				}
+				queueMS := time.Since(batchStart).Milliseconds()
+				requestStart := time.Now()
 				preparation := preparations[index]
 				err := a.withWechatCredentialAccessToken(uploadContext, credential, func(token string) error {
 					var response struct {
@@ -848,6 +851,7 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 					results[index] = strings.TrimSpace(response.URL)
 					return nil
 				})
+				log.Printf("wechat draft image upload: index=%d queue_ms=%d request_ms=%d bytes=%d outcome=%s", index+1, queueMS, time.Since(requestStart).Milliseconds(), len(preparation.Prepared), wechatImageUploadOutcome(err))
 				if err != nil {
 					cancel(wechatArticleImageContext(index, preparation.Source, "upload", err))
 					return
@@ -857,6 +861,7 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 		}()
 	}
 	workers.Wait()
+	log.Printf("wechat draft image upload batch: uploads=%d workers=%d total_ms=%d outcome=%s", uploadCount, min(wechatDraftImageUploadWorkers, uploadCount), time.Since(batchStart).Milliseconds(), wechatImageUploadOutcome(context.Cause(uploadContext)))
 	if uploadCount > 0 {
 		a.pruneWechatImageUploadCache(ctx, account)
 	}
@@ -867,6 +872,23 @@ func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficia
 		results[index] = results[firstIndexes[hash]]
 	}
 	return results, nil
+}
+
+func wechatImageUploadOutcome(err error) string {
+	switch {
+	case err == nil:
+		return "ok"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	default:
+		var providerError *wechatProviderError
+		if errors.As(err, &providerError) {
+			return "provider_error"
+		}
+		return "failed"
+	}
 }
 
 func rewriteWechatImageSources(
