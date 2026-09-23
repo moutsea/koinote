@@ -111,7 +111,10 @@ func (e *wechatArticleImageError) Error() string {
 	if e.Host != "" {
 		location += " from " + e.Host
 	}
-	return location + " failed during " + e.Stage
+	if e.Err == nil {
+		return location + " failed during " + e.Stage
+	}
+	return fmt.Sprintf("%s failed during %s: %v", location, e.Stage, e.Err)
 }
 
 func (e *wechatArticleImageError) Unwrap() error {
@@ -1074,7 +1077,7 @@ func (a *App) wechatPostMultipart(
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, wechatProviderResponseBytes+1))
-	if err != nil || len(responseBody) > wechatProviderResponseBytes || response.StatusCode < 200 || response.StatusCode >= 300 {
+	if err != nil || len(responseBody) > wechatProviderResponseBytes {
 		return errWechatProviderUnavailable
 	}
 	var providerStatus struct {
@@ -1082,10 +1085,17 @@ func (a *App) wechatPostMultipart(
 		ErrMsg  string `json:"errmsg"`
 	}
 	if err := json.Unmarshal(responseBody, &providerStatus); err != nil {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			log.Printf("wechat API %s returned HTTP %d with a non-JSON response", path, response.StatusCode)
+		}
 		return errWechatProviderUnavailable
 	}
 	if providerStatus.ErrCode != 0 {
 		return &wechatProviderError{Code: providerStatus.ErrCode, Message: providerStatus.ErrMsg}
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		log.Printf("wechat API %s returned HTTP %d", path, response.StatusCode)
+		return fmt.Errorf("%w: HTTP %d", errWechatProviderUnavailable, response.StatusCode)
 	}
 	if err := json.Unmarshal(responseBody, output); err != nil {
 		return errWechatProviderUnavailable

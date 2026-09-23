@@ -1121,6 +1121,21 @@ func TestWechatPostJSONEscapesAccessToken(t *testing.T) {
 	}
 }
 
+func TestWechatPostMultipartPreservesProviderErrorOnHTTPFailure(t *testing.T) {
+	app := &App{wechatAPIHTTPClient: &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"errcode":40007,"errmsg":"invalid media_id"}`)),
+		}, nil
+	})}}
+	err := app.wechatPostMultipart(context.Background(), "/cgi-bin/media/uploadimg", "token", "article.jpg", "image/jpeg", []byte("image"), &struct{}{})
+	var providerError *wechatProviderError
+	if !errors.As(err, &providerError) || providerError.Code != 40007 {
+		t.Fatalf("multipart error=%v, want provider error 40007", err)
+	}
+}
+
 func TestWechatProviderNetworkErrorDoesNotExposeAccessToken(t *testing.T) {
 	const accessToken = "sensitive-token-value"
 	app := &App{wechatAPIHTTPClient: &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
