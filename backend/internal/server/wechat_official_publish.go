@@ -47,6 +47,7 @@ const (
 	wechatDraftHTMLMaxBytes         = 2 << 20
 	wechatDraftMaxImages            = 20
 	wechatDraftImagePrepareWorkers  = 2
+	wechatDraftImageUploadWorkers   = 4
 	wechatRemoteImageMaxBytes       = 10 << 20
 	wechatContentImageMaxBytes      = 1 << 20
 	wechatImageMaxPixels            = 36_000_000
@@ -740,10 +741,11 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 	for index, source := range uniqueSources {
 		preserveRaw[index] = index == 0 || selectCover && source == coverSource
 	}
+	prepareStarted := time.Now()
 	preparations := a.prepareWechatDraftImages(ctx, uniqueSources, preserveRaw)
 	var firstImage []byte
 	var selectedImage []byte
-	for index, preparation := range preparations {
+	for _, preparation := range preparations {
 		if preparation.Err != nil {
 			return "", nil, preparation.Err
 		}
@@ -753,25 +755,16 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 		if selectCover && preparation.Source == coverSource {
 			selectedImage = preparation.Raw
 		}
-		var uploadedURL string
-		err := a.withWechatAccessToken(ctx, account, func(token string) error {
-			var response struct {
-				URL string `json:"url"`
-			}
-			err := a.wechatPostMultipart(ctx, "/cgi-bin/media/uploadimg", token, "article.jpg", "image/jpeg", preparation.Prepared, &response)
-			if err == nil && strings.TrimSpace(response.URL) == "" {
-				return errWechatContentImageFailed
-			}
-			uploadedURL = response.URL
-			return err
-		})
-		if err != nil {
-			return "", nil, errors.Join(
-				errWechatContentImageFailed,
-				wechatArticleImageContext(index, preparation.Source, "upload", err),
-			)
-		}
-		unique[preparation.Source] = uploadedURL
+	}
+	log.Printf("wechat draft images prepared: count=%d duration=%s", len(preparations), time.Since(prepareStarted).Round(time.Millisecond))
+	uploadStarted := time.Now()
+	uploadedURLs, err := a.uploadWechatDraftImages(ctx, account, preparations)
+	log.Printf("wechat draft images uploaded: count=%d duration=%s success=%t", len(preparations), time.Since(uploadStarted).Round(time.Millisecond), err == nil)
+	if err != nil {
+		return "", nil, err
+	}
+	for index, preparation := range preparations {
+		unique[preparation.Source] = uploadedURLs[index]
 	}
 
 	rewritten, err := rewriteWechatImageSources(content, matches, sources, unique)
@@ -782,6 +775,53 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 		return rewritten, selectedImage, nil
 	}
 	return rewritten, firstImage, nil
+}
+
+func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficialAccountRef, preparations []wechatDraftImagePreparation) ([]string, error) {
+	uploadContext, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	results := make([]string, len(preparations))
+	jobs := make(chan int, len(preparations))
+	for index := range preparations {
+		jobs <- index
+	}
+	close(jobs)
+
+	var workers sync.WaitGroup
+	for worker := 0; worker < min(wechatDraftImageUploadWorkers, len(preparations)); worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				if uploadContext.Err() != nil {
+					return
+				}
+				preparation := preparations[index]
+				err := a.withWechatAccessToken(uploadContext, account, func(token string) error {
+					var response struct {
+						URL string `json:"url"`
+					}
+					if err := a.wechatPostMultipart(uploadContext, "/cgi-bin/media/uploadimg", token, "article.jpg", "image/jpeg", preparation.Prepared, &response); err != nil {
+						return err
+					}
+					if strings.TrimSpace(response.URL) == "" {
+						return errWechatContentImageFailed
+					}
+					results[index] = response.URL
+					return nil
+				})
+				if err != nil {
+					cancel(wechatArticleImageContext(index, preparation.Source, "upload", err))
+					return
+				}
+			}
+		}()
+	}
+	workers.Wait()
+	if err := context.Cause(uploadContext); err != nil {
+		return nil, errors.Join(errWechatContentImageFailed, err)
+	}
+	return results, nil
 }
 
 func rewriteWechatImageSources(

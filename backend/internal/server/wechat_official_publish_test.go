@@ -867,6 +867,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 	tests := []struct {
 		name        string
 		failDraft   bool
+		failImage   bool
 		coverMode   string
 		coverSource string
 		savedSource string
@@ -877,6 +878,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 	}{
 		{name: "successful sync charges 20", credits: 20, wantStatus: http.StatusOK, wantBalance: 0},
 		{name: "draft provider error releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
+		{name: "image upload error releases 20", credits: 20, failImage: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
 		{name: "insufficient credits blocks provider calls", credits: 1, wantStatus: http.StatusPaymentRequired, wantCode: "insufficient_credits", wantBalance: 1},
 		{name: "saved default cover", coverMode: "default", coverSource: "https://images.example.test/cover.jpg", savedSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
 		{name: "saved relative default cover", coverMode: "default", coverSource: "https://img.koinote.app/u/test-user/12345678abcdef00.png", savedSource: "/images/u/test-user/12345678abcdef00.png", credits: 20, wantStatus: http.StatusOK},
@@ -904,6 +906,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(coverData))}, nil
 			})}
 			var uploadedCover []byte
+			var draftCalls int
 			app.wechatAPIHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
 				response := func(body string) (*http.Response, error) {
 					return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
@@ -911,6 +914,8 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 				switch request.URL.Path {
 				case "/cgi-bin/stable_token":
 					return response(`{"access_token":"wechat-credit-token","expires_in":7200}`)
+				case "/cgi-bin/media/uploadimg":
+					return response(`{"errcode":40005,"errmsg":"invalid file type"}`)
 				case "/cgi-bin/material/add_material":
 					file, _, readErr := request.FormFile("media")
 					if readErr != nil {
@@ -925,6 +930,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 				case "/cgi-bin/material/del_material":
 					return response(`{}`)
 				case "/cgi-bin/draft/add":
+					draftCalls++
 					if test.failDraft {
 						return &http.Response{StatusCode: http.StatusBadGateway, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"errcode":-1,"errmsg":"unavailable"}`))}, nil
 					}
@@ -960,8 +966,12 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create document: %v", err)
 			}
+			content := "<p>Article body</p>"
+			if test.failImage {
+				content += `<img src="` + coverDataURL + `">`
+			}
 			requestBody, err := json.Marshal(map[string]any{
-				"accountId": accountID, "title": "Credit test", "html": "<p>Article body</p>",
+				"accountId": accountID, "title": "Credit test", "html": content,
 				"coverMode": test.coverMode, "coverImageSource": test.coverSource, "coverRatio": "3:2",
 			})
 			if err != nil {
@@ -979,6 +989,9 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 			app.Routes().ServeHTTP(response, request)
 			if response.Code != test.wantStatus {
 				t.Fatalf("draft status=%d want=%d body=%s", response.Code, test.wantStatus, response.Body.String())
+			}
+			if test.failImage && (draftCalls != 0 || len(uploadedCover) != 0) {
+				t.Fatal("failed article image must stop cover upload and draft creation")
 			}
 			if test.coverMode == "default" && test.wantStatus == http.StatusBadRequest && (imageReads != 0 || len(uploadedCover) != 0) {
 				t.Fatal("rejected default URL must not trigger image downloads or uploads")

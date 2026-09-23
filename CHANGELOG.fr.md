@@ -13,6 +13,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- Les images des brouillons WeChat sont désormais envoyées en parallèle avec une limite de concurrence, réduisant l’attente des articles riches en images et les délais de passerelle causés par les envois séquentiels.
 - Correction des titres masqués lors d’un échec de chargement de couverture, des titres obsolètes sur les couvertures par défaut, des couvertures dupliquées dans le corps sur X, des anciennes couvertures dans les brouillons WeChat et du blocage de la synchronisation du corps sur Feishu. Les métadonnées de couverture respectent désormais des limites de taille et de stockage.
 - Les opérations groupées sur l’arborescence réutilisent désormais le contrôle de révision et préservent la récupération des images lors de la suppression définitive.
 

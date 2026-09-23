@@ -898,8 +898,12 @@ clients. The backend validates every AppID and AppSecret through `stable_token`,
 access tokens by account, and encrypts each AppSecret with the dedicated
 `WECHAT_CREDENTIAL_ENCRYPTION_KEY`. Publishing reuses the same HTML builder without
 duplicating the title in the body. The backend safely downloads and validates each
-article image, transfers it with `media/uploadimg`, uploads the permanent thumbnail,
-then calls `draft/add`. Cover settings offer a default cover, an article image, or an
+article image with two preparation workers, then transfers deduplicated images with up to
+four concurrent `media/uploadimg` workers to reduce time spent waiting for the origin response.
+Results retain the original image order. The first upload failure cancels the other uploads
+and preserves its error; only a successful batch proceeds to the permanent thumbnail and
+`draft/add`. Phase logs contain counts, durations, and success status without image URLs or
+tokens. Cover settings offer a default cover, an article image, or an
 AI-generated image. The client renders the default cover with the Koinote logo and article
 title; article images are re-read, validated, and center-cropped by the backend to the
 selected ratio.
