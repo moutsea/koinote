@@ -1096,11 +1096,8 @@ func (a *App) wechatPostMultipart(
 func writeWechatPublishError(w http.ResponseWriter, err error) {
 	var providerError *wechatProviderError
 	if errors.As(err, &providerError) {
-		switch providerError.Code {
-		case 40013, 40125, 40164, 48001, 48004, 48005, 45009:
-			writeWechatOfficialError(w, err)
-			return
-		}
+		writeWechatOfficialError(w, err)
+		return
 	}
 	switch {
 	case errors.Is(err, errWechatAccountNotBound),

@@ -95,6 +95,12 @@ func TestWechatPublishErrorPreservesAccountAndPersistenceFailures(t *testing.T) 
 			wantStatus: http.StatusInternalServerError,
 			wantCode:   "server_error",
 		},
+		{
+			name:       "unknown provider error during draft creation",
+			err:        errors.Join(errWechatDraftCreateFailed, &wechatProviderError{Code: 47001, Message: "data format error"}),
+			wantStatus: http.StatusBadGateway,
+			wantCode:   "wechat_provider_error",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
