@@ -4,11 +4,58 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"io"
+	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 var errUnexpectedTunnelRead = errors.New("unexpected read past buffered tunnel data")
+
+func TestIdleTimeoutKeepsActiveUploadAndPendingResponseAlive(t *testing.T) {
+	client, peer := net.Pipe()
+	defer client.Close()
+	defer peer.Close()
+	conn := newIdleTimeoutConn(client, 300*time.Millisecond)
+	peerDone := make(chan error, 1)
+	go func() {
+		_, err := io.CopyN(io.Discard, peer, 10)
+		if err == nil {
+			_, err = peer.Write([]byte{1})
+		}
+		peerDone <- err
+	}()
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := io.ReadFull(conn, make([]byte, 1))
+		readDone <- err
+	}()
+	for index := 0; index < 10; index++ {
+		time.Sleep(50 * time.Millisecond)
+		if _, err := conn.Write([]byte{1}); err != nil {
+			t.Fatalf("active upload expired: %v", err)
+		}
+	}
+	if err := <-readDone; err != nil {
+		t.Fatalf("response reader expired during active upload: %v", err)
+	}
+	if err := <-peerDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIdleTimeoutClosesInactiveTunnel(t *testing.T) {
+	client, peer := net.Pipe()
+	defer client.Close()
+	defer peer.Close()
+	conn := newIdleTimeoutConn(client, 20*time.Millisecond)
+	_, err := conn.Read(make([]byte, 1))
+	var networkError net.Error
+	if !errors.As(err, &networkError) || !networkError.Timeout() {
+		t.Fatalf("inactive connection error=%v, want timeout", err)
+	}
+}
 
 type oneChunkReader struct {
 	chunk []byte

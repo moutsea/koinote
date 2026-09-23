@@ -868,6 +868,7 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 		name        string
 		failDraft   bool
 		failImage   bool
+		streamed    bool
 		coverMode   string
 		coverSource string
 		savedSource string
@@ -879,6 +880,9 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 		{name: "successful sync charges 20", credits: 20, wantStatus: http.StatusOK, wantBalance: 0},
 		{name: "draft provider error releases 20", credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
 		{name: "image upload error releases 20", credits: 20, failImage: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
+		{name: "streamed sync charges 20", streamed: true, credits: 20, wantStatus: http.StatusOK},
+		{name: "streamed draft error releases 20", streamed: true, credits: 20, failDraft: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
+		{name: "streamed image error releases 20", streamed: true, credits: 20, failImage: true, wantStatus: http.StatusBadGateway, wantCode: "wechat_provider_error", wantBalance: 20},
 		{name: "insufficient credits blocks provider calls", credits: 1, wantStatus: http.StatusPaymentRequired, wantCode: "insufficient_credits", wantBalance: 1},
 		{name: "saved default cover", coverMode: "default", coverSource: "https://images.example.test/cover.jpg", savedSource: "https://images.example.test/cover.jpg", credits: 20, wantStatus: http.StatusOK},
 		{name: "saved relative default cover", coverMode: "default", coverSource: "https://img.koinote.app/u/test-user/12345678abcdef00.png", savedSource: "/images/u/test-user/12345678abcdef00.png", credits: 20, wantStatus: http.StatusOK},
@@ -985,8 +989,26 @@ func TestWechatDraftHTTPChargesAndReleasesFixedCredits(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("x-koinote-internal-token", "wechat-credit-test-internal")
 			request.Header.Set("X-Auth-User-Id", user.AuthUserID)
+			if test.streamed {
+				request.Header.Set("Accept", wechatDraftStreamContentType)
+			}
 			response := httptest.NewRecorder()
 			app.Routes().ServeHTTP(response, request)
+			if test.streamed {
+				if response.Header().Get("Content-Type") != wechatDraftStreamContentType {
+					t.Fatalf("draft stream was not enabled: %s", response.Body.String())
+				}
+				decoder := json.NewDecoder(response.Body)
+				var result wechatDraftStreamFrame
+				for result.Type != "result" {
+					if err := decoder.Decode(&result); err != nil {
+						t.Fatal(err)
+					}
+				}
+				response = httptest.NewRecorder()
+				response.Code = result.Status
+				response.Body.Write(result.Body)
+			}
 			if response.Code != test.wantStatus {
 				t.Fatalf("draft status=%d want=%d body=%s", response.Code, test.wantStatus, response.Body.String())
 			}

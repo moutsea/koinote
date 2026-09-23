@@ -899,7 +899,7 @@ access tokens by account, and encrypts each AppSecret with the dedicated
 `WECHAT_CREDENTIAL_ENCRYPTION_KEY`. Publishing reuses the same HTML builder without
 duplicating the title in the body. The backend safely downloads and validates each
 article image with two preparation workers, then transfers deduplicated images with up to
-four concurrent `media/uploadimg` workers to reduce time spent waiting for the origin response.
+two concurrent `media/uploadimg` workers with a 90-second upload timeout to accommodate the relay bandwidth.
 Results retain the original image order. The first upload failure cancels the other uploads
 and preserves its error; only a successful batch proceeds to the permanent thumbnail and
 `draft/add`. Phase logs contain counts, durations, and success status without image URLs or
@@ -912,6 +912,14 @@ thumbnail for legacy requests before calling `draft/add`.
 Remote downloads reject private and loopback networks, validate
 resolved DNS addresses, disable redirects, and cap response sizes. If draft creation
 fails, the backend makes a best-effort deletion of the newly uploaded orphan thumbnail.
+
+For long draft requests, the Worker negotiates `application/x-koinote-wechat-draft` with
+the backend. Heartbeats are flushed every 10 seconds, followed by the real HTTP status
+and JSON result. The Worker caps this stream at 64 KiB and restores the ordinary JSON
+response for released clients. Missing or interrupted results fail explicitly. Draft work
+has a 10-minute deadline, keeps request cancellation, and releases credits on failure.
+The WeChat CONNECT relay expires connections after two minutes without read or write
+activity, rather than terminating an active upload based on connection age.
 
 Cover generation calls an OpenAI-compatible Images API only from the backend. It
 supports presets and custom `W:H` ratios (default `2.35:1`). Both components must be positive,

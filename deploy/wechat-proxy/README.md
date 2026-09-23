@@ -4,6 +4,12 @@
 only `api.weixin.qq.com:443`, limits concurrent connections, and never proxies
 ordinary HTTP requests or arbitrary destinations.
 
+Tunnels expire after two minutes of inactivity. Reads and writes refresh both deadlines
+so an active image upload can finish even when the connection is older than two minutes.
+Run `GO111MODULE=off go test -race ./deploy/wechat-proxy` from the repository root before
+deploying a proxy change. The relay binary and `koinote-wechat-proxy` systemd service must
+be updated separately from the main backend deployment; keep the previous binary for rollback.
+
 The intended production path is WireGuard (`10.77.0.1/24` on the relay and
 `10.77.0.2/24` on the Koinote host). The relay listens on `10.77.0.1:18080`
 by default. The current relay provider does not pass UDP 51820, so production

@@ -15,7 +15,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
-- WeChat drafts now upload article images with bounded concurrency, reducing waits for image-heavy articles and fixing gateway timeouts caused by sequential uploads.
+- Fixed WeChat draft timeouts for image-heavy articles with bounded parallel uploads, gateway heartbeats, and relay connections that expire only when idle. Existing clients remain compatible.
 - Fixed missing titles after cover load failures, stale default-cover titles, duplicate X cover images in article bodies, stale WeChat draft covers, and Feishu cover failures blocking body sync. Cover metadata now has size and storage quota limits.
 - Batched tree mutations now share document revision checks and preserve image reclamation during permanent cleanup.
 

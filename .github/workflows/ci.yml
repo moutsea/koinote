@@ -87,6 +87,11 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
+      - name: WeChat proxy tests
+        env:
+          GO111MODULE: "off"
+        run: go test -race ./deploy/wechat-proxy
+
       - name: go test
         working-directory: backend
         # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，

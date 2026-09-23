@@ -1017,6 +1017,10 @@ func wechatProviderRequestError(err error) error {
 		return errors.Join(errWechatProviderUnavailable, context.Canceled)
 	case errors.Is(err, context.DeadlineExceeded):
 		return errors.Join(errWechatProviderUnavailable, context.DeadlineExceeded)
+	case errors.Is(err, io.EOF):
+		return errors.Join(errWechatProviderUnavailable, io.EOF)
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return errors.Join(errWechatProviderUnavailable, io.ErrUnexpectedEOF)
 	default:
 		return fmt.Errorf("%w: request failed", errWechatProviderUnavailable)
 	}

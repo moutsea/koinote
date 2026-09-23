@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	defaultListenAddress = "10.77.0.1:18080"
-	allowedWechatHost    = "api.weixin.qq.com"
-	allowedWechatTarget  = allowedWechatHost + ":443"
-	maxConnectHeader     = 8 << 10
-	connectTimeout       = 15 * time.Second
-	connectionLifetime   = 2 * time.Minute
-	maxConcurrent        = 32
+	defaultListenAddress  = "10.77.0.1:18080"
+	allowedWechatHost     = "api.weixin.qq.com"
+	allowedWechatTarget   = allowedWechatHost + ":443"
+	maxConnectHeader      = 8 << 10
+	connectTimeout        = 15 * time.Second
+	connectionIdleTimeout = 2 * time.Minute
+	maxConcurrent         = 32
 )
 
 var errUnsupportedProxyRequest = errors.New("only the WeChat HTTPS CONNECT target is allowed")
@@ -107,8 +107,8 @@ func (p *proxy) handle(client net.Conn) {
 	if _, err := io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 		return
 	}
-	_ = client.SetDeadline(time.Now().Add(connectionLifetime))
-	_ = upstream.SetDeadline(time.Now().Add(connectionLifetime))
+	client = newIdleTimeoutConn(client, connectionIdleTimeout)
+	upstream = newIdleTimeoutConn(upstream, connectionIdleTimeout)
 
 	// CONNECT requests do not carry a body, so any buffered bytes are the
 	// beginning of the tunneled TLS stream and must be forwarded upstream.
@@ -119,6 +119,33 @@ func (p *proxy) handle(client net.Conn) {
 	go proxyCopy(finished, upstream, client)
 	go proxyCopy(finished, client, upstream)
 	<-finished
+}
+
+type idleTimeoutConn struct {
+	net.Conn
+	timeout time.Duration
+}
+
+func newIdleTimeoutConn(conn net.Conn, timeout time.Duration) *idleTimeoutConn {
+	wrapped := &idleTimeoutConn{Conn: conn, timeout: timeout}
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+	return wrapped
+}
+
+func (conn *idleTimeoutConn) Read(data []byte) (int, error) {
+	count, err := conn.Conn.Read(data)
+	if count > 0 {
+		_ = conn.Conn.SetDeadline(time.Now().Add(conn.timeout))
+	}
+	return count, err
+}
+
+func (conn *idleTimeoutConn) Write(data []byte) (int, error) {
+	count, err := conn.Conn.Write(data)
+	if count > 0 {
+		_ = conn.Conn.SetDeadline(time.Now().Add(conn.timeout))
+	}
+	return count, err
 }
 
 func forwardBufferedTunnelData(destination io.Writer, reader *bufio.Reader) error {

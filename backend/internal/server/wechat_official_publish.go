@@ -47,7 +47,8 @@ const (
 	wechatDraftHTMLMaxBytes         = 2 << 20
 	wechatDraftMaxImages            = 20
 	wechatDraftImagePrepareWorkers  = 2
-	wechatDraftImageUploadWorkers   = 4
+	wechatDraftImageUploadWorkers   = 2
+	wechatImageUploadTimeout        = 90 * time.Second
 	wechatRemoteImageMaxBytes       = 10 << 20
 	wechatContentImageMaxBytes      = 1 << 20
 	wechatImageMaxPixels            = 36_000_000
@@ -456,6 +457,15 @@ func (a *App) wechatDraftCreate(w http.ResponseWriter, r *http.Request) {
 			log.Printf("wechat draft release credits: %v", releaseErr)
 		}
 	}()
+	draftContext, cancelDraft := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelDraft()
+	r = r.WithContext(draftContext)
+	if r.Header.Get("Accept") == wechatDraftStreamContentType {
+		stream, streamContext := newWechatDraftResponseStream(w, r.Context(), 10*time.Second)
+		defer stream.Close()
+		w = stream
+		r = r.WithContext(streamContext)
+	}
 	var cover []byte
 	if strings.TrimSpace(input.CoverBase64) != "" {
 		coverRaw, decodeErr := decodeWechatCoverInput(input.CoverBase64)
@@ -1111,7 +1121,9 @@ func (a *App) wechatPostMultipart(
 	if client == nil {
 		client = newWechatAPIHTTPClient(a.cfg.WechatAPIProxyURL)
 	}
-	response, err := client.Do(request)
+	uploadClient := *client
+	uploadClient.Timeout = wechatImageUploadTimeout
+	response, err := uploadClient.Do(request)
 	if err != nil {
 		return wechatProviderRequestError(err)
 	}

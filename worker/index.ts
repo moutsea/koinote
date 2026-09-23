@@ -22,6 +22,10 @@ import {
   handleDatabaseBackupUpload,
 } from "./backups";
 import { applySecurityHeaders } from "./securityHeaders";
+import {
+  readWechatDraftResponse,
+  WECHAT_DRAFT_STREAM_TYPE,
+} from "./wechatDraftStream";
 
 export interface Env extends Cloudflare.Env {
   BACKEND_URL: string;
@@ -256,6 +260,11 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
     headers.set("x-koinote-internal-token", env.BACKEND_INTERNAL_TOKEN);
   }
 
+  const isWechatDraft =
+    request.method === "POST" &&
+    /^\/api\/documents\/[^/]+\/wechat-draft$/.test(incomingUrl.pathname);
+  if (isWechatDraft) headers.set("accept", WECHAT_DRAFT_STREAM_TYPE);
+
   const backendResponse = await fetch(targetUrl, {
     method: request.method,
     headers,
@@ -264,7 +273,15 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
         ? undefined
         : request.body,
     redirect: "manual",
+    ...(isWechatDraft ? { signal: request.signal } : {}),
   });
+
+  if (
+    isWechatDraft &&
+    backendResponse.headers.get("content-type") === WECHAT_DRAFT_STREAM_TYPE
+  ) {
+    return readWechatDraftResponse(backendResponse);
+  }
 
   const responseHeaders = new Headers(backendResponse.headers);
   responseHeaders.set("x-koinote-proxy", "cloudflare-worker");
