@@ -47,7 +47,7 @@ const (
 	wechatDraftHTMLMaxBytes         = 2 << 20
 	wechatDraftMaxImages            = 20
 	wechatDraftImagePrepareWorkers  = 2
-	wechatRemoteImageMaxBytes       = 5 << 20
+	wechatRemoteImageMaxBytes       = 10 << 20
 	wechatContentImageMaxBytes      = 1 << 20
 	wechatImageMaxPixels            = 36_000_000
 	wechatCoverGenerateLimit        = 8

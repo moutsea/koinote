@@ -1137,6 +1137,29 @@ func TestWechatImageNetworkErrorDoesNotExposeSignedURL(t *testing.T) {
 	}
 }
 
+func TestDownloadWechatImageAllowsSyncedImageUploadLimit(t *testing.T) {
+	const source = "https://img.koinote.app/u/test-user/large.png"
+	payload := bytes.Repeat([]byte{0x42}, 6<<20)
+	app := &App{wechatImageHTTPClient: &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.String() != source {
+			t.Fatalf("image URL=%q want=%q", request.URL.String(), source)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(bytes.NewReader(payload)),
+		}, nil
+	})}}
+
+	data, err := app.downloadWechatImage(context.Background(), source, wechatRemoteImageMaxBytes)
+	if err != nil {
+		t.Fatalf("download synced image: %v", err)
+	}
+	if len(data) != len(payload) {
+		t.Fatalf("downloaded bytes=%d want=%d", len(data), len(payload))
+	}
+}
+
 func TestRequestWechatStableTokenForwardsForceRefresh(t *testing.T) {
 	app := &App{wechatAPIHTTPClient: &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
 		var input struct {
