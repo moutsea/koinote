@@ -93,6 +93,12 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 		switch source[i] {
 		case '\\':
 			i += min(2, len(source)-i)
+		case '<':
+			if next := shareAutoLinkEnd(source, i); next > i {
+				i = next
+			} else {
+				i++
+			}
 		case '[':
 			start := i
 			if i > 0 && source[i-1] == '!' {
@@ -186,10 +192,12 @@ func shareInlineDestinationEnd(source []byte, open int) int {
 	depth := 1
 	var quote byte
 	angle := false
+	afterSpace := false
 	for i := open + 1; i < len(source); i++ {
 		switch {
 		case source[i] == '\\':
 			i++
+			afterSpace = false
 		case angle:
 			if source[i] == '>' {
 				angle = false
@@ -198,17 +206,25 @@ func shareInlineDestinationEnd(source []byte, open int) int {
 			if source[i] == quote {
 				quote = 0
 			}
+		case depth == 1 && shareMarkdownSpace(source[i]):
+			afterSpace = true
 		case source[i] == '<':
 			angle = true
-		case source[i] == '"' || source[i] == '\'':
+			afterSpace = false
+		case afterSpace && (source[i] == '"' || source[i] == '\''):
 			quote = source[i]
+			afterSpace = false
 		case source[i] == '(':
+			afterSpace = false
 			depth++
 		case source[i] == ')':
+			afterSpace = false
 			depth--
 			if depth == 0 {
 				return i + 1
 			}
+		default:
+			afterSpace = false
 		}
 	}
 	return 0

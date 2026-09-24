@@ -190,6 +190,8 @@ func TestSharePreviewReferenceSyntaxInCodeAndInlineLink(t *testing.T) {
 		"`[x][id]`",
 		"[x](https://visible.example)",
 		"[链接](<https://visible.example/[x][id]>)",
+		"[链接](https://visible.example/o'brien/[x][id])",
+		"<https://visible.example/[x][id]>",
 		"<span title=\"[x][id]\">可见文字</span>",
 		"```md\n[x][id]\n```",
 	} {
