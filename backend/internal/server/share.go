@@ -483,11 +483,51 @@ func shareSafeInlineCutoff(source []rune, cutoff int) int {
 			starts = starts[:len(starts)-1]
 			i += 2
 			parens := 1
+			// CommonMark 允许用 <...> 包住地址；里面的括号是地址的一部分。
+			angle := i
+			for angle < len(source) && (source[angle] == ' ' || source[angle] == '\t' || source[angle] == '\r' || source[angle] == '\n') {
+				angle++
+			}
+			if angle < len(source) && source[angle] == '<' {
+				i = angle + 1
+				for i < len(source) {
+					if source[i] == '\\' && i+1 < len(source) {
+						i += 2
+						continue
+					}
+					if source[i] == '>' {
+						i++
+						break
+					}
+					i++
+				}
+			}
+			var titleQuote rune
+			afterSpace := false
 			for i < len(source) && parens > 0 {
 				if source[i] == '\\' && i+1 < len(source) {
 					i += 2
 					continue
 				}
+				if titleQuote != 0 {
+					if source[i] == titleQuote {
+						titleQuote = 0
+					}
+					i++
+					continue
+				}
+				if parens == 1 && (source[i] == ' ' || source[i] == '\t' || source[i] == '\r' || source[i] == '\n') {
+					afterSpace = true
+					i++
+					continue
+				}
+				if afterSpace && (source[i] == '"' || source[i] == '\'') {
+					titleQuote = source[i]
+					afterSpace = false
+					i++
+					continue
+				}
+				afterSpace = false
 				switch source[i] {
 				case '(':
 					parens++

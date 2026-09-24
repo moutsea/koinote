@@ -122,6 +122,7 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 		{"首个内容就是图片", "![图](https://example.com/very/long/image-(1).png) 结尾", ""},
 		{"换行位于图片替代文字内", "序文 ![123456789012345\nalt](x) 1234567890", "序文"},
 		{"嵌套标签跨越中点", "开头 [外层 [内层](x)](https://example.com/long/path) 结尾", "开头"},
+		{"尖括号图片地址含右括号", "![x](<a)b>) 1234567", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -138,6 +139,33 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 	completeImage := "![图](https://example.com/a.png) " + strings.Repeat("后", 100)
 	if got := sharePreview(completeImage); !strings.Contains(got, "![图](https://example.com/a.png)") {
 		t.Fatalf("中点之前的完整图片应保留，实际 %q", got)
+	}
+	angleImage := "![x](<a)b>) " + strings.Repeat("后", 50)
+	if got := sharePreview(angleImage); !strings.Contains(got, "![x](<a)b>)") {
+		t.Fatalf("中点之前的完整尖括号图片应保留，实际 %q", got)
+	}
+}
+
+func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
+	for _, content := range []string{
+		"[x](<a(b>) suffix",
+		"![x]( <a)b> ) suffix",
+		"![x](<a\\>b)>) suffix",
+		"[x](<a)b> \"title\") suffix",
+	} {
+		cutoff := strings.Index(content, "b")
+		if got := shareSafeInlineCutoff([]rune(content), cutoff); got != 0 {
+			t.Errorf("尖括号地址不能从中间截断: content=%q cutoff=%d got=%d", content, cutoff, got)
+		}
+	}
+	for _, content := range []string{
+		"![x](<a)b> \"foo)bar\") suffix",
+		"[x](url 'foo)bar') suffix",
+	} {
+		cutoff := strings.Index(content, "bar")
+		if got := shareSafeInlineCutoff([]rune(content), cutoff); got != 0 {
+			t.Errorf("图片或链接标题不能从中间截断: content=%q cutoff=%d got=%d", content, cutoff, got)
+		}
 	}
 }
 
