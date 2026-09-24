@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Copy, Eye, FileText, LoaderCircle, Lock, LogIn } from "lucide-react";
@@ -18,7 +18,7 @@ import {
 import { interpolate, useI18n, type Locale } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { InkSeal } from "../components/Ink";
-import { useSession } from "../auth";
+import { useSession, type SessionSnapshot } from "../auth";
 import { copySharedDocument } from "../documentTransfer";
 import { normalizeLegacyImageAdjacentHeadings } from "../components/editor/markdownImage";
 
@@ -36,28 +36,62 @@ export function SharePage() {
   const session = useSession();
   const viewerKey = session.data?.user?.authUserId ?? "guest";
 
+  if (session.isPending) {
+    return <Centered>{t.editor.loading}</Centered>;
+  }
+
+  // 身份变化时销毁旧阅读视图，也丢弃口令解锁状态和未完成的解锁回调。
+  return (
+    <ShareReader
+      key={`${token}:${viewerKey}`}
+      token={token}
+      viewerKey={viewerKey}
+      revocationVersion={session.data?.revocationVersion ?? 0}
+    />
+  );
+}
+
+function ShareReader({ token, viewerKey, revocationVersion }: {
+  token?: string;
+  viewerKey: string;
+  revocationVersion: number;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
   // 口令验证成功后的正文放在本地，优先于查询结果
   const [unlocked, setUnlocked] = useState<{
-    token: string;
-    viewerKey: string;
     document: SharedDocument;
+    revocationVersion: number;
   } | null>(null);
+  const currentUnlock = unlocked && (
+    unlocked.document.isPreview || unlocked.revocationVersion === revocationVersion
+  ) ? unlocked.document : null;
+
+  useEffect(() => {
+    if (unlocked && !currentUnlock) setUnlocked(null);
+  }, [unlocked, currentUnlock]);
+
+  function acceptUnlock(document: SharedDocument) {
+    const latest = queryClient.getQueryData<SessionSnapshot>(["session"]);
+    if (
+      (latest?.user?.authUserId ?? "guest") !== viewerKey ||
+      (latest?.revocationVersion ?? 0) !== revocationVersion
+    ) return;
+    setUnlocked({ document, revocationVersion });
+  }
 
   const query = useQuery({
     queryKey: ["share", token ?? "", viewerKey],
     queryFn: () => getSharedDocument(token!),
-    enabled: Boolean(token) && !session.isPending,
+    enabled: Boolean(token),
     retry: false,
     refetchOnWindowFocus: false,
   });
 
-  const currentUnlock = unlocked && unlocked.token === token && unlocked.viewerKey === viewerKey
-    ? unlocked.document
-    : null;
   const shared = currentUnlock ?? query.data?.document;
   const needsPassword = !currentUnlock && query.data?.requiresPassword === true;
 
-  if (session.isPending || query.isLoading) {
+  if (query.isLoading) {
     return <Centered>{t.editor.loading}</Centered>;
   }
 
@@ -80,7 +114,7 @@ export function SharePage() {
   }
 
   if (needsPassword && token) {
-    return <PasswordGate key={token} token={token} onUnlock={(doc) => setUnlocked({ token, viewerKey, document: doc })} />;
+    return <PasswordGate key={revocationVersion} token={token} onUnlock={acceptUnlock} />;
   }
 
   if (!shared) {

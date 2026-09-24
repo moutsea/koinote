@@ -123,6 +123,9 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 		{"换行位于图片替代文字内", "序文 ![123456789012345\nalt](x) 1234567890", "序文"},
 		{"嵌套标签跨越中点", "开头 [外层 [内层](x)](https://example.com/long/path) 结尾", "开头"},
 		{"标签含行内代码仍保留完整链接", "开头 [用 `code` 说明](https://example.com/very/long/path) 结尾", "开头"},
+		{"标签行内代码含方括号", "[outer `][` label](https://example.com/very/long/path/to/article) ", ""},
+		{"标签含行内 HTML 时不截断地址", "[outer <span>x</span> label](https://example.com/very/long/path/to/article) ", ""},
+		{"标签行内 HTML 属性含方括号", "[outer <span title=\"](\">x</span> label](https://example.com/very/long/path/to/article) ", ""},
 		{"尖括号图片地址含右括号", "![x](<a)b>) 1234567", ""},
 		{"自动链接跨越中点", "<https://example.com/very/long/path> 1234567890", ""},
 		{"邮件自动链接跨越中点", "<hello@example.com> 1234567890", ""},
@@ -146,6 +149,13 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 	angleImage := "![x](<a)b>) " + strings.Repeat("后", 50)
 	if got := sharePreview(angleImage); !strings.Contains(got, "![x](<a)b>)") {
 		t.Fatalf("中点之前的完整尖括号图片应保留，实际 %q", got)
+	}
+}
+
+func TestSharePreviewDoesNotCutInlineHTMLTag(t *testing.T) {
+	content := "前文 <span title=\"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\">正文"
+	if got := sharePreview(content); got != "前文" {
+		t.Fatalf("行内 HTML 标签不能在属性中间截断: %q", got)
 	}
 }
 
@@ -216,6 +226,26 @@ func TestSharePreviewReferenceSyntaxInCodeAndInlineLink(t *testing.T) {
 	}
 }
 
+func TestSharePreviewDoesNotRewriteReferenceDefinitions(t *testing.T) {
+	for _, definition := range []string{
+		"[id]: https://example.com/path/[x]",
+		"[id]: /path \"title [x]\"",
+		"[id]: /path\n  \"title [x]\"",
+		"> [id]: /path/[x]",
+		"- [id]: /path/[x]",
+	} {
+		content := definition + "\n\n[x] 正文 " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+		preview := sharePreview(content)
+		if !strings.Contains(preview, definition) || !strings.Contains(preview, "\nx 正文") {
+			t.Fatalf("引用定义应保持原样，正文中的隐藏引用仍要改写: %q", preview)
+		}
+	}
+	plainText := "[id]: /path extra [x]\n\n" + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+	if got := sharePreview(plainText); !strings.Contains(got, "[id]: /path extra x") {
+		t.Fatalf("无效的定义行是正文，仍须改写其中的隐藏引用: %q", got)
+	}
+}
+
 func TestSharePreviewDoesNotActivateOuterLink(t *testing.T) {
 	content := "[outer **[x]**](https://visible.example) " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
 	preview := sharePreview(content)
@@ -228,6 +258,89 @@ func TestSharePreviewDoesNotActivateOuterLink(t *testing.T) {
 	shortcut := "[outer x]: /visible\n\n[outer [x]] " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
 	if got := sharePreview(shortcut); !strings.Contains(got, "outer x ") {
 		t.Fatalf("隐藏内层引用后，外层快捷引用不应突然生效: %q", got)
+	}
+	for _, tc := range []struct {
+		name   string
+		prefix string
+		use    string
+		want   string
+	}{
+		{"嵌套行内链接", "", "[outer [inner **[x]**](https://visible.example)][id]", "outer inner **x** (https://visible.example)"},
+		{"嵌套引用链接", "[visible]: /visible\n\n", "[outer [inner **[x]**][visible]][id]", "outer inner **x** 后"},
+		{"行内代码位于外层标签", "", "[outer `code` **[x]**](https://visible.example)", "outer `code` **x** (https://visible.example)"},
+		{"行内 HTML 位于外层标签", "", "[outer <span>span</span> [x]](https://visible.example)", "outer <span>span</span> x (https://visible.example)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			content := tc.prefix + tc.use + " " + strings.Repeat("后", 100) + "\n\n[x]: /hidden\n[id]: /hidden"
+			if got := sharePreview(content); !strings.Contains(got, tc.want) {
+				t.Fatalf("外层引用和内层引用都需要改写，不能激活原本无效的链接: %q", got)
+			}
+		})
+	}
+}
+
+func TestSharePreviewMalformedInlineLinkDoesNotConsumeLaterParagraph(t *testing.T) {
+	for _, separator := range []string{"\n\n", "\n \t\n", "\r\n\r\n"} {
+		content := "[bad](unfinished" + separator + "[outer **[x]**](https://visible.example) closing) " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+		preview := sharePreview(content)
+		if !strings.Contains(preview, "outer **x** (https://visible.example)") {
+			t.Fatalf("未闭合链接不能跨空行吞掉后续引用，分隔符 %q，预览 %q", separator, preview)
+		}
+	}
+}
+
+func TestSharePreviewScansLinksAfterMalformedInlineLink(t *testing.T) {
+	for _, separator := range []string{"\n\n", " "} {
+		content := "[bad](unfinished" + separator + "[good](https://visible.example/[x]) " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+		if got := sharePreview(content); !strings.Contains(got, "[good](https://visible.example/[x])") {
+			t.Fatalf("未闭合链接之后的正常链接地址不应被引用改写，分隔符 %q，预览 %q", separator, got)
+		}
+	}
+}
+
+func TestShareInlineDestinationRejectsNestedTitleAndAngle(t *testing.T) {
+	for _, content := range []string{
+		"[x](url (nested(title)))",
+		"[x](<first<second>)",
+	} {
+		open := strings.Index(content, "(")
+		if got := shareInlineDestinationEnd([]byte(content), open); got != 0 {
+			t.Fatalf("嵌套分隔符使链接无效，应立即结束扫描: %q -> %d", content, got)
+		}
+	}
+	for _, content := range []string{
+		"[x](url (title))",
+		"[x](url (nested\\(title))",
+		"[x](<first\\<second>)",
+	} {
+		open := strings.Index(content, "(")
+		if got := shareInlineDestinationEnd([]byte(content), open); got != len(content) {
+			t.Fatalf("合法或已转义的分隔符仍应保留链接: %q -> %d", content, got)
+		}
+	}
+}
+
+func TestSharePreviewScansAfterMalformedNestedDelimiter(t *testing.T) {
+	for _, prefix := range []string{
+		"[bad](url (title ",
+		"[bad](<url ",
+	} {
+		content := prefix + "[good](<https://visible.example/[x]>) " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+		if got := sharePreview(content); !strings.Contains(got, "[good](<https://visible.example/[x]>)") {
+			t.Fatalf("坏链接之后的正常链接不应被改写: %q", got)
+		}
+	}
+}
+
+func TestSharePreviewDoesNotActivateMalformedImage(t *testing.T) {
+	content := "[visible]: /visible\n\n![[x] <span title=\"](\">h</span> ][visible] " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+	preview := sharePreview(content)
+	if !strings.Contains(preview, "x <span title=\"](\">h</span>") || strings.Contains(preview, "][visible]") {
+		t.Fatalf("隐藏内层引用后，原本无效的图片不能变成新链接: %q", preview)
+	}
+	valid := "[visible]: /image\n\n![[x] image][visible] " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+	if got := sharePreview(valid); !strings.Contains(got, "![x image][visible]") {
+		t.Fatalf("原本有效的图片仍应显示: %q", got)
 	}
 }
 
@@ -254,6 +367,17 @@ func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
 	}
 }
 
+func TestShareSafeInlineCutoffAfterMalformedLink(t *testing.T) {
+	for _, separator := range []string{"\n\n", " "} {
+		content := "[bad](unfinished" + separator + "[good](https://visible.example/path) 结尾"
+		cutoff := strings.Index(content, "visible")
+		want := strings.Index(content, "[good]")
+		if got := shareSafeInlineCutoff([]byte(content), cutoff, nil); got != want {
+			t.Fatalf("未闭合链接不能跨过后续链接来决定截断点，分隔符 %q，得到 %d，期望 %d", separator, got, want)
+		}
+	}
+}
+
 func TestSharePreviewPreservesCodeExamples(t *testing.T) {
 	content := "```md\n![x](https://example.com/very/long/path)\n```\n结尾"
 	preview := sharePreview(content)
@@ -275,6 +399,24 @@ func TestSharePreviewManyUnclosedBrackets(t *testing.T) {
 	content := strings.Repeat("[", 200_000)
 	if got := sharePreview(content); len(got) != len(content)/2 {
 		t.Fatalf("未闭合方括号应按中点截断，实际长度 %d", len(got))
+	}
+}
+
+func BenchmarkSharePreviewMalformedDestinations(b *testing.B) {
+	for _, tc := range []struct {
+		name, pattern string
+	}{
+		{"unclosed_parenthesized_title", "[x](url (title "},
+		{"unclosed_double_quoted_title", "[x](url \"title "},
+		{"unclosed_single_quoted_title", "[x](url 'title "},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			content := strings.Repeat(tc.pattern, 6_400) + "\n\n[x]: /hidden"
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = sharePreview(content)
+			}
+		})
 	}
 }
 
