@@ -216,6 +216,21 @@ func TestSharePreviewReferenceSyntaxInCodeAndInlineLink(t *testing.T) {
 	}
 }
 
+func TestSharePreviewDoesNotActivateOuterLink(t *testing.T) {
+	content := "[outer **[x]**](https://visible.example) " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+	preview := sharePreview(content)
+	if !strings.Contains(preview, "outer **x** (https://visible.example)") {
+		t.Fatalf("隐藏内层引用后，外层原本无效的链接仍应作为普通文字: %q", preview)
+	}
+	if len([]rune(preview)) > len([]rune(content))/2 {
+		t.Fatalf("预览超过前半篇: %q", preview)
+	}
+	shortcut := "[outer x]: /visible\n\n[outer [x]] " + strings.Repeat("后", 100) + "\n\n[x]: /hidden"
+	if got := sharePreview(shortcut); !strings.Contains(got, "outer x ") {
+		t.Fatalf("隐藏内层引用后，外层快捷引用不应突然生效: %q", got)
+	}
+}
+
 func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
 	for _, content := range []string{
 		"[x](<a(b>) suffix",

@@ -80,6 +80,7 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 	type bracket struct{ start, labelStart int }
 	var stack []bracket
 	var uses []shareReferenceUse
+	var brackets []shareSourceRange
 	rawIndex := 0
 	codeIndex := 0
 	failedInlineDestination := false
@@ -123,6 +124,7 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 			}
 			open := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
+			brackets = append(brackets, shareSourceRange{open.start, i + 1})
 			labelEnd := i
 			useEnd := i + 1
 			keyLabel := source[open.labelStart:labelEnd]
@@ -179,19 +181,62 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 	}
 	previewContext := parser.NewContext()
 	goldmark.DefaultParser().Parse(text.NewReader(source[:end]), parser.WithContext(previewContext))
-	sort.Slice(uses, func(i, j int) bool { return uses[i].start < uses[j].start })
-	var result strings.Builder
-	last := 0
+	type edit struct {
+		start, end int
+		value      string
+	}
+	var edits []edit
+	var missingLinks []shareReferenceUse
 	for _, use := range uses {
-		if use.start < last || use.end > end {
+		if use.end > end {
 			continue
 		}
 		if _, ok := previewContext.Reference(use.key); ok {
 			continue
 		}
-		result.Write(source[last:use.start])
-		result.Write(source[use.labelStart:use.labelEnd])
-		last = use.end
+		edits = append(edits, edit{use.start, use.end, string(source[use.labelStart:use.labelEnd])})
+		if source[use.start] != '!' {
+			missingLinks = append(missingLinks, use)
+		}
+	}
+	// 内层链接失去定义后，原本无效的外层 [标签](地址) 或 [标签][id]
+	// 可能重新生效。去掉外层方括号，只留下可读标签与原有的可见地址。
+	sort.Slice(missingLinks, func(i, j int) bool { return missingLinks[i].end < missingLinks[j].end })
+	maxStart := make([]int, len(missingLinks))
+	for i, use := range missingLinks {
+		maxStart[i] = use.start
+		if i > 0 {
+			maxStart[i] = max(maxStart[i], maxStart[i-1])
+		}
+	}
+	for _, bracket := range brackets {
+		if bracket.end > end || source[bracket.start] == '!' {
+			continue
+		}
+		count := sort.Search(len(missingLinks), func(i int) bool { return missingLinks[i].end > bracket.end })
+		if count == 0 || maxStart[count-1] <= bracket.start {
+			continue
+		}
+		edits = append(edits,
+			edit{bracket.start, bracket.start + 1, ""},
+			edit{bracket.end - 1, bracket.end, " "},
+		)
+	}
+	sort.Slice(edits, func(i, j int) bool {
+		if edits[i].start == edits[j].start {
+			return edits[i].end > edits[j].end
+		}
+		return edits[i].start < edits[j].start
+	})
+	var result strings.Builder
+	last := 0
+	for _, current := range edits {
+		if current.start < last {
+			continue
+		}
+		result.Write(source[last:current.start])
+		result.WriteString(current.value)
+		last = current.end
 	}
 	result.Write(source[last:end])
 	return result.String()
