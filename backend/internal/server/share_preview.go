@@ -71,15 +71,17 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 		return string(source[:end])
 	}
 	fullContext := parser.NewContext()
-	goldmark.DefaultParser().Parse(text.NewReader(source), parser.WithContext(fullContext))
+	root := goldmark.DefaultParser().Parse(text.NewReader(source), parser.WithContext(fullContext))
 	if len(fullContext.References()) == 0 {
 		return string(source[:end])
 	}
+	linkCodeRanges := shareLinkCodeRanges(root, len(source))
 
 	type bracket struct{ start, labelStart int }
 	var stack []bracket
 	var uses []shareReferenceUse
 	rawIndex := 0
+	codeIndex := 0
 	failedInlineDestination := false
 	for i := 0; i < len(source); {
 		for rawIndex < len(rawRanges) && i >= rawRanges[rawIndex].end {
@@ -88,6 +90,14 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 		if rawIndex < len(rawRanges) && i >= rawRanges[rawIndex].start {
 			i = rawRanges[rawIndex].end
 			stack = nil
+			continue
+		}
+		for codeIndex < len(linkCodeRanges) && i >= linkCodeRanges[codeIndex].end {
+			codeIndex++
+		}
+		if codeIndex < len(linkCodeRanges) && i >= linkCodeRanges[codeIndex].start {
+			// 标签中的代码不是引用用法，但外层的链接边界仍需继续扫描。
+			i = linkCodeRanges[codeIndex].end
 			continue
 		}
 		switch source[i] {
@@ -185,6 +195,39 @@ func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRang
 	}
 	result.Write(source[last:end])
 	return result.String()
+}
+
+// 截断扫描要保留完整链接，引用改写却不能碰链接标签中的代码文字。
+func shareLinkCodeRanges(root ast.Node, sourceLength int) []shareSourceRange {
+	var ranges []shareSourceRange
+	_ = ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering || node.Kind() != ast.KindCodeSpan {
+			return ast.WalkContinue, nil
+		}
+		inLink := false
+		for parent := node.Parent(); parent != nil; parent = parent.Parent() {
+			if parent.Kind() == ast.KindLink || parent.Kind() == ast.KindImage {
+				inLink = true
+				break
+			}
+		}
+		if !inLink {
+			return ast.WalkContinue, nil
+		}
+		start, end := sourceLength, 0
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			if code, ok := child.(*ast.Text); ok {
+				start = min(start, code.Segment.Start)
+				end = max(end, code.Segment.Stop)
+			}
+		}
+		if start < end {
+			ranges = append(ranges, shareSourceRange{start, end})
+		}
+		return ast.WalkContinue, nil
+	})
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
+	return ranges
 }
 
 // 跳过完整行内链接的地址和标题，避免把 URL 中的方括号当作引用用法。

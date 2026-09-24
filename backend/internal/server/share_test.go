@@ -183,12 +183,22 @@ func TestSharePreviewReferenceLinks(t *testing.T) {
 	if got := sharePreview(visibleDefinition); !strings.Contains(got, "[链接][id]") {
 		t.Fatalf("定义可见时应保留原链接: %q", got)
 	}
+	codeLabel := "[id]: /visible\n\n[link `[x]`][id] " + strings.Repeat("后", 80) + "\n\n[x]: /hidden"
+	if got := sharePreview(codeLabel); !strings.Contains(got, "[link `[x]`][id]") {
+		t.Fatalf("可见引用链接内的代码文字应保留: %q", got)
+	}
+	hiddenDefinition := "[link `[x]`][id] " + strings.Repeat("后", 80) + "\n\n[id]: /hidden\n[x]: /hidden"
+	if got := sharePreview(hiddenDefinition); !strings.Contains(got, "link `[x]`") {
+		t.Fatalf("隐藏定义的引用只应去掉外层链接语法: %q", got)
+	}
 }
 
 func TestSharePreviewReferenceSyntaxInCodeAndInlineLink(t *testing.T) {
 	for _, use := range []string{
 		"`[x][id]`",
 		"[x](https://visible.example)",
+		"[link `[id]`](https://visible.example)",
+		"![alt `[id]`](https://visible.example/image.png)",
 		"[链接](<https://visible.example/[x][id]>)",
 		"[链接](https://visible.example/o'brien/[x][id])",
 		"<https://visible.example/[x][id]>",
