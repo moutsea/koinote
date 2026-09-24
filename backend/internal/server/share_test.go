@@ -122,7 +122,10 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 		{"首个内容就是图片", "![图](https://example.com/very/long/image-(1).png) 结尾", ""},
 		{"换行位于图片替代文字内", "序文 ![123456789012345\nalt](x) 1234567890", "序文"},
 		{"嵌套标签跨越中点", "开头 [外层 [内层](x)](https://example.com/long/path) 结尾", "开头"},
+		{"标签含行内代码仍保留完整链接", "开头 [用 `code` 说明](https://example.com/very/long/path) 结尾", "开头"},
 		{"尖括号图片地址含右括号", "![x](<a)b>) 1234567", ""},
+		{"自动链接跨越中点", "<https://example.com/very/long/path> 1234567890", ""},
+		{"邮件自动链接跨越中点", "<hello@example.com> 1234567890", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,7 +157,7 @@ func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
 		"[x](<a)b> \"title\") suffix",
 	} {
 		cutoff := strings.Index(content, "b")
-		if got := shareSafeInlineCutoff([]rune(content), cutoff); got != 0 {
+		if got := shareSafeInlineCutoff([]byte(content), cutoff, nil); got != 0 {
 			t.Errorf("尖括号地址不能从中间截断: content=%q cutoff=%d got=%d", content, cutoff, got)
 		}
 	}
@@ -163,9 +166,25 @@ func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
 		"[x](url 'foo)bar') suffix",
 	} {
 		cutoff := strings.Index(content, "bar")
-		if got := shareSafeInlineCutoff([]rune(content), cutoff); got != 0 {
+		if got := shareSafeInlineCutoff([]byte(content), cutoff, nil); got != 0 {
 			t.Errorf("图片或链接标题不能从中间截断: content=%q cutoff=%d got=%d", content, cutoff, got)
 		}
+	}
+}
+
+func TestSharePreviewPreservesCodeExamples(t *testing.T) {
+	content := "```md\n![x](https://example.com/very/long/path)\n```\n结尾"
+	preview := sharePreview(content)
+	if !strings.Contains(preview, "![x](https://example") {
+		t.Fatalf("代码块内的图片示例应保留到中点附近，实际 %q", preview)
+	}
+	inline := "开头 `![x](https://example.com/very/long/path)` 结尾"
+	if got := sharePreview(inline); !strings.Contains(got, "![x](https://example") {
+		t.Fatalf("行内代码中的图片示例应保留到中点附近，实际 %q", got)
+	}
+	indented := "    ![x](https://example.com/very/long/path)\n结尾"
+	if got := sharePreview(indented); !strings.Contains(got, "![x](https://") {
+		t.Fatalf("缩进代码块中的图片示例应保留到中点附近，实际 %q", got)
 	}
 }
 
