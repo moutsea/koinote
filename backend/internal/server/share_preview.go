@@ -8,7 +8,9 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 type shareSourceRange struct {
@@ -16,8 +18,16 @@ type shareSourceRange struct {
 	end   int
 }
 
-// 最多返回 Markdown 源码的前半段；接近中点的完整行优先。
-// 只在真实链接或图片内部回退，代码里的示例文本仍可预览。
+type shareReferenceUse struct {
+	start      int
+	end        int
+	labelStart int
+	labelEnd   int
+	key        string
+}
+
+// 从 Markdown 源码的前半段生成预览；接近中点的完整行优先。
+// 引用定义在隐藏部分时只保留可见的标签文字，不泄露链接地址。
 func sharePreview(content string) string {
 	cutoffRunes := utf8.RuneCountInString(content) / 2
 	if cutoffRunes == 0 {
@@ -51,7 +61,157 @@ func sharePreview(content string) string {
 	if end == cutoff {
 		end = shareSafeInlineCutoff(source, cutoff, rawRanges)
 	}
-	return strings.TrimRight(content[:end], " \t\r\n")
+	return strings.TrimRight(shareReadableReferences(source, end, rawRanges), " \t\r\n")
+}
+
+// Goldmark 只会将真实的引用定义加入上下文。预览缺少定义时，已经可见的
+// 引用用法会退化成普通文字；跨中点的用法则回退到开始处。
+func shareReadableReferences(source []byte, end int, rawRanges []shareSourceRange) string {
+	if !bytes.Contains(source[:end], []byte("[")) || !bytes.Contains(source, []byte("]:")) {
+		return string(source[:end])
+	}
+	fullContext := parser.NewContext()
+	goldmark.DefaultParser().Parse(text.NewReader(source), parser.WithContext(fullContext))
+	if len(fullContext.References()) == 0 {
+		return string(source[:end])
+	}
+
+	type bracket struct{ start, labelStart int }
+	var stack []bracket
+	var uses []shareReferenceUse
+	rawIndex := 0
+	failedInlineDestination := false
+	for i := 0; i < len(source); {
+		for rawIndex < len(rawRanges) && i >= rawRanges[rawIndex].end {
+			rawIndex++
+		}
+		if rawIndex < len(rawRanges) && i >= rawRanges[rawIndex].start {
+			i = rawRanges[rawIndex].end
+			stack = nil
+			continue
+		}
+		switch source[i] {
+		case '\\':
+			i += min(2, len(source)-i)
+		case '[':
+			start := i
+			if i > 0 && source[i-1] == '!' {
+				start--
+			}
+			stack = append(stack, bracket{start, i + 1})
+			i++
+		case ']':
+			if len(stack) == 0 {
+				i++
+				continue
+			}
+			open := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			labelEnd := i
+			useEnd := i + 1
+			keyLabel := source[open.labelStart:labelEnd]
+			if useEnd < len(source) && source[useEnd] == '(' {
+				if !failedInlineDestination {
+					if inlineEnd := shareInlineDestinationEnd(source, useEnd); inlineEnd > useEnd {
+						i = inlineEnd
+					} else {
+						// 后续候选不能再从各自的位置重复扫描到末尾。
+						failedInlineDestination = true
+						i++
+					}
+				} else {
+					i++
+				}
+				continue
+			}
+			if useEnd < len(source) && source[useEnd] == '[' {
+				close := useEnd + 1
+				for close < len(source) && source[close] != ']' && source[close] != '\n' {
+					if source[close] == '\\' && close+1 < len(source) {
+						close += 2
+					} else {
+						close++
+					}
+				}
+				if close >= len(source) || source[close] != ']' {
+					i++
+					continue
+				}
+				if close > useEnd+1 {
+					keyLabel = source[useEnd+1 : close]
+				}
+				useEnd = close + 1
+			} else if useEnd < len(source) && source[useEnd] == ':' {
+				// 引用定义本身不是引用用法。
+				i++
+				continue
+			}
+			key := util.ToLinkReference(keyLabel)
+			if _, ok := fullContext.Reference(key); ok {
+				uses = append(uses, shareReferenceUse{open.start, useEnd, open.labelStart, labelEnd, key})
+				if open.start < end && useEnd > end {
+					end = open.start
+				}
+			}
+			i++
+		default:
+			i++
+		}
+	}
+	if len(uses) == 0 {
+		return string(source[:end])
+	}
+	previewContext := parser.NewContext()
+	goldmark.DefaultParser().Parse(text.NewReader(source[:end]), parser.WithContext(previewContext))
+	sort.Slice(uses, func(i, j int) bool { return uses[i].start < uses[j].start })
+	var result strings.Builder
+	last := 0
+	for _, use := range uses {
+		if use.start < last || use.end > end {
+			continue
+		}
+		if _, ok := previewContext.Reference(use.key); ok {
+			continue
+		}
+		result.Write(source[last:use.start])
+		result.Write(source[use.labelStart:use.labelEnd])
+		last = use.end
+	}
+	result.Write(source[last:end])
+	return result.String()
+}
+
+// 跳过完整行内链接的地址和标题，避免把 URL 中的方括号当作引用用法。
+func shareInlineDestinationEnd(source []byte, open int) int {
+	depth := 1
+	var quote byte
+	angle := false
+	for i := open + 1; i < len(source); i++ {
+		switch {
+		case source[i] == '\\':
+			i++
+		case angle:
+			if source[i] == '>' {
+				angle = false
+			}
+		case quote != 0:
+			if source[i] == quote {
+				quote = 0
+			}
+		case source[i] == '<':
+			angle = true
+		case source[i] == '"' || source[i] == '\'':
+			quote = source[i]
+		case source[i] == '(':
+			depth++
+		case source[i] == ')':
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return 0
 }
 
 // Goldmark 的源码片段告诉扫描器哪些文字实际处于代码或 HTML 块中。
@@ -83,6 +243,15 @@ func shareRawMarkdownRanges(source []byte) []shareSourceRange {
 			if fenced, ok := node.(*ast.FencedCodeBlock); ok && fenced.Info != nil {
 				start = min(start, fenced.Info.Segment.Start)
 				end = max(end, fenced.Info.Segment.Stop)
+			}
+			add(start, end)
+		case ast.KindRawHTML:
+			html := node.(*ast.RawHTML)
+			start, end := len(source), 0
+			for i := 0; i < html.Segments.Len(); i++ {
+				segment := html.Segments.At(i)
+				start = min(start, segment.Start)
+				end = max(end, segment.Stop)
 			}
 			add(start, end)
 		case ast.KindCodeSpan:

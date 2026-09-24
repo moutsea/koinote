@@ -149,6 +149,61 @@ func TestSharePreviewKeepsMarkdownLinksWhole(t *testing.T) {
 	}
 }
 
+func TestSharePreviewReferenceLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		use  string
+		want string
+	}{
+		{"完整引用链接", "[链接][id]", "链接"},
+		{"完整引用图片", "![图片][id]", "图片"},
+		{"折叠引用", "[ID][]", "ID"},
+		{"简写引用", "[ID]", "ID"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "前文 " + tc.use + " 更多内容 " + strings.Repeat("后", 80) + "\n\n[id]: https://hidden.example/image.png"
+			preview := sharePreview(content)
+			if !strings.Contains(preview, "前文 "+tc.want+" 更多内容") {
+				t.Fatalf("隐藏定义的引用应保留可读文字: %q", preview)
+			}
+			if strings.Contains(preview, "hidden.example") || len([]rune(preview)) > len([]rune(content))/2 {
+				t.Fatalf("预览不能泄露后半篇: %q", preview)
+			}
+		})
+	}
+	for _, content := range []string{
+		"[abcdefghijklmno][x]\n\n[x]: /a",
+		"![abcdefghijklmno][x]\n\n[x]: /a",
+	} {
+		if got := sharePreview(content); got != "" {
+			t.Fatalf("不能从引用标记中间截断: %q -> %q", content, got)
+		}
+	}
+	visibleDefinition := "[id]: /visible\n\n[链接][id] " + strings.Repeat("后", 80)
+	if got := sharePreview(visibleDefinition); !strings.Contains(got, "[链接][id]") {
+		t.Fatalf("定义可见时应保留原链接: %q", got)
+	}
+}
+
+func TestSharePreviewReferenceSyntaxInCodeAndInlineLink(t *testing.T) {
+	for _, use := range []string{
+		"`[x][id]`",
+		"[x](https://visible.example)",
+		"[链接](<https://visible.example/[x][id]>)",
+		"<span title=\"[x][id]\">可见文字</span>",
+		"```md\n[x][id]\n```",
+	} {
+		content := use + "\n" + strings.Repeat("后", 80) + "\n\n[id]: /hidden"
+		if got := sharePreview(content); !strings.Contains(got, use) {
+			t.Fatalf("代码示例或行内链接不应当成引用改写: %q -> %q", use, got)
+		}
+	}
+	content := "[x][id] " + strings.Repeat("后", 80) + "\n\n```md\n[id]: /example\n```"
+	if got := sharePreview(content); !strings.Contains(got, "[x][id]") {
+		t.Fatalf("代码块内的引用定义不生效: %q", got)
+	}
+}
+
 func TestShareSafeInlineCutoffDestinationsAndTitles(t *testing.T) {
 	for _, content := range []string{
 		"[x](<a(b>) suffix",
