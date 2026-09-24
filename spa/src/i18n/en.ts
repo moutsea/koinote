@@ -1731,12 +1731,12 @@ export const en: Messages = {
     shareTitle: "Share this document",
     shareAccessLink: "Anyone with the link",
     shareAccessLinkHint:
-      "The link is random and unguessable, but works for anyone who has it",
+      "Anyone with the link can preview the first half; sign in to read the full document",
     shareTokenRotated:
       "A new link was generated: removing the password invalidated the old link immediately. If you already sent the old one, share again.",
     shareAccessPassword: "Password required",
     shareAccessPasswordHint:
-      "Visitors must enter a password, at least 6 characters",
+      "Visitors need a password of at least 6 characters; sign-in unlocks the full document",
     sharePasswordPlaceholder: "Set an access password",
     shareEnable: "Enable sharing",
     shareUpdate: "Update settings",
@@ -1756,6 +1756,10 @@ export const en: Messages = {
     sharedPasswordSubmit: "View",
     sharedOpenApp: "About Koinote",
     sharedViews: "{count} reads",
+    sharedPreviewTitle: "Continue reading",
+    sharedPreviewPrompt: "You've reached the end of the preview. Create an account or sign in to read the rest.",
+    sharedReadFull: "Sign up to read more",
+    sharedLoginToRead: "Sign in to read more",
     copyToMine: "Copy to my Koinote",
     copyingToMine: "Copying…",
     copiedToMine: "Copied. Opening the document…",
@@ -2467,7 +2471,7 @@ function hello(name) {
         {
           title: "Share Links",
           body: [
-            "Once sharing is enabled, anyone holding the link can view that document without logging in. A password adds a second layer, but a leaked link is a leaked document — judge for yourself what is appropriate to share.",
+            "Once sharing is enabled, anyone holding the link can preview the first half of the document without logging in. Registration or sign-in is required to read the full document. A password adds a second layer of protection; decide what is appropriate to share.",
             "You can revoke sharing or rotate the link at any time; old links stop working immediately.",
           ],
         },

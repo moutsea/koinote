@@ -24,6 +24,12 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # 分享预览回归会把真实 Go 输出交给前端渲染器验证。
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
       # npm ci 而不是 npm install：严格按 lock 文件装，
       # 装出来的依赖树和本地一致，否则 CI 绿了本地红也说明不了问题
       - run: npm ci

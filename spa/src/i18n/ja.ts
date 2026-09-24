@@ -1707,11 +1707,11 @@ export const ja: Messages = {
     shareTitle: "このドキュメントを共有",
     shareAccessLink: "リンクを知っている人",
     shareAccessLinkHint:
-      "リンクはランダムで推測できませんが、入手した人は誰でも開けます",
+      "リンクを持つ人は前半をプレビューでき、ログインすると全文を読めます",
     shareTokenRotated:
       "新しいリンクを生成しました：パスワード保護の解除により、以前のリンクは即座に無効になりました。既に配布済みの場合は再共有してください。",
     shareAccessPassword: "パスワードが必要",
-    shareAccessPasswordHint: "閲覧者はパスワードの入力が必要です（6 文字以上）",
+    shareAccessPasswordHint: "6 文字以上のパスワードが必要です。全文を読むにはログインも必要です",
     sharePasswordPlaceholder: "アクセスパスワードを設定",
     shareEnable: "共有を開始",
     shareUpdate: "設定を更新",
@@ -1731,6 +1731,10 @@ export const ja: Messages = {
     sharedPasswordSubmit: "表示",
     sharedOpenApp: "Koinote について",
     sharedViews: "{count} 回閲覧",
+    sharedPreviewTitle: "続きを読む",
+    sharedPreviewPrompt: "プレビューはここまでです。登録またはログインすると、残りを読めます。",
+    sharedReadFull: "登録して全文を読む",
+    sharedLoginToRead: "ログインして全文を読む",
     copyToMine: "自分の Koinote にコピー",
     copyingToMine: "コピー中…",
     copiedToMine: "コピーしました。文書を開きます…",
@@ -2441,7 +2445,7 @@ function hello(name) {
         {
           title: "共有リンク",
           body: [
-            "共有を有効にすると、リンクを持つ人はログインせずにそのドキュメントを閲覧できます。パスワードは保護を一段追加しますが、リンクの漏洩は内容の漏洩と同じです。共有して差し支えない内容かはご自身で判断してください。",
+            "共有を有効にすると、リンクを持つ人はログインせずにドキュメントの前半をプレビューできます。全文を読むには登録またはログインが必要です。パスワードを設定すると保護を追加できます。共有する内容はご自身で判断してください。",
             "共有はいつでも取り消し、またはリンクを再生成できます。取り消すと古いリンクは即座に無効になります。",
           ],
         },

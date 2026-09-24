@@ -32,25 +32,53 @@ func TestShareGrowthEndToEnd(t *testing.T) {
 			($1, $2, '公开标题', $3, $4, 'link', NULL, now()),
 			($5, $2, '口令秘密标题', '口令秘密正文', $6, 'password', $7, now())
 	`, "share-public-"+owner.AuthUserID, owner.ID,
-		"# 开头\n\n公开摘要 ![](https://img.koinote.app/u/test-user/0123456789abcdef.png)", publicToken,
+		"# 开头\n\n公开摘要 ![](https://img.koinote.app/u/test-user/0123456789abcdef.png)\n\n"+strings.Repeat("过渡段落", 35)+"后半篇秘密", publicToken,
 		"share-protected-"+owner.AuthUserID, protectedToken, string(passwordHash)); err != nil {
 		t.Fatalf("插入分享测试文档: %v", err)
 	}
 
-	request := func(method, path, body string) *httptest.ResponseRecorder {
+	requestAs := func(method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		if body != "" {
 			req.Header.Set("Content-Type", "application/json")
 		}
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
 		rec := httptest.NewRecorder()
 		app.Routes().ServeHTTP(rec, req)
 		return rec
+	}
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		return requestAs(method, path, body, nil)
 	}
 
 	public := request(http.MethodGet, "/api/share/"+publicToken, "")
 	if public.Code != http.StatusOK || !strings.Contains(public.Body.String(), `"viewCount":1`) {
 		t.Fatalf("公开阅读应计数一次: %d %s", public.Code, public.Body.String())
+	}
+	if !strings.Contains(public.Body.String(), `"isPreview":true`) || strings.Contains(public.Body.String(), "后半篇秘密") {
+		t.Fatalf("匿名分享响应只能包含前半篇: %s", public.Body.String())
+	}
+	verifyWithoutPassword := request(http.MethodPost, "/api/share/"+publicToken+"/verify", `{"password":""}`)
+	if verifyWithoutPassword.Code != http.StatusOK || !strings.Contains(verifyWithoutPassword.Body.String(), `"isPreview":true`) ||
+		strings.Contains(verifyWithoutPassword.Body.String(), "后半篇秘密") {
+		t.Fatalf("验证接口不能绕过匿名预览: %d %s", verifyWithoutPassword.Code, verifyWithoutPassword.Body.String())
+	}
+	verifiedCookie := sessionCookieFor(t, app, owner.AuthUserID, owner.SessionVersion)
+	full := requestAs(http.MethodGet, "/api/share/"+publicToken, "", verifiedCookie)
+	if full.Code != http.StatusOK || !strings.Contains(full.Body.String(), `"isPreview":false`) || !strings.Contains(full.Body.String(), "后半篇秘密") {
+		t.Fatalf("已登录访问应取得全文: %d %s", full.Code, full.Body.String())
+	}
+	staleCookie := sessionCookieFor(t, app, owner.AuthUserID, owner.SessionVersion+1)
+	stale := requestAs(http.MethodGet, "/api/share/"+publicToken, "", staleCookie)
+	if stale.Code != http.StatusOK || !strings.Contains(stale.Body.String(), `"isPreview":true`) || strings.Contains(stale.Body.String(), "后半篇秘密") {
+		t.Fatalf("失效会话只能取得预览: %d %s", stale.Code, stale.Body.String())
+	}
+	forged := requestAs(http.MethodGet, "/api/share/"+publicToken, "", &http.Cookie{Name: sessionCookieName, Value: "forged"})
+	if forged.Code != http.StatusOK || !strings.Contains(forged.Body.String(), `"isPreview":true`) || strings.Contains(forged.Body.String(), "后半篇秘密") {
+		t.Fatalf("伪造会话只能取得预览: %d %s", forged.Code, forged.Body.String())
 	}
 	meta := request(http.MethodGet, "/api/share/"+publicToken+"/meta", "")
 	var metaBody map[string]any
@@ -59,7 +87,8 @@ func TestShareGrowthEndToEnd(t *testing.T) {
 	}
 	if meta.Code != http.StatusOK || metaBody["title"] != "公开标题" ||
 		metaBody["protected"] != false || metaBody["imageKey"] != "u/test-user/0123456789abcdef.png" ||
-		!strings.Contains(metaBody["description"].(string), "公开摘要") {
+		!strings.Contains(metaBody["description"].(string), "公开摘要") ||
+		strings.Contains(meta.Body.String(), "后半篇秘密") {
 		t.Fatalf("公开 OG 元数据异常: code=%d body=%v", meta.Code, metaBody)
 	}
 
@@ -90,8 +119,14 @@ func TestShareGrowthEndToEnd(t *testing.T) {
 		t.Fatalf("未解锁的口令分享不应计数，实际 %d", protectedViews)
 	}
 	correct := request(http.MethodPost, "/api/share/"+protectedToken+"/verify", `{"password":"correct horse"}`)
-	if correct.Code != http.StatusOK || !strings.Contains(correct.Body.String(), `"viewCount":1`) {
-		t.Fatalf("正确口令应返回正文并计数: %d %s", correct.Code, correct.Body.String())
+	if correct.Code != http.StatusOK || !strings.Contains(correct.Body.String(), `"viewCount":1`) ||
+		!strings.Contains(correct.Body.String(), `"isPreview":true`) {
+		t.Fatalf("匿名口令验证成功后仍应只返回预览: %d %s", correct.Code, correct.Body.String())
+	}
+	correctLoggedIn := requestAs(http.MethodPost, "/api/share/"+protectedToken+"/verify", `{"password":"correct horse"}`, verifiedCookie)
+	if correctLoggedIn.Code != http.StatusOK || !strings.Contains(correctLoggedIn.Body.String(), `"isPreview":false`) ||
+		!strings.Contains(correctLoggedIn.Body.String(), "口令秘密正文") {
+		t.Fatalf("登录并验证口令后应返回全文: %d %s", correctLoggedIn.Code, correctLoggedIn.Body.String())
 	}
 }
 

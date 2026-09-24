@@ -70,7 +70,7 @@ func normalizeShareAccess(raw string) string {
 // 拿着它的人从能读变成要输口令，安全性只增不减。
 //
 // 放宽权限（口令 → link）必须换 token。否则同一个 URL 会从「要口令」
-// 变成「谁拿到都能直接读全文」—— 之前被口令挡住的人瞬间全部获得访问权，
+// 变成「谁拿到都能预览」—— 之前被口令挡住的人瞬间获得访问权，
 // 而用户以为自己只是改了个设置。换 token 让老链接立刻失效，
 // 用户必须重新分享，这个动作本身就是知情确认。
 func shouldRotateShareToken(existingToken string, hadPassword, willHavePassword bool) bool {
@@ -274,7 +274,7 @@ func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDo
 	return doc, err
 }
 
-// shareGet 无需登录。token 本身就是凭证。
+// shareGet 对所有持有 token 的访问者开放；未登录时只返回前半篇。
 func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
 	setShareResponseHeaders(w)
 	token := strings.TrimSpace(r.PathValue("token"))
@@ -302,7 +302,7 @@ func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
 	}
 	doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
 
-	writeSharedDocument(w, doc)
+	writeSharedDocument(w, doc, !a.authenticatedShareViewer(r))
 }
 
 // shareVerify 校验口令后返回正文。两层限流防爆破。
@@ -362,7 +362,35 @@ func (a *App) shareVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
 
-	writeSharedDocument(w, doc)
+	writeSharedDocument(w, doc, !a.authenticatedShareViewer(r))
+}
+
+// 分享页允许匿名访问，因此不能用 requireUser 写 401。已失效的会话视为匿名，
+// 版本校验与普通受保护接口保持一致，避免改密或登出后的旧 Cookie 读到全文。
+func (a *App) authenticatedShareViewer(r *http.Request) bool {
+	if a.hasInternalToken(r) {
+		if id := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); id != "" {
+			_, err := a.getUserByAuthUserID(r.Context(), id)
+			return err == nil
+		}
+	}
+	if token := bearerToken(r); token != "" {
+		_, ok, err := a.desktopUserFromBearer(r.Context(), token)
+		return err == nil && ok
+	}
+	payload, ok := a.sessionPayloadFromCookie(r)
+	if !ok {
+		return false
+	}
+	user, err := a.getUserByAuthUserID(r.Context(), payload.AuthUserID)
+	if err != nil {
+		return false
+	}
+	version := payload.SessionVersion
+	if version == 0 {
+		version = 1
+	}
+	return version == user.SessionVersion
 }
 
 func (a *App) incrementShareView(ctx context.Context, documentID int, fallback int64) int64 {
@@ -381,13 +409,18 @@ func (a *App) incrementShareView(ctx context.Context, documentID int, fallback i
 
 // writeSharedDocument 只输出公开视图需要的字段。
 // 内部 id、user_id、doc_id、share_token 一律不外泄。
-func writeSharedDocument(w http.ResponseWriter, doc sharedDocument) {
+func writeSharedDocument(w http.ResponseWriter, doc sharedDocument, preview bool) {
+	content := doc.Content
+	if preview {
+		content = sharePreview(content)
+	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"document": map[string]any{
 			"title": doc.Title,
 			// 分享页要和编辑区排版一致，主题得跟着出去
 			"theme":     doc.Theme,
-			"content":   doc.Content,
+			"content":   content,
+			"isPreview": preview,
 			"updatedAt": doc.UpdatedAt,
 			"ownerName": strings.TrimSpace(doc.OwnerName.String),
 			"viewCount": doc.ViewCount,
@@ -414,7 +447,7 @@ func shareDescription(content string) string {
 }
 
 // shareMeta 只给 Worker 注入 OpenGraph 使用。口令分享不暴露标题、摘要或封面；
-// 普通链接分享也只返回展示字段，不返回正文和内部标识。
+// 普通链接分享的摘要和封面也只来自匿名可读的前半篇。
 func (a *App) shareMeta(w http.ResponseWriter, r *http.Request) {
 	setShareResponseHeaders(w)
 	token := strings.TrimSpace(r.PathValue("token"))
@@ -436,13 +469,14 @@ func (a *App) shareMeta(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{"protected": true})
 		return
 	}
+	preview := sharePreview(doc.Content)
 	imageKey := ""
-	if match := imageKeyPattern.FindString(doc.Content); isSafeImageKey(match) {
+	if match := imageKeyPattern.FindString(preview); isSafeImageKey(match) {
 		imageKey = match
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"title":       doc.Title,
-		"description": shareDescription(doc.Content),
+		"description": shareDescription(preview),
 		"imageKey":    imageKey,
 		"protected":   false,
 	})
