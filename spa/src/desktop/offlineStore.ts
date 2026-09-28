@@ -860,7 +860,12 @@ export async function desktopReleaseUnusedImages(sources: string[]): Promise<voi
             AND (
               instr(d.content, $3 || offline_images.image_id) > 0 OR
               instr(d.cover_image_source, $3 || offline_images.image_id) > 0 OR
-              instr(d.remote_snapshot, $3 || offline_images.image_id) > 0
+              instr(d.remote_snapshot, $3 || offline_images.image_id) > 0 OR
+              (offline_images.object_key IS NOT NULL AND (
+                instr(d.content, offline_images.object_key) > 0 OR
+                instr(d.cover_image_source, offline_images.object_key) > 0 OR
+                instr(d.remote_snapshot, offline_images.object_key) > 0
+              ))
             )
         )
     `, [account, imageID, "koinote-local-image://", cutoff]);

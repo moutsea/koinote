@@ -251,6 +251,8 @@ func TestCustomMediaPublishHTTP(t *testing.T) {
 		wantStatus      int
 		wantCode        string
 		wantURL         string
+		cover           string
+		omitCover       bool
 		disabled        bool
 		foreignPlatform bool
 		foreignDocument bool
@@ -258,7 +260,11 @@ func TestCustomMediaPublishHTTP(t *testing.T) {
 		oversizedField  bool
 		oversizedBody   bool
 	}{
-		{name: "success", providerStatus: 201, providerBody: `{"url":"https://publisher.example.com/article/1"}`, wantStatus: 200, wantURL: "https://publisher.example.com/article/1"},
+		{name: "success with cover", cover: "https://publisher.example.com/cover.png", providerStatus: 201, providerBody: `{"url":"https://publisher.example.com/article/1"}`, wantStatus: 200, wantURL: "https://publisher.example.com/article/1"},
+		{name: "omitted cover", omitCover: true, providerStatus: 201, providerBody: "{}", wantStatus: 200},
+		{name: "empty cover", providerStatus: 201, providerBody: "{}", wantStatus: 200},
+		{name: "blank cover", cover: " \t\n ", providerStatus: 201, providerBody: "{}", wantStatus: 200},
+		{name: "trimmed cover", cover: " https://publisher.example.com/cover.png ", providerStatus: 201, providerBody: "{}", wantStatus: 200},
 		{name: "non JSON success", providerStatus: 200, providerBody: "accepted", wantStatus: 200},
 		{name: "empty success", providerStatus: 204, wantStatus: 200},
 		{name: "upstream error", providerStatus: 500, providerBody: "failed", wantStatus: 502, wantCode: "custom_media_publish_failed"},
@@ -297,7 +303,10 @@ func TestCustomMediaPublishHTTP(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 				t.Fatal(err)
 			}
-			input := map[string]string{"title": "Article", "markdown": "# Article\n\nBody", "html": "<p>Body</p>", "coverImageSource": "https://publisher.example.com/cover.png"}
+			input := map[string]string{"title": "Article", "markdown": "# Article\n\nBody", "html": "<p>Body</p>", "coverImageSource": test.cover}
+			if test.omitCover {
+				delete(input, "coverImageSource")
+			}
 			if test.escapedBoundary {
 				input["markdown"] = strings.Repeat("\x01", maxContentBytes)
 				input["html"] = strings.Repeat("\x01", customMediaMaxHTMLBytes)
@@ -329,9 +338,17 @@ func TestCustomMediaPublishHTTP(t *testing.T) {
 					t.Fatal("invalid outgoing source metadata")
 				}
 				for field, want := range input {
+					if field == "coverImageSource" {
+						continue
+					}
 					if payload.Article[field] != want {
 						t.Fatalf("article field %s changed", field)
 					}
+				}
+				cover, hasCover := payload.Article["coverImageSource"]
+				wantCover := strings.TrimSpace(input["coverImageSource"])
+				if hasCover != (wantCover != "") || cover != wantCover {
+					t.Fatalf("outgoing cover = %q (present=%v), want %q (present=%v)", cover, hasCover, wantCover, wantCover != "")
 				}
 				return &http.Response{StatusCode: test.providerStatus, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(test.providerBody))}, nil
 			})}

@@ -1996,8 +1996,8 @@ export const ja: Messages = {
     wechatCoverLoading: "記事のカバーを読み込み中…",
     wechatCoverLoadFailed: "記事のカバーを読み込めませんでした。再試行してください。",
     wechatCoverImageFailed: "カバー画像を読み込めませんでした。接続を確認するか別の画像を選択してください。",
-    wechatCoverDraftOnly: "この WeChat 下書きにのみ適用し、記事のカバーは変更しません。",
-    wechatCoverUse: "このカバーを使用",
+    wechatCoverSavedWithDocument: "カバーは記事に保存され、次回の同期でも使用されます。",
+    wechatCoverSaveFailed: "カバーを保存できませんでした。もう一度お試しください。",
     wechatCoverPreview: "WeChat カバープレビュー",
     wechatCoverGenerateFailed:
       "カバーを生成できませんでした。後でもう一度お試しください",

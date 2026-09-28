@@ -39,7 +39,7 @@ Authorization: Bearer <your-token>
 }
 ```
 
-When no cover is configured, `coverImageSource` is an empty string. `markdown` contains the title and `html` is generated from the document theme. Handle the request by `event` and `version`; unknown fields may be ignored.
+`coverImageSource` is optional: it is omitted when no cover is configured; otherwise, it contains the cover URL with surrounding whitespace removed. Receivers may also accept an empty string from older versions as no cover. `markdown` contains the title and `html` is generated from the document theme. Handle the request by `event` and `version`; unknown fields may be ignored.
 
 ## Limits and recommendations
 

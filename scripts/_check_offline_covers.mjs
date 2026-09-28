@@ -150,6 +150,40 @@ try {
   assert.equal(rowFor("account-1", remote.docId).cover_image_source, remoteSource);
   await store.cleanupUnusedOfflineImages("account-1");
   assert.equal(imageCount("account-1"), 1, "remote cover object keys protect cloud image caches");
+
+  // Explicit release receives the original local key even after sync has mapped
+  // document references to remote URLs. Exercise the real DELETE past its grace
+  // period, including references held only by the other side of a conflict.
+  for (const source of [localSource, remoteSource, `/images/${objectKey}`]) {
+    for (const reference of ["cover", "body", "remote-cover", "remote-body"]) {
+      const content = reference === "body" ? `![image](${source})` : "Body";
+      const cover = reference === "cover" ? source : "";
+      const snapshot = reference.startsWith("remote-")
+        ? JSON.stringify({ ...remote, content: reference === "remote-body" ? `![image](${source})` : "Body", coverImageSource: reference === "remote-cover" ? source : "" })
+        : null;
+      sqlite.prepare(`UPDATE offline_documents SET content = ?, cover_image_source = ?, remote_snapshot = ?
+        WHERE account_id = 'account-1' AND doc_id = ?`).run(content, cover, snapshot, remote.docId);
+      await store.desktopReleaseUnusedImages([localSource]);
+      await store.cleanupUnusedOfflineImages("account-1");
+      assert.equal(imageCount("account-1"), 1, `${reference} retains its cached image: ${source}`);
+      assert.equal(await store.desktopResolveImageSource(source), "data:image/png;base64,Y292ZXI=", `${reference} remains readable offline`);
+    }
+  }
+
+  sqlite.prepare(`UPDATE offline_documents SET content = 'Body', cover_image_source = '', remote_snapshot = NULL
+    WHERE account_id = 'account-1' AND doc_id = ?`).run(remote.docId);
+  await store.desktopReleaseUnusedImages([localSource]);
+  assert.equal(imageCount("account-1"), 0, "a synced image is reclaimed after its final reference is removed");
+  assert.equal(imageCount("local:v1"), 1, "cleanup is scoped to the active account");
+
+  sqlite.prepare(`INSERT INTO offline_images
+    (account_id, image_id, content_type, base64_data, byte_size, created_at, is_local_origin)
+    VALUES ('account-1', ?, 'image/png', 'Y292ZXI=', 5, ?, 1)`).run(imageID, new Date().toISOString());
+  await store.desktopReleaseUnusedImages([localSource]);
+  assert.equal(imageCount("account-1"), 1, "new uploads retain their cleanup grace period");
+  sqlite.prepare("UPDATE offline_images SET created_at = '2000-01-01T00:00:00Z' WHERE account_id = 'account-1'").run();
+  await store.desktopReleaseUnusedImages([localSource]);
+  assert.equal(imageCount("account-1"), 0, "explicit release still reclaims abandoned local uploads after the grace period");
   console.log("offline cover SQLite and migration checks passed");
 } finally {
   globalThis.window = originalWindow;

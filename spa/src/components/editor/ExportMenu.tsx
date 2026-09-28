@@ -33,6 +33,7 @@ import {
   type WechatOfficialAccount,
 } from "../../api";
 import type { MediaPlatform } from "./mediaExportStrategy";
+import type { DocumentCoverState, SaveDocumentCover } from "./documentCoverState";
 import {
   feishuErrorText,
   getFeishuAccount,
@@ -67,6 +68,8 @@ export function ExportMenu({
   member,
   localMode,
   onBeforeExternalExport,
+  onSaveCover,
+  getCurrentCover,
 }: {
   editor: Editor | null;
   docId: string;
@@ -77,6 +80,8 @@ export function ExportMenu({
   member: boolean;
   localMode: boolean;
   onBeforeExternalExport: () => Promise<boolean>;
+  onSaveCover: SaveDocumentCover;
+  getCurrentCover: () => DocumentCoverState | null;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -396,6 +401,8 @@ export function ExportMenu({
           enabledPlatforms={enabledPlatforms}
           customPlatforms={customPlatforms}
           onBeforeExternalExport={onBeforeExternalExport}
+          onSaveCover={onSaveCover}
+          getCurrentCover={getCurrentCover}
           onOpenWechatDraft={openWechatDraft}
           wechatDraftOpening={wechatDraftOpening}
           onClose={() => setMediaOpen(false)}
@@ -413,6 +420,8 @@ export function ExportMenu({
           enabledPlatforms={enabledPlatforms}
           customPlatforms={customPlatforms}
           onBeforeExternalExport={onBeforeExternalExport}
+          onSaveCover={onSaveCover}
+          getCurrentCover={getCurrentCover}
           wechatAccounts={wechatAccounts}
           draftOnly
           onClose={() => setWechatDraftOpen(false)}

@@ -199,12 +199,10 @@ export function LiveEditor({
     };
   }, [coverOpen, editorInstance]);
 
-  const saveCover = useCallback((next: Parameters<typeof DocumentCoverDialog>[0]["initial"]) => {
-    saver.queue(docId, next);
-    queryClient.setQueryData<NonNullable<typeof doc.data>>(["document", docId], (current) =>
-      current ? { ...current, ...next } : current,
-    );
-  }, [docId, queryClient, saver]);
+  const saveCover = useCallback<Parameters<typeof DocumentCoverDialog>[0]["onSave"]>(
+    (next, signal) => saver.saveCover(docId, next, signal),
+    [docId, saver.saveCover],
+  );
 
   const handleImageSourceMapped = useCallback(
     (localURL: string, remoteURL: string) => {

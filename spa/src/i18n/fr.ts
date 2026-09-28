@@ -2056,8 +2056,8 @@ export const fr: Messages = {
     wechatCoverLoading: "Chargement de la couverture…",
     wechatCoverLoadFailed: "Impossible de charger la couverture. Réessayez.",
     wechatCoverImageFailed: "Impossible de charger l’image de couverture. Vérifiez votre connexion ou choisissez une autre image.",
-    wechatCoverDraftOnly: "Uniquement pour ce brouillon WeChat, sans modifier la couverture de l’article.",
-    wechatCoverUse: "Utiliser cette couverture",
+    wechatCoverSavedWithDocument: "La couverture est enregistrée avec l’article et réutilisée lors de la prochaine synchronisation.",
+    wechatCoverSaveFailed: "Impossible d’enregistrer la couverture. Veuillez réessayer.",
     wechatCoverPreview: "Aperçu de la couverture WeChat",
     wechatCoverGenerateFailed:
       "Impossible de générer la couverture. Réessayez plus tard",
