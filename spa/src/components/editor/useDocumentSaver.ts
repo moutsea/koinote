@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, type WechatCoverMode, type WechatCoverRatio } from "../../api";
+import { ApiError, releaseUnusedImages, uploadImage, type UploadedImage, type WechatCoverMode, type WechatCoverRatio } from "../../api";
 import { conflictDraftKey } from "../../conflictDrafts";
 import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { useSaveDocument } from "../../documents";
+import { documentCoverState, type DocumentCoverState, type SaveDocumentCover } from "./documentCoverState";
+import { dataUriToFile, isDataUri } from "./rehost";
 
 /**
  * 页面级的保存层：按 docId 维护待存内容、防抖定时器与保存状态。
@@ -54,6 +56,7 @@ type StoredDocumentDraft = DocumentSnapshot & {
 
 type Entry = {
   pending: DocumentSnapshot;
+  coverUploads: Map<string, CoverUpload>;
   timer: ReturnType<typeof setTimeout> | null;
   /** 只有标题变过才需要刷侧栏列表，正文变化不用 */
   titleDirty: boolean;
@@ -67,11 +70,35 @@ type Entry = {
   revisionConflict?: boolean;
 };
 
+type CoverUpload = {
+  promise: Promise<UploadedImage>;
+  image?: UploadedImage;
+  users: number;
+};
+
+// Failed saves keep their uploads until the document is saved or discarded.
+// Never reclaim an image while another save is still preparing to use it.
+function releaseCoverUploads(entry: Entry, keep: DocumentSnapshot | null = entry.pending, only?: CoverUpload) {
+  const keys: string[] = [];
+  for (const [source, upload] of entry.coverUploads) {
+    if ((only && upload !== only) || upload.users || !upload.image) continue;
+    const { image } = upload;
+    if (keep && (keep.coverImageSource === image.url || keep.content.includes(image.url))) continue;
+    entry.coverUploads.delete(source);
+    keys.push(image.key);
+  }
+  // Both storage implementations recheck persisted references before deletion.
+  if (keys.length) void releaseUnusedImages(keys).catch(() => undefined);
+}
+
 export type DocumentSaver = {
   /** 文档首次载入时铺一份基线。已有待存内容时不覆盖 —— 那可能比服务端的新 */
   seed: (docId: string, snapshot: DocumentSnapshot) => void;
   /** 记下改动并排入防抖队列 */
   queue: (docId: string, patch: DocPatch) => void;
+  /** 上传和重试记录属于文档，封面弹窗关闭后仍可复用。 */
+  saveCover: (docId: string, ...args: Parameters<SaveDocumentCover>) => Promise<DocumentCoverState>;
+  getCover: (docId: string) => DocumentCoverState | null;
   /** 撤回一次失败的标题提交；保留期间发生的正文、主题和其他标题编辑。 */
   rollbackTitle: (docId: string, attemptedTitle: string, before: DocumentSnapshot, wasDirty: boolean) => void;
   /** 立刻存并返回是否落库成功。换主题、删除、淘汰实例时用 */
@@ -271,6 +298,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
           now.dirty = false;
           now.titleDirty = false;
           clearStoredDraft(docId);
+          releaseCoverUploads(now);
           setStatus(docId, "saved");
           if (titleCommittedNeeded) titleCommitted.current?.();
           return true;
@@ -294,6 +322,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
         existing.pending = { ...snapshot };
         existing.forceVersion = false;
         existing.revisionConflict = false;
+        releaseCoverUploads(existing);
       }
       return;
     }
@@ -337,6 +366,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     }
     entries.current.set(docId, {
       pending: { ...pending },
+      coverUploads: new Map(),
       timer: null,
       titleDirty: false,
       dirty: recovered,
@@ -381,6 +411,61 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     return results.every(Boolean);
   }, [flush]);
 
+  const saveCover = useCallback(async (
+    docId: string,
+    next: DocumentCoverState,
+    signal: AbortSignal,
+  ): Promise<DocumentCoverState> => {
+    const entry = entries.current.get(docId);
+    if (!entry) throw new Error("document_not_loaded");
+    let upload: CoverUpload | undefined;
+    let submitted = false;
+    let saved = false;
+    try {
+      signal.throwIfAborted();
+      let source = next.coverImageSource;
+      if (isDataUri(source)) {
+        upload = entry.coverUploads.get(source);
+        if (!upload) {
+          const file = dataUriToFile(source);
+          if (!file) throw new Error("document_cover_invalid");
+          const created: CoverUpload = { promise: uploadImage(file, "persistent"), users: 0 };
+          created.promise = created.promise.then((image) => {
+            created.image = image;
+            return image;
+          });
+          entry.coverUploads.set(source, created);
+          upload = created;
+        }
+        upload.users += 1;
+        source = (await upload.promise).url;
+      }
+      signal.throwIfAborted();
+      if (entries.current.get(docId) !== entry) throw new Error("document_not_loaded");
+      queue(docId, { ...next, coverImageSource: source });
+      submitted = true;
+      if (!(await flush(docId))) throw new Error("document_save_failed");
+      saved = true;
+      return documentCoverState(entry.pending);
+    } finally {
+      if (upload) {
+        upload.users -= 1;
+        if (!upload.image && entry.coverUploads.get(next.coverImageSource) === upload) {
+          entry.coverUploads.delete(next.coverImageSource);
+        }
+      }
+      const current = entries.current.get(docId);
+      if (current !== entry) releaseCoverUploads(entry, current?.pending ?? null);
+      else if (saved) releaseCoverUploads(entry);
+      else if (!submitted && upload) releaseCoverUploads(entry, entry.pending, upload);
+    }
+  }, [flush, queue]);
+
+  const getCover = useCallback((docId: string) => {
+    const entry = entries.current.get(docId);
+    return entry ? documentCoverState(entry.pending) : null;
+  }, []);
+
   const rollbackTitle = useCallback((
     docId: string,
     attemptedTitle: string,
@@ -418,6 +503,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       // 存失败就留着记录：下次打开这篇还能接着重试，不静默丢弃
       if (entry && entry.dirty) return;
       entries.current.delete(docId);
+      if (entry) releaseCoverUploads(entry);
       setStatuses((prev) => {
         if (!(docId in prev)) return prev;
         const next = { ...prev };
@@ -433,6 +519,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     if (entry?.timer) clearTimeout(entry.timer);
     entries.current.delete(docId);
     clearStoredDraft(docId);
+    if (entry) releaseCoverUploads(entry, null);
     setStatuses((prev) => {
       if (!(docId in prev)) return prev;
       const next = { ...prev };
@@ -469,6 +556,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       if (entry?.timer) clearTimeout(entry.timer);
       entries.current.set(docId, {
         pending: { ...snapshot },
+        coverUploads: new Map(),
         timer: null,
         titleDirty: false,
         dirty: false,
@@ -476,6 +564,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
         forceVersion: false,
       });
       clearStoredDraft(docId);
+      if (entry) releaseCoverUploads(entry, snapshot);
       setStatus(docId, "saved");
     },
     [clearStoredDraft, setStatus],
@@ -490,6 +579,9 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     (docId: string, localURL: string, remoteURL: string) => {
       const entry = entries.current.get(docId);
       if (!entry) return false;
+      for (const upload of entry.coverUploads.values()) {
+        if (upload.image?.url === localURL) upload.image.url = remoteURL;
+      }
       const content = replaceDesktopLocalImageURLs(
         entry.pending.content,
         new Map([[localURL, remoteURL]]),
@@ -525,7 +617,8 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     return () => {
       for (const [docId, entry] of map) {
         if (entry.timer) clearTimeout(entry.timer);
-        if (entry.dirty) void doSave(docId);
+        if (entry.dirty) void doSave(docId).finally(() => releaseCoverUploads(entry));
+        else releaseCoverUploads(entry);
       }
     };
   }, [doSave]);
@@ -538,6 +631,8 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     () => ({
       seed,
       queue,
+      saveCover,
+      getCover,
       rollbackTitle,
       flush,
       flushAll,
@@ -554,6 +649,8 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [
       seed,
       queue,
+      saveCover,
+      getCover,
       rollbackTitle,
       flush,
       flushAll,

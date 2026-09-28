@@ -2024,8 +2024,8 @@ export const en: Messages = {
     wechatCoverLoading: "Loading article cover…",
     wechatCoverLoadFailed: "Could not load the article cover. Please retry.",
     wechatCoverImageFailed: "Could not load the cover image. Check your network or choose another image.",
-    wechatCoverDraftOnly: "Applies only to this WeChat draft; the article cover stays unchanged.",
-    wechatCoverUse: "Use this cover",
+    wechatCoverSavedWithDocument: "The cover is saved with the article and reused the next time you sync.",
+    wechatCoverSaveFailed: "Could not save the cover. Please try again.",
     wechatTitleLimit:
       "A WeChat draft title must contain 1–64 characters. Update the article title first.",
     wechatDraftCreate: "Save to WeChat drafts",

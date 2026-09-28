@@ -348,6 +348,16 @@ func (a *App) customMediaPlatformPublish(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
+	article := map[string]string{
+		"title":    input.Title,
+		"markdown": input.Markdown,
+		"html":     input.HTML,
+	}
+	// A missing cover is optional; sending an empty string fails URL validation
+	// on platforms that accept either a valid URL or an omitted field.
+	if input.CoverImageSource != "" {
+		article["coverImageSource"] = input.CoverImageSource
+	}
 	payload := map[string]any{
 		"version": 1,
 		"event":   "article.publish",
@@ -357,12 +367,7 @@ func (a *App) customMediaPlatformPublish(w http.ResponseWriter, r *http.Request)
 			"revision":     revision,
 			"platformName": name,
 		},
-		"article": map[string]string{
-			"title":            input.Title,
-			"markdown":         input.Markdown,
-			"html":             input.HTML,
-			"coverImageSource": input.CoverImageSource,
-		},
+		"article": article,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

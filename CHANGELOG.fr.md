@@ -17,6 +17,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- La synchronisation vers les plateformes personnalisées omet désormais le champ de couverture facultatif lorsqu’aucune couverture n’est définie, évitant les erreurs de validation d’URL vide.
+- Les couvertures choisies dans les réglages des brouillons WeChat sont désormais enregistrées avec l’article. Les nouvelles tentatives réutilisent les images déjà envoyées, et le nettoyage du client conserve les images encore référencées par une couverture, le corps ou une version en conflit après synchronisation.
 - Correction des délais d’expiration des brouillons WeChat riches en images grâce aux envois parallèles limités, aux signaux de maintien de la passerelle et aux connexions relais qui expirent uniquement lorsqu’elles sont inactives. Les clients existants restent compatibles.
 - Correction des titres masqués lors d’un échec de chargement de couverture, des titres obsolètes sur les couvertures par défaut, des couvertures dupliquées dans le corps sur X, des anciennes couvertures dans les brouillons WeChat et du blocage de la synchronisation du corps sur Feishu. Les métadonnées de couverture respectent désormais des limites de taille et de stockage.
 - Les opérations groupées sur l’arborescence réutilisent désormais le contrôle de révision et préservent la récupération des images lors de la suppression définitive.

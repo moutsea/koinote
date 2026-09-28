@@ -1483,6 +1483,8 @@ export function EditorPage() {
                     member={session.data?.user?.membershipTier === "lifetime"}
                     localMode={localMode}
                     onBeforeExternalExport={() => saver.flush(liveId)}
+                    onSaveCover={(next, signal) => saver.saveCover(liveId, next, signal)}
+                    getCurrentCover={() => saver.getCover(liveId)}
                   />
                   {!localMode && <button
                     type="button"

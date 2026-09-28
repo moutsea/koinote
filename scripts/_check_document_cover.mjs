@@ -7,6 +7,12 @@ import { parseHTML } from "linkedom";
 const { window } = parseHTML("<!doctype html><html><body><div id='root'></div></body></html>");
 const require = createRequire(import.meta.url);
 Object.assign(globalThis, { window, document: window.document, HTMLElement: window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+const recoveryStorage = new Map();
+window.localStorage = {
+  getItem: key => recoveryStorage.get(key) ?? null,
+  setItem: (key, value) => recoveryStorage.set(key, value),
+  removeItem: key => recoveryStorage.delete(key),
+};
 const textareaValues = new WeakMap();
 Object.defineProperties(window.HTMLTextAreaElement.prototype, {
   value: {
@@ -19,21 +25,33 @@ Object.defineProperties(window.HTMLTextAreaElement.prototype, {
   },
 });
 const adapters = {
-  i18n: 'const editor = new Proxy({}, { get: (_, key) => key }); export const useI18n = () => ({ t: { editor } });',
+  i18n: 'const editor = new Proxy({}, { get: (_, key) => key }); export const useI18n = () => ({ t: { editor, errors: {} } });',
   runtime: 'export const isDesktopRuntime = () => globalThis.__coverDesktop; export const desktopAPIOrigin = () => "https://koinote.app";',
   offlineStore: 'export const desktopResolveImageSource = source => globalThis.__coverResolve(source);',
   query: 'export const useQueryClient = () => ({ invalidateQueries: async () => {} });',
   modal: 'export const pushModal = () => () => {};',
-  api: 'export class ApiError extends Error {} export const AGENT_CREDITS_QUERY_KEY = ["credits"]; export const WECHAT_COVER_RATIO_PRESETS = ["2.35:1", "1:1"]; export const generateWechatCover = (prompt, ratio) => globalThis.__coverGenerateAI(prompt, ratio); export const uploadImage = file => globalThis.__coverUpload(file);',
+  api: `export class ApiError extends Error {}
+    export const AGENT_CREDITS_QUERY_KEY = ["credits"];
+    export const WECHAT_COVER_RATIO_PRESETS = ["2.35:1", "1:1"];
+    export const generateWechatCover = (prompt, ratio) => globalThis.__coverGenerateAI(prompt, ratio);
+    export const uploadImage = (file, purpose) => globalThis.__coverUpload(file, purpose);
+    export const releaseUnusedImages = keys => globalThis.__coverRelease(keys);
+    export const getDocument = id => globalThis.__coverGetDocument(id);
+    export const prepareWechatDraftDocument = id => globalThis.__coverPrepareDocument(id);
+    export const createWechatDraft = (id, input) => globalThis.__coverPublishDraft(id, input);
+    export const getWechatOfficialAccounts = async () => ({ accounts: [] });`,
+  documents: 'export const useSaveDocument = () => ({ mutateAsync: input => globalThis.__coverPersistDocument(input) });',
+  router: 'export const Link = () => null;',
   generator: 'export const createDefaultWechatCover = (title, ratio) => globalThis.__coverGenerate(title, ratio);',
-  rehost: 'export const dataUriToFile = source => ({ source });',
 };
 const bundle = await build({
   stdin: {
-    contents: `export { createElement, act } from "react";
+    contents: `export { createElement, act, useEffect, useState } from "react";
       export { createRoot } from "react-dom/client";
       export { DocumentCoverPreview } from "./spa/src/components/editor/DocumentCoverPreview";
       export { DocumentCoverDialog } from "./spa/src/components/editor/DocumentCoverDialog";
+      export { WechatDraftPanel } from "./spa/src/components/editor/WechatDraftPanel";
+      export { useDocumentSaver } from "./spa/src/components/editor/useDocumentSaver";
       export { parseCoverRatio } from "./spa/src/components/editor/coverRatio";`,
     resolveDir: process.cwd(),
   },
@@ -49,14 +67,15 @@ const bundle = await build({
       const modules = [
         [/\/i18n$/, "i18n"], [/\/desktop\/runtime$/, "runtime"], [/\/desktop\/offlineStore$/, "offlineStore"],
         [/^@tanstack\/react-query$/, "query"], [/\/modalStack$/, "modal"], [/\/api$/, "api"],
-        [/^\.\/wechatCover$/, "generator"], [/^\.\/rehost$/, "rehost"],
+        [/^@tanstack\/react-router$/, "router"], [/\/documents$/, "documents"],
+        [/^\.\/wechatCover$/, "generator"],
       ];
       for (const [filter, path] of modules) builder.onResolve({ filter }, () => ({ path, namespace: "cover-test" }));
       builder.onLoad({ filter: /.*/, namespace: "cover-test" }, ({ path }) => ({ contents: adapters[path], loader: "js" }));
     },
   }],
 });
-const { createElement, act, createRoot, DocumentCoverPreview, DocumentCoverDialog, parseCoverRatio } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, useEffect, useState, createRoot, DocumentCoverPreview, DocumentCoverDialog, WechatDraftPanel, useDocumentSaver, parseCoverRatio } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 for (const ratio of ["0.0:0.0", "0.00:1", "1:0.00", "101:100", "1:100", "100:1", "1.001:1", "invalid"]) {
   assert.equal(parseCoverRatio(ratio), null, `invalid ratio ${ratio}`);
 }
@@ -97,48 +116,387 @@ assert.ok(container.querySelector(".default-title textarea"), "network failures 
 await act(async () => root.render(createElement(DocumentCoverPreview, { ...preview, coverImageSource: "https://example.test/broken.png", fallbackTitleClassName: "" })));
 assert.equal(container.querySelector(".default-title"), null, "themed documents retain their own title styling");
 
+
 const generations = [];
-let uploadedSource;
-let savedCover;
+const uploads = [];
+const releaseRequests = [];
+const released = [];
+const publishedDrafts = [];
+const savedDocuments = new Map();
+const events = [];
+const embeddedImage = "data:image/png;base64,Y292ZXI=";
+const otherEmbeddedImage = "data:image/png;base64,b3RoZXI=";
+let rejectSave = false;
+let rejectGet = false;
+let rejectUpload = false;
+let saveGate;
+let uploadGate;
+let prepareDocument = async () => {};
+let documentSaver;
+let controls;
+let activeDocId;
+let uploadAttempts = 0;
+let saveAttempts = 0;
+const initialDocument = {
+  title: "Cover title", content: "Original body", theme: "", revision: 1,
+  coverMode: "default", coverRatio: "2.35:1", coverImageSource: "", coverPrompt: "",
+};
+const uploadedSource = image => `data:${image.contentType};base64,${image.bytes.toString("base64")}`;
+const buttonWithText = text => [...document.querySelectorAll("button")].find(button => button.textContent === text);
+const click = async text => {
+  const button = buttonWithText(text);
+  assert.ok(button, `button exists: ${text}`);
+  assert.equal(button.disabled, false, `button enabled: ${text}`);
+  await act(async () => button.click());
+};
+const chooseMode = async index => act(async () => document.querySelectorAll('[role="radio"]')[index].click());
+const closeCover = async () => act(async () => document.querySelector('[aria-label="shareClose"]').click());
+
 globalThis.__coverGenerate = async (title, ratio) => {
   generations.push({ title, ratio });
-  return { base64: Buffer.from(title).toString("base64"), mimeType: "image/png", width: 940, height: 400, ratio };
+  return { base64: Buffer.from(`${title}:${ratio}`).toString("base64"), mimeType: "image/png", width: 940, height: 400, ratio };
 };
-globalThis.__coverUpload = async (file) => {
-  uploadedSource = file.source;
-  return { url: "https://example.test/new-cover.png" };
+globalThis.__coverGenerateAI = async (prompt, ratio) => ({
+  cover: { base64: Buffer.from(`AI:${prompt}`).toString("base64"), mimeType: "image/png", width: 600, height: 400, ratio },
+});
+globalThis.__coverUpload = async (file, purpose) => {
+  assert.equal(purpose, "persistent");
+  uploadAttempts += 1;
+  if (rejectUpload) throw new Error("upload failed");
+  const key = `u/test-user/${uploadAttempts.toString(16).padStart(8, "0")}.png`;
+  const source = globalThis.__coverDesktop ? `koinote-local-image://cover-${uploadAttempts}` : `https://img.koinote.app/${key}`;
+  const image = { key: globalThis.__coverDesktop ? source : key, url: source, contentType: file.type, size: file.size, bytes: Buffer.from(await file.arrayBuffer()) };
+  uploads.push(image);
+  if (uploadGate) await uploadGate;
+  return image;
 };
-const dialog = {
-  title: "New title", member: true, articleImages: [],
-  initial: { coverMode: "default", coverRatio: "2.35:1", coverImageSource: "https://example.test/old-title.png", coverPrompt: "" },
-  onSave(cover) { savedCover = cover; }, onClose() {},
+globalThis.__coverRelease = async keys => {
+  releaseRequests.push(...keys);
+  for (const key of keys) {
+    const image = uploads.find(upload => upload.key === key);
+    if (![...savedDocuments.values()].some(doc => doc.coverImageSource === image?.url || doc.content.includes(image?.url))) released.push(key);
+  }
 };
-await act(async () => root.render(createElement(DocumentCoverDialog, dialog)));
-assert.deepEqual(generations, [{ title: "New title", ratio: "2.35:1" }], "a saved default cover regenerates with the current title");
-await act(async () => root.render(createElement(DocumentCoverDialog, { ...dialog, title: "Newest title" })));
-assert.equal(generations.at(-1).title, "Newest title");
-const saveButton = [...document.querySelectorAll("button")].find(button => button.textContent === "wechatCoverSave");
-assert.equal(saveButton.disabled, false);
-await act(async () => saveButton.click());
-assert.equal(uploadedSource, `data:image/png;base64,${Buffer.from("Newest title").toString("base64")}`);
-assert.equal(savedCover.coverImageSource, "https://example.test/new-cover.png", "saving persists the regenerated cover");
+globalThis.__coverGetDocument = async id => {
+  events.push("read-cover");
+  if (rejectGet) throw new Error("read failed");
+  assert.ok(savedDocuments.has(id));
+  return { document: { ...savedDocuments.get(id) } };
+};
+globalThis.__coverPersistDocument = async input => {
+  events.push("save-document");
+  saveAttempts += 1;
+  if (saveGate) await saveGate;
+  if (rejectSave) throw new Error("save failed");
+  const current = savedDocuments.get(input.docId);
+  assert.equal(input.expectedRevision, current.revision);
+  assert.doesNotMatch(input.coverImageSource ?? "", /^data:/i, "document API never receives an embedded image");
+  const image = uploads.find(upload => upload.url === input.coverImageSource);
+  assert.equal(image && released.includes(image.key), image ? false : undefined, "pending saves must not reference released images");
+  const document = { ...current, ...input, revision: current.revision + 1 };
+  savedDocuments.set(input.docId, document);
+  return { document: { ...document } };
+};
+globalThis.__coverPrepareDocument = async id => {
+  events.push("sync-document");
+  assert.equal(documentSaver.isDirty(id), false, "draft preparation starts after editor saves complete");
+  await prepareDocument(id);
+};
+globalThis.__coverPublishDraft = async (id, input) => {
+  // The real API performs desktop preparation again before sending its request.
+  await globalThis.__coverPrepareDocument(id);
+  assert.equal(input.coverImageSource ?? "", savedDocuments.get(id).coverImageSource, "publish uses the latest saved cover");
+  publishedDrafts.push({ id, ...input });
+  return { draft: { mediaId: "saved-draft" } };
+};
+function EditorHarness({ docId }) {
+  const saver = useDocumentSaver();
+  documentSaver = saver;
+  const [headerOpen, setHeaderOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(true);
+  controls = { setHeaderOpen, setDraftOpen };
+  useEffect(() => saver.seed(docId, savedDocuments.get(docId)), [docId, saver.seed]);
+  const current = saver.peek(docId) ?? savedDocuments.get(docId);
+  const cover = saver.getCover(docId) ?? current;
+  const articleImages = [
+    { src: "https://example.test/article.png", alt: "Article image" },
+    { src: embeddedImage, alt: "Embedded image" },
+    { src: otherEmbeddedImage, alt: "Other embedded image" },
+    { src: "DATA:image/png;BASE64,Y292ZXI=", alt: "Uppercase embedded image" },
+    { src: "data:image/png;base64,%%%", alt: "Broken image" },
+  ];
+  const saveCover = (next, signal) => saver.saveCover(docId, next, signal);
+  return createElement("div", null,
+    headerOpen && createElement(DocumentCoverDialog, {
+      title: current.title, member: true, articleImages, initial: cover,
+      onSave: saveCover, onClose: () => setHeaderOpen(false),
+    }),
+    draftOpen && createElement(WechatDraftPanel, {
+      accounts: [{ accountId: "wechat-account", label: "Test account", isDefault: true }],
+      docId, title: current.title, member: true, disabled: false, articleImages,
+      prepareHTML: async () => "<p>Original body</p>",
+      onSaveCover: saveCover,
+      getCurrentCover: () => saver.getCover(docId),
+      onBeforeExternalExport: () => saver.flush(docId),
+    }),
+  );
+}
+async function newDocument(name, patch = {}) {
+  await act(async () => root.render(null));
+  rejectSave = rejectGet = rejectUpload = false;
+  saveGate = uploadGate = undefined;
+  prepareDocument = async () => {};
+  globalThis.__coverDesktop = false;
+  const id = `cover-${name}`;
+  savedDocuments.set(id, { ...initialDocument, ...patch, docId: id });
+  activeDocId = id;
+  await act(async () => root.render(createElement(EditorHarness, { docId: id })));
+  return id;
+}
+const stored = () => savedDocuments.get(activeDocId);
 
-uploadedSource = undefined;
-savedCover = undefined;
-const draftCover = Object.freeze({ coverMode: "ai", coverRatio: "3:2", coverImageSource: "https://example.test/saved-ai.png", coverPrompt: "New AI cover" });
-const generatedAI = { base64: Buffer.from("Generated AI cover").toString("base64"), mimeType: "image/png", width: 600, height: 400, ratio: "3:2" };
-globalThis.__coverGenerateAI = async (prompt, ratio) => {
-  assert.equal(prompt, draftCover.coverPrompt);
-  assert.equal(ratio, draftCover.coverRatio);
-  return { cover: generatedAI };
+// The header uses the same persistent saver as the draft panel and waits for I/O.
+await newDocument("header", { title: "New title", coverImageSource: "https://example.test/old-title.png" });
+await act(async () => controls.setHeaderOpen(true));
+assert.deepEqual(generations.at(-1), { title: "New title", ratio: "2.35:1" });
+await act(async () => {
+  documentSaver.queue(activeDocId, { title: "Newest title" });
+  assert.equal(await documentSaver.flush(activeDocId), true);
+});
+assert.equal(generations.at(-1).title, "Newest title");
+let finishSave;
+saveGate = new Promise(resolve => { finishSave = resolve; });
+await click("wechatCoverSave");
+assert.ok(document.querySelector('[role="dialog"]'));
+assert.equal(buttonWithText("wechatCoverSave").disabled, true);
+assert.equal(stored().coverImageSource, "https://example.test/old-title.png");
+await act(async () => { finishSave(); await saveGate; });
+saveGate = undefined;
+assert.equal(document.querySelector('[role="dialog"]'), null);
+assert.equal(stored().coverImageSource, uploads.at(-1).url);
+assert.equal(uploadedSource(uploads.at(-1)), `data:image/png;base64,${Buffer.from("Newest title:2.35:1").toString("base64")}`);
+
+// Real data URI parsing covers lowercase/uppercase schemes and rejects malformed images.
+for (const label of ["Embedded image", "Uppercase embedded image", "Broken image", "Article image"]) {
+  await newDocument(label);
+  await click("wechatCoverSet");
+  await chooseMode(1);
+  await click(label);
+  const uploadCount = uploads.length;
+  const beforeSave = saveAttempts;
+  await click("wechatCoverSave");
+  if (label === "Broken image") {
+    assert.equal(uploads.length, uploadCount);
+    assert.equal(saveAttempts, beforeSave);
+    assert.equal(document.querySelector('[role="alert"]').textContent, "wechatCoverSaveFailed");
+  } else if (label === "Article image") {
+    assert.equal(uploads.length, uploadCount);
+    assert.equal(stored().coverImageSource, "https://example.test/article.png");
+  } else {
+    assert.equal(uploads.length, uploadCount + 1);
+    assert.equal(uploads.at(-1).bytes.toString(), "cover");
+    assert.equal(stored().coverImageSource, uploads.at(-1).url);
+  }
+}
+
+// Default and AI uploads survive closing/reopening the entire draft panel, or
+// changing between draft settings and the editor header, without another upload.
+for (const mode of ["default", "ai"]) {
+  await newDocument(`retry-${mode}`, mode === "ai" ? { coverMode: "ai", coverPrompt: "Mountains" } : {});
+  await click("wechatCoverSet");
+  if (mode === "ai") await click("wechatCoverGenerate");
+  rejectSave = true;
+  const count = uploads.length;
+  await click("wechatCoverSave");
+  const retained = uploads.at(-1);
+  await click("wechatCoverSave");
+  assert.equal(uploads.length, count + 1, "an in-place retry reuses the upload");
+  await closeCover();
+  await act(async () => controls.setDraftOpen(false));
+  await act(async () => controls.setDraftOpen(true));
+  await click("wechatCoverChange");
+  await click("wechatCoverSave");
+  assert.equal(uploads.length, count + 1, "reopening the draft retains the upload and the selected cover mode");
+  await closeCover();
+  rejectSave = false;
+  await act(async () => controls.setHeaderOpen(true));
+  await click("wechatCoverSave");
+  assert.equal(uploads.length, count + 1, "the document header shares the upload cache");
+  assert.equal(stored().coverImageSource, retained.url);
+  assert.equal(stored().coverMode, mode);
+  assert.equal(released.includes(retained.key), false);
+  await act(async () => {
+    documentSaver.queue(activeDocId, { content: "Body changed after saving cover" });
+    assert.equal(await documentSaver.flush(activeDocId), true);
+  });
+  assert.equal(stored().coverImageSource, retained.url);
+}
+
+// A superseded failed upload is reclaimed after replacement is safely saved.
+await newDocument("replacement");
+await click("wechatCoverSet");
+rejectSave = true;
+await click("wechatCoverSave");
+const superseded = uploads.at(-1);
+await closeCover();
+await click("wechatCoverChange");
+await chooseMode(1);
+await click("Embedded image");
+await click("wechatCoverSave");
+const retained = uploads.at(-1);
+await closeCover();
+assert.equal(released.includes(superseded.key), false, "failed uploads remain reusable until persistence settles");
+assert.equal(released.includes(retained.key), false);
+rejectSave = false;
+await act(async () => assert.equal(await documentSaver.flush(activeDocId), true));
+assert.equal(released.includes(superseded.key), true);
+assert.equal(released.includes(retained.key), false);
+assert.equal(stored().coverImageSource, retained.url);
+
+// A failed cover save followed by direct publishing first retries document I/O.
+// Desktop preparation then maps the local image; the request must use that URL.
+await newDocument("publish-recovery", { coverImageSource: "https://example.test/previous-cover.png" });
+globalThis.__coverDesktop = true;
+globalThis.__coverResolve = async () => embeddedImage;
+await click("wechatCoverChange");
+rejectSave = true;
+await click("wechatCoverSave");
+const localCover = documentSaver.getCover(activeDocId).coverImageSource;
+assert.match(localCover, /^koinote-local-image:/);
+await closeCover();
+const beforePublish = publishedDrafts.length;
+events.length = 0;
+await click("wechatDraftCreate");
+assert.equal(document.querySelector('[role="alert"]').textContent, "saveFailed");
+assert.equal(publishedDrafts.length, beforePublish);
+assert.equal(events.includes("sync-document"), false, "failed editor persistence blocks publishing");
+rejectSave = false;
+const mappedCover = "https://img.koinote.app/u/test-user/aaaaaaaa.png";
+prepareDocument = async id => {
+  if (savedDocuments.get(id).coverImageSource === localCover) {
+    savedDocuments.get(id).coverImageSource = mappedCover;
+    documentSaver.applyImageMapping(id, localCover, mappedCover);
+  }
 };
-await act(async () => root.render(createElement(DocumentCoverDialog, { ...dialog, key: "wechat-draft", purpose: "wechat-draft", initial: draftCover })));
-const generateButton = [...document.querySelectorAll("button")].find(button => button.textContent === "wechatCoverRegenerate");
-await act(async () => generateButton.click());
-const useButton = [...document.querySelectorAll("button")].find(button => button.textContent === "wechatCoverUse");
-await act(async () => useButton.click());
-assert.equal(uploadedSource, undefined, "draft-only covers do not upload to persistent image storage");
-assert.equal(savedCover.coverImageSource, `data:image/png;base64,${generatedAI.base64}`, "the draft receives the generated image directly");
-assert.equal(draftCover.coverImageSource, "https://example.test/saved-ai.png", "draft selection leaves the original document cover unchanged");
+events.length = 0;
+await click("wechatDraftCreate");
+assert.equal(publishedDrafts.length, beforePublish + 1);
+assert.equal(publishedDrafts.at(-1).coverImageSource, mappedCover);
+assert.ok(events.indexOf("read-cover") > events.indexOf("sync-document"));
+assert.ok(buttonWithText("wechatDraftCreated"));
+await click("wechatCoverChange");
+await closeCover();
+assert.ok(buttonWithText("wechatDraftCreated"), "closing unchanged cover settings preserves duplicate-publish protection");
+
+// Fresh cover lookup failures must stop publishing rather than fall back to stale state.
+await newDocument("read-failure");
+rejectGet = true;
+const publishCount = publishedDrafts.length;
+await click("wechatDraftCreate");
+assert.equal(publishedDrafts.length, publishCount);
+assert.equal(document.querySelector('[role="alert"]').textContent, "wechatDraftCreateFailed");
+rejectGet = false;
+await click("wechatDraftCreate");
+assert.equal(publishedDrafts.length, publishCount + 1, "articles with no cover still publish");
+
+// Upload failures are retryable; aborted dialogs cannot save late upload results.
+await newDocument("upload-failure");
+await click("wechatCoverSet");
+rejectUpload = true;
+const failedCount = uploadAttempts;
+await click("wechatCoverSave");
+rejectUpload = false;
+await click("wechatCoverSave");
+assert.equal(uploadAttempts, failedCount + 2);
+assert.equal(stored().coverImageSource, uploads.at(-1).url);
+await newDocument("unmount-upload");
+let finishUpload;
+uploadGate = new Promise(resolve => { finishUpload = resolve; });
+await click("wechatCoverSet");
+const savesBeforeUnmount = saveAttempts;
+await click("wechatCoverSave");
+const orphan = uploads.at(-1);
+await act(async () => controls.setDraftOpen(false));
+await act(async () => { finishUpload(); await uploadGate; });
+uploadGate = undefined;
+assert.equal(saveAttempts, savesBeforeUnmount);
+assert.equal(stored().coverImageSource, "");
+assert.ok(released.includes(orphan.key));
+
+// Concurrent users share an upload; canceling one must not delete another's image.
+await newDocument("concurrent-upload");
+uploadGate = new Promise(resolve => { finishUpload = resolve; });
+const firstAbort = new AbortController();
+const secondAbort = new AbortController();
+const embeddedCover = { ...documentSaver.getCover(activeDocId), coverMode: "article", coverImageSource: embeddedImage };
+const concurrentCount = uploads.length;
+let firstSave, secondSave;
+await act(async () => {
+  firstSave = documentSaver.saveCover(activeDocId, embeddedCover, firstAbort.signal).catch(error => error);
+  secondSave = documentSaver.saveCover(activeDocId, embeddedCover, secondAbort.signal);
+});
+await act(async () => {
+  firstAbort.abort();
+  finishUpload();
+  assert.equal((await firstSave).name, "AbortError");
+  await secondSave;
+});
+uploadGate = undefined;
+assert.equal(uploads.length, concurrentCount + 1);
+assert.equal(released.includes(uploads.at(-1).key), false);
+assert.equal(stored().coverImageSource, uploads.at(-1).url);
+
+// Closing a tab or accepting a remote version keeps uploads referenced by that
+// version, even when desktop sync has changed the URL but kept the local key.
+for (const action of ["forget", "acceptRemote"]) {
+  for (const reference of ["cover", "body"]) {
+    await newDocument(`${action}-${reference}`);
+    globalThis.__coverDesktop = true;
+    await act(async () => documentSaver.saveCover(activeDocId, embeddedCover, new AbortController().signal));
+    const image = uploads.at(-1);
+    const localKey = image.key;
+    const remoteURL = `https://img.koinote.app/u/test-user/${uploadAttempts.toString(16).padStart(8, "0")}.png`;
+    stored().coverImageSource = remoteURL;
+    await act(async () => documentSaver.applyImageMapping(activeDocId, localKey, remoteURL));
+    if (reference === "body") {
+      await act(async () => {
+        documentSaver.queue(activeDocId, { content: `![image](${remoteURL})`, coverImageSource: "" });
+        assert.equal(await documentSaver.flush(activeDocId), true);
+      });
+    }
+    await act(async () => {
+      if (action === "forget") await documentSaver.forget(activeDocId);
+      else documentSaver.acceptRemote(activeDocId, stored());
+    });
+    assert.equal(releaseRequests.includes(localKey), false, `${action} preserves the ${reference} upload`);
+  }
+}
+
+// An upload can finish after accepting another version. Its late cleanup must
+// also respect references in the replacement entry.
+await newDocument("accept-remote-during-upload");
+uploadGate = new Promise(resolve => { finishUpload = resolve; });
+let lateSave;
+await act(async () => {
+  lateSave = documentSaver.saveCover(activeDocId, embeddedCover, new AbortController().signal).catch(error => error);
+});
+const lateImage = uploads.at(-1);
+stored().coverImageSource = lateImage.url;
+await act(async () => documentSaver.acceptRemote(activeDocId, stored()));
+await act(async () => {
+  finishUpload();
+  assert.equal((await lateSave).message, "document_not_loaded");
+});
+uploadGate = undefined;
+assert.equal(releaseRequests.includes(lateImage.key), false, "late cleanup preserves the accepted remote cover");
+
+// Upload ownership is isolated per document, and explicit discard frees failed uploads.
+await newDocument("discard");
+rejectSave = true;
+await act(async () => assert.rejects(documentSaver.saveCover(activeDocId, embeddedCover, new AbortController().signal)));
+const discarded = uploads.at(-1);
+await act(async () => documentSaver.acceptRemote(activeDocId, stored()));
+assert.ok(released.includes(discarded.key));
+rejectSave = false;
 await act(async () => root.unmount());
-console.log("document cover rendering and ratio checks passed");
+console.log("document cover rendering, shared upload lifecycle, publish recovery and ratio checks passed");

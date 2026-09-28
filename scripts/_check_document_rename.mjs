@@ -14,7 +14,9 @@ const bundle = await build({
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ contents:
       path === "hooks" ? `export const useRef = value => ({current:value}); export const useState = value => [value, () => {}]; export const useCallback = fn => fn; export const useMemo = fn => fn(); export const useEffect = () => {};` :
       path === "documents" ? `export const useSaveDocument = () => ({mutateAsync:globalThis.renameTestSave});` :
-      `export class ApiError extends Error {}`,
+      `export class ApiError extends Error {}
+       export const uploadImage = async () => { throw new Error("Unexpected image upload during rename"); };
+       export const releaseUnusedImages = async () => { throw new Error("Unexpected image cleanup during rename"); };`,
     }));
   } }],
 });

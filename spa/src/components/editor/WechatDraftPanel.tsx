@@ -6,12 +6,14 @@ import {
   createWechatDraft,
   getDocument,
   getWechatOfficialAccounts,
+  prepareWechatDraftDocument,
   type WechatOfficialAccount,
 } from "../../api";
 import { useI18n } from "../../i18n";
 import { CoverImage } from "./CoverImage";
 import { DocumentCoverDialog, type DocumentCoverState } from "./DocumentCoverDialog";
 import { wechatDraftCoverInput } from "./wechatDraftCover";
+import { documentCoverState, type SaveDocumentCover } from "./documentCoverState";
 
 export function WechatDraftPanel({
   accounts: initialAccounts,
@@ -23,6 +25,9 @@ export function WechatDraftPanel({
   member,
   articleImages,
   prepareHTML,
+  onSaveCover,
+  getCurrentCover,
+  onBeforeExternalExport,
   onPublishingChange,
 }: {
   accounts?: WechatOfficialAccount[];
@@ -34,6 +39,9 @@ export function WechatDraftPanel({
   member: boolean;
   articleImages: Array<{ src: string; alt: string }>;
   prepareHTML: () => Promise<string | null>;
+  onSaveCover: SaveDocumentCover;
+  getCurrentCover: () => DocumentCoverState | null;
+  onBeforeExternalExport: () => Promise<boolean>;
   onPublishingChange?: (publishing: boolean) => void;
 }) {
   const { t } = useI18n();
@@ -52,6 +60,8 @@ export function WechatDraftPanel({
   const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const publishingRef = useRef(false);
+  const getCurrentCoverRef = useRef(getCurrentCover);
+  getCurrentCoverRef.current = getCurrentCover;
 
   useEffect(() => {
     if (initialAccounts !== undefined) {
@@ -85,12 +95,7 @@ export function WechatDraftPanel({
     setCoverLoadError(false);
     void getDocument(docId).then(({ document }) => {
       if (cancelled) return;
-      setCoverState({
-        coverMode: document.coverMode ?? "default",
-        coverRatio: document.coverRatio ?? "2.35:1",
-        coverImageSource: document.coverImageSource ?? "",
-        coverPrompt: document.coverPrompt ?? "",
-      });
+      setCoverState(getCurrentCoverRef.current() ?? documentCoverState(document));
     }).catch(() => {
       if (!cancelled) setCoverLoadError(true);
     }).finally(() => {
@@ -111,9 +116,19 @@ export function WechatDraftPanel({
     setPublishing(true);
     onPublishingChange?.(true);
     try {
+      if (!(await onBeforeExternalExport())) {
+        setError(t.editor.saveFailed);
+        return;
+      }
       const html = await prepareHTML();
       if (!html) return;
-      const coverInput = await wechatDraftCoverInput(coverState);
+      // Desktop sync can complete a failed save and replace local image URLs.
+      // Read the persisted cover only after those operations finish.
+      await prepareWechatDraftDocument(docId);
+      const { document } = await getDocument(docId);
+      const savedCover = documentCoverState(document);
+      setCoverState(savedCover);
+      const coverInput = await wechatDraftCoverInput(savedCover);
       await createWechatDraft(docId, {
         accountId: selectedAccountId,
         title: title.trim(),
@@ -145,6 +160,23 @@ export function WechatDraftPanel({
   const controlsDisabled = disabled || publishing;
   const titleInvalid = title.trim().length === 0 || [...title.trim()].length > 64;
   const hasCover = Boolean(coverState?.coverImageSource.trim());
+
+  function openCoverDialog() {
+    setCoverState(getCurrentCover() ?? coverState);
+    setCoverDialogOpen(true);
+  }
+
+  function closeCoverDialog() {
+    const current = getCurrentCover();
+    if (current) {
+      if (current.coverMode !== coverState?.coverMode || current.coverRatio !== coverState?.coverRatio ||
+        current.coverImageSource !== coverState?.coverImageSource || current.coverPrompt !== coverState?.coverPrompt) {
+        setPublished(false);
+      }
+      setCoverState(current);
+    }
+    setCoverDialogOpen(false);
+  }
 
   if (accountLoading || coverLoading) {
     return (
@@ -206,14 +238,14 @@ export function WechatDraftPanel({
           <div className="mt-3 overflow-hidden rounded-lg border border-black/10 bg-black/5 dark:border-white/10">
             <CoverImage source={coverState.coverImageSource} alt={t.editor.wechatCoverPreview} className="mx-auto block w-full max-w-sm object-cover" style={{ aspectRatio: coverState.coverRatio.replace(":", " / ") }} />
             <div className="flex items-center justify-between gap-3 px-3 py-2">
-              <p className="text-[11px] text-neutral-500">{t.editor.wechatCoverDraftOnly}</p>
-              <button type="button" disabled={controlsDisabled} onClick={() => setCoverDialogOpen(true)} className="shrink-0 rounded-full border border-black/10 px-3 py-1 text-[11px] font-semibold disabled:opacity-60 dark:border-white/15">{t.editor.wechatCoverChange}</button>
+              <p className="text-[11px] text-neutral-500">{t.editor.wechatCoverSavedWithDocument}</p>
+              <button type="button" disabled={controlsDisabled} onClick={openCoverDialog} className="shrink-0 rounded-full border border-black/10 px-3 py-1 text-[11px] font-semibold disabled:opacity-60 dark:border-white/15">{t.editor.wechatCoverChange}</button>
             </div>
           </div>
         ) : (
           <div className="mt-3 rounded-lg border border-dashed border-black/10 px-3 py-4 text-center text-[11px] text-neutral-400 dark:border-white/10">
             {t.editor.wechatCoverUnset}
-            <button type="button" disabled={controlsDisabled} onClick={() => setCoverDialogOpen(true)} className="ml-2 font-semibold text-emerald-700 underline underline-offset-2 dark:text-emerald-300">{t.editor.wechatCoverSet}</button>
+            <button type="button" disabled={controlsDisabled} onClick={openCoverDialog} className="ml-2 font-semibold text-emerald-700 underline underline-offset-2 dark:text-emerald-300">{t.editor.wechatCoverSet}</button>
           </div>
         )}
       </div>
@@ -235,8 +267,14 @@ export function WechatDraftPanel({
           articleImages={articleImages}
           initial={coverState}
           purpose="wechat-draft"
-          onSave={(next) => { setCoverState(next); setPublished(false); setError(null); }}
-          onClose={() => setCoverDialogOpen(false)}
+          onSave={async (next, signal) => {
+            const saved = await onSaveCover(next, signal);
+            setCoverState(saved);
+            setPublished(false);
+            setError(null);
+            return saved;
+          }}
+          onClose={closeCoverDialog}
         />
       )}
     </section>

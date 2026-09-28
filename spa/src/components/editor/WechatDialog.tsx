@@ -27,6 +27,7 @@ import {
 } from "../../api";
 import { buildWechatHTML } from "./exportWechat";
 import { WechatDraftPanel } from "./WechatDraftPanel";
+import type { DocumentCoverState, SaveDocumentCover } from "./documentCoverState";
 import { ZhihuPublishPanel } from "./ZhihuPublishPanel";
 import { XPublishPanel } from "./XPublishPanel";
 import { WechatPreflightPanel } from "./WechatPreflightPanel";
@@ -54,6 +55,8 @@ export function MediaExportDialog({
   enabledPlatforms,
   customPlatforms = [],
   onBeforeExternalExport,
+  onSaveCover,
+  getCurrentCover,
   onClose,
 }: {
   editor: Editor;
@@ -70,6 +73,8 @@ export function MediaExportDialog({
   enabledPlatforms?: MediaPlatform[];
   customPlatforms?: CustomMediaPlatform[];
   onBeforeExternalExport: () => Promise<boolean>;
+  onSaveCover: SaveDocumentCover;
+  getCurrentCover: () => DocumentCoverState | null;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -881,6 +886,9 @@ export function MediaExportDialog({
               }
               articleImages={articleImages}
               prepareHTML={prepareWechatDraftHTML}
+              onSaveCover={onSaveCover}
+              getCurrentCover={getCurrentCover}
+              onBeforeExternalExport={onBeforeExternalExport}
               onPublishingChange={setDraftPublishing}
             />
           )}

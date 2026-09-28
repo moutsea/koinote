@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds persistent document covers with custom ratios, cover reuse when syncing to X, Feishu, and WeChat, and per-document reading-position restoration. It also hardens cover validation and quotas, keeps titles editable when cover images fail, separates X cover media from article images, and lets Feishu body sync succeed when cover sync fails."
+          notes="Koinote Desktop $version saves covers selected in WeChat draft settings with the article, reuses uploaded covers after failed saves, and preserves referenced offline images after sync. Custom platform sync also supports articles without a cover."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,12 +239,10 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 新增文档封面：支持默认、正文图片和 AI 封面、自定义比例、大小限制与存储配额。
-          - X 同步使用独立封面媒体，不会把封面重复追加到正文或挤占正文图片额度。
-          - 飞书正文同步成功后再同步封面，封面失败会提示但不会回滚正文。
-          - 微信草稿打开前等待编辑器保存，封面地址校验更严格。
-          - 切换文档、标签回收或重新挂载编辑器后恢复每篇文档的阅读位置。
-          - 封面加载失败时仍保留可编辑标题与封面设置入口。
+          - 微信公众号草稿设置中的封面会保存到文章，同步完成后不再恢复为未设置。
+          - 封面保存失败后重试、关闭重开设置时复用已上传图片，并在创建草稿前读取最新已保存封面。
+          - 修复关闭标签或接受远端更新时误删图片缓存的问题，保留封面、正文与冲突版本引用的离线图片。
+          - 未设置封面的文章也可同步到自定义平台。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -258,12 +256,10 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Add persistent document covers with default, article-image, and AI sources, custom ratios, size limits, and storage-quota accounting.
-          - Use separate cover media for X so the cover is not appended to the article body or counted against its image limit.
-          - Sync the Feishu body before its cover; a cover failure is reported without rolling back the body.
-          - Wait for editor saves before opening a WeChat draft and apply stricter cover-source validation.
-          - Restore each document's reading position after switching documents, recycling tabs, or remounting the editor.
-          - Keep the editable title and cover settings reachable when a cover image cannot be loaded.
+          - Save covers selected in WeChat draft settings with the article so they remain available after sync.
+          - Reuse uploaded covers when retrying failed saves or reopening settings, and read the latest saved cover before creating a draft.
+          - Preserve offline images referenced by covers, article bodies, or conflict snapshots when closing tabs or accepting remote updates.
+          - Allow articles without a cover to sync to custom platforms.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

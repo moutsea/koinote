@@ -19,6 +19,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Custom platform sync now omits the optional cover field when no cover is set, avoiding empty-URL validation failures.
+- Covers selected in WeChat draft settings now persist with the article. Failed saves reuse uploaded images on retry, and desktop cleanup preserves images still referenced by covers, article bodies, or conflict snapshots after sync.
 - Fixed WeChat draft timeouts for image-heavy articles with bounded parallel uploads, gateway heartbeats, and relay connections that expire only when idle. Existing clients remain compatible.
 - Fixed missing titles after cover load failures, stale default-cover titles, duplicate X cover images in article bodies, stale WeChat draft covers, and Feishu cover failures blocking body sync. Cover metadata now has size and storage quota limits.
 - Batched tree mutations now share document revision checks and preserve image reclamation during permanent cleanup.

@@ -1356,8 +1356,8 @@ export interface Messages {
     wechatCoverLoading: string;
     wechatCoverLoadFailed: string;
     wechatCoverImageFailed: string;
-    wechatCoverDraftOnly: string;
-    wechatCoverUse: string;
+    wechatCoverSavedWithDocument: string;
+    wechatCoverSaveFailed: string;
     wechatTitleLimit: string;
     wechatDraftCreate: string;
     wechatDraftCreating: string;

@@ -15,6 +15,8 @@ const panel = read("spa/src/components/editor/WechatOfficialAccountPanel.tsx");
 const draftPanel = read("spa/src/components/editor/WechatDraftPanel.tsx");
 const coverGenerator = read("spa/src/components/editor/wechatCover.ts");
 const coverDialog = read("spa/src/components/editor/DocumentCoverDialog.tsx");
+const coverState = read("spa/src/components/editor/documentCoverState.ts");
+const saver = read("spa/src/components/editor/useDocumentSaver.ts");
 const coverInput = read("spa/src/components/editor/wechatDraftCover.ts");
 const exportMenu = read("spa/src/components/editor/ExportMenu.tsx");
 const settings = read("spa/src/pages/SettingsPage.tsx");
@@ -215,7 +217,7 @@ ok(
 );
 ok(
   "封面默认 2.35:1",
-  draftPanel.includes('coverRatio: document.coverRatio ?? "2.35:1"'),
+  coverState.includes('coverRatio: document.coverRatio ?? "2.35:1"'),
 );
 ok(
   "封面比例包含 1:1 及常见比例",
@@ -282,18 +284,19 @@ ok(
     publish.includes("defaultWechatCover(input.Title, input.CoverRatio)"),
 );
 ok(
-  "草稿封面从文档初始化并接收临时选择",
+  "草稿封面从文档初始化并等待文档保存",
   draftPanel.includes("getDocument(docId)") &&
-    draftPanel.includes('coverImageSource: document.coverImageSource ?? ""') &&
-    draftPanel.includes("setCoverState(next)"),
+    coverState.includes('coverImageSource: document.coverImageSource ?? ""') &&
+    /await onSaveCover\(next, signal\);\s+setCoverState\(saved\)/.test(draftPanel),
 );
 ok(
-  "封面选项放在修改弹框中，草稿选择不持久上传",
+  "封面选项放在修改弹框中，生成的草稿封面持久上传",
   !draftPanel.includes('role="radiogroup"') &&
     draftPanel.includes("t.editor.wechatCoverChange") &&
     draftPanel.includes('purpose="wechat-draft"') &&
-    /purpose === "document"[^\n]*generatedCover/.test(coverDialog) &&
-    coverDialog.includes("t.editor.wechatCoverUse"),
+    !/purpose === "document"[^\n]*generatedCover/.test(coverDialog) &&
+    saver.includes('uploadImage(file, "persistent")') &&
+    coverDialog.includes("t.editor.wechatCoverSavedWithDocument"),
 );
 ok(
   "后端校验并处理正文图片封面",

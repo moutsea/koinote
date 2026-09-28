@@ -7,24 +7,16 @@ import {
   ApiError,
   WECHAT_COVER_RATIO_PRESETS,
   generateWechatCover,
-  uploadImage,
   type WechatCoverMode,
-  type WechatCoverRatio,
   type WechatGeneratedCover,
 } from "../../api";
 import { useI18n } from "../../i18n";
 import { pushModal } from "../../modalStack";
 import { CoverImage } from "./CoverImage";
-import { dataUriToFile } from "./rehost";
 import { createDefaultWechatCover } from "./wechatCover";
 import { isValidCoverRatio } from "./coverRatio";
-
-export type DocumentCoverState = {
-  coverMode: WechatCoverMode;
-  coverRatio: WechatCoverRatio;
-  coverImageSource: string;
-  coverPrompt: string;
-};
+import type { DocumentCoverState, SaveDocumentCover } from "./documentCoverState";
+export type { DocumentCoverState } from "./documentCoverState";
 
 type ArticleImage = { src: string; alt: string };
 
@@ -42,7 +34,7 @@ export function DocumentCoverDialog({
   articleImages: ArticleImage[];
   initial: DocumentCoverState;
   purpose?: "document" | "wechat-draft";
-  onSave: (next: DocumentCoverState) => Promise<void> | void;
+  onSave: SaveDocumentCover;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -64,11 +56,14 @@ export function DocumentCoverDialog({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const savingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const saveAbortRef = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
+    mountedRef.current = true;
     const releaseModal = pushModal();
     const previousFocus = document.activeElement;
     dialogRef.current?.focus();
@@ -97,6 +92,8 @@ export function DocumentCoverDialog({
     return () => {
       window.removeEventListener("keydown", onKey, true);
       abortRef.current?.abort();
+      saveAbortRef.current?.abort();
+      mountedRef.current = false;
       releaseModal();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
@@ -164,26 +161,23 @@ export function DocumentCoverDialog({
     savingRef.current = true;
     setSaving(true);
     setError(null);
+    const controller = new AbortController();
+    saveAbortRef.current = controller;
     try {
-      let imageSource = selectedSource;
-      if (purpose === "document" && generatedCover && selectedSource.startsWith("data:")) {
-        const file = dataUriToFile(selectedSource);
-        if (!file) throw new Error(t.editor.wechatCoverGenerateFailed);
-        imageSource = (await uploadImage(file, "persistent")).url;
-      }
       await onSave({
         coverMode: mode,
         coverRatio: ratio,
-        coverImageSource: imageSource,
+        coverImageSource: selectedSource,
         coverPrompt: mode === "ai" ? prompt.trim() : "",
-      });
-      onClose();
+      }, controller.signal);
+      if (mountedRef.current) onClose();
     } catch (caught) {
       const code = caught instanceof ApiError ? caught.code : undefined;
-      setError((code && t.errors[code]) || t.editor.wechatCoverGenerateFailed);
+      if (mountedRef.current) setError((code && t.errors[code]) || t.editor.wechatCoverSaveFailed);
     } finally {
+      saveAbortRef.current = null;
       savingRef.current = false;
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   }
 
@@ -211,7 +205,7 @@ export function DocumentCoverDialog({
           </div>
           <button type="button" onClick={onClose} disabled={saving} aria-label={t.editor.shareClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
         </div>
-        {purpose === "wechat-draft" && <p className="mt-3 text-xs leading-relaxed text-neutral-500">{t.editor.wechatCoverDraftOnly}</p>}
+        {purpose === "wechat-draft" && <p className="mt-3 text-xs leading-relaxed text-neutral-500">{t.editor.wechatCoverSavedWithDocument}</p>}
         <div role="radiogroup" aria-label={t.editor.wechatCoverModeLabel} className="mt-4 grid grid-cols-3 gap-1.5">
           {coverOptions.map((option) => {
             const locked = option.value === "ai" && !member;
@@ -257,7 +251,7 @@ export function DocumentCoverDialog({
         {error && <p role="alert" className="mt-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={saving} className="rounded-full px-4 py-2 text-sm text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10">{t.editor.shareClose}</button>
-          <button type="button" onClick={() => void save()} disabled={controlsDisabled || !canSave} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{purpose === "wechat-draft" ? t.editor.wechatCoverUse : t.editor.wechatCoverSave}</button>
+          <button type="button" onClick={() => void save()} disabled={controlsDisabled || !canSave} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t.editor.wechatCoverSave}</button>
         </div>
       </div>
     </div>,
