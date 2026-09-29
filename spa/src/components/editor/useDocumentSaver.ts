@@ -318,7 +318,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   const seed = useCallback((docId: string, snapshot: DocumentSnapshot) => {
     const existing = entries.current.get(docId);
     if (existing) {
-      if (!existing.dirty && !existing.inFlight) {
+      if (!existing.dirty && !existing.inFlight && snapshot.revision >= existing.pending.revision) {
         existing.pending = { ...snapshot };
         existing.forceVersion = false;
         existing.revisionConflict = false;

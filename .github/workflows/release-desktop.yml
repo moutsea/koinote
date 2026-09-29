@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version saves covers selected in WeChat draft settings with the article, reuses uploaded covers after failed saves, and preserves referenced offline images after sync. Custom platform sync also supports articles without a cover."
+          notes="Koinote Desktop $version prevents stale local revisions during multi-image editing and ensures WeChat draft HTML uses uploaded image URLs. It also saves covers selected in WeChat draft settings with the article, reuses uploaded covers after failed saves, and preserves referenced offline images after sync."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -243,6 +243,7 @@ jobs:
           - 封面保存失败后重试、关闭重开设置时复用已上传图片，并在创建草稿前读取最新已保存封面。
           - 修复关闭标签或接受远端更新时误删图片缓存的问题，保留封面、正文与冲突版本引用的离线图片。
           - 未设置封面的文章也可同步到自定义平台。
+          - 修复多图片上传期间继续编辑导致的版本回退、图片地址恢复为本地占位符和误报冲突；微信公众号草稿会在图片同步完成后再生成正文。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -260,6 +261,7 @@ jobs:
           - Reuse uploaded covers when retrying failed saves or reopening settings, and read the latest saved cover before creating a draft.
           - Preserve offline images referenced by covers, article bodies, or conflict snapshots when closing tabs or accepting remote updates.
           - Allow articles without a cover to sync to custom platforms.
+          - Prevent revision rollback, placeholder-image restoration, and false conflicts while editing during multi-image uploads; generate WeChat draft HTML after image synchronization completes.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

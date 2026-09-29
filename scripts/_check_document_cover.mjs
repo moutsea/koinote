@@ -132,6 +132,7 @@ let rejectUpload = false;
 let saveGate;
 let uploadGate;
 let prepareDocument = async () => {};
+let draftImageSource = "https://example.test/article.png";
 let documentSaver;
 let controls;
 let activeDocId;
@@ -234,7 +235,10 @@ function EditorHarness({ docId }) {
     draftOpen && createElement(WechatDraftPanel, {
       accounts: [{ accountId: "wechat-account", label: "Test account", isDefault: true }],
       docId, title: current.title, member: true, disabled: false, articleImages,
-      prepareHTML: async () => "<p>Original body</p>",
+      prepareHTML: async () => {
+        events.push("prepare-html");
+        return `<p><img src="${draftImageSource}"></p>`;
+      },
       onSaveCover: saveCover,
       getCurrentCover: () => saver.getCover(docId),
       onBeforeExternalExport: () => saver.flush(docId),
@@ -246,6 +250,7 @@ async function newDocument(name, patch = {}) {
   rejectSave = rejectGet = rejectUpload = false;
   saveGate = uploadGate = undefined;
   prepareDocument = async () => {};
+  draftImageSource = "https://example.test/article.png";
   globalThis.__coverDesktop = false;
   const id = `cover-${name}`;
   savedDocuments.set(id, { ...initialDocument, ...patch, docId: id });
@@ -358,6 +363,9 @@ assert.equal(stored().coverImageSource, retained.url);
 await newDocument("publish-recovery", { coverImageSource: "https://example.test/previous-cover.png" });
 globalThis.__coverDesktop = true;
 globalThis.__coverResolve = async () => embeddedImage;
+const localBodyImage = "koinote-local-image://00000000-0000-4000-8000-000000000001";
+const mappedBodyImage = "https://img.koinote.app/u/test-user/bbbbbbbb.png";
+draftImageSource = localBodyImage;
 await click("wechatCoverChange");
 rejectSave = true;
 await click("wechatCoverSave");
@@ -377,12 +385,16 @@ prepareDocument = async id => {
     savedDocuments.get(id).coverImageSource = mappedCover;
     documentSaver.applyImageMapping(id, localCover, mappedCover);
   }
+  if (draftImageSource === localBodyImage) draftImageSource = mappedBodyImage;
 };
 events.length = 0;
 await click("wechatDraftCreate");
 assert.equal(publishedDrafts.length, beforePublish + 1);
 assert.equal(publishedDrafts.at(-1).coverImageSource, mappedCover);
+assert.ok(publishedDrafts.at(-1).html.includes(mappedBodyImage));
+assert.ok(!publishedDrafts.at(-1).html.includes("koinote-local-image://"));
 assert.ok(events.indexOf("read-cover") > events.indexOf("sync-document"));
+assert.ok(events.indexOf("prepare-html") > events.indexOf("sync-document"));
 assert.ok(buttonWithText("wechatDraftCreated"));
 await click("wechatCoverChange");
 await closeCover();

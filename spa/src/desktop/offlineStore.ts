@@ -688,23 +688,47 @@ async function applyUploadedImageMapping(
   imageID: string,
   remoteURL: string,
 ): Promise<number> {
+  return serializeMutation(async () => {
+    const db = await database();
+    const localURL = desktopLocalImageURL(imageID);
+    const result = await db.execute(`
+      UPDATE offline_documents
+      SET content = replace(content, $2, $3),
+          cover_image_source = replace(cover_image_source, $2, $3),
+          sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
+          change_seq = change_seq + 1,
+          last_error = NULL
+      WHERE account_id = $1 AND (instr(content, $2) > 0 OR instr(cover_image_source, $2) > 0)
+    `, [account, localURL, remoteURL]);
+    if (result.rowsAffected > 0 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
+        detail: { localURL, remoteURL },
+      }));
+    }
+    return result.rowsAffected;
+  });
+}
+
+async function uploadedImageMappings(account: string, content: string, coverSource = "") {
+  const replacements = new Map<string, string>();
+  if (isLocalAccount(account)) return replacements;
+  const sources = [...new Set([...imageReferences(content), coverSource])];
+  const imageIDs = sources.map(desktopLocalImageID).filter((imageID) => imageID !== null);
+  if (imageIDs.length === 0) return replacements;
   const db = await database();
-  const localURL = desktopLocalImageURL(imageID);
-  const result = await db.execute(`
-    UPDATE offline_documents
-    SET content = replace(content, $2, $3),
-        cover_image_source = replace(cover_image_source, $2, $3),
-        sync_state = CASE WHEN sync_state = 'clean' THEN 'update' ELSE sync_state END,
-        change_seq = change_seq + 1,
-        last_error = NULL
-    WHERE account_id = $1 AND (instr(content, $2) > 0 OR instr(cover_image_source, $2) > 0)
-  `, [account, localURL, remoteURL]);
-  if (result.rowsAffected > 0 && typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
-      detail: { localURL, remoteURL },
-    }));
+  for (let offset = 0; offset < imageIDs.length; offset += 400) {
+    const chunk = imageIDs.slice(offset, offset + 400);
+    const placeholders = chunk.map((_, index) => `$${index + 2}`).join(", ");
+    const rows = await db.select<{ image_id: string; remote_url: string }[]>(`
+      SELECT image_id, remote_url FROM offline_images
+      WHERE account_id = $1 AND remote_url IS NOT NULL AND remote_url <> ''
+        AND image_id IN (${placeholders})
+    `, [account, ...chunk]);
+    for (const row of rows) {
+      replacements.set(desktopLocalImageURL(row.image_id), row.remote_url);
+    }
   }
-  return result.rowsAffected;
+  return replacements;
 }
 
 async function prepareDocumentContentForRemote(
@@ -1146,15 +1170,16 @@ export async function desktopUpdateDocument(
     const db = await database();
     const now = new Date().toISOString();
     const local = isLocalAccount(account);
+    const imageMappings = await uploadedImageMappings(account, params.content, params.coverImageSource);
     const [storedTitle, storedContent, storedTheme, storedCoverSource, storedCoverPrompt] = await Promise.all([
       storedLocalValue(account, params.title.trim()),
-      storedLocalValue(account, params.content),
+      storedLocalValue(account, replaceDesktopLocalImageURLs(params.content, imageMappings)),
       params.theme === undefined
         ? Promise.resolve<string | null>(null)
         : storedLocalValue(account, params.theme),
       params.coverImageSource === undefined
         ? Promise.resolve<string | null>(null)
-        : storedLocalValue(account, params.coverImageSource),
+        : storedLocalValue(account, replaceDesktopLocalImageURLs(params.coverImageSource, imageMappings)),
       params.coverPrompt === undefined
         ? Promise.resolve<string | null>(null)
         : storedLocalValue(account, params.coverPrompt),
@@ -1191,6 +1216,13 @@ export async function desktopUpdateDocument(
     if (result.rowsAffected !== 1) throw new Error("document_revision_conflict");
     const row = await selectDocument(account, docId);
     if (!row) throw new Error("Document not found");
+    if (typeof window !== "undefined") {
+      for (const [localURL, remoteURL] of imageMappings) {
+        window.dispatchEvent(new CustomEvent(DESKTOP_IMAGE_UPLOADED_EVENT, {
+          detail: { localURL, remoteURL },
+        }));
+      }
+    }
     if (!local) scheduleDocumentSync();
     return { document: rowToDocument(row) };
   });
@@ -2933,7 +2965,7 @@ async function acknowledgeDocument(account: string, sent: DocumentRow, remote: D
         local_revision = CASE
           WHEN sync_state IN ('trash', 'conflict') THEN local_revision
           WHEN change_seq = $3 OR (title = $4 AND theme = $5 AND content = $6 AND cover_mode = $12 AND cover_ratio = $13 AND cover_image_source = $14 AND cover_prompt = $15)
-            THEN $7
+            THEN MAX(local_revision, $7)
           ELSE local_revision
         END,
         base_revision = CASE

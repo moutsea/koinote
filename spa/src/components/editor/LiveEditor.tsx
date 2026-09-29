@@ -262,6 +262,7 @@ export function LiveEditor({
       void getDocument(docId).then(({ document }) => {
         if (disposed || saver.isDirty(docId)) return;
         const current = saver.peek(docId);
+        if (current && document.revision < current.revision) return;
         if (
           current?.revision === document.revision &&
           current.title === document.title &&

@@ -11,9 +11,12 @@ const bind = (values) => Object.fromEntries(values.map((value, index) => [`$${in
 const calls = [];
 const harness = {
   local: true,
+  beforeExecute: async () => {},
+  fetch: async () => { throw new Error("Unexpected network request"); },
   database: {
     async select(sql, values = []) { return sqlite.prepare(sql).all(bind(values)); },
     async execute(sql, values = []) {
+      await harness.beforeExecute(sql, values);
       return { rowsAffected: Number(sqlite.prepare(sql).run(bind(values)).changes) };
     },
   },
@@ -23,7 +26,8 @@ globalThis.__offlineCoverTest = harness;
 const bundle = await build({
   stdin: {
     contents: readFileSync("spa/src/desktop/offlineStore.ts", "utf8") + `
-      export { insertRemoteDocument, localReferencedImageIDs, cleanupUnusedOfflineImages, applyUploadedImageMapping };
+      export { insertRemoteDocument, localReferencedImageIDs, cleanupUnusedOfflineImages, applyUploadedImageMapping,
+        acknowledgeDocument, acknowledgeMatchingRemoteDocument, replaceDocumentFromRemote, prepareDocumentContentForRemote };
       export { encryptLocalModeValue, decryptLocalModeValue } from "./localModeCrypto";
     `,
     resolveDir: `${process.cwd()}/spa/src/desktop`,
@@ -40,7 +44,7 @@ const bundle = await build({
         "@tauri-apps/plugin-sql": "export default { load: async () => globalThis.__offlineCoverTest.database };",
         "@tauri-apps/api/core": "export const invoke = (...args) => globalThis.__offlineCoverTest.invoke(...args);",
         "./auth": "export const getStoredDesktopSession = async () => ({ accountId: 'account-1' });",
-        "./network": "export const desktopFetch = async () => { throw new Error('Unexpected network request'); };",
+        "./network": "export const desktopFetch = (...args) => globalThis.__offlineCoverTest.fetch(...args);",
         "./logoutGuard": "export const prepareDesktopSync = async () => true;",
         "./localMode": `
           const harness = globalThis.__offlineCoverTest;
@@ -184,6 +188,115 @@ try {
   sqlite.prepare("UPDATE offline_images SET created_at = '2000-01-01T00:00:00Z' WHERE account_id = 'account-1'").run();
   await store.desktopReleaseUnusedImages([localSource]);
   assert.equal(imageCount("account-1"), 0, "explicit release still reclaims abandoned local uploads after the grace period");
+
+  const race = (await store.desktopCreateDocument({
+    title: "Image upload race", content: `Body\n\n![](${localSource})`,
+  })).document;
+  const sent = rowFor("account-1", race.docId);
+  const edited = (await store.desktopUpdateDocument(race.docId, {
+    ...race, content: `${race.content}\n\nTyping during upload`, expectedRevision: race.revision,
+  })).document;
+  await store.applyUploadedImageMapping("account-1", imageID, remoteSource);
+  const mappedContent = race.content.replace(localSource, remoteSource);
+  const undone = (await store.desktopUpdateDocument(race.docId, {
+    ...edited, content: mappedContent, expectedRevision: edited.revision,
+  })).document;
+  await store.acknowledgeDocument("account-1", sent, { ...race, content: mappedContent });
+  const next = await store.desktopUpdateDocument(race.docId, {
+    ...undone, content: `${mappedContent}\n\nKeep writing`, expectedRevision: undone.revision,
+  });
+  assert.equal(next.document.content, `${mappedContent}\n\nKeep writing`, "typing after an upload acknowledgement must not conflict with this client's own saves");
+  assert.equal(next.document.revision, undone.revision + 1, "an old sync response must not rewind the local revision");
+  assert.equal(rowFor("account-1", race.docId).sync_state, "update");
+  await store.acknowledgeDocument("account-1", sent, { ...race, content: mappedContent });
+  const afterLateResponse = rowFor("account-1", race.docId);
+  assert.equal(afterLateResponse.content, next.document.content, "a late response must retain text entered after its snapshot");
+  assert.equal(afterLateResponse.local_revision, next.document.revision);
+  assert.equal(afterLateResponse.sync_state, "update", "new text must remain queued for cloud sync");
+
+  const sameContent = (await store.desktopCreateDocument({ title: "Same content", content: "Body" })).document;
+  const sameRow = rowFor("account-1", sameContent.docId);
+  await store.acknowledgeDocument("account-1", sameRow, { ...sameContent, revision: 9 });
+  assert.equal(rowFor("account-1", sameContent.docId).local_revision, 9);
+  assert.equal(rowFor("account-1", sameContent.docId).base_revision, 9);
+  const matchingRow = rowFor("account-1", sameContent.docId);
+  await store.acknowledgeMatchingRemoteDocument("account-1", matchingRow, { ...sameContent, revision: 10 }, null, 0);
+  assert.equal(rowFor("account-1", sameContent.docId).local_revision, 10);
+  assert.equal(rowFor("account-1", sameContent.docId).base_revision, 10);
+  const beforeRemoteEdit = rowFor("account-1", sameContent.docId);
+  await store.replaceDocumentFromRemote("account-1", beforeRemoteEdit, { ...sameContent, content: "Real remote edit", revision: 11 }, null, 0);
+  await assert.rejects(store.desktopUpdateDocument(sameContent.docId, {
+    ...sameContent, content: "Stale editor draft", expectedRevision: beforeRemoteEdit.local_revision,
+  }), /document_revision_conflict/, "real remote changes must still reject stale editor writes");
+
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise(complete => { resolve = complete; });
+    return { promise, resolve };
+  };
+  const uploads = Array.from({ length: 3 }, () => {
+    const imageId = crypto.randomUUID();
+    const key = `u/test-user/${imageId.replaceAll("-", "")}.png`;
+    sqlite.prepare(`INSERT INTO offline_images
+      (account_id, image_id, content_type, base64_data, byte_size, created_at, is_local_origin)
+      VALUES ('account-1', ?, 'image/png', 'Y292ZXI=', 5, ?, 1)`).run(imageId, new Date().toISOString());
+    return {
+      imageId, key, localURL: `koinote-local-image://${imageId}`,
+      remoteURL: `https://img.koinote.app/${key}`, response: deferred(), started: deferred(), recorded: deferred(),
+    };
+  });
+  const imageBody = uploads.map(upload => `![](${upload.localURL})`).join("\n\n");
+  const multiImage = (await store.desktopCreateDocument({ title: "Three uploads", content: imageBody })).document;
+  const multiSent = rowFor("account-1", multiImage.docId);
+  let uploadCount = 0;
+  harness.fetch = async (url, init) => {
+    assert.equal(url, "/api/images");
+    assert.equal(init.method, "POST");
+    const upload = uploads[uploadCount++];
+    upload.started.resolve();
+    await upload.response.promise;
+    return Response.json({ image: { key: upload.key, url: upload.remoteURL } });
+  };
+  const saveStarted = deferred();
+  const saveGate = deferred();
+  harness.beforeExecute = async (sql, values) => {
+    if (sql.includes("local_revision = local_revision + 1") && values[1] === multiImage.docId) {
+      saveStarted.resolve();
+      await saveGate.promise;
+    }
+    if (sql.includes("SET object_key = $3, remote_url = $4")) {
+      uploads.find(upload => upload.imageId === values[1]).recorded.resolve();
+    }
+  };
+  const preparing = store.prepareDocumentContentForRemote("account-1", imageBody);
+  await Promise.all(uploads.map(upload => upload.started.promise));
+  const saving = store.desktopUpdateDocument(multiImage.docId, {
+    ...multiImage, content: `${imageBody}\n\nTyping during three uploads`,
+    coverImageSource: uploads[0].localURL, expectedRevision: multiImage.revision,
+  });
+  await saveStarted.promise;
+  for (const upload of uploads.toReversed()) upload.response.resolve();
+  await Promise.all(uploads.map(upload => upload.recorded.promise));
+  await new Promise(resolve => setImmediate(resolve));
+  saveGate.resolve();
+  const [mappedBody, savedDuringUpload] = await Promise.all([preparing, saving]);
+  harness.beforeExecute = async () => {};
+  assert.equal(uploadCount, 3);
+  assert.equal(rowFor("account-1", multiImage.docId).content, `${mappedBody}\n\nTyping during three uploads`, "an in-flight local save must not restore placeholders after concurrent uploads");
+  assert.equal(rowFor("account-1", multiImage.docId).cover_image_source, uploads[0].remoteURL);
+  const staleImageSave = await store.desktopUpdateDocument(multiImage.docId, {
+    ...multiImage, content: `${imageBody}\n\nKeep typing with an older image snapshot`,
+    coverImageSource: uploads[0].localURL, expectedRevision: savedDuringUpload.document.revision,
+  });
+  assert.equal(staleImageSave.document.content, `${mappedBody}\n\nKeep typing with an older image snapshot`, "a queued snapshot must reuse completed uploads without another network request");
+  assert.equal(staleImageSave.document.coverImageSource, uploads[0].remoteURL);
+  assert.equal(uploadCount, 3);
+  await store.acknowledgeDocument("account-1", multiSent, { ...multiImage, content: mappedBody });
+  const afterMultiAck = rowFor("account-1", multiImage.docId);
+  assert.equal(afterMultiAck.content, staleImageSave.document.content);
+  assert.equal(afterMultiAck.local_revision, staleImageSave.document.revision);
+  assert.equal(afterMultiAck.base_revision, multiImage.revision, "later local edits must build on the acknowledged cloud revision");
+  assert.equal(afterMultiAck.sync_state, "update");
   console.log("offline cover SQLite and migration checks passed");
 } finally {
   globalThis.window = originalWindow;

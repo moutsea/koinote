@@ -120,14 +120,12 @@ export function WechatDraftPanel({
         setError(t.editor.saveFailed);
         return;
       }
-      const html = await prepareHTML();
-      if (!html) return;
-      // Desktop sync can complete a failed save and replace local image URLs.
-      // Read the persisted cover only after those operations finish.
       await prepareWechatDraftDocument(docId);
       const { document } = await getDocument(docId);
       const savedCover = documentCoverState(document);
       setCoverState(savedCover);
+      const html = await prepareHTML();
+      if (!html) return;
       const coverInput = await wechatDraftCoverInput(savedCover);
       await createWechatDraft(docId, {
         accountId: selectedAccountId,

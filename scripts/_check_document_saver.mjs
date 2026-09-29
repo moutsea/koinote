@@ -146,7 +146,7 @@ ok(
 );
 ok(
   "脏草稿不会被 seed 覆盖",
-  /if\s*\(existing\)[\s\S]{0,350}if\s*\(!existing\.dirty\s*&&\s*!existing\.inFlight\)[\s\S]{0,350}return/.test(bareSaver),
+  /if\s*\(existing\)[\s\S]{0,350}if\s*\(!existing\.dirty\s*&&\s*!existing\.inFlight\s*&&\s*snapshot\.revision >= existing\.pending\.revision\)[\s\S]{0,350}return/.test(bareSaver),
   "查询刷新不能覆盖尚未落库的用户编辑",
 );
 ok(
