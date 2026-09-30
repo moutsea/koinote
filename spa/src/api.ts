@@ -58,9 +58,14 @@ export const IMAGE_QUOTA_EVENT = "koinote:image-quota-exceeded";
  */
 export const IMAGE_QUOTA_CODE = "image_quota_exceeded";
 export const STORAGE_QUOTA_CODE = "storage_quota_exceeded";
+export const CONFIG_SNAPSHOT_QUOTA_CODE = "config_snapshot_quota_exceeded";
 export const TEMPORARY_IMAGE_QUOTA_CODE = "temporary_image_quota_exceeded";
 
-const QUOTA_CODES = new Set<string>([IMAGE_QUOTA_CODE, STORAGE_QUOTA_CODE]);
+const QUOTA_CODES = new Set<string>([
+  IMAGE_QUOTA_CODE,
+  STORAGE_QUOTA_CODE,
+  CONFIG_SNAPSHOT_QUOTA_CODE,
+]);
 
 export type ImageQuotaDetail = {
   usedBytes: number;
@@ -68,6 +73,7 @@ export type ImageQuotaDetail = {
   /** 分项。旧版后端可能不返回，所以是可选的 */
   documentBytes?: number;
   imageBytes?: number;
+  configBytes?: number;
 };
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -94,6 +100,9 @@ async function toApiError(response: Response): Promise<ApiError> {
           : {}),
         ...(typeof data.imageBytes === "number"
           ? { imageBytes: data.imageBytes }
+          : {}),
+        ...(typeof data.configBytes === "number"
+          ? { configBytes: data.configBytes }
           : {}),
       };
     }
@@ -2082,12 +2091,14 @@ export async function fetchImageToBucket(url: string) {
  * 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
  */
 export type StorageUsage = {
-  /** 总量，等于 documentBytes + imageBytes */
+  /** 总量，等于 documentBytes + imageBytes + configBytes */
   usedBytes: number;
   /** 文档正文与标题（Postgres） */
   documentBytes: number;
   /** 图床对象（R2） */
   imageBytes: number;
+  /** 客户端加密配置快照 */
+  configBytes?: number;
   quotaBytes: number;
 };
 
@@ -2099,6 +2110,58 @@ export type StorageUsage = {
  */
 export function getStorageUsage() {
   return apiJson<StorageUsage>("/api/storage/usage");
+}
+
+export type ConfigSnapshotSummary = {
+  id: string;
+  name: string;
+  fileCount: number;
+  bytes: number;
+  envelopeVersion: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConfigSnapshot = ConfigSnapshotSummary & { envelope: string };
+
+export function getConfigSnapshots() {
+  return apiJson<{ snapshots: ConfigSnapshotSummary[] }>("/api/config-snapshots");
+}
+
+export function getConfigSnapshot(snapshotId: string) {
+  return apiJson<{ snapshot: ConfigSnapshot }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}`,
+  );
+}
+
+export type ConfigSnapshotInput = {
+  name: string;
+  fileCount: number;
+  envelopeVersion: number;
+  envelope: string;
+};
+
+export function createConfigSnapshot(input: ConfigSnapshotInput) {
+  return apiJson<{ snapshot: ConfigSnapshot }>("/api/config-snapshots", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteConfigSnapshot(snapshotId: string, revision?: number) {
+  const query = revision === undefined ? "" : `?revision=${encodeURIComponent(String(revision))}`;
+  return apiJson<{ success: boolean }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}${query}`,
+    { method: "DELETE" },
+  );
+}
+
+export function updateConfigSnapshot(snapshotId: string, input: ConfigSnapshotInput & { revision: number }) {
+  return apiJson<{ snapshot: ConfigSnapshot }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
 }
 
 export async function releaseUnusedImages(keys: string[]) {

@@ -17,6 +17,7 @@ import {
   Coins,
   Crown,
   FileText,
+  FolderOpen,
   HardDrive,
   History,
   Keyboard,
@@ -350,14 +351,17 @@ export function AppShell() {
             <InkSeal className="ml-0.5 hidden h-7 px-0.5 text-[10px] sm:inline-flex" />
           </Link>
 
-          {/* 主导航只留编辑器。控制台是账号自己的东西（我的文档、注册时间、邮箱），
-              归到右侧的账户菜单里；顶栏留给「产品能做什么」那一类入口 */}
+          {/* 控制台是账号自己的东西（我的文档、注册时间、邮箱），归到右侧账户菜单里；
+              顶栏保留编辑器和「我的空间」等工作入口。 */}
           <nav
             className="ml-4 hidden items-center gap-5 text-sm sm:flex"
             style={{ color: "var(--ink-mid)" }}
           >
             <HeaderLink to="/editor" active={isUnder(pathname, "/editor")}>
               {t.nav.editor}
+            </HeaderLink>
+            <HeaderLink to="/space" active={isUnder(pathname, "/space")}>
+              {t.nav.space}
             </HeaderLink>
             {desktopRuntime && localMode ? null : desktopRuntime ? (
               <>
@@ -436,6 +440,7 @@ export function AppShell() {
                 membershipTier={user.membershipTier}
                 isAdmin={user.isAdmin}
                 settingsActive={isUnder(pathname, "/settings")}
+                spaceActive={isUnder(pathname, "/space")}
                 documentsActive={isUnder(pathname, "/documents")}
                 trashActive={isUnder(pathname, "/trash")}
                 adminActive={isUnder(pathname, "/admin")}
@@ -566,6 +571,7 @@ function isLocalModeAllowedPath(pathname: string): boolean {
     "/documents",
     "/editor",
     "/privacy",
+    "/space",
     "/terms",
     "/trash",
   ].some((prefix) => isUnder(pathname, prefix));
@@ -584,6 +590,7 @@ function UserMenu({
   membershipTier,
   isAdmin,
   settingsActive,
+  spaceActive,
   documentsActive,
   trashActive,
   adminActive,
@@ -602,6 +609,7 @@ function UserMenu({
   membershipTier: "free" | "lifetime";
   isAdmin: boolean;
   settingsActive: boolean;
+  spaceActive: boolean;
   documentsActive: boolean;
   trashActive: boolean;
   adminActive: boolean;
@@ -847,6 +855,20 @@ function UserMenu({
               {t.nav.settings}
             </Link>
           )}
+
+          <Link
+            to="/space"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]"
+            style={{
+              color: spaceActive ? "var(--cinnabar)" : "var(--ink-strong)",
+              fontWeight: spaceActive ? 500 : undefined,
+            }}
+          >
+            <FolderOpen className="h-4 w-4 shrink-0" />
+            {t.nav.space}
+          </Link>
 
           <Link
             to="/documents"
@@ -1114,7 +1136,7 @@ function HeaderLink({
   active,
   children,
 }: {
-  to: "/editor" | "/documents" | "/pricing";
+  to: "/editor" | "/space" | "/documents" | "/pricing";
   active: boolean;
   children: React.ReactNode;
 }) {

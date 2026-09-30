@@ -438,6 +438,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodPost
 	case "/api/billing/status", "/api/invitations", "/api/storage/usage":
 		return method == http.MethodGet
+	case "/api/config-snapshots":
+		return method == http.MethodGet || method == http.MethodPost
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
 		return method == http.MethodPost
 	case "/api/feedback":
@@ -499,6 +501,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 			return method == http.MethodPut || method == http.MethodDelete
 		}
 		return len(parts) == 2 && parts[0] != "" && parts[1] == "default" && method == http.MethodPut
+	}
+	if rest, found := strings.CutPrefix(path, "/api/config-snapshots/"); found {
+		return rest != "" && !strings.Contains(rest, "/") &&
+			(method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete)
 	}
 	if rest, found := strings.CutPrefix(path, "/api/folders/"); found {
 		parts := strings.Split(rest, "/")

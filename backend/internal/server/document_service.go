@@ -189,6 +189,8 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM image_objects
 			WHERE user_id = $2 AND purpose = 'persistent'
+		), 0) + COALESCE((
+			SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2
 		), 0) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
 		ON CONFLICT (doc_id) DO NOTHING
 		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
@@ -304,6 +306,8 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 			), 0) + COALESCE((
 				SELECT SUM(bytes) FROM image_objects
 				WHERE user_id = $1 AND purpose = 'persistent'
+			), 0) + COALESCE((
+				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
 			), 0) + $3::bigint <= $4::bigint
 		`, params.User.ID, previous.ID, newBytes, a.storageQuotaFor(params.User)).Scan(&fits); err != nil {
 			return documentUpdateResult{}, err

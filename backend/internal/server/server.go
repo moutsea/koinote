@@ -222,6 +222,11 @@ func (a *App) Routes() http.Handler {
 	// 取图处理，"usage" 会被它当成一个 key 截走，永远到不了这里。
 	mux.HandleFunc("GET /api/storage/usage", a.storageUsage)
 	mux.HandleFunc("POST /api/storage/release-images", a.imageReleaseUnused)
+	mux.HandleFunc("GET /api/config-snapshots", a.configSnapshotsList)
+	mux.HandleFunc("POST /api/config-snapshots", a.configSnapshotCreate)
+	mux.HandleFunc("GET /api/config-snapshots/{snapshotId}", a.configSnapshotGet)
+	mux.HandleFunc("PUT /api/config-snapshots/{snapshotId}", a.configSnapshotUpdate)
+	mux.HandleFunc("DELETE /api/config-snapshots/{snapshotId}", a.configSnapshotDelete)
 	// Worker 写完 R2 来报账。鉴权走内部令牌 + X-Auth-User-Id（见 authUserIDFromRequest）
 	mux.HandleFunc("POST /api/images/record", a.imageRecord)
 

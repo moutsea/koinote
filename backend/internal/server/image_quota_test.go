@@ -364,6 +364,9 @@ func TestStorageUsageCountsDocuments(t *testing.T) {
 	if !strings.Contains(body, "FROM image_objects") {
 		t.Error("用量查询没有统计 image_objects 表")
 	}
+	if !strings.Contains(body, "FROM config_snapshots") {
+		t.Error("用量查询没有统计 config_snapshots 表 —— 加密配置也占云端存储")
+	}
 	// octet_length 而不是 length：后者按字符数算，中文正文会少算约三分之二
 	// （UTF-8 下一个汉字 3 字节）。存储占用要的是字节
 	if !strings.Contains(body, "octet_length") {
@@ -375,10 +378,10 @@ func TestStorageUsageCountsDocuments(t *testing.T) {
 	}
 }
 
-// 三处配额判定都必须把文档字节算进去。
+// 各处配额判定都必须把文档和配置快照字节算进去。
 //
 // 漏掉任何一处的表现都是"配额在那条路径上不生效"，而且不会报错：
-//   - recordImageObject 漏了 → 文档占的空间不挡图片上传
+//   - recordImageObject 漏了 → 文档或配置占的空间不挡图片上传
 //   - documentCreate 漏了 → 能无限新建文档
 //   - documentUpdate 漏了 → 能把单篇写到无限大（受单篇 1 MiB 限制，但篇数无限）
 func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
@@ -398,7 +401,7 @@ func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.name == "更新文档" {
-				for _, want := range []string{"pg_advisory_xact_lock", "FROM image_objects", "octet_length", "if newBytes > oldBytes"} {
+				for _, want := range []string{"pg_advisory_xact_lock", "FROM image_objects", "FROM config_snapshots", "octet_length", "if newBytes > oldBytes"} {
 					if !strings.Contains(tc.src, want) {
 						t.Errorf("共享更新服务缺 %q", want)
 					}
@@ -415,9 +418,9 @@ func TestQuotaChecksIncludeDocumentBytes(t *testing.T) {
 			}
 			stmt := tc.src[idx : idx+end]
 
-			for _, want := range []string{"image_objects", "octet_length"} {
+			for _, want := range []string{"image_objects", "config_snapshots", "octet_length"} {
 				if !strings.Contains(stmt, want) {
-					t.Errorf("配额判定里缺 %q —— 三处判定都要按「文档 + 图片」的总量算。\n语句:\n%s",
+					t.Errorf("配额判定里缺 %q —— 所有判定都要按「文档 + 图片 + 配置」的总量算。\n语句:\n%s",
 						want, stmt)
 				}
 			}

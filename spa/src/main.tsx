@@ -139,6 +139,7 @@ function parseSettingsSearch(search: Record<string, unknown>): {
   section?:
     | "general"
     | "membership"
+    | "configs"
     | "ai"
     | "invitations"
     | "media"
@@ -157,6 +158,7 @@ function parseSettingsSearch(search: Record<string, unknown>): {
     section:
       section === "general" ||
       section === "membership" ||
+      section === "configs" ||
       section === "ai" ||
       section === "invitations" ||
       section === "media" ||
@@ -254,6 +256,14 @@ const settingsRoute = createRoute({
     "SettingsPage",
   ),
 });
+const spaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/space",
+  component: lazyRouteComponent(
+    () => import("./pages/SpacePage"),
+    "SpacePage",
+  ),
+});
 const aiSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/ai-settings",
@@ -338,6 +348,7 @@ const routeTree = rootRoute.addChildren([
   registerRoute,
   dashboardRoute,
   settingsRoute,
+  spaceRoute,
   aiSettingsRoute,
   mcpActivityRoute,
   documentsRoute,

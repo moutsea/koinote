@@ -67,11 +67,18 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function SettingsPage() {
   const session = useSession();
+  const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
-    section?: SettingsSection | MediaPlatform;
+    section?: SettingsSection | "configs" | MediaPlatform;
     platform?: MediaPlatform;
   };
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (search.section === "configs") {
+      void navigate({ to: "/space", replace: true });
+    }
+  }, [navigate, search.section]);
 
   if (session.isLoading) {
     return <SettingsLoading />;
