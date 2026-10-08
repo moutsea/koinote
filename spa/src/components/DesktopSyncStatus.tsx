@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { REMOTE_UPDATE_INTERVAL_MS } from "../remoteUpdates";
 import {
+  desktopCheckRemoteUpdates,
+  desktopInitializeSync,
   desktopListConflicts,
   desktopSyncEventName,
   desktopSyncSummary,
@@ -46,19 +48,28 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
       }
       previousConflictCount.current = next.conflicts;
     };
-    const onOnline = () => void syncDesktopNow();
+    const onOnline = () => {
+      void desktopInitializeSync({ retryFailed: true })
+        .then(() => disposed ? undefined : desktopCheckRemoteUpdates())
+        .then(() => disposed ? undefined : syncDesktopNow({ onlyIfPending: true }))
+        .catch(() => undefined);
+    };
     const checkRemote = () => {
-      if (!navigator.onLine || document.visibilityState !== "visible") return;
-      void syncDesktopNow({ silent: true });
+      if (disposed || !navigator.onLine || document.visibilityState !== "visible") return;
+      void desktopCheckRemoteUpdates().catch(() => undefined);
     };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") checkRemote();
+    let checkTimer: ReturnType<typeof setTimeout>;
+    const scheduleRemoteCheck = () => {
+      checkTimer = setTimeout(() => {
+        checkRemote();
+        scheduleRemoteCheck();
+      }, REMOTE_UPDATE_INTERVAL_MS);
     };
+    scheduleRemoteCheck();
     window.addEventListener(eventName, onStatus);
     window.addEventListener("online", onOnline);
     window.addEventListener("focus", checkRemote);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    const interval = window.setInterval(checkRemote, REMOTE_UPDATE_INTERVAL_MS);
+    document.addEventListener("visibilitychange", checkRemote);
     void desktopSyncSummary()
       .then((initial) => {
         if (disposed) return;
@@ -71,16 +82,16 @@ export function DesktopSyncStatus({ variant = "header" }: { variant?: "header" |
             setDialogOpen(true);
           });
         }
-        if (navigator.onLine) void syncDesktopNow();
+        if (navigator.onLine) return desktopInitializeSync();
       })
       .catch(() => undefined);
     return () => {
       disposed = true;
-      window.clearInterval(interval);
+      clearTimeout(checkTimer);
       window.removeEventListener(eventName, onStatus);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("focus", checkRemote);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("visibilitychange", checkRemote);
     };
   }, []);
 

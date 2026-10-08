@@ -381,6 +381,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     (docId: string, patch: DocPatch) => {
       const entry = entries.current.get(docId);
       if (!entry) return; // 没 seed 过说明文档还没载入，此时的改动不该发
+      if (Object.entries(patch).every(([key, value]) => entry.pending[key as keyof DocPatch] === value)) return;
       entry.pending = { ...entry.pending, ...patch };
       entry.dirty = true;
       if (patch.title !== undefined) entry.titleDirty = true;

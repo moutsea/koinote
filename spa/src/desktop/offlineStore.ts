@@ -114,6 +114,19 @@ export type DesktopSyncSummary = {
   message?: string;
 };
 
+type DesktopSyncOptions = {
+  silent?: boolean;
+  background?: boolean;
+  force?: boolean;
+  onlyIfPending?: boolean;
+  pullOnly?: boolean;
+};
+
+type DesktopSnapshotInitialization = {
+  ready: Promise<void>;
+  needsRetry: boolean;
+};
+
 export type DesktopConflict = {
   docId: string;
   title: string;
@@ -199,10 +212,12 @@ let databasePromise: Promise<import("@tauri-apps/plugin-sql").default> | null = 
 const serializeMutation = createAsyncSerialQueue();
 const serializeImageCacheMutation = createAsyncSerialQueue();
 let syncPromise: Promise<DesktopSyncSummary> | null = null;
+let queuedForcedSyncOptions: DesktopSyncOptions | null = null;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncQueuedAfterCurrent = false;
 let lastDocumentMutationAt = 0;
-const snapshotInitializations = new Map<string, Promise<void>>();
+const snapshotInitializations = new Map<string, DesktopSnapshotInitialization>();
+const remoteCheckTimes = new Map<string, number>();
 const remoteCacheFullAccounts = new Set<string>();
 
 async function database() {
@@ -2183,7 +2198,7 @@ export async function desktopPutEditorTabs(value: EditorTabs): Promise<EditorTab
   return value;
 }
 
-export function syncDesktopNow(options: { silent?: boolean; force?: boolean } = {}): Promise<DesktopSyncSummary> {
+export function syncDesktopNow(options: DesktopSyncOptions = {}): Promise<DesktopSyncSummary> {
   if (isDesktopLocalModeSelected()) {
     return Promise.resolve({
       state: "idle",
@@ -2192,22 +2207,47 @@ export function syncDesktopNow(options: { silent?: boolean; force?: boolean } = 
       lastSyncedAt: null,
     });
   }
-  if (!options.force) {
+  if (syncPromise) {
+    if (options.force) queuedForcedSyncOptions = { ...options };
+    return syncPromise;
+  }
+  if (!options.force && !options.pullOnly) {
     const remaining = documentSyncIdleRemaining();
     if (remaining > 0) {
       scheduleSync(remaining);
       return desktopSyncSummary();
     }
   }
-  if (syncPromise) return syncPromise;
-  syncPromise = performPreparedSync(options).finally(() => {
+  syncPromise = (async () => {
+    let summary = await performPreparedSync(options);
+    while (queuedForcedSyncOptions) {
+      const requestedOptions = queuedForcedSyncOptions;
+      queuedForcedSyncOptions = null;
+      summary = await performPreparedSync(requestedOptions);
+    }
+    return summary;
+  })().finally(() => {
     syncPromise = null;
+    queuedForcedSyncOptions = null;
     if (syncQueuedAfterCurrent) {
       syncQueuedAfterCurrent = false;
       scheduleSync(0);
     }
   });
   return syncPromise;
+}
+
+export async function desktopInitializeSync(options: { retryFailed?: boolean } = {}): Promise<void> {
+  const account = await accountID();
+  await ensureInitialSnapshot(account, options.retryFailed);
+}
+
+export async function desktopCheckRemoteUpdates(): Promise<void> {
+  if (isDesktopLocalModeSelected() || !navigator.onLine) return;
+  const account = await accountID();
+  const lastCheck = remoteCheckTimes.get(account);
+  if (lastCheck !== undefined && Date.now() - lastCheck < 1000) return;
+  await syncDesktopNow({ pullOnly: true, background: true });
 }
 
 export async function desktopSyncSummary(): Promise<DesktopSyncSummary> {
@@ -2286,12 +2326,13 @@ export async function resolveDesktopConflict(docId: string, choice: "local" | "r
 
 export async function clearDesktopOfflineAccount(account: string): Promise<void> {
   const initialization = snapshotInitializations.get(account);
-  if (initialization) await initialization.catch(() => undefined);
+  if (initialization) await initialization.ready.catch(() => undefined);
   if (syncTimer) {
     clearTimeout(syncTimer);
     syncTimer = null;
   }
   syncQueuedAfterCurrent = false;
+  queuedForcedSyncOptions = null;
   const activeSync = syncPromise;
   if (activeSync) await activeSync.catch(() => undefined);
   if (syncTimer) {
@@ -2306,38 +2347,47 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
   await db.execute(`DELETE FROM offline_meta WHERE account_id = $1`, [account]);
   await db.execute(`DELETE FROM offline_images WHERE account_id = $1`, [account]);
   remoteCacheFullAccounts.delete(account);
+  remoteCheckTimes.delete(account);
   snapshotInitializations.delete(account);
 }
 
-async function ensureInitialSnapshot(account: string): Promise<void> {
-  if (isLocalAccount(account)) return;
+async function ensureInitialSnapshot(account: string, retryFailed = false): Promise<void> {
+  if (isLocalAccount(account) || !navigator.onLine) return;
   const existing = snapshotInitializations.get(account);
-  if (existing) return existing;
+  if (existing && (!retryFailed || !existing.needsRetry)) return existing.ready;
 
-  const initialization = initializeDesktopSnapshot(account);
+  const initialization: DesktopSnapshotInitialization = {
+    ready: Promise.resolve(),
+    needsRetry: false,
+  };
   snapshotInitializations.set(account, initialization);
+  initialization.ready = initializeDesktopSnapshot(account, initialization);
   try {
-    await initialization;
+    await initialization.ready;
   } catch (error) {
-    snapshotInitializations.delete(account);
+    initialization.needsRetry = true;
     throw error;
   }
 }
 
-async function initializeDesktopSnapshot(account: string): Promise<void> {
+async function initializeDesktopSnapshot(
+  account: string,
+  initialization: DesktopSnapshotInitialization,
+): Promise<void> {
   const db = await database();
   const rows = await db.select<{ count: number }[]>(`
     SELECT COUNT(*) AS count FROM offline_documents WHERE account_id = $1
   `, [account]);
-  if (Number(rows[0]?.count ?? 0) === 0) {
-    try {
-      await syncDesktopNow();
-    } catch {
-      // 空缓存 + 离线时返回空列表；连接恢复后状态组件会重新触发同步。
-    }
-  } else {
-    scheduleSync(0);
-  }
+  const hasCache = Number(rows[0]?.count ?? 0) > 0;
+  const synchronization = syncDesktopNow({ background: hasCache })
+    .then((summary) => {
+      initialization.needsRetry = summary.state === "error" || summary.state === "offline";
+    })
+    .catch((error) => {
+      initialization.needsRetry = true;
+      console.warn("Desktop startup synchronization failed", error);
+    });
+  if (!hasCache) await synchronization;
 }
 
 function scheduleDocumentSync() {
@@ -2357,46 +2407,82 @@ function scheduleSync(delay = 1500) {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     syncTimer = null;
-    // 图片上传会让一轮同步持续数秒。期间若用户继续编辑，保存完成后安排的
-    // 下一轮定时器可能先到；直接调用 syncDesktopNow 只会拿到旧 Promise，
-    // 这次新改动便失去唤醒，只能等周期轮询或用户手动重试。
     if (syncPromise) {
       syncQueuedAfterCurrent = true;
       return;
     }
-    void syncDesktopNow();
+    void syncDesktopNow({ onlyIfPending: true });
   }, delay);
 }
 
-async function performPreparedSync(options: { silent?: boolean }): Promise<DesktopSyncSummary> {
+async function performPreparedSync(options: DesktopSyncOptions): Promise<DesktopSyncSummary> {
   const account = await accountID();
+  if (options.pullOnly) return performRemoteCheck(account);
   if (!(await prepareDesktopSync())) {
     const summary = await calculateSummary(account, "error", "document_save_pending");
+    notify(summary);
+    return summary;
+  }
+  if (!options.force) {
+    const remaining = documentSyncIdleRemaining();
+    if (remaining > 0) {
+      scheduleSync(remaining);
+      return desktopSyncSummary();
+    }
+  }
+  if (options.onlyIfPending) {
+    const summary = await desktopSyncSummary();
+    if (summary.pending === 0) return summary;
+  }
+  if (!navigator.onLine) {
+    const summary = await calculateSummary(account, "offline");
     notify(summary);
     return summary;
   }
   return performSync(account, options);
 }
 
+async function recordSuccessfulSync(account: string): Promise<void> {
+  const db = await database();
+  const now = new Date().toISOString();
+  await db.execute(`
+    INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'last-synced-at', $2)
+    ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
+  `, [account, now]);
+  remoteCheckTimes.set(account, Date.now());
+  const initialization = snapshotInitializations.get(account);
+  if (initialization) initialization.needsRetry = false;
+}
+
+async function performRemoteCheck(account: string): Promise<DesktopSyncSummary> {
+  if (!navigator.onLine) return desktopSyncSummary();
+  remoteCheckTimes.set(account, Date.now());
+  let changed = false;
+  try {
+    await pullRemoteSnapshot(account, { readOnly: true, onChange: () => { changed = true; } });
+    if (changed) await recordSuccessfulSync(account);
+    const initialization = snapshotInitializations.get(account);
+    if (initialization) initialization.needsRetry = false;
+  } catch {}
+  const summary = await desktopSyncSummary();
+  if (changed) notify(summary);
+  return summary;
+}
+
 async function performSync(
   account: string,
-  options: { silent?: boolean },
+  options: DesktopSyncOptions,
 ): Promise<DesktopSyncSummary> {
-  if (!options.silent) notify(await calculateSummary(account, "syncing"));
+  const initialSummary = await calculateSummary(account, "syncing");
+  remoteCheckTimes.set(account, Date.now());
+  if (!options.silent && !options.background) notify(initialSummary);
   try {
     const outcome = await runDesktopSyncSequence({
       pushFolders: () => pushFolders(account),
       pushDocuments: () => pushDocuments(account),
       pullRemoteSnapshot: () => pullRemoteSnapshot(account),
       maintain: () => maintainOfflineImages(account),
-      recordSuccess: async () => {
-        const db = await database();
-        const now = new Date().toISOString();
-        await db.execute(`
-          INSERT INTO offline_meta (account_id, key, value) VALUES ($1, 'last-synced-at', $2)
-          ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value
-        `, [account, now]);
-      },
+      recordSuccess: () => recordSuccessfulSync(account),
       reportMaintenanceFailure: (error) => {
         console.warn("Desktop image maintenance state could not be saved", error);
       },
@@ -2420,7 +2506,9 @@ async function performSync(
       offline ? "offline" : "error",
       message,
     );
-    notify(summary);
+    if (!options.background || initialSummary.pending > 0 || summary.pending > 0) {
+      notify(summary);
+    }
     return summary;
   }
 }
@@ -2766,7 +2854,13 @@ async function recoverDeletedRemoteDocument(row: DocumentRow): Promise<Document>
   }
 }
 
-async function pullRemoteSnapshot(account: string) {
+async function pullRemoteSnapshot(
+  account: string,
+  options: { readOnly?: boolean; onChange?: () => void } = {},
+) {
+  const markChanged = (rowsAffected: number) => {
+    if (rowsAffected > 0) options.onChange?.();
+  };
   const [documents, folders] = await Promise.all([
     remoteJSON<{ documents: DocumentSummary[] }>("/api/documents"),
     remoteJSON<{ folders: Folder[] }>("/api/folders"),
@@ -2786,7 +2880,7 @@ async function pullRemoteSnapshot(account: string) {
     if (local?.sync_state === "conflict") continue;
     if (!local) {
       const remote = await remoteJSON<{ document: Document }>(`/api/documents/${encodeURIComponent(summary.docId)}`);
-      await insertRemoteDocument(account, remote.document, summary.folderId, summary.sortOrder);
+      if (await insertRemoteDocument(account, remote.document, summary.folderId, summary.sortOrder)) options.onChange?.();
       continue;
     }
     if (local.sync_state === "trash") continue;
@@ -2795,7 +2889,7 @@ async function pullRemoteSnapshot(account: string) {
         (summary.folderId !== local.folder_id && !local.folder_dirty) ||
         (summary.sortOrder !== local.sort_order && !local.order_dirty)
       ) {
-        await db.execute(`
+        const result = await db.execute(`
           UPDATE offline_documents
           SET folder_id = CASE WHEN folder_dirty = 0 THEN $3 ELSE folder_id END,
               sort_order = CASE WHEN order_dirty = 0 THEN $4 ELSE sort_order END,
@@ -2810,6 +2904,7 @@ async function pullRemoteSnapshot(account: string) {
           account, summary.docId, summary.folderId, summary.sortOrder,
           local.base_revision, local.sync_state, local.change_seq,
         ]);
+        markChanged(result.rowsAffected);
       }
       continue;
     }
@@ -2818,11 +2913,14 @@ async function pullRemoteSnapshot(account: string) {
     let comparableLocalContent = local.content;
     let comparableLocalCoverSource = local.cover_image_source;
     try {
-      comparableLocalContent = await prepareDocumentContentForRemote(
-        account,
-        local.content,
-      );
-      comparableLocalCoverSource = await prepareDocumentCoverForRemote(account, local.cover_image_source);
+      if (options.readOnly) {
+        const mappings = await uploadedImageMappings(account, local.content, local.cover_image_source);
+        comparableLocalContent = replaceDesktopLocalImageURLs(local.content, mappings);
+        comparableLocalCoverSource = replaceDesktopLocalImageURLs(local.cover_image_source, mappings);
+      } else {
+        comparableLocalContent = await prepareDocumentContentForRemote(account, local.content);
+        comparableLocalCoverSource = await prepareDocumentCoverForRemote(account, local.cover_image_source);
+      }
     } catch (error) {
       if (!(error instanceof OfflineImageUploadError)) throw error;
       // 本地占位地址必然与远端正文不同，后面的决策会保留双方并进入冲突；
@@ -2856,29 +2954,31 @@ async function pullRemoteSnapshot(account: string) {
       },
     );
     if (decision === "replace-clean") {
-      await replaceDocumentFromRemote(account, local, remote.document, summary.folderId, summary.sortOrder);
+      if (await replaceDocumentFromRemote(account, local, remote.document, summary.folderId, summary.sortOrder)) options.onChange?.();
     } else if (decision === "acknowledge-local") {
-      await acknowledgeMatchingRemoteDocument(account, local, remote.document, summary.folderId, summary.sortOrder);
+      if (await acknowledgeMatchingRemoteDocument(account, local, remote.document, summary.folderId, summary.sortOrder)) options.onChange?.();
     } else if (decision === "conflict") {
       const [baseRevision, syncState, changeSeq] = snapshotGuard({
         baseRevision: local.base_revision,
         syncState: local.sync_state,
         changeSeq: local.change_seq,
       });
-      await db.execute(`
+      const result = await db.execute(`
         UPDATE offline_documents SET sync_state = 'conflict', remote_snapshot = $3,
           last_error = 'document_revision_conflict'
         WHERE account_id = $1 AND doc_id = $2
           AND base_revision = $4 AND sync_state = $5 AND change_seq = $6
       `, [account, summary.docId, JSON.stringify(remote.document), baseRevision, syncState, changeSeq]);
+      markChanged(result.rowsAffected);
     }
   }
   for (const local of localDocuments) {
     if (!remoteIDs.has(local.doc_id) && (local.sync_state === "clean" || local.sync_state === "trash")) {
-      await db.execute(`
+      const result = await db.execute(`
         DELETE FROM offline_documents
         WHERE account_id = $1 AND doc_id = $2 AND sync_state = $3 AND change_seq = $4
       `, [account, local.doc_id, local.sync_state, local.change_seq]);
+      markChanged(result.rowsAffected);
     }
   }
 
@@ -2890,7 +2990,7 @@ async function pullRemoteSnapshot(account: string) {
   for (const remote of folders.folders) {
     const local = localFolderByID.get(remote.folderId);
     if (!local) {
-      await insertRemoteFolder(account, remote);
+      if (await insertRemoteFolder(account, remote)) options.onChange?.();
       continue;
     }
     const decision = decideRemoteFolder(
@@ -2907,7 +3007,7 @@ async function pullRemoteSnapshot(account: string) {
       },
     );
     if (decision === "replace-clean") {
-      await db.execute(`
+      const result = await db.execute(`
         UPDATE offline_folders
         SET name = $3, parent_folder_id = $4, organizer_kind = $5,
             change_seq = change_seq + 1,
@@ -2918,8 +3018,9 @@ async function pullRemoteSnapshot(account: string) {
         account, remote.folderId, remote.name, remote.parentFolderId,
         remote.organizerKind ?? null, local.change_seq,
       ]);
+      markChanged(result.rowsAffected);
     } else if (decision === "acknowledge-local") {
-      await db.execute(`
+      const result = await db.execute(`
         UPDATE offline_folders
         SET name = $3, parent_folder_id = $4, organizer_kind = $5,
             sync_state = 'clean',
@@ -2930,23 +3031,27 @@ async function pullRemoteSnapshot(account: string) {
         account, remote.folderId, remote.name, remote.parentFolderId,
         remote.organizerKind ?? null, local.sync_state, local.change_seq,
       ]);
+      markChanged(result.rowsAffected);
     } else if (decision === "keep-local") {
       // 文件夹没有 revision。若推送和拉取之间另一端又改了它，保留本地待同步
       // 状态，下一轮再写入；文档正文才进入需要人工选择的冲突流程。
-      await db.execute(`
+      const result = await db.execute(`
         UPDATE offline_folders SET sync_state = 'update', last_error = NULL
         WHERE account_id = $1 AND folder_id = $2
           AND sync_state = $3 AND change_seq = $4
+          AND (sync_state <> 'update' OR last_error IS NOT NULL)
       `, [account, remote.folderId, local.sync_state, local.change_seq]);
+      markChanged(result.rowsAffected);
     }
   }
   for (const local of localFolders) {
     if (!remoteFolderIDs.has(local.folder_id) && local.sync_state === "clean") {
-      await db.execute(`
+      const result = await db.execute(`
         DELETE FROM offline_folders
         WHERE account_id = $1 AND folder_id = $2
           AND sync_state = 'clean' AND change_seq = $3
       `, [account, local.folder_id, local.change_seq]);
+      markChanged(result.rowsAffected);
     }
   }
 }
@@ -3089,7 +3194,7 @@ async function insertRemoteDocument(
 ) {
   await cacheDocumentImages(account, document.content, document.coverImageSource ?? "");
   const db = await database();
-  await db.execute(`
+  const result = await db.execute(`
     INSERT INTO offline_documents (
       account_id, doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, folder_id,
       local_revision, base_revision, created_at, updated_at, share_json,
@@ -3103,6 +3208,7 @@ async function insertRemoteDocument(
     document.share ? JSON.stringify(document.share) : null,
     sortOrder,
   ]);
+  return result.rowsAffected > 0;
 }
 
 async function replaceDocumentFromRemote(
@@ -3127,7 +3233,7 @@ async function replaceDocumentFromRemote(
         sort_order = CASE WHEN order_dirty = 0 THEN $11 ELSE sort_order END,
         local_revision = $12, base_revision = $13,
         created_at = $14, updated_at = $15, share_json = $16,
-        sync_state = 'clean', folder_dirty = 0, change_seq = change_seq + 1,
+        sync_state = 'clean', change_seq = change_seq + 1,
         remote_snapshot = NULL, last_error = NULL
     WHERE account_id = $1 AND doc_id = $2
       AND base_revision = $17 AND sync_state = $18 AND change_seq = $19
@@ -3156,7 +3262,7 @@ async function acknowledgeMatchingRemoteDocument(
     syncState: local.sync_state,
     changeSeq: local.change_seq,
   });
-  await db.execute(`
+  const result = await db.execute(`
     UPDATE offline_documents
     SET title = $3, theme = $4, content = $5,
         cover_mode = $6, cover_ratio = $7, cover_image_source = $8, cover_prompt = $9,
@@ -3176,11 +3282,12 @@ async function acknowledgeMatchingRemoteDocument(
     document.share ? JSON.stringify(document.share) : null,
     baseRevision, syncState, changeSeq,
   ]);
+  return result.rowsAffected > 0;
 }
 
 async function insertRemoteFolder(account: string, folder: Folder) {
   const db = await database();
-  await db.execute(`
+  const result = await db.execute(`
     INSERT INTO offline_folders (
       account_id, folder_id, name, parent_folder_id, organizer_kind,
       sync_state, change_seq
@@ -3190,6 +3297,7 @@ async function insertRemoteFolder(account: string, folder: Folder) {
     account, folder.folderId, folder.name, folder.parentFolderId,
     folder.organizerKind ?? null,
   ]);
+  return result.rowsAffected > 0;
 }
 
 async function selectDocument(account: string, docID: string): Promise<DocumentRow | null> {

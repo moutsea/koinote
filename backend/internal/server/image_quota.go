@@ -73,15 +73,17 @@ type storageBreakdown struct {
 	DocumentBytes int64
 	// ImageBytes 是图床对象的字节数（R2）
 	ImageBytes int64
+	// ConfigBytes 是客户端加密配置快照的字节数（Postgres 中的 bytea）
+	ConfigBytes int64
 }
 
 func (s storageBreakdown) Total() int64 {
-	return s.DocumentBytes + s.ImageBytes
+	return s.DocumentBytes + s.ImageBytes + s.ConfigBytes
 }
 
 // storageUsageFor 查某用户占用的云端存储。
 //
-// 两项都算：图片在 R2，文档正文在 Postgres —— 两者都是"用户存在云端的东西"，
+// 各项都算：图片在 R2，文档正文和加密配置在 Postgres —— 都是"用户存在云端的东西"，
 // 只算前者会让一个写了几百篇长文的人看到"用量 0"。
 //
 // 文档用 octet_length 而不是 length：后者按字符数算，中文正文会少算三分之二
@@ -113,8 +115,11 @@ func storageUsageForQuerier(
 			COALESCE((
 				SELECT SUM(bytes) FROM image_objects
 				WHERE user_id = $1 AND purpose = 'persistent'
+			), 0),
+			COALESCE((
+				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
 			), 0)
-	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes)
+	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes, &out.ConfigBytes)
 	return out, err
 }
 
@@ -183,6 +188,8 @@ func (a *App) recordImageObject(
 			+ COALESCE(
 				(SELECT SUM(octet_length(content) + octet_length(title) + octet_length(cover_image_source) + octet_length(cover_prompt))
 				 FROM documents WHERE user_id = $2), 0)
+			+ COALESCE(
+				(SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2), 0)
 			+ $3::bigint <= $4
 		) OR (
 			$5::text = 'wechat-export'
@@ -288,6 +295,7 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 		"usedBytes":     used.Total(),
 		"documentBytes": used.DocumentBytes,
 		"imageBytes":    used.ImageBytes,
+		"configBytes":   used.ConfigBytes,
 		"quotaBytes":    a.storageQuotaFor(user),
 	})
 }
@@ -363,6 +371,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 			"usedBytes":     used.Total(),
 			"documentBytes": used.DocumentBytes,
 			"imageBytes":    used.ImageBytes,
+			"configBytes":   used.ConfigBytes,
 			"quotaBytes":    quotaBytes,
 		})
 		return
@@ -387,6 +396,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		"usedBytes":     used.Total(),
 		"documentBytes": used.DocumentBytes,
 		"imageBytes":    used.ImageBytes,
+		"configBytes":   used.ConfigBytes,
 		"quotaBytes":    quotaBytes,
 	})
 }

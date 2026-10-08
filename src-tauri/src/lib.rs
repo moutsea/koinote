@@ -1032,6 +1032,1001 @@ async fn desktop_save_export(
     .map_err(|error| error.to_string())?
 }
 
+#[derive(Debug, Serialize)]
+struct DesktopConfigFile {
+    path: String,
+    bytes: Vec<u8>,
+}
+
+const CONFIG_FILES_MAX_BYTES: usize = 128 * 1024 * 1024;
+
+#[derive(Default)]
+struct ConfigFileCollection {
+    files: std::collections::BTreeMap<String, DesktopConfigFile>,
+    total_bytes: usize,
+}
+
+impl ConfigFileCollection {
+    fn insert(&mut self, path: String, source: &std::path::Path) -> Result<(), String> {
+        use std::io::Read;
+
+        if self.files.contains_key(&path) {
+            return Ok(());
+        }
+        let remaining = CONFIG_FILES_MAX_BYTES - self.total_bytes;
+        let file = std::fs::File::open(source).map_err(|error| error.to_string())?;
+        let metadata = file.metadata().map_err(|error| error.to_string())?;
+        if !metadata.is_file() {
+            return Err("config_path_invalid".to_string());
+        }
+        if metadata.len() > remaining as u64 {
+            return Err("config_files_too_large".to_string());
+        }
+        let mut bytes = Vec::new();
+        file.take(remaining as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| error.to_string())?;
+        if bytes.len() > remaining {
+            return Err("config_files_too_large".to_string());
+        }
+        self.total_bytes += bytes.len();
+        self.files
+            .insert(path.clone(), DesktopConfigFile { path, bytes });
+        Ok(())
+    }
+
+    fn into_files(self) -> Vec<DesktopConfigFile> {
+        self.files.into_values().collect()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct DesktopConfigRestoreFile {
+    path: String,
+    bytes: Vec<u8>,
+}
+
+const CONFIG_SCAN_ROOTS: [&str; 59] = [
+    ".ssh",
+    ".claude",
+    ".codex",
+    ".pi",
+    ".opencode",
+    ".hermes",
+    ".config",
+    ".openclaw",
+    ".moltbot",
+    ".cursor",
+    ".windsurf",
+    ".continue",
+    ".vscode",
+    ".zed",
+    ".cline",
+    ".roo",
+    ".gemini",
+    ".aider",
+    ".qwen",
+    ".amazonq",
+    ".codeium",
+    ".copilot",
+    ".mcp",
+    ".aws",
+    ".azure",
+    ".vercel",
+    ".netlify",
+    ".fly",
+    ".docker",
+    ".kube",
+    ".cargo",
+    ".terraform.d",
+    ".emacs.d",
+    ".bundle",
+    ".gradle",
+    ".m2",
+    ".sdkman/etc",
+    ".pip",
+    ".oh-my-zsh",
+    "Library/Application Support/Code/User",
+    "Library/Application Support/Code - Insiders/User",
+    "Library/Application Support/Cursor/User",
+    "Library/Application Support/Windsurf/User",
+    "Library/Application Support/Claude",
+    "Library/Application Support/Codex",
+    "Library/Application Support/Zed",
+    "Library/Application Support/ChatGPT",
+    "Library/Application Support/pip",
+    "Library/Application Support/pypoetry",
+    "AppData/Roaming/Code/User",
+    "AppData/Roaming/Code - Insiders/User",
+    "AppData/Roaming/Cursor/User",
+    "AppData/Roaming/Windsurf/User",
+    "AppData/Roaming/Claude",
+    "AppData/Roaming/Codex",
+    "AppData/Roaming/Zed",
+    "AppData/Roaming/ChatGPT",
+    "AppData/Roaming/pip",
+    "AppData/Roaming/pypoetry",
+];
+
+const AGENT_WORKSPACE_SCAN_ROOTS: &[&str] = &[
+    ".claude/agents",
+    ".claude/commands",
+    ".claude/skills",
+    ".claude/hooks",
+    ".claude/rules",
+    ".codex/skills",
+    ".codex/prompts",
+    ".codex/rules",
+    ".pi/agent/skills",
+    ".pi/agent/prompts",
+    ".pi/agent/extensions",
+    ".pi/agent/themes",
+    ".agents/skills",
+    ".config/opencode/agent",
+    ".config/opencode/agents",
+    ".config/opencode/command",
+    ".config/opencode/commands",
+    ".config/opencode/skill",
+    ".config/opencode/skills",
+    ".config/opencode/plugin",
+    ".config/opencode/plugins",
+    ".config/opencode/tools",
+    ".opencode/agent",
+    ".opencode/agents",
+    ".opencode/command",
+    ".opencode/commands",
+    ".opencode/skill",
+    ".opencode/skills",
+    ".opencode/plugin",
+    ".opencode/plugins",
+    ".opencode/tools",
+    ".config/claude/skills",
+    ".config/codex/skills",
+    ".config/pi/agent/skills",
+    ".openclaw/skills",
+    ".hermes/skills",
+    ".moltbot/skills",
+    ".config/openclaw/skills",
+    ".config/hermes/skills",
+    ".config/moltbot/skills",
+    ".gemini/commands",
+    ".gemini/skills",
+    ".cursor/rules",
+    ".windsurf/rules",
+    ".continue/rules",
+];
+
+const AGENT_WORKSPACE_SCAN_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", "GEMINI.md"];
+
+const CONFIG_COMPLETE_DIRECTORIES: &[&str] = &[
+    ".ssh",
+    ".config/git",
+    ".config/zsh",
+    ".config/bash",
+    ".config/fish",
+    ".config/tmux",
+    ".config/kitty",
+    ".config/wezterm",
+    ".config/ghostty",
+    ".config/nushell",
+    ".oh-my-zsh/custom",
+    ".config/nvim",
+    ".vim/after",
+    ".vim/autoload",
+    ".vim/colors",
+    ".vim/ftplugin",
+    ".vim/plugin",
+    ".vim/snippets",
+    ".gradle/init.d",
+];
+
+const CONFIG_FILE_EXTENSIONS: [&str; 17] = [
+    "cfg",
+    "conf",
+    "ini",
+    "json",
+    "json5",
+    "jsonc",
+    "kdl",
+    "plist",
+    "properties",
+    "toml",
+    "yaml",
+    "yml",
+    "xml",
+    "nu",
+    "el",
+    "ps1",
+    "lua",
+];
+
+const CONFIG_FILE_NAMES: [&str; 47] = [
+    "authorized_keys",
+    "authorized_keys2",
+    "known_hosts",
+    "known_hosts.old",
+    ".git-credentials",
+    ".gitattributes",
+    ".gitignore_global",
+    ".netrc",
+    ".editorconfig",
+    ".tool-versions",
+    ".node-version",
+    ".python-version",
+    ".ruby-version",
+    ".java-version",
+    ".zshenv",
+    ".zlogout",
+    ".bash_logout",
+    ".bash_aliases",
+    ".bash_functions",
+    ".dircolors",
+    ".p10k.zsh",
+    ".wezterm.lua",
+    ".emacs",
+    "init.lua",
+    "init.vim",
+    "init.el",
+    "early-init.el",
+    "wezterm.lua",
+    "kitty.conf",
+    "alacritty.toml",
+    "config.kdl",
+    "config.lua",
+    "config.fish",
+    "config.nu",
+    "env.nu",
+    "env",
+    "env.tcsh",
+    "instructions",
+    "policy",
+    "mcp.json",
+    "opencode.json",
+    "openclaw.json",
+    "settings",
+    "preferences",
+    "credentials",
+    "properties",
+    "config",
+];
+
+const CONFIG_DIRECTORY_EXCLUSIONS: [&str; 23] = [
+    "cache",
+    "cacheddata",
+    "caches",
+    "history",
+    "log",
+    "logs",
+    "extensions",
+    "migration-backups",
+    "node_modules",
+    "projects",
+    "registry",
+    "repos",
+    "src",
+    "target",
+    "tmp",
+    "temp",
+    "worktrees",
+    "workspace",
+    ".git",
+    ".next",
+    ".tmp",
+    "build",
+    "dist",
+];
+
+fn is_config_candidate(path: &std::path::Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let name = name.to_ascii_lowercase();
+    if CONFIG_FILE_NAMES.contains(&name.as_str())
+        || name == "profile"
+        || name.contains("config")
+        || name.contains("settings")
+        || name.ends_with("rc")
+        || name.ends_with("profile")
+        || name.starts_with(".env")
+    {
+        return true;
+    }
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| {
+            CONFIG_FILE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+        })
+}
+
+fn is_excluded_config_directory(path: &std::path::Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let name = name.to_ascii_lowercase();
+    name.ends_with(".app") || CONFIG_DIRECTORY_EXCLUSIONS.contains(&name.as_str())
+}
+
+fn is_config_restore_backup(path: &std::path::Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|name| name.starts_with('.') && name.contains(".koinote-backup-"))
+}
+
+fn is_complete_config_directory(path: &std::path::Path, logical_home: &std::path::Path) -> bool {
+    let Ok(relative) = path.strip_prefix(logical_home) else {
+        return false;
+    };
+    let relative = relative
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    CONFIG_COMPLETE_DIRECTORIES.contains(&relative.as_str())
+}
+
+fn is_agent_workspace_directory(path: &std::path::Path, logical_home: &std::path::Path) -> bool {
+    let Ok(relative) = path.strip_prefix(logical_home) else {
+        return false;
+    };
+    let relative = relative
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    AGENT_WORKSPACE_SCAN_ROOTS
+        .iter()
+        .any(|root| relative == *root || relative.starts_with(&format!("{root}/")))
+}
+
+fn config_home_directory() -> Result<std::path::PathBuf, String> {
+    #[cfg(windows)]
+    let value = std::env::var_os("USERPROFILE");
+    #[cfg(not(windows))]
+    let value = std::env::var_os("HOME");
+    value
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| "config_home_unavailable".to_string())
+}
+
+fn config_relative_path(path: &std::path::Path) -> Result<String, String> {
+    let logical_home = config_home_directory()?;
+    let home =
+        std::fs::canonicalize(&logical_home).map_err(|_| "config_home_unavailable".to_string())?;
+    let canonical_path = std::fs::canonicalize(path).map_err(|error| error.to_string())?;
+    if !canonical_path.is_file() {
+        return Err("config_path_invalid".to_string());
+    }
+    if !canonical_path.starts_with(&home) {
+        return Err("config_file_outside_home".to_string());
+    }
+    let relative = path
+        .strip_prefix(&logical_home)
+        .or_else(|_| canonical_path.strip_prefix(&home))
+        .map_err(|_| "config_file_outside_home".to_string())?;
+    let mut components = Vec::new();
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(value) => {
+                components.push(value.to_string_lossy().to_string())
+            }
+            _ => return Err("config_path_invalid".to_string()),
+        }
+    }
+    if components.is_empty() {
+        return Err("config_path_invalid".to_string());
+    }
+    let relative = components.join("/");
+    if relative.as_bytes().len() > 512 {
+        return Err("config_path_invalid".to_string());
+    }
+    Ok(relative)
+}
+
+fn append_config_file(
+    path: &std::path::Path,
+    logical_home: &std::path::Path,
+    canonical_home: &std::path::Path,
+    files: &mut ConfigFileCollection,
+) -> Result<(), String> {
+    if is_config_restore_backup(path) {
+        return Ok(());
+    }
+    let Ok(canonical_target) = std::fs::canonicalize(path) else {
+        return Ok(());
+    };
+    if !canonical_target.starts_with(canonical_home) {
+        return Ok(());
+    }
+    let Ok(relative) = path.strip_prefix(logical_home) else {
+        return Ok(());
+    };
+    let relative = relative
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    if relative.is_empty() {
+        return Ok(());
+    }
+    match files.insert(relative, &canonical_target) {
+        Err(error) if error == "config_files_too_large" => Err(error),
+        _ => Ok(()),
+    }
+}
+
+fn collect_config_directory(
+    directory: &std::path::Path,
+    logical_home: &std::path::Path,
+    canonical_home: &std::path::Path,
+    files: &mut ConfigFileCollection,
+    include_all_files: bool,
+) -> Result<(), String> {
+    if is_agent_workspace_directory(directory, logical_home) {
+        return Ok(());
+    }
+    let include_all_files =
+        include_all_files || is_complete_config_directory(directory, logical_home);
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path();
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            if std::fs::canonicalize(&path).is_ok_and(|target| {
+                target.is_file() && (include_all_files || is_config_candidate(&path))
+            }) {
+                append_config_file(&path, logical_home, canonical_home, files)?;
+            }
+            continue;
+        }
+        if metadata.is_dir() {
+            if is_agent_workspace_directory(&path, logical_home) {
+                continue;
+            }
+            if !is_excluded_config_directory(&path)
+                || is_complete_config_directory(&path, logical_home)
+            {
+                collect_config_directory(
+                    &path,
+                    logical_home,
+                    canonical_home,
+                    files,
+                    include_all_files,
+                )?;
+            }
+            continue;
+        }
+        if !metadata.is_file() || (!include_all_files && !is_config_candidate(&path)) {
+            continue;
+        }
+        append_config_file(&path, logical_home, canonical_home, files)?;
+    }
+    Ok(())
+}
+
+fn collect_agent_workspace_directory(
+    directory: &std::path::Path,
+    logical_home: &std::path::Path,
+    canonical_home: &std::path::Path,
+    files: &mut ConfigFileCollection,
+) -> Result<(), String> {
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path();
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            if std::fs::canonicalize(&path).is_ok_and(|target| target.is_file()) {
+                append_config_file(&path, logical_home, canonical_home, files)?;
+            }
+            continue;
+        }
+        if metadata.is_dir() {
+            if !is_excluded_config_directory(&path) {
+                collect_agent_workspace_directory(&path, logical_home, canonical_home, files)?;
+            }
+            continue;
+        }
+        if metadata.is_file() {
+            append_config_file(&path, logical_home, canonical_home, files)?;
+        }
+    }
+    Ok(())
+}
+
+fn scan_config_files() -> Result<Vec<DesktopConfigFile>, String> {
+    let home = config_home_directory()?;
+    let canonical_home =
+        std::fs::canonicalize(&home).map_err(|_| "config_home_unavailable".to_string())?;
+    let mut files = ConfigFileCollection::default();
+    let entries = std::fs::read_dir(&home).map_err(|error| error.to_string())?;
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path();
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            if std::fs::canonicalize(&path)
+                .is_ok_and(|target| target.is_file() && is_config_candidate(&path))
+            {
+                append_config_file(&path, &home, &canonical_home, &mut files)?;
+            }
+            continue;
+        }
+        if metadata.is_file() && is_config_candidate(&path) {
+            append_config_file(&path, &home, &canonical_home, &mut files)?;
+        }
+    }
+    for relative in CONFIG_SCAN_ROOTS {
+        let directory = home.join(relative);
+        match std::fs::symlink_metadata(&directory) {
+            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+                collect_config_directory(
+                    &directory,
+                    &home,
+                    &canonical_home,
+                    &mut files,
+                    relative == ".ssh",
+                )?;
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(files.into_files())
+}
+
+fn scan_agent_workspace_files() -> Result<Vec<DesktopConfigFile>, String> {
+    let home = config_home_directory()?;
+    let canonical_home =
+        std::fs::canonicalize(&home).map_err(|_| "config_home_unavailable".to_string())?;
+    let mut files = ConfigFileCollection::default();
+    for relative in AGENT_WORKSPACE_SCAN_FILES {
+        let path = home.join(relative);
+        if std::fs::symlink_metadata(&path)
+            .is_ok_and(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+        {
+            append_config_file(&path, &home, &canonical_home, &mut files)?;
+        }
+    }
+    for relative in AGENT_WORKSPACE_SCAN_ROOTS {
+        let directory = home.join(relative);
+        match std::fs::symlink_metadata(&directory) {
+            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+                collect_agent_workspace_directory(&directory, &home, &canonical_home, &mut files)?;
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(files.into_files())
+}
+
+fn validated_config_restore_path(
+    root: &std::path::Path,
+    relative: &str,
+) -> Result<std::path::PathBuf, String> {
+    let relative_path = std::path::Path::new(relative);
+    if relative_path.is_absolute()
+        || relative.is_empty()
+        || relative.as_bytes().len() > 512
+        || relative.contains('\0')
+    {
+        return Err("config_path_invalid".to_string());
+    }
+    for component in relative_path.components() {
+        if !matches!(component, std::path::Component::Normal(_)) {
+            return Err("config_path_invalid".to_string());
+        }
+    }
+    Ok(root.join(relative_path))
+}
+
+fn prepare_config_restore_parent(
+    root: &std::path::Path,
+    parent: &std::path::Path,
+) -> Result<(), String> {
+    let root = std::fs::canonicalize(root).map_err(|_| "config_home_unavailable".to_string())?;
+    let relative = parent
+        .strip_prefix(&root)
+        .map_err(|_| "config_path_invalid".to_string())?;
+    let mut current = root;
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            return Err("config_path_invalid".to_string());
+        };
+        current.push(name);
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("config_path_invalid".to_string())
+            }
+            Ok(metadata) if !metadata.is_dir() => return Err("config_path_invalid".to_string()),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(&current).map_err(|error| error.to_string())?;
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(())
+}
+
+fn config_restore_backup_path(target: &std::path::Path, timestamp: u128) -> std::path::PathBuf {
+    let name = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("config");
+    let base = target.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let stem = format!(".{name}.koinote-backup-{timestamp}");
+    let mut candidate = base.join(&stem);
+    let mut suffix = 1;
+    while candidate.exists() {
+        candidate = base.join(format!("{stem}-{suffix}"));
+        suffix += 1;
+    }
+    candidate
+}
+
+fn restore_config_files(
+    root: &std::path::Path,
+    files: &[DesktopConfigRestoreFile],
+) -> Result<usize, String> {
+    if files.is_empty() {
+        return Err("config_file_count_invalid".to_string());
+    }
+    let root = std::fs::canonicalize(root).map_err(|_| "config_home_unavailable".to_string())?;
+    let mut seen = std::collections::HashSet::new();
+    for file in files {
+        if !seen.insert(restore_config_path_key(&file.path)) {
+            return Err("config_path_duplicate".to_string());
+        }
+    }
+    let targets = files
+        .iter()
+        .map(|file| validated_config_restore_path(&root, &file.path))
+        .collect::<Result<Vec<_>, _>>()?;
+    for target in &targets {
+        let parent = target
+            .parent()
+            .ok_or_else(|| "config_path_invalid".to_string())?;
+        prepare_config_restore_parent(&root, parent)?;
+        #[cfg(unix)]
+        if parent
+            .strip_prefix(&root)
+            .ok()
+            .and_then(|path| path.to_str())
+            .is_some_and(|path| restore_config_path_is_ssh(path))
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    for (file, target) in files.iter().zip(targets) {
+        if target.exists() {
+            let backup = config_restore_backup_path(&target, timestamp);
+            std::fs::rename(&target, backup).map_err(|error| error.to_string())?;
+        }
+        file_export::save_export_path(target.clone(), file.bytes.clone())?;
+        #[cfg(unix)]
+        if restore_config_path_is_ssh(&file.path) {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(files.len())
+}
+
+// macOS 的 APFS 默认大小写与 Unicode 规范化都不敏感：先做 Unicode 小写，
+// 再把会折叠成 ASCII 的少数字符（ſ、ﬅ 等）展开，并合并重复分隔符。
+fn restore_config_path_key(path: &str) -> String {
+    let mut folded = String::with_capacity(path.len());
+    for character in path.replace('\\', "/").chars() {
+        match character {
+            'ſ' => folded.push('s'),
+            'ﬀ' => folded.push_str("ff"),
+            'ﬁ' => folded.push_str("fi"),
+            'ﬂ' => folded.push_str("fl"),
+            'ﬃ' => folded.push_str("ffi"),
+            'ﬄ' => folded.push_str("ffl"),
+            'ﬅ' | 'ﬆ' => folded.push_str("st"),
+            other => folded.extend(other.to_lowercase()),
+        }
+    }
+    folded
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn restore_config_path_is_ssh(path: &str) -> bool {
+    let normalized = restore_config_path_key(path);
+    normalized == ".ssh" || normalized.starts_with(".ssh/")
+}
+
+fn restore_config_path_is_high_risk(path: &str) -> bool {
+    let normalized = restore_config_path_key(path);
+    // 非 ASCII 路径可能经文件系统折叠后落到敏感文件上，保守地一律走二次确认。
+    !normalized.is_ascii()
+        || restore_config_path_is_ssh(&normalized)
+        || matches!(
+            normalized.as_str(),
+            ".gitconfig"
+                | ".git-credentials"
+                | ".zshenv"
+                | ".zshrc"
+                | ".zprofile"
+                | ".zlogin"
+                | ".zlogout"
+                | ".bashrc"
+                | ".bash_profile"
+                | ".bash_login"
+                | ".bash_logout"
+                | ".profile"
+                | ".config/git/config"
+                | ".config/fish/config.fish"
+        )
+        || normalized.starts_with(".config/git/")
+        || normalized.starts_with(".config/fish/")
+        || normalized.starts_with("library/launchagents/")
+        || normalized.starts_with("library/launchdaemons/")
+}
+
+fn restore_config_high_risk_paths_under_home(
+    root: &std::path::Path,
+    files: &[DesktopConfigRestoreFile],
+) -> Vec<String> {
+    let (Ok(home), Ok(root)) = (
+        config_home_directory().and_then(|home| {
+            std::fs::canonicalize(home).map_err(|_| "config_home_unavailable".to_string())
+        }),
+        std::fs::canonicalize(root),
+    ) else {
+        return Vec::new();
+    };
+    files
+        .iter()
+        .filter_map(|file| {
+            let target = validated_config_restore_path(&root, &file.path).ok()?;
+            let relative = target.strip_prefix(&home).ok()?.to_str()?.to_string();
+            restore_config_path_is_high_risk(&relative).then(|| file.path.clone())
+        })
+        .collect()
+}
+
+fn restore_config_paths_text(paths: &[String]) -> String {
+    const DISPLAY_LIMIT: usize = 48;
+    let mut lines = paths
+        .iter()
+        .take(DISPLAY_LIMIT)
+        .map(|path| format!("• ~/{path}"))
+        .collect::<Vec<_>>();
+    if paths.len() > DISPLAY_LIMIT {
+        lines.push(format!("… and {} more", paths.len() - DISPLAY_LIMIT));
+    }
+    lines.join("\n")
+}
+
+fn restore_config_dialog_copy(
+    locale: &str,
+    paths: &[String],
+    high_risk_paths: &[String],
+) -> (String, String, String, String) {
+    let paths_text = restore_config_paths_text(paths);
+    let high_risk_text = restore_config_paths_text(high_risk_paths);
+    match locale {
+        "zh" => (
+            "恢复本地配置".to_string(),
+            format!(
+                "将把以下配置文件恢复到当前电脑的 HOME 目录，并覆盖同名文件。\n\n{paths_text}\n\n原文件会自动备份。是否继续？"
+            ),
+            "高风险配置确认".to_string(),
+            format!(
+                "以下文件可能影响登录、密钥访问或 Shell 启动行为：\n\n{high_risk_text}\n\n请确认你理解这些文件的内容并仍要恢复。"
+            ),
+        ),
+        "fr" => (
+            "Restaurer la configuration locale".to_string(),
+            format!(
+                "Les fichiers de configuration suivants seront restaurés dans le dossier HOME de cet ordinateur et remplaceront les fichiers de même nom.\n\n{paths_text}\n\nLes fichiers existants seront sauvegardés. Continuer ?"
+            ),
+            "Confirmer les fichiers à risque".to_string(),
+            format!(
+                "Les fichiers suivants peuvent modifier la connexion, l’accès aux clés ou le démarrage du Shell :\n\n{high_risk_text}\n\nConfirmez que vous en comprenez le contenu et souhaitez toujours les restaurer."
+            ),
+        ),
+        "ja" => (
+            "ローカル設定を復元".to_string(),
+            format!(
+                "次の設定ファイルをこのコンピューターの HOME フォルダーに復元し、同名ファイルを上書きします。\n\n{paths_text}\n\n既存ファイルは自動的にバックアップされます。続行しますか？"
+            ),
+            "高リスク設定の確認".to_string(),
+            format!(
+                "次のファイルはログイン、鍵へのアクセス、または Shell の起動動作に影響する可能性があります。\n\n{high_risk_text}\n\n内容を理解したうえで復元することを確認してください。"
+            ),
+        ),
+        _ => (
+            "Restore local configuration".to_string(),
+            format!(
+                "The following configuration files will be restored to this computer's HOME directory and overwrite same-named files.\n\n{paths_text}\n\nExisting files will be backed up first. Continue?"
+            ),
+            "Confirm high-risk configuration".to_string(),
+            format!(
+                "The following files may affect sign-in, key access, or Shell startup behavior:\n\n{high_risk_text}\n\nConfirm that you understand their contents and still want to restore them."
+            ),
+        ),
+    }
+}
+
+#[tauri::command]
+async fn desktop_pick_config_files(
+    window: tauri::WebviewWindow,
+) -> Result<Vec<DesktopConfigFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::DialogExt;
+        let Some(paths) = window.dialog().file().blocking_pick_files() else {
+            return Ok(Vec::new());
+        };
+        let mut files = ConfigFileCollection::default();
+        for path in paths {
+            let path = path.into_path().map_err(|error| error.to_string())?;
+            let relative = config_relative_path(&path)?;
+            files.insert(relative, &path)?;
+        }
+        Ok(files.into_files())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn desktop_scan_config_files() -> Result<Vec<DesktopConfigFile>, String> {
+    tauri::async_runtime::spawn_blocking(scan_config_files)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn desktop_scan_agent_workspace_files() -> Result<Vec<DesktopConfigFile>, String> {
+    tauri::async_runtime::spawn_blocking(scan_agent_workspace_files)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn desktop_restore_config_files(
+    window: tauri::WebviewWindow,
+    files: Vec<DesktopConfigRestoreFile>,
+    locale: Option<String>,
+) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+        let Some(root) = window.dialog().file().blocking_pick_folder() else {
+            return Ok(0);
+        };
+        let root = root.into_path().map_err(|error| error.to_string())?;
+        // 选中的目录可能就是 HOME 或其上级：按落点相对 HOME 的路径同样做高风险确认。
+        let high_risk_paths = restore_config_high_risk_paths_under_home(&root, &files);
+        if !high_risk_paths.is_empty() {
+            let paths = files
+                .iter()
+                .map(|file| file.path.clone())
+                .collect::<Vec<_>>();
+            let (_, _, high_risk_title, high_risk_message) = restore_config_dialog_copy(
+                locale.as_deref().unwrap_or("en"),
+                &paths,
+                &high_risk_paths,
+            );
+            let confirmed = window
+                .dialog()
+                .message(high_risk_message)
+                .title(high_risk_title)
+                .kind(MessageDialogKind::Warning)
+                .buttons(MessageDialogButtons::OkCancel)
+                .blocking_show();
+            if !confirmed {
+                return Ok(0);
+            }
+        }
+        restore_config_files(&root, &files)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn desktop_restore_config_files_to_home(
+    window: tauri::WebviewWindow,
+    files: Vec<DesktopConfigRestoreFile>,
+    locale: String,
+) -> Result<usize, String> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    if files.is_empty() {
+        return Err("config_file_count_invalid".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = config_home_directory()?;
+        let canonical_root =
+            std::fs::canonicalize(&root).map_err(|_| "config_home_unavailable".to_string())?;
+        let mut seen = std::collections::HashSet::new();
+        for file in &files {
+            if !seen.insert(restore_config_path_key(&file.path)) {
+                return Err("config_path_duplicate".to_string());
+            }
+            validated_config_restore_path(&canonical_root, &file.path)?;
+        }
+        let paths = files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>();
+        let high_risk_paths = paths
+            .iter()
+            .filter(|path| restore_config_path_is_high_risk(path))
+            .cloned()
+            .collect::<Vec<_>>();
+        let (title, message, high_risk_title, high_risk_message) =
+            restore_config_dialog_copy(&locale, &paths, &high_risk_paths);
+        let confirmed = window
+            .dialog()
+            .message(message)
+            .title(title)
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancel)
+            .blocking_show();
+        if !confirmed {
+            return Ok(0);
+        }
+        if !high_risk_paths.is_empty()
+            && !window
+                .dialog()
+                .message(high_risk_message)
+                .title(high_risk_title)
+                .kind(MessageDialogKind::Warning)
+                .buttons(MessageDialogButtons::OkCancel)
+                .blocking_show()
+        {
+            return Ok(0);
+        }
+        restore_config_files(&root, &files)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 fn decode_export_header(value: &str) -> Result<String, String> {
     let value = value.as_bytes();
     let mut decoded = Vec::with_capacity(value.len());
@@ -1111,6 +2106,14 @@ pub fn run() {
         },
     ];
 
+    #[cfg(koinote_local)]
+    {
+        std::env::set_var("HTTP_PROXY", "http://127.0.0.1:9");
+        std::env::set_var("HTTPS_PROXY", "http://127.0.0.1:9");
+        std::env::set_var("ALL_PROXY", "http://127.0.0.1:9");
+        std::env::set_var("NO_PROXY", "127.0.0.1,localhost");
+        std::env::set_var("no_proxy", "127.0.0.1,localhost");
+    }
     let builder = tauri::Builder::default();
     #[cfg(not(target_os = "macos"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -1173,6 +2176,11 @@ pub fn run() {
             desktop_abort_local_mode_import,
             desktop_export_pdf,
             desktop_save_export,
+            desktop_pick_config_files,
+            desktop_scan_config_files,
+            desktop_scan_agent_workspace_files,
+            desktop_restore_config_files,
+            desktop_restore_config_files_to_home,
             desktop_set_menu_locale,
             desktop_set_menu_enabled,
         ]);
@@ -1185,6 +2193,58 @@ pub fn run() {
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    #[test]
+    fn restore_dialog_lists_paths_and_marks_high_risk_files() {
+        let paths = vec![
+            ".gitconfig".to_string(),
+            ".ssh/authorized_keys".to_string(),
+            ".SSH/authorized_keys2".to_string(),
+            ".config/git/config".to_string(),
+            "library/launchagents/com.example.agent.plist".to_string(),
+            ".zshrc".to_string(),
+        ];
+        let high_risk = paths
+            .iter()
+            .filter(|path| restore_config_path_is_high_risk(path))
+            .cloned()
+            .collect::<Vec<_>>();
+        let (_, message, high_risk_title, high_risk_message) =
+            restore_config_dialog_copy("zh", &paths, &high_risk);
+        assert!(message.contains("~/.gitconfig"));
+        assert!(message.contains("~/.ssh/authorized_keys"));
+        assert_eq!(high_risk_title, "高风险配置确认");
+        assert!(high_risk_message.contains("~/.zshrc"));
+        assert_eq!(high_risk.len(), paths.len());
+        assert!(restore_config_path_is_high_risk(".ZSHRC"));
+        assert!(restore_config_path_is_high_risk(".SSH/rc"));
+        assert!(restore_config_path_is_high_risk(
+            "Library/LaunchAgents/x.plist"
+        ));
+        assert!(restore_config_path_is_high_risk(
+            ".config/fish/functions/prompt.fish"
+        ));
+    }
+
+    #[test]
+    fn restore_path_keys_prevent_case_and_separator_aliases() {
+        assert_eq!(
+            restore_config_path_key(".SSH\\authorized_keys"),
+            ".ssh/authorized_keys"
+        );
+        assert!(restore_config_path_is_ssh(".SSH/authorized_keys2"));
+        assert_eq!(
+            restore_config_path_key(".ssh//authorized_keys/"),
+            ".ssh/authorized_keys"
+        );
+        assert!(restore_config_path_is_ssh(".ſsh/authorized_keys"));
+        assert!(restore_config_path_is_high_risk(".zſhrc"));
+        assert!(restore_config_path_is_high_risk(
+            ".config/fish/completions/git.fish"
+        ));
+        assert!(restore_config_path_is_high_risk("Ｌibrary/x.plist"));
+        assert!(!restore_config_path_is_high_risk(".config/starship.toml"));
+    }
 
     #[cfg(desktop)]
     #[test]
@@ -1364,12 +2424,15 @@ mod tests {
             .fetch_one(&pool)
             .await
             .expect("load imported cover");
-            assert_eq!(cover, (
-                "ai".to_string(),
-                "3:2".to_string(),
-                "koinote-local-image://image-1".to_string(),
-                "Imported cover".to_string(),
-            ));
+            assert_eq!(
+                cover,
+                (
+                    "ai".to_string(),
+                    "3:2".to_string(),
+                    "koinote-local-image://image-1".to_string(),
+                    "Imported cover".to_string(),
+                )
+            );
         });
     }
 
@@ -1458,5 +2521,251 @@ mod tests {
             decode_export_header("%E5%AF%BC%E5%87%BA%ZZ.html").unwrap_err(),
             "export_filename_invalid"
         );
+    }
+
+    #[test]
+    fn config_restore_rejects_absolute_and_parent_paths() {
+        let root = std::path::Path::new("/tmp/koinote-config");
+        assert!(validated_config_restore_path(root, ".ssh/config").is_ok());
+        assert_eq!(
+            validated_config_restore_path(root, "../outside").unwrap_err(),
+            "config_path_invalid"
+        );
+        assert_eq!(
+            validated_config_restore_path(root, "/etc/ssh/config").unwrap_err(),
+            "config_path_invalid"
+        );
+        assert_eq!(
+            validated_config_restore_path(root, "./config").unwrap_err(),
+            "config_path_invalid"
+        );
+        assert_eq!(
+            validated_config_restore_path(root, "bad\0path").unwrap_err(),
+            "config_path_invalid"
+        );
+    }
+
+    #[test]
+    fn config_scan_recognizes_generic_formats_and_skips_cache_directories() {
+        assert!(is_config_candidate(std::path::Path::new("settings.json")));
+        assert!(is_config_candidate(std::path::Path::new("tool.toml")));
+        assert!(is_config_candidate(std::path::Path::new(".customrc")));
+        assert!(is_config_candidate(std::path::Path::new(".env.local")));
+        assert!(is_config_candidate(std::path::Path::new(".zshenv")));
+        assert!(is_config_candidate(std::path::Path::new(
+            ".git-credentials"
+        )));
+        assert!(is_config_candidate(std::path::Path::new(".editorconfig")));
+        assert!(is_config_candidate(std::path::Path::new(".tool-versions")));
+        assert!(is_config_candidate(std::path::Path::new(".bash_logout")));
+        assert!(is_config_candidate(std::path::Path::new(".p10k.zsh")));
+        assert!(is_config_candidate(std::path::Path::new(".wezterm.lua")));
+        assert!(is_config_candidate(std::path::Path::new("init.el")));
+        assert!(is_config_candidate(std::path::Path::new("config.jsonc")));
+        assert!(is_config_candidate(std::path::Path::new(
+            "gradle.properties"
+        )));
+        assert!(is_config_candidate(std::path::Path::new("env")));
+        assert!(is_config_candidate(std::path::Path::new("env.tcsh")));
+        assert!(!is_config_candidate(std::path::Path::new("notes.txt")));
+        assert!(is_excluded_config_directory(std::path::Path::new("cache")));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "worktrees"
+        )));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "extensions"
+        )));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "registry"
+        )));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "workspace"
+        )));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "claude.app"
+        )));
+        assert!(is_excluded_config_directory(std::path::Path::new(
+            "Claude.APP"
+        )));
+        assert!(!is_excluded_config_directory(std::path::Path::new(
+            "opencode"
+        )));
+    }
+
+    #[test]
+    fn config_scan_includes_all_ssh_files_and_keeps_logical_paths() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-ssh-scan-{}-{timestamp}",
+            std::process::id()
+        ));
+        let ssh = root.join(".ssh");
+        std::fs::create_dir_all(ssh.join("cache")).unwrap();
+        for name in [
+            "config",
+            "id_ed25519",
+            "id_ed25519.pub",
+            "known_hosts",
+            "work-key",
+            ".config.koinote-backup-123",
+        ] {
+            std::fs::write(ssh.join(name), name.as_bytes()).unwrap();
+        }
+        std::fs::write(ssh.join("cache").join("ignored"), b"ignored").unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(ssh.join("work-key"), ssh.join("linked-key")).unwrap();
+
+        let mut files = ConfigFileCollection::default();
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        collect_config_directory(&ssh, &root, &canonical_root, &mut files, true).unwrap();
+        let mut paths = files
+            .into_files()
+            .into_iter()
+            .map(|file| file.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert!(paths.contains(&".ssh/id_ed25519".to_string()));
+        assert!(paths.contains(&".ssh/id_ed25519.pub".to_string()));
+        assert!(paths.contains(&".ssh/known_hosts".to_string()));
+        assert!(paths.contains(&".ssh/work-key".to_string()));
+        assert!(!paths.contains(&".ssh/.config.koinote-backup-123".to_string()));
+        assert!(!paths.contains(&".ssh/cache/ignored".to_string()));
+        #[cfg(unix)]
+        assert!(paths.contains(&".ssh/linked-key".to_string()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_scan_skips_agent_workspace_files() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-config-complete-{}-{timestamp}",
+            std::process::id()
+        ));
+        let skills = root.join(".claude/skills/example");
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(skills.join("SKILL.md"), b"skill").unwrap();
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let mut files = ConfigFileCollection::default();
+        collect_config_directory(
+            &root.join(".claude"),
+            &root,
+            &canonical_root,
+            &mut files,
+            false,
+        )
+        .unwrap();
+        assert!(!files
+            .into_files()
+            .iter()
+            .any(|file| file.path == ".claude/skills/example/SKILL.md"));
+
+        let opencode_skills = root.join(".opencode/skills/example");
+        std::fs::create_dir_all(&opencode_skills).unwrap();
+        std::fs::write(opencode_skills.join("SKILL.md"), b"opencode skill").unwrap();
+        let mut opencode_files = ConfigFileCollection::default();
+        collect_config_directory(
+            &root.join(".opencode"),
+            &root,
+            &canonical_root,
+            &mut opencode_files,
+            false,
+        )
+        .unwrap();
+        assert!(!opencode_files
+            .into_files()
+            .iter()
+            .any(|file| file.path == ".opencode/skills/example/SKILL.md"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_scan_skips_agent_extension_files() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-config-complete-exclusion-{}-{timestamp}",
+            std::process::id()
+        ));
+        let extensions = root.join(".pi/agent/extensions/example");
+        std::fs::create_dir_all(&extensions).unwrap();
+        std::fs::write(extensions.join("README.md"), b"extension").unwrap();
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let mut files = ConfigFileCollection::default();
+        collect_config_directory(&root.join(".pi"), &root, &canonical_root, &mut files, false)
+            .unwrap();
+        assert!(!files
+            .into_files()
+            .iter()
+            .any(|file| file.path == ".pi/agent/extensions/example/README.md"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn agent_workspace_scan_collects_shareable_files() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-agent-scan-{}-{timestamp}",
+            std::process::id()
+        ));
+        let prompts = root.join(".codex/prompts");
+        std::fs::create_dir_all(&prompts).unwrap();
+        std::fs::write(prompts.join("system.md"), b"prompt").unwrap();
+        std::fs::write(root.join("AGENTS.md"), b"instructions").unwrap();
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let mut files = ConfigFileCollection::default();
+        append_config_file(&root.join("AGENTS.md"), &root, &canonical_root, &mut files).unwrap();
+        collect_agent_workspace_directory(&prompts, &root, &canonical_root, &mut files).unwrap();
+        let files = files.into_files();
+        assert!(files.iter().any(|file| file.path == "AGENTS.md"));
+        assert!(files
+            .iter()
+            .any(|file| file.path == ".codex/prompts/system.md"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_backups_existing_files() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("koinote-config-{}-{timestamp}", std::process::id()));
+        let ssh = root.join(".ssh");
+        std::fs::create_dir_all(&ssh).unwrap();
+        let target = ssh.join("config");
+        std::fs::write(&target, b"old").unwrap();
+        let files = vec![DesktopConfigRestoreFile {
+            path: ".ssh/config".to_string(),
+            bytes: b"new".to_vec(),
+        }];
+
+        assert_eq!(restore_config_files(&root, &files).unwrap(), 1);
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        let backup_count = std::fs::read_dir(&ssh)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".config.koinote-backup-")
+            })
+            .count();
+        assert_eq!(backup_count, 1);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

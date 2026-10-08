@@ -58,9 +58,14 @@ export const IMAGE_QUOTA_EVENT = "koinote:image-quota-exceeded";
  */
 export const IMAGE_QUOTA_CODE = "image_quota_exceeded";
 export const STORAGE_QUOTA_CODE = "storage_quota_exceeded";
+export const CONFIG_SNAPSHOT_QUOTA_CODE = "config_snapshot_quota_exceeded";
 export const TEMPORARY_IMAGE_QUOTA_CODE = "temporary_image_quota_exceeded";
 
-const QUOTA_CODES = new Set<string>([IMAGE_QUOTA_CODE, STORAGE_QUOTA_CODE]);
+const QUOTA_CODES = new Set<string>([
+  IMAGE_QUOTA_CODE,
+  STORAGE_QUOTA_CODE,
+  CONFIG_SNAPSHOT_QUOTA_CODE,
+]);
 
 export type ImageQuotaDetail = {
   usedBytes: number;
@@ -68,6 +73,7 @@ export type ImageQuotaDetail = {
   /** 分项。旧版后端可能不返回，所以是可选的 */
   documentBytes?: number;
   imageBytes?: number;
+  configBytes?: number;
 };
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -94,6 +100,9 @@ async function toApiError(response: Response): Promise<ApiError> {
           : {}),
         ...(typeof data.imageBytes === "number"
           ? { imageBytes: data.imageBytes }
+          : {}),
+        ...(typeof data.configBytes === "number"
+          ? { configBytes: data.configBytes }
           : {}),
       };
     }
@@ -588,6 +597,131 @@ export function updateAgentSettings(
     method: "PUT",
     body: JSON.stringify({ providerMode }),
   });
+}
+
+export type AgentWorkspaceFile = {
+  fileId: number;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
+export type AgentWorkspaceFileContent = AgentWorkspaceFile & {
+  contentBase64: string;
+};
+
+export type AgentWorkspace = {
+  workspaceId: number;
+  name: string;
+  description: string;
+  revision: number;
+  updatedAt: string;
+  files: AgentWorkspaceFile[];
+};
+
+export const AGENT_WORKSPACE_QUERY_KEY = ["agent-workspace"] as const;
+
+export type AgentWorkspaceSummary = AgentWorkspace & {
+  fileCount: number;
+  sizeBytes: number;
+};
+
+export function getAgentWorkspaceSettings() {
+  return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings");
+}
+export type AgentWorkspaceStorage = { usedBytes: number; quotaBytes: number; bonusBytes: number };
+export function getAgentWorkspaceStorage() { return apiJson<{ storage: AgentWorkspaceStorage }>("/api/agent/workspace/storage"); }
+export type AgentWorkspaceCommit = { commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
+export function listAgentWorkspaceCommits(workspaceId: number) { return apiJson<{ commits: AgentWorkspaceCommit[]; nextBefore?: number | null }>(`/api/agent/workspaces/${workspaceId}/commits`); }
+export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number) { return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, { method: "POST", body: JSON.stringify({ expectedRevision }) }); }
+
+export function updateAgentWorkspaceSettings(enabled: boolean) {
+  return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function listAgentWorkspaces() {
+  return apiJson<{ workspaces: AgentWorkspaceSummary[] }>("/api/agent/workspaces");
+}
+
+export function createAgentWorkspace(input: { name: string; description?: string; locale?: string }) {
+  return apiJson<{ workspace: AgentWorkspace }>("/api/agent/workspaces", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAgentWorkspaceMetadata(
+  workspaceId: number,
+  input: { expectedRevision: number; name: string; description?: string },
+) {
+  return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/metadata`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAgentWorkspace(workspaceId: number, expectedRevision: number) {
+  return apiJson<{ success: boolean }>(`/api/agent/workspaces/${workspaceId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ expectedRevision }),
+  });
+}
+
+export function getAgentWorkspace(workspaceId?: number) {
+  return apiJson<{ workspace: AgentWorkspace | null }>(
+    workspaceId ? `/api/agent/workspaces/${workspaceId}` : "/api/agent/workspace",
+  );
+}
+
+export function getAgentWorkspaceFile(fileId: number) {
+  return apiJson<{ file: AgentWorkspaceFileContent }>(
+    `/api/agent/workspace/files/${fileId}`,
+  );
+}
+
+export function updateAgentWorkspace(input: {
+  expectedRevision: number;
+  files: Array<{ path: string; contentBase64: string; mimeType?: string }>;
+  allowSensitive?: boolean;
+  workspaceId?: number;
+}) {
+  const endpoint = input.workspaceId
+    ? `/api/agent/workspaces/${input.workspaceId}`
+    : "/api/agent/workspace";
+  const { workspaceId: _workspaceId, ...body } = input;
+  return apiJson<{ workspace: AgentWorkspace }>(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchAgentWorkspace(input: {
+  expectedRevision: number;
+  upsert?: Array<{ path: string; contentBase64: string; mimeType?: string }>;
+  delete?: string[];
+  allowSensitive?: boolean;
+  workspaceId?: number;
+}) {
+  const endpoint = input.workspaceId
+    ? `/api/agent/workspaces/${input.workspaceId}`
+    : "/api/agent/workspace";
+  const { workspaceId: _workspaceId, ...body } = input;
+  return apiJson<{ workspace: AgentWorkspace }>(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAgentWorkspacePrompt(workspaceId?: number) {
+  return apiJson<{ version: string; prompt: string }>(
+    workspaceId
+      ? `/api/agent/workspace/prompt?workspaceId=${workspaceId}`
+      : "/api/agent/workspace/prompt",
+  );
 }
 
 export function listLLMChannels() {
@@ -1645,7 +1779,7 @@ export type MCPToken = {
   tokenId: string;
   name: string;
   hint: string;
-  scope: "read" | "write" | "publish";
+  scope: "read" | "write" | "publish" | "agent_read" | "agent_write";
   expiresAt?: string | null;
   lastUsedAt?: string | null;
   createdAt?: string | null;
@@ -1658,7 +1792,7 @@ export function listMCPTokens() {
 
 export function createMCPToken(params: {
   name: string;
-  scope: "read" | "write" | "publish";
+  scope: "read" | "write" | "publish" | "agent_read" | "agent_write";
   expiresInDays?: number;
   neverExpires?: boolean;
 }) {
@@ -2082,12 +2216,14 @@ export async function fetchImageToBucket(url: string) {
  * 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
  */
 export type StorageUsage = {
-  /** 总量，等于 documentBytes + imageBytes */
+  /** 总量，等于 documentBytes + imageBytes + configBytes */
   usedBytes: number;
   /** 文档正文与标题（Postgres） */
   documentBytes: number;
   /** 图床对象（R2） */
   imageBytes: number;
+  /** 客户端加密配置快照 */
+  configBytes?: number;
   quotaBytes: number;
 };
 
@@ -2099,6 +2235,58 @@ export type StorageUsage = {
  */
 export function getStorageUsage() {
   return apiJson<StorageUsage>("/api/storage/usage");
+}
+
+export type ConfigSnapshotSummary = {
+  id: string;
+  name: string;
+  fileCount: number;
+  bytes: number;
+  envelopeVersion: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConfigSnapshot = ConfigSnapshotSummary & { envelope: string };
+
+export function getConfigSnapshots() {
+  return apiJson<{ snapshots: ConfigSnapshotSummary[] }>("/api/config-snapshots");
+}
+
+export function getConfigSnapshot(snapshotId: string) {
+  return apiJson<{ snapshot: ConfigSnapshot }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}`,
+  );
+}
+
+export type ConfigSnapshotInput = {
+  name: string;
+  fileCount: number;
+  envelopeVersion: number;
+  envelope: string;
+};
+
+export function createConfigSnapshot(input: ConfigSnapshotInput) {
+  return apiJson<{ snapshot: ConfigSnapshotSummary }>("/api/config-snapshots", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteConfigSnapshot(snapshotId: string, revision?: number) {
+  const query = revision === undefined ? "" : `?revision=${encodeURIComponent(String(revision))}`;
+  return apiJson<{ success: boolean }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}${query}`,
+    { method: "DELETE" },
+  );
+}
+
+export function updateConfigSnapshot(snapshotId: string, input: ConfigSnapshotInput & { revision: number }) {
+  return apiJson<{ snapshot: ConfigSnapshotSummary }>(
+    `/api/config-snapshots/${encodeURIComponent(snapshotId)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
 }
 
 export async function releaseUnusedImages(keys: string[]) {

@@ -13,6 +13,7 @@ import {
   type DesktopLocalModeStatus,
   unlockDesktopLocalMode,
 } from "../desktop/localMode";
+import { desktopFlavor } from "../desktop/runtime";
 import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 import { useI18n } from "../i18n";
@@ -46,18 +47,26 @@ export function DesktopLoginPage() {
       clearAuthTimeout();
       setLoading(null);
     };
-    const handleError = () => {
+    const handleError = (event: Event) => {
       clearAuthTimeout();
       setLoading(null);
-      setError(t.desktopAuth.failed);
+      const detail = (event as CustomEvent<string>).detail;
+      setError(
+        desktopFlavor() === "local" && detail
+          ? `${t.desktopAuth.failed} (${detail})`
+          : t.desktopAuth.failed,
+      );
     };
+    const handleStale = () => setError(t.desktopAuth.staleCallback);
     window.addEventListener("koinote:desktop-authenticated", handleAuthenticated);
     window.addEventListener("koinote:desktop-auth-error", handleError);
+    window.addEventListener("koinote:desktop-auth-stale", handleStale);
     return () => {
       window.removeEventListener("koinote:desktop-authenticated", handleAuthenticated);
       window.removeEventListener("koinote:desktop-auth-error", handleError);
+      window.removeEventListener("koinote:desktop-auth-stale", handleStale);
     };
-  }, [t.desktopAuth.failed]);
+  }, [t.desktopAuth.failed, t.desktopAuth.staleCallback]);
 
   useEffect(() => () => clearAuthTimeout(), []);
 
@@ -74,10 +83,14 @@ export function DesktopLoginPage() {
         setLoading((current) => (current === "account" ? null : current));
         setError(t.desktopAuth.timeout);
       }, DESKTOP_AUTH_TIMEOUT_MS);
-    } catch {
+    } catch (caught) {
       clearAuthTimeout();
       setLoading(null);
-      setError(t.desktopAuth.failed);
+      setError(
+        desktopFlavor() === "local"
+          ? `${t.desktopAuth.failed} (${caught instanceof Error ? caught.message : String(caught)})`
+          : t.desktopAuth.failed,
+      );
     }
   }
 

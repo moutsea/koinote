@@ -816,7 +816,7 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /syncPromise = performPreparedSync\(options\)\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
+  /syncPromise = [\s\S]*?performPreparedSync\(options\)[\s\S]*?\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
   "当前同步结束后必须立即补跑期间积累的新改动",
 );
 assert.match(
@@ -901,12 +901,12 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /snapshotInitializations\s*=\s*new Map<string, Promise<void>>[\s\S]*?ensureInitialSnapshot[\s\S]*?snapshotInitializations\.get\(account\)[\s\S]*?return existing[\s\S]*?snapshotInitializations\.set\(account, initialization\)/,
+  /snapshotInitializations\s*=\s*new Map<string, DesktopSnapshotInitialization>[\s\S]*?ensureInitialSnapshot[\s\S]*?snapshotInitializations\.get\(account\)[\s\S]*?return existing\.ready[\s\S]*?snapshotInitializations\.set\(account, initialization\)/,
   "首次快照初始化必须按账号去重，列表刷新不能反复触发同步",
 );
 assert.match(
   offlineStore,
-  /clearDesktopOfflineAccount[\s\S]*?await initialization\.catch[\s\S]*?clearTimeout\(syncTimer\)[\s\S]*?await activeSync\.catch[\s\S]*?DELETE FROM offline_documents[\s\S]*?snapshotInitializations\.delete\(account\)/,
+  /clearDesktopOfflineAccount[\s\S]*?await initialization\.ready\.catch[\s\S]*?clearTimeout\(syncTimer\)[\s\S]*?await activeSync\.catch[\s\S]*?DELETE FROM offline_documents[\s\S]*?snapshotInitializations\.delete\(account\)/,
   "登出清库前必须停止并等待后台同步，避免数据被异步写回",
 );
 assert.match(
@@ -998,18 +998,18 @@ assert.match(
 );
 assert.match(
   syncStatus,
-  /desktopSyncSummary\(\)[\s\S]*?navigator\.onLine[\s\S]*?syncDesktopNow\(\)/,
+  /desktopSyncSummary\(\)[\s\S]*?navigator\.onLine[\s\S]*?desktopInitializeSync\(\)/,
   "客户端启动后必须自动拉取远端并重试待同步修改",
 );
 assert.match(
   syncStatus,
-  /addEventListener\("focus", checkRemote\)[\s\S]*?visibilitychange[\s\S]*?setInterval\(checkRemote, REMOTE_UPDATE_INTERVAL_MS\)/,
-  "客户端前台必须定时检查，并在重新聚焦时立即检查远端",
+  /const checkRemote[\s\S]*?navigator\.onLine[\s\S]*?visibilityState[\s\S]*?desktopCheckRemoteUpdates\(\)[\s\S]*?REMOTE_UPDATE_INTERVAL_MS[\s\S]*?addEventListener\("focus", checkRemote\)[\s\S]*?addEventListener\("visibilitychange", checkRemote\)/,
+  "前台轮询与窗口恢复只检查云端更新，不能提前上传本地改动",
 );
 assert.match(
   syncStatus,
-  /syncDesktopNow\(\{ silent: true \}\)/,
-  "后台检查不能让同步状态每 30 秒闪烁",
+  /syncDesktopNow\(\{ onlyIfPending: true \}\)/,
+  "网络恢复时只重试待上传的改动",
 );
 assert.match(
   syncStatus,

@@ -29,6 +29,7 @@ import { useSession } from "../auth";
 import { AccountDeletionCard } from "../components/AccountDeletionCard";
 import { AgentCreditsCard } from "../components/AgentCreditsCard";
 import { AgentModelSettingsCard } from "../components/AgentModelSettingsCard";
+import { AgentWorkspaceCard } from "../components/AgentWorkspaceCard";
 import { Avatar } from "../components/Avatar";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { InvitationCard } from "../components/InvitationCard";
@@ -51,6 +52,7 @@ import { useI18n, type Locale } from "../i18n";
 type SettingsSection =
   | "general"
   | "membership"
+  | "agent"
   | "ai"
   | "invitations"
   | "media"
@@ -67,11 +69,18 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function SettingsPage() {
   const session = useSession();
+  const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
-    section?: SettingsSection | MediaPlatform;
+    section?: SettingsSection | "configs" | MediaPlatform;
     platform?: MediaPlatform;
   };
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (search.section === "configs") {
+      void navigate({ to: "/space", replace: true });
+    }
+  }, [navigate, search.section]);
 
   if (session.isLoading) {
     return <SettingsLoading />;
@@ -118,6 +127,12 @@ export function SettingsPage() {
       ) : (
         <LockKeyhole className="h-4 w-4" />
       ),
+    },
+    {
+      id: "agent",
+      label: t.agentWorkspace.title,
+      description: t.agentWorkspace.description,
+      icon: <ShieldCheck className="h-4 w-4" />,
     },
     {
       id: "media",
@@ -270,6 +285,14 @@ function SettingsSectionContent({
         <div id="agent-credits" className="scroll-mt-20">
           <AgentCreditsCard user={user} />
         </div>
+      </div>
+    );
+  }
+
+  if (section === "agent") {
+    return (
+      <div id="agent-workspace" className="scroll-mt-20">
+        <AgentWorkspaceCard user={user} />
       </div>
     );
   }

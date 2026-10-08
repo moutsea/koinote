@@ -155,14 +155,14 @@ for (const bytes of [0, 1, 1023, 1024, 1536, MiB, QUOTA, 1024 ** 4]) {
 
 // ---------- 分段进度条的宽度 ----------
 //
-// StorageCard 把条分成「文档」「图片」两段。两段之和绝不能超过容器宽度，
-// 否则第二段会把第一段挤出去或溢出圆角容器 —— 这是 flex 布局下的真实后果。
+// StorageCard 把条分成「文档」「配置」「图片」三段。三段之和绝不能超过容器宽度，
+// 否则后面的段会把前面的段挤出去或溢出圆角容器 —— 这是 flex 布局下的真实后果。
 //
 // 直接测 storage.ts 导出的 barSegments，不在这里抄一份算法 ——
 // 抄一份的话组件改了算法这些断言照旧全绿，等于没钉。
-function segments(docBytes, imgBytes, quota) {
-  const { documents, images } = barSegments(docBytes, imgBytes, quota);
-  return { docWidth: documents, imageWidth: images };
+function segments(docBytes, imgBytes, quota, configBytes = 0) {
+  const { documents, config, images } = barSegments(docBytes, imgBytes, quota, configBytes);
+  return { docWidth: documents, configWidth: config, imageWidth: images };
 }
 
 {
@@ -180,14 +180,21 @@ function segments(docBytes, imgBytes, quota) {
   ];
 
   for (const [name, doc, img] of cases) {
-    const { docWidth, imageWidth } = segments(doc, img, QUOTA);
-    const total = docWidth + imageWidth;
+    const { docWidth, configWidth, imageWidth } = segments(doc, img, QUOTA);
+    const total = docWidth + configWidth + imageWidth;
 
-    ok(`${name}: 两段之和不超过 100`, total <= 100 + 1e-9, total);
+    ok(`${name}: 三段之和不超过 100`, total <= 100 + 1e-9, total);
     ok(`${name}: 文档段非负`, docWidth >= 0, docWidth);
     ok(`${name}: 图片段非负`, imageWidth >= 0, imageWidth);
+    ok(`${name}: 配置段非负`, configWidth >= 0, configWidth);
     ok(`${name}: 文档段不超过 100`, docWidth <= 100, docWidth);
   }
+}
+
+{
+  const { docWidth, configWidth, imageWidth } = segments(100 * MiB, 100 * MiB, QUOTA, 50 * MiB);
+  eq("配置 50/500 → 10%", configWidth, 10);
+  eq("配置段不挤出图片段", docWidth + configWidth + imageWidth, 50);
 }
 
 // 文档已占满时，图片段必须是 0 —— 否则会溢出
@@ -197,7 +204,7 @@ function segments(docBytes, imgBytes, quota) {
   eq("文档占满时图片段为 0", imageWidth, 0);
 }
 
-// 两段的比例要正确反映各自占比，而不是被压缩
+// 各段的比例要正确反映各自占比，而不是被压缩
 {
   const { docWidth, imageWidth } = segments(100 * MiB, 200 * MiB, QUOTA);
   eq("文档 100/500 → 20%", docWidth, 20);

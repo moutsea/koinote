@@ -21,6 +21,7 @@ export interface Messages {
     mcpGuide: string;
     versionHistoryGuide: string;
     settings: string;
+    space: string;
     documents: string;
     trash: string;
     admin: string;
@@ -28,6 +29,108 @@ export interface Messages {
     logout: string;
     /** 账户菜单触发器的无障碍名。按钮上显示的是用户名，读屏需要知道它是个菜单 */
     userMenu: string;
+  };
+  space: {
+    subtitle: string;
+    configTitle: string;
+    repositoryTab: string;
+    cloneTitle: string;
+    cloneTagline: string;
+    cloneDescription: string;
+    cloneSecurity: string;
+    cloneCategories: string[];
+    syncButton: string;
+    syncDialogTitle: string;
+    syncDialogDescription: string;
+    syncNameLabel: string;
+    syncPasswordLabel: string;
+    syncConfirmLabel: string;
+    syncSelectLabel: string;
+    syncSelectAll: string;
+    syncClearAll: string;
+    syncSelected: string;
+    syncScan: string;
+    syncStatusScanning: string;
+    syncStatusUploading: string;
+    syncStatusCompleted: string;
+    syncReviewTitle: string;
+    syncReviewDescription: string;
+    syncReviewFilesLabel: string;
+    syncReviewSizeLabel: string;
+    syncReviewGroupsLabel: string;
+    syncReviewSelectAll: string;
+    syncReviewClearAll: string;
+    syncReviewFiles: string;
+    syncReviewSize: string;
+    syncReviewWarning: string;
+    syncReviewCancel: string;
+    syncReviewUpload: string;
+    syncUnlockPasswordLabel: string;
+    syncUnlockPasswordHint: string;
+    syncUnlockPasswordRequired: string;
+    syncUnlockTitle: string;
+    syncUnlockContinue: string;
+    syncUnlockWorking: string;
+    syncUnlockFailed: string;
+    syncSnapshotsHint: string;
+    syncManual: string;
+    syncCancel: string;
+    syncCloudOnly: string;
+    syncUpdateHint: string;
+    configSnapshots: {
+      defaultName: string;
+      passwordMismatch: string;
+      saved: string;
+      deleted: string;
+      restoreConfirm: string;
+      restoreCancelled: string;
+      restored: string;
+      downloaded: string;
+      categoryNoFiles: string;
+      deletedAll: string;
+      deletedFiles: string;
+      updated: string;
+      uploadCancelled: string;
+      categoryRequired: string;
+      selectedCategoriesEmpty: string;
+      savedTitle: string;
+      loading: string;
+      empty: string;
+      filesSummary: string;
+      collapse: string;
+      expandUnlock: string;
+      restoreAll: string;
+      downloadAll: string;
+      chooseFolder: string;
+      deleteSnapshotConfirm: string;
+      deleteSnapshotAria: string;
+      groupFiles: string;
+      restoreGroup: string;
+      updateFromLocal: string;
+      deleteGroupAria: string;
+      treeExpand: string;
+      treeCollapse: string;
+      treeView: string;
+      treeDelete: string;
+      treeSelect: string;
+      previewTitle: string;
+      previewClose: string;
+      emptyFile: string;
+      binaryFile: string;
+      truncatedFile: string;
+      errorLimit: string;
+      errorQuota: string;
+      errorConflict: string;
+      errorInvalid: string;
+      errorPassword: string;
+      errorPasswordShort: string;
+      errorFileCount: string;
+      errorNoFiles: string;
+      errorHome: string;
+      errorOutsideHome: string;
+      errorPath: string;
+      errorGeneric: string;
+    };
   };
   home: {
     badge: string;
@@ -331,6 +434,8 @@ export interface Messages {
     remaining: string;
     /** 分项标签：文档 */
     documents: string;
+    /** 分项标签：配置 */
+    config: string;
     /** 分项标签：图片 */
     images: string;
     /** 接近上限时的提示 */
@@ -407,6 +512,7 @@ export interface Messages {
     loadFailed: string;
     saveFailed: string;
   };
+  agentWorkspace: Record<string, string>;
   llmChannels: {
     title: string;
     description: string;
@@ -567,6 +673,8 @@ export interface Messages {
     readOnly: string;
     readWrite: string;
     publishOnly: string;
+    agentRead?: string;
+    agentWrite?: string;
     expiry: string;
     days: string;
     neverExpires: string;
@@ -1519,6 +1627,7 @@ export interface Messages {
     signIn: string;
     invalid: string;
     failed: string;
+    staleCallback: string;
     timeout: string;
   };
   desktopLocalMode: {

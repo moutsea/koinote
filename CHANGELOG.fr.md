@@ -6,6 +6,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Added
 
+- Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale.
 - L’export permet désormais d’activer ou désactiver WeChat, Zhihu et X séparément, ainsi que de configurer des plateformes HTTPS personnalisées avec un contrat JSON documenté ; la destination Juejin a été retirée.
 - Les documents peuvent conserver une couverture par défaut, issue de l’article ou générée par IA, avec un ratio personnalisé, et la réutiliser sur X, Feishu et WeChat. Le changement de document restaure la position de lecture précédente.
 - Ajout de la sélection multiple avec Shift/Ctrl, de la navigation au clavier et du déplacement ou de la suppression groupés dans l’arborescence.
@@ -13,10 +14,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Changed
 
+- Le client de bureau vérifie les mises à jour cloud au démarrage, à la reconnexion, au retour à la fenêtre et toutes les 30 secondes lorsque celle-ci est visible. Seules les modifications locales déclenchent des envois ; les vérifications sans changement ou en échec restent discrètes, et les fenêtres masquées ne lancent pas de vérifications périodiques.
+- La mise à jour d’un ancien instantané de configuration de développement/IA retire de cet instantané les fichiers Agent tels que `CLAUDE.md` et `.claude/skills/*`. Exportez ces fichiers ou envoyez-les vers un dépôt Agent avant la mise à jour ; les fichiers locaux restent inchangés.
 - La synchronisation des brouillons WeChat réutilise les images déjà envoyées selon le compte et leur contenu, réduisant l’attente lors des synchronisations répétées et des nouvelles tentatives, sans modifier la qualité ni les couvertures. Aucune mise à jour du client n’est nécessaire.
 
 ### Fixed
 
+- La synchronisation sur ordinateur conserve les déplacements de documents effectués pendant une actualisation cloud, relance les synchronisations initiales échouées à la reconnexion et exécute les demandes manuelles reçues pendant une synchronisation automatique.
 - La synchronisation vers les plateformes personnalisées omet désormais le champ de couverture facultatif lorsqu’aucune couverture n’est définie, évitant les erreurs de validation d’URL vide.
 - Les couvertures choisies dans les réglages des brouillons WeChat sont désormais enregistrées avec l’article. Les nouvelles tentatives réutilisent les images déjà envoyées, et le nettoyage du client conserve les images encore référencées par une couverture, le corps ou une version en conflit après synchronisation.
 - Correction des délais d’expiration des brouillons WeChat riches en images grâce aux envois parallèles limités, aux signaux de maintien de la passerelle et aux connexions relais qui expirent uniquement lorsqu’elles sont inactives. Les clients existants restent compatibles.

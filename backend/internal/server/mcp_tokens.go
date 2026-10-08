@@ -23,6 +23,7 @@ import (
 
 const (
 	mcpTokenPrefix       = "knt_mcp_"
+	agentTokenPrefix     = "knt_agent_"
 	mcpTokenMaxNameRunes = 80
 	mcpTokenMaxDays      = 365
 	defaultMCPTokenDays  = 90
@@ -58,6 +59,14 @@ type mcpTokenExpiryInput struct {
 
 func (p mcpPrincipal) canWrite() bool {
 	return p.Scope == "write"
+}
+
+func (p mcpPrincipal) isAgentWorkspace() bool {
+	return p.Scope == "agent_read" || p.Scope == "agent_write"
+}
+
+func (p mcpPrincipal) canAgentWorkspaceWrite() bool {
+	return p.Scope == "agent_write"
 }
 
 func (p mcpPrincipal) canPublish() bool {
@@ -139,9 +148,21 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Scope = strings.ToLower(strings.TrimSpace(body.Scope))
-	if body.Scope != "read" && body.Scope != "write" && body.Scope != "publish" {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_scope", "Token scope must be read, write, or publish")
+	if body.Scope != "read" && body.Scope != "write" && body.Scope != "publish" && body.Scope != "agent_read" && body.Scope != "agent_write" {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_token_scope", "Token scope is invalid")
 		return
+	}
+	if body.Scope == "agent_read" || body.Scope == "agent_write" {
+		enabled, err := a.agentWorkspaceEnabled(r.Context(), user.ID)
+		if err != nil {
+			log.Printf("mcp agent token enabled check: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		if !enabled {
+			httpx.ErrorCode(w, http.StatusForbidden, "agent_workspace_disabled", "Enable Skills/Agent cloud sync before creating an Agent token")
+			return
+		}
 	}
 	expiresAt, valid := mcpTokenExpiry(mcpTokenExpiryInput{
 		ExpiresInDays: body.ExpiresInDays,
@@ -157,7 +178,11 @@ func (a *App) mcpTokenCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	plainToken := mcpTokenPrefix + secret
+	tokenPrefix := mcpTokenPrefix
+	if body.Scope == "agent_read" || body.Scope == "agent_write" {
+		tokenPrefix = agentTokenPrefix
+	}
+	plainToken := tokenPrefix + secret
 	hash := sha256.Sum256([]byte(plainToken))
 	tokenID, err := randomUUID()
 	if err != nil {
@@ -373,7 +398,7 @@ func (a *App) authenticateMCPToken(r *http.Request) (mcpPrincipal, error) {
 		return mcpPrincipal{}, errMCPTokenUnauthorized
 	}
 	plainToken := strings.TrimSpace(authorization[len("Bearer "):])
-	if !strings.HasPrefix(plainToken, mcpTokenPrefix) || len(plainToken) > 128 {
+	if (!strings.HasPrefix(plainToken, mcpTokenPrefix) && !strings.HasPrefix(plainToken, agentTokenPrefix)) || len(plainToken) > 128 {
 		return mcpPrincipal{}, errMCPTokenUnauthorized
 	}
 	hash := sha256.Sum256([]byte(plainToken))

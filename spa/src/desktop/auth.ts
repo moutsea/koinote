@@ -132,6 +132,32 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
       continue;
     }
     if (callback.hostname !== "auth") continue;
+    let pending: PendingAuthorization | null;
+    try {
+      pending = await invoke<PendingAuthorization | null>(
+        "desktop_pending_auth_get",
+      );
+    } catch (error) {
+      window.dispatchEvent(
+        new CustomEvent("koinote:desktop-auth-error", {
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      continue;
+    }
+    if (!pending) {
+      window.dispatchEvent(
+        new CustomEvent("koinote:desktop-auth-error", {
+          detail: "desktop_auth_request_missing",
+        }),
+      );
+      continue;
+    }
+    if (pending.state !== callback.searchParams.get("state")) {
+      // 旧的授权窗口回调：不打断当前请求，只提示用户去完成最新那次授权。
+      window.dispatchEvent(new CustomEvent("koinote:desktop-auth-stale"));
+      continue;
+    }
     try {
       await exchangeDesktopCallback(callback);
       window.dispatchEvent(new CustomEvent("koinote:desktop-authenticated"));
@@ -294,7 +320,9 @@ async function exchangeDesktopCallback(callback: URL): Promise<void> {
     pending.state !== state ||
     Date.now() - pending.createdAt > PENDING_MAX_AGE_MS
   ) {
-    await clearPendingAuthorization();
+    if (pending && pending.state === state && Date.now() - pending.createdAt > PENDING_MAX_AGE_MS) {
+      await clearPendingAuthorization();
+    }
     throw new Error("Desktop authorization state is invalid or expired");
   }
 

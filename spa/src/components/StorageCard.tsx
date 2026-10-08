@@ -66,20 +66,20 @@ export function StorageCard() {
     );
   }
 
-  const { usedBytes, documentBytes, imageBytes, quotaBytes } = usage.data;
+  const { usedBytes, documentBytes, imageBytes, configBytes = 0, quotaBytes } = usage.data;
   const level = usageLevel(usedBytes, quotaBytes);
   const ratio = usageRatio(usedBytes, quotaBytes);
   const color = LEVEL_COLOR[level];
 
-  // 两段宽度的算法在 storage.ts，那里有断言钉住"两段之和 <= 100"
-  const segments = barSegments(documentBytes, imageBytes, quotaBytes);
+  // 文档、配置和图片分别展示；算法保证三段之和不超过 100%。
+  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes);
 
-  // 接近上限时两段都转朱砂：此时"哪部分占得多"已经不重要，
-  // 重要的是"满了"。正常状态下才用两色区分
+  // 接近上限时三段都转朱砂：此时"哪部分占得多"已经不重要，
+  // 重要的是"满了"。正常状态下才用多色区分
   const barColors =
     level === "normal"
-      ? { documents: "var(--ink-faint)", images: "var(--cinnabar)" }
-      : { documents: "var(--cinnabar)", images: "var(--cinnabar)" };
+      ? { documents: "var(--ink-faint)", config: "var(--ink-strong)", images: "var(--cinnabar)" }
+      : { documents: "var(--cinnabar)", config: "var(--cinnabar)", images: "var(--cinnabar)" };
 
   return (
     <PaperCard className="p-5">
@@ -109,13 +109,17 @@ export function StorageCard() {
         className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full"
         style={{ background: "var(--ink-wash-strong)" }}
       >
-        {/* 两段：文档 + 图片。分段而不是一整条，是为了让下面那两个色块图例
+        {/* 三段：文档、配置和图片。分段而不是一整条，是为了让下面的色块图例
             真的有对应物 —— 只有一整条的话，图例的颜色是没有出处的装饰。
             接近上限时整条转朱砂（下面 barColors 里处理），此时分段意义不大，
             但保持结构一致比多一个分支简单 */}
         <div
           className="h-full transition-[width] duration-500"
           style={{ width: `${segments.documents}%`, background: barColors.documents }}
+        />
+        <div
+          className="h-full transition-[width] duration-500"
+          style={{ width: `${segments.config}%`, background: barColors.config }}
         />
         <div
           className="h-full transition-[width] duration-500"
@@ -138,6 +142,17 @@ export function StorageCard() {
           <dt>{t.storage.documents}</dt>
           <dd style={{ color: "var(--ink-strong)" }}>
             {formatBytes(documentBytes, locale)}
+          </dd>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-sm"
+            style={{ background: barColors.config }}
+          />
+          <dt>{t.storage.config}</dt>
+          <dd style={{ color: "var(--ink-strong)" }}>
+            {formatBytes(configBytes, locale)}
           </dd>
         </div>
         <div className="flex items-center gap-1.5">

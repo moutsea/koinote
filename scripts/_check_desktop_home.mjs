@@ -44,6 +44,7 @@ const tauriConfig = fs.readFileSync("src-tauri/tauri.conf.json", "utf8");
 const tauriLocalConfig = fs.readFileSync("src-tauri/tauri.local.conf.json", "utf8");
 const desktopFrontendRunner = fs.readFileSync("scripts/desktop_frontend_runner.mjs", "utf8");
 const desktopRunner = fs.readFileSync("scripts/desktop_runner.mjs", "utf8");
+const tauriSource = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
 const tauriBuild = fs.readFileSync("src-tauri/build.rs", "utf8");
 
 includes("桌面运行时使用独立首页", main, 'import("./pages/DesktopHomePage")');
@@ -63,6 +64,7 @@ includes("桌面首页区分自动缓存与待上传图片", home, "pendingLocal
 includes("桌面首页显示远端图片缓存上限", home, "remoteCacheLimitBytes");
 includes("图片维护失败与文档同步状态分开提示", home, "imageCache.maintenanceIssue");
 includes("桌面首页允许清空远端图片缓存", home, "desktopClearRemoteImageCache");
+includes("恢复配置到 HOME 前经过原生确认", tauriSource, "Restore local configuration");
 includes("桌面图片缓存清理失败会显示反馈", home, "setImageCacheNotice(t.desktopSync.error)");
 includes("同步组件支持面板形态", sync, 'variant?: "header" | "panel"');
 matches(

@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version prevents stale local revisions during multi-image editing and ensures WeChat draft HTML uses uploaded image URLs. It also saves covers selected in WeChat draft settings with the article, reuses uploaded covers after failed saves, and preserves referenced offline images after sync."
+          notes="Koinote Desktop $version adds one-click Agent repository uploads and encrypted development/AI configuration snapshots, with file previews and sensitive-data filtering. Cloud changes refresh automatically while local edits upload after 20 seconds of inactivity. Updating an older configuration snapshot removes Agent files from that snapshot; export them or upload them to an Agent repository first. Local files remain unchanged."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,11 +239,12 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 微信公众号草稿设置中的封面会保存到文章，同步完成后不再恢复为未设置。
-          - 封面保存失败后重试、关闭重开设置时复用已上传图片，并在创建草稿前读取最新已保存封面。
-          - 修复关闭标签或接受远端更新时误删图片缓存的问题，保留封面、正文与冲突版本引用的离线图片。
-          - 未设置封面的文章也可同步到自定义平台。
-          - 修复多图片上传期间继续编辑导致的版本回退、图片地址恢复为本地占位符和误报冲突；微信公众号草稿会在图片同步完成后再生成正文。
+          - 「我的空间」新增 Skills/Agent 仓库和「开发/AI 配置云端同步」，分别管理 Agent 内容与私人配置。
+          - 客户端支持一键扫描、文件树勾选、内容预览和上传；自动排除可能包含敏感信息的文件，手动选回时需明确确认。也可通过 MCP 连接 Agent。
+          - 开发/AI 配置以加密快照保存；恢复到本机前列出目标路径、备份已有文件，并对高危路径再次确认。
+          - 本地未编辑时也会获取云端更新：启动、重连、切回窗口时检查，前台每 30 秒检查一次。上传仅由本地改动触发，停止输入 20 秒后执行。
+          - 后台无变化或检查失败时不打扰；保留未保存草稿和冲突双副本，修复文档移动与手动同步的并发问题。
+          - 更新旧版配置快照时，会从快照中移除 \`CLAUDE.md\`、\`.claude/skills/*\` 等 Agent 文件。请先导出或上传至 Agent 仓库；本机文件不受影响。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -257,11 +258,12 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Save covers selected in WeChat draft settings with the article so they remain available after sync.
-          - Reuse uploaded covers when retrying failed saves or reopening settings, and read the latest saved cover before creating a draft.
-          - Preserve offline images referenced by covers, article bodies, or conflict snapshots when closing tabs or accepting remote updates.
-          - Allow articles without a cover to sync to custom platforms.
-          - Prevent revision rollback, placeholder-image restoration, and false conflicts while editing during multi-image uploads; generate WeChat draft HTML after image synchronization completes.
+          - My Space now separates Skills/Agent repositories from private development/AI configuration snapshots.
+          - Scan, select, preview, and upload local files in the client. Potentially sensitive files are excluded by default and require explicit confirmation to include; MCP access remains available.
+          - Store encrypted configuration snapshots, preview restore paths, back up existing files, and confirm high-risk paths separately before restoring to this computer.
+          - Receive cloud changes even without local edits: check at startup, on reconnection and window focus, and every 30 seconds while visible. Local edits upload after 20 seconds of inactivity.
+          - Keep unchanged or failed background checks quiet, preserve unsaved drafts and conflict copies, and fix concurrent document moves and manual sync requests.
+          - Updating an older configuration snapshot removes Agent files such as \`CLAUDE.md\` and \`.claude/skills/*\` from that snapshot. Export them or upload them to an Agent repository first; local files remain unchanged.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

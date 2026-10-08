@@ -15,6 +15,24 @@ const statementBreakpoint = "--> statement-breakpoint"
 
 const migrationAdvisoryLockName = "koinote:schema-migrations"
 
+var legacyMigrationAliases = map[string]string{
+	"0061_agent_workspace.sql":                            "0049_agent_workspace.sql",
+	"0062_agent_workspace_tokens.sql":                     "0050_agent_workspace_tokens.sql",
+	"0063_agent_workspace_setup.sql":                      "0051_agent_workspace_setup.sql",
+	"0064_agent_workspace_readme_backfill.sql":            "0052_agent_workspace_readme_backfill.sql",
+	"0065_agent_workspace_human_readme.sql":               "0053_agent_workspace_human_readme.sql",
+	"0066_agent_workspace_description_cleanup.sql":        "0054_agent_workspace_description_cleanup.sql",
+	"0067_config_snapshots.sql":                           "0054_config_snapshots.sql",
+	"0068_config_snapshot_unbounded.sql":                  "0055_config_snapshot_unbounded.sql",
+	"0069_fix_agent_workspace_readme_leading_newline.sql": "0055_fix_agent_workspace_readme_leading_newline.sql",
+	"0070_agent_workspace_storage_quota.sql":              "0056_agent_workspace_storage_quota.sql",
+	"0071_config_snapshot_revision.sql":                   "0056_config_snapshot_revision.sql",
+	"0072_agent_workspace_commits.sql":                    "0057_agent_workspace_commits.sql",
+	"0073_agent_workspace_one_click_readme.sql":            "0058_agent_workspace_one_click_readme.sql",
+	"0074_agent_workspace_history_retention.sql":           "0059_agent_workspace_history_retention.sql",
+	"0075_agent_workspace_account_history.sql":             "0060_agent_workspace_account_history.sql",
+}
+
 // Apply 按文件名顺序执行 dir 下的 *.sql 迁移，已应用的跳过，记录在 schema_migrations 表。
 func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	conn, err := pool.Acquire(ctx)
@@ -49,12 +67,21 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	for _, file := range files {
 		version := filepath.Base(file)
 
+		versions := []string{version}
+		if legacy, ok := legacyMigrationAliases[version]; ok {
+			versions = append(versions, legacy)
+		}
 		var exists bool
-		if err := conn.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`,
-			version,
-		).Scan(&exists); err != nil {
-			return fmt.Errorf("check migration %s: %w", version, err)
+		for _, candidate := range versions {
+			if err := conn.QueryRow(ctx,
+				`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`,
+				candidate,
+			).Scan(&exists); err != nil {
+				return fmt.Errorf("check migration %s: %w", version, err)
+			}
+			if exists {
+				break
+			}
 		}
 		if exists {
 			continue

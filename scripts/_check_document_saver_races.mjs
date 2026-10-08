@@ -78,6 +78,12 @@ try {
   documents.set("stale-cache", { ...original });
   saver.seed("stale-cache", original);
   await act(async () => {
+    saver.queue("stale-cache", { title: original.title, content: original.content });
+    assert.equal(saver.isDirty("stale-cache"), false, "unchanged editor callbacks must not create pending writes");
+    assert.equal(await saver.flush("stale-cache"), true);
+  });
+  assert.equal(requests.length, 0, "flushing an unchanged document must not save or schedule synchronization");
+  await act(async () => {
     saver.queue("stale-cache", { content: "Saved body with image" });
     assert.equal(await saver.flush("stale-cache"), true);
   });

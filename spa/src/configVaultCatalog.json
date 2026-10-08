@@ -1,0 +1,62 @@
+[
+  {
+    "id": "git",
+    "files": [".gitconfig", "gitconfig", ".git-credentials", ".gitattributes", ".gitignore", ".gitignore_global", ".gitmessage"],
+    "directories": [".config/git"],
+    "completeDirectories": [".config/git"]
+  },
+  {
+    "id": "ssh",
+    "files": [],
+    "directories": [".ssh"],
+    "completeDirectories": [".ssh"]
+  },
+  {
+    "id": "shell",
+    "files": [".zshrc", ".zshenv", ".zlogin", ".zlogout", ".zprofile", ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases", ".bash_functions", ".profile", ".inputrc", ".dircolors", ".p10k.zsh", ".tmux.conf", ".wezterm.lua", ".screenrc"],
+    "directories": [".config/zsh", ".config/bash", ".config/fish", ".config/tmux", ".config/kitty", ".config/alacritty", ".config/wezterm", ".config/ghostty", ".config/nushell", ".config/powershell", ".oh-my-zsh/custom", "Documents/PowerShell", "Documents/WindowsPowerShell", "Library/Application Support/com.mitchellh.ghostty"],
+    "completeDirectories": [".config/zsh", ".config/bash", ".config/fish", ".config/tmux", ".config/kitty", ".config/wezterm", ".config/ghostty", ".config/nushell", ".oh-my-zsh/custom"]
+  },
+  {
+    "id": "coding-agents",
+    "files": [".claude.json", ".aider.conf.yml", ".aider.model.settings.yml", ".aider.model.metadata.json", "CLAUDE.md", "AGENTS.md"],
+    "directories": [".claude", ".codex", ".pi", ".opencode", ".aider", ".cline", ".roo", ".qwen", ".amazonq", ".codeium", ".copilot", ".agents", ".config/claude", ".config/codex", ".config/pi", ".config/opencode", ".config/aider", ".config/cline", ".config/roo", ".config/qwen", ".config/amazonq", ".config/copilot", "Library/Application Support/Codex", "AppData/Roaming/Codex"],
+    "completeDirectories": [".claude/agents", ".claude/commands", ".claude/skills", ".claude/hooks", ".claude/rules", ".codex/skills", ".codex/prompts", ".codex/rules", ".pi/agent/skills", ".pi/agent/prompts", ".pi/agent/extensions", ".pi/agent/themes", ".agents/skills", ".config/opencode/agent", ".config/opencode/agents", ".config/opencode/command", ".config/opencode/commands", ".config/opencode/skill", ".config/opencode/skills", ".config/opencode/plugin", ".config/opencode/plugins", ".config/opencode/tools", ".opencode/agent", ".opencode/agents", ".opencode/command", ".opencode/commands", ".opencode/skill", ".opencode/skills", ".opencode/plugin", ".opencode/plugins", ".opencode/tools", ".config/claude/skills", ".config/codex/skills", ".config/pi/agent/skills"]
+  },
+  {
+    "id": "personal-agents",
+    "files": [],
+    "directories": [".openclaw", ".hermes", ".moltbot", ".config/openclaw", ".config/hermes", ".config/moltbot"],
+    "completeDirectories": [".openclaw/skills", ".hermes/skills", ".moltbot/skills", ".config/openclaw/skills", ".config/hermes/skills", ".config/moltbot/skills"]
+  },
+  {
+    "id": "editor-ide",
+    "files": [".vimrc", ".gvimrc", ".emacs", ".ideavimrc", ".vscode/extensions.json"],
+    "directories": [".cursor", ".windsurf", ".continue", ".vscode", ".zed", ".vim", ".emacs.d", ".config/cursor", ".config/windsurf", ".config/continue", ".config/vscode", ".config/zed", ".config/nvim", ".config/Code/User", ".config/Code - Insiders/User", "Library/Application Support/Code/User", "Library/Application Support/Code - Insiders/User", "Library/Application Support/Cursor/User", "Library/Application Support/Windsurf/User", "Library/Application Support/Zed", "AppData/Roaming/Code/User", "AppData/Roaming/Code - Insiders/User", "AppData/Roaming/Cursor/User", "AppData/Roaming/Windsurf/User", "AppData/Roaming/Zed"],
+    "completeDirectories": [".config/nvim", ".vim/after", ".vim/autoload", ".vim/colors", ".vim/ftplugin", ".vim/plugin", ".vim/snippets", ".cursor/rules", ".windsurf/rules", ".continue/rules"]
+  },
+  {
+    "id": "cloud-devops",
+    "files": [".terraformrc"],
+    "directories": [".aws", ".azure", ".docker", ".fly", ".kube", ".netlify", ".terraform.d", ".vercel", ".config/aws", ".config/azure", ".config/docker", ".config/fly", ".config/gcloud", ".config/gh", ".config/kube", ".config/netlify", ".config/vercel"],
+    "completeDirectories": []
+  },
+  {
+    "id": "language-tools",
+    "files": [".npmrc", ".yarnrc", ".yarnrc.yml", ".pypirc", ".tool-versions", ".nvmrc", ".node-version", ".python-version", ".ruby-version", ".java-version", ".gemrc", ".condarc", ".bunfig.toml", "bunfig.toml"],
+    "directories": [".bundle", ".cargo", ".gradle", ".m2", ".pip", ".sdkman/etc", ".config/pip", ".config/uv", ".config/poetry", ".config/pypoetry", ".config/pnpm", ".config/yarn", ".config/bun", ".config/go", ".config/mise", ".config/conda", ".config/nuget", "Library/Application Support/pip", "Library/Application Support/pypoetry", "AppData/Roaming/pip", "AppData/Roaming/pypoetry"],
+    "completeDirectories": [".gradle/init.d"]
+  },
+  {
+    "id": "other-ai",
+    "files": ["GEMINI.md"],
+    "directories": [".gemini", ".mcp", ".config/gemini", ".config/mcp", "Library/Application Support/Claude", "AppData/Roaming/Claude"],
+    "completeDirectories": [".gemini/commands", ".gemini/skills"]
+  },
+  {
+    "id": "config",
+    "files": [".netrc", ".editorconfig"],
+    "directories": [".config"],
+    "completeDirectories": []
+  }
+]

@@ -8,6 +8,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
+- My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files.
 - Publishing now supports per-account switches for WeChat, Zhihu, and X, plus custom HTTPS API platforms with a documented JSON contract; the retired Juejin destination is no longer offered.
 - Documents can save default, article-image, or AI covers with custom ratios and reuse them when syncing to X, Feishu, and WeChat. Switching documents restores the previous reading position.
 - Added Shift/Ctrl multi-selection, keyboard navigation, and bulk move/delete to the document tree.
@@ -15,10 +16,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
+- Desktop sync checks cloud updates at startup, on reconnection and window focus, and every 30 seconds while visible. Only local changes trigger uploads; unchanged or failed background checks stay quiet, and hidden windows do not poll.
+- Updating an older development/AI configuration snapshot removes Agent files such as `CLAUDE.md` and `.claude/skills/*` from that snapshot. Export those files or upload them to an Agent repository before updating; local files remain unchanged.
 - WeChat draft sync reuses uploaded article images by account and image content, reducing repeat-sync and retry delays without changing image quality or covers. Existing clients need no update.
 
 ### Fixed
 
+- Desktop sync now preserves document moves made during a cloud refresh, retries failed startup syncs on reconnection, and honors manual sync requests received while an automatic sync is running.
 - Custom platform sync now omits the optional cover field when no cover is set, avoiding empty-URL validation failures.
 - Covers selected in WeChat draft settings now persist with the article. Failed saves reuse uploaded images on retry, and desktop cleanup preserves images still referenced by covers, article bodies, or conflict snapshots after sync.
 - Fixed WeChat draft timeouts for image-heavy articles with bounded parallel uploads, gateway heartbeats, and relay connections that expire only when idle. Existing clients remain compatible.
