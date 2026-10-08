@@ -7,6 +7,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 ### Added
 
 - Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale.
+- Les réglages de Mon espace affichent désormais l’utilisation et le quota des dépôts Agent, permettent de réessayer les vérifications échouées et acceptent les demandes manuelles d’extension.
 - L’export permet désormais d’activer ou désactiver WeChat, Zhihu et X séparément, ainsi que de configurer des plateformes HTTPS personnalisées avec un contrat JSON documenté ; la destination Juejin a été retirée.
 - Les documents peuvent conserver une couverture par défaut, issue de l’article ou générée par IA, avec un ratio personnalisé, et la réutiliser sur X, Feishu et WeChat. Le changement de document restaure la position de lecture précédente.
 - Ajout de la sélection multiple avec Shift/Ctrl, de la navigation au clavier et du déplacement ou de la suppression groupés dans l’arborescence.

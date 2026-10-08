@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version makes Agent repository tokens optional for client uploads. Repository tokens are managed separately in My Space settings; Copy for AI Agent guides you there only when a read/write token is needed. Token-limit errors explain the shared 20-token allowance and link to the other settings page. Updating an older configuration snapshot removes Agent files from that snapshot; export them or upload them to an Agent repository first. Local files remain unchanged."
+          notes="Koinote Desktop $version makes Agent repository tokens optional for client uploads. My Space settings now show Agent repository storage usage, provide retry feedback when storage cannot be loaded, and let users submit a manual expansion request. Repository tokens are managed separately in My Space settings; Copy for AI Agent guides you there only when a read/write token is needed. Token-limit errors explain the shared 20-token allowance and link to the other settings page. Updating an older configuration snapshot removes Agent files from that snapshot; export them or upload them to an Agent repository first. Local files remain unchanged."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -243,6 +243,7 @@ jobs:
           - 仓库 Token 在「我的空间 → 设置」中单独管理，与「AI 设置 → Agent 文档访问（MCP）」中的文档 Token 分开展示。
           - 点击 README 的「复制给 AI Agent」且缺少可用读写 Token 时，才引导前往创建，并保留返回原仓库的入口。
           - 达到 Token 上限时，明确说明两类 Token 共享 20 个有效名额，并提供另一类 Token 的管理入口。
+          - 「我的空间 → 设置」显示 Agent 仓库用量和配额，支持重试存储查询，并可提交人工扩容申请。
           - 更新旧版配置快照时，会从快照中移除 \`CLAUDE.md\`、\`.claude/skills/*\` 等 Agent 文件。请先导出或上传至 Agent 仓库；本机文件不受影响。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
@@ -261,6 +262,7 @@ jobs:
           - Manage repository tokens separately in My Space → Settings. AI Settings → Agent document access (MCP) lists only document tokens.
           - Copy for AI Agent checks for a usable read/write token on demand, guides you to create one if needed, and keeps a link back to the original repository.
           - Token-limit errors explain the shared allowance of 20 active tokens and link to the other token settings page.
+          - My Space → Settings shows Agent repository usage and quota, supports retrying failed storage checks, and accepts manual expansion requests.
           - Updating an older configuration snapshot removes Agent files such as \`CLAUDE.md\` and \`.claude/skills/*\` from that snapshot. Export them or upload them to an Agent repository first; local files remain unchanged.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.

@@ -20,6 +20,7 @@ const harness = {
   search: {},
   labels: null,
   failTokenList: false,
+  failStorage: false,
   createError: null,
   user: { membershipTier: "lifetime", isLocalMode: false },
   navigate: async (destination) => { navigations.push(destination); },
@@ -42,7 +43,11 @@ const harness = {
     }
     if (method === "revealMCPToken") return { secret: "test-agent-secret" };
     if (method === "getAgentWorkspacePrompt") return { prompt: "Instructions for repository 7" };
-    if (method === "getAgentWorkspaceStorage") return { storage: { usedBytes: 0, quotaBytes: 100000000 } };
+    if (method === "getAgentWorkspaceStorage") {
+      if (harness.failStorage) throw new Error("storage unavailable");
+      return { storage: { usedBytes: 0, quotaBytes: 100000000 } };
+    }
+    if (method === "submitFeedback") return { feedback: { id: 1, category: args[0].category, message: args[0].message, pagePath: args[0].pagePath, client: "web", createdAt: "2026-10-08T00:00:00Z" } };
     if (method === "listAgentWorkspaces") return { workspaces: [] };
     if (method === "listAgentWorkspaceCommits") return { commits: [] };
     if (method === "getAgentWorkspace") return {
@@ -72,7 +77,7 @@ const bundle = await build({
       "getAgentWorkspaceSettings", "updateAgentWorkspaceSettings", "getAgentWorkspace", "getAgentWorkspaceFile",
       "getAgentWorkspacePrompt", "getAgentWorkspaceStorage", "listAgentWorkspaceCommits", "patchAgentWorkspace",
       "restoreAgentWorkspaceCommit", "updateAgentWorkspace", "updateAgentWorkspaceMetadata",
-      "createAgentWorkspace", "deleteAgentWorkspace", "listAgentWorkspaces",
+      "createAgentWorkspace", "deleteAgentWorkspace", "listAgentWorkspaces", "submitFeedback",
     ];
     const adapters = {
       "../api": `export class ApiError extends Error {
@@ -133,6 +138,16 @@ try {
   await click(zh.agentWorkspace.enable);
   assert.deepEqual(navigations.at(-1), { to: "/space", search: { tab: "agent" } });
   assert.equal(calls.filter((call) => call.method === "createMCPToken").length, 0, "enabling repositories does not create or require a token");
+  assert.ok(document.body.textContent.includes(zh.agentWorkspace.storageSettingsTitle), "repository settings show storage controls");
+  assert.ok(document.body.textContent.includes("0.0 KiB / 95.4 MiB"), "repository settings show storage usage and quota");
+  assert.equal([...document.querySelectorAll("a")].some((link) => link.textContent?.includes(zh.agentWorkspace.storageExpand)), false, "storage settings do not link back to themselves");
+  await click(zh.agentWorkspace.storageRequest);
+  assert.ok(document.querySelector("textarea"), "storage settings open an expansion request form");
+  harness.failStorage = true;
+  await mount(AgentWorkspaceSettingsPage);
+  assert.ok(document.querySelector('[role="alert"]')?.textContent.includes(zh.storage.loadFailed), "storage failures are visible to the user");
+  assert.equal(document.body.textContent.includes("0.0 KiB / 95.4 MiB"), false, "storage failures do not display fake usage");
+  harness.failStorage = false;
 
   calls.length = 0;
   await mount(AgentWorkspaceCard, { user: harness.user });

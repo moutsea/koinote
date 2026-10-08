@@ -9,6 +9,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 ### Added
 
 - My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files.
+- My Space settings now show Agent repository storage usage and quota, retry failed storage checks, and accept manual expansion requests.
 - Publishing now supports per-account switches for WeChat, Zhihu, and X, plus custom HTTPS API platforms with a documented JSON contract; the retired Juejin destination is no longer offered.
 - Documents can save default, article-image, or AI covers with custom ratios and reuse them when syncing to X, Feishu, and WeChat. Switching documents restores the previous reading position.
 - Added Shift/Ctrl multi-selection, keyboard navigation, and bulk move/delete to the document tree.

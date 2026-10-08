@@ -66,7 +66,7 @@ export function AgentWorkspaceRepositoriesPage({ embedded = false }: { embedded?
       </header>
     </>}
     {embedded && enabled && <div className="flex justify-end"><div className="flex gap-2"><Link to="/space/settings" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}><Settings2 className="h-3.5 w-3.5" />{t.agentWorkspace.settingsTab}</Link>{enabled && <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-opacity hover:opacity-90" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}><Plus className="h-3.5 w-3.5" />{t.agentWorkspace.newRepository}</button>}</div></div>}
-    {enabled && <div className="mt-6"><AgentWorkspaceStorageCard storage={storage.data?.storage} /></div>}
+    {enabled && <div className="mt-6"><AgentWorkspaceStorageCard storage={storage.data?.storage} loading={storage.isFetching} error={storage.isError} onRetry={() => void storage.refetch()} /></div>}
     {!enabled ? <EnablePanel /> : <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_16rem]">
       <main className="min-w-0">
         {showCreate ? <CreateRepositoryView name={name} description={description} t={t} pending={create.isPending} error={create.isError} onName={setName} onDescription={setDescription} onSubmit={() => create.mutate()} onCancel={closeCreate} /> : <>
