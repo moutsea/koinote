@@ -6,6 +6,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Added
 
+- Le MCP des dépôts Skills/Agent permet de consulter et restaurer l’historique, de vérifier le stockage et d’envoyer des fichiers jusqu’à 5 MiB et de les lire par blocs, avec une connexion distincte du MCP des documents.
 - Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale.
 - Les réglages de Mon espace permettent d’allouer directement du stockage personnel aux dépôts Agent, avec effet immédiat, et de récupérer la capacité inutilisée. Le détail du stockage du compte affiche cette allocation, tout en protégeant les fichiers existants et leur historique.
 - L’export permet désormais d’activer ou désactiver WeChat, Zhihu et X séparément, ainsi que de configurer des plateformes HTTPS personnalisées avec un contrat JSON documenté ; la destination Juejin a été retirée.
@@ -22,6 +23,8 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- La restauration web demande une confirmation pour les contenus sensibles et affiche les erreurs, y compris les conflits de révision. Les mises à jour MCP consignent le dépôt et les révisions ; OpenClaw enregistre les références d’environnement avant de tester la connexion.
+- La restauration refuse les contenus sensibles avec un jeton Agent ; le remplacement MCP complet exige `replaceAll`, les requêtes trop volumineuses renvoient 413 et les configurations Claude Code/OpenClaw conservent les références aux variables d’environnement.
 - Lorsque la limite de jetons est atteinte, précisez que les documents MCP et les dépôts Agent partagent 20 jetons actifs et proposez un lien vers la gestion de l’autre type de jeton.
 - La synchronisation sur ordinateur conserve les déplacements de documents effectués pendant une actualisation cloud, relance les synchronisations initiales échouées à la reconnexion et exécute les demandes manuelles reçues pendant une synchronisation automatique.
 - La synchronisation vers les plateformes personnalisées omet désormais le champ de couverture facultatif lorsqu’aucune couverture n’est définie, évitant les erreurs de validation d’URL vide.

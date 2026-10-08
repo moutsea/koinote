@@ -24,6 +24,7 @@ type mcpUpdateAgentWorkspaceInput struct {
 	Upsert           []mcpAgentWorkspaceFileInput `json:"upsert,omitempty" jsonschema:"Files that are new or changed. Only these files are uploaded."`
 	Delete           []string                     `json:"delete,omitempty" jsonschema:"Relative paths to delete."`
 	Files            []mcpAgentWorkspaceFileInput `json:"files,omitempty" jsonschema:"Legacy complete replacement file set. Prefer upsert and delete for incremental updates."`
+	ReplaceAll       bool                         `json:"replaceAll,omitempty" jsonschema:"Explicitly allow files to replace the entire repository in ONE request. Never split a replacement into batches. Cannot be combined with upsert or delete."`
 }
 
 type mcpAgentWorkspaceSelectionInput struct {
@@ -50,43 +51,19 @@ type mcpAgentWorkspaceListOutput struct {
 
 type mcpReadAgentWorkspaceFileInput struct {
 	FileID int64 `json:"fileId" jsonschema:"File ID returned by get_agent_workspace."`
-}
-
-func (a *App) addAgentWorkspaceMCPTools(server *mcp.Server, principal mcpPrincipal) {
-	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false)}
-	mcp.AddTool(server, &mcp.Tool{Name: "list_agent_workspaces", Title: "List Agent repositories", Description: "List the authenticated member's private Skills/Agent repositories.", Annotations: readOnly}, a.mcpListAgentWorkspaces)
-	mcp.AddTool(server, &mcp.Tool{
-		Name: "get_agent_workspace", Title: "Read agent workspace",
-		Description: "Read the authenticated member's private Agent settings workspace metadata and file list.",
-		Annotations: readOnly,
-	}, a.mcpGetAgentWorkspace)
-	mcp.AddTool(server, &mcp.Tool{
-		Name: "read_agent_workspace_file", Title: "Read agent workspace file",
-		Description: "Read one original file from the authenticated member's private Agent settings workspace as base64.",
-		Annotations: readOnly,
-	}, a.mcpReadAgentWorkspaceFile)
-	mcp.AddTool(server, &mcp.Tool{
-		Name: "get_agent_workspace_prompt", Title: "Get agent workspace instructions",
-		Description: "Return instructions for safely reading and updating the authenticated member's private Agent settings workspace.",
-		Annotations: readOnly,
-	}, a.mcpGetAgentWorkspacePrompt)
-	if principal.canAgentWorkspaceWrite() {
-		mcp.AddTool(server, &mcp.Tool{Name: "create_agent_workspace", Title: "Create Agent repository", Description: "Create a private Skills/Agent repository; upload files separately.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)}}, a.mcpCreateAgentWorkspace)
-		mcp.AddTool(server, &mcp.Tool{Name: "manage_agent_workspace", Title: "Manage Agent repository", Description: "Rename or permanently delete a private Skills/Agent repository using its expected revision.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)}}, a.mcpManageAgentWorkspace)
-		mcp.AddTool(server, &mcp.Tool{
-			Name: "update_agent_workspace", Title: "Update agent workspace",
-			Description: "Incrementally update the authenticated member's private Agent settings workspace with changed files in upsert and paths in delete. Check the expected revision and redact sensitive data first.",
-			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
-		}, a.mcpUpdateAgentWorkspace)
-	}
+	mcpAgentWorkspaceReadRange
 }
 
 func (a *App) mcpListAgentWorkspaces(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, mcpAgentWorkspaceListOutput, error) {
 	principal := mcpPrincipalFromContext(ctx)
+	started := time.Now()
+	result := "error"
+	defer func() { a.auditMCPCall(principal, "list_agent_workspaces", "", result, started) }()
 	workspaces, err := a.listAgentWorkspaces(ctx, principal.User.ID)
 	if err != nil {
 		return nil, mcpAgentWorkspaceListOutput{}, mcpInternalError("list agent workspaces", err)
 	}
+	result = "success"
 	return nil, mcpAgentWorkspaceListOutput{Workspaces: workspaces}, nil
 }
 
@@ -111,7 +88,7 @@ func (a *App) mcpManageAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 	started := time.Now()
 	result := "error"
 	defer func() {
-		a.auditMCPCall(principal, "manage_agent_workspace", strconv.FormatInt(input.WorkspaceID, 10), result, started)
+		a.auditMCPCallWithWorkspace(principal, "manage_agent_workspace", "", result, started, mcpWorkspaceAudit{WorkspaceID: input.WorkspaceID, ExpectedRevision: &input.ExpectedRevision})
 	}()
 	if err := a.allowMCPAgentWorkspaceWrite(principal); err != nil {
 		return nil, agentWorkspaceView{}, err
@@ -147,25 +124,33 @@ func (a *App) mcpGetAgentWorkspace(ctx context.Context, _ *mcp.CallToolRequest, 
 	return nil, view, nil
 }
 
-func (a *App) mcpReadAgentWorkspaceFile(ctx context.Context, _ *mcp.CallToolRequest, input mcpReadAgentWorkspaceFileInput) (*mcp.CallToolResult, agentWorkspaceFileContentView, error) {
+func (a *App) mcpReadAgentWorkspaceFile(ctx context.Context, _ *mcp.CallToolRequest, input mcpReadAgentWorkspaceFileInput) (*mcp.CallToolResult, mcpAgentWorkspaceFileChunk, error) {
 	principal := mcpPrincipalFromContext(ctx)
 	started := time.Now()
 	result := "error"
 	defer func() { a.auditMCPCall(principal, "read_agent_workspace_file", "", result, started) }()
-	var view agentWorkspaceFileContentView
+	limit, err := input.mcpAgentWorkspaceReadRange.validate()
+	if err != nil {
+		return nil, mcpAgentWorkspaceFileChunk{}, err
+	}
+	var view mcpAgentWorkspaceFileChunk
 	var content []byte
-	err := a.db.QueryRow(ctx, `
-		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, f.content
+	err = a.db.QueryRow(ctx, `
+		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, substring(f.content FROM $3::int FOR $4::int)
 		FROM agent_workspace_files f
 		JOIN agent_workspaces w ON w.id = f.workspace_id
 		WHERE f.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL
-	`, input.FileID, principal.User.ID).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content)
+	`, input.FileID, principal.User.ID, input.Offset+1, limit).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, agentWorkspaceFileContentView{}, errors.New("agent workspace file not found")
+			return nil, mcpAgentWorkspaceFileChunk{}, errors.New("agent workspace file not found")
 		}
-		return nil, agentWorkspaceFileContentView{}, mcpInternalError("read agent workspace file", err)
+		return nil, mcpAgentWorkspaceFileChunk{}, mcpInternalError("read agent workspace file", err)
 	}
+	if err := input.mcpAgentWorkspaceReadRange.checkFile(view.SizeBytes, view.SHA256); err != nil {
+		return nil, mcpAgentWorkspaceFileChunk{}, err
+	}
+	view.mcpAgentWorkspaceChunkRange = newMCPAgentWorkspaceChunkRange(input.Offset, int64(len(content)), view.SizeBytes)
 	view.ContentBase64 = encodeAgentWorkspaceContent(content)
 	result = "success"
 	return nil, view, nil
@@ -175,17 +160,27 @@ func (a *App) mcpUpdateAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 	principal := mcpPrincipalFromContext(ctx)
 	started := time.Now()
 	result := "error"
-	defer func() { a.auditMCPCall(principal, "update_agent_workspace", "", result, started) }()
+	target := mcpWorkspaceAudit{WorkspaceID: input.WorkspaceID, ExpectedRevision: &input.ExpectedRevision}
+	defer func() { a.auditMCPCallWithWorkspace(principal, "update_agent_workspace", "", result, started, target) }()
 	if err := a.allowMCPAgentWorkspaceWrite(principal); err != nil {
 		return nil, agentWorkspaceView{}, err
 	}
+	if target.WorkspaceID == 0 {
+		// Legacy callers may omit the ID for a single repository. Resolve it for
+		// failed attempts too; a successful write records its authoritative ID below.
+		if id, err := resolveAgentWorkspaceID(ctx, a.db, principal.User.ID, 0); err == nil {
+			target.WorkspaceID = id
+		}
+	}
 	upsert := input.Upsert
 	if input.Upsert != nil || input.Delete != nil {
-		if len(input.Files) > 0 {
-			return nil, agentWorkspaceView{}, errors.New("files cannot be combined with upsert or delete")
+		if input.Files != nil || input.ReplaceAll {
+			return nil, agentWorkspaceView{}, errors.New("files and replaceAll cannot be combined with upsert or delete")
 		}
-	} else if len(input.Files) > 0 {
+	} else if input.ReplaceAll {
 		upsert = input.Files
+	} else {
+		return nil, agentWorkspaceView{}, errors.New("use upsert/delete for incremental batches; complete replacement requires files and replaceAll: true in a single request")
 	}
 	patchMode := input.Upsert != nil || input.Delete != nil
 	if patchMode && len(upsert) == 0 && len(input.Delete) == 0 {
@@ -215,6 +210,8 @@ func (a *App) mcpUpdateAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 			return nil, agentWorkspaceView{}, mapMCPAgentWorkspaceError(patchErr)
 		}
 		result = "success"
+		target.WorkspaceID = view.WorkspaceID
+		target.ResultingRevision = &view.Revision
 		return nil, view, nil
 	}
 	validated, err := validateAgentWorkspaceFiles(files)
@@ -229,10 +226,15 @@ func (a *App) mcpUpdateAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 		return nil, agentWorkspaceView{}, mapMCPAgentWorkspaceError(err)
 	}
 	result = "success"
+	target.WorkspaceID = view.WorkspaceID
+	target.ResultingRevision = &view.Revision
 	return nil, view, nil
 }
 
 func (a *App) allowMCPAgentWorkspaceWrite(principal mcpPrincipal) error {
+	if !principal.canAgentWorkspaceWrite() {
+		return errors.New("an agent_write repository token is required")
+	}
 	if !a.rateLimit().allow("agent-workspace-write:"+strconv.Itoa(principal.User.ID), agentWorkspaceWriteLimit, time.Minute) {
 		return errors.New("too many workspace updates; try again later")
 	}
@@ -240,7 +242,10 @@ func (a *App) allowMCPAgentWorkspaceWrite(principal mcpPrincipal) error {
 }
 
 func mapMCPAgentWorkspaceError(err error) error {
+	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.As(err, &sensitive), errors.Is(err, errAgentWorkspaceRevisionNotFound), errors.Is(err, errAgentWorkspaceFileNotFound), errors.Is(err, errAgentWorkspaceFileRange):
+		return err
 	case errors.Is(err, errAgentWorkspaceNotFound):
 		return errors.New("agent workspace not found")
 	case errors.Is(err, errAgentWorkspaceSelection):

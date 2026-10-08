@@ -230,11 +230,18 @@ url = "https://koinote.app/mcp"
 bearer_token_env_var = "KOINOTE_MCP_TOKEN"
 ```
 
-Claude Code：
+Claude Code（写入项目的 `.mcp.json`；在启动客户端的环境中设置上面的令牌变量）：
 
-```bash
-claude mcp add --transport http koinote https://koinote.app/mcp \
-  --header "Authorization: Bearer knt_mcp_..."
+```json
+{
+  "mcpServers": {
+    "koinote": {
+      "type": "http",
+      "url": "https://koinote.app/mcp",
+      "headers": { "Authorization": "Bearer ${KOINOTE_MCP_TOKEN}" }
+    }
+  }
+}
 ```
 
 OpenCode（写入全局或项目级 `opencode.json`；配置格式见其
@@ -261,11 +268,15 @@ OpenClaw：
 ```bash
 openclaw mcp add koinote \
   --url https://koinote.app/mcp \
-  --transport streamable-http \
-  --header "Authorization=Bearer ${KOINOTE_MCP_TOKEN}"
+  --transport streamable-http --no-probe \
+  --header 'Authorization=Bearer ${KOINOTE_MCP_TOKEN}'
 
 openclaw mcp doctor koinote --probe
 ```
+
+使用 `--no-probe` 先保存环境变量引用，再用 `doctor --probe` 从已保存的配置读取令牌并检查连接。已在 OpenClaw 2026.6.10 上连接本地 Koinote MCP 验证；配置文件未保存令牌明文。
+
+OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a literal sensitive value`；若配置文件仍保存上述环境变量引用，这是对运行时展开值的误报，可忽略。
 
 其他客户端无需 Koinote 专用适配：只要支持远程 Streamable HTTP MCP，并允许给请求设置
 `Authorization: Bearer <PAT>`，即可使用相同端点和令牌接入。
@@ -284,6 +295,27 @@ openclaw mcp doctor koinote --probe
 微信公众号 GEO 摘要也可通过 MCP 管理：`get_wechat_geo_summary` 用于读取已保存摘要和检查是否过期，读写或仅发布令牌可以调用
 `generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。使用内置模型生成会按实际用量消耗 credits，BYOK 渠道不扣费。
 推送草稿时需显式传入 `includeGeo: true`，且摘要必须已启用并与当前文档匹配；默认不会把隐藏语料带入草稿。
+
+## Skills/Agent 仓库访问（MCP）
+
+在「我的空间 → 设置 → Agent 仓库访问 · API / MCP」创建仓库 Token，使用 **仓库 MCP 连接**标签中的配置。
+连接地址同样是 `https://koinote.app/mcp`，服务名使用 `koinote-agent`，环境变量使用 `KOINOTE_AGENT_TOKEN`，
+可与文档 MCP 同时连接。仓库 Token 仅访问当前账号自己的 Skills/Agent 仓库；文档 Token 不能用于仓库。
+
+| 权限 | 工具 |
+| --- | --- |
+| 只读或读写 | `list_agent_workspaces`、`get_agent_workspace`、`read_agent_workspace_file`、`get_agent_workspace_prompt` |
+| 只读或读写 | `get_agent_workspace_storage`、`list_agent_workspace_commits`、`get_agent_workspace_commit`、`read_agent_workspace_commit_file` |
+| 读写 | `create_agent_workspace`、`manage_agent_workspace`、`update_agent_workspace`、`restore_agent_workspace_commit` |
+
+- `agent_read` 用于读取，`agent_write` 可创建、重命名、删除仓库，以及增删文件和恢复历史。Token 授权当前账号的全部私有仓库，操作时应指定 `workspaceId`。
+- 文件保持原始字节，读写使用 `contentBase64`。更新前先读取当前 `revision`，用 `expectedRevision` 校验；冲突时重新读取并确认后再继续。
+- 历史每页 25 条，用 `nextBefore` 翻页；`null` 表示结束。恢复会替换当前全部文件并创建新 revision，保留当前仓库名与描述。只恢复用户指定的版本，已按容量策略清理的历史不可恢复。
+- 单文件上限 5 MiB，MCP JSON 请求上限 8 MiB（包含 base64），超限返回 HTTP 413。只拆分 `upsert`/`delete` 增量批次，每批使用上次返回的新 revision。`files` 必须显式指定 `replaceAll: true` 并在一次请求中提交完整文件集，不能拆批。
+- 当前和历史文件按字节分块读取，每块最多 8 KiB。若 `hasMore` 为 true，下一次传入 `nextOffset` 和首次返回的 `sha256`（作为 `expectedSHA256`）。逐块解码 base64、拼接字节后再解码文本，并校验完整文件哈希。
+- 恢复历史也会检查敏感信息，Agent Token 不能绕过；审计保留仓库 ID、目标历史版本、预期和最终版本。
+- 用量查询包括仓库文件及保留的历史，不返回个人文档用量，也不允许 Agent 调整个人存储分配。
+- 所有请求重新校验会员、功能启用状态、Token 有效期和撤销状态；写入复用网页端的配额、版本冲突、敏感信息检查和审计。
 
 ## AI 优化
 

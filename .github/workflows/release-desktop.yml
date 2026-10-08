@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version lets you allocate extra Agent repository capacity directly from personal storage in My Space settings. Changes take effect immediately, and unused capacity can be returned to personal storage. Account storage details show the reserved allocation; existing repository files and history are protected when reducing capacity. The included repository quota is preserved. Storage accounting remains consistent during concurrent changes."
+          notes="Koinote Desktop $version adds a dedicated MCP connection for Skills/Agent repositories, including file management, storage usage, history browsing, and version restore. Repository and document connections can be used together. This release adds safe incremental uploads, chunked file reads, explicit confirmation for sensitive history restores in the UI, clearer restore errors, and repository revision audit details. Client configuration keeps tokens as environment variable references."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,14 +239,11 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 启用 Skills/Agent 仓库后即可创建仓库和一键上传本机文件，无需先创建 Token。
-          - 仓库 Token 在「我的空间 → 设置」中单独管理，与「AI 设置 → Agent 文档访问（MCP）」中的文档 Token 分开展示。
-          - 点击 README 的「复制给 AI Agent」且缺少可用读写 Token 时，才引导前往创建，并保留返回原仓库的入口。
-          - 达到 Token 上限时，明确说明两类 Token 共享 20 个有效名额，并提供另一类 Token 的管理入口。
-          - 「我的空间 → 设置」可从个人存储直接分配 Agent 仓库额外容量，立即生效，也可收回未使用的额度。
-          - 账户存储明细显示仓库已分配额度；减少容量时保护现有文件和历史版本，保留仓库原有基础配额。
-          - 修复并发调整容量时存储用量与可分配额度可能不一致的问题。
-          - 更新旧版配置快照时，会从快照中移除 \`CLAUDE.md\`、\`.claude/skills/*\` 等 Agent 文件。请先导出或上传至 Agent 仓库；本机文件不受影响。
+          - Skills/Agent 仓库提供独立的 MCP 连接，Agent 可管理文件、查看存储用量、浏览历史并恢复版本，与文档 MCP 同时使用。
+          - 支持最大 5 MiB 文件上传与分块读取；增量上传可分批进行，整体替换需要显式指定，避免误删其他文件。
+          - 恢复历史版本时重新检查敏感内容；网页端提供明确确认，并显示恢复失败和版本冲突提示，Agent Token 无法绕过敏感检查。
+          - MCP 活动记录补全仓库 ID 和修改前后的版本，便于追溯文件更新与历史恢复。
+          - Claude Code 和 OpenClaw 配置保留环境变量引用，避免令牌明文写入配置；OpenClaw 先保存配置再探测连接。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -260,14 +257,11 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Enable Skills/Agent repositories and create repositories or upload local files without creating a token first.
-          - Manage repository tokens separately in My Space → Settings. AI Settings → Agent document access (MCP) lists only document tokens.
-          - Copy for AI Agent checks for a usable read/write token on demand, guides you to create one if needed, and keeps a link back to the original repository.
-          - Token-limit errors explain the shared allowance of 20 active tokens and link to the other token settings page.
-          - Allocate extra Agent repository capacity directly from personal storage in My Space → Settings, with immediate changes and the ability to reclaim unused capacity.
-          - Account storage details show the reserved allocation. Reducing capacity protects existing files and history, and the included repository quota is preserved.
-          - Storage usage and available capacity remain consistent during concurrent allocation changes.
-          - Updating an older configuration snapshot removes Agent files such as \`CLAUDE.md\` and \`.claude/skills/*\` from that snapshot. Export them or upload them to an Agent repository first; local files remain unchanged.
+          - Connect agents to Skills/Agent repositories through a dedicated MCP connection to manage files, check storage usage, browse history, and restore versions alongside document MCP access.
+          - Upload files up to 5 MiB and read them in chunks. Incremental uploads support batching, while full replacement requires an explicit flag to prevent accidental file loss.
+          - Restoring history checks sensitive content again. The web UI asks for confirmation and displays restore failures and revision conflicts; Agent tokens cannot bypass sensitive-content checks.
+          - MCP activity records include repository IDs and the revisions before and after file updates and history restores.
+          - Claude Code and OpenClaw configuration preserves environment variable references instead of saving plaintext tokens. OpenClaw saves the configuration before probing the connection.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

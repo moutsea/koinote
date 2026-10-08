@@ -127,24 +127,24 @@ ok(
 );
 ok(
   "Codex 配置从环境变量读取 bearer token",
-  /bearer_token_env_var\s*=\s*["']KOINOTE_MCP_TOKEN["']/.test(accessCard),
+  /bearer_token_env_var\s*=\s*["']\$\{tokenEnv\}["']/.test(accessCard),
   "令牌不应直接写进持久配置文件",
 );
 ok(
   "OpenCode 使用远程 MCP 且令牌来自环境变量",
   /title="OpenCode"/.test(accessCard) &&
     /["']type["']:\s*["']remote["']/.test(accessCard) &&
-    /Bearer \{env:KOINOTE_MCP_TOKEN\}/.test(accessCard) &&
+    /Bearer \{env:\$\{tokenEnv\}\}/.test(accessCard) &&
     /["']oauth["']:\s*false/.test(accessCard),
   "远程 PAT 鉴权应关闭 OAuth 自动探测，且不能把令牌写进 opencode.json",
 );
 ok(
   "OpenClaw 使用 Streamable HTTP 与环境变量令牌",
   /title="OpenClaw"/.test(accessCard) &&
-    /openclaw mcp add koinote/.test(accessCard) &&
-    /--transport streamable-http/.test(accessCard) &&
-    /Authorization=Bearer \\?\$\{KOINOTE_MCP_TOKEN\}/.test(accessCard) &&
-    /openclaw mcp doctor koinote --probe/.test(accessCard),
+    /openclaw mcp add \$\{serverName\}/.test(accessCard) &&
+    /--transport streamable-http --no-probe/.test(accessCard) &&
+    /--header 'Authorization=Bearer \\?\$\{\$\{tokenEnv\}\}'/.test(accessCard) &&
+    /openclaw mcp doctor \$\{serverName\} --probe/.test(accessCard),
   "OpenClaw 配置应能直接添加并探测 Koinote MCP",
 );
 ok(

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -61,47 +60,12 @@ func (a *App) agentWorkspaceCommitsList(w http.ResponseWriter, r *http.Request) 
 		}
 		before = &value
 	}
-	var exists bool
-	if err := a.db.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM agent_workspaces WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL)`, workspaceID, user.ID).Scan(&exists); err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	if !exists {
-		writeAgentWorkspaceError(w, errAgentWorkspaceNotFound)
-		return
-	}
-	rows, err := a.db.Query(r.Context(), `
-		SELECT c.commit_id, c.revision, c.parent_revision, c.action, c.restored_from,
-		       c.name, c.description, c.file_count, c.size_bytes, c.created_at
-		FROM agent_workspace_commits c JOIN agent_workspaces w ON w.id = c.workspace_id
-		WHERE w.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL
-		  AND ($3::bigint IS NULL OR c.revision < $3)
-		ORDER BY c.revision DESC LIMIT 26
-	`, workspaceID, user.ID, before)
+	page, err := a.listAgentWorkspaceCommits(r.Context(), user.ID, workspaceID, before)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
-	defer rows.Close()
-	commits := []agentWorkspaceCommit{}
-	for rows.Next() {
-		commit, err := scanAgentWorkspaceCommit(rows)
-		if err != nil {
-			writeAgentWorkspaceError(w, err)
-			return
-		}
-		commits = append(commits, commit)
-	}
-	if err := rows.Err(); err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	var nextBefore *int64
-	if len(commits) > 25 {
-		commits = commits[:25]
-		nextBefore = &commits[24].Revision
-	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"commits": commits, "nextBefore": nextBefore})
+	httpx.JSON(w, http.StatusOK, page)
 }
 
 func (a *App) agentWorkspaceCommitGet(w http.ResponseWriter, r *http.Request) {
@@ -114,39 +78,12 @@ func (a *App) agentWorkspaceCommitGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	commit, err := scanAgentWorkspaceCommit(a.db.QueryRow(r.Context(), `
-		SELECT c.commit_id, c.revision, c.parent_revision, c.action, c.restored_from,
-		       c.name, c.description, c.file_count, c.size_bytes, c.created_at
-		FROM agent_workspace_commits c JOIN agent_workspaces w ON w.id = c.workspace_id
-		WHERE w.id = $1 AND w.user_id = $2 AND c.revision = $3 AND w.deleted_at IS NULL
-	`, workspaceID, user.ID, revision))
+	view, err := a.loadAgentWorkspaceCommit(r.Context(), user.ID, workspaceID, revision)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
-	rows, err := a.db.Query(r.Context(), `
-		SELECT path, mime_type, size_bytes, sha256 FROM agent_workspace_commit_files
-		WHERE workspace_id = $1 AND revision = $2 ORDER BY path
-	`, workspaceID, revision)
-	if err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	defer rows.Close()
-	files := []agentWorkspaceCommitFile{}
-	for rows.Next() {
-		var file agentWorkspaceCommitFile
-		if err := rows.Scan(&file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256); err != nil {
-			writeAgentWorkspaceError(w, err)
-			return
-		}
-		files = append(files, file)
-	}
-	if err := rows.Err(); err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"commit": commit, "files": files})
+	httpx.JSON(w, http.StatusOK, view)
 }
 
 func (a *App) agentWorkspaceCommitFileGet(w http.ResponseWriter, r *http.Request) {
@@ -159,25 +96,11 @@ func (a *App) agentWorkspaceCommitFileGet(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	var file struct {
-		agentWorkspaceCommitFile
-		ContentBase64 string `json:"contentBase64"`
-	}
-	var content []byte
-	err := a.db.QueryRow(r.Context(), `
-		SELECT f.path, f.mime_type, f.size_bytes, f.sha256, b.content
-		FROM agent_workspace_commit_files f JOIN agent_workspace_blobs b USING (workspace_id, sha256)
-		JOIN agent_workspaces w ON w.id = f.workspace_id
-		WHERE w.id = $1 AND w.user_id = $2 AND f.revision = $3 AND f.path = $4 AND w.deleted_at IS NULL
-	`, workspaceID, user.ID, revision, r.URL.Query().Get("path")).Scan(&file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = errAgentWorkspaceNotFound
-	}
+	file, err := a.loadAgentWorkspaceCommitFile(r.Context(), user.ID, workspaceID, revision, r.URL.Query().Get("path"))
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
-	file.ContentBase64 = base64.StdEncoding.EncodeToString(content)
 	httpx.JSON(w, http.StatusOK, map[string]any{"file": file})
 }
 
@@ -198,12 +121,13 @@ func (a *App) agentWorkspaceCommitRestore(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var input struct {
 		ExpectedRevision *int64 `json:"expectedRevision"`
+		AllowSensitive   bool   `json:"allowSensitive"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.ExpectedRevision == nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "revision_required", "expectedRevision is required")
 		return
 	}
-	view, err := a.mutateAgentWorkspaceWithHistory(r.Context(), user.ID, workspaceID, *input.ExpectedRevision, nil, nil, true, &revision)
+	view, err := a.mutateAgentWorkspaceWithHistory(r.Context(), user.ID, workspaceID, *input.ExpectedRevision, nil, nil, true, &revision, input.AllowSensitive && agentWorkspaceSensitiveOverrideAllowed(r))
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return

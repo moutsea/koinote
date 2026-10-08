@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
@@ -26,6 +27,17 @@ const harness = {
   allocationWait: null,
   storage: { usedBytes: 0, quotaBytes: 100000000, bonusBytes: 0, allocatedBytes: 0, personalQuotaBytes: 10 * 1024 ** 3, personalUsedBytes: 0, availableBytes: 10 * 1024 ** 3 },
   createError: null,
+  commits: [],
+  workspaceRevision: 1,
+  restoreResponses: [],
+  confirmations: [],
+  confirmationResults: [],
+  confirmationWait: null,
+  async confirm(message) {
+    harness.confirmations.push(message);
+    if (harness.confirmationWait && message === zh.agentWorkspace.restoreSensitiveConfirm.replace("{revision}", "0")) await harness.confirmationWait;
+    return harness.confirmationResults.shift() ?? true;
+  },
   user: { membershipTier: "lifetime", isLocalMode: false },
   navigate: async (destination) => { navigations.push(destination); },
   async api(method, ...args) {
@@ -61,9 +73,15 @@ const harness = {
     if (method === "getStorageUsage") return { usedBytes: harness.storage.personalUsedBytes, documentBytes: 0, imageBytes: 0, configBytes: 0, agentAllocatedBytes: harness.storage.allocatedBytes, quotaBytes: harness.storage.personalQuotaBytes };
     if (method === "submitFeedback") return { feedback: { id: 1, category: args[0].category, message: args[0].message, pagePath: args[0].pagePath, client: "web", createdAt: "2026-10-08T00:00:00Z" } };
     if (method === "listAgentWorkspaces") return { workspaces: [] };
-    if (method === "listAgentWorkspaceCommits") return { commits: [] };
+    if (method === "listAgentWorkspaceCommits") return { commits: harness.commits };
+    if (method === "restoreAgentWorkspaceCommit") {
+      const response = harness.restoreResponses.shift();
+      if (response instanceof Error) throw response;
+      harness.workspaceRevision = args[2] + 1;
+      return { workspace: { workspaceId: 7, revision: harness.workspaceRevision, files: [] } };
+    }
     if (method === "getAgentWorkspace") return {
-      workspace: { workspaceId: 7, name: "Test repository", description: "", revision: 1, files: [], updatedAt: "2026-10-08T00:00:00Z" },
+      workspace: { workspaceId: 7, name: "Test repository", description: "", revision: harness.workspaceRevision, files: [], updatedAt: "2026-10-08T00:00:00Z" },
     };
     throw new Error(`Unexpected API call: ${method}`);
   },
@@ -73,6 +91,7 @@ const bundle = await build({
   stdin: {
     contents: `export { createElement, act } from "react";
       export { ApiError } from "../api";
+      export { restoreAgentWorkspaceCommit as realRestoreAgentWorkspaceCommit } from "./spa/src/api";
       export { createRoot } from "react-dom/client";
       export { QueryClient, QueryClientProvider } from "@tanstack/react-query";
       export { AgentWorkspaceRepositoryPage } from "./spa/src/pages/AgentWorkspaceRepositoryPage";
@@ -113,9 +132,12 @@ const bundle = await build({
         export const AgentWorkspaceReadme = props => createElement("div", null,
           createElement("button", { onClick: props.onCopy, disabled: props.copying, "data-copied": String(props.copied) }, "copy-prompt"),
           props.promptError && createElement("p", { role: "alert" }, props.promptErrorMessage));`,
+      "./desktop/runtime": "export const isDesktopRuntime = () => false;",
+      "./desktop/network": "export const desktopFetch = () => { throw new Error('Unexpected desktop request'); };",
+      "./desktop/offlineStore": "export const desktopResolveImageSource = () => { throw new Error('Unexpected offline image request'); };",
       "../desktop/runtime": "export const isDesktopRuntime = () => false; export const desktopAPIOrigin = () => 'https://koinote.example';",
       "../desktop/configFiles": "export const desktopScanAgentWorkspaceFiles = async () => [];",
-      "../confirmAction": "export const confirmAction = async () => true;",
+      "../confirmAction": "export const confirmAction = (...args) => globalThis.__agentAccessTest.confirm(...args);",
       "../modalStack": "export const pushModal = () => () => {};",
     };
     window.location = { origin: "https://koinote.example" };
@@ -124,7 +146,7 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/react-query$|lucide-react$)/ }, ({ path }) => ({ path: pathToFileURL(require.resolve(path)).href, external: true }));
   } }],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, StorageCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { realRestoreAgentWorkspaceCommit, createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, StorageCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 harness.labels = zh;
 const root = createRoot(document.getElementById("root"));
 let client;
@@ -144,9 +166,20 @@ async function click(label) {
   await act(async () => button.click());
   await settle();
 }
+const originalFetch = globalThis.fetch;
 const token = (scope, revealable = true) => ({ tokenId: `${scope}-token`, name: `${scope}-credential`, scope, revealable, hint: "test-token" });
 
 try {
+  const restoreRequests = [];
+  globalThis.fetch = async (path, init) => {
+    restoreRequests.push({ path, ...init, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ workspace: { workspaceId: 7 } }), { status: 200 });
+  };
+  await realRestoreAgentWorkspaceCommit(7, 0, 1);
+  await realRestoreAgentWorkspaceCommit(7, 0, 1, true);
+  assert.deepEqual(restoreRequests.map(({ body }) => body), [{ expectedRevision: 1, allowSensitive: false }, { expectedRevision: 1, allowSensitive: true }]);
+  assert.ok(restoreRequests.every(({ path, method, credentials }) => path === "/api/agent/workspaces/7/commits/0/restore" && method === "POST" && credentials === "include"));
+  globalThis.fetch = originalFetch;
   await mount(AgentWorkspaceSettingsPage);
   assert.ok(!document.body.textContent.includes(zh.agentWorkspace.tokenSettingsTitle));
   await click(zh.agentWorkspace.enable);
@@ -258,6 +291,33 @@ try {
     await click(zh.mcp.create);
     assert.equal(document.querySelector('[role="alert"]'), null, "a successful retry clears the limit warning");
     assert.ok(document.body.textContent.includes(zh.mcp.secretStored));
+    const configuration = [...document.querySelectorAll("pre")].map((block) => block.textContent).join("\n");
+    const expectedServer = agentOnly ? "koinote-agent" : "koinote";
+    const expectedEnv = agentOnly ? "KOINOTE_AGENT_TOKEN" : "KOINOTE_MCP_TOKEN";
+    assert.ok(configuration.includes(`[mcp_servers.${expectedServer}]`), "connections use different server names");
+    assert.ok(configuration.includes(`bearer_token_env_var = "${expectedEnv}"`));
+    assert.ok(configuration.includes(`Bearer {env:${expectedEnv}}`), "OpenCode uses the correct token environment");
+    const configs = [...document.querySelectorAll("pre")].map((block) => block.textContent);
+    const claudeConfig = configs.find((block) => block.includes("# .mcp.json"));
+    const claudeJSON = JSON.parse(claudeConfig.slice(claudeConfig.indexOf("{")));
+    assert.equal(claudeJSON.mcpServers[expectedServer].headers.Authorization, "Bearer ${" + expectedEnv + "}");
+    assert.ok(!JSON.stringify(claudeJSON).includes("test-agent-secret"), "Claude persists an environment reference, not the credential");
+    const openClawConfig = configs.find((block) => block.includes("openclaw mcp add"));
+    // Execute the displayed shell syntax with a fake CLI that captures its arguments.
+    // Double quotes would expand the credential here and fail this regression check.
+    const captured = execFileSync("/bin/sh", ["-c", 'openclaw() { printf "%s\\n" "$@"; };\n' + openClawConfig], { encoding: "utf8" });
+    assert.ok(captured.includes("--no-probe"), "defer probing until the saved config resolves environment references");
+    assert.ok(captured.includes("Authorization=Bearer ${" + expectedEnv + "}"), "OpenClaw receives a literal runtime reference");
+    assert.ok(!captured.includes("test-agent-secret"), "OpenClaw configuration arguments never contain the credential");
+    assert.ok(configuration.includes(`openclaw mcp doctor ${expectedServer} --probe`));
+    if (agentOnly) {
+      assert.equal(document.querySelector('[role="tab"][aria-selected="true"]').textContent, zh.agentWorkspace.mcpTitle, "repository setup defaults to MCP");
+      assert.ok(!configuration.includes("KOINOTE_MCP_TOKEN"), "repository setup cannot overwrite the document token environment");
+      await click(zh.agentWorkspace.apiTitle);
+      assert.ok(document.querySelector('pre').textContent.includes('/api/agent/workspaces'), "REST access remains available");
+      await click(zh.agentWorkspace.mcpTitle);
+    }
+
 
     for (const failure of [new ApiError(409, "Other conflict", "other_conflict"), new Error("network unavailable")]) {
       harness.createError = failure;
@@ -299,7 +359,7 @@ try {
   assert.equal(navigations.length, 0, "a newly created token is found despite a stale query cache");
   assert.equal(clipboard.length, 1);
   assert.match(clipboard[0], /Instructions for repository 7/);
-  assert.match(clipboard[0], /KOINOTE_MCP_TOKEN=test-agent-secret/);
+  assert.match(clipboard[0], /KOINOTE_AGENT_TOKEN=test-agent-secret/);
   assert.equal(document.querySelector("[data-copied]").getAttribute("data-copied"), "true");
 
   harness.tokens = [];
@@ -310,8 +370,66 @@ try {
   assert.equal(navigations.length, 0, "a token lookup failure must not be treated as an absent token");
   assert.ok(document.querySelector('[role="alert"]'));
   assert.equal(clipboard.length, 1);
-  console.log("agent repository optional tokens, isolated settings, shared token limit guidance, on-demand setup and copy checks passed");
+  harness.failTokenList = false;
+  harness.commits = [{ commitId: "historical", revision: 0, action: "patch", createdAt: "2026-10-08T00:00:00Z" }];
+  const sensitiveRestoreError = () => new ApiError(422, 'sensitive data detected in "settings.json"', "sensitive_data_detected");
+  const restoreCalls = () => calls.filter((call) => call.method === "restoreAgentWorkspaceCommit").map((call) => call.args);
+  const resetRestore = async (responses = [], confirmations = [true, true]) => {
+    harness.workspaceRevision = 1;
+    harness.restoreResponses = responses;
+    harness.confirmations = [];
+    harness.confirmationResults = confirmations;
+    await mount(AgentWorkspaceRepositoryPage);
+    calls.length = 0;
+  };
+
+  await resetRestore([], [false]);
+  await click(zh.agentWorkspace.restore);
+  assert.deepEqual(restoreCalls(), [], "cancelling the initial restore never sends a request");
+
+  await resetRestore([sensitiveRestoreError(), null]);
+  await click(zh.agentWorkspace.restore);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1], [7, 0, 1, true]], "only confirmed sensitive restores send allowSensitive");
+  assert.deepEqual(harness.confirmations, [zh.agentWorkspace.restoreCommitConfirm.replace("{revision}", "0"), zh.agentWorkspace.restoreSensitiveConfirm.replace("{revision}", "0")]);
+  assert.equal(document.querySelector('[role="alert"]'), null);
+  for (const method of ["getAgentWorkspace", "listAgentWorkspaceCommits", "getAgentWorkspaceStorage"]) {
+    assert.ok(calls.some((call) => call.method === method), `successful restore refreshes ${method}`);
+  }
+
+  await resetRestore([sensitiveRestoreError()], [true, false]);
+  await click(zh.agentWorkspace.restore);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1]], "declining the sensitive override never retries");
+  assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.restoreSensitiveData));
+  assert.ok(document.querySelector('[role="alert"]').textContent.includes("settings.json"));
+
+  for (const failure of [new ApiError(409, "conflict", "revision_conflict"), new Error("network unavailable")]) {
+    await resetRestore([failure]);
+    await click(zh.agentWorkspace.restore);
+    assert.deepEqual(restoreCalls(), [[7, 0, 1]], "ordinary errors never bypass checks or retry automatically");
+    assert.equal(harness.confirmations.length, 1);
+    assert.ok(document.querySelector('[role="alert"]').textContent.includes(failure instanceof ApiError ? zh.agentWorkspace.scanRevisionConflict : failure.message));
+    harness.restoreResponses = [null];
+    await click(zh.agentWorkspace.restore);
+    assert.equal(document.querySelector('[role="alert"]'), null, "a successful retry clears the old restore error");
+  }
+
+  await resetRestore([sensitiveRestoreError(), new ApiError(409, "conflict", "revision_conflict")]);
+  let confirmRestore;
+  harness.confirmationWait = new Promise((resolve) => { confirmRestore = resolve; });
+  await click(zh.agentWorkspace.restore);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1]]);
+  assert.ok([...document.querySelectorAll("button")].find((button) => button.textContent === zh.agentWorkspace.restore).disabled, "restore remains pending during confirmation");
+  // A background refresh must not silently change the revision covered by consent.
+  await act(async () => client.setQueryData(["agent-workspace", 7], { workspace: { ...client.getQueryData(["agent-workspace", 7]).workspace, revision: 9 } }));
+  await act(async () => confirmRestore());
+  await settle();
+  harness.confirmationWait = null;
+  assert.deepEqual(restoreCalls(), [[7, 0, 1], [7, 0, 1, true]]);
+  assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.scanRevisionConflict), "a conflict on the confirmed retry is visible");
+
+  console.log("agent repository optional tokens, isolated settings, shared token limit guidance, on-demand setup, copy and restore confirmation/error checks passed");
 } finally {
+  globalThis.fetch = originalFetch;
   await act(async () => root.unmount());
   client?.clear();
   stop();

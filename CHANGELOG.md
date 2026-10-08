@@ -8,6 +8,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
+- Skills/Agent repository MCP now includes history browsing, revision restoration and storage queries, supports uploads up to 5 MiB and bounded chunked file reads, and uses a separate connection configuration alongside document MCP.
 - My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files.
 - My Space settings now let you allocate extra Agent repository capacity directly from personal storage, apply changes immediately, and reclaim unused capacity. Account storage details show the reserved allocation, while existing files and history remain protected.
 - Publishing now supports per-account switches for WeChat, Zhihu, and X, plus custom HTTPS API platforms with a documented JSON contract; the retired Juejin destination is no longer offered.
@@ -24,6 +25,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Browser history restore now asks for explicit confirmation before restoring sensitive content and displays failures, including revision conflicts. MCP file updates also retain repository and revision audit details. OpenClaw setup now saves environment references before probing the connection.
+- Repository restores now reject sensitive historical content for Agent tokens, complete MCP replacements require explicit `replaceAll`, oversized requests return 413, and Claude Code/OpenClaw configurations preserve environment references instead of storing tokens.
 - When token creation reaches the limit, explain that document MCP and Agent repository tokens share 20 active slots and link to the other token settings page.
 - Desktop sync now preserves document moves made during a cloud refresh, retries failed startup syncs on reconnection, and honors manual sync requests received while an automatic sync is running.
 - Custom platform sync now omits the optional cover field when no cover is set, avoiding empty-URL validation failures.

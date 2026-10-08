@@ -123,14 +123,14 @@ func TestMCPOriginValidation(t *testing.T) {
 
 func TestMCPScopeControlsExposedTools(t *testing.T) {
 	agentReadTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "agent_read"})
-	wantAgentRead := []string{"get_agent_workspace", "get_agent_workspace_prompt", "list_agent_workspaces", "read_agent_workspace_file"}
+	wantAgentRead := []string{"get_agent_workspace", "get_agent_workspace_prompt", "list_agent_workspaces", "read_agent_workspace_file", "get_agent_workspace_storage", "list_agent_workspace_commits", "get_agent_workspace_commit", "read_agent_workspace_commit_file"}
 	slices.Sort(wantAgentRead)
 	if !slices.Equal(agentReadTools, wantAgentRead) {
 		t.Fatalf("agent read scope 工具 = %v，期望 %v", agentReadTools, wantAgentRead)
 	}
 
 	agentWriteTools := listInMemoryMCPTools(t, mcpPrincipal{Scope: "agent_write"})
-	wantAgentWrite := append(slices.Clone(wantAgentRead), "create_agent_workspace", "manage_agent_workspace", "update_agent_workspace")
+	wantAgentWrite := append(slices.Clone(wantAgentRead), "create_agent_workspace", "manage_agent_workspace", "update_agent_workspace", "restore_agent_workspace_commit")
 	slices.Sort(wantAgentWrite)
 	if !slices.Equal(agentWriteTools, wantAgentWrite) {
 		t.Fatalf("agent write scope 工具 = %v，期望 %v", agentWriteTools, wantAgentWrite)
@@ -2031,7 +2031,11 @@ func createMCPTokenForTest(t *testing.T, server *httptest.Server, cookie *http.C
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(result.Secret, mcpTokenPrefix) || result.Token.Scope != scope {
+	prefix := mcpTokenPrefix
+	if scope == "agent_read" || scope == "agent_write" {
+		prefix = agentTokenPrefix
+	}
+	if !strings.HasPrefix(result.Secret, prefix) || result.Token.Scope != scope {
 		t.Fatalf("令牌响应异常: %+v", result)
 	}
 	return result

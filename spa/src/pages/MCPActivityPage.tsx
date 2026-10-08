@@ -103,6 +103,13 @@ export function MCPActivityPage() {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs" style={{ color: "var(--ink-faint)" }}>
                       <span className="inline-flex items-center gap-1.5"><KeyRound className="h-3.5 w-3.5" />{entry.tokenName || t.mcpActivity.deletedToken}{entry.tokenHint ? ` ${entry.tokenHint}` : ""}</span>
+                      {entry.workspaceId != null && (
+                        <span>{t.agentWorkspace.repositoryId} #{entry.workspaceId}
+                          {entry.sourceRevision != null && ` · ${t.agentWorkspace.restore} r${entry.sourceRevision}`}
+                          {entry.expectedRevision != null && ` · ${t.agentWorkspace.revision} r${entry.expectedRevision}`}
+                          {entry.resultingRevision != null && ` → r${entry.resultingRevision}`}
+                        </span>
+                      )}
                       {entry.docId && (entry.documentTitle ? (
                         <Link to="/editor/$docId" params={{ docId: entry.docId }} className="inline-flex items-center gap-1.5 hover:underline"><FileText className="h-3.5 w-3.5" />{entry.documentTitle}</Link>
                       ) : (

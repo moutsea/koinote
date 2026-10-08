@@ -119,7 +119,14 @@ func agentWorkspaceIDFromRequest(w http.ResponseWriter, r *http.Request) (int64,
 }
 
 func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
+	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.As(err, &sensitive):
+		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "sensitive_data_detected", err.Error())
+	case errors.Is(err, errAgentWorkspaceRevisionNotFound):
+		httpx.ErrorCode(w, http.StatusNotFound, "revision_not_found", err.Error())
+	case errors.Is(err, errAgentWorkspaceFileNotFound):
+		httpx.ErrorCode(w, http.StatusNotFound, "file_not_found", err.Error())
 	case errors.Is(err, errAgentWorkspaceDisabled):
 		httpx.ErrorCode(w, http.StatusForbidden, "agent_workspace_disabled", err.Error())
 	case errors.Is(err, errAgentWorkspaceNotFound):

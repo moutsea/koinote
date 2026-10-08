@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -20,15 +21,16 @@ import (
 )
 
 const (
-	mcpServerVersion        = "0.1.0"
-	mcpDefaultPageSize      = 50
-	mcpMaxPageSize          = 100
-	mcpDefaultContentRunes  = 12000
-	mcpMaxContentRunes      = 40000
-	mcpRequestsPerMinute    = 120
-	mcpMaxRequestBytes      = 2 << 20
-	mcpAuditRetention       = 180 * 24 * time.Hour
-	mcpAuditCleanupInterval = 24 * time.Hour
+	mcpServerVersion                 = "0.1.0"
+	mcpDefaultPageSize               = 50
+	mcpMaxPageSize                   = 100
+	mcpDefaultContentRunes           = 12000
+	mcpMaxContentRunes               = 40000
+	mcpRequestsPerMinute             = 120
+	mcpMaxRequestBytes               = 2 << 20
+	mcpAgentWorkspaceMaxRequestBytes = 8 << 20
+	mcpAuditRetention                = 180 * 24 * time.Hour
+	mcpAuditCleanupInterval          = 24 * time.Hour
 )
 
 func (a *App) mcpHandler() http.Handler {
@@ -72,14 +74,65 @@ func (a *App) mcpHandler() http.Handler {
 			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
+		limit := int64(mcpMaxRequestBytes)
+		if principal.isAgentWorkspace() {
+			limit = mcpAgentWorkspaceMaxRequestBytes
+		}
+		if r.ContentLength > limit {
+			http.Error(w, "MCP request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, mcpMaxRequestBytes)
+			// The SDK turns read errors into 500 in stateless mode. Observe the
+			// streaming limit and write 413 before that fallback, without buffering
+			// another copy of a potentially large request (including chunked bodies).
+			guard := &mcpBodyLimitWriter{ResponseWriter: w}
+			r.Body = &mcpLimitedBody{ReadCloser: http.MaxBytesReader(w, r.Body, limit), response: guard}
+			w = guard
 		}
 		handler.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), mcpPrincipalContextKey{}, principal)))
 	})
 }
 
 type mcpPrincipalContextKey struct{}
+
+type mcpBodyLimitWriter struct {
+	http.ResponseWriter
+	rejected bool
+}
+
+func (w *mcpBodyLimitWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w *mcpBodyLimitWriter) WriteHeader(status int) {
+	if !w.rejected {
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+func (w *mcpBodyLimitWriter) Write(body []byte) (int, error) {
+	if w.rejected {
+		return len(body), nil
+	}
+	return w.ResponseWriter.Write(body)
+}
+func (w *mcpBodyLimitWriter) Flush() {
+	if !w.rejected {
+		_ = http.NewResponseController(w.ResponseWriter).Flush()
+	}
+}
+
+type mcpLimitedBody struct {
+	io.ReadCloser
+	response *mcpBodyLimitWriter
+}
+
+func (r *mcpLimitedBody) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	var oversized *http.MaxBytesError
+	if errors.As(err, &oversized) && !r.response.rejected {
+		http.Error(r.response.ResponseWriter, "MCP request body too large", http.StatusRequestEntityTooLarge)
+		r.response.rejected = true
+	}
+	return n, err
+}
 
 func (a *App) validMCPOrigin(r *http.Request) bool {
 	rawOrigin := strings.TrimSpace(r.Header.Get("Origin"))
@@ -98,10 +151,14 @@ func (a *App) validMCPOrigin(r *http.Request) bool {
 }
 
 func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
+	name, title := "koinote", "Koinote Documents"
+	if principal.isAgentWorkspace() {
+		name, title = "koinote-agent", "Koinote Skills/Agent Repositories"
+	}
 	server := mcp.NewServer(&mcp.Implementation{
-		Name: "koinote", Title: "Koinote Documents", Version: mcpServerVersion,
+		Name: name, Title: title, Version: mcpServerVersion,
 		WebsiteURL: strings.TrimRight(a.cfg.AppURL, "/"),
-	}, nil)
+	}, &mcp.ServerOptions{SchemaCache: &a.mcpSchemaCache})
 	if principal.isAgentWorkspace() {
 		a.addAgentWorkspaceMCPTools(server, principal)
 		return server
@@ -1055,18 +1112,31 @@ func mcpInternalError(operation string, err error) error {
 	return errors.New("internal server error")
 }
 
+type mcpWorkspaceAudit struct {
+	WorkspaceID       int64
+	SourceRevision    *int64
+	ExpectedRevision  *int64
+	ResultingRevision *int64
+}
+
 func (a *App) auditMCPCall(principal mcpPrincipal, toolName, docID, result string, started time.Time) {
+	a.auditMCPCallWithWorkspace(principal, toolName, docID, result, started, mcpWorkspaceAudit{})
+}
+
+func (a *App) auditMCPCallWithWorkspace(principal mcpPrincipal, toolName, docID, result string, started time.Time, target mcpWorkspaceAudit) {
 	duration := max(0, int(time.Since(started).Milliseconds()))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_, err := a.db.Exec(ctx, `
-		INSERT INTO mcp_audit_logs (user_id, token_id, tool_name, document_id, doc_id, result, duration_ms)
+		INSERT INTO mcp_audit_logs (user_id, token_id, tool_name, document_id, doc_id, result, duration_ms,
+		 workspace_id, source_revision, expected_revision, resulting_revision)
 		VALUES (
 			$1, NULLIF($2, 0), $3,
 			(SELECT id FROM documents WHERE doc_id = NULLIF($4, '') AND user_id = $1),
-			NULLIF($4, ''), $5, $6
+			NULLIF($4, ''), $5, $6, NULLIF($7::bigint, 0), $8, $9, $10
 		)
-	`, principal.User.ID, principal.TokenID, toolName, docID, result, duration)
+	`, principal.User.ID, principal.TokenID, toolName, docID, result, duration,
+		target.WorkspaceID, target.SourceRevision, target.ExpectedRevision, target.ResultingRevision)
 	if err != nil {
 		log.Printf("mcp audit %s: %v", toolName, err)
 	}

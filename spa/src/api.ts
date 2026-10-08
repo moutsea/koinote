@@ -647,7 +647,11 @@ export function updateAgentWorkspaceStorage(allocatedBytes: number) {
 }
 export type AgentWorkspaceCommit = { commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
 export function listAgentWorkspaceCommits(workspaceId: number) { return apiJson<{ commits: AgentWorkspaceCommit[]; nextBefore?: number | null }>(`/api/agent/workspaces/${workspaceId}/commits`); }
-export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number) { return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, { method: "POST", body: JSON.stringify({ expectedRevision }) }); }
+export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number, allowSensitive = false) {
+  return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, {
+    method: "POST", body: JSON.stringify({ expectedRevision, allowSensitive }),
+  });
+}
 
 export function updateAgentWorkspaceSettings(enabled: boolean) {
   return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings", {
@@ -1849,6 +1853,10 @@ export type MCPActivity = {
   documentTitle?: string | null;
   tokenName?: string | null;
   tokenHint?: string | null;
+  workspaceId?: number | null;
+  sourceRevision?: number | null;
+  expectedRevision?: number | null;
+  resultingRevision?: number | null;
 };
 
 export function listMCPActivity(cursor?: string, limit = 50) {

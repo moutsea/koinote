@@ -19,8 +19,16 @@ bearer_token_env_var = "KOINOTE_MCP_TOKEN"`,
     name: "Claude Code",
     code: `export KOINOTE_MCP_TOKEN='knt_mcp_...'
 
-claude mcp add --transport http koinote ${ENDPOINT} \\
-  --header "Authorization: Bearer \${KOINOTE_MCP_TOKEN}"`,
+# .mcp.json
+{
+  "mcpServers": {
+    "koinote": {
+      "type": "http",
+      "url": "${ENDPOINT}",
+      "headers": { "Authorization": "Bearer \${KOINOTE_MCP_TOKEN}" }
+    }
+  }
+}`,
   },
   {
     name: "OpenCode",
@@ -47,8 +55,8 @@ claude mcp add --transport http koinote ${ENDPOINT} \\
 
 openclaw mcp add koinote \\
   --url ${ENDPOINT} \\
-  --transport streamable-http \\
-  --header "Authorization=Bearer \${KOINOTE_MCP_TOKEN}"
+  --transport streamable-http --no-probe \\
+  --header 'Authorization=Bearer \${KOINOTE_MCP_TOKEN}'
 
 openclaw mcp doctor koinote --probe`,
   },
@@ -105,6 +113,14 @@ export function MCPGuidePage() {
                 </li>
               ))}
             </ol>
+          </PaperCard>
+        </section>
+
+        <section className="mx-auto mt-8 max-w-5xl">
+          <PaperCard className="p-6 sm:p-7">
+            <h2 className="kn-heading-cn text-xl font-bold" style={{ color: "var(--ink-black)" }}>{t.agentWorkspace.mcpTitle}</h2>
+            <p className="mt-3 text-sm leading-7" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.mcpDescription}</p>
+            <Link to="/space/settings" className="mt-4 inline-flex text-sm font-semibold underline" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.tokenSettingsTitle}</Link>
           </PaperCard>
         </section>
 

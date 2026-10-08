@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stripe/stripe-go/v82"
 
 	"koinote/backend/internal/config"
@@ -18,6 +19,7 @@ import (
 )
 
 type App struct {
+	mcpSchemaCache          mcp.SchemaCache
 	cfg                     config.Config
 	db                      *pgxpool.Pool
 	emailSender             verificationEmailSender

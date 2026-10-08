@@ -244,11 +244,18 @@ url = "https://koinote.app/mcp"
 bearer_token_env_var = "KOINOTE_MCP_TOKEN"
 ```
 
-Claude Code:
+Claude Code (save to the project’s `.mcp.json`; set the token environment variable above before starting the client):
 
-```bash
-claude mcp add --transport http koinote https://koinote.app/mcp \
-  --header "Authorization: Bearer knt_mcp_..."
+```json
+{
+  "mcpServers": {
+    "koinote": {
+      "type": "http",
+      "url": "https://koinote.app/mcp",
+      "headers": { "Authorization": "Bearer ${KOINOTE_MCP_TOKEN}" }
+    }
+  }
+}
 ```
 
 OpenCode (put this in a global or project-level `opencode.json`; see the
@@ -275,11 +282,15 @@ OpenClaw:
 ```bash
 openclaw mcp add koinote \
   --url https://koinote.app/mcp \
-  --transport streamable-http \
-  --header "Authorization=Bearer ${KOINOTE_MCP_TOKEN}"
+  --transport streamable-http --no-probe \
+  --header 'Authorization=Bearer ${KOINOTE_MCP_TOKEN}'
 
 openclaw mcp doctor koinote --probe
 ```
+
+Use `--no-probe` to save the environment reference first, then `doctor --probe` to resolve it from the saved configuration and check the connection. Verified with OpenClaw 2026.6.10 against a local Koinote MCP server; the saved configuration contains no plaintext token.
+
+OpenClaw 2026.6.10 may report `headers.Authorization contains a literal sensitive value` during `doctor`. If the saved configuration still contains the environment reference shown above, this is a false positive on the value expanded at runtime and can be ignored.
 
 Other clients need no Koinote-specific integration. They can connect with the same endpoint and
 token when they support remote Streamable HTTP MCP plus an
@@ -296,6 +307,36 @@ UI on conflict. See the [design notes](docs/DESIGN.en.md#mcp-document-access) fo
 trade-offs.
 
 Write tokens can also call `sync_document_to_feishu` to create or update a bound Feishu document from Koinote. Bind the Feishu account first under Settings → Feishu. This is a one-way sync: the Koinote title and Markdown replace the Feishu body, with no bidirectional sync or conflict merging.
+
+## Skills/Agent repository access (MCP)
+
+Create a repository token in **My Space → Settings → Agent repository access · API / MCP** and use its **Repository MCP connection** tab.
+The endpoint is `https://koinote.app/mcp`. Repository connections use `koinote-agent` and the `KOINOTE_AGENT_TOKEN` environment
+variable so they can coexist with document MCP. Repository tokens access only the account's private Skills/Agent repositories;
+document tokens cannot access repositories.
+
+| Scope | Tools |
+| --- | --- |
+| Read or write | `list_agent_workspaces`, `get_agent_workspace`, `read_agent_workspace_file`, `get_agent_workspace_prompt` |
+| Read or write | `get_agent_workspace_storage`, `list_agent_workspace_commits`, `get_agent_workspace_commit`, `read_agent_workspace_commit_file` |
+| Write | `create_agent_workspace`, `manage_agent_workspace`, `update_agent_workspace`, `restore_agent_workspace_commit` |
+
+Use `agent_read` for reads or `agent_write` to create, rename and delete repositories, edit files and restore history. Tokens cover all
+of the account's private repositories; specify `workspaceId`. File contents round-trip as original bytes via `contentBase64`.
+Read the current `revision` before editing and supply `expectedRevision`; reread and review changes after a conflict.
+
+History pages contain up to 25 commits; pass `nextBefore` to continue until it is null. Restoring replaces the complete current file
+set and creates a new revision, preserving the current repository name and description. Restore only a user-requested revision;
+pruned history is unavailable. Restores scan for sensitive content; Agent tokens cannot bypass the check. Audits retain the repository ID, source, expected and resulting revisions.
+
+Each file may be up to 5 MiB, and each MCP JSON request up to 8 MiB including base64; oversized requests return HTTP 413. Split only
+`upsert`/`delete` batches and use each batch’s returned revision. Legacy `files` requires `replaceAll: true` and the complete file set
+in a single request; never batch replacements. Current and historical file reads return at most 8 KiB per chunk. Continue with
+`nextOffset` and the first chunk’s `sha256` as `expectedSHA256` until `hasMore` is false. Decode each base64 chunk separately,
+concatenate bytes before decoding text, and verify the full file hash.
+
+Storage queries include files and retained history, expose no personal document
+usage, and cannot allocate personal storage. Membership, feature enablement and token validity are checked on every request.
 
 ## AI optimization
 

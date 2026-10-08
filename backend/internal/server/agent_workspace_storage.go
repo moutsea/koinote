@@ -27,6 +27,24 @@ type agentWorkspaceStorageView struct {
 	AvailableBytes     int64 `json:"availableBytes"`
 }
 
+// This is the single privacy boundary shared by both repository token transports.
+// Do not add personal-account counters here.
+type agentWorkspaceQuotaView struct {
+	UsedBytes      int64 `json:"usedBytes"`
+	QuotaBytes     int64 `json:"quotaBytes"`
+	BonusBytes     int64 `json:"bonusBytes"`
+	AllocatedBytes int64 `json:"allocatedBytes"`
+}
+
+func loadAgentWorkspaceQuota(ctx context.Context, q imageUsageQuerier, userID int) (agentWorkspaceQuotaView, error) {
+	var view agentWorkspaceQuotaView
+	err := q.QueryRow(ctx, `SELECT agent_workspace_storage_bytes($1), agent_workspace_quota_bytes($1),
+	 COALESCE((SELECT bonus_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0),
+	 COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0)
+	`, userID).Scan(&view.UsedBytes, &view.QuotaBytes, &view.BonusBytes, &view.AllocatedBytes)
+	return view, err
+}
+
 func (a *App) loadAgentWorkspaceStorage(ctx context.Context, q imageUsageQuerier, user model.User) (agentWorkspaceStorageView, error) {
 	var view agentWorkspaceStorageView
 	var usage storageBreakdown
@@ -64,17 +82,18 @@ func (a *App) agentWorkspaceStorageGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if token := bearerToken(r); strings.HasPrefix(token, mcpTokenPrefix) || strings.HasPrefix(token, agentTokenPrefix) {
+		view, err := loadAgentWorkspaceQuota(r.Context(), a.db, user.ID)
+		if err != nil {
+			writeAgentWorkspaceError(w, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"storage": view})
+		return
+	}
 	view, err := a.loadAgentWorkspaceStorage(r.Context(), a.db, user)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
-		return
-	}
-	if token := bearerToken(r); strings.HasPrefix(token, mcpTokenPrefix) || strings.HasPrefix(token, agentTokenPrefix) {
-		// Repository credentials may inspect their quota, but not personal account usage.
-		httpx.JSON(w, http.StatusOK, map[string]any{"storage": map[string]int64{
-			"usedBytes": view.UsedBytes, "quotaBytes": view.QuotaBytes,
-			"bonusBytes": view.BonusBytes, "allocatedBytes": view.AllocatedBytes,
-		}})
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"storage": view})

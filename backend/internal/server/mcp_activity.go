@@ -18,15 +18,19 @@ const (
 )
 
 type mcpActivityView struct {
-	ID            int64      `json:"id"`
-	ToolName      string     `json:"toolName"`
-	Result        string     `json:"result"`
-	DurationMS    int        `json:"durationMs"`
-	CreatedAt     *time.Time `json:"createdAt"`
-	DocID         *string    `json:"docId"`
-	DocumentTitle *string    `json:"documentTitle"`
-	TokenName     *string    `json:"tokenName"`
-	TokenHint     *string    `json:"tokenHint"`
+	ID                int64      `json:"id"`
+	ToolName          string     `json:"toolName"`
+	Result            string     `json:"result"`
+	DurationMS        int        `json:"durationMs"`
+	CreatedAt         *time.Time `json:"createdAt"`
+	DocID             *string    `json:"docId"`
+	DocumentTitle     *string    `json:"documentTitle"`
+	TokenName         *string    `json:"tokenName"`
+	TokenHint         *string    `json:"tokenHint"`
+	WorkspaceID       *int64     `json:"workspaceId,omitempty"`
+	SourceRevision    *int64     `json:"sourceRevision,omitempty"`
+	ExpectedRevision  *int64     `json:"expectedRevision,omitempty"`
+	ResultingRevision *int64     `json:"resultingRevision,omitempty"`
 }
 
 func (a *App) mcpActivityList(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +56,8 @@ func (a *App) mcpActivityList(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.db.Query(r.Context(), `
 		SELECT audit.id, audit.tool_name, audit.result, audit.duration_ms, audit.created_at,
-		       audit.doc_id, document.title, token.name, token.token_hint
+		       audit.doc_id, document.title, token.name, token.token_hint,
+		       audit.workspace_id, audit.source_revision, audit.expected_revision, audit.resulting_revision
 		FROM mcp_audit_logs audit
 		LEFT JOIN documents document
 		  ON document.id = audit.document_id AND document.user_id = audit.user_id
@@ -74,7 +79,8 @@ func (a *App) mcpActivityList(w http.ResponseWriter, r *http.Request) {
 		var activity mcpActivityView
 		if err := rows.Scan(&activity.ID, &activity.ToolName, &activity.Result,
 			&activity.DurationMS, &activity.CreatedAt, &activity.DocID,
-			&activity.DocumentTitle, &activity.TokenName, &activity.TokenHint); err != nil {
+			&activity.DocumentTitle, &activity.TokenName, &activity.TokenHint,
+			&activity.WorkspaceID, &activity.SourceRevision, &activity.ExpectedRevision, &activity.ResultingRevision); err != nil {
 			log.Printf("mcp activity scan: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return

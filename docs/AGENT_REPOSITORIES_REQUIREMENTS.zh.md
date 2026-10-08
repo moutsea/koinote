@@ -6,6 +6,13 @@
 >
 > 状态：第一期 Hosted Workspace 已完成 API、MCP 工具和设置页实现，尚未部署上线；Repository、Release、Memory 等仍未实现。本文依据本次产品讨论整理，不代表已经上线或完成生产验收。
 
+## 2026-10-08：私有仓库 MCP 补充
+
+当前 Skills/Agent 私有仓库已提供独立的 `agent_read` / `agent_write` MCP 权限，复用 `/mcp` 入口。
+本次补齐历史分页、历史文件、恢复和存储用量查询，并提供独立的 `koinote-agent` 连接配置。
+历史恢复与网页端共享服务及版本校验，仓库 Token 不得分配个人存储或读取个人文档用量。
+完整工具和接入方式见 [README](../README.md#skillsagent-仓库访问mcp)。以下早期规划中的公开 Repository / Release 分发不在本次范围。
+
 ## 1. 产品定位与决策摘要
 
 Koinote 为用户提供独立于普通文档的 Agent 配置托管空间，并在后续阶段支持将托管内容发布为可分享的 Repository。托管空间是作者随时可更新的工作区；首次发布后才生成 Repository，Repository 中的每个 Release 是不可变版本快照。
@@ -597,6 +604,16 @@ MCP 是后续可选适配：只包装同一仓库业务服务，免费仓库读�
 | [Basic Memory](https://github.com/basicmachines-co/basic-memory) | 用户可读、可导出的知识数据 | AGPL-3.0；仅供后续 Memory 研究，不纳入本期依赖 |
 
 协议边界参考：[MCP Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts)、[Agent Skills Specification](https://agentskills.io/specification)、[Codex 自定义指令](https://developers.openai.com/codex/guides/agents-md/)。MCP Prompts 和 HTTP 返回内容都不是强制系统消息注入机制。
+
+### MCP 边界补充（审查修复）
+
+- `files` 整体替换须显式传 `replaceAll: true`，一次提交完整文件集；仅 `upsert` / `delete` 可以分批。
+- 当前与历史文件读取每次最多 8 KiB，按 `nextOffset` 继续并携带 `expectedSHA256`，逐块解码后拼接原始字节。
+- 恢复在同一事务内检查历史内容，Agent Token 无法跳过敏感信息检查；网页收到敏感信息错误后须再次确认，并沿用原 expectedRevision 重试，取消不重试，冲突与其他错误必须显示。恢复及文件更新的审计记录仓库与操作前后版本。
+- OpenClaw 2026.6.10 实测支持 `mcp add --header`，但保存前的默认探测不会展开环境变量，须用 `--no-probe` 保存引用后再执行 `doctor --probe`。已用临时账号和本地 Koinote MCP 验证鉴权成功，配置保留 `${KOINOTE_AGENT_TOKEN}`，未保存明文。
+- 仓库 MCP 请求限 8 MiB，文档 MCP 仍限 2 MiB，超限（包括流式上传）统一返回 413。
+- 存储查询共享只含仓库字段的类型和查询，不统计个人文档、图片或配置快照。
+- 复用 MCP schema 缓存；限流读取不增加整包缓冲，敏感内容扫描直接使用字节。当前 Go SDK 的无状态传输仍有内部整包读取和 JSON 解码副本，尚未消除该依赖内部的内存开销。
 
 ## 16. 一句话交付定义
 

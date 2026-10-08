@@ -453,27 +453,37 @@ function TokenConfigurations({
   copied: string | null;
   onCopy: (value: string, key: string) => Promise<void>;
 }) {
-  const [configurationTab, setConfigurationTab] = useState<"api" | "mcp">("api");
+  const [configurationTab, setConfigurationTab] = useState<"api" | "mcp">("mcp");
   const api = `Base URL: ${apiBaseURL}\nHeader: Authorization: Bearer ${secret}\n\n# List your Skills/Agent repositories\ncurl --fail --header "Authorization: Bearer ${secret}" "${apiBaseURL}/api/agent/workspaces"`;
-  const codex = `export KOINOTE_MCP_TOKEN='${secret}'\n\n[mcp_servers.koinote]\nurl = "${endpoint}"\nbearer_token_env_var = "KOINOTE_MCP_TOKEN"`;
-  const claude = `claude mcp add --transport http koinote ${endpoint} --header "Authorization: Bearer ${secret}"`;
-  const openCode = `export KOINOTE_MCP_TOKEN='${secret}'\n\n{
+  const serverName = agentOnly ? "koinote-agent" : "koinote";
+  const tokenEnv = agentOnly ? "KOINOTE_AGENT_TOKEN" : "KOINOTE_MCP_TOKEN";
+  const codex = `export ${tokenEnv}='${secret}'\n\n[mcp_servers.${serverName}]\nurl = "${endpoint}"\nbearer_token_env_var = "${tokenEnv}"`;
+  const claude = `export ${tokenEnv}='${secret}'\n\n# .mcp.json\n${JSON.stringify({
+    mcpServers: {
+      [serverName]: {
+        type: "http",
+        url: endpoint,
+        headers: { Authorization: `Bearer $` + `{${tokenEnv}}` },
+      },
+    },
+  }, null, 2)}`;
+  const openCode = `export ${tokenEnv}='${secret}'\n\n{
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "koinote": {
+    "${serverName}": {
       "type": "remote",
       "url": "${endpoint}",
       "oauth": false,
       "headers": {
-        "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}"
+        "Authorization": "Bearer {env:${tokenEnv}}"
       }
     }
   }
 }`;
-  const openClaw = `export KOINOTE_MCP_TOKEN='${secret}'\n\nopenclaw mcp add koinote \\
+  const openClaw = `export ${tokenEnv}='${secret}'\n\nopenclaw mcp add ${serverName} \\
  --url ${endpoint} \\
- --transport streamable-http \\
- --header "Authorization=Bearer \${KOINOTE_MCP_TOKEN}"\n\nopenclaw mcp doctor koinote --probe`;
+ --transport streamable-http --no-probe \\
+ --header 'Authorization=Bearer \${${tokenEnv}}'\n\nopenclaw mcp doctor ${serverName} --probe`;
   const generic = `Transport: Streamable HTTP\nURL: ${endpoint}\nHeader: Authorization: Bearer ${secret}`;
   const mcpConfigurations = <>
     <ConfigBlock title="Codex" value={codex} copied={copied === `${copyKeyPrefix}-codex`} onCopy={() => void onCopy(codex, `${copyKeyPrefix}-codex`)} />

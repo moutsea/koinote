@@ -50,7 +50,7 @@ export function AgentWorkspaceRepositoryPage() {
         return false;
       }
       const [result, revealed] = await Promise.all([getAgentWorkspacePrompt(workspaceId), revealMCPToken(token.tokenId)]);
-      await navigator.clipboard.writeText(`${result.prompt}\n\nAuthentication token for this session (keep it secret):\nKOINOTE_MCP_TOKEN=${revealed.secret}\nUse this value as the Bearer token for both REST API and MCP requests.`);
+      await navigator.clipboard.writeText(`${result.prompt}\n\nAuthentication token for this session (keep it secret):\nKOINOTE_AGENT_TOKEN=${revealed.secret}\nUse this value as the Bearer token for both REST API and MCP requests.`);
       return true;
     },
     onSuccess(didCopy) { if (didCopy) { setCopied(true); window.setTimeout(() => setCopied(false), 1800); } },
@@ -119,8 +119,26 @@ export function AgentWorkspaceRepositoryPage() {
     },
   });
   const restore = useMutation({
-    mutationFn: (revision: number) => restoreAgentWorkspaceCommit(workspaceId, revision, detail.data?.workspace?.revision ?? 0),
-    onSuccess: () => { void detail.refetch(); void commits.refetch(); void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] }); },
+    mutationFn: async (revision: number) => {
+      const expectedRevision = detail.data?.workspace?.revision;
+      if (expectedRevision === undefined) throw new Error(t.agentWorkspace.repositoryLoadFailed);
+      try {
+        return await restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "sensitive_data_detected") throw error;
+        const confirmed = await confirmAction(t.agentWorkspace.restoreSensitiveConfirm.replace("{revision}", String(revision)));
+        if (!confirmed) throw error;
+        // Keep the original revision: a write while the user confirms must conflict.
+        return restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision, true);
+      }
+    },
+    retry: false,
+    onSuccess: () => {
+      void detail.refetch();
+      void commits.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-workspace-storage"] });
+    },
   });
 
   if (session.isLoading) return <PageLoading>{t.dashboard.loading}</PageLoading>;
@@ -146,7 +164,7 @@ export function AgentWorkspaceRepositoryPage() {
     {pendingLocalFiles && <AgentWorkspaceScanDialog files={pendingLocalFiles} filteredFiles={filteredLocalFiles} selectedPaths={selectedLocalPaths} pending={scanLocalPending} errorMessage={agentWorkspaceErrorMessage(scanError, t.agentWorkspace)} t={t.agentWorkspace} onToggleFile={(path) => setSelectedLocalPaths((current) => togglePath(current, path))} onToggleDirectory={(files) => setSelectedLocalPaths((current) => togglePaths(current, files.map((file) => file.path)))} onSelectAll={() => setSelectedLocalPaths(new Set([...pendingLocalFiles, ...filteredLocalFiles].map((file) => file.path)))} onClearAll={() => setSelectedLocalPaths(new Set())} onCancel={() => { if (!scanLocalPending) { setPendingLocalFiles(null); setFilteredLocalFiles([]); setSelectedLocalPaths(new Set()); } }} onConfirm={async () => { if (scanLocalPending) return; const allFiles = [...pendingLocalFiles, ...filteredLocalFiles]; const selected = allFiles.filter((file) => selectedLocalPaths.has(file.path)); const selectedFiltered = selected.filter((selectedFile) => filteredLocalFiles.some((filteredFile) => filteredFile.path === selectedFile.path)); if (selectedFiltered.length > 0 && !(await confirmAction(t.agentWorkspace.scanReviewSensitiveConfirm.replace("{count}", String(selectedFiltered.length))))) return; syncLocal.mutate({ selected, allowSensitive: selectedFiltered.length > 0 }); }} />}
     {editingSettings && <RepositorySettingsForm name={editName} description={editDescription} t={t} pending={saveSettings.isPending} error={saveSettings.isError} onName={setEditName} onDescription={setEditDescription} onSubmit={() => saveSettings.mutate()} onCancel={() => { saveSettings.reset(); setEditingSettings(false); }} />}
     {selectedFile !== null && <div className="mt-7"><FileEditor file={selectedFileQuery.data?.file} loading={selectedFileQuery.isLoading} errorMessage={t.agentWorkspace.fileSaveFailed} t={t.agentWorkspace} onClose={() => setSelectedFile(null)} onSave={async (content, mimeType) => { await patchAgentWorkspace({ workspaceId: workspace.workspaceId, expectedRevision: workspace.revision, upsert: [{ path: selectedFileQuery.data!.file.path, contentBase64: btoa(unescape(encodeURIComponent(content))), mimeType }] }); await detail.refetch(); }} /></div>}
-    <PaperCard className="mt-7 p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.commitHistory}</h2><div className="mt-3 space-y-2">{commits.data?.commits.map((commit) => <div key={commit.commitId} className="flex items-center justify-between gap-3 border-b pb-2 text-xs last:border-b-0"><div><p style={{ color: "var(--ink-strong)" }}>r{commit.revision} · {commit.action}</p><p style={{ color: "var(--ink-faint)" }}>{new Date(commit.createdAt).toLocaleString(locale)}</p></div>{commit.revision !== workspace.revision && <button type="button" disabled={restore.isPending} onClick={async () => { if (await confirmAction(t.agentWorkspace.restoreCommitConfirm.replace("{revision}", String(commit.revision)))) restore.mutate(commit.revision); }} className="shrink-0 rounded border px-2 py-1" style={{ borderColor: "var(--ink-line)" }}>{t.agentWorkspace.restore}</button>}</div>)}</div></PaperCard>
+    <PaperCard className="mt-7 p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.commitHistory}</h2>{restore.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{agentWorkspaceErrorMessage(restore.error, t.agentWorkspace, "restore") || t.agentWorkspace.restoreFailed}</p>}<div className="mt-3 space-y-2">{commits.data?.commits.map((commit) => <div key={commit.commitId} className="flex items-center justify-between gap-3 border-b pb-2 text-xs last:border-b-0"><div><p style={{ color: "var(--ink-strong)" }}>r{commit.revision} · {commit.action}</p><p style={{ color: "var(--ink-faint)" }}>{new Date(commit.createdAt).toLocaleString(locale)}</p></div>{commit.revision !== workspace.revision && <button type="button" disabled={restore.isPending} onClick={async () => { if (await confirmAction(t.agentWorkspace.restoreCommitConfirm.replace("{revision}", String(commit.revision)))) restore.mutate(commit.revision); }} className="shrink-0 rounded border px-2 py-1" style={{ borderColor: "var(--ink-line)" }}>{t.agentWorkspace.restore}</button>}</div>)}</div></PaperCard>
   </PageContainer>;
 }
 
@@ -203,12 +221,13 @@ function togglePaths(paths: Set<string>, values: string[]) {
   return next;
 }
 
-function agentWorkspaceErrorMessage(error: unknown, t: Record<string, string>) {
+function agentWorkspaceErrorMessage(error: unknown, t: Record<string, string>, action: "upload" | "restore" = "upload") {
   if (!error) return null;
   if (error instanceof ApiError) {
     if (error.code === "sensitive_data_detected") {
       const path = error.message.match(/"([^\"]+)"/)?.[1];
-      return path ? `${t.scanSensitiveData} ${path}` : t.scanSensitiveData;
+      const message = action === "restore" ? t.restoreSensitiveData : t.scanSensitiveData;
+      return path ? `${message} ${path}` : message;
     }
     if (error.code === "revision_conflict") return t.scanRevisionConflict;
     if (error.code === "agent_workspace_quota_exceeded") return t.scanQuotaExceeded;
