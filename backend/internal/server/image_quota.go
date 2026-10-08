@@ -64,7 +64,7 @@ func (a *App) storageQuotaFor(user model.User) int64 {
 	return baseQuota + boundedInvitationBonus(user.BonusStorageBytes)
 }
 
-// storageBreakdown 是用户占用的云端存储，按来源分开。
+// storageBreakdown 是用户已使用或划拨的云端存储，按来源分开。
 //
 // 分开而不是只给一个总数：用户看到"满了"之后要知道该删什么。只报总数的话，
 // 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
@@ -75,16 +75,18 @@ type storageBreakdown struct {
 	ImageBytes int64
 	// ConfigBytes 是客户端加密配置快照的字节数（Postgres 中的 bytea）
 	ConfigBytes int64
+	// AgentAllocatedBytes reserves personal storage assigned to repository expansion.
+	AgentAllocatedBytes int64
 }
 
 func (s storageBreakdown) Total() int64 {
-	return s.DocumentBytes + s.ImageBytes + s.ConfigBytes
+	return s.DocumentBytes + s.ImageBytes + s.ConfigBytes + s.AgentAllocatedBytes
 }
 
 // storageUsageFor 查某用户占用的云端存储。
 //
-// 各项都算：图片在 R2，文档正文和加密配置在 Postgres —— 都是"用户存在云端的东西"，
-// 只算前者会让一个写了几百篇长文的人看到"用量 0"。
+// 图片、文档正文和加密配置都计入用量；划拨给仓库的额外容量全额预留，
+// 仓库文件不重复计费。基础仓库容量和既有赠送额度不占个人配额。
 //
 // 文档用 octet_length 而不是 length：后者按字符数算，中文正文会少算三分之二
 // （UTF-8 下一个汉字 3 字节）。存储占用要的是字节。
@@ -118,8 +120,9 @@ func storageUsageForQuerier(
 			), 0),
 			COALESCE((
 				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
-			), 0)
-	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes, &out.ConfigBytes)
+			), 0),
+			COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0)
+	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes, &out.ConfigBytes, &out.AgentAllocatedBytes)
 	return out, err
 }
 
@@ -190,6 +193,7 @@ func (a *App) recordImageObject(
 				 FROM documents WHERE user_id = $2), 0)
 			+ COALESCE(
 				(SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2), 0)
+			+ COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0)
 			+ $3::bigint <= $4
 		) OR (
 			$5::text = 'wechat-export'
@@ -292,11 +296,12 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 	// 分项一起给：用户看到"满了"之后要知道该删什么。只报总数的话，
 	// 一个存了 400 MB 图片的人可能会去删文档，白费功夫
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"usedBytes":     used.Total(),
-		"documentBytes": used.DocumentBytes,
-		"imageBytes":    used.ImageBytes,
-		"configBytes":   used.ConfigBytes,
-		"quotaBytes":    a.storageQuotaFor(user),
+		"usedBytes":           used.Total(),
+		"documentBytes":       used.DocumentBytes,
+		"imageBytes":          used.ImageBytes,
+		"configBytes":         used.ConfigBytes,
+		"agentAllocatedBytes": used.AgentAllocatedBytes,
+		"quotaBytes":          a.storageQuotaFor(user),
 	})
 }
 
@@ -367,12 +372,13 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		// 409 而不是 413：413 是"这一张太大"，这里是"总量满了"。
 		// Worker 要据此区分回给前端哪个错误码
 		httpx.JSON(w, http.StatusConflict, map[string]any{
-			"code":          "image_quota_exceeded",
-			"usedBytes":     used.Total(),
-			"documentBytes": used.DocumentBytes,
-			"imageBytes":    used.ImageBytes,
-			"configBytes":   used.ConfigBytes,
-			"quotaBytes":    quotaBytes,
+			"code":                "image_quota_exceeded",
+			"usedBytes":           used.Total(),
+			"documentBytes":       used.DocumentBytes,
+			"imageBytes":          used.ImageBytes,
+			"configBytes":         used.ConfigBytes,
+			"agentAllocatedBytes": used.AgentAllocatedBytes,
+			"quotaBytes":          quotaBytes,
 		})
 		return
 	}
@@ -393,10 +399,11 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"usedBytes":     used.Total(),
-		"documentBytes": used.DocumentBytes,
-		"imageBytes":    used.ImageBytes,
-		"configBytes":   used.ConfigBytes,
-		"quotaBytes":    quotaBytes,
+		"usedBytes":           used.Total(),
+		"documentBytes":       used.DocumentBytes,
+		"imageBytes":          used.ImageBytes,
+		"configBytes":         used.ConfigBytes,
+		"agentAllocatedBytes": used.AgentAllocatedBytes,
+		"quotaBytes":          quotaBytes,
 	})
 }

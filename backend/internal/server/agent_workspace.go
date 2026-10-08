@@ -642,14 +642,14 @@ func (a *App) mutateAgentWorkspaceWithHistory(ctx context.Context, userID int, w
 }
 
 func checkAgentWorkspaceQuota(ctx context.Context, tx pgx.Tx, userID int, previousBytes int64) error {
-	var usedBytes, bonusBytes int64
+	var usedBytes, quotaBytes int64
 	if err := tx.QueryRow(ctx, `
 		SELECT agent_workspace_storage_bytes($1),
-		       COALESCE((SELECT bonus_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0)
-	`, userID).Scan(&usedBytes, &bonusBytes); err != nil {
+		       agent_workspace_quota_bytes($1)
+	`, userID).Scan(&usedBytes, &quotaBytes); err != nil {
 		return err
 	}
-	if usedBytes > agentWorkspaceDefaultQuotaBytes+bonusBytes && usedBytes > previousBytes {
+	if usedBytes > quotaBytes && usedBytes > previousBytes {
 		return errAgentWorkspaceQuota
 	}
 	return nil

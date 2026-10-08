@@ -822,6 +822,7 @@ export const zh: Messages = {
       "云端账号已注销，但本机离线数据未能完全清理。服务端令牌已失效，请退出应用后手动删除本机应用数据。",
   },
   storage: {
+    agentAllocated: "仓库额外分配",
     title: "云端存储",
     usedOf: "已用 {used} / 共 {quota}",
     remaining: "还剩 {remaining}",

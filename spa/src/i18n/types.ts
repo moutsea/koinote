@@ -426,6 +426,7 @@ export interface Messages {
     localCleanupFailed: string;
   };
   storage: {
+    agentAllocated: string;
     /** 控制台卡片标题 */
     title: string;
     /** 「已用 {used} / 共 {quota}」 */

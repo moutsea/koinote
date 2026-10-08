@@ -211,6 +211,16 @@ function segments(docBytes, imgBytes, quota, configBytes = 0) {
   eq("图片 200/500 → 40%", imageWidth, 40);
 }
 
+// Repository allocations reserve personal capacity and must appear in the progress bar.
+{
+  const result = barSegments(100, 200, 1000, 50, 300);
+  eq("仓库分配 300/1000 → 30%", result.agent, 30);
+  eq("含仓库分配的总用量", Object.values(result).reduce((a, b) => a + b, 0), 65);
+  const over = barSegments(100, 200, 500, 100, 300);
+  eq("四段总量封顶", Object.values(over).reduce((a, b) => a + b, 0), 100);
+  eq("仓库分配不可为负", barSegments(0, 0, 100, 0, -1).agent, 0);
+}
+
 // ---------- 阈值常量 ----------
 ok("阈值在 0 与 1 之间", NEAR_LIMIT_RATIO > 0 && NEAR_LIMIT_RATIO < 1, NEAR_LIMIT_RATIO);
 

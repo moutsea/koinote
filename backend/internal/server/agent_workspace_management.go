@@ -35,23 +35,6 @@ type agentWorkspaceSummary struct {
 	SizeBytes   int64     `json:"sizeBytes"`
 }
 
-func (a *App) agentWorkspaceStorageGet(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requireAgentWorkspaceUser(w, r, false)
-	if !ok {
-		return
-	}
-	var used, bonus int64
-	err := a.db.QueryRow(r.Context(), `
-		SELECT agent_workspace_storage_bytes($1),
-		       COALESCE((SELECT bonus_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0)
-	`, user.ID).Scan(&used, &bonus)
-	if err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"storage": map[string]int64{"usedBytes": used, "quotaBytes": agentWorkspaceDefaultQuotaBytes + bonus, "bonusBytes": bonus}})
-}
-
 type agentWorkspaceMetadataInput struct {
 	Name             string `json:"name"`
 	Description      string `json:"description"`

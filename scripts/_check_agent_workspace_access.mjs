@@ -7,6 +7,7 @@ import { parseHTML } from "linkedom";
 const require = createRequire(import.meta.url);
 const { window } = parseHTML("<html><body><div id='root'></div></body></html>");
 Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
+document.oninput = null;
 const calls = [];
 const navigations = [];
 const clipboard = [];
@@ -21,6 +22,9 @@ const harness = {
   labels: null,
   failTokenList: false,
   failStorage: false,
+  allocationError: null,
+  allocationWait: null,
+  storage: { usedBytes: 0, quotaBytes: 100000000, bonusBytes: 0, allocatedBytes: 0, personalQuotaBytes: 10 * 1024 ** 3, personalUsedBytes: 0, availableBytes: 10 * 1024 ** 3 },
   createError: null,
   user: { membershipTier: "lifetime", isLocalMode: false },
   navigate: async (destination) => { navigations.push(destination); },
@@ -45,8 +49,16 @@ const harness = {
     if (method === "getAgentWorkspacePrompt") return { prompt: "Instructions for repository 7" };
     if (method === "getAgentWorkspaceStorage") {
       if (harness.failStorage) throw new Error("storage unavailable");
-      return { storage: { usedBytes: 0, quotaBytes: 100000000 } };
+      return { storage: { ...harness.storage } };
     }
+    if (method === "updateAgentWorkspaceStorage") {
+      if (harness.allocationWait) await harness.allocationWait;
+      if (harness.allocationError) throw harness.allocationError;
+      const difference = args[0] - harness.storage.allocatedBytes;
+      harness.storage = { ...harness.storage, allocatedBytes: args[0], quotaBytes: harness.storage.quotaBytes + difference, personalUsedBytes: harness.storage.personalUsedBytes + difference, availableBytes: harness.storage.availableBytes - difference };
+      return { storage: { ...harness.storage } };
+    }
+    if (method === "getStorageUsage") return { usedBytes: harness.storage.personalUsedBytes, documentBytes: 0, imageBytes: 0, configBytes: 0, agentAllocatedBytes: harness.storage.allocatedBytes, quotaBytes: harness.storage.personalQuotaBytes };
     if (method === "submitFeedback") return { feedback: { id: 1, category: args[0].category, message: args[0].message, pagePath: args[0].pagePath, client: "web", createdAt: "2026-10-08T00:00:00Z" } };
     if (method === "listAgentWorkspaces") return { workspaces: [] };
     if (method === "listAgentWorkspaceCommits") return { commits: [] };
@@ -67,6 +79,7 @@ const bundle = await build({
       export { AgentWorkspaceSettingsPage } from "./spa/src/pages/AgentWorkspaceSettingsPage";
       export { MCPAccessCard } from "./spa/src/components/MCPAccessCard";
       export { AgentWorkspaceCard } from "./spa/src/components/AgentWorkspaceCard";
+      export { StorageCard } from "./spa/src/components/StorageCard";
       export { zh } from "./spa/src/i18n/zh";`,
     resolveDir: process.cwd(),
   },
@@ -75,7 +88,7 @@ const bundle = await build({
     const methods = [
       "createMCPToken", "listMCPTokens", "revealMCPToken", "revokeMCPToken", "updateMCPTokenExpiry",
       "getAgentWorkspaceSettings", "updateAgentWorkspaceSettings", "getAgentWorkspace", "getAgentWorkspaceFile",
-      "getAgentWorkspacePrompt", "getAgentWorkspaceStorage", "listAgentWorkspaceCommits", "patchAgentWorkspace",
+      "getAgentWorkspacePrompt", "getAgentWorkspaceStorage", "updateAgentWorkspaceStorage", "getStorageUsage", "listAgentWorkspaceCommits", "patchAgentWorkspace",
       "restoreAgentWorkspaceCommit", "updateAgentWorkspace", "updateAgentWorkspaceMetadata",
       "createAgentWorkspace", "deleteAgentWorkspace", "listAgentWorkspaces", "submitFeedback",
     ];
@@ -86,7 +99,8 @@ const bundle = await build({
         export const AGENT_WORKSPACE_QUERY_KEY = ["agent-workspace"];
         ${methods.map((method) => `export const ${method} = (...args) => globalThis.__agentAccessTest.api("${method}", ...args);`).join("\n")}`,
       "../auth": "export const useSession = () => ({ data: { user: globalThis.__agentAccessTest.user } });",
-      "../i18n": "export const useI18n = () => ({ t: globalThis.__agentAccessTest.labels, locale: 'zh' });",
+      "../i18n": `export const useI18n = () => ({ t: globalThis.__agentAccessTest.labels, locale: 'zh' });
+        export const interpolate = (template, values) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll("{" + key + "}", value), template);`,
       "@tanstack/react-router": `import { createElement } from "react";
         export const useNavigate = () => globalThis.__agentAccessTest.navigate;
         export const useSearch = () => globalThis.__agentAccessTest.search;
@@ -110,7 +124,7 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/react-query$|lucide-react$)/ }, ({ path }) => ({ path: pathToFileURL(require.resolve(path)).href, external: true }));
   } }],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, StorageCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 harness.labels = zh;
 const root = createRoot(document.getElementById("root"));
 let client;
@@ -141,12 +155,69 @@ try {
   assert.ok(document.body.textContent.includes(zh.agentWorkspace.storageSettingsTitle), "repository settings show storage controls");
   assert.ok(document.body.textContent.includes("0.0 KiB / 95.4 MiB"), "repository settings show storage usage and quota");
   assert.equal([...document.querySelectorAll("a")].some((link) => link.textContent?.includes(zh.agentWorkspace.storageExpand)), false, "storage settings do not link back to themselves");
-  await click(zh.agentWorkspace.storageRequest);
-  assert.ok(document.querySelector("textarea"), "storage settings open an expansion request form");
+  const allocationInput = () => document.getElementById("agent-storage-allocation");
+  const allocationButton = () => document.querySelector('button[type="submit"]');
+  const setAllocation = async (value) => {
+    await act(async () => {
+      const input = allocationInput();
+      const previous = input.value;
+      input.value = value;
+      input._valueTracker?.setValue(previous);
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+  };
+  const submitAllocation = async () => {
+    await act(async () => allocationInput().closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+  };
+  assert.ok(allocationInput(), "storage settings directly expose allocation controls");
+  assert.equal(document.querySelector("textarea"), null, "no manual request form remains");
+  assert.equal(allocationButton().disabled, true, "unchanged allocation is not submitted");
+  for (const invalid of ["", "-1", "0.5", "10241"]) {
+    await setAllocation(invalid);
+    assert.equal(allocationButton().disabled, true, `invalid allocation ${invalid} is disabled`);
+  }
+  client.setQueryData(["storage-usage"], { usedBytes: 0 });
+  await setAllocation("512");
+  assert.equal(allocationButton().disabled, false);
+  let finishAllocation;
+  harness.allocationWait = new Promise((resolve) => { finishAllocation = resolve; });
+  await submitAllocation();
+  assert.equal(allocationInput().disabled, true, "pending allocation cannot be edited or submitted twice");
+  await act(async () => finishAllocation());
+  await settle();
+  harness.allocationWait = null;
+  assert.equal(calls.findLast((call) => call.method === "updateAgentWorkspaceStorage").args[0], 512 * 1024 ** 2);
+  assert.equal(client.getQueryData(["agent-workspace-storage"]).storage.allocatedBytes, 512 * 1024 ** 2);
+  assert.equal(client.getQueryState(["storage-usage"]).isInvalidated, true, "account usage refreshes after allocation");
+  assert.ok(document.body.textContent.includes(zh.agentWorkspace.storageAllocationSaved));
+  assert.ok(document.body.textContent.includes("607.4 MiB"), "repository quota updates immediately");
+  assert.equal(calls.some((call) => call.method === "submitFeedback"), false, "allocation never submits feedback");
+  for (const [code, label] of [["storage_allocation_insufficient", "storageAllocationInsufficient"], ["storage_allocation_in_use", "storageAllocationInUse"]]) {
+    harness.allocationError = new ApiError(409, code, code);
+    await setAllocation("128");
+    await submitAllocation();
+    assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace[label]));
+    assert.equal(allocationInput().value, "128", "failed save preserves the requested value for retry");
+  }
+  harness.allocationError = null;
+  await submitAllocation();
+  assert.equal(document.querySelector('[role="alert"]'), null);
+  assert.equal(harness.storage.allocatedBytes, 128 * 1024 ** 2, "reducing allocation returns unused space");
+  await mount(StorageCard);
+  assert.ok(document.body.textContent.includes(zh.storage.agentAllocated), "personal usage shows the reserved allocation");
+  assert.ok(document.body.textContent.includes("128 MB"));
+  harness.storage.usedBytes = 100000000 + 50 * 1024 ** 2;
+  await mount(AgentWorkspaceSettingsPage);
+  assert.equal(allocationInput().getAttribute("min"), "50", "files and retained history set the minimum allocation");
+  await setAllocation("49");
+  assert.equal(allocationButton().disabled, true);
+  harness.storage.usedBytes = 0;
   harness.failStorage = true;
   await mount(AgentWorkspaceSettingsPage);
   assert.ok(document.querySelector('[role="alert"]')?.textContent.includes(zh.storage.loadFailed), "storage failures are visible to the user");
   assert.equal(document.body.textContent.includes("0.0 KiB / 95.4 MiB"), false, "storage failures do not display fake usage");
+  assert.equal(document.getElementById("agent-storage-allocation"), null, "allocation is unavailable until storage loads successfully");
   harness.failStorage = false;
 
   calls.length = 0;

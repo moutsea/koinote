@@ -844,6 +844,7 @@ export const en: Messages = {
       "The cloud account was deleted, but some offline data could not be cleared from this device. Server tokens are invalid; quit the app and remove its local application data manually.",
   },
   storage: {
+    agentAllocated: "Repository allocation",
     title: "Cloud storage",
     documents: "Documents",
     config: "Configuration",

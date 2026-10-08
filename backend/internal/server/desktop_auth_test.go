@@ -112,6 +112,8 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodGet, "/api/agent/workspace/settings", true},
 		{http.MethodPut, "/api/agent/workspace/settings", true},
 		{http.MethodGet, "/api/agent/workspace/storage", true},
+		{http.MethodPut, "/api/agent/workspace/storage", true},
+		{http.MethodPost, "/api/agent/workspace/storage", false},
 		{http.MethodGet, "/api/agent/workspaces", true},
 		{http.MethodPost, "/api/agent/workspaces", true},
 		{http.MethodGet, "/api/agent/workspaces/1", true},

@@ -157,6 +157,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/agent/settings", a.agentSettingsPut)
 	mux.HandleFunc("GET /api/agent/workspace/settings", a.agentWorkspaceSettingsGet)
 	mux.HandleFunc("GET /api/agent/workspace/storage", a.agentWorkspaceStorageGet)
+	mux.HandleFunc("PUT /api/agent/workspace/storage", a.agentWorkspaceStoragePut)
 	mux.HandleFunc("PUT /api/agent/workspace/settings", a.agentWorkspaceSettingsPut)
 	mux.HandleFunc("GET /api/agent/workspaces", a.agentWorkspacesList)
 	mux.HandleFunc("POST /api/agent/workspaces", a.agentWorkspaceCreate)

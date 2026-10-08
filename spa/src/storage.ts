@@ -44,13 +44,13 @@ export function remainingBytes(usedBytes: number, quotaBytes: number): number {
 /**
  * 分段进度条各段的宽度（百分比）。
  *
- * 控制台把条分成「文档」「配置」「图片」三段。三段之和绝不能超过 100 —— 它们是 flex 子项，
+ * 控制台把条分成「文档」「配置」「图片」「仓库分配」四段。各段之和绝不能超过 100 —— 它们是 flex 子项，
  * 超了会把前一段挤出去或溢出圆角容器。
  *
  * 分别算各自占配额的比例、再给图片段封顶，而不是「先算总比例再按各自权重切」：
  * 后者在超额时有舍入误差累积，而前者的每一段都已经被 usageRatio 钳在 1 以内。
  *
- * 放在这里而不是留在组件里，是为了能被断言覆盖 —— 那条"三段之和 <= 100"的不变量
+ * 放在这里而不是留在组件里，是为了能被断言覆盖 —— 那条"各段之和 <= 100"的不变量
  * 值得钉住，而抄一份到测试里等于没钉。
  */
 export function barSegments(
@@ -58,7 +58,8 @@ export function barSegments(
   imageBytes: number,
   quotaBytes: number,
   configBytes = 0,
-): { documents: number; config: number; images: number } {
+  agentAllocatedBytes = 0,
+): { documents: number; config: number; images: number; agent: number } {
   const documents = usageRatio(documentBytes, quotaBytes) * 100;
   const config = Math.min(
     Math.max(0, 100 - documents),
@@ -69,7 +70,11 @@ export function barSegments(
     Math.max(0, 100 - documents - config),
     usageRatio(imageBytes, quotaBytes) * 100,
   );
-  return { documents, config, images };
+  const agent = Math.min(
+    Math.max(0, 100 - documents - config - images),
+    usageRatio(agentAllocatedBytes, quotaBytes) * 100,
+  );
+  return { documents, config, images, agent };
 }
 
 const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;

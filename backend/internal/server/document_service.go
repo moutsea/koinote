@@ -191,7 +191,7 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 			WHERE user_id = $2 AND purpose = 'persistent'
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2
-		), 0) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
+		), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
 		ON CONFLICT (doc_id) DO NOTHING
 		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
 	`, docID, params.User.ID, params.Title, theme, params.Content, derefOrEmpty(params.FolderID), coverMode, coverRatio, coverImageSource, coverPrompt, a.storageQuotaFor(params.User)).Scan(
@@ -308,7 +308,7 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 				WHERE user_id = $1 AND purpose = 'persistent'
 			), 0) + COALESCE((
 				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
-			), 0) + $3::bigint <= $4::bigint
+			), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0) + $3::bigint <= $4::bigint
 		`, params.User.ID, previous.ID, newBytes, a.storageQuotaFor(params.User)).Scan(&fits); err != nil {
 			return documentUpdateResult{}, err
 		}

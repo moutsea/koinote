@@ -35,8 +35,7 @@ const LEVEL_COLOR: Record<UsageLevel, string> = {
 /**
  * 云端存储用量卡片。
  *
- * 统计的是文档正文加图片两项 —— 都是用户存在云端的东西。只算图片会让一个写了
- * 几百篇长文的人看到"用量 0"。
+ * 展示文档、图片、加密配置和已划拨给仓库的额外容量。
  *
  * 放在控制台的账户信息卡下面 —— 它比邮箱、注册时间更需要被看到，尤其是快满的时候。
  */
@@ -66,20 +65,20 @@ export function StorageCard() {
     );
   }
 
-  const { usedBytes, documentBytes, imageBytes, configBytes = 0, quotaBytes } = usage.data;
+  const { usedBytes, documentBytes, imageBytes, configBytes = 0, agentAllocatedBytes = 0, quotaBytes } = usage.data;
   const level = usageLevel(usedBytes, quotaBytes);
   const ratio = usageRatio(usedBytes, quotaBytes);
   const color = LEVEL_COLOR[level];
 
-  // 文档、配置和图片分别展示；算法保证三段之和不超过 100%。
-  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes);
+  // 文档、配置、图片和仓库分配分别展示；各段之和不超过 100%。
+  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes, agentAllocatedBytes);
 
-  // 接近上限时三段都转朱砂：此时"哪部分占得多"已经不重要，
+  // 接近上限时各段都转朱砂：此时"哪部分占得多"已经不重要，
   // 重要的是"满了"。正常状态下才用多色区分
   const barColors =
     level === "normal"
-      ? { documents: "var(--ink-faint)", config: "var(--ink-strong)", images: "var(--cinnabar)" }
-      : { documents: "var(--cinnabar)", config: "var(--cinnabar)", images: "var(--cinnabar)" };
+      ? { documents: "var(--ink-faint)", config: "var(--ink-strong)", images: "var(--cinnabar)", agent: "var(--ink-mid)" }
+      : { documents: "var(--cinnabar)", config: "var(--cinnabar)", images: "var(--cinnabar)", agent: "var(--cinnabar)" };
 
   return (
     <PaperCard className="p-5">
@@ -109,7 +108,7 @@ export function StorageCard() {
         className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full"
         style={{ background: "var(--ink-wash-strong)" }}
       >
-        {/* 三段：文档、配置和图片。分段而不是一整条，是为了让下面的色块图例
+        {/* 各段：文档、配置、图片和仓库分配。分段而不是一整条，是为了让下面的色块图例
             真的有对应物 —— 只有一整条的话，图例的颜色是没有出处的装饰。
             接近上限时整条转朱砂（下面 barColors 里处理），此时分段意义不大，
             但保持结构一致比多一个分支简单 */}
@@ -124,6 +123,10 @@ export function StorageCard() {
         <div
           className="h-full transition-[width] duration-500"
           style={{ width: `${segments.images}%`, background: barColors.images }}
+        />
+        <div
+          className="h-full transition-[width] duration-500"
+          style={{ width: `${segments.agent}%`, background: barColors.agent }}
         />
       </div>
 
@@ -166,6 +169,11 @@ export function StorageCard() {
             {formatBytes(imageBytes, locale)}
           </dd>
         </div>
+        {agentAllocatedBytes > 0 && <div className="flex items-center gap-1.5">
+          <span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: barColors.agent }} />
+          <dt>{t.storage.agentAllocated}</dt>
+          <dd style={{ color: "var(--ink-strong)" }}>{formatBytes(agentAllocatedBytes, locale)}</dd>
+        </div>}
       </dl>
 
       {/* 只在需要提醒时出文字。正常状态下多一行字是噪音 */}

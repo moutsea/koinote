@@ -461,7 +461,7 @@ func desktopRequestAllowed(r *http.Request) bool {
 	case "/api/agent/workspace/settings":
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/agent/workspace/storage":
-		return method == http.MethodGet
+		return method == http.MethodGet || method == http.MethodPut
 	case "/api/agent/workspaces":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/workspace":

@@ -630,8 +630,21 @@ export type AgentWorkspaceSummary = AgentWorkspace & {
 export function getAgentWorkspaceSettings() {
   return apiJson<{ enabled: boolean }>("/api/agent/workspace/settings");
 }
-export type AgentWorkspaceStorage = { usedBytes: number; quotaBytes: number; bonusBytes: number };
+export type AgentWorkspaceStorage = {
+  usedBytes: number;
+  quotaBytes: number;
+  bonusBytes: number;
+  allocatedBytes: number;
+  personalQuotaBytes: number;
+  personalUsedBytes: number;
+  availableBytes: number;
+};
 export function getAgentWorkspaceStorage() { return apiJson<{ storage: AgentWorkspaceStorage }>("/api/agent/workspace/storage"); }
+export function updateAgentWorkspaceStorage(allocatedBytes: number) {
+  return apiJson<{ storage: AgentWorkspaceStorage }>("/api/agent/workspace/storage", {
+    method: "PUT", body: JSON.stringify({ allocatedBytes }),
+  });
+}
 export type AgentWorkspaceCommit = { commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
 export function listAgentWorkspaceCommits(workspaceId: number) { return apiJson<{ commits: AgentWorkspaceCommit[]; nextBefore?: number | null }>(`/api/agent/workspaces/${workspaceId}/commits`); }
 export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number) { return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, { method: "POST", body: JSON.stringify({ expectedRevision }) }); }
@@ -2216,7 +2229,7 @@ export async function fetchImageToBucket(url: string) {
  * 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
  */
 export type StorageUsage = {
-  /** 总量，等于 documentBytes + imageBytes + configBytes */
+  /** 总量：文档、图片、配置快照以及划拨给仓库的额外容量 */
   usedBytes: number;
   /** 文档正文与标题（Postgres） */
   documentBytes: number;
@@ -2224,6 +2237,7 @@ export type StorageUsage = {
   imageBytes: number;
   /** 客户端加密配置快照 */
   configBytes?: number;
+  agentAllocatedBytes?: number;
   quotaBytes: number;
 };
 

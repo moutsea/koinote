@@ -852,6 +852,7 @@ export const fr: Messages = {
       "Le compte cloud a été supprimé, mais certaines données hors ligne n’ont pas pu être effacées de cet appareil. Les jetons serveur sont invalides ; quittez l’application et supprimez manuellement ses données locales.",
   },
   storage: {
+    agentAllocated: "Allocation aux dépôts",
     title: "Stockage cloud",
     documents: "Documents",
     config: "Configuration",
