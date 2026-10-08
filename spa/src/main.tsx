@@ -201,6 +201,11 @@ function parseSpaceSearch(search: Record<string, unknown>): { tab?: "config" | "
   };
 }
 
+function parseAgentWorkspaceSettingsSearch(search: Record<string, unknown>): { workspaceId?: number } {
+  const workspaceId = Number(search.workspaceId);
+  return { workspaceId: Number.isSafeInteger(workspaceId) && workspaceId > 0 ? workspaceId : undefined };
+}
+
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/editor",
@@ -282,11 +287,20 @@ const agentWorkspaceRepositoryRoute = createRoute({
 });
 const agentWorkspaceSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/agent/settings",
+  path: "/space/settings",
+  validateSearch: parseAgentWorkspaceSettingsSearch,
   component: lazyRouteComponent(
     () => import("./pages/AgentWorkspaceSettingsPage"),
     "AgentWorkspaceSettingsPage",
   ),
+});
+const legacyAgentWorkspaceSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent/settings",
+  validateSearch: parseAgentWorkspaceSettingsSearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: "/space/settings", search, replace: true });
+  },
 });
 const agentWorkspaceRepositoriesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -394,6 +408,7 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   agentWorkspaceRepositoriesRoute,
   agentWorkspaceSettingsRoute,
+  legacyAgentWorkspaceSettingsRoute,
   agentWorkspaceRepositoryRoute,
   spaceRoute,
   aiSettingsRoute,

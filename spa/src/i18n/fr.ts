@@ -1155,6 +1155,9 @@ export const fr: Messages = {
     expiryUpdateFailed: "Impossible de modifier l’expiration. Réessayez.",
     create: "Créer le jeton",
     createFailed: "Impossible de créer le jeton. Réessayez.",
+    sharedTokenLimitReached: "Votre compte a atteint la limite commune de 20 jetons actifs pour les documents MCP et les dépôts Agent. Chaque page n’affiche que son type de jeton. Révoquez un jeton inutilisé ici ou dans l’autre page de paramètres avant d’en créer un autre.",
+    manageDocumentTokens: "Gérer les jetons MCP de documents dans les paramètres IA",
+    manageRepositoryTokens: "Gérer les jetons de dépôts dans les paramètres de Mon espace",
     secretStored:
       "Le jeton est stocké chiffré et peut être consulté ou copié à nouveau ci-dessous.",
     activeTokens: "Jetons actifs",

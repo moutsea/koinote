@@ -459,6 +459,15 @@ MCP 是 Koinote 暴露给 Codex、Claude Code 等 Agent 客户端的文档操作
 当前入口是 Streamable HTTP `POST /mcp`，使用官方 Go MCP SDK 的无状态
 JSON 响应模式。Worker 只精确代理 `/mcp`，保持请求 body stream，不解析或重编码协议内容。
 
+Skills/Agent 仓库的启用和客户端上传不依赖 Token。启用后直接返回「我的空间」仓库列表；
+只有点击 README 的「复制给 AI Agent」时才按需读取可用的仓库读写 Token。没有可用 Token 时，
+跳转「我的空间 → 设置」（`/space/settings`），保留返回原仓库的入口，由用户主动创建。
+仓库的 `agent_read` / `agent_write` Token 仅在我的空间设置中展示和管理；
+「AI 设置 → Agent 文档访问（MCP）」只展示 `read` / `write` / `publish` 文档 Token。
+两者复用令牌存储与鉴权实现，但权限和设置入口相互独立。
+两类 Token 合计最多 20 个有效令牌；创建达到上限时，明确说明共享额度，
+并提供前往另一类 Token 设置的链接，便于用户撤销不再使用的令牌。
+
 ### 为什么协议层在 Go，而不是 Worker / Durable Object
 
 MCP 的身份、会员等级、文档授权、版本和审计真值都在 PostgreSQL 与 Go 后端。若把协议层

@@ -684,6 +684,9 @@ export interface Messages {
     expiryUpdateFailed: string;
     create: string;
     createFailed: string;
+    sharedTokenLimitReached: string;
+    manageDocumentTokens: string;
+    manageRepositoryTokens: string;
     secretStored: string;
     activeTokens: string;
     loading: string;

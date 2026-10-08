@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, ChevronRight, Cloud, Edit3, Eye, FileText, Folder, FolderOpen, LockKeyhole, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { AGENT_WORKSPACE_QUERY_KEY, ApiError, getAgentWorkspace, getAgentWorkspaceFile, getAgentWorkspacePrompt, getAgentWorkspaceStorage, listAgentWorkspaceCommits, listMCPTokens, patchAgentWorkspace, revealMCPToken, restoreAgentWorkspaceCommit, updateAgentWorkspace, updateAgentWorkspaceMetadata } from "../api";
@@ -21,6 +21,7 @@ export function AgentWorkspaceRepositoryPage() {
   const { t, locale } = useI18n();
   const session = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const params = useParams({ strict: false }) as { workspaceId?: string };
   const search = useSearch({ strict: false }) as { from?: "hub" | "space" | "settings" };
   const workspaceId = Number(params.workspaceId);
@@ -29,7 +30,6 @@ export function AgentWorkspaceRepositoryPage() {
   const detail = useQuery({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId], queryFn: () => getAgentWorkspace(workspaceId), enabled: canAccess, retry: false });
   const storage = useQuery({ queryKey: ["agent-workspace-storage"], queryFn: getAgentWorkspaceStorage, enabled: canAccess, retry: false });
   const commits = useQuery({ queryKey: ["agent-workspace-commits", workspaceId], queryFn: () => listAgentWorkspaceCommits(workspaceId), enabled: canAccess, retry: false });
-  const tokens = useQuery({ queryKey: ["mcp-tokens"], queryFn: listMCPTokens, enabled: canAccess, retry: false });
   const readmeFile = detail.data?.workspace?.files.find((file) => file.path.toLowerCase() === "readme.md");
   const readme = useQuery({ queryKey: ["agent-workspace-readme", readmeFile?.fileId, readmeFile?.sha256], queryFn: () => getAgentWorkspaceFile(readmeFile!.fileId), enabled: canAccess && readmeFile !== undefined, retry: false });
   const [copied, setCopied] = useState(false);
@@ -43,13 +43,17 @@ export function AgentWorkspaceRepositoryPage() {
   const selectedFileQuery = useQuery({ queryKey: ["agent-workspace-file", selectedFile, detail.data?.workspace?.revision], queryFn: () => getAgentWorkspaceFile(selectedFile!), enabled: selectedFile !== null, retry: false });
   const prompt = useMutation({
     mutationFn: async () => {
-      const currentTokens = tokens.data?.tokens ?? (await listMCPTokens()).tokens;
+      const currentTokens = (await listMCPTokens()).tokens;
       const token = currentTokens.find((item) => item.scope === "agent_write" && item.revealable);
-      if (!token) throw new Error("no revealable agent token");
+      if (!token) {
+        await navigate({ to: "/space/settings", search: { workspaceId } });
+        return false;
+      }
       const [result, revealed] = await Promise.all([getAgentWorkspacePrompt(workspaceId), revealMCPToken(token.tokenId)]);
       await navigator.clipboard.writeText(`${result.prompt}\n\nAuthentication token for this session (keep it secret):\nKOINOTE_MCP_TOKEN=${revealed.secret}\nUse this value as the Bearer token for both REST API and MCP requests.`);
+      return true;
     },
-    onSuccess() { setCopied(true); window.setTimeout(() => setCopied(false), 1800); },
+    onSuccess(didCopy) { if (didCopy) { setCopied(true); window.setTimeout(() => setCopied(false), 1800); } },
   });
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
@@ -214,7 +218,6 @@ function agentWorkspaceErrorMessage(error: unknown, t: Record<string, string>) {
     if (error.message === "file too large" || error.message.startsWith("file too large:")) return t.scanReviewFileSizeLimit;
     if (error.message === "config_files_too_large") return t.scanLocalFailed;
     if (error.message === "no agent files found") return t.scanNoFilesFound;
-    if (error.message === "no revealable agent token") return t.promptWriteTokenRequired;
     return error.message || null;
   }
   return null;

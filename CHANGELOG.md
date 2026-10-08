@@ -16,12 +16,14 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
+- Enabling Skills/Agent repositories no longer requires a token. Repository tokens live in My Space settings, separately from document MCP tokens; Copy for AI Agent guides you there only when a usable read/write token is missing.
 - Desktop sync checks cloud updates at startup, on reconnection and window focus, and every 30 seconds while visible. Only local changes trigger uploads; unchanged or failed background checks stay quiet, and hidden windows do not poll.
 - Updating an older development/AI configuration snapshot removes Agent files such as `CLAUDE.md` and `.claude/skills/*` from that snapshot. Export those files or upload them to an Agent repository before updating; local files remain unchanged.
 - WeChat draft sync reuses uploaded article images by account and image content, reducing repeat-sync and retry delays without changing image quality or covers. Existing clients need no update.
 
 ### Fixed
 
+- When token creation reaches the limit, explain that document MCP and Agent repository tokens share 20 active slots and link to the other token settings page.
 - Desktop sync now preserves document moves made during a cloud refresh, retries failed startup syncs on reconnection, and honors manual sync requests received while an automatic sync is running.
 - Custom platform sync now omits the optional cover field when no cover is set, avoiding empty-URL validation failures.
 - Covers selected in WeChat draft settings now persist with the article. Failed saves reuse uploaded images on retry, and desktop cleanup preserves images still referenced by covers, article bodies, or conflict snapshots after sync.

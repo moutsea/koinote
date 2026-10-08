@@ -4,12 +4,11 @@ import { Check, Edit3, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   createAgentWorkspace, deleteAgentWorkspace, getAgentWorkspaceSettings,
-  listAgentWorkspaces, listMCPTokens,
+  listAgentWorkspaces,
   updateAgentWorkspaceMetadata, updateAgentWorkspaceSettings, type AgentWorkspaceSummary, type User,
 } from "../api";
 import { useI18n } from "../i18n";
 import { confirmAction } from "../confirmAction";
-import { MCPAccessCard } from "./MCPAccessCard";
 import { PaperCard } from "./Ink";
 
 export function AgentWorkspaceCard({ user, repositoryLinkSource = "settings" }: { user: User; repositoryLinkSource?: "settings" | "hub" }) {
@@ -19,7 +18,6 @@ export function AgentWorkspaceCard({ user, repositoryLinkSource = "settings" }: 
   const localMode = Boolean(user.isLocalMode);
   const settings = useQuery({ queryKey: ["agent-workspace-settings"], queryFn: getAgentWorkspaceSettings, enabled: !localMode, retry: false });
   const enabled = member && settings.data?.enabled === true;
-  const tokens = useQuery({ queryKey: ["mcp-tokens"], queryFn: listMCPTokens, enabled, retry: false });
   const repositories = useQuery({ queryKey: ["agent-workspaces"], queryFn: listAgentWorkspaces, enabled, retry: false });
   const workspaces = repositories.data?.workspaces;
   const [newName, setNewName] = useState("");
@@ -53,12 +51,11 @@ export function AgentWorkspaceCard({ user, repositoryLinkSource = "settings" }: 
   if (!member) return <WorkspaceShell user={user} title={t.agentWorkspace.title} description={t.agentWorkspace.membersOnly}><Link to="/pricing" className="mt-5 inline-flex rounded-full px-5 py-2.5 text-sm font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.mcp.upgrade}</Link></WorkspaceShell>;
   if (!enabled) return <WorkspaceShell user={user} title={t.agentWorkspace.title} description={t.agentWorkspace.description}><section className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>{t.agentWorkspace.enableStep}</p><p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.description}</p><button type="button" disabled={enable.isPending} onClick={() => enable.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{enable.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{t.agentWorkspace.enable}</button>{enable.isError && <p className="mt-2 text-sm" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.enableFailed}</p>}</section></WorkspaceShell>;
 
-  const hasToken = tokens.data?.tokens.some((token) => token.scope === "agent_read" || token.scope === "agent_write") === true;
-  const onboarding = !hasToken || workspaces?.length === 0;
+  const onboarding = workspaces?.length === 0;
   return <WorkspaceShell user={user} title={t.agentWorkspace.title} description={t.agentWorkspace.description}>
     {onboarding && <StepLabel>{t.agentWorkspace.enabled}</StepLabel>}
-    {onboarding && <MCPAccessCard user={user} agentOnly workspaceEnabled />}
-    {hasToken && <section className="mt-5 border-t pt-5" style={{ borderColor: "var(--ink-line)" }}>
+    <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.clientUploadWithoutToken}</p>
+    <section className="mt-5 border-t pt-5" style={{ borderColor: "var(--ink-line)" }}>
       {onboarding && <><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>{t.agentWorkspace.repositoriesTitle}</p>
       <p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.repositoriesDescription}</p></>}
       {repositories.isError ? <p className="mt-4 text-sm" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.repositoryLoadFailed}</p> : <>
@@ -69,7 +66,7 @@ export function AgentWorkspaceCard({ user, repositoryLinkSource = "settings" }: 
           {create.isError && <p className="mt-2 text-sm" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.createFailed}</p>}
         </div> : null}
       </>}
-    </section>}
+    </section>
   </WorkspaceShell>;
 }
 

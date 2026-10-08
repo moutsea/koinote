@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Activity, Check, Copy, Eye, EyeOff, KeyRound, LoaderCircle, Pencil, PlugZap, Trash2, X } from "lucide-react";
 import {
+  ApiError,
   createMCPToken,
   listMCPTokens,
   revealMCPToken,
@@ -93,7 +94,11 @@ export function MCPAccessCard({ user, agentOnly = false, workspaceEnabled = true
     }
   }
 
-  const visibleTokens = tokens.data?.tokens.filter((token) => !agentOnly || token.scope === "agent_read" || token.scope === "agent_write");
+  const visibleTokens = tokens.data?.tokens.filter((token) => {
+    const isAgentToken = token.scope === "agent_read" || token.scope === "agent_write";
+    return agentOnly ? isAgentToken : !isAgentToken;
+  });
+  const tokenLimitReached = create.error instanceof ApiError && create.error.code === "mcp_token_limit_reached";
 
   return (
     <PaperCard>
@@ -157,8 +162,8 @@ export function MCPAccessCard({ user, agentOnly = false, workspaceEnabled = true
                   {!agentOnly && <option value="read">{t.mcp.readOnly}</option>}
                   {!agentOnly && <option value="write">{t.mcp.readWrite}</option>}
                   {!agentOnly && <option value="publish">{t.mcp.publishOnly}</option>}
-                  {(agentOnly || scope === "agent_read") && <option value="agent_read">{t.mcp.agentRead}</option>}
-                  {(agentOnly || scope === "agent_write") && <option value="agent_write">{t.mcp.agentWrite}</option>}
+                  {agentOnly && <option value="agent_read">{t.mcp.agentRead}</option>}
+                  {agentOnly && <option value="agent_write">{t.mcp.agentWrite}</option>}
                 </select>
               </label>
               <label className="text-xs" style={{ color: "var(--ink-mid)" }}>
@@ -189,7 +194,20 @@ export function MCPAccessCard({ user, agentOnly = false, workspaceEnabled = true
               </button>
             </div>
 
-            {create.isError && <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>{t.mcp.createFailed}</p>}
+            {create.isError && (
+              <div role="alert" className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>
+                <p>{tokenLimitReached ? t.mcp.sharedTokenLimitReached : t.mcp.createFailed}</p>
+                {tokenLimitReached && (agentOnly ? (
+                  <Link to="/settings" search={{ section: "ai" }} hash="mcp" className="mt-2 inline-block font-semibold underline" style={{ color: "var(--cinnabar)" }}>
+                    {t.mcp.manageDocumentTokens}
+                  </Link>
+                ) : (
+                  <Link to="/space/settings" className="mt-2 inline-block font-semibold underline" style={{ color: "var(--cinnabar)" }}>
+                    {t.mcp.manageRepositoryTokens}
+                  </Link>
+                ))}
+              </div>
+            )}
 
             {secret && (
               <div

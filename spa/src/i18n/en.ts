@@ -1144,6 +1144,9 @@ export const en: Messages = {
     expiryUpdateFailed: "Could not update the expiry. Please try again.",
     create: "Create token",
     createFailed: "Could not create the token. Please try again.",
+    sharedTokenLimitReached: "Your account has reached the shared limit of 20 active document MCP and Agent repository tokens. Each settings page only lists its own token type. Revoke an unused token here or in the other settings page before creating another.",
+    manageDocumentTokens: "Manage document MCP tokens in AI settings",
+    manageRepositoryTokens: "Manage repository tokens in My Space settings",
     secretStored:
       "The token is stored encrypted and can be viewed or copied again below.",
     activeTokens: "Active tokens",

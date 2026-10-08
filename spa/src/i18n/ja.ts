@@ -1129,6 +1129,9 @@ export const ja: Messages = {
       "有効期限を更新できませんでした。もう一度お試しください。",
     create: "トークンを作成",
     createFailed: "トークンを作成できませんでした。再試行してください。",
+    sharedTokenLimitReached: "文書 MCP と Agent リポジトリの有効なトークンが、アカウント共通の上限 20 個に達しました。各設定ページには、その種類のトークンだけが表示されます。ここ、またはもう一方の設定ページで不要なトークンを取り消してから作成してください。",
+    manageDocumentTokens: "AI 設定で文書 MCP トークンを管理",
+    manageRepositoryTokens: "マイスペース設定でリポジトリトークンを管理",
     secretStored:
       "トークンは暗号化して保存され、後から再表示・コピーできます。",
     activeTokens: "有効なトークン",

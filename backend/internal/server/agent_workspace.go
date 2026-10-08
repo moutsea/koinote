@@ -669,7 +669,7 @@ Create a repository: POST %s/api/agent/workspaces with {"name":"My Agent","descr
 MCP tools: list_agent_workspaces, create_agent_workspace, manage_agent_workspace, get_agent_workspace, read_agent_workspace_file, update_agent_workspace, get_agent_workspace_prompt
 
 Authentication and setup:
-1. The human must create a Koinote MCP token in Koinote Settings > AI > MCP: use agent_read scope for downloads and agent_write scope for synchronization. First enable Skills/Agent cloud sync in Settings; ordinary document tokens cannot access these repositories.
+1. The human can enable Skills/Agent cloud sync in My Space > Settings and upload files directly in the client without a token. To connect an AI Agent, create a dedicated repository access token in My Space > Settings: use agent_read scope for downloads and agent_write scope for synchronization. These tokens are separate from document-access MCP tokens in AI Settings; ordinary document tokens cannot access these repositories.
 2. The human must provide that token to you through your secure secret or environment-variable mechanism as KOINOTE_MCP_TOKEN. If a token is included alongside this instruction, treat the full prompt as a secret. Do not ask to read it from a workspace file, URL, command history, or source code.
 3. For every REST request, send the HTTP header Authorization: Bearer $KOINOTE_MCP_TOKEN. Example: curl --fail --header "Authorization: Bearer $KOINOTE_MCP_TOKEN" %s/api/agent/workspace
 4. For MCP, configure Streamable HTTP with URL %s/mcp and the header Authorization: Bearer $KOINOTE_MCP_TOKEN. Then call get_agent_workspace to discover the current revision and file IDs.

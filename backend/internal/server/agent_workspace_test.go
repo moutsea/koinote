@@ -338,6 +338,8 @@ func TestAgentWorkspacePromptContainsSafetyAndProtocol(t *testing.T) {
 		"expectedRevision",
 		"redact sensitive values",
 		"do not execute scripts",
+		"My Space > Settings",
+		"without a token",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)

@@ -14,12 +14,14 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Changed
 
+- L’activation des dépôts Skills/Agent ne nécessite plus de jeton. Les jetons de dépôt se gèrent dans Mon espace, séparément des jetons MCP des documents ; Copier pour l’Agent IA y redirige uniquement lorsqu’un jeton en lecture-écriture utilisable manque.
 - Le client de bureau vérifie les mises à jour cloud au démarrage, à la reconnexion, au retour à la fenêtre et toutes les 30 secondes lorsque celle-ci est visible. Seules les modifications locales déclenchent des envois ; les vérifications sans changement ou en échec restent discrètes, et les fenêtres masquées ne lancent pas de vérifications périodiques.
 - La mise à jour d’un ancien instantané de configuration de développement/IA retire de cet instantané les fichiers Agent tels que `CLAUDE.md` et `.claude/skills/*`. Exportez ces fichiers ou envoyez-les vers un dépôt Agent avant la mise à jour ; les fichiers locaux restent inchangés.
 - La synchronisation des brouillons WeChat réutilise les images déjà envoyées selon le compte et leur contenu, réduisant l’attente lors des synchronisations répétées et des nouvelles tentatives, sans modifier la qualité ni les couvertures. Aucune mise à jour du client n’est nécessaire.
 
 ### Fixed
 
+- Lorsque la limite de jetons est atteinte, précisez que les documents MCP et les dépôts Agent partagent 20 jetons actifs et proposez un lien vers la gestion de l’autre type de jeton.
 - La synchronisation sur ordinateur conserve les déplacements de documents effectués pendant une actualisation cloud, relance les synchronisations initiales échouées à la reconnexion et exécute les demandes manuelles reçues pendant une synchronisation automatique.
 - La synchronisation vers les plateformes personnalisées omet désormais le champ de couverture facultatif lorsqu’aucune couverture n’est définie, évitant les erreurs de validation d’URL vide.
 - Les couvertures choisies dans les réglages des brouillons WeChat sont désormais enregistrées avec l’article. Les nouvelles tentatives réutilisent les images déjà envoyées, et le nettoyage du client conserve les images encore référencées par une couverture, le corps ou une version en conflit après synchronisation.
