@@ -149,6 +149,7 @@ func main() {
 	app.StartPaymentNotificationRetry(backgroundCtx)
 	app.StartStripeCheckoutCleanup(backgroundCtx)
 	app.StartMCPAuditCleanup(backgroundCtx)
+	app.StartConfigSyncCleanup(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),

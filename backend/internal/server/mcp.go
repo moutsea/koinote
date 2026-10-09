@@ -78,20 +78,22 @@ func (a *App) mcpHandler() http.Handler {
 		if principal.isAgentWorkspace() {
 			limit = mcpAgentWorkspaceMaxRequestBytes
 		}
-		if r.ContentLength > limit {
-			http.Error(w, "MCP request body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		if r.Body != nil {
-			// The SDK turns read errors into 500 in stateless mode. Observe the
-			// streaming limit and write 413 before that fallback, without buffering
-			// another copy of a potentially large request (including chunked bodies).
-			guard := &mcpBodyLimitWriter{ResponseWriter: w}
-			r.Body = &mcpLimitedBody{ReadCloser: http.MaxBytesReader(w, r.Body, limit), response: guard}
-			w = guard
-		}
-		handler.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), mcpPrincipalContextKey{}, principal)))
+		serveLimitedMCP(handler, w, r.WithContext(context.WithValue(r.Context(), mcpPrincipalContextKey{}, principal)), limit)
 	})
+}
+
+func serveLimitedMCP(handler http.Handler, w http.ResponseWriter, r *http.Request, limit int64) {
+	if r.ContentLength > limit {
+		http.Error(w, "MCP request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if r.Body != nil {
+		// Override the SDK's 500 on streaming read errors without another body copy.
+		guard := &mcpBodyLimitWriter{ResponseWriter: w}
+		r.Body = &mcpLimitedBody{ReadCloser: http.MaxBytesReader(w, r.Body, limit), response: guard}
+		w = guard
+	}
+	handler.ServeHTTP(w, r)
 }
 
 type mcpPrincipalContextKey struct{}

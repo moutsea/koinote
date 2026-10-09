@@ -513,6 +513,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return len(parts) == 2 && parts[0] != "" && parts[1] == "default" && method == http.MethodPut
 	}
 	if rest, found := strings.CutPrefix(path, "/api/config-snapshots/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 2 && parts[0] != "" && parts[1] == "agent-sync" {
+			return method == http.MethodPost || method == http.MethodDelete
+		}
 		return rest != "" && !strings.Contains(rest, "/") &&
 			(method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete)
 	}

@@ -1,4 +1,4 @@
-import { strToU8, unzipSync, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync, type Zippable } from "fflate";
 
 export const CONFIG_SNAPSHOT_ENVELOPE_VERSION = 1;
 const PBKDF2_ITERATIONS = 310_000;
@@ -61,7 +61,7 @@ function validateFiles(files: ConfigVaultFile[]): ConfigVaultFile[] {
   return normalized;
 }
 
-async function deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function deriveKey(password: string, salt: Uint8Array, iterations: number, extractable = false): Promise<CryptoKey> {
   if (password.length < 8) throw new Error("config_password_too_short");
   const passwordKey = await crypto.subtle.importKey(
     "raw",
@@ -74,9 +74,19 @@ async function deriveKey(password: string, salt: Uint8Array, iterations: number)
     { name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations },
     passwordKey,
     { name: "AES-GCM", length: 256 },
-    false,
+    extractable,
     ["encrypt", "decrypt"],
   );
+}
+
+function zipConfigFiles(files: ConfigVaultFile[]): Uint8Array {
+  // Configuration can contain secrets under any filename. Match native restore:
+  // both downloaded ZIPs and encrypted archives carry owner-only permissions.
+  const entries: Zippable = Object.fromEntries(files.map(({ path, bytes }) => [
+    path,
+    [bytes, { os: 3, attrs: (0o100600 << 16) >>> 0 }],
+  ]));
+  return zipSync(entries, { level: 6 });
 }
 
 export async function encryptConfigSnapshot(
@@ -84,10 +94,7 @@ export async function encryptConfigSnapshot(
   password: string,
 ): Promise<{ envelope: string; fileCount: number; bytes: number }> {
   const validated = validateFiles(files);
-  const archive = zipSync(
-    Object.fromEntries(validated.map((file) => [file.path, file.bytes])),
-    { level: 6 },
-  );
+  const archive = zipConfigFiles(validated);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
@@ -116,6 +123,13 @@ export async function decryptConfigSnapshot(
   serialized: string,
   password: string,
 ): Promise<ConfigVaultFile[]> {
+  return (await unlockConfigSnapshot(serialized, password)).files;
+}
+
+export async function unlockConfigSnapshot(
+  serialized: string,
+  password: string,
+): Promise<{ files: ConfigVaultFile[]; decryptionKey: string }> {
   let envelope: ConfigVaultEnvelope;
   try {
     envelope = JSON.parse(serialized) as ConfigVaultEnvelope;
@@ -130,19 +144,21 @@ export async function decryptConfigSnapshot(
     envelope.iterations > 2_000_000
   ) throw new Error("config_snapshot_invalid");
   let archive: Uint8Array;
+  let decryptionKey: string;
   try {
-    const key = await deriveKey(password, base64ToBytes(envelope.salt), envelope.iterations);
+    const key = await deriveKey(password, base64ToBytes(envelope.salt), envelope.iterations, true);
     archive = new Uint8Array(await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: base64ToBytes(envelope.iv) as BufferSource },
       key,
       base64ToBytes(envelope.ciphertext) as BufferSource,
     ));
+    decryptionKey = bytesToBase64(new Uint8Array(await crypto.subtle.exportKey("raw", key)));
   } catch {
     throw new Error("config_password_incorrect");
   }
   try {
     let uncompressedBytes = 0;
-    return validateFiles(
+    const files = validateFiles(
       Object.entries(unzipSync(archive, {
         filter: ({ originalSize }) => {
           if (
@@ -157,6 +173,7 @@ export async function decryptConfigSnapshot(
         },
       })).map(([path, bytes]) => ({ path, bytes })),
     );
+    return { files, decryptionKey };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("config_")) throw error;
     throw new Error("config_snapshot_invalid");
@@ -171,7 +188,7 @@ export function filesFromFileList(files: FileList | File[]): Promise<ConfigVault
 }
 
 export function configFilesZip(files: ConfigVaultFile[]): Uint8Array {
-  return zipSync(Object.fromEntries(validateFiles(files).map((file) => [file.path, file.bytes])), { level: 6 });
+  return zipConfigFiles(validateFiles(files));
 }
 
 export function downloadConfigFiles(files: ConfigVaultFile[], name: string): void {

@@ -8,6 +8,10 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Added
 
+- Development/AI configuration sync now includes DeepSeek Harness under Coding agents, scanning default `.dsh` settings and profiles; credentials restore with owner-only access on macOS/Linux, while skills and AGENTS.md belong to the separate repository.
+- Skills/Agent and configuration sync menus now offer Copy for AI Agent with the MCP endpoint, read-only credentials and local merge instructions; configuration handoff uses a temporary credential scoped to one snapshot revision without sharing the migration password.
+- Local restore for Skills/Agent and development configurations maps known configuration locations across Windows, macOS and Linux, previews destinations and rejects path conflicts before writing; existing backups work without re-uploading.
+- Skills/Agent repositories now support selected-file ZIP downloads and desktop sync to original AI paths or a chosen folder, with overwrite confirmation, local backups, and revision and integrity checks.
 - Skills/Agent repository MCP now includes history browsing, revision restoration and storage queries, supports uploads up to 5 MiB and bounded chunked file reads, and uses a separate connection configuration alongside document MCP.
 - My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files.
 - My Space settings now let you allocate extra Agent repository capacity directly from personal storage, apply changes immediately, and reclaim unused capacity. Account storage details show the reserved allocation, while existing files and history remain protected.
@@ -18,6 +22,7 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
+- Unlocked configuration revisions can be synced again on the same page without re-entering the password; refreshing or changing the cloud revision requires unlocking again.
 - Enabling Skills/Agent repositories no longer requires a token. Repository tokens live in My Space settings, separately from document MCP tokens; Copy for AI Agent guides you there only when a usable read/write token is missing.
 - Desktop sync checks cloud updates at startup, on reconnection and window focus, and every 30 seconds while visible. Only local changes trigger uploads; unchanged or failed background checks stay quiet, and hidden windows do not poll.
 - Updating an older development/AI configuration snapshot removes Agent files such as `CLAUDE.md` and `.claude/skills/*` from that snapshot. Export those files or upload them to an Agent repository before updating; local files remain unchanged.
@@ -25,6 +30,11 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Fixed
 
+- Fixed local configuration restore for HOME aliases, Windows path casing and external configuration roots, preserved valid Unix filenames and prevented case-folded remapping; all configuration writes start private and paths are checked before creating directories.
+- AI sync no longer copies existing long-lived repository tokens; configuration grants can be revoked and follow account/desktop session invalidation, unavailable clipboards offer manual copying, and large envelopes require whole downloads.
+- Fixed DeepSeek Harness sync to exclude its actual `storages` runtime directory and record Unix `0600` credential permissions in downloaded and encrypted ZIPs, so extraction preserves the permissions Harness requires.
+- Hardened local sync: detect multiline cookie credentials, reject Unicode-equivalent destination paths, retry clipboard writes without issuing new credentials, refresh metadata after unlocking, and bound repository transfer batches while preserving special ZIP entry names.
+- Fixed shifting buttons and unclear upload status during Skills/Agent sync, and false sensitive-content warnings for cookie-clearing examples in Cloudflare skills.
 - Browser history restore now asks for explicit confirmation before restoring sensitive content and displays failures, including revision conflicts. MCP file updates also retain repository and revision audit details. OpenClaw setup now saves environment references before probing the connection.
 - Repository restores now reject sensitive historical content for Agent tokens, complete MCP replacements require explicit `replaceAll`, oversized requests return 413, and Claude Code/OpenClaw configurations preserve environment references instead of storing tokens.
 - When token creation reaches the limit, explain that document MCP and Agent repository tokens share 20 active slots and link to the other token settings page.

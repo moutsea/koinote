@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { unzipSync } from "fflate";
 import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -12,12 +14,23 @@ document.oninput = null;
 const calls = [];
 const navigations = [];
 const clipboard = [];
+let userGesture = false;
 Object.defineProperty(globalThis, "navigator", {
   value: { userAgent: "Node.js", clipboard: { writeText: async (text) => clipboard.push(text) } },
   configurable: true,
 });
 const harness = {
   enabled: false,
+  desktop: false,
+  workspaceFiles: [],
+  fileContents: new Map(),
+  fileWait: null,
+  revisionResponses: [],
+  nativeCalls: [],
+  saveResult: true,
+  restoreCount: null,
+  async save(command, bytes, options) { harness.nativeCalls.push({ command, bytes, options }); return harness.saveResult; },
+  async restoreFiles(destination, files, locale) { harness.nativeCalls.push({ destination, files, locale }); return harness.restoreCount ?? files.length; },
   tokens: [],
   search: {},
   labels: null,
@@ -53,12 +66,12 @@ const harness = {
     }
     if (method === "createMCPToken") {
       if (harness.createError) throw harness.createError;
-      const token = { ...args[0], tokenId: "created-agent-token", hint: "test-token", revealable: true };
+      const token = { ...args[0], tokenId: "created-agent-token", hint: "test-token", revealable: true, expiresAt: new Date(Date.now() + args[0].expiresInDays * 86_400_000).toISOString() };
       harness.tokens.push(token);
       return { token, secret: "test-agent-secret" };
     }
     if (method === "revealMCPToken") return { secret: "test-agent-secret" };
-    if (method === "getAgentWorkspacePrompt") return { prompt: "Instructions for repository 7" };
+    if (method === "getAgentWorkspacePrompt") return { prompt: "Instructions for repository 7", mcpUrl: "https://example.test/mcp" };
     if (method === "getAgentWorkspaceStorage") {
       if (harness.failStorage) throw new Error("storage unavailable");
       return { storage: { ...harness.storage } };
@@ -80,8 +93,15 @@ const harness = {
       harness.workspaceRevision = args[2] + 1;
       return { workspace: { workspaceId: 7, revision: harness.workspaceRevision, files: [] } };
     }
+    if (method === "getAgentWorkspaceFile") {
+      if (harness.fileWait) await harness.fileWait;
+      const file = harness.fileContents.get(args[0]);
+      if (file instanceof Error) throw file;
+      if (!file) throw new ApiError(404, "missing", "not_found");
+      return { file };
+    }
     if (method === "getAgentWorkspace") return {
-      workspace: { workspaceId: 7, name: "Test repository", description: "", revision: harness.workspaceRevision, files: [], updatedAt: "2026-10-08T00:00:00Z" },
+      workspace: { workspaceId: 7, name: "Test repository", description: "", revision: harness.revisionResponses.shift() ?? harness.workspaceRevision, files: harness.workspaceFiles, updatedAt: "2026-10-08T00:00:00Z" },
     };
     throw new Error(`Unexpected API call: ${method}`);
   },
@@ -94,6 +114,8 @@ const bundle = await build({
       export { restoreAgentWorkspaceCommit as realRestoreAgentWorkspaceCommit } from "./spa/src/api";
       export { createRoot } from "react-dom/client";
       export { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+      export { loadAgentWorkspaceFiles, saveAgentWorkspaceZip, validateAgentWorkspaceTransferPaths, agentWorkspaceTransferTooLarge, AGENT_WORKSPACE_TRANSFER_MAX_BYTES, AGENT_WORKSPACE_TRANSFER_MAX_FILES } from "./spa/src/agentWorkspaceTransfer";
+      export { AgentWorkspaceTransferDialog } from "./spa/src/components/AgentWorkspaceTransferDialog";
       export { AgentWorkspaceRepositoryPage } from "./spa/src/pages/AgentWorkspaceRepositoryPage";
       export { AgentWorkspaceSettingsPage } from "./spa/src/pages/AgentWorkspaceSettingsPage";
       export { MCPAccessCard } from "./spa/src/components/MCPAccessCard";
@@ -132,21 +154,23 @@ const bundle = await build({
         export const AgentWorkspaceReadme = props => createElement("div", null,
           createElement("button", { onClick: props.onCopy, disabled: props.copying, "data-copied": String(props.copied) }, "copy-prompt"),
           props.promptError && createElement("p", { role: "alert" }, props.promptErrorMessage));`,
-      "./desktop/runtime": "export const isDesktopRuntime = () => false;",
+      "./desktop/runtime": "export const isDesktopRuntime = () => globalThis.__agentAccessTest.desktop;",
       "./desktop/network": "export const desktopFetch = () => { throw new Error('Unexpected desktop request'); };",
       "./desktop/offlineStore": "export const desktopResolveImageSource = () => { throw new Error('Unexpected offline image request'); };",
-      "../desktop/runtime": "export const isDesktopRuntime = () => false; export const desktopAPIOrigin = () => 'https://koinote.example';",
-      "../desktop/configFiles": "export const desktopScanAgentWorkspaceFiles = async () => [];",
+      "../desktop/runtime": "export const isDesktopRuntime = () => globalThis.__agentAccessTest.desktop; export const desktopAPIOrigin = () => 'https://koinote.example';",
+      "../desktop/configFiles": "export const desktopScanAgentWorkspaceFiles = async () => []; export const desktopRestoreConfigFiles = (...args) => globalThis.__agentAccessTest.restoreFiles('folder', ...args); export const desktopRestoreConfigFilesToHome = (...args) => globalThis.__agentAccessTest.restoreFiles('home', ...args);",
+      "@tauri-apps/api/core": "export const invoke = (...args) => globalThis.__agentAccessTest.save(...args);",
       "../confirmAction": "export const confirmAction = (...args) => globalThis.__agentAccessTest.confirm(...args);",
       "../modalStack": "export const pushModal = () => () => {};",
     };
     window.location = { origin: "https://koinote.example" };
+    builder.onResolve({ filter: /^\.\/api$/ }, ({ importer }) => importer.endsWith("agentWorkspaceTransfer.ts") ? { path: "../api", namespace: "agent-access" } : undefined);
     builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(adapters, path) ? { path, namespace: "agent-access" } : undefined);
     builder.onLoad({ filter: /.*/, namespace: "agent-access" }, ({ path }) => ({ contents: adapters[path] }));
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/react-query$|lucide-react$)/ }, ({ path }) => ({ path: pathToFileURL(require.resolve(path)).href, external: true }));
   } }],
 });
-const { realRestoreAgentWorkspaceCommit, createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, StorageCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { agentWorkspaceTransferTooLarge, AGENT_WORKSPACE_TRANSFER_MAX_BYTES, AGENT_WORKSPACE_TRANSFER_MAX_FILES, loadAgentWorkspaceFiles, saveAgentWorkspaceZip, validateAgentWorkspaceTransferPaths, AgentWorkspaceTransferDialog, realRestoreAgentWorkspaceCommit, createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentWorkspaceRepositoryPage, AgentWorkspaceSettingsPage, AgentWorkspaceCard, StorageCard, MCPAccessCard, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 harness.labels = zh;
 const root = createRoot(document.getElementById("root"));
 let client;
@@ -163,7 +187,7 @@ async function mount(component, props = {}) {
 async function click(label) {
   const button = [...document.querySelectorAll("button")].find((item) => item.textContent === label);
   assert.ok(button, `Missing button: ${label}`);
-  await act(async () => button.click());
+  await act(async () => { userGesture = true; try { button.click(); } finally { userGesture = false; } });
   await settle();
 }
 const originalFetch = globalThis.fetch;
@@ -427,7 +451,168 @@ try {
   assert.deepEqual(restoreCalls(), [[7, 0, 1], [7, 0, 1, true]]);
   assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.scanRevisionConflict), "a conflict on the confirmed retry is visible");
 
-  console.log("agent repository optional tokens, isolated settings, shared token limit guidance, on-demand setup, copy and restore confirmation/error checks passed");
+  // Repository export must preserve binary content and a single captured revision.
+  const makeFile = (fileId, path, bytes) => ({ fileId, path, mimeType: "application/octet-stream", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), contentBase64: Buffer.from(bytes).toString("base64") });
+  const cloudFiles = [makeFile(21, ".codex/skills/demo/SKILL.md", Buffer.from("# 你好\n")), makeFile(22, "README.md", Buffer.from("# Repository")), makeFile(23, "assets/icon.bin", Buffer.from([0, 128, 255, 42]))];
+  harness.workspaceRevision = 3;
+  harness.workspaceFiles = cloudFiles.map(({ contentBase64, ...metadata }) => metadata);
+  harness.fileContents = new Map(cloudFiles.map(file => [file.fileId, file]));
+  const snapshot = { workspaceId: 7, name: "测试仓库", revision: 3, files: harness.workspaceFiles };
+  const selectedIDs = new Set([21, 23]);
+  const loaded = await loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {});
+  assert.deepEqual(loaded.map(file => file.path), [cloudFiles[0].path, cloudFiles[2].path]);
+  assert.deepEqual(Buffer.from(loaded[1].bytes), Buffer.from([0, 128, 255, 42]));
+  harness.desktop = true;
+  await saveAgentWorkspaceZip(loaded, "测试仓库-r3");
+  const archive = harness.nativeCalls.pop();
+  assert.equal(archive.command, "desktop_save_export");
+  assert.equal(decodeURIComponent(archive.options.headers["x-koinote-export-filename"]), "测试仓库-r3.zip");
+  const unpacked = unzipSync(archive.bytes);
+  assert.deepEqual(Object.keys(unpacked), loaded.map(file => file.path));
+  assert.deepEqual(Buffer.from(unpacked[loaded[1].path]), Buffer.from(loaded[1].bytes));
+
+  const specialFiles = ["__proto__", "constructor", "toString", "assets/__proto__"].map(path => ({ path, bytes: new TextEncoder().encode(`file:${path}`) }));
+  await saveAgentWorkspaceZip(specialFiles, `A${"😀".repeat(40)}`);
+  const specialArchive = harness.nativeCalls.pop();
+  const extracted = JSON.parse(execFileSync("python3", ["-c", "import io,sys,zipfile,json; z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())); print(json.dumps({n:z.read(n).decode() for n in z.namelist()}))"], { input: Buffer.from(specialArchive.bytes), encoding: "utf8" }));
+  assert.deepEqual(Object.entries(extracted), specialFiles.map(file => [file.path, new TextDecoder().decode(file.bytes)]), "an independent ZIP reader recovers every special-name file");
+  assert.ok(decodeURIComponent(specialArchive.options.headers["x-koinote-export-filename"]).endsWith("😀.zip"), "long emoji names never split a surrogate pair");
+
+  const totalLimit = AGENT_WORKSPACE_TRANSFER_MAX_BYTES;
+  assert.equal(agentWorkspaceTransferTooLarge([{ sizeBytes: totalLimit }]), false);
+  assert.equal(agentWorkspaceTransferTooLarge([{ sizeBytes: totalLimit }, { sizeBytes: 1 }]), true);
+  assert.equal(agentWorkspaceTransferTooLarge(Array.from({length: AGENT_WORKSPACE_TRANSFER_MAX_FILES + 1}, () => ({sizeBytes: 0}))), true);
+  const oversizedFiles = Array.from({length: 13}, (_, index) => ({...cloudFiles[0], fileId: index + 100, path: `.codex/skills/large/${index}.bin`, sizeBytes: 5 << 20}));
+  const oversizedSnapshot = { ...snapshot, files: oversizedFiles };
+  const requestsBeforeOversize = calls.length;
+  await assert.rejects(() => loadAgentWorkspaceFiles(oversizedSnapshot, new Set(oversizedFiles.map(file => file.fileId)), () => {}), /transferTooLarge/);
+  assert.equal(calls.length, requestsBeforeOversize, "reject oversized batches before any network request");
+  await mount(AgentWorkspaceTransferDialog, { workspace: oversizedSnapshot, initialDestination: "home", onClose() {}, onComplete() { assert.fail("oversized selection completed"); } });
+  assert.ok(document.querySelector('[role="alert"]').textContent.includes("64 MiB"));
+  assert.ok([...document.querySelectorAll("button")].find(button => button.textContent === zh.agentWorkspace.transferConfirmSync).disabled);
+
+  for (const path of ["../outside", "/absolute", "C:/outside", "bad\\path", "a/../b"]) {
+    assert.throws(() => validateAgentWorkspaceTransferPaths([{ path }]), /transferInvalidPath/);
+  }
+  assert.throws(() => validateAgentWorkspaceTransferPaths([{ path: "same" }, { path: "same/child" }]), /transferInvalidPath/);
+  harness.revisionResponses = [3, 4];
+  await assert.rejects(() => loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {}), /transferChanged/);
+  harness.fileContents.set(23, { ...cloudFiles[2], contentBase64: Buffer.from([0, 128, 255, 43]).toString("base64") });
+  await assert.rejects(() => loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {}), /transferChanged/);
+  harness.fileContents.set(23, new ApiError(404, "missing", "not_found"));
+  await assert.rejects(() => loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {}), /transferChanged/);
+  harness.fileContents.set(23, cloudFiles[2]);
+  const aborted = new AbortController(); aborted.abort();
+  await assert.rejects(() => loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {}, aborted.signal), /abort/i);
+
+  const completed = [];
+  const transferProps = { workspace: snapshot, initialDestination: "home", onClose() {}, onComplete: message => completed.push(message) };
+  harness.nativeCalls = [];
+  await mount(AgentWorkspaceTransferDialog, transferProps);
+  assert.ok(document.querySelector('input[aria-label="选择 README.md"]').disabled, "root README is not restored to HOME");
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.equal(harness.nativeCalls.length, 1);
+  assert.equal(harness.nativeCalls[0].destination, "home");
+  assert.deepEqual(harness.nativeCalls[0].files.map(file => file.path), [cloudFiles[0].path]);
+  assert.equal(harness.nativeCalls[0].locale, "zh");
+  assert.equal(completed.pop(), zh.agentWorkspace.transferSynced.replace("{count}", "1"));
+
+  harness.restoreCount = 0;
+  await mount(AgentWorkspaceTransferDialog, transferProps);
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.ok(document.querySelector('[role="status"]').textContent.includes(zh.agentWorkspace.transferCancelled));
+  assert.equal(completed.length, 0, "cancelling the native restore is not success");
+  harness.restoreCount = null;
+
+  const restoreFilesBeforeError = harness.restoreFiles;
+  for (const [code, message] of [
+    ["config_platform_path_conflict", zh.space.configSnapshots.errorPlatformConflict],
+    ["config_platform_path_unsupported", zh.space.configSnapshots.errorPlatformUnsupported],
+  ]) {
+    harness.restoreFiles = async () => { throw code; };
+    await mount(AgentWorkspaceTransferDialog, transferProps);
+    assert.ok(document.body.textContent.includes(zh.space.configSnapshots.crossPlatformHint));
+    await click(zh.agentWorkspace.transferConfirmSync);
+    assert.equal(document.querySelector('[role="alert"]').textContent, message);
+    assert.equal(completed.length, 0, "platform conflicts do not report success");
+  }
+  harness.restoreFiles = restoreFilesBeforeError;
+
+  harness.nativeCalls = [];
+  harness.revisionResponses = [4];
+  await mount(AgentWorkspaceTransferDialog, transferProps);
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.transferChanged));
+  assert.equal(harness.nativeCalls.length, 0, "conflicting revisions never reach the local writer");
+
+  let finishDownload;
+  harness.fileWait = new Promise(resolve => { finishDownload = resolve; });
+  await mount(AgentWorkspaceTransferDialog, transferProps);
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.ok(document.querySelector('[aria-busy="true"]'));
+  await act(async () => root.render(null));
+  await act(async () => finishDownload());
+  await settle();
+  harness.fileWait = null;
+  assert.equal(harness.nativeCalls.length, 0, "leaving the dialog aborts before local writes");
+
+  const folderProps = { ...transferProps, workspace: { ...snapshot, files: snapshot.files.slice(1) } };
+  harness.confirmationResults = [false];
+  await mount(AgentWorkspaceTransferDialog, folderProps);
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.equal(harness.nativeCalls.length, 0, "declined folder overwrite confirmation never writes");
+  harness.confirmationResults = [true];
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.equal(harness.nativeCalls[0].destination, "folder");
+  assert.deepEqual(harness.nativeCalls[0].files.map(file => file.path), ["README.md", "assets/icon.bin"]);
+
+  harness.desktop = false;
+  await mount(AgentWorkspaceRepositoryPage);
+  assert.ok([...document.querySelectorAll("button")].some(button => button.textContent === zh.agentWorkspace.transferDownload));
+  await click(zh.agentWorkspace.transferSync);
+  assert.ok(document.querySelector('[role="menu"]'));
+  assert.ok([...document.querySelectorAll('[role="menuitem"]')].some(button => button.textContent === zh.space.configSnapshots.downloadWithKoinote), "browser Koinote option downloads ZIP");
+  harness.tokens = [
+    { tokenId: "writer-only", scope: "agent_write", revealable: true },
+    { ...token("agent_read"), tokenId: "permanent", name: "Local Skills/Agent sync", expiresAt: null },
+    { ...token("agent_read"), tokenId: "long-lived", name: "Local Skills/Agent sync", expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() },
+    { ...token("agent_read"), tokenId: "personal", expiresAt: new Date(Date.now() + 86_400_000).toISOString() },
+  ];
+  const callsBeforeLocalCopy = calls.length;
+  globalThis.ClipboardItem = class { constructor(data) { this.data = data; } };
+  let clipboardStarts = 0;
+  navigator.clipboard.write = async items => {
+    assert.equal(userGesture, true, "repository copy must start before mutation/network awaits");
+    clipboardStarts++;
+    clipboard.push(await (await items[0].data["text/plain"]).text());
+  };
+  await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(clipboardStarts, 1);
+  assert.equal(calls.findLast(call => call.method === "createMCPToken").args[0].scope, "agent_read", "local merge never creates a write token");
+  assert.equal(calls.findLast(call => call.method === "createMCPToken").args[0].expiresInDays, 1);
+  assert.ok(!calls.slice(callsBeforeLocalCopy).some(call => call.method === "revealMCPToken" && call.args[0] === "writer-only"), "local merge never reveals a write token");
+  assert.ok(!calls.slice(callsBeforeLocalCopy).some(call => call.method === "revealMCPToken"), "local sync must not reveal permanent, long-lived or unrelated tokens");
+  assert.ok(clipboard.at(-1).includes("MCP endpoint: https://example.test/mcp"));
+  assert.ok(clipboard.at(-1).includes("Authorization: Bearer test-agent-secret"));
+  assert.ok(clipboard.at(-1).includes("Target workspaceId: 7"));
+  assert.ok(clipboard.at(-1).includes("merge with existing local configuration"));
+  const tokensAfterCopy = harness.tokens.length;
+  await click(zh.agentWorkspace.transferSync);
+  await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(harness.tokens.length, tokensAfterCopy, "repeat copy reuses a read token");
+  navigator.clipboard.write = async () => { throw new DOMException("denied", "NotAllowedError"); };
+  await click(zh.agentWorkspace.transferSync); await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(document.querySelector('[role="dialog"]').getAttribute("aria-labelledby"), "agent-copy-title");
+  const callsBeforeRetry = calls.length;
+  navigator.clipboard.writeText = async text => { assert.equal(userGesture, true); clipboard.push(text); };
+  await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(calls.length, callsBeforeRetry, "repository clipboard retry neither creates nor reveals another token");
+  delete globalThis.ClipboardItem;
+  delete navigator.clipboard.write;
+  await click(zh.agentWorkspace.transferDownload);
+  assert.equal(document.querySelector('select').querySelectorAll('option').length, 1, "browser export only offers ZIP");
+
+  console.log("agent repository optional tokens, isolated settings, shared token limit guidance, on-demand setup, copy, history restore and repository download/local sync checks passed");
 } finally {
   globalThis.fetch = originalFetch;
   await act(async () => root.unmount());

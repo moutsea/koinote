@@ -734,7 +734,7 @@ export function patchAgentWorkspace(input: {
 }
 
 export function getAgentWorkspacePrompt(workspaceId?: number) {
-  return apiJson<{ version: string; prompt: string }>(
+  return apiJson<{ version: string; prompt: string; mcpUrl: string }>(
     workspaceId
       ? `/api/agent/workspace/prompt?workspaceId=${workspaceId}`
       : "/api/agent/workspace/prompt",
@@ -2271,6 +2271,18 @@ export type ConfigSnapshotSummary = {
 };
 
 export type ConfigSnapshot = ConfigSnapshotSummary & { envelope: string };
+
+export type ConfigSyncGrant = { token: string; expiresAt: string; snapshotId: string; revision: number; mcpUrl: string; downloadUrl: string };
+
+export function createConfigSyncGrant(snapshotId: string, revision: number) {
+  return apiJson<ConfigSyncGrant>(`/api/config-snapshots/${encodeURIComponent(snapshotId)}/agent-sync`, {
+    method: "POST", body: JSON.stringify({ revision }),
+  });
+}
+
+export function revokeConfigSyncGrants(snapshotId: string) {
+  return apiJson<{ success: boolean }>(`/api/config-snapshots/${encodeURIComponent(snapshotId)}/agent-sync`, { method: "DELETE" });
+}
 
 export function getConfigSnapshots() {
   return apiJson<{ snapshots: ConfigSnapshotSummary[] }>("/api/config-snapshots");

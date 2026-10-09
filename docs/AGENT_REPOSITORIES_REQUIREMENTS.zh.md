@@ -6,6 +6,51 @@
 >
 > 状态：第一期 Hosted Workspace 已完成 API、MCP 工具和设置页实现，尚未部署上线；Repository、Release、Memory 等仍未实现。本文依据本次产品讨论整理，不代表已经上线或完成生产验收。
 
+## 2026-10-09：DeepSeek Harness 配置支持（随桌面 0.1.72 发布）
+
+- DeepSeek Harness 使用编码 Agent 分类，默认扫描 HOME 下 `.dsh` 配置与 profiles；不扫描自定义 `DSH_HOME`，可手动选取 HOME 内的配置。
+- 复用加密快照、解锁缓存和两种本机同步方式；默认 HOME 相对路径支持三种系统，保留文件内容。macOS/Linux 恢复所有配置文件（含 `.env`、SSH 私钥、`.credentials.yaml`）时，临时文件与最终文件均使用仅所有者读写权限。
+- `.dsh/skills` 与 `.dsh/AGENTS.md` 归入 Skills/Agent；依赖、缓存、会话和附件等运行数据不进入自动配置扫描，包含实际使用的 `.dsh/storages`。
+- 网页下载和加密快照共用 ZIP 打包逻辑，为全部配置文件写入 Unix 普通文件 `0600` 属性；旧快照解锁后再次下载也会补上此属性。已用系统 unzip 实际解压验证权限和内容。
+- 目录依据：[官方配置说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/app-boot/README.md)、[凭据存储说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/credentials/credentials-local/README.md)。
+
+## 2026-10-09：同步审查修复（随桌面 0.1.72 发布）
+
+- 敏感扫描仅豁免以分号或文件末尾结束的空 Cookie 字面量；换行后的拼接、方法调用不豁免，前后端共用回归样例。
+- 本机路径比较加入 Unicode NFD 规范化；等价文件名及等价父目录冲突在创建目录或写文件前拒绝。
+- AI 交接在点击/提交事件中启动剪贴板写入，异步填充内容；权限拒绝或剪贴板不可用时提供手动全选文本和直接重试按钮，复用已准备的凭证，离页后不再复制迟到响应。
+- 解锁完成后同步更新列表中的版本摘要，避免列表旧版本导致重复要求密码；解密内容和密钥仍只保留在页面内存。
+- 仓库每批下载/恢复最多 64 MiB、10,000 个文件，开始网络请求前及 ZIP 打包前检查，界面提示分批选择；ZIP 逐条添加文件，保留 `__proto__` 等合法文件名。
+
+## 2026-10-09：选择本机同步方式与 AI 交接（随桌面 0.1.72 发布）
+
+- 两类同步主入口弹出下拉菜单：Koinote 自动恢复（网页下载 ZIP），或复制给自己的 AI Agent。开发配置的分类恢复仍保留按类恢复到本机。
+- 成功解锁后，仅在当前页面内存保存该快照 revision、明文文件和派生后的快照密钥，不保存迁移密码。收起/再次展开、恢复到 HOME/选择目录、整包 AI 交接可复用。刷新/退出销毁缓存，云端 revision 变化会清空缓存并要求重新解锁。写入云端的编辑仍需密码以重新加密。
+- Skills/Agent 本机合并只复用专用名称 `Local Skills/Agent sync` 且剩余有效期不超过一天的 `agent_read` Token，不复制永久、长期或其他用途的 Token；无合适 Token 时创建一天有效的只读 Token，不读取或创建 `agent_write`。原有读写管理入口继续独立存在。提示词约束目标 workspaceId、revision、文件哈希及本机合并边界。
+- 开发配置新增 0080、0081 迁移，只保存临时 Token 的 SHA256、所有者、snapshotId、revision、到期时间、账号会话版本与签发桌面登录族；不保存明文 Token、密钥、迁移密码或额外的配置副本。30 分钟有效，最多 10 个有效交接凭证；API/工具每次验证所有者、有效期及固定版本，修改账号密码、使所有会话失效、撤销签发桌面登录均使凭证失效；桌面正常刷新登录不使凭证失效。页面支持撤销此快照的全部 AI 授权，删除快照会级联删除凭证。旧的未绑定会话版本凭证自动失效。
+- 过期授权由每分钟后台任务分批清理；签发事务只清理当前用户的过期/旧会话记录，不锁住其他用户的记录。
+- `POST /api/config-snapshots/{id}/agent-sync` 只接受浏览器/桌面会话及期望 revision，`DELETE` 撤销当前快照的全部凭证；桌面 API 白名单仅开放这两个精确操作。仓库/文档 Token 和临时配置 Token 都不能签发交接凭证。
+- 独立 `/api/config-sync/mcp` 只注册 `get_config_sync_snapshot`、`read_config_sync_envelope`；`GET /api/config-sync/envelope` 使用相同 Bearer 凭证下载整包密文。MCP 分块最大 8 KiB，仅供不超过 8 MiB 的 envelope 使用；元信息公布 `maxMcpEnvelopeBytes`，超出时明确要求整包下载。整包下载支持完整 64 MiB envelope 上限，避免受 30 分钟有效期和每分钟 120 次请求限制。两类 MCP 共用请求体上限处理。
+- 复制内容包含单版本 AES-GCM 密钥（不是迁移密码）、临时 Token、MCP/下载地址和本机合并指令。菜单明确提示仅交给信任的 Agent。本机合并要求先检查系统、差异和路径，备份同名文件、保留本机独有文件，冲突询问；不执行下载代码，不自动回写云端。服务端继续保持无法解密。
+- 已在临时 PostgreSQL 库验证临时凭证隔离、跨用户拒绝、过期/删除/版本变更、密文下载与 MCP 分块、413；前端验证单次解锁复用、跨快照密钥隔离、版本变化与离页失效、菜单复制和只读仓库 Token 选择。
+
+## 2026-10-09：跨系统恢复（随桌面 0.1.72 发布）
+
+- Skills/Agent 和开发配置共用桌面恢复通道；仅“同步到本机”映射路径，下载 ZIP 和选择目录导出保留备份结构。
+- HOME 相对路径（如 `.claude/skills`、`.codex/skills`）在接收电脑重新定位；不需要保存原用户名或盘符。
+- 已知默认目录规则：VS Code / Insiders、Cursor、Windsurf 的 User 目录；Zed；pip（含 `pip.ini` ↔ `pip.conf`）；Poetry；Claude Desktop 的 `claude_desktop_config.json`（仅 Windows ↔ macOS）。旧备份按路径识别，无需改变服务端或加密快照格式。
+- 目标目录尊重 HOME 内的 `APPDATA`、`XDG_CONFIG_HOME`；HOME 符号链接与 Windows 目录大小写可正确识别。目标配置根目录在 HOME 外时，同平台保留原 HOME 相对路径，跨平台仍提示选择目录导出；不会写入 HOME 外。Unix 应用目录匹配区分大小写，Unix 旧快照中的冒号文件名仍可恢复。未知的外系统 AppData / Library 路径不自动还原。自定义来源路径暂无法推断其应用类型。
+- 原生确认显示原路径 → 目标路径，再按最终落点检查高风险文件；映射冲突、文件/父目录冲突、Windows 保留名和不合法路径在写入前拒绝。
+- 文件内容逐字节保留：不改绝对路径、脚本、命令、快捷键、行尾或凭据。依赖和脚本可执行权限需在本机检查；路径适配不等于所有配置可直接运行。
+- 规则验证使用显式系统参数覆盖三个系统的双向映射；实际落盘与备份验证只在当前 macOS 测试环境的临时目录执行，尚未进行 Windows/Linux 真机测试。
+- 目录依据：[VS Code](https://code.visualstudio.com/docs/configure/settings)、[Cursor](https://docs.cursor.com/en/troubleshooting/troubleshooting-guide)、[Zed](https://zed.dev/docs/themes)、[pip](https://pip.pypa.io/en/stable/topics/configuration/)、[Poetry](https://python-poetry.org/docs/configuration/)、[Claude Desktop MCP](https://py.sdk.modelcontextprotocol.io/get-started/real-host/)。Windsurf 使用仓库现有扫描清单中的对应 User 目录。
+
+## 2026-10-09：仓库下载与本机同步
+
+仓库详情提供文件选择、预览和 ZIP 下载；桌面端还支持恢复扫描所得的 AI 路径到 HOME，或保留相对目录结构写入用户选择的文件夹。恢复前确认，原文件自动备份，不删除未选中的本机文件。HOME 模式只接收已知 AI 路径中的文件及 AGENTS.md 等入口，不把仓库 README.md 写到 HOME，也不把 AI 根目录当成文件覆盖。
+
+客户端下载并核对选中版本的文件哈希、大小、路径，并在读取前后校验仓库 revision；并发读取最多 4 个文件。校验失败、版本变化、用户取消或页面退出后，不触发本机写入。底层恢复还会预先拒绝与现有目录重名的文件。此项本地实现尚待发布。
+
 ## 2026-10-08：私有仓库 MCP 补充
 
 当前 Skills/Agent 私有仓库已提供独立的 `agent_read` / `agent_write` MCP 权限，复用 `/mcp` 入口。

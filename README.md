@@ -298,6 +298,18 @@ OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a l
 
 ## Skills/Agent 仓库访问（MCP）
 
+打开仓库后，可通过「下载文件」勾选文件并下载 ZIP，保留目录结构。桌面客户端另提供「同步到本机」：扫描上传的 AI 路径可还原到原位置，其他仓库文件可保存到指定文件夹。覆盖前确认并自动备份同名原文件，不删除本机其他文件；仓库中途更新或文件校验失败时会停止保存，请刷新后重试。
+
+仓库下载或同步每批最多 64 MiB、10,000 个文件；超出时请减少勾选并分批操作。该限制保护客户端内存，不影响云端容量。
+
+跨系统恢复同样适用于「开发配置」快照：`.claude/skills`、`.codex/skills` 等路径相对于目标电脑的用户目录还原；VS Code（含 Insiders）、Cursor、Windsurf、Zed、pip、Poetry 的默认配置位置会在 Windows、macOS、Linux 之间映射，Claude Desktop 的 MCP 配置支持 Windows 与 macOS 互转。旧备份也适用，无需重新上传；确认框会显示变更前后的路径。无法适配的外系统目录、映射后冲突的路径会在写入前报错，可改为选择目录导出后整理。ZIP 和「选择目录」保留备份路径。文件里的绝对路径、命令、快捷键和脚本内容不会转换，依赖与脚本执行权限仍需在本机检查；自定义来源目录尚不支持自动识别。
+
+开发/AI 配置的「编码 Agent」包含 **DeepSeek Harness**：默认扫描 `~/.dsh` 中的配置文件（含 `.credentials.yaml`、`.env`、`cordis.patch.yml`、旧版 `settings.yaml`）及 `profiles` 配置；跳过依赖、缓存和运行数据。`.dsh/skills` 与 `.dsh/AGENTS.md` 使用 Skills/Agent 仓库。默认路径可跨系统恢复，macOS/Linux 上全部配置文件（包括 `.env`、SSH 私钥和 `.credentials.yaml`）从临时写入开始就使用 `0600` 权限；ZIP 也保留此权限。自定义 `DSH_HOME` 暂不自动扫描，可手动选择 HOME 内的文件。目录依据：[官方配置说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/app-boot/README.md)、[凭据存储说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/credentials/credentials-local/README.md)。
+
+Skills/Agent 和开发配置的同步主入口均提供下拉选项：「通过 Koinote 同步」或「复制给 AI Agent」（网页中的 Koinote 选项下载 ZIP）。后者一次复制 MCP 地址、凭证和本机同步/合并指令，要求 Agent 检查本机环境、比较差异、备份原文件，并在冲突时询问用户。Skills/Agent 只复用专用、剩余有效期不超过一天的只读仓库 Token；否则创建有效期一天的 Token，可在仓库访问设置中撤销。已有的仓库读写入口保持独立。剪贴板受限或不可用时，可在弹窗全选文本后手动复制，也可重试；重试复用同一份凭证。
+
+开发配置展开解锁后，在当前页面同步同一版本无需重复输入密码；退出页面、刷新或版本变更后需重新解锁。交给 AI 时使用独立的 `koinote-config-sync` MCP 连接（`/api/config-sync/mcp`），凭证只读、30 分钟有效且绑定单个快照版本，同时复制该版本的解密密钥。迁移密码、解密密钥和明文均不上传服务端；普通仓库或文档 Token 无法访问此接口。请仅将复制内容交给信任的 AI Agent。Agent 可经 MCP 获取元信息和小块密文，超过 8 MiB 的密文必须经同凭证下载接口获取整包（支持完整 64 MiB 上限），再在本机解密、合并；临时凭证无云端写入权限。 可在快照卡片点击「撤销 AI 授权」立即停止后续读取；修改账号密码、使所有会话失效或退出签发授权的桌面登录也会令凭证失效。已下载的内容无法撤回。剪贴板不可用时可在弹窗全选并手动复制，重试复用已有凭证。
+
 在「我的空间 → 设置 → Agent 仓库访问 · API / MCP」创建仓库 Token，使用 **仓库 MCP 连接**标签中的配置。
 连接地址同样是 `https://koinote.app/mcp`，服务名使用 `koinote-agent`，环境变量使用 `KOINOTE_AGENT_TOKEN`，
 可与文档 MCP 同时连接。仓库 Token 仅访问当前账号自己的 Skills/Agent 仓库；文档 Token 不能用于仓库。

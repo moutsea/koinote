@@ -17,6 +17,7 @@ use tauri::{
 use tauri::{Emitter, Manager};
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+mod config_restore;
 mod file_export;
 mod pdf_export;
 
@@ -1086,10 +1087,11 @@ struct DesktopConfigRestoreFile {
     bytes: Vec<u8>,
 }
 
-const CONFIG_SCAN_ROOTS: [&str; 59] = [
+const CONFIG_SCAN_ROOTS: [&str; 60] = [
     ".ssh",
     ".claude",
     ".codex",
+    ".dsh",
     ".pi",
     ".opencode",
     ".hermes",
@@ -1149,6 +1151,7 @@ const CONFIG_SCAN_ROOTS: [&str; 59] = [
 ];
 
 const AGENT_WORKSPACE_SCAN_ROOTS: &[&str] = &[
+    ".dsh/skills",
     ".claude/agents",
     ".claude/commands",
     ".claude/skills",
@@ -1196,7 +1199,7 @@ const AGENT_WORKSPACE_SCAN_ROOTS: &[&str] = &[
     ".continue/rules",
 ];
 
-const AGENT_WORKSPACE_SCAN_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", "GEMINI.md"];
+const AGENT_WORKSPACE_SCAN_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".dsh/AGENTS.md"];
 
 const CONFIG_COMPLETE_DIRECTORIES: &[&str] = &[
     ".ssh",
@@ -1473,6 +1476,15 @@ fn collect_config_directory(
     if is_agent_workspace_directory(directory, logical_home) {
         return Ok(());
     }
+    // Harness keeps runtime data beside its settings and profile definitions.
+    // Do not walk session stores or attachments as configuration candidates.
+    if directory.strip_prefix(logical_home.join(".dsh")).ok()
+        .and_then(|path| path.components().next())
+        .and_then(|part| part.as_os_str().to_str())
+        .is_some_and(|name| matches!(name, "sessions" | "storage" | "storages" | "attachments" | "uploads" | "state" | "data"))
+    {
+        return Ok(());
+    }
     let include_all_files =
         include_all_files || is_complete_config_directory(directory, logical_home);
     let entries = match std::fs::read_dir(directory) {
@@ -1634,20 +1646,8 @@ fn validated_config_restore_path(
     root: &std::path::Path,
     relative: &str,
 ) -> Result<std::path::PathBuf, String> {
-    let relative_path = std::path::Path::new(relative);
-    if relative_path.is_absolute()
-        || relative.is_empty()
-        || relative.as_bytes().len() > 512
-        || relative.contains('\0')
-    {
-        return Err("config_path_invalid".to_string());
-    }
-    for component in relative_path.components() {
-        if !matches!(component, std::path::Component::Normal(_)) {
-            return Err("config_path_invalid".to_string());
-        }
-    }
-    Ok(root.join(relative_path))
+    config_restore::validate_path(relative, config_restore::Platform::current())?;
+    Ok(root.join(relative))
 }
 
 fn prepare_config_restore_parent(
@@ -1679,6 +1679,31 @@ fn prepare_config_restore_parent(
     Ok(())
 }
 
+fn validate_config_restore_parent(
+    root: &std::path::Path,
+    parent: &std::path::Path,
+) -> Result<(), String> {
+    let relative = parent
+        .strip_prefix(root)
+        .map_err(|_| "config_path_invalid")?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            return Err("config_path_invalid".into());
+        };
+        current.push(name);
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err("config_path_invalid".into())
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(())
+}
+
 fn config_restore_backup_path(target: &std::path::Path, timestamp: u128) -> std::path::PathBuf {
     let name = target
         .file_name()
@@ -1703,16 +1728,26 @@ fn restore_config_files(
         return Err("config_file_count_invalid".to_string());
     }
     let root = std::fs::canonicalize(root).map_err(|_| "config_home_unavailable".to_string())?;
-    let mut seen = std::collections::HashSet::new();
-    for file in files {
-        if !seen.insert(restore_config_path_key(&file.path)) {
-            return Err("config_path_duplicate".to_string());
-        }
-    }
+    config_restore::validate_destinations(
+        &files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>(),
+        config_restore::Platform::current(),
+    )?;
     let targets = files
         .iter()
-        .map(|file| validated_config_restore_path(&root, &file.path))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|file| root.join(&file.path))
+        .collect::<Vec<_>>();
+    // Validate every destination before replacing any file. A repository file
+    // must never rename and replace an existing local directory (or directory link).
+    if targets.iter().any(|target| target.is_dir()) {
+        return Err("config_path_invalid".to_string());
+    }
+    // Inspect every existing ancestor before creating any destination directories.
+    for target in &targets {
+        validate_config_restore_parent(&root, target.parent().ok_or("config_path_invalid")?)?;
+    }
     for target in &targets {
         let parent = target
             .parent()
@@ -1739,22 +1774,19 @@ fn restore_config_files(
             let backup = config_restore_backup_path(&target, timestamp);
             std::fs::rename(&target, backup).map_err(|error| error.to_string())?;
         }
-        file_export::save_export_path(target.clone(), file.bytes.clone())?;
-        #[cfg(unix)]
-        if restore_config_path_is_ssh(&file.path) {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
-                .map_err(|error| error.to_string())?;
-        }
+        // Configuration may contain secrets under any name (.env, SSH keys, etc.).
+        // The temporary file is private from creation, before any bytes are written.
+        file_export::save_private_export_path(target, file.bytes.clone())?;
     }
     Ok(files.len())
 }
 
-// macOS 的 APFS 默认大小写与 Unicode 规范化都不敏感：先做 Unicode 小写，
-// 再把会折叠成 ASCII 的少数字符（ſ、ﬅ 等）展开，并合并重复分隔符。
+// macOS 的 APFS 默认大小写与 Unicode 规范化都不敏感：先分解为 NFD，
+// 再做小写和兼容字符折叠，最后规范化组合字符顺序并合并重复分隔符。
 fn restore_config_path_key(path: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
     let mut folded = String::with_capacity(path.len());
-    for character in path.replace('\\', "/").chars() {
+    for character in path.replace('\\', "/").nfd() {
         match character {
             'ſ' => folded.push('s'),
             'ﬀ' => folded.push_str("ff"),
@@ -1766,7 +1798,7 @@ fn restore_config_path_key(path: &str) -> String {
             other => folded.extend(other.to_lowercase()),
         }
     }
-    folded
+    folded.nfd().collect::<String>()
         .split('/')
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
@@ -1852,7 +1884,7 @@ fn restore_config_dialog_copy(
         "zh" => (
             "恢复本地配置".to_string(),
             format!(
-                "将把以下配置文件恢复到当前电脑的 HOME 目录，并覆盖同名文件。\n\n{paths_text}\n\n原文件会自动备份。是否继续？"
+                "将把以下配置文件恢复到当前电脑的 HOME 目录，并覆盖同名文件。\n\n{paths_text}\n\n目录已按本机系统适配（如有变化，上方显示原路径 → 目标路径）。文件内容保持原样，请检查绝对路径、命令及脚本是否适用；脚本执行权限需在本机确认。原文件会自动备份。是否继续？"
             ),
             "高风险配置确认".to_string(),
             format!(
@@ -1862,7 +1894,7 @@ fn restore_config_dialog_copy(
         "fr" => (
             "Restaurer la configuration locale".to_string(),
             format!(
-                "Les fichiers de configuration suivants seront restaurés dans le dossier HOME de cet ordinateur et remplaceront les fichiers de même nom.\n\n{paths_text}\n\nLes fichiers existants seront sauvegardés. Continuer ?"
+                "Les fichiers de configuration suivants seront restaurés dans le dossier HOME de cet ordinateur et remplaceront les fichiers de même nom.\n\n{paths_text}\n\nLes dossiers pris en charge sont adaptés au système (source → destination ci-dessus). Le contenu reste inchangé : vérifiez les chemins absolus, commandes, scripts et permissions d’exécution. Les fichiers existants seront sauvegardés. Continuer ?"
             ),
             "Confirmer les fichiers à risque".to_string(),
             format!(
@@ -1872,7 +1904,7 @@ fn restore_config_dialog_copy(
         "ja" => (
             "ローカル設定を復元".to_string(),
             format!(
-                "次の設定ファイルをこのコンピューターの HOME フォルダーに復元し、同名ファイルを上書きします。\n\n{paths_text}\n\n既存ファイルは自動的にバックアップされます。続行しますか？"
+                "次の設定ファイルをこのコンピューターの HOME フォルダーに復元し、同名ファイルを上書きします。\n\n{paths_text}\n\n対応する保存先をこのOSに合わせました（変更時は元のパス → 保存先を上に表示）。内容は変更しません。絶対パス、コマンド、スクリプト、実行権限を確認してください。既存ファイルは自動的にバックアップされます。続行しますか？"
             ),
             "高リスク設定の確認".to_string(),
             format!(
@@ -1882,7 +1914,7 @@ fn restore_config_dialog_copy(
         _ => (
             "Restore local configuration".to_string(),
             format!(
-                "The following configuration files will be restored to this computer's HOME directory and overwrite same-named files.\n\n{paths_text}\n\nExisting files will be backed up first. Continue?"
+                "The following configuration files will be restored to this computer's HOME directory and overwrite same-named files.\n\n{paths_text}\n\nSupported locations are adapted to this system (changes show source → destination above). File contents stay unchanged: review absolute paths, commands, scripts and executable permissions on this computer. Existing files will be backed up first. Continue?"
             ),
             "Confirm high-risk configuration".to_string(),
             format!(
@@ -1980,15 +2012,10 @@ async fn desktop_restore_config_files_to_home(
     }
     tauri::async_runtime::spawn_blocking(move || {
         let root = config_home_directory()?;
-        let canonical_root =
-            std::fs::canonicalize(&root).map_err(|_| "config_home_unavailable".to_string())?;
-        let mut seen = std::collections::HashSet::new();
-        for file in &files {
-            if !seen.insert(restore_config_path_key(&file.path)) {
-                return Err("config_path_duplicate".to_string());
-            }
-            validated_config_restore_path(&canonical_root, &file.path)?;
-        }
+        let (files, display_paths) =
+            plan_config_home_restore(files, &config_restore::HomeLocations::current(&root))?;
+        // Planning uses the shared destination validator; the writer rechecks
+        // paths and filesystem state after the confirmation dialog.
         let paths = files
             .iter()
             .map(|file| file.path.clone())
@@ -1999,7 +2026,7 @@ async fn desktop_restore_config_files_to_home(
             .cloned()
             .collect::<Vec<_>>();
         let (title, message, high_risk_title, high_risk_message) =
-            restore_config_dialog_copy(&locale, &paths, &high_risk_paths);
+            restore_config_dialog_copy(&locale, &display_paths, &high_risk_paths);
         let confirmed = window
             .dialog()
             .message(message)
@@ -2025,6 +2052,31 @@ async fn desktop_restore_config_files_to_home(
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+fn plan_config_home_restore(
+    files: Vec<DesktopConfigRestoreFile>,
+    locations: &config_restore::HomeLocations,
+) -> Result<(Vec<DesktopConfigRestoreFile>, Vec<String>), String> {
+    let original_paths = files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect::<Vec<_>>();
+    let mapped_paths = config_restore::home_paths(&original_paths, locations)?;
+    let mut display_paths = Vec::with_capacity(files.len());
+    let mut mapped_files = Vec::with_capacity(files.len());
+    for (mut file, path) in files.into_iter().zip(mapped_paths) {
+        display_paths.push(if file.path == path {
+            path.clone()
+        } else {
+            format!("{} → ~/{path}", file.path)
+        });
+        file.path = path;
+        mapped_files.push(file);
+    }
+    // Show relocated files first, including when a large selection is truncated.
+    display_paths.sort_by_key(|path| !path.contains(" → ~/"));
+    Ok((mapped_files, display_paths))
 }
 
 fn decode_export_header(value: &str) -> Result<String, String> {
@@ -2593,6 +2645,59 @@ mod tests {
     }
 
     #[test]
+    fn config_scan_and_restore_deepseek_harness() {
+        assert!(CONFIG_SCAN_ROOTS.contains(&".dsh"));
+        assert!(AGENT_WORKSPACE_SCAN_ROOTS.contains(&".dsh/skills"));
+        assert!(AGENT_WORKSPACE_SCAN_FILES.contains(&".dsh/AGENTS.md"));
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-deepseek-scan-{}-{timestamp}", std::process::id()
+        ));
+        let expected = [
+            ".dsh/.credentials.yaml", ".dsh/.env", ".dsh/cordis.patch.yml",
+            ".dsh/profiles/web/cordis.patch.yml", ".dsh/profiles/web/package.json",
+            ".dsh/profiles/web/pnpm-lock.yaml", ".dsh/settings.yaml",
+        ];
+        let excluded = [
+            ".dsh/skills/demo/SKILL.md", ".dsh/skills/demo/config.json", ".dsh/AGENTS.md",
+            ".dsh/sessions/session/config.json", ".dsh/storage/index.json",
+            ".dsh/storages/session_projcache/session.json", ".dsh/storages/workspaces.json",
+            ".dsh/attachments/settings.json", ".dsh/state/index.json",
+            ".dsh/uploads/user.json", ".dsh/data/index.json",
+            ".dsh/cache/config.json", ".dsh/logs/settings.json",
+            ".dsh/profiles/web/node_modules/plugin/package.json",
+        ];
+        for path in expected.iter().chain(excluded.iter()) {
+            let target = root.join(path);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(target, path.as_bytes()).unwrap();
+        }
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let mut files = ConfigFileCollection::default();
+        collect_config_directory(&root.join(".dsh"), &root, &canonical_root, &mut files, false).unwrap();
+        let files = files.into_files();
+        assert_eq!(files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(), expected);
+
+        let destination = root.join("restored");
+        std::fs::create_dir(&destination).unwrap();
+        let restore_files = files.into_iter().map(|file| DesktopConfigRestoreFile {
+            path: file.path, bytes: file.bytes,
+        }).collect::<Vec<_>>();
+        assert_eq!(restore_config_files(&destination, &restore_files).unwrap(), expected.len());
+        for path in expected {
+            assert_eq!(std::fs::read(destination.join(path)).unwrap(), path.as_bytes());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = std::fs::metadata(destination.join(".dsh/.credentials.yaml")).unwrap().permissions();
+            assert_eq!(permissions.mode() & 0o777, 0o600);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn config_scan_includes_all_ssh_files_and_keeps_logical_paths() {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2737,6 +2842,125 @@ mod tests {
     }
 
     #[test]
+    fn config_restore_windows_backup_to_mac_preserves_bytes_and_backups() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-portable-{}-{timestamp}",
+            std::process::id()
+        ));
+        let destination = "Library/Application Support/Code/User/settings.json";
+        let target = root.join(destination);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(&target, b"original").unwrap();
+        let bytes = b"{\r\n  \"example\": \"C:\\\\Users\\\\Alice\"\r\n}\r\n".to_vec();
+        let (files, display) = plan_config_home_restore(
+            vec![DesktopConfigRestoreFile {
+                path: "AppData/Roaming/Code/User/settings.json".into(),
+                bytes: bytes.clone(),
+            }],
+            &config_restore::HomeLocations {
+                platform: config_restore::Platform::Mac,
+                roaming: Ok("AppData/Roaming".into()),
+                xdg: Ok(".config".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(files[0].path, destination);
+        assert_eq!(files[0].bytes, bytes);
+        assert_eq!(
+            display,
+            vec![format!(
+                "AppData/Roaming/Code/User/settings.json → ~/{destination}"
+            )]
+        );
+        let (_, copy, _, _) = restore_config_dialog_copy("zh", &display, &[]);
+        assert!(copy.contains("原路径 → 目标路径"));
+        assert!(copy.contains("文件内容保持原样"));
+        assert_eq!(restore_config_files(&root, &files).unwrap(), 1);
+        assert_eq!(std::fs::read(&target).unwrap(), bytes);
+        let backup = std::fs::read_dir(target.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".settings.json.koinote-backup-")
+            })
+            .unwrap();
+        assert_eq!(std::fs::read(backup.path()).unwrap(), b"original");
+        assert!(!root.join("AppData").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_rejects_unicode_aliases_before_any_writes() {
+        let root = std::env::temp_dir().join(format!("koinote-unicode-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("existing.md"), b"original").unwrap();
+        // Distinct names on a source filesystem can alias on the target, including
+        // a file whose normalized name becomes another entry's parent directory.
+        for second in ["skills/cafe\u{301}", "skills/cafe\u{301}/SKILL.md"] {
+            let files = vec![
+                DesktopConfigRestoreFile { path: "existing.md".into(), bytes: b"changed".to_vec() },
+                DesktopConfigRestoreFile { path: "skills/caf\u{e9}".into(), bytes: b"first".to_vec() },
+                DesktopConfigRestoreFile { path: second.into(), bytes: b"second".to_vec() },
+            ];
+            assert_eq!(restore_config_files(&root, &files), Err("config_path_duplicate".into()));
+            assert_eq!(std::fs::read(root.join("existing.md")).unwrap(), b"original");
+            assert!(!root.join("skills").exists());
+            let paths = files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
+            assert_eq!(config_restore::home_paths(&paths, &config_restore::HomeLocations {
+                platform: config_restore::Platform::Mac,
+                roaming: Ok("AppData/Roaming".into()), xdg: Ok(".config".into()),
+            }), Err("config_platform_path_conflict".into()));
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_rejects_directory_conflicts_before_writing() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "koinote-restore-directory-{}-{timestamp}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(root.join("existing.md"), b"original").unwrap();
+        std::fs::write(root.join("skills/demo/SKILL.md"), b"local skill").unwrap();
+        let files = vec![
+            DesktopConfigRestoreFile {
+                path: "existing.md".to_string(),
+                bytes: b"new".to_vec(),
+            },
+            DesktopConfigRestoreFile {
+                path: "skills/demo".to_string(),
+                bytes: b"not a directory".to_vec(),
+            },
+        ];
+        assert_eq!(
+            restore_config_files(&root, &files),
+            Err("config_path_invalid".to_string())
+        );
+        assert_eq!(
+            std::fs::read(root.join("existing.md")).unwrap(),
+            b"original"
+        );
+        assert_eq!(
+            std::fs::read(root.join("skills/demo/SKILL.md")).unwrap(),
+            b"local skill"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn config_restore_backups_existing_files() {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2766,6 +2990,83 @@ mod tests {
             })
             .count();
         assert_eq!(backup_count, 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_validates_all_ancestors_before_mkdir() {
+        let root = std::env::temp_dir().join(format!(
+            "koinote-preflight-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("blocked"), b"local").unwrap();
+        let files = vec![
+            DesktopConfigRestoreFile {
+                path: "new/deep/config.json".into(),
+                bytes: vec![1],
+            },
+            DesktopConfigRestoreFile {
+                path: "blocked/config.json".into(),
+                bytes: vec![2],
+            },
+        ];
+        assert!(restore_config_files(&root, &files).is_err());
+        assert!(!root.join("new").exists());
+        assert_eq!(std::fs::read(root.join("blocked")).unwrap(), b"local");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn config_restore_all_files_are_private_from_creation() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!(
+            "koinote-private-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let files = [
+            ".dsh/.env",
+            ".ssh/id_ed25519",
+            ".dsh/.credentials.yaml",
+            "profiles/host:8080.json",
+        ]
+        .iter()
+        .map(|path| DesktopConfigRestoreFile {
+            path: (*path).into(),
+            bytes: b"fixture".to_vec(),
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(restore_config_files(&root, &files).unwrap(), files.len());
+        for file in &files {
+            assert_eq!(
+                std::fs::metadata(root.join(&file.path))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600,
+                "{}",
+                file.path
+            );
+        }
+        assert_eq!(
+            std::fs::metadata(root.join(".ssh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }

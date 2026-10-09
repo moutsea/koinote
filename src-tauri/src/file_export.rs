@@ -17,6 +17,16 @@ fn validated_export_path_buf(output_path: PathBuf) -> Result<PathBuf, String> {
 }
 
 pub fn save_export_path(output_path: PathBuf, bytes: Vec<u8>) -> Result<(), String> {
+    save_export_path_with_privacy(output_path, bytes, false)
+}
+
+pub(crate) fn save_private_export_path(output_path: PathBuf, bytes: Vec<u8>) -> Result<(), String> {
+    save_export_path_with_privacy(output_path, bytes, true)
+}
+
+fn save_export_path_with_privacy(output_path: PathBuf, bytes: Vec<u8>, private: bool) -> Result<(), String> {
+    #[cfg(not(unix))]
+    let _ = private;
     if bytes.len() > MAX_EXPORT_OUTPUT_BYTES {
         return Err("export_output_too_large".to_string());
     }
@@ -37,11 +47,14 @@ pub fn save_export_path(output_path: PathBuf, bytes: Vec<u8>) -> Result<(), Stri
             std::process::id()
         ));
         temporary_path = parent.join(temporary_name);
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary_path)
-        {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        if private {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&temporary_path) {
             Ok(file) => {
                 temporary_file = Some(file);
                 break;

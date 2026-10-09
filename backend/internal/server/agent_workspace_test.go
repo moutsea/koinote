@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -274,6 +275,33 @@ func TestValidateAgentWorkspaceFilesAllowsDocumentationExamples(t *testing.T) {
 		}}); err != nil {
 			t.Fatalf("documentation example rejected: %q (%v)", content, err)
 		}
+	}
+}
+
+func TestAgentWorkspaceSensitiveContentFixtures(t *testing.T) {
+	contents, err := os.ReadFile("testdata/agent_workspace_sensitive_content.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixtures []struct {
+		Name      string `json:"name"`
+		Content   string `json:"content"`
+		Sensitive bool   `json:"sensitive"`
+	}
+	if err := json.Unmarshal(contents, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.Name, func(t *testing.T) {
+			_, err := validateAgentWorkspaceFiles([]agentWorkspaceFileInput{{
+				Path:          "skills/cloudflare/references/zaraz/gotchas.md",
+				ContentBase64: base64.StdEncoding.EncodeToString([]byte(fixture.Content)),
+			}})
+			var sensitive *agentWorkspaceSensitiveError
+			if got := errors.As(err, &sensitive); got != fixture.Sensitive || (!fixture.Sensitive && err != nil) {
+				t.Fatalf("sensitive = %t, want %t; error = %v", got, fixture.Sensitive, err)
+			}
+		})
 	}
 }
 

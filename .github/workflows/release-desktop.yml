@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds a dedicated MCP connection for Skills/Agent repositories, including file management, storage usage, history browsing, and version restore. Repository and document connections can be used together. This release adds safe incremental uploads, chunked file reads, explicit confirmation for sensitive history restores in the UI, clearer restore errors, and repository revision audit details. Client configuration keeps tokens as environment variable references."
+          notes="Koinote Desktop $version adds selected Skills/Agent downloads and local sync, cross-platform configuration paths, and a Copy for AI Agent option with read-only credentials and merge instructions. Configuration sync remembers unlocked snapshots on the current page and supports DeepSeek Harness. This release hardens path checks and private file permissions, adds revocable temporary configuration access, avoids copying long-lived repository tokens, and provides manual copying when clipboard access is unavailable."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,11 +239,11 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - Skills/Agent 仓库提供独立的 MCP 连接，Agent 可管理文件、查看存储用量、浏览历史并恢复版本，与文档 MCP 同时使用。
-          - 支持最大 5 MiB 文件上传与分块读取；增量上传可分批进行，整体替换需要显式指定，避免误删其他文件。
-          - 恢复历史版本时重新检查敏感内容；网页端提供明确确认，并显示恢复失败和版本冲突提示，Agent Token 无法绕过敏感检查。
-          - MCP 活动记录补全仓库 ID 和修改前后的版本，便于追溯文件更新与历史恢复。
-          - Claude Code 和 OpenClaw 配置保留环境变量引用，避免令牌明文写入配置；OpenClaw 先保存配置再探测连接。
+          - Skills/Agent 仓库支持勾选下载 ZIP，并同步到本机 AI 目录或指定文件夹；覆盖前确认、备份并校验文件。
+          - Skills/Agent 和开发配置的同步菜单提供「通过 Koinote 同步」和「复制给 AI Agent」，携带 MCP 地址、只读凭证与本机合并指令。
+          - 已解锁的配置快照在当前页面无需重复输入密码；临时 AI 授权绑定单个版本，可手动撤销，并跟随账号或签发它的桌面登录失效。
+          - 开发/AI 配置新增 DeepSeek Harness；已知配置路径可在 Windows、macOS、Linux 之间适配，文件中的命令和绝对路径仍需检查。
+          - 修复上传按钮样式、Cloudflare Skills 误排除、路径兼容及大小写问题；配置文件从临时写入起保持私有权限，避免复制长期仓库令牌，剪贴板不可用时可手动复制。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -257,11 +257,11 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Connect agents to Skills/Agent repositories through a dedicated MCP connection to manage files, check storage usage, browse history, and restore versions alongside document MCP access.
-          - Upload files up to 5 MiB and read them in chunks. Incremental uploads support batching, while full replacement requires an explicit flag to prevent accidental file loss.
-          - Restoring history checks sensitive content again. The web UI asks for confirmation and displays restore failures and revision conflicts; Agent tokens cannot bypass sensitive-content checks.
-          - MCP activity records include repository IDs and the revisions before and after file updates and history restores.
-          - Claude Code and OpenClaw configuration preserves environment variable references instead of saving plaintext tokens. OpenClaw saves the configuration before probing the connection.
+          - Download selected Skills/Agent files as ZIPs or sync them to local AI paths or a chosen folder, with overwrite confirmation, backups and integrity checks.
+          - Choose Sync with Koinote or Copy for AI Agent for both repositories and configuration snapshots, including the MCP endpoint, read-only credentials and local merge instructions.
+          - Reuse an unlocked configuration revision on the current page without entering the password again. Temporary AI access is scoped to one revision, can be revoked, and follows account or issuing desktop session invalidation.
+          - Development/AI configuration now includes DeepSeek Harness. Known configuration paths adapt between Windows, macOS and Linux; embedded commands and absolute paths still need review.
+          - Fix upload controls, false Cloudflare Skills exclusions, path compatibility and case handling. Configuration files stay private from temporary-file creation, repository handoff avoids long-lived tokens, and unavailable clipboards offer manual copying.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

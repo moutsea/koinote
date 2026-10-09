@@ -6,6 +6,10 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Added
 
+- La synchronisation des configurations de développement/IA prend en charge DeepSeek Harness dans les agents de codage, avec les paramètres et profils `.dsh` ; les identifiants sont restaurés avec un accès réservé au propriétaire sur macOS/Linux, et les skills et AGENTS.md rejoignent le dépôt séparé.
+- Les menus de synchronisation Skills/Agent et des configurations proposent de copier le point MCP, un accès en lecture seule et les instructions de fusion pour un agent IA ; les configurations utilisent un accès temporaire à une seule révision, sans partager le mot de passe de migration.
+- La restauration locale des Skills/Agent et configurations de développement adapte les dossiers reconnus entre Windows, macOS et Linux, affiche les destinations et bloque les conflits avant écriture ; les anciennes sauvegardes restent utilisables.
+- Les dépôts Skills/Agent permettent de télécharger une sélection en ZIP et de la synchroniser sur ordinateur dans les dossiers IA d’origine ou un dossier choisi, avec confirmation, sauvegardes et vérification de version et d’intégrité.
 - Le MCP des dépôts Skills/Agent permet de consulter et restaurer l’historique, de vérifier le stockage et d’envoyer des fichiers jusqu’à 5 MiB et de les lire par blocs, avec une connexion distincte du MCP des documents.
 - Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale.
 - Les réglages de Mon espace permettent d’allouer directement du stockage personnel aux dépôts Agent, avec effet immédiat, et de récupérer la capacité inutilisée. Le détail du stockage du compte affiche cette allocation, tout en protégeant les fichiers existants et leur historique.
@@ -16,6 +20,7 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Changed
 
+- Une configuration déverrouillée peut être resynchronisée sur la même page sans ressaisir le mot de passe ; une actualisation ou une nouvelle révision exige un nouveau déverrouillage.
 - L’activation des dépôts Skills/Agent ne nécessite plus de jeton. Les jetons de dépôt se gèrent dans Mon espace, séparément des jetons MCP des documents ; Copier pour l’Agent IA y redirige uniquement lorsqu’un jeton en lecture-écriture utilisable manque.
 - Le client de bureau vérifie les mises à jour cloud au démarrage, à la reconnexion, au retour à la fenêtre et toutes les 30 secondes lorsque celle-ci est visible. Seules les modifications locales déclenchent des envois ; les vérifications sans changement ou en échec restent discrètes, et les fenêtres masquées ne lancent pas de vérifications périodiques.
 - La mise à jour d’un ancien instantané de configuration de développement/IA retire de cet instantané les fichiers Agent tels que `CLAUDE.md` et `.claude/skills/*`. Exportez ces fichiers ou envoyez-les vers un dépôt Agent avant la mise à jour ; les fichiers locaux restent inchangés.
@@ -23,6 +28,11 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ### Fixed
 
+- Correction de la restauration pour les alias HOME, la casse Windows et les dossiers de configuration externes ; les noms Unix valides sont préservés, tous les fichiers sont privés dès leur écriture temporaire et les chemins sont vérifiés avant création des dossiers.
+- La synchronisation IA ne copie plus les jetons de dépôt de longue durée ; les autorisations temporaires sont révocables et liées aux sessions, la copie manuelle est disponible et les grandes archives utilisent le téléchargement complet.
+- Correction de la synchronisation DeepSeek Harness : exclusion du répertoire de données d’exécution `storages` et conservation des permissions Unix `0600` des identifiants dans les ZIP téléchargés et chiffrés.
+- Fiabilisation de la synchronisation : détection des cookies concaténés sur plusieurs lignes, rejet des chemins Unicode équivalents, nouvelle tentative de copie sans recréer les identifiants, actualisation de la version après déverrouillage et lots de transfert limités avec prise en charge des noms ZIP spéciaux.
+- Correction du déplacement des boutons et de l’état d’envoi peu clair lors de la synchronisation Skills/Agent, ainsi que des fausses alertes de contenu sensible pour les exemples de suppression de cookies des skills Cloudflare.
 - La restauration web demande une confirmation pour les contenus sensibles et affiche les erreurs, y compris les conflits de révision. Les mises à jour MCP consignent le dépôt et les révisions ; OpenClaw enregistre les références d’environnement avant de tester la connexion.
 - La restauration refuse les contenus sensibles avec un jeton Agent ; le remplacement MCP complet exige `replaceAll`, les requêtes trop volumineuses renvoient 413 et les configurations Claude Code/OpenClaw conservent les références aux variables d’environnement.
 - Lorsque la limite de jetons est atteinte, précisez que les documents MCP et les dépôts Agent partagent 20 jetons actifs et proposez un lien vers la gestion de l’autre type de jeton.

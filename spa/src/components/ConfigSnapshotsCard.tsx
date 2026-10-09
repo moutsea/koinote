@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Download,
   Eye,
   FileText,
   Files,
@@ -22,6 +21,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ApiError,
   createConfigSnapshot,
+  createConfigSyncGrant,
+  revokeConfigSyncGrants,
   deleteConfigSnapshot,
   getConfigSnapshot,
   getConfigSnapshots,
@@ -32,10 +33,15 @@ import {
   decryptConfigSnapshot,
   downloadConfigFiles,
   encryptConfigSnapshot,
+  unlockConfigSnapshot,
   filesFromFileList,
   type ConfigVaultFile,
 } from "../configVaultCrypto";
 import { isAgentWorkspaceSourcePath } from "../agentWorkspaceImport";
+import { configRestoreErrorMessage } from "../configRestore";
+import { configAgentSyncPrompt } from "../agentLocalSync";
+import { LocalSyncMenu } from "./LocalSyncMenu";
+import { useAgentSyncCopy } from "./AgentSyncCopyDialog";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { interpolate, useI18n, type Messages } from "../i18n";
 import { formatBytes } from "../storage";
@@ -49,6 +55,7 @@ import { configGroupKey, GROUP_KEYS, type GroupKey } from "../configVaultGroups"
 const SNAPSHOTS_KEY = ["config-snapshots"] as const;
 const CONFIG_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
 type SnapshotFiles = Record<string, ConfigVaultFile[]>;
+type UnlockedSnapshot = { revision: number; files: ConfigVaultFile[]; decryptionKey: string };
 type PendingScan = {
   files: ConfigVaultFile[];
 };
@@ -56,6 +63,7 @@ type GroupAction = { snapshotId: string; groupKey: string } | null;
 type SnapshotAction = { snapshot: ConfigSnapshotSummary } & (
   | { kind: "expand" }
   | { kind: "restore"; destination: "home" | "folder"; groupKey?: string }
+  | { kind: "agent" }
   | { kind: "update"; groupKey: string; replacements: ConfigVaultFile[] }
   | { kind: "delete"; groupKey: string; paths: string[]; label: string }
 );
@@ -71,6 +79,8 @@ type ConfigFileTreeNode = {
 type SnapshotMessages = Messages["space"]["configSnapshots"];
 
 function errorMessage(error: unknown, messages: SnapshotMessages): string {
+  const restoreError = configRestoreErrorMessage(error, messages);
+  if (restoreError) return restoreError;
   if (error instanceof ApiError) {
     if (error.code === "config_snapshot_limit") return messages.errorLimit;
     if (error.code === "config_snapshot_quota_exceeded") return messages.errorQuota;
@@ -430,6 +440,9 @@ export function ConfigSnapshotsCard({
   const reviewDialogRef = useRef<HTMLElement>(null);
   const closeTimer = useRef<number | null>(null);
   const pendingGroupAction = useRef<GroupAction>(null);
+  const unlockedSnapshots = useRef(new Map<string, UnlockedSnapshot>());
+  const readingSnapshot = useRef(false);
+  const mounted = useRef(true);
   const [snapshotFiles, setSnapshotFiles] = useState<SnapshotFiles>({});
   const [expandedSnapshotId, setExpandedSnapshotId] = useState<string | null>(null);
   const [name, setName] = useState(snapshotMessages.defaultName);
@@ -440,6 +453,7 @@ export function ConfigSnapshotsCard({
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(() => new Set(GROUP_KEYS));
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const agentSyncCopy = useAgentSyncCopy(() => setMessage(snapshotMessages.agentCopied));
   const [syncPhase, setSyncPhase] = useState<"scanning" | "uploading" | "completed" | null>(null);
   const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
   const [selectedScanPaths, setSelectedScanPaths] = useState<Set<string>>(() => new Set());
@@ -447,6 +461,19 @@ export function ConfigSnapshotsCard({
   const snapshots = useQuery({ queryKey: SNAPSHOTS_KEY, queryFn: getConfigSnapshots, enabled: !localMode });
   const existing = snapshots.data?.snapshots ?? [];
   const canUpload = !localMode && (member || existing.length <= 1);
+
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; unlockedSnapshots.current.clear(); }; }, []);
+  useEffect(() => {
+    if (!snapshots.data && !localMode) return;
+    const invalid = [...unlockedSnapshots.current].filter(([id, cached]) => {
+      const summary = snapshots.data?.snapshots.find((item) => item.id === id);
+      return localMode || !summary || summary.revision > cached.revision;
+    }).map(([id]) => id);
+    if (!invalid.length) return;
+    for (const id of invalid) unlockedSnapshots.current.delete(id);
+    setSnapshotFiles((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !invalid.includes(id))));
+    setPreviewFile((current) => current && invalid.includes(current.snapshotId) ? null : current);
+  }, [snapshots.data, localMode]);
 
   const upload = useMutation({
     mutationFn: async (source: ConfigVaultFile[]) => {
@@ -482,6 +509,7 @@ export function ConfigSnapshotsCard({
     },
     onSuccess: (result) => {
       const updated = result.snapshot;
+      unlockedSnapshots.current.delete(updated.id);
       setSnapshotFiles((current) => {
         const next = { ...current };
         delete next[updated.id];
@@ -511,6 +539,7 @@ export function ConfigSnapshotsCard({
   const remove = useMutation({
     mutationFn: ({ snapshotId, revision }: { snapshotId: string; revision: number }) => deleteConfigSnapshot(snapshotId, revision),
     onSuccess: (_, { snapshotId }) => {
+      unlockedSnapshots.current.delete(snapshotId);
       setSnapshotFiles((current) => {
         const next = { ...current };
         delete next[snapshotId];
@@ -531,12 +560,17 @@ export function ConfigSnapshotsCard({
       return;
     }
     setMessage(null);
+    if (unlockedSnapshots.current.get(snapshot.id)?.revision === snapshot.revision) {
+      setExpandedSnapshotId(snapshot.id);
+      return;
+    }
     setSnapshotAction({ kind: "expand", snapshot });
   }
 
   async function restoreFiles(restored: ConfigVaultFile[], snapshotName: string, destination: "home" | "folder" = "home") {
     if (isDesktopRuntime()) {
       const { desktopRestoreConfigFiles, desktopRestoreConfigFilesToHome } = await import("../desktop/configFiles");
+      if (!mounted.current) return;
       const count = destination === "home"
         ? await desktopRestoreConfigFilesToHome(restored, locale)
         : await desktopRestoreConfigFiles(restored, locale);
@@ -548,8 +582,74 @@ export function ConfigSnapshotsCard({
   }
 
   function restoreSnapshot(snapshot: ConfigSnapshotSummary, destination: "home" | "folder" = "home") {
+    startReadAction({ kind: "restore", snapshot, destination });
+  }
+
+  async function revokeAgentAccess(snapshot: ConfigSnapshotSummary) {
+    if (readingSnapshot.current || busyId !== null) return;
+    readingSnapshot.current = true;
+    setBusyId(`revoke:${snapshot.id}`);
+    try {
+      if (!await confirmAction(interpolate(snapshotMessages.revokeAgentAccessConfirm, { name: snapshot.name }))) return;
+      await revokeConfigSyncGrants(snapshot.id);
+      if (mounted.current) {
+        agentSyncCopy.clear();
+        setMessage(snapshotMessages.agentAccessRevoked);
+      }
+    } catch (error) {
+      if (mounted.current) setMessage(errorMessage(error, snapshotMessages));
+    } finally {
+      readingSnapshot.current = false;
+      if (mounted.current) setBusyId(null);
+    }
+  }
+
+  type ReadAction = Extract<SnapshotAction, { kind: "restore" | "agent" }>;
+  function forgetUnlockedSnapshot(id: string) {
+    unlockedSnapshots.current.delete(id);
+    setSnapshotFiles((current) => { const next = { ...current }; delete next[id]; return next; });
+    setPreviewFile((current) => current?.snapshotId === id ? null : current);
+    void queryClient.invalidateQueries({ queryKey: SNAPSHOTS_KEY });
+  }
+  async function prepareAgentInstructions(action: ReadAction, unlocked: UnlockedSnapshot) {
+    const grant = await createConfigSyncGrant(action.snapshot.id, unlocked.revision).catch((error) => {
+      if (mounted.current && error instanceof ApiError && (error.code === "config_snapshot_conflict" || error.code === "snapshot_not_found")) forgetUnlockedSnapshot(action.snapshot.id);
+      throw error;
+    });
+    if (!mounted.current) throw new DOMException("Copy cancelled", "AbortError");
+    if (grant.snapshotId !== action.snapshot.id || grant.revision !== unlocked.revision) throw new ApiError(409, "Snapshot changed", "config_snapshot_conflict");
+    return configAgentSyncPrompt(grant, unlocked.decryptionKey);
+  }
+  async function executeReadAction(action: ReadAction, unlocked: UnlockedSnapshot) {
+    if (action.kind === "agent") {
+      return agentSyncCopy.copy(() => prepareAgentInstructions(action, unlocked));
+    }
+    // Reuse plaintext only for the exact revision the user unlocked. A metadata
+    // check avoids downloading/decrypting the whole encrypted archive again.
+    const latest = (await getConfigSnapshots()).snapshots.find((item) => item.id === action.snapshot.id);
+    if (!latest || latest.revision !== unlocked.revision) {
+      if (mounted.current) forgetUnlockedSnapshot(action.snapshot.id);
+      throw new ApiError(409, "Snapshot changed", "config_snapshot_conflict");
+    }
+    if (!mounted.current) return;
+    const restored = action.groupKey ? unlocked.files.filter((file) => configGroupKey(file.path) === action.groupKey) : unlocked.files;
+    if (!restored.length) throw new Error("config_no_files_found");
+    await restoreFiles(restored, latest.name, action.destination);
+  }
+
+  function startReadAction(action: ReadAction) {
+    if (readingSnapshot.current || busyId !== null) return;
     setMessage(null);
-    setSnapshotAction({ kind: "restore", snapshot, destination });
+    const cached = unlockedSnapshots.current.get(action.snapshot.id);
+    if (!cached || cached.revision !== action.snapshot.revision) { setSnapshotAction(action); return; }
+    readingSnapshot.current = true;
+    setBusyId(`${action.kind}:${action.snapshot.id}`);
+    void executeReadAction(action, cached).catch((error) => {
+      if (mounted.current) setMessage(errorMessage(error, snapshotMessages));
+    }).finally(() => {
+      readingSnapshot.current = false;
+      if (mounted.current) setBusyId(null);
+    });
   }
 
   function openScanPreview(scanned: ConfigVaultFile[]) {
@@ -578,25 +678,46 @@ export function ConfigSnapshotsCard({
     setSnapshotAction({ kind: "delete", snapshot, groupKey, paths, label });
   }
 
+  async function unlockCurrentSnapshot(id: string, migrationPassword: string) {
+    const { snapshot } = await getConfigSnapshot(id);
+    const decrypted = await unlockConfigSnapshot(snapshot.envelope, migrationPassword);
+    if (!mounted.current) throw new DOMException("Unlock cancelled", "AbortError");
+    const latest = queryClient.getQueryData<{ snapshots: ConfigSnapshotSummary[] }>(SNAPSHOTS_KEY)?.snapshots.find((item) => item.id === id);
+    if (latest && latest.revision > snapshot.revision) throw new ApiError(409, "Snapshot changed", "config_snapshot_conflict");
+    const current = filterPrivateConfigFiles(decrypted.files);
+    const unlocked = { files: current, decryptionKey: decrypted.decryptionKey, revision: snapshot.revision };
+    unlockedSnapshots.current.set(snapshot.id, unlocked);
+    setSnapshotFiles((filesBySnapshot) => ({ ...filesBySnapshot, [snapshot.id]: current }));
+    // The detail may be newer than the list the user clicked. Keep both revision
+    // checks in agreement without putting decrypted data or keys in query caches.
+    const { envelope: _envelope, ...summary } = snapshot;
+    queryClient.setQueryData<{ snapshots: ConfigSnapshotSummary[] }>(SNAPSHOTS_KEY, (data) => data && {
+      snapshots: data.snapshots.map((item) => item.id === id && item.revision <= summary.revision ? summary : item),
+    });
+    return { snapshot, current, unlocked };
+  }
+
   async function runSnapshotAction(migrationPassword: string) {
     if (!snapshotAction) return;
     const action = snapshotAction;
     setBusyId(`${action.kind}:${action.snapshot.id}`);
     setMessage(null);
     try {
-      const { snapshot } = await getConfigSnapshot(action.snapshot.id);
-      const current = filterPrivateConfigFiles(await decryptConfigSnapshot(snapshot.envelope, migrationPassword));
-      setSnapshotFiles((filesBySnapshot) => ({ ...filesBySnapshot, [snapshot.id]: current }));
+      if (action.kind === "agent") {
+        // Start writing in the form's submit gesture, before fetching/decrypting.
+        await agentSyncCopy.copy(async () => {
+          const { unlocked } = await unlockCurrentSnapshot(action.snapshot.id, migrationPassword);
+          return prepareAgentInstructions(action, unlocked);
+        });
+        return;
+      }
+      const { snapshot, current, unlocked } = await unlockCurrentSnapshot(action.snapshot.id, migrationPassword);
       if (action.kind === "expand") {
         setExpandedSnapshotId(snapshot.id);
         return;
       }
       if (action.kind === "restore") {
-        const restored = action.groupKey
-          ? current.filter((file) => configGroupKey(file.path) === action.groupKey)
-          : current;
-        if (restored.length === 0) throw new Error("config_no_files_found");
-        await restoreFiles(restored, snapshot.name, action.destination);
+        await executeReadAction(action, unlocked);
         return;
       }
       if (action.kind === "delete") {
@@ -605,6 +726,7 @@ export function ConfigSnapshotsCard({
         setPreviewFile((selected) => selected && selected.snapshotId === snapshot.id && pathsToDelete.has(selected.file.path) ? null : selected);
         if (remaining.length === 0) {
           await deleteConfigSnapshot(snapshot.id, snapshot.revision);
+          unlockedSnapshots.current.delete(snapshot.id);
           setSnapshotFiles((filesBySnapshot) => {
             const next = { ...filesBySnapshot };
             delete next[snapshot.id];
@@ -624,6 +746,7 @@ export function ConfigSnapshotsCard({
             envelope: encrypted.envelope,
             revision: snapshot.revision,
           });
+          unlockedSnapshots.current.delete(snapshot.id);
           setSnapshotFiles((filesBySnapshot) => ({ ...filesBySnapshot, [snapshot.id]: remaining }));
           queryClient.setQueryData<{ snapshots: ConfigSnapshotSummary[] }>(SNAPSHOTS_KEY, (currentData) => currentData && {
             snapshots: currentData.snapshots.map((item) => item.id === snapshot.id ? updated : item),
@@ -647,6 +770,7 @@ export function ConfigSnapshotsCard({
         envelope: encrypted.envelope,
         revision: snapshot.revision,
       });
+      unlockedSnapshots.current.delete(snapshot.id);
       setSnapshotFiles((filesBySnapshot) => ({ ...filesBySnapshot, [snapshot.id]: merged }));
       queryClient.setQueryData<{ snapshots: ConfigSnapshotSummary[] }>(SNAPSHOTS_KEY, (currentData) => currentData && {
         snapshots: currentData.snapshots.map((item) => item.id === snapshot.id ? updated : item),
@@ -660,8 +784,7 @@ export function ConfigSnapshotsCard({
   }
 
   function restoreGroup(snapshot: ConfigSnapshotSummary, groupKey: string) {
-    setMessage(null);
-    setSnapshotAction({ kind: "restore", snapshot, destination: "home", groupKey });
+    startReadAction({ kind: "restore", snapshot, destination: "home", groupKey });
   }
 
   async function pickFiles() {
@@ -865,6 +988,7 @@ export function ConfigSnapshotsCard({
 
   return (
     <>
+      {agentSyncCopy.dialog}
       {pendingScan && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
           <section ref={reviewDialogRef} role="dialog" aria-modal="true" aria-labelledby="config-sync-review-title" className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border bg-[var(--background)] shadow-2xl" style={{ borderColor: "var(--ink-line)" }}>
@@ -968,6 +1092,7 @@ export function ConfigSnapshotsCard({
       <PaperCard className="p-5 sm:p-6">
         <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}><KeyRound className="h-4 w-4" />{snapshotMessages.savedTitle}</div>
         <p className="mt-2 text-xs" style={{ color: "var(--ink-faint)" }}>{t.space.syncSnapshotsHint}</p>
+        {isDesktopRuntime() && <p className="mt-2 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{snapshotMessages.crossPlatformHint}</p>}
         {localMode && <p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>{t.space.syncCloudOnly}</p>}
         {snapshots.isLoading && <p className="mt-3 text-sm" style={{ color: "var(--ink-faint)" }}>{snapshotMessages.loading}</p>}
         {!snapshots.isLoading && existing.length === 0 && <p className="mt-3 text-sm" style={{ color: "var(--ink-faint)" }}>{snapshotMessages.empty}</p>}
@@ -988,10 +1113,8 @@ export function ConfigSnapshotsCard({
                       {busyId === `unlock:${snapshot.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />}
                       {expanded ? snapshotMessages.collapse : snapshotMessages.expandUnlock}
                     </button>
-                    <button type="button" onClick={() => void restoreSnapshot(snapshot)} disabled={busyId !== null} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium hover:bg-[var(--ink-wash)] disabled:opacity-50" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}>
-                      {busyId === `restore:${snapshot.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      {isDesktopRuntime() ? snapshotMessages.restoreAll : snapshotMessages.downloadAll}
-                    </button>
+                    <LocalSyncMenu label={snapshotMessages.restoreAll} disabled={busyId !== null} sensitive download={!isDesktopRuntime()} onKoinote={() => restoreSnapshot(snapshot)} onAgent={() => startReadAction({ kind: "agent", snapshot })} />
+                    <button type="button" onClick={() => void revokeAgentAccess(snapshot)} disabled={busyId !== null} className="rounded-full border px-3 py-1.5 text-xs hover:bg-[var(--ink-wash)] disabled:opacity-50" style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}>{snapshotMessages.revokeAgentAccess}</button>
                     {isDesktopRuntime() && <button type="button" onClick={() => void restoreSnapshot(snapshot, "folder")} disabled={busyId !== null} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs hover:bg-[var(--ink-wash)] disabled:opacity-50" style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}>{snapshotMessages.chooseFolder}</button>}
                     <button type="button" onClick={() => void (async () => { if (await confirmAction(interpolate(snapshotMessages.deleteSnapshotConfirm, { name: snapshot.name }))) remove.mutate({ snapshotId: snapshot.id, revision: snapshot.revision }); })()} disabled={remove.isPending} className="inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 text-xs hover:bg-[var(--ink-wash)] disabled:opacity-50" style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }} aria-label={interpolate(snapshotMessages.deleteSnapshotAria, { name: snapshot.name })}>
                       <Trash2 className="h-3.5 w-3.5" />

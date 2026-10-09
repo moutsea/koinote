@@ -2447,7 +2447,7 @@ dependencies = [
 
 [[package]]
 name = "koinote-desktop"
-version = "0.1.71"
+version = "0.1.72"
 dependencies = [
  "keyring",
  "log",
@@ -2469,6 +2469,7 @@ dependencies = [
  "tauri-plugin-sql",
  "tauri-plugin-updater",
  "tokio",
+ "unicode-normalization",
  "webview2-com",
  "windows",
 ]

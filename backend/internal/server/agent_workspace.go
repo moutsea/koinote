@@ -38,6 +38,7 @@ var (
 	errAgentWorkspaceConflict          = errors.New("agent workspace revision conflict")
 	agentWorkspaceSecretPattern        = regexp.MustCompile(`(?i)["']?(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|oauth[_-]?secret|password|authorization|private[_-]?key|cookie|session[_-]?token)["']?\s*[:=]\s*["']?[-A-Za-z0-9_./+=:@$]{12,}`)
 	agentWorkspaceBearerPattern        = regexp.MustCompile(`(?i)\b(?:bearer|basic)\s+[-A-Za-z0-9._~+/=]{20,}`)
+	agentWorkspaceEmptyCookiePattern   = regexp.MustCompile(`(?i)^cookie\s*=\s*(?:'[^'\\=;\s]+=(?:;[^'\\\r\n]*)?'|"[^"\\=;\s]+=(?:;[^"\\\r\n]*)?")[\t ]*(?:;|[\t \r\n]*$)`)
 	agentWorkspaceProviderTokenPattern = regexp.MustCompile(`\b(?:sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[A-Za-z0-9_-]{30,})\b`)
 	agentWorkspaceExampleValuePattern  = regexp.MustCompile(`(?i)^(?:process\.env(?:\.[\w.]+)?|env\.[\w.]+|os\.environ(?:\.get)?|this\.env\.[\w.]+|config(?:\.[\w.]+)+|var\.[\w.]+|vapidKeys\.[\w.]+|request\.[\w.]+|req\.[\w.]+|secretsstoresecret|(?:your|example|sample|replace|test|dummy|fake|redacted|change[-_ ]?me|xxxxx)(?:[-_ ].*)?|local[-_ ]dev(?:[-_ ].*)?|sk[-_](?:live|test)[-_]abc123(?:\.\.\.)?|<[^>]+>|cookie[-_ ]consent|consent[-_ ]cookie|(?:zaraz[-_ ]?)?consent[-_ ]cookie)$`)
 )
@@ -265,6 +266,7 @@ func (a *App) agentWorkspacePromptGet(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.JSON(w, http.StatusOK, map[string]string{
 		"version": agentWorkspacePromptRevision,
+		"mcpUrl":  strings.TrimRight(a.cfg.AppURL, "/") + "/mcp",
 		"prompt":  agentWorkspacePromptForID(strings.TrimRight(a.cfg.AppURL, "/"), workspaceID),
 	})
 }
@@ -378,7 +380,13 @@ func agentWorkspaceSensitiveContent(content []byte) bool {
 			break
 		}
 		match := remaining[location[0]:location[1]]
+		// Clearing a cookie contains its name but no credential. Require a
+		// complete literal assignment; never exempt a populated cookie or file.
+		emptyCookie := bytes.HasSuffix(content[:len(content)-len(remaining)+location[0]], []byte("document.")) && agentWorkspaceEmptyCookiePattern.Match(remaining[location[0]:])
 		remaining = remaining[location[1]:]
+		if emptyCookie {
+			continue
+		}
 		separator := bytes.IndexAny(match, ":=")
 		if separator >= 0 && agentWorkspaceExampleValuePattern.Match(bytes.Trim(bytes.Trim(bytes.TrimSpace(match[separator+1:]), "\"'`"), ",;")) {
 			continue

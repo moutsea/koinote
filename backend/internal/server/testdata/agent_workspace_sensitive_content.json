@@ -1,0 +1,82 @@
+[
+  {
+    "name": "zaraz documentation clears consent cookie",
+    "content": "document.cookie = 'zaraz-consent=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';",
+    "sensitive": false
+  },
+  {
+    "name": "double quoted empty cookie",
+    "content": "document.cookie = \"zaraz-consent=\";",
+    "sensitive": false
+  },
+  {
+    "name": "empty cookie without semicolon",
+    "content": "document.cookie = 'zaraz-consent='\n",
+    "sensitive": false
+  },
+  {
+    "name": "real consent cookie",
+    "content": "document.cookie = 'zaraz-consent=0123456789abcdef';",
+    "sensitive": true
+  },
+  {
+    "name": "real cookie followed by clearing example",
+    "content": "document.cookie = 'zaraz-consent=0123456789abcdef';\ndocument.cookie = 'zaraz-consent=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';",
+    "sensitive": true
+  },
+  {
+    "name": "clearing example followed by secret",
+    "content": "document.cookie = 'zaraz-consent=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';\napi_key: \"0123456789abcdef01234567\"",
+    "sensitive": true
+  },
+  {
+    "name": "clearing example followed by private key",
+    "content": "document.cookie = 'zaraz-consent=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';\n-----BEGIN PRIVATE KEY-----",
+    "sensitive": true
+  },
+  {
+    "name": "other credential ending in equals",
+    "content": "password: \"zaraz-consent=\"",
+    "sensitive": true
+  },
+  {
+    "name": "cookie variable is not a document assignment",
+    "content": "cookie = 'zaraz-consent=';",
+    "sensitive": true
+  },
+  {
+    "name": "empty cookie prefix concatenated with token",
+    "content": "document.cookie = 'zaraz-consent=' + '0123456789abcdef';",
+    "sensitive": true
+  },
+  {
+    "name": "newline continues cookie with concatenation",
+    "content": "document.cookie = 'zaraz-consent='\n  + '0123456789abcdef';",
+    "sensitive": true
+  },
+  {
+    "name": "CRLF continues cookie with method call",
+    "content": "document.cookie = 'zaraz-consent='\r\n  .concat('0123456789abcdef');",
+    "sensitive": true
+  },
+  {
+    "name": "newline followed by comment and continuation",
+    "content": "document.cookie = 'zaraz-consent='\n  /* cookie value */ + '0123456789abcdef';",
+    "sensitive": true
+  },
+  {
+    "name": "populated cookie equals padding",
+    "content": "document.cookie = 'session=0123456789abcdef=';",
+    "sensitive": true
+  },
+  {
+    "name": "escaped separator is a populated cookie",
+    "content": "document.cookie = 'longcookiename\\x3d0123456789abcdef=';",
+    "sensitive": true
+  },
+  {
+    "name": "unicode escaped separator is a populated cookie",
+    "content": "document.cookie = 'longcookiename\\u003d0123456789abcdef=';",
+    "sensitive": true
+  }
+]

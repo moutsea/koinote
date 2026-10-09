@@ -11,6 +11,10 @@ const AGENT_WORKSPACE_SENSITIVE_CONTENT_PATTERNS = [
   /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/i,
   /\b(?:sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[A-Za-z0-9_-]{30,})\b/,
 ];
+// Only a complete literal assignment with an empty cookie value is harmless.
+// Keep checking populated cookies and other credentials elsewhere in the file.
+// A newline alone does not end a JavaScript expression (+, .concat, etc.).
+const EMPTY_DOCUMENT_COOKIE_PATTERN = /^cookie\s*=\s*(?:'[^'\\=;\s]+=(?:;[^'\\\r\n]*)?'|"[^"\\=;\s]+=(?:;[^"\\\r\n]*)?")[\t ]*(?:;|[\t \r\n]*$)/i;
 
 export type AgentWorkspaceFilteredFile = ConfigVaultFile & {
   reason: "sensitive_path" | "sensitive_content";
@@ -30,6 +34,7 @@ function containsAgentWorkspaceSensitiveContent(text: string) {
   for (const pattern of AGENT_WORKSPACE_SENSITIVE_CONTENT_PATTERNS) {
     const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
     for (const match of text.matchAll(globalPattern)) {
+      if (text.slice(Math.max(0, match.index - 9), match.index) === "document." && EMPTY_DOCUMENT_COOKIE_PATTERN.test(text.slice(match.index))) continue;
       const valueStart = match[0].search(/[:=]/);
       if (valueStart >= 0 && isSensitiveExampleValue(match[0].slice(valueStart + 1))) continue;
       return true;
@@ -39,6 +44,7 @@ function containsAgentWorkspaceSensitiveContent(text: string) {
 }
 
 const AGENT_WORKSPACE_SOURCE_ROOTS = [
+  ".dsh/skills",
   ".claude/agents", ".claude/commands", ".claude/skills", ".claude/hooks", ".claude/rules",
   ".codex/skills", ".codex/prompts", ".codex/rules",
   ".pi/agent/skills", ".pi/agent/prompts", ".pi/agent/extensions", ".pi/agent/themes",
@@ -50,7 +56,7 @@ const AGENT_WORKSPACE_SOURCE_ROOTS = [
   ".openclaw/skills", ".hermes/skills", ".moltbot/skills", ".config/openclaw/skills", ".config/hermes/skills", ".config/moltbot/skills",
   ".gemini/commands", ".gemini/skills", ".cursor/rules", ".windsurf/rules", ".continue/rules",
 ];
-const AGENT_WORKSPACE_SOURCE_FILES = new Set(["agents.md", "claude.md", "gemini.md"]);
+const AGENT_WORKSPACE_SOURCE_FILES = new Set(["agents.md", "claude.md", "gemini.md", ".dsh/agents.md"]);
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -64,6 +70,12 @@ export function isAgentWorkspaceSourcePath(path: string): boolean {
   const normalized = path.replaceAll("\\", "/").toLowerCase();
   if (AGENT_WORKSPACE_SOURCE_FILES.has(normalized)) return true;
   return AGENT_WORKSPACE_SOURCE_ROOTS.some((root) => normalized === root || normalized.startsWith(`${root}/`));
+}
+
+export function isAgentWorkspaceHomeFile(path: string): boolean {
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  return AGENT_WORKSPACE_SOURCE_FILES.has(normalized)
+    || AGENT_WORKSPACE_SOURCE_ROOTS.some((root) => normalized.startsWith(`${root}/`));
 }
 
 export function configFilesToAgentWorkspaceImport(files: ConfigVaultFile[]) {
