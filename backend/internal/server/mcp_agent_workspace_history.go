@@ -26,9 +26,10 @@ type mcpAgentWorkspaceCommitFileInput struct {
 }
 
 type mcpRestoreAgentWorkspaceCommitInput struct {
-	WorkspaceID      int64 `json:"workspaceId" jsonschema:"Repository ID from list_agent_workspaces."`
-	Revision         int64 `json:"revision" jsonschema:"Retained revision whose files should be restored."`
-	ExpectedRevision int64 `json:"expectedRevision" jsonschema:"Current revision from get_agent_workspace, not the historical revision. A conflict requires reading the repository again."`
+	Comment          string `json:"comment,omitempty" jsonschema:"Recommended reason for restoring, up to 500 characters. Never include credentials. Optional for older clients."`
+	WorkspaceID      int64  `json:"workspaceId" jsonschema:"Repository ID from list_agent_workspaces."`
+	Revision         int64  `json:"revision" jsonschema:"Retained revision whose files should be restored."`
+	ExpectedRevision int64  `json:"expectedRevision" jsonschema:"Current revision from get_agent_workspace, not the historical revision. A conflict requires reading the repository again."`
 }
 
 func (a *App) mcpGetAgentWorkspaceStorage(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, agentWorkspaceQuotaView, error) {
@@ -128,7 +129,7 @@ func (a *App) mcpRestoreAgentWorkspaceCommit(ctx context.Context, _ *mcp.CallToo
 	if err := a.allowMCPAgentWorkspaceWrite(principal); err != nil {
 		return nil, agentWorkspaceView{}, err
 	}
-	view, err := a.mutateAgentWorkspaceWithHistory(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, nil, nil, true, &input.Revision, false)
+	view, err := a.mutateAgentWorkspaceWithHistory(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, nil, nil, true, &input.Revision, false, input.Comment)
 	if err != nil {
 		return nil, agentWorkspaceView{}, mapMCPAgentWorkspaceError(err)
 	}

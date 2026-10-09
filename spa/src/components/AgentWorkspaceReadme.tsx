@@ -14,6 +14,7 @@ type Props = {
   promptError: boolean;
   promptErrorMessage?: string | null;
   uploadError: boolean;
+  uploadErrorMessage?: string | null;
   uploadSuccess: boolean;
   scanningLocal: boolean;
   scanError: boolean;
@@ -75,7 +76,7 @@ function ReadmeAction({ action, inputRef, props, t }: { action: "client" | "copy
       <input ref={inputRef} type="file" multiple hidden disabled={props.uploading || props.scanningLocal} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; if (files.length > 0 && !props.uploading && !props.scanningLocal) props.onImport(files); }} />
     </>}
     {action === "copy" && props.promptError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{props.promptErrorMessage || t.agentWorkspace.promptFailed}</p>}
-    {(action === "client" || action === "import") && props.uploadError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.saveFailed}</p>}
+    {(action === "client" || action === "import") && props.uploadError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{props.uploadErrorMessage || t.agentWorkspace.saveFailed}</p>}
     {(action === "client" || action === "import") && props.scanError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{props.scanErrorMessage || t.agentWorkspace.scanLocalFailed}</p>}
     {(action === "client" || action === "import") && props.uploadSuccess && <p role="status" className="mt-3 text-sm" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.saved}</p>}
   </div>;

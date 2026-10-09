@@ -121,8 +121,27 @@ func agentWorkspaceIDFromRequest(w http.ResponseWriter, r *http.Request) (int64,
 func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.Is(err, errAgentWorkspaceCommentSensitive):
+		httpx.ErrorCode(w, 422, "sensitive_comment", err.Error())
+	case errors.Is(err, errAgentWorkspaceCommentInvalid):
+		httpx.ErrorCode(w, 400, "invalid_comment", err.Error())
 	case errors.As(err, &sensitive):
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "sensitive_data_detected", err.Error())
+	case errors.Is(err, errAgentGitHubCredentialRequired):
+		httpx.ErrorCode(w, http.StatusForbidden, "github_token_required", err.Error())
+	case errors.Is(err, errAgentGitHubCredentialInvalid):
+		httpx.ErrorCode(w, http.StatusBadRequest, "github_token_invalid", err.Error())
+	case errors.Is(err, errAgentGitHubCredentialCrypto):
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_credential_unavailable", "GitHub credential storage is unavailable")
+	case errors.Is(err, errAgentGitHubRepositoryInvalid), errors.Is(err, errAgentGitHubLicense):
+		httpx.ErrorCode(w, http.StatusBadRequest, "github_repository_invalid", err.Error())
+	case errors.Is(err, errAgentGitHubRepositoryMissing):
+		httpx.ErrorCode(w, http.StatusNotFound, "github_repository_unavailable", err.Error())
+	case errors.Is(err, errAgentGitHubArchiveInvalid):
+		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "github_archive_invalid", err.Error())
+	case errors.Is(err, errAgentGitHubRateLimited), errors.Is(err, errAgentGitHubImportBusy):
+		w.Header().Set("Retry-After", "60")
+		httpx.ErrorCode(w, http.StatusTooManyRequests, "github_rate_limited", err.Error())
 	case errors.Is(err, errAgentWorkspaceRevisionNotFound):
 		httpx.ErrorCode(w, http.StatusNotFound, "revision_not_found", err.Error())
 	case errors.Is(err, errAgentWorkspaceFileNotFound):
@@ -208,7 +227,7 @@ func (a *App) createAgentWorkspace(ctx context.Context, userID int, name, descri
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM agent_workspaces WHERE user_id = $1 AND deleted_at IS NULL`, userID).Scan(&count); err != nil {
 		return agentWorkspaceView{}, err
 	}
-	if count >= 100 {
+	if count >= agentWorkspaceMaxRepositories {
 		return agentWorkspaceView{}, errAgentWorkspaceLimit
 	}
 	var previousBytes int64

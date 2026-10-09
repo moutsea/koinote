@@ -19,6 +19,9 @@ import (
 )
 
 type App struct {
+	githubHTTPClient        *http.Client
+	githubImportOnce        sync.Once
+	githubImportSlots       chan struct{}
 	mcpSchemaCache          mcp.SchemaCache
 	cfg                     config.Config
 	db                      *pgxpool.Pool
@@ -138,6 +141,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
 	mux.HandleFunc("GET /api/admin/server-status", a.adminServerStatus)
 	mux.HandleFunc("GET /api/admin/feedback", a.adminFeedbackList)
+	mux.HandleFunc("PUT /api/admin/agent-repositories/storage", a.agentRepositorySystemStoragePut)
 	mux.HandleFunc("GET /api/admin/announcements", a.adminAnnouncementsList)
 	mux.HandleFunc("POST /api/admin/announcements", a.adminAnnouncementPublish)
 	mux.HandleFunc("DELETE /api/admin/announcements/{announcementId}", a.adminAnnouncementWithdraw)
@@ -157,6 +161,20 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/agent/channels/{channelId}", a.llmChannelDelete)
 	mux.HandleFunc("GET /api/agent/settings", a.agentSettingsGet)
 	mux.HandleFunc("PUT /api/agent/settings", a.agentSettingsPut)
+	mux.HandleFunc("GET /api/agent/github-credential", a.agentGitHubCredentialGet)
+	mux.HandleFunc("PUT /api/agent/github-credential", a.agentGitHubCredentialPut)
+	mux.HandleFunc("DELETE /api/agent/github-credential", a.agentGitHubCredentialDelete)
+	mux.HandleFunc("POST /api/agent/workspaces/import/github", a.agentGitHubImportPost)
+	mux.HandleFunc("GET /api/agent/repositories", a.publicAgentRepositoriesList)
+	mux.HandleFunc("GET /api/agent/repositories/{workspaceId}", a.publicAgentRepositoryGet)
+	mux.HandleFunc("GET /api/agent/repositories/{workspaceId}/files/{fileId}", a.publicAgentRepositoryFileGet)
+	mux.HandleFunc("POST /api/agent/repositories/{workspaceId}/fork", a.publicAgentRepositoryFork)
+	mux.HandleFunc("PUT /api/agent/repositories/{workspaceId}/star", a.publicAgentRepositoryStar)
+	mux.HandleFunc("DELETE /api/agent/repositories/{workspaceId}/star", a.publicAgentRepositoryStar)
+	mux.HandleFunc("POST /api/agent/repositories/{workspaceId}/clone", a.publicAgentRepositoryClone)
+	mux.HandleFunc("GET /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)
+	mux.HandleFunc("PUT /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)
+	mux.HandleFunc("DELETE /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)
 	mux.HandleFunc("GET /api/agent/workspace/settings", a.agentWorkspaceSettingsGet)
 	mux.HandleFunc("GET /api/agent/workspace/storage", a.agentWorkspaceStorageGet)
 	mux.HandleFunc("PUT /api/agent/workspace/storage", a.agentWorkspaceStoragePut)

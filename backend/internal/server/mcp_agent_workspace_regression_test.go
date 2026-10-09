@@ -78,7 +78,7 @@ func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
 	patch := func(view agentWorkspaceView, path, content string) agentWorkspaceView {
 		t.Helper()
 		var next agentWorkspaceView
-		decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{"workspaceId": view.WorkspaceID, "expectedRevision": view.Revision, "upsert": []any{file(path, content)}}), &next)
+		decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{"comment": "Regression test change", "workspaceId": view.WorkspaceID, "expectedRevision": view.Revision, "upsert": []any{file(path, content)}}), &next)
 		return next
 	}
 	t.Run("sensitive restore is atomic for both transports", func(t *testing.T) {
@@ -95,10 +95,10 @@ func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
 		decodeJSONResponse(t, uploaded, &body)
 		sensitiveRevision := body.Workspace.Revision
 		clean := patch(body.Workspace, "settings.txt", "api_key=<REDACTED>")
-		args := map[string]any{"workspaceId": view.WorkspaceID, "revision": sensitiveRevision, "expectedRevision": clean.Revision}
+		args := map[string]any{"comment": "Restore regression fixture", "workspaceId": view.WorkspaceID, "revision": sensitiveRevision, "expectedRevision": clean.Revision}
 		requireMCPToolError(t, client, "restore_agent_workspace_commit", args, "sensitive data")
 		restorePath := fmt.Sprintf("%s/commits/%d/restore", path, sensitiveRevision)
-		payload := fmt.Sprintf(`{"expectedRevision":%d,"allowSensitive":true}`, clean.Revision)
+		payload := fmt.Sprintf(`{"comment":"Restore regression fixture","expectedRevision":%d,"allowSensitive":true}`, clean.Revision)
 		req := httptest.NewRequest(http.MethodPost, restorePath, strings.NewReader(payload))
 		req.Header.Set("Authorization", "Bearer "+token.Secret)
 		req.Header.Set("Content-Type", "application/json")
@@ -145,7 +145,7 @@ func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
 		if len(view.Files) != 3 {
 			t.Fatalf("batches lost files: %+v", view.Files)
 		}
-		replacement := map[string]any{"workspaceId": view.WorkspaceID, "expectedRevision": view.Revision, "files": []any{file("replacement.txt", "complete export")}}
+		replacement := map[string]any{"comment": "Replace regression fixture", "workspaceId": view.WorkspaceID, "expectedRevision": view.Revision, "files": []any{file("replacement.txt", "complete export")}}
 		requireMCPToolError(t, client, "update_agent_workspace", replacement, "replaceAll")
 		unchanged, err := app.loadAgentWorkspace(ctx, user.ID, view.WorkspaceID)
 		if err != nil || unchanged.Revision != view.Revision || len(unchanged.Files) != 3 {
@@ -174,11 +174,11 @@ func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
 		assertUpdateAudit("success", unchanged.Revision, &view.Revision, 1)
 		// A legacy caller can omit workspaceId when there is just one repository.
 		before := view.Revision
-		decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{
+		decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{"comment": "Regression test change",
 			"expectedRevision": before, "upsert": []any{file("incremental.txt", "audit target")},
 		}), &view)
 		assertUpdateAudit("success", before, &view.Revision, 1)
-		requireMCPToolError(t, client, "update_agent_workspace", map[string]any{
+		requireMCPToolError(t, client, "update_agent_workspace", map[string]any{"comment": "Regression test change",
 			"expectedRevision": before, "upsert": []any{file("incremental.txt", "stale update")},
 		}, "revision conflict")
 		assertUpdateAudit("error", before, nil, 1)

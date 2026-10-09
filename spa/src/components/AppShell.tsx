@@ -363,6 +363,9 @@ export function AppShell() {
             <HeaderLink to="/space" active={isUnder(pathname, "/space")}>
               {t.nav.space}
             </HeaderLink>
+            <HeaderLink to="/repositories" active={isUnder(pathname, "/repositories")}>
+              {t.agentWorkspace.publicRepositories}
+            </HeaderLink>
             {desktopRuntime && localMode ? null : desktopRuntime ? (
               <>
                 <HeaderDocsMenu
@@ -870,6 +873,10 @@ function UserMenu({
             {t.nav.space}
           </Link>
 
+          <Link to="/repositories" role="menuitem" onClick={() => setOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--ink-wash-strong)]">
+            <FolderOpen className="h-4 w-4 shrink-0" />{t.agentWorkspace.publicRepositories}
+          </Link>
+
           <Link
             to="/documents"
             role="menuitem"
@@ -1136,7 +1143,7 @@ function HeaderLink({
   active,
   children,
 }: {
-  to: "/editor" | "/space" | "/documents" | "/pricing";
+  to: "/editor" | "/space" | "/documents" | "/pricing" | "/repositories";
   active: boolean;
   children: React.ReactNode;
 }) {

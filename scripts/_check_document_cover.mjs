@@ -33,7 +33,7 @@ const adapters = {
   api: `export class ApiError extends Error {}
     export const AGENT_CREDITS_QUERY_KEY = ["credits"];
     export const WECHAT_COVER_RATIO_PRESETS = ["2.35:1", "1:1"];
-    export const generateWechatCover = (prompt, ratio) => globalThis.__coverGenerateAI(prompt, ratio);
+    export const generateWechatCover = (prompt, ratio, signal, reference) => globalThis.__coverGenerateAI(prompt, ratio, signal, reference);
     export const uploadImage = (file, purpose) => globalThis.__coverUpload(file, purpose);
     export const releaseUnusedImages = keys => globalThis.__coverRelease(keys);
     export const getDocument = id => globalThis.__coverGetDocument(id);
@@ -510,5 +510,47 @@ const discarded = uploads.at(-1);
 await act(async () => documentSaver.acceptRemote(activeDocId, stored()));
 assert.ok(released.includes(discarded.key));
 rejectSave = false;
+// Reference files stay local until generation; closing aborts late reads and requests.
+const referenceReaders=[];
+globalThis.FileReader=class {
+  readAsDataURL(file){ this.file=file;referenceReaders.push(this); }
+  abort(){ this.aborted=true; }
+};
+const referenceCalls=[];
+globalThis.__coverGenerateAI=async(prompt,ratio,signal,reference)=>{
+  referenceCalls.push({prompt,ratio,signal,reference});
+  return {cover:{base64:Buffer.from('generated').toString('base64'),mimeType:'image/png',width:600,height:400,ratio}};
+};
+await act(async()=>root.render(null));
+const referenceProps={title:'Reference cover',member:true,articleImages:[],initial:{coverMode:'ai',coverRatio:'1:1',coverImageSource:'',coverPrompt:'Follow the reference palette'},onSave:async()=>{},onClose(){}};
+await act(async()=>root.render(createElement(DocumentCoverDialog,referenceProps)));
+function propsFor(element){assert.ok(Boolean(element));return element[Object.keys(element).find(key=>key.startsWith('__reactProps'))];}
+async function selectReference(file){await act(async()=>propsFor(document.querySelector('input[type="file"]')).onChange({target:{files:[file],value:'selected'}}));}
+await selectReference({type:'image/svg+xml',size:20,name:'unsafe.svg'});
+assert.equal(document.querySelector('[role="alert"]').textContent,'wechatCoverReferenceInvalid');
+assert.equal(referenceReaders.length,0);
+await selectReference({type:'image/png',size:5*1024*1024+1,name:'large.png'});
+assert.equal(referenceReaders.length,0);
+await selectReference({type:'image/png',size:100,name:'reference.png'});
+assert.equal(buttonWithText('wechatCoverGenerate').disabled,true,'generation waits for the selected reference');
+const referenceSource='data:image/png;base64,cmVmZXJlbmNl';
+await act(async()=>{const reader=referenceReaders.at(-1);reader.result=referenceSource;reader.onload();});
+assert.equal(document.querySelector('img[alt="wechatCoverReferencePreview"]')?.getAttribute('src'),referenceSource);
+assert.equal(referenceCalls.length,0,'selection does not send the reference');
+await click('wechatCoverGenerate');assert.equal(referenceCalls.at(-1).reference,referenceSource);
+await act(async()=>document.querySelector('[aria-label="wechatCoverReferenceRemove"]').click());
+await click('wechatCoverRegenerate');assert.equal(referenceCalls.at(-1).reference,undefined,'removed reference is not reused');
+await selectReference({type:'image/png',size:100,name:'late.png'});
+const lateReader=referenceReaders.at(-1);
+await act(async()=>root.render(null));assert.equal(lateReader.aborted,true);
+await act(async()=>{lateReader.result=referenceSource;lateReader.onload();});
+assert.equal(document.querySelector('[role="dialog"]'),null,'late file reads do not reopen a closed dialog');
+await act(async()=>root.render(createElement(DocumentCoverDialog,referenceProps)));
+let finishReferenceGeneration;
+globalThis.__coverGenerateAI=async(prompt,ratio,signal)=>{referenceCalls.push({signal});return new Promise(resolve=>{finishReferenceGeneration=resolve;});};
+await click('wechatCoverGenerate');
+await act(async()=>root.render(null));assert.equal(referenceCalls.at(-1).signal.aborted,true);
+await act(async()=>finishReferenceGeneration({cover:{base64:'aGk=',mimeType:'image/png',ratio:'1:1',width:1,height:1}}));
+assert.equal(document.querySelector('[role="dialog"]'),null);
 await act(async () => root.unmount());
 console.log("document cover rendering, shared upload lifecycle, publish recovery and ratio checks passed");

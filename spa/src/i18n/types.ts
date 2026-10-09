@@ -1469,6 +1469,13 @@ export interface Messages {
     wechatCoverAi: string;
     wechatCoverAiHint: string;
     wechatCoverAiRequired: string;
+    wechatCoverReferenceUpload: string;
+    wechatCoverReferenceHint: string;
+    wechatCoverReferenceReading: string;
+    wechatCoverReferencePreview: string;
+    wechatCoverReferenceRemove: string;
+    wechatCoverReferenceInvalid: string;
+    wechatCoverReferenceFailed: string;
     wechatCoverPromptPlaceholder: string;
     wechatCoverRatio: string;
     wechatCoverCreditCost: string;

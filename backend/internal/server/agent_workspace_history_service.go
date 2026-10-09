@@ -81,7 +81,7 @@ func (a *App) listAgentWorkspaceCommits(ctx context.Context, userID int, workspa
 	}
 	rows, err := a.db.Query(ctx, `
 		SELECT c.commit_id, c.revision, c.parent_revision, c.action, c.restored_from,
-		       c.name, c.description, c.file_count, c.size_bytes, c.created_at
+		       c.name, c.description, c.file_count, c.size_bytes, c.created_at, c.comment
 		FROM agent_workspace_commits c JOIN agent_workspaces w ON w.id = c.workspace_id
 		WHERE w.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL
 		  AND ($3::bigint IS NULL OR c.revision < $3)
@@ -123,7 +123,7 @@ func (a *App) loadAgentWorkspaceCommit(ctx context.Context, userID int, workspac
 	}
 	commit, err := scanAgentWorkspaceCommit(tx.QueryRow(ctx, `
 		SELECT c.commit_id, c.revision, c.parent_revision, c.action, c.restored_from,
-		       c.name, c.description, c.file_count, c.size_bytes, c.created_at
+		       c.name, c.description, c.file_count, c.size_bytes, c.created_at, c.comment
 		FROM agent_workspace_commits c JOIN agent_workspaces w ON w.id = c.workspace_id
 		WHERE w.id = $1 AND w.user_id = $2 AND c.revision = $3 AND w.deleted_at IS NULL
 	`, workspaceID, userID, revision))

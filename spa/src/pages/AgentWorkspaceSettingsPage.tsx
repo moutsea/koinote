@@ -1,3 +1,4 @@
+import { AgentGitHubCredentialCard } from "../components/AgentGitHubCredentialCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Check, Cloud, LoaderCircle, ShieldCheck } from "lucide-react";
@@ -55,6 +56,7 @@ export function AgentWorkspaceSettingsPage() {
         {storage.data && !storage.isError && <AgentWorkspaceStorageAllocation storage={storage.data.storage} />}
       </PaperCard>}
       {!enabled && <PaperCard className="p-6 sm:p-7"><div className="flex items-start gap-3"><span className="rounded-lg p-2.5" style={{ background: "var(--ink-wash)", color: "var(--ink-strong)" }}><ShieldCheck className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h2 className="kn-heading-cn text-lg font-bold" style={{ color: "var(--ink-black)" }}>{t.agentWorkspace.title}</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.description}</p><button type="button" disabled={enable.isPending} onClick={() => enable.mutate()} className="mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold disabled:opacity-50" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{enable.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}{t.agentWorkspace.enable}</button>{enable.isError && <p className="mt-3 text-sm" role="alert" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.enableFailed}</p>}</div></div></PaperCard>}
+      {enabled && <AgentGitHubCredentialCard />}
       {enabled && <MCPAccessCard user={user} agentOnly workspaceEnabled title={t.agentWorkspace.tokenSettingsTitle} />}
     </main>
   </PageContainer>;

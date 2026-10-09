@@ -150,6 +150,7 @@ func main() {
 	app.StartStripeCheckoutCleanup(backgroundCtx)
 	app.StartMCPAuditCleanup(backgroundCtx)
 	app.StartConfigSyncCleanup(backgroundCtx)
+	app.StartAgentRepositoryCleanup(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),

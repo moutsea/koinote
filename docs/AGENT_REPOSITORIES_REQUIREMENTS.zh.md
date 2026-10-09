@@ -4,7 +4,44 @@
 >
 > 整理日期：2026-09-11
 >
-> 状态：第一期 Hosted Workspace 已完成 API、MCP 工具和设置页实现，尚未部署上线；Repository、Release、Memory 等仍未实现。本文依据本次产品讨论整理，不代表已经上线或完成生产验收。
+> 状态：个人仓库、API/MCP、本机同步及 AI 交接随 0.1.72 上线；以下「当前共享实现」随 0.1.73 发布。下方早期方案仅作历史参考，冲突处以当前实现为准。首批公开仓库内容另按清单执行生产导入。
+
+
+## 当前共享实现（2026-10-10，随桌面 0.1.73 发布）
+
+- 参考本地 `codex/agent-workspace-wechat-updates` 分支，重用产品流程；未合并旧的权限、存储实现。GitHub 导入流程已移植并适配当前容量、敏感检查及权限边界。
+- 在私有仓库的「公开共享」中检查文件、选择许可证并确认发布。每个仓库保留一个当前公开快照，冻结名称、说明和文件内容；后续私有写入、重命名和历史恢复不会自动公开。再次发布替换公开快照，旧 revision 的读取返回 404。 前端在打开确认框前固定仓库 ID、revision 和许可证；确认期间的后台刷新不能改变待发布内容，版本变化由服务端返回 409。暂不提供多 Release 归档、Git 协议或自动上游合并。
+- `/repositories` 提供匿名浏览、搜索及分页，详情页可预览文件。Clone 是 ZIP 下载或桌面本机同步，沿用文件选择、SHA256 校验、64 MiB/10,000 文件每批限制、跨系统路径映射和备份确认。公开内容也可以复制无凭证的 REST 下载指令给 AI Agent，不创建或暴露私有 MCP token。 Clone 下载及前后 manifest 检查遇到 429 时，四个读取任务共享等待时间，按 Retry-After 续传而不重复下载已完成文件；缺少有效等待值时等待 60 秒，每次读取最多重试三次，单次等待超过五分钟则报错。下载及等待均可取消；撤回或版本变化会停止整批，全部校验完成后才写入本机。
+- Fork 需要付费资格、启用仓库功能及足够容量。复制公开快照到新的私有仓库，保留来源名称、版本和许可证；不会复制作者尚未发布的文件。重试同一请求不会重复创建；来源撤回或删除后，已有 Fork 不受影响。Fork 是独立副本，不自动同步上游。
+- 发布和撤回只接受浏览器/桌面会话，Agent token 无权操作；只有付费用户可以发布。关闭同步或失去付费资格后，撤回 API 仍可用。公开扫描不能 `allowSensitive` 绕过，同时检查凭据文件路径、文件内容和公开名称/说明。
+- 撤回或删除源仓库后，所有公开详情、文件、清单和新 Fork 请求都不可用。公开响应使用 `Cache-Control: no-store`；已经下载或 Fork 的副本不能远程收回。
+- 迁移 `0082_agent_repository_sharing.sql` 将公开文件清单与历史独立存放，复用按仓库去重的 blob；历史清理保留公开引用。公开独占的旧内容继续计入作者现有配额，撤回或重新发布后回收无引用的 blob。Fork 的副本使用接收者的容量。
+- API：`GET /api/agent/repositories?q=&cursor=` 返回不透明的 `nextCursor`，以发布时间、仓库 ID 双字段倒序分页；`GET /api/agent/repositories/{workspaceId}[?revision=]`，`GET /api/agent/repositories/{workspaceId}/files/{fileId}?revision=`；`POST .../{workspaceId}/fork` 接受 `expectedRevision`、UUID v4 `requestId`。自己的 `GET/PUT/DELETE /api/agent/workspaces/{workspaceId}/sharing` 读取状态或发布/撤回；写操作需要 `expectedRevision`，发布还需要 `license`。
+- GitHub 导入通过 `POST /api/agent/workspaces/import/github` 创建私有仓库，需要付费资格、启用同步、URL 和 UUID v4 `requestId`；可选分支、标签或 commit，同请求幂等，复用 ID 但改变参数返回冲突。公开源允许匿名 GitHub 拉取，私有源可在 `GET/PUT/DELETE /api/agent/github-credential` 管理加密 Token；这些接口不允许仓库 Agent token 操作。
+- GitHub 原作者定义为 API 返回的仓库所有者账号或组织，不取导入者或最近提交人。原作者链接、原始仓库链接、导入 commit、ref 和原许可证由服务端写入，普通编辑和恢复不能覆盖；发布冻结该来源，Fork 继续继承，源 Koinote 仓库删除后仍保留。公开列表、详情和 AI Clone 指令展示来源，并注明可能包含后续修改、不会自动追踪上游。私有来源标记只出现在自己的仓库确认页面。
+- GitHub 先解析 ref 到固定 commit 再下载 ZIP；只请求 `api.github.com`，只允许受限 GitHub 重定向，转 `codeload.github.com` 时移除授权头。压缩包限 128 MiB，以 0600 临时文件处理并清理；最多 2,000 个文件、单文件 5 MiB、解压后 64 MiB，拒绝符号链接、路径冲突和敏感内容。每实例最多两个并行导入，每用户每分钟五次，总请求限时 90 秒。插入及配额校验在同一事务中，失败无半成品。
+- 迁移 `0083_agent_github_import.sql` 保存私有及公开来源、导入幂等标识和加密 GitHub 凭据。GitHub Token 使用既有 `MCP_TOKEN_ENCRYPTION_KEY` 通过独立域派生 AES-GCM 密钥，并绑定用户 ID；生产必须配置，开发才回退 `SESSION_SECRET`。轮换根密钥前需迁移密文，否则用户须重新保存 GitHub Token。API 不回传明文，公开响应、Fork 和 AI 指令不携带该 Token。
+
+
+- `PUT/DELETE .../{workspaceId}/star` 允许所有登录用户收藏/取消收藏，唯一约束保证重复操作幂等；Agent token 无权收藏。公开列表与详情返回 `starCount`、当前查看者的 `starred`、`cloneCount`，匿名不会得到别人的收藏状态。
+- `POST .../{workspaceId}/clone` 允许匿名访问，接收 `expectedRevision`、UUID v4 `requestId`、`method`（`zip`、`home`、`agent`）；同一请求在 30 天内重试只计一次，复用 ID 却更改内容返回 409，来源已撤回返回 404。前端在记录成功后清除去重编号，同一页面再次发起 Clone 使用新编号；请求失败或成功响应丢失时保留编号供重试。记录仅表示发起 Clone，不确认下载或安装完成；登录时关联用户，匿名不持久化 IP、Cookie 标识或设备指纹。仅信任带内部令牌的代理提供的 IP，并增加每进程总量限流；后台分批清理超过 30 天的去重记录，独立累计计数不随清理减少。Clone 指令支持中英法日四种语言，保留校验、备份和来源归属要求。
+- 文件变更历史新增 `comment`：网页上传、编辑、恢复选填，Agent REST/MCP 写入、文件删除和恢复建议填写；旧 Agent 可省略或留空，去除首尾空白后最多 500 字，拒绝敏感信息及非法控制字符。说明与变更在同一事务中保存，失败不留下记录。工具 schema、说明和 v6 提示词同步更新；Fork、GitHub 导入自动记录来源说明。
+- 迁移 `0084_agent_repository_engagement.sql` 新增收藏、Clone 发起记录、公开更新时间索引与提交说明列。删除仓库会清理其互动记录；删除用户会清理收藏，并将既有 Clone 记录匿名化。
+- 迁移 `0085_agent_repository_scan_cache.sql` 在 blob 中增加扫描策略摘要和结果；旧文件默认未扫描，客户端不能提交或覆盖这些字段。
+
+### 发布前审查补充
+
+- 敏感变更说明返回独立的 `sensitive_comment`，不走敏感文件确认通道。成功的网页文件变更清空说明；校验集中在变更服务内，说明随提交 INSERT 原子保存。
+- 发布扫描先检查路径和名称/说明，再按仓库内的 SHA-256 与扫描策略摘要复用安全/敏感结果，仅逐个读取未命中的不同内容。结果随 blob 保留和回收，不跨仓库共享；首次扫描与策略变化仍需读取全部未命中内容。正则变化自动改变策略摘要，其他扫描逻辑变化须递增 `agentWorkspaceSensitiveLogicVersion`。扫描使用不持有用户写锁的只读一致性快照；缓存写入不修改内容，正式发布事务重新检查 revision，避免把扫描后的未审核修改公开。配额失败原本就会回滚历史删除；另移除无法腾出足够空间时的无效裁剪。
+- GitHub 请求的 Accept 由端点显式指定，凭证被拒绝时只为公开内容尝试匿名回退；私有仓库保留凭证错误，限流不回退。公开访客与登录接口共用会话校验；Star 与 Clone 使用事务维护的累计计数。
+- 封面生成在读取请求体前限流，编码错误统一返回生成失败错误码。
+
+## 同步移植：参考图生成封面（未发布）
+
+- 接入当前统一文档封面弹窗的 AI 模式，支持上传、预览、替换、移除一张参考图，不恢复旧的公众号专用重复入口。
+- 允许 PNG、JPEG、GIF、WebP，文件最多 5 MiB、解码最多 3,600 万像素；服务端拒绝远程 URL 和 SVG，校验后缩放并重新编码为 JPEG，去除元数据。只在点击生成后发送给配置的模型，参考图不写入正文、文档封面元数据或仓库。
+- 无参考图继续走 `/images/generations`；有参考图走兼容 OpenAI 的 `/images/edits`，以 multipart `image[]` 传图，模型需支持图片编辑。沿用现有会员权限、限流、比例裁剪、20 credits 成功扣费与失败退回。关闭弹窗取消文件读取及生成请求。
+- 回归测试使用模拟模型服务检查上传协议、拒绝非法图片和失败退费，不调用付费模型生成。
 
 ## 2026-10-09：DeepSeek Harness 配置支持（随桌面 0.1.72 发布）
 
@@ -33,6 +70,11 @@
 - 独立 `/api/config-sync/mcp` 只注册 `get_config_sync_snapshot`、`read_config_sync_envelope`；`GET /api/config-sync/envelope` 使用相同 Bearer 凭证下载整包密文。MCP 分块最大 8 KiB，仅供不超过 8 MiB 的 envelope 使用；元信息公布 `maxMcpEnvelopeBytes`，超出时明确要求整包下载。整包下载支持完整 64 MiB envelope 上限，避免受 30 分钟有效期和每分钟 120 次请求限制。两类 MCP 共用请求体上限处理。
 - 复制内容包含单版本 AES-GCM 密钥（不是迁移密码）、临时 Token、MCP/下载地址和本机合并指令。菜单明确提示仅交给信任的 Agent。本机合并要求先检查系统、差异和路径，备份同名文件、保留本机独有文件，冲突询问；不执行下载代码，不自动回写云端。服务端继续保持无法解密。
 - 已在临时 PostgreSQL 库验证临时凭证隔离、跨用户拒绝、过期/删除/版本变更、密文下载与 MCP 分块、413；前端验证单次解锁复用、跨快照密钥隔离、版本变化与离页失效、菜单复制和只读仓库 Token 选择。
+
+## 首批公共内容的系统容量
+
+- 首批 GitHub 公共仓库由平台专用管理员账号承载，导入前通过管理员接口自动确保系统赠送容量，不从个人空间分配，不计入个人用量。接口仅接受管理员会话并核对目标账号邮箱；仓库和 MCP Token 无权调用。
+- 系统赠送使用现有 `bonus_bytes`，以完整清单大小作为最低值，保留默认容量；重复执行与分批导入不叠加赠送，也不降低已有更高额度。普通用户的配额、仓库数量上限与 Fork 后的个人计费规则保持不变。
 
 ## 2026-10-09：跨系统恢复（随桌面 0.1.72 发布）
 

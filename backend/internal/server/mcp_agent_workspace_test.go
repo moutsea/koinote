@@ -81,7 +81,7 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 	fileInput := func(text string) map[string]any {
 		return map[string]any{"path": "skills/writing/SKILL.md", "mimeType": "text/markdown", "contentBase64": base64.StdEncoding.EncodeToString([]byte(text))}
 	}
-	decodeMCPStructured(t, callMCPToolOK(t, writer, "update_agent_workspace", map[string]any{
+	decodeMCPStructured(t, callMCPToolOK(t, writer, "update_agent_workspace", map[string]any{"comment": "Regression test change",
 		"workspaceId": id, "expectedRevision": workspace.Revision, "upsert": []any{fileInput(content)},
 	}), &workspace)
 	originalRevision := workspace.Revision
@@ -96,15 +96,15 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 	if file.ContentBase64 != base64.StdEncoding.EncodeToString([]byte(content)) || originalFile.FileID == 0 {
 		t.Fatalf("file content did not round-trip: %+v", file)
 	}
-	assertRejected(reader, "update_agent_workspace", map[string]any{"workspaceId": id, "expectedRevision": workspace.Revision, "delete": []string{originalFile.Path}})
-	assertRejected(writer, "update_agent_workspace", map[string]any{"workspaceId": id, "expectedRevision": workspace.Revision - 1, "delete": []string{originalFile.Path}})
-	assertRejected(writer, "update_agent_workspace", map[string]any{"workspaceId": id, "upsert": []any{fileInput("Missing revision")}})
-	assertRejected(writer, "update_agent_workspace", map[string]any{"workspaceId": id, "expectedRevision": workspace.Revision, "upsert": []any{fileInput("api_key=sk-abcdefghijklmnopqrstuvwxyz1234567890")}})
+	assertRejected(reader, "update_agent_workspace", map[string]any{"comment": "Regression test change", "workspaceId": id, "expectedRevision": workspace.Revision, "delete": []string{originalFile.Path}})
+	assertRejected(writer, "update_agent_workspace", map[string]any{"comment": "Regression test change", "workspaceId": id, "expectedRevision": workspace.Revision - 1, "delete": []string{originalFile.Path}})
+	assertRejected(writer, "update_agent_workspace", map[string]any{"comment": "Regression test change", "workspaceId": id, "upsert": []any{fileInput("Missing revision")}})
+	assertRejected(writer, "update_agent_workspace", map[string]any{"comment": "Regression test change", "workspaceId": id, "expectedRevision": workspace.Revision, "upsert": []any{fileInput("api_key=sk-abcdefghijklmnopqrstuvwxyz1234567890")}})
 
 	decodeMCPStructured(t, callMCPToolOK(t, writer, "manage_agent_workspace", map[string]any{
 		"workspaceId": id, "expectedRevision": workspace.Revision, "name": "Renamed skills", "description": "Current description",
 	}), &workspace)
-	decodeMCPStructured(t, callMCPToolOK(t, writer, "update_agent_workspace", map[string]any{
+	decodeMCPStructured(t, callMCPToolOK(t, writer, "update_agent_workspace", map[string]any{"comment": "Regression test change",
 		"workspaceId": id, "expectedRevision": workspace.Revision, "delete": []string{originalFile.Path},
 	}), &workspace)
 	for _, current := range workspace.Files {
@@ -136,7 +136,7 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 		{"list_agent_workspace_commits", map[string]any{"workspaceId": id}},
 		{"get_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": originalRevision}},
 		{"read_agent_workspace_commit_file", map[string]any{"workspaceId": id, "revision": originalRevision, "path": originalFile.Path}},
-		{"restore_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision}},
+		{"restore_agent_workspace_commit", map[string]any{"comment": "Regression test change", "workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision}},
 		{"manage_agent_workspace", map[string]any{"workspaceId": id, "expectedRevision": workspace.Revision, "delete": true}},
 	} {
 		assertRejected(stranger, bad.name, bad.args)
@@ -149,11 +149,11 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 	assertRejected(reader, "get_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": -1})
 	assertRejected(reader, "read_agent_workspace_commit_file", map[string]any{"workspaceId": id, "revision": originalRevision, "path": "../private.txt"})
 	assertRejected(reader, "get_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": workspace.Revision + 100})
-	assertRejected(reader, "restore_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision})
-	assertRejected(writer, "restore_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision - 1})
-	assertRejected(writer, "restore_agent_workspace_commit", map[string]any{"workspaceId": id, "revision": originalRevision})
+	assertRejected(reader, "restore_agent_workspace_commit", map[string]any{"comment": "Regression test change", "workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision})
+	assertRejected(writer, "restore_agent_workspace_commit", map[string]any{"comment": "Regression test change", "workspaceId": id, "revision": originalRevision, "expectedRevision": workspace.Revision - 1})
+	assertRejected(writer, "restore_agent_workspace_commit", map[string]any{"comment": "Regression test change", "workspaceId": id, "revision": originalRevision})
 	previousRevision := workspace.Revision
-	decodeMCPStructured(t, callMCPToolOK(t, writer, "restore_agent_workspace_commit", map[string]any{
+	decodeMCPStructured(t, callMCPToolOK(t, writer, "restore_agent_workspace_commit", map[string]any{"comment": "Regression test change",
 		"workspaceId": id, "revision": originalRevision, "expectedRevision": previousRevision,
 	}), &workspace)
 	if workspace.Revision != previousRevision+1 || workspace.Name != "Renamed skills" || workspace.Description != "Current description" || len(workspace.Files) != 2 {
@@ -255,7 +255,7 @@ func TestMCPAgentRepositoryAcceptsMaximumFileSize(t *testing.T) {
 	var workspace agentWorkspaceView
 	decodeMCPStructured(t, callMCPToolOK(t, client, "create_agent_workspace", map[string]any{"name": "Large files"}), &workspace)
 	encoded := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a", agentWorkspaceMaxFileBytes)))
-	decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{
+	decodeMCPStructured(t, callMCPToolOK(t, client, "update_agent_workspace", map[string]any{"comment": "Regression test change",
 		"workspaceId": workspace.WorkspaceID, "expectedRevision": workspace.Revision,
 		"upsert": []map[string]any{{"path": "large.txt", "contentBase64": encoded}},
 	}), &workspace)

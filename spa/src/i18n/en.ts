@@ -2134,6 +2134,13 @@ export const en: Messages = {
     wechatCoverAiHint: "Create a custom cover from a prompt",
     wechatCoverAiRequired:
       "Enter a prompt and generate a cover, or choose another cover source.",
+    wechatCoverReferenceUpload: "Upload reference image",
+    wechatCoverReferenceHint: "Optional PNG, JPEG, GIF or WebP up to 5 MiB and 36 megapixels. Sent to the configured image provider only when you generate; it is not saved with the document.",
+    wechatCoverReferenceReading: "Reading image…",
+    wechatCoverReferencePreview: "Reference image preview",
+    wechatCoverReferenceRemove: "Remove reference image",
+    wechatCoverReferenceInvalid: "Choose a PNG, JPEG, GIF or WebP image up to 5 MiB.",
+    wechatCoverReferenceFailed: "Could not read the reference image. Please try again.",
     wechatCoverPromptPlaceholder:
       "Describe the subject, composition, and style, for example: a modern writing desk under a deep-blue night sky, restrained, with clean title space…",
     wechatCoverRatio: "Cover ratio",

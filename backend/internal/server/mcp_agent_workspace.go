@@ -19,6 +19,7 @@ type mcpAgentWorkspaceFileInput struct {
 }
 
 type mcpUpdateAgentWorkspaceInput struct {
+	Comment          string                       `json:"comment,omitempty" jsonschema:"Recommended change description, up to 500 characters. Never include credentials. Optional for older clients."`
 	WorkspaceID      int64                        `json:"workspaceId,omitempty" jsonschema:"Repository workspace ID returned by list_agent_workspaces. Required when multiple repositories exist."`
 	ExpectedRevision int64                        `json:"expectedRevision" jsonschema:"Revision returned by get_agent_workspace. Use 0 when no workspace exists."`
 	Upsert           []mcpAgentWorkspaceFileInput `json:"upsert,omitempty" jsonschema:"Files that are new or changed. Only these files are uploaded."`
@@ -202,7 +203,7 @@ func (a *App) mcpUpdateAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 		if overlapErr := ensureAgentWorkspacePatchPathsDoNotOverlap(validated, deletePaths); overlapErr != nil {
 			return nil, agentWorkspaceView{}, overlapErr
 		}
-		view, patchErr := a.patchAgentWorkspace(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, validated, deletePaths)
+		view, patchErr := a.mutateAgentWorkspaceWithHistory(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, validated, deletePaths, false, nil, false, input.Comment)
 		if errors.Is(patchErr, errAgentWorkspaceConflict) {
 			return nil, agentWorkspaceView{}, errors.New("agent workspace revision conflict; read the latest workspace and retry")
 		}
@@ -218,7 +219,7 @@ func (a *App) mcpUpdateAgentWorkspace(ctx context.Context, _ *mcp.CallToolReques
 	if err != nil {
 		return nil, agentWorkspaceView{}, errors.New(strings.TrimSpace(err.Error()))
 	}
-	view, err := a.replaceAgentWorkspace(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, validated)
+	view, err := a.mutateAgentWorkspaceWithHistory(ctx, principal.User.ID, input.WorkspaceID, input.ExpectedRevision, validated, nil, true, nil, false, input.Comment)
 	if errors.Is(err, errAgentWorkspaceConflict) {
 		return nil, agentWorkspaceView{}, errors.New("agent workspace revision conflict; read the latest workspace and retry")
 	}

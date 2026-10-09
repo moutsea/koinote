@@ -156,64 +156,76 @@ func (a *App) sessionPayloadFromCookie(r *http.Request) (sessionPayload, bool) {
 	return payload, true
 }
 
-// requireUser 从会话解析出当前用户，未登录时写 401 并返回 false。
-func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, bool) {
-	// Worker 内部调用可以显式传递用户身份；浏览器请求即使经过 Worker，也没有这个头，
-	// 因而仍会落到 Cookie 的版本校验，不能借代理令牌绕过会话失效。
+// sessionUser resolves interactive identity for required and optional login.
+// It never treats MCP/Agent tokens as browser or desktop sessions.
+type sessionAuthError struct {
+	status        int
+	code, message string
+	clearCookie   bool
+}
+
+func (e *sessionAuthError) Error() string { return e.message }
+
+func (a *App) sessionUser(r *http.Request) (model.User, userClient, error) {
+	expired := &sessionAuthError{status: http.StatusUnauthorized, code: "session_expired", message: "Session expired"}
 	if a.hasInternalToken(r) {
-		if authUserID := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); authUserID != "" {
-			user, err := a.getUserByAuthUserID(r.Context(), authUserID)
-			if err == nil {
-				a.noteUserActivity(user.ID)
-				return user, true
+		if authID := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); authID != "" {
+			user, err := a.getUserByAuthUserID(r.Context(), authID)
+			if err != nil {
+				return model.User{}, "", expired
 			}
-			httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
-			return model.User{}, false
+			return user, "", nil
 		}
 	}
 	if token := bearerToken(r); token != "" {
 		user, ok, err := a.desktopUserFromBearer(r.Context(), token)
 		if err != nil {
-			log.Printf("desktop bearer authentication: %v", err)
-			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
-			return model.User{}, false
+			return model.User{}, "", err
 		}
-		if ok {
-			if !desktopRequestAllowed(r) {
-				httpx.ErrorCode(w, http.StatusForbidden, "desktop_scope_forbidden", "Desktop app is not allowed to access this endpoint")
-				return model.User{}, false
-			}
-			a.noteUserActivity(user.ID)
-			a.noteUserClient(user.ID, userClientDesktop)
-			return user, true
+		if !ok {
+			return model.User{}, "", expired
 		}
-		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
-		return model.User{}, false
+		if !desktopRequestAllowed(r) {
+			return model.User{}, "", &sessionAuthError{status: http.StatusForbidden, code: "desktop_scope_forbidden", message: "Desktop app is not allowed to access this endpoint"}
+		}
+		return user, userClientDesktop, nil
 	}
-
 	payload, ok := a.sessionPayloadFromCookie(r)
 	if !ok {
-		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
-		return model.User{}, false
+		return model.User{}, "", &sessionAuthError{status: http.StatusUnauthorized, code: "unauthorized", message: "Not logged in"}
 	}
 	user, err := a.getUserByAuthUserID(r.Context(), payload.AuthUserID)
+	// Cookies issued before session versioning represent the initial version.
+	version := payload.SessionVersion
+	if version == 0 {
+		version = 1
+	}
+	if err != nil || version != user.SessionVersion {
+		expired.clearCookie = true
+		return model.User{}, "", expired
+	}
+	return user, userClientWeb, nil
+}
+
+// requireUser writes an authentication error; optional public views can instead
+// remain anonymous while sharing exactly the same session validity rules.
+func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, bool) {
+	user, client, err := a.sessionUser(r)
 	if err != nil {
-		a.clearSessionCookie(w)
-		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
-		return model.User{}, false
-	}
-	// 0021 之前签发的 Cookie 没有这个字段。把缺失值视为初始版本 1，避免部署
-	// 本身让所有在线用户掉线；任一安全操作递增版本后，这些旧 Cookie 同样失效。
-	cookieVersion := payload.SessionVersion
-	if cookieVersion == 0 {
-		cookieVersion = 1
-	}
-	if cookieVersion != user.SessionVersion {
-		a.clearSessionCookie(w)
-		httpx.ErrorCode(w, http.StatusUnauthorized, "session_expired", "Session expired")
+		if authErr, ok := err.(*sessionAuthError); ok {
+			if authErr.clearCookie {
+				a.clearSessionCookie(w)
+			}
+			httpx.ErrorCode(w, authErr.status, authErr.code, authErr.message)
+		} else {
+			log.Printf("session authentication: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
+		}
 		return model.User{}, false
 	}
 	a.noteUserActivity(user.ID)
-	a.noteUserClient(user.ID, userClientWeb)
+	if client != "" {
+		a.noteUserClient(user.ID, client)
+	}
 	return user, true
 }

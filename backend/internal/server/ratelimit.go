@@ -86,3 +86,17 @@ func requestIP(r *http.Request) string {
 	}
 	return r.RemoteAddr
 }
+
+// Public endpoints may also be reached directly. Trust forwarding metadata only
+// from our authenticated Worker; a caller-controlled XFF must not create a bucket.
+func (a *App) publicRepositoryRequestIP(r *http.Request) string {
+	if a.hasInternalToken(r) {
+		if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Forwarded-For"))); ip != nil {
+			return ip.String()
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}

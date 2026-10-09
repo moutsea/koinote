@@ -141,6 +141,8 @@ Koinote Paper（暖纸长文）、Koinote Signal（产品与 AI）、Koinote Not
 
 封面不是必需项，可使用 Koinote Logo + 标题、正文图片或 AI 生成的图片。每次成功同步到草稿箱消耗 20 credits；每次成功生成 AI 封面另消耗 20 credits。失败不会扣除对应费用。文章只会进入草稿箱，不会被 Koinote 直接发布。完整的微信后台配置和排查步骤见[公众号配置教程](https://koinote.app/docs/wechat-official-account)。
 
+在文档封面弹窗选择「AI 生成」后，可以上传一张参考图，预览、替换或移除，再填写描述生成微信封面。支持 PNG、JPEG、GIF、WebP，最多 5 MiB、3,600 万像素；点击生成才会将处理后的图片发送给配置的模型服务，参考图不保存到文章。带参考图的生成要求服务支持 [OpenAI Images 编辑接口](https://developers.openai.com/api/reference/resources/images/methods/edit)，沿用同一封面模型和积分规则。
+
 ### 知乎直接发布
 
 在「设置 → 知乎」绑定知乎开放平台凭证后，可在编辑器选择「导出到自媒体 → 知乎」并确认直接发布。文章不会写入知乎草稿箱；OpenAPI 直发暂不支持包含图片的文章，发布前会明确提示。
@@ -295,6 +297,30 @@ OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a l
 微信公众号 GEO 摘要也可通过 MCP 管理：`get_wechat_geo_summary` 用于读取已保存摘要和检查是否过期，读写或仅发布令牌可以调用
 `generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。使用内置模型生成会按实际用量消耗 credits，BYOK 渠道不扣费。
 推送草稿时需显式传入 `includeGeo: true`，且摘要必须已启用并与当前文档匹配；默认不会把隐藏语料带入草稿。
+
+## Skills/Agent 公开共享与 Clone / Fork
+
+在自己的仓库页面选择「公开共享」，检查文件、选择许可证并确认发布。公开的是本次确认的版本；之后上传、编辑或恢复的私有内容不会自动公开，需要再次发布。每个仓库只提供当前公开版本，更新后旧版本的公开读取会停止。
+
+- **Clone**：任何人都可以从「公开仓库」浏览、预览并下载文件；桌面端可同步到本机，或复制无凭证的下载与合并指令给自己的 AI Agent。沿用文件校验、跨系统路径适配及覆盖前备份，不需要仓库 Token。 遇到服务限流会按提示等待后继续，已下载文件无需重下，等待期间可取消。
+- **Fork**：付费用户启用仓库同步后，可将公开版本复制到自己的私有仓库，消耗自己的仓库容量并保留来源版本和许可证。它是独立副本，不自动跟随上游修改。
+- **撤回**：作者可在仓库中撤回公开访问；即使关闭同步，也可以从公开详情页撤回。删除源仓库也会停止公开访问；他人已经下载或 Fork 的副本无法收回。
+
+登录用户（含普通用户）可以 Star 收藏或取消收藏，列表和详情显示收藏数。公开目录按最近发布时间排序，Clone 的 AI 指令随界面语言切换（中文、英文、法文、日文）。Clone 次数记录的是发起 ZIP、本机同步或 AI 指令的请求，同一请求在 30 天内重试不重复计数，过期明细会清理但累计计数保留；它不代表已经下载或安装完成，匿名记录不保存 IP 或设备指纹。
+
+仓库历史会显示变更说明。网页上传、编辑和恢复时可以选填；Agent 通过 REST 或 MCP 修改文件、删除文件或恢复版本时，建议提供 `comment`（最多 500 字，不能含凭据）。旧 Agent 省略或留空时仍可正常同步，历史以操作类型标识；新调用建议补上这个字段，例如 `{"workspaceId":7,"expectedRevision":3,"comment":"更新编码规范","upsert":[...]}`；Fork 和 GitHub 导入自动记录来源说明。
+
+公开前会检查敏感内容和凭据文件，不能跳过；内容检查按仓库内的文件哈希和扫描规则复用，未变内容无需重复读取，路径和公开说明每次重新检查；已在私有仓库确认保存的敏感文件也必须先移除。共享快照复用仓库文件存储，历史清理不会删除仍公开的内容，相应空间继续计入作者配额。这里的 Clone/Fork 是文件分发和私有副本，不提供 Git 协议或自动合并上游。
+
+### 从 GitHub 导入
+
+付费用户启用仓库功能后，可在「我的空间 → Skills/Agent 仓库」选择「从 GitHub 导入」，填写仓库地址及可选的分支、标签或 commit。导入创建私有副本，检查后再明确发布，不会自动公开。公开仓库无需 GitHub Token；私有仓库可在「我的空间设置」保存仅对选定仓库授予 **Contents: read** 权限的 [GitHub Token](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#download-a-repository-archive-zip)。Token 加密存储，只显示末四位，可随时移除，不进入公开内容或 AI 指令。
+
+公开列表、详情和 Fork 副本均保留 **GitHub 原作者（仓库所有者账号或组织）及原始仓库链接**，同时记录实际导入的 commit 和原许可证。后续编辑、恢复、重新发布，以及源 Koinote 仓库被删除，都不会改变已创建副本的 GitHub 来源。副本可能经过修改，不自动跟随 GitHub 更新；导入时保留仓库内的 LICENSE、NOTICE 等文件，发布前仍需确认有权分享。
+
+每次最多 2,000 个文件、单文件 5 MiB、解压后合计 64 MiB，并计入自己的仓库容量。导入检查敏感内容、路径和符号链接，不执行仓库代码，不拉取子模块或 Git LFS 对象；不满足要求时整次导入失败。固定到解析出的 commit 下载，重试同一请求不会重复创建仓库。
+
+项目准备了[首批公开仓库清单与导入说明](data/agent-repositories/README.md)，包含 100 个经过实际导入验证的 GitHub Skills 仓库。清单固定版本并保留原作者、原始链接和许可证；部署共享功能后由平台管理员显式导入，容量由系统提供，不占用个人空间；不会在服务启动时自动发布。
 
 ## Skills/Agent 仓库访问（MCP）
 
@@ -548,7 +574,7 @@ AppSecret 的 AES-GCM 加密，不能复用会话、MCP、BYOK 或微信凭据�
 
 **微信公众号封面模型是可选的完整配置组。** `WECHAT_COVER_IMAGE_BASE_URL`、
 `WECHAT_COVER_IMAGE_API_KEY`、`WECHAT_COVER_IMAGE_MODEL` 必须三项齐全或全部留空；生产只接受
-HTTPS。启用后仅终生会员可调用，每生成一张封面固定消耗 20 credits，并按用户限流。模型服务商会收到用户输入的封面提示词，
+HTTPS。启用后仅终生会员可调用，每生成一张封面固定消耗 20 credits，并按用户限流。模型服务商会收到用户输入的封面提示词及本次选择的参考图（如有），
 不会收到公众号 AppSecret 或文章正文。
 
 **AI 优化内置模型是可选的完整配置组。** `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、
@@ -759,7 +785,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限                                                                      |
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用                                 |
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
-| `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 访问令牌加密密钥；必须长期保留，轮换后旧令牌无法再次查看                                        |
+| `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 令牌及 GitHub 导入凭据的加密根密钥；轮换需迁移密文，否则旧 MCP 令牌无法查看、GitHub Token 需重新保存                                        |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | 自定义自媒体平台令牌独立加密密钥；生产必填，轮换前必须迁移既有密文                    |
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |

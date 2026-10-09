@@ -159,6 +159,7 @@ that account's drafts. The flow is:
 
 The cover is optional: use the Koinote Logo + title, an image from the article, or an AI-generated image.
 Each successful AI cover costs 20 credits. Koinote saves the article as a draft and never publishes it directly.
+Choose **AI generation** in the document cover dialog to upload, preview, replace or remove one reference image before generating a WeChat cover from your brief. PNG, JPEG, GIF and WebP uploads are limited to 5 MiB and 36 megapixels. Only clicking Generate sends the processed image to the configured model provider; the reference is not saved to the article. Reference generation requires support for the [OpenAI Images edit endpoint](https://developers.openai.com/api/reference/resources/images/methods/edit), uses the same cover model and costs 20 credits on success; failures release the reservation.
 See the complete [WeChat configuration guide](https://koinote.app/docs/wechat-official-account) for platform setup and troubleshooting.
 
 **Sharing**
@@ -307,6 +308,30 @@ UI on conflict. See the [design notes](docs/DESIGN.en.md#mcp-document-access) fo
 trade-offs.
 
 Write tokens can also call `sync_document_to_feishu` to create or update a bound Feishu document from Koinote. Bind the Feishu account first under Settings → Feishu. This is a one-way sync: the Koinote title and Markdown replace the Feishu body, with no bidirectional sync or conflict merging.
+
+## Public Skills/Agent sharing and Clone / Fork
+
+Use **Public sharing** on your repository page to review the files, choose a license and explicitly publish the current version. Later private uploads, edits and history restores stay private until you publish again. Each repository offers one current public snapshot; publishing a different revision stops public reads of the previous one.
+
+- **Clone:** anyone can browse and preview public repositories, download selected files, sync them through the desktop client, or copy credential-free download and merge instructions for their AI Agent. File verification, cross-platform path mapping and overwrite backups are reused; no repository token is needed. Rate-limited downloads pause and resume without fetching completed files again; you can cancel while waiting.
+- **Fork:** members with repository sync enabled can create an independent private copy, charged to their own repository capacity, with the source revision and license preserved. Forks do not automatically track upstream changes.
+- **Withdrawal:** authors can withdraw public access from their repository or its public detail page, including after disabling sync. Deleting the source also stops public access. Previously downloaded or forked copies remain with their recipients.
+
+Signed-in users, including free users, can Star and unstar repositories; lists and details show the count. The directory orders by latest publication, and Clone instructions follow the interface language (English, Chinese, French or Japanese). Clone counts represent requests to begin a ZIP download, local sync or AI handoff, with retries deduplicated for 30 days; expired records are removed while lifetime counts remain; they do not prove a completed download or installation. Anonymous records contain no IP addresses or device fingerprints.
+
+Repository history displays change descriptions. Browser uploads, edits and restores accept an optional description; REST and MCP Agent file updates, file deletions and restores accept an optional `comment` (up to 500 characters, without credentials). Older Agent callers continue to work when it is omitted or empty; new callers should include it, for example `{"workspaceId":7,"expectedRevision":3,"comment":"Update coding conventions","upsert":[...]}`. Forks and GitHub imports automatically record their source.
+
+Publishing checks file contents, credential paths and public metadata without a sensitive-content override. Content scan results are reused by repository, file hash and scanner policy, so unchanged files are not read again; paths and public metadata are checked each time. Published files share the repository's quota-accounted storage and survive history pruning. These operations distribute files and create private copies; Git transport and automatic upstream merges are not included.
+
+### Import from GitHub
+
+Members with repository sync enabled can select **Import from GitHub** under My Space → Skills/Agent repositories, enter a repository URL and optionally a branch, tag or commit. Imports create private copies; publication requires a separate review and confirmation. Public repositories need no GitHub token. For private repositories, save a [GitHub token](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#download-a-repository-archive-zip) with **Contents: read** permission for selected repositories in My Space settings. Tokens are encrypted, show only their last four characters, can be removed, and never appear in public content or AI instructions.
+
+Public listings, details and Forks preserve the **original GitHub author (the repository owner account or organization) and original repository link**, together with the imported commit and original license. Later edits, restores, republication and deletion of the source Koinote repository do not change an existing copy's GitHub provenance. Copies may include local edits and do not track GitHub updates automatically. LICENSE, NOTICE and other repository files are retained; confirm your right to share before publishing.
+
+Imports allow up to 2,000 files, 5 MiB per file and 64 MiB extracted, within your repository capacity. Sensitive content, unsafe paths and symlinks cause the entire import to fail. Repository code is never executed; submodules and Git LFS objects are not fetched. Downloads are pinned to the resolved commit, and retries with the same request ID do not create duplicate repositories.
+
+An [initial public repository catalog and import guide](data/agent-repositories/README.md) contains 100 verified GitHub Skills repositories, pinned to reviewed commits with original authors, links and licenses preserved. After sharing is deployed, a platform administrator explicitly imports the catalog with system-funded capacity that does not reserve personal storage; server startup does not publish it automatically.
 
 ## Skills/Agent repository access (MCP)
 
@@ -743,7 +768,7 @@ Required repository secrets:
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | Token limited to Zone / Cache Purge                                                                                         |
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | Optional; Analytics Read limited to the target zone, used for Admin UV/PV                                                   |
 | `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
-| `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption key for recoverable MCP access tokens; keep it stable or old tokens cannot be revealed                           |
+| `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption root for recoverable MCP tokens and GitHub import credentials; migrate ciphertext before rotation or old MCP tokens cannot be revealed and GitHub tokens must be saved again                           |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated BYOK API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
 | `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | Dedicated custom publishing token encryption key; keep it stable or migrate ciphertext before rotation          |
 | `FEISHU_CLIENT_ID`             | Feishu Open Platform app ID; configure it together with the next two values to enable document sync                   |

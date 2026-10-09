@@ -10,6 +10,7 @@ import { useI18n } from "../i18n";
 import { pushModal } from "../modalStack";
 import { formatBytes } from "../storage";
 import { buildAgentWorkspaceFileTree } from "./AgentWorkspaceFileTree";
+import type { AgentWorkspaceTransferSource } from "../agentWorkspaceTransfer";
 
 type Destination = "zip" | "home" | "folder";
 type Node = ReturnType<typeof buildAgentWorkspaceFileTree>[number];
@@ -17,11 +18,12 @@ function descendants(node: Node): AgentWorkspaceFile[] {
   return node.kind === "file" ? [node.file] : node.children.flatMap(descendants);
 }
 
-export function AgentWorkspaceTransferDialog({ workspace, initialDestination, onClose, onComplete }: {
+export function AgentWorkspaceTransferDialog({ workspace, initialDestination, onClose, onComplete, source }: {
   workspace: AgentWorkspace;
   initialDestination: "zip" | "home";
   onClose: () => void;
   onComplete: (message: string) => void;
+  source?: AgentWorkspaceTransferSource;
 }) {
   const { t, locale } = useI18n();
   const messages = t.agentWorkspace;
@@ -32,6 +34,8 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
   const [selected, setSelected] = useState(() => new Set((initial === "home" ? homeFiles : workspace.files).map((file) => file.fileId)));
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -51,11 +55,17 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
   }, []);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if (!transfer.current) onClose(); }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if (!saving) { transfer.current?.abort(); onClose(); } }
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, [onClose, saving]);
+
+  function cancelDownload() {
+    if (saving) return;
+    transfer.current?.abort();
+    onClose();
+  }
 
   function changeDestination(value: Destination) {
     setDestination(value);
@@ -76,7 +86,7 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
     const sequence = ++previewSequence.current;
     setPreview({ path: file.path, text: messages.loadingFile });
     try {
-      const result = await getAgentWorkspaceFile(file.fileId);
+      const result = await (source ? source.readFile(file.fileId) : getAgentWorkspaceFile(file.fileId));
       if (sequence !== previewSequence.current) return;
       if (result.file.sha256 !== file.sha256) throw new AgentWorkspaceTransferError("transferChanged");
       const binary = atob(result.file.contentBase64);
@@ -91,14 +101,19 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
     const controller = new AbortController();
     transfer.current = controller;
     setPending(true);
+    setSaving(false);
+    setRateLimited(false);
     setError(null);
     setNotice(null);
     try {
       if (destination === "folder" && !await confirmAction(messages.transferFolderConfirm)) return;
       const files = await loadAgentWorkspaceFiles(workspace, new Set(selectedFiles.map((file) => file.fileId)), (done, total) => {
         if (!controller.signal.aborted) setProgress(messages.transferProgress.replace("{done}", String(done)).replace("{total}", String(total)));
-      }, controller.signal);
+      }, controller.signal, source, (waiting) => {
+        if (!controller.signal.aborted) setRateLimited(waiting);
+      });
       controller.signal.throwIfAborted();
+      setSaving(true);
       setProgress(messages.transferSaving);
       let completed: boolean;
       if (destination === "zip") {
@@ -114,7 +129,7 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
     } catch (value) {
       if (!controller.signal.aborted) setError(value instanceof AgentWorkspaceTransferError ? (value.code === "transferTooLarge" ? limitMessage : messages[value.code]) : configRestoreErrorMessage(value, t.space.configSnapshots) ?? messages.transferFailed);
     } finally {
-      if (!controller.signal.aborted) { transfer.current = null; setPending(false); }
+      if (!controller.signal.aborted) { transfer.current = null; setPending(false); setSaving(false); setRateLimited(false); }
     }
   }
 
@@ -138,7 +153,7 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
   return <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
     <section role="dialog" aria-modal="true" aria-labelledby="agent-transfer-title" className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border bg-[var(--background)] shadow-2xl" style={{ borderColor: "var(--ink-line)" }}>
       <header className="flex items-start gap-3 border-b px-5 py-4" style={{ borderColor: "var(--ink-line)" }}>
-        <Download className="mt-1 h-5 w-5 shrink-0" style={{ color: "var(--cinnabar)" }} /><div className="min-w-0 flex-1"><h2 id="agent-transfer-title" className="font-semibold">{messages.transferTitle}</h2><p className="mt-1 break-words text-xs" style={{ color: "var(--ink-mid)" }}>{workspace.name} · r{workspace.revision}</p></div><button type="button" disabled={pending} onClick={onClose} aria-label={messages.close} className="rounded p-1 disabled:opacity-50"><X className="h-4 w-4" /></button>
+        <Download className="mt-1 h-5 w-5 shrink-0" style={{ color: "var(--cinnabar)" }} /><div className="min-w-0 flex-1"><h2 id="agent-transfer-title" className="font-semibold">{messages.transferTitle}</h2><p className="mt-1 break-words text-xs" style={{ color: "var(--ink-mid)" }}>{workspace.name} · r{workspace.revision}</p></div><button type="button" disabled={saving} onClick={cancelDownload} aria-label={messages.close} className="rounded p-1 disabled:opacity-50"><X className="h-4 w-4" /></button>
       </header>
       <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4">
         <label className="block text-sm">{messages.transferDestination}<select value={destination} disabled={pending} onChange={(event) => changeDestination(event.target.value as Destination)} className="mt-2 block w-full rounded-lg border bg-[var(--background)] px-3 py-2" style={{ borderColor: "var(--ink-line)" }}>
@@ -151,9 +166,9 @@ export function AgentWorkspaceTransferDialog({ workspace, initialDestination, on
         {selectionTooLarge && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{limitMessage}</p>}
         {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
         {notice && <p role="status" className="text-sm">{notice}</p>}
-        {pending && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{progress || messages.transferSaving}</p>}
+        {pending && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{progress || messages.transferSaving}{rateLimited && <> · {messages.transferRateLimited}</>}</p>}
       </div>
-      <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t px-5 py-3" style={{ borderColor: "var(--ink-line)" }}><button type="button" disabled={pending} onClick={onClose} className="rounded-full border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>{messages.scanReviewCancel}</button><button type="button" disabled={pending || !selectedFiles.length || selectionTooLarge} aria-busy={pending} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed" style={{ background: "var(--cinnabar)", opacity: !selectedFiles.length || selectionTooLarge ? 0.5 : 1 }}><RefreshCw aria-hidden="true" className={`h-4 w-4 shrink-0 ${pending ? "animate-spin" : "invisible"}`} />{destination === "zip" ? messages.transferZip : messages.transferConfirmSync}</button></footer>
+      <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t px-5 py-3" style={{ borderColor: "var(--ink-line)" }}><button type="button" disabled={saving} onClick={cancelDownload} className="rounded-full border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>{messages.scanReviewCancel}</button><button type="button" disabled={pending || !selectedFiles.length || selectionTooLarge} aria-busy={pending} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed" style={{ background: "var(--cinnabar)", opacity: !selectedFiles.length || selectionTooLarge ? 0.5 : 1 }}><RefreshCw aria-hidden="true" className={`h-4 w-4 shrink-0 ${pending ? "animate-spin" : "invisible"}`} />{destination === "zip" ? messages.transferZip : messages.transferConfirmSync}</button></footer>
     </section>
   </div>;
 }

@@ -1,3 +1,4 @@
+import { AgentRepositorySharingCard } from "../components/AgentRepositorySharingCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, ChevronRight, Cloud, Download, Edit3, Eye, FileText, Folder, FolderOpen, LockKeyhole, RefreshCw, ShieldCheck, X } from "lucide-react";
@@ -39,6 +40,8 @@ export function AgentWorkspaceRepositoryPage() {
   const [transferSelection, setTransferSelection] = useState<{ workspace: AgentWorkspace; destination: "zip" | "home" } | null>(null);
   const [transferMessage, setTransferMessage] = useState<string | null>(null);
   const agentSyncCopy = useAgentSyncCopy(() => setTransferMessage(t.space.configSnapshots.agentCopied));
+  const [changeComment, setChangeComment] = useState("");
+  useEffect(() => { setChangeComment(""); }, [workspaceId]);
   const [copied, setCopied] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
   const [editName, setEditName] = useState("");
@@ -87,9 +90,9 @@ export function AgentWorkspaceRepositoryPage() {
       const currentReadme = workspace.files.find((file) => file.path.toLowerCase() === "readme.md");
       const readmeContent = currentReadme ? await getAgentWorkspaceFile(currentReadme.fileId) : undefined;
       const prepared = await prepareAgentWorkspaceImport(files, readmeContent?.file);
-      return updateAgentWorkspace({ workspaceId: workspace.workspaceId, expectedRevision: workspace.revision, files: prepared });
+      return updateAgentWorkspace({ workspaceId: workspace.workspaceId, expectedRevision: workspace.revision, comment: changeComment, files: prepared });
     },
-    onSuccess() { void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] }); void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] }); },
+    onSuccess() { setChangeComment(""); void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] }); void queryClient.invalidateQueries({ queryKey: ["agent-workspace-commits", workspaceId] }); void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] }); },
   });
   const scanLocal = useMutation({
     mutationFn: async () => {
@@ -122,13 +125,15 @@ export function AgentWorkspaceRepositoryPage() {
         expectedRevision: workspace.revision,
         upsert,
         allowSensitive,
+        comment: changeComment,
       });
     },
     onSuccess: () => {
+      setChangeComment("");
       setPendingLocalFiles(null);
       setFilteredLocalFiles([]);
       setSelectedLocalPaths(new Set());
-      void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] }); void queryClient.invalidateQueries({ queryKey: ["agent-workspace-commits", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] });
       void queryClient.invalidateQueries({ queryKey: ["agent-workspace-storage"] });
     },
@@ -139,7 +144,7 @@ export function AgentWorkspaceRepositoryPage() {
     mutationFn: () => updateAgentWorkspaceMetadata(workspaceId, { expectedRevision: detail.data?.workspace?.revision ?? 0, name: editName.trim(), description: editDescription.trim() }),
     onSuccess() {
       setEditingSettings(false);
-      void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: [...AGENT_WORKSPACE_QUERY_KEY, workspaceId] }); void queryClient.invalidateQueries({ queryKey: ["agent-workspace-commits", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] });
     },
   });
@@ -148,17 +153,18 @@ export function AgentWorkspaceRepositoryPage() {
       const expectedRevision = detail.data?.workspace?.revision;
       if (expectedRevision === undefined) throw new Error(t.agentWorkspace.repositoryLoadFailed);
       try {
-        return await restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision);
+        return await restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision, false, changeComment);
       } catch (error) {
         if (!(error instanceof ApiError) || error.code !== "sensitive_data_detected") throw error;
         const confirmed = await confirmAction(t.agentWorkspace.restoreSensitiveConfirm.replace("{revision}", String(revision)));
         if (!confirmed) throw error;
         // Keep the original revision: a write while the user confirms must conflict.
-        return restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision, true);
+        return restoreAgentWorkspaceCommit(workspaceId, revision, expectedRevision, true, changeComment);
       }
     },
     retry: false,
     onSuccess: () => {
+      setChangeComment("");
       void detail.refetch();
       void commits.refetch();
       void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] });
@@ -188,16 +194,17 @@ export function AgentWorkspaceRepositoryPage() {
     </div>
     {agentSyncCopy.dialog}
     {localPrompt.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{agentWorkspaceErrorMessage(localPrompt.error, t.agentWorkspace)}</p>}
+    <label className="mt-5 block max-w-2xl text-xs" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.changeComment}<textarea rows={2} maxLength={500} value={changeComment} onChange={(event) => setChangeComment(event.target.value)} placeholder={t.agentWorkspace.changeCommentHint} disabled={upload.isPending || syncLocal.isPending || restore.isPending} className="mt-2 w-full rounded-lg border bg-transparent px-3 py-2 text-sm" /></label>
     {transferMessage && <p role="status" className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>{transferMessage}</p>}
     <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_16rem]">
-      <main className="min-w-0 space-y-7"><section><PaperCard className="overflow-hidden"><div className="flex items-center gap-2 border-b px-5 py-5 sm:px-6" style={{ borderColor: "var(--ink-line)" }}><FileText className="h-4 w-4" style={{ color: "var(--ink-faint)" }} /><h2 className="text-base font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.filesTitle}</h2><span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: "var(--ink-wash)", color: "var(--ink-faint)" }}>{workspace.files.length}</span></div>{workspace.files.length === 0 ? <div className="px-5 py-10 text-sm" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.empty}</div> : <AgentWorkspaceFileTree key={workspace.workspaceId} files={workspace.files} hashLabel={t.agentWorkspace.hashLabel} onOpen={setSelectedFile} />}<AgentWorkspaceReadme content={readmeContent} loading={readme.isLoading} failed={readme.isError} copying={prompt.isPending} copied={copied} uploading={upload.isPending || syncLocal.isPending} scanningLocal={scanLocal.isPending} canScanLocal={isDesktopRuntime()} promptError={prompt.isError} promptErrorMessage={agentWorkspaceErrorMessage(prompt.error, t.agentWorkspace)} uploadError={upload.isError} uploadSuccess={upload.isSuccess || syncLocal.isSuccess} scanError={scanLocal.isError || syncLocal.isError} scanErrorMessage={agentWorkspaceErrorMessage(scanError, t.agentWorkspace)} onCopy={() => { prompt.reset(); prompt.mutate(); }} onImport={(files) => upload.mutate(files)} onScanLocal={() => { syncLocal.reset(); scanLocal.reset(); prompt.reset(); scanLocal.mutate(); }} onRetry={() => void readme.refetch()} /></PaperCard></section></main>
-      <aside className="space-y-4"><PaperCard className="p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.aboutTitle}</h2><dl className="mt-4 space-y-4 text-xs"><InfoRow label={t.agentWorkspace.repositoryId} value={`#${workspace.workspaceId}`} /><InfoRow label={t.agentWorkspace.filesTitle} value={String(workspace.files.length)} /><InfoRow label={t.agentWorkspace.revision} value={`r${workspace.revision}`} /><InfoRow label={t.agentWorkspace.updatedLabel} value={new Date(workspace.updatedAt).toLocaleDateString(locale)} /></dl></PaperCard></aside>
+      <main className="min-w-0 space-y-7"><section><PaperCard className="overflow-hidden"><div className="flex items-center gap-2 border-b px-5 py-5 sm:px-6" style={{ borderColor: "var(--ink-line)" }}><FileText className="h-4 w-4" style={{ color: "var(--ink-faint)" }} /><h2 className="text-base font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.filesTitle}</h2><span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: "var(--ink-wash)", color: "var(--ink-faint)" }}>{workspace.files.length}</span></div>{workspace.files.length === 0 ? <div className="px-5 py-10 text-sm" style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.empty}</div> : <AgentWorkspaceFileTree key={workspace.workspaceId} files={workspace.files} hashLabel={t.agentWorkspace.hashLabel} onOpen={setSelectedFile} />}<AgentWorkspaceReadme content={readmeContent} loading={readme.isLoading} failed={readme.isError} copying={prompt.isPending} copied={copied} uploading={upload.isPending || syncLocal.isPending} scanningLocal={scanLocal.isPending} canScanLocal={isDesktopRuntime()} promptError={prompt.isError} promptErrorMessage={agentWorkspaceErrorMessage(prompt.error, t.agentWorkspace)} uploadError={upload.isError} uploadErrorMessage={agentWorkspaceErrorMessage(upload.error, t.agentWorkspace)} uploadSuccess={upload.isSuccess || syncLocal.isSuccess} scanError={scanLocal.isError || syncLocal.isError} scanErrorMessage={agentWorkspaceErrorMessage(scanError, t.agentWorkspace)} onCopy={() => { prompt.reset(); prompt.mutate(); }} onImport={(files) => upload.mutate(files)} onScanLocal={() => { syncLocal.reset(); scanLocal.reset(); prompt.reset(); scanLocal.mutate(); }} onRetry={() => void readme.refetch()} /></PaperCard></section></main>
+      <aside className="space-y-4"><AgentRepositorySharingCard key={workspace.workspaceId} workspace={workspace} /><PaperCard className="p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.aboutTitle}</h2><dl className="mt-4 space-y-4 text-xs"><InfoRow label={t.agentWorkspace.repositoryId} value={`#${workspace.workspaceId}`} /><InfoRow label={t.agentWorkspace.filesTitle} value={String(workspace.files.length)} /><InfoRow label={t.agentWorkspace.revision} value={`r${workspace.revision}`} /><InfoRow label={t.agentWorkspace.updatedLabel} value={new Date(workspace.updatedAt).toLocaleDateString(locale)} /></dl></PaperCard></aside>
     </div>
     {transferSelection && <AgentWorkspaceTransferDialog workspace={transferSelection.workspace} initialDestination={transferSelection.destination} onClose={() => setTransferSelection(null)} onComplete={(message) => { setTransferMessage(message); setTransferSelection(null); }} />}
     {pendingLocalFiles && <AgentWorkspaceScanDialog files={pendingLocalFiles} filteredFiles={filteredLocalFiles} selectedPaths={selectedLocalPaths} pending={scanLocalPending} errorMessage={agentWorkspaceErrorMessage(scanError, t.agentWorkspace)} t={t.agentWorkspace} onToggleFile={(path) => setSelectedLocalPaths((current) => togglePath(current, path))} onToggleDirectory={(files) => setSelectedLocalPaths((current) => togglePaths(current, files.map((file) => file.path)))} onSelectAll={() => setSelectedLocalPaths(new Set([...pendingLocalFiles, ...filteredLocalFiles].map((file) => file.path)))} onClearAll={() => setSelectedLocalPaths(new Set())} onCancel={() => { if (!scanLocalPending) { setPendingLocalFiles(null); setFilteredLocalFiles([]); setSelectedLocalPaths(new Set()); } }} onConfirm={async () => { if (scanLocalPending) return; const allFiles = [...pendingLocalFiles, ...filteredLocalFiles]; const selected = allFiles.filter((file) => selectedLocalPaths.has(file.path)); const selectedFiltered = selected.filter((selectedFile) => filteredLocalFiles.some((filteredFile) => filteredFile.path === selectedFile.path)); if (selectedFiltered.length > 0 && !(await confirmAction(t.agentWorkspace.scanReviewSensitiveConfirm.replace("{count}", String(selectedFiltered.length))))) return; syncLocal.mutate({ selected, allowSensitive: selectedFiltered.length > 0 }); }} />}
     {editingSettings && <RepositorySettingsForm name={editName} description={editDescription} t={t} pending={saveSettings.isPending} error={saveSettings.isError} onName={setEditName} onDescription={setEditDescription} onSubmit={() => saveSettings.mutate()} onCancel={() => { saveSettings.reset(); setEditingSettings(false); }} />}
-    {selectedFile !== null && <div className="mt-7"><FileEditor file={selectedFileQuery.data?.file} loading={selectedFileQuery.isLoading} errorMessage={t.agentWorkspace.fileSaveFailed} t={t.agentWorkspace} onClose={() => setSelectedFile(null)} onSave={async (content, mimeType) => { await patchAgentWorkspace({ workspaceId: workspace.workspaceId, expectedRevision: workspace.revision, upsert: [{ path: selectedFileQuery.data!.file.path, contentBase64: btoa(unescape(encodeURIComponent(content))), mimeType }] }); await detail.refetch(); }} /></div>}
-    <PaperCard className="mt-7 p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.commitHistory}</h2>{restore.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{agentWorkspaceErrorMessage(restore.error, t.agentWorkspace, "restore") || t.agentWorkspace.restoreFailed}</p>}<div className="mt-3 space-y-2">{commits.data?.commits.map((commit) => <div key={commit.commitId} className="flex items-center justify-between gap-3 border-b pb-2 text-xs last:border-b-0"><div><p style={{ color: "var(--ink-strong)" }}>r{commit.revision} · {commit.action}</p><p style={{ color: "var(--ink-faint)" }}>{new Date(commit.createdAt).toLocaleString(locale)}</p></div>{commit.revision !== workspace.revision && <button type="button" disabled={restore.isPending} onClick={async () => { if (await confirmAction(t.agentWorkspace.restoreCommitConfirm.replace("{revision}", String(commit.revision)))) restore.mutate(commit.revision); }} className="shrink-0 rounded border px-2 py-1" style={{ borderColor: "var(--ink-line)" }}>{t.agentWorkspace.restore}</button>}</div>)}</div></PaperCard>
+    {selectedFile !== null && <div className="mt-7"><FileEditor file={selectedFileQuery.data?.file} loading={selectedFileQuery.isLoading} errorMessage={t.agentWorkspace.fileSaveFailed} t={t.agentWorkspace} onClose={() => setSelectedFile(null)} onSave={async (content, mimeType) => { const submittedComment = changeComment; await patchAgentWorkspace({ workspaceId: workspace.workspaceId, expectedRevision: workspace.revision, comment: changeComment, upsert: [{ path: selectedFileQuery.data!.file.path, contentBase64: btoa(unescape(encodeURIComponent(content))), mimeType }] }); setChangeComment(current => current === submittedComment ? "" : current); await Promise.all([detail.refetch(), commits.refetch()]); }} /></div>}
+    <PaperCard className="mt-7 p-5"><h2 className="text-sm font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.commitHistory}</h2>{restore.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{agentWorkspaceErrorMessage(restore.error, t.agentWorkspace, "restore") || t.agentWorkspace.restoreFailed}</p>}<div className="mt-3 space-y-2">{commits.data?.commits.map((commit) => <div key={commit.commitId} className="flex items-center justify-between gap-3 border-b pb-2 text-xs last:border-b-0"><div><p style={{ color: "var(--ink-strong)" }}>r{commit.revision} · {commit.action}</p>{commit.comment && <p className="mt-1 whitespace-pre-wrap break-words" style={{ color: "var(--ink-mid)" }}>{commit.comment}</p>}<p style={{ color: "var(--ink-faint)" }}>{new Date(commit.createdAt).toLocaleString(locale)}</p></div>{commit.revision !== workspace.revision && <button type="button" disabled={restore.isPending} onClick={async () => { if (await confirmAction(t.agentWorkspace.restoreCommitConfirm.replace("{revision}", String(commit.revision)))) restore.mutate(commit.revision); }} className="shrink-0 rounded border px-2 py-1" style={{ borderColor: "var(--ink-line)" }}>{t.agentWorkspace.restore}</button>}</div>)}</div></PaperCard>
   </PageContainer>;
 }
 
@@ -257,6 +264,8 @@ function togglePaths(paths: Set<string>, values: string[]) {
 function agentWorkspaceErrorMessage(error: unknown, t: Record<string, string>, action: "upload" | "restore" = "upload") {
   if (!error) return null;
   if (error instanceof ApiError) {
+    if (error.code === "sensitive_comment") return t.changeCommentSensitive;
+    if (error.code === "invalid_comment") return t.changeCommentInvalid;
     if (error.code === "sensitive_data_detected") {
       const path = error.message.match(/"([^\"]+)"/)?.[1];
       const message = action === "restore" ? t.restoreSensitiveData : t.scanSensitiveData;
@@ -406,13 +415,13 @@ function RepositorySettingsForm({ name, description, t, pending, error, onName, 
 function Badge({ children, icon }: { children: string; icon?: ReactNode }) { return <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium" style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}>{icon}{children}</span>; }
 function InfoRow({ label, value }: { label: string; value: string }) { return <div><dt style={{ color: "var(--ink-faint)" }}>{label}</dt><dd className="mt-1 font-medium" style={{ color: "var(--ink-strong)" }}>{value}</dd></div>; }
 function FileEditor({ file, loading, errorMessage, t, onClose, onSave }: { file?: { path: string; mimeType: string; contentBase64: string }; loading: boolean; errorMessage: string; t: Record<string, string>; onClose: () => void; onSave: (content: string, mimeType: string) => Promise<void> }) {
-  const [editing, setEditing] = useState(false); const [value, setValue] = useState(""); const [saving, setSaving] = useState(false); const [saveError, setSaveError] = useState(false);
+  const [editing, setEditing] = useState(false); const [value, setValue] = useState(""); const [saving, setSaving] = useState(false); const [saveError, setSaveError] = useState<string | null>(null);
   useEffect(() => pushModal(), []);
   useEffect(() => { if (file) setValue(decodeAgentWorkspaceText(file.contentBase64)); }, [file]);
   const isCode = Boolean(file && (/\.(ts|tsx|js|jsx|json|go|py|rs|java|css|html|sql|sh|yaml|yml|toml|md)$/i.test(file.path) || file.mimeType.startsWith("text/")));
   if (loading) return <PaperCard className="p-6 text-sm">{t.loadingFile}</PaperCard>;
   if (!file) return null;
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" onClick={onClose}><PaperCard className="flex h-[min(85vh,50rem)] w-full max-w-5xl flex-col overflow-hidden" onClick={(event: MouseEvent) => event.stopPropagation()}><div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--ink-line)" }}><code className="truncate text-sm font-semibold">{file.path}</code><div className="flex gap-2"><button type="button" onClick={() => { setSaveError(false); setEditing(!editing); }} className="rounded-md border px-3 py-1.5 text-xs">{editing ? t.preview : t.edit}</button><button type="button" onClick={onClose} className="p-1" aria-label={t.close}><X className="h-4 w-4" /></button></div></div>{editing ? <textarea value={value} onChange={(event) => { setSaveError(false); setValue(event.target.value); }} className="min-h-0 flex-1 resize-none bg-transparent p-5 font-mono text-sm leading-6 outline-none" spellCheck={false} /> : <pre className={`min-h-0 flex-1 overflow-auto p-5 font-mono text-sm leading-6 ${isCode ? "language-auto" : ""}`}><code>{value}</code></pre>}{editing && <div className="border-t px-5 py-3" style={{ borderColor: "var(--ink-line)" }}>{saveError && <p className="mb-2 text-sm" role="alert" style={{ color: "var(--cinnabar)" }}>{errorMessage}</p>}<div className="flex justify-end"><button type="button" disabled={saving} onClick={async () => { setSaving(true); setSaveError(false); try { await onSave(value, file.mimeType); setEditing(false); } catch { setSaveError(true); } finally { setSaving(false); } }} className="rounded-md px-4 py-2 text-xs font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{saving ? t.saving : t.save}</button></div></div>}</PaperCard></div>;
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" onClick={onClose}><PaperCard className="flex h-[min(85vh,50rem)] w-full max-w-5xl flex-col overflow-hidden" onClick={(event: MouseEvent) => event.stopPropagation()}><div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--ink-line)" }}><code className="truncate text-sm font-semibold">{file.path}</code><div className="flex gap-2"><button type="button" onClick={() => { setSaveError(null); setEditing(!editing); }} className="rounded-md border px-3 py-1.5 text-xs">{editing ? t.preview : t.edit}</button><button type="button" onClick={onClose} className="p-1" aria-label={t.close}><X className="h-4 w-4" /></button></div></div>{editing ? <textarea value={value} onChange={(event) => { setSaveError(null); setValue(event.target.value); }} className="min-h-0 flex-1 resize-none bg-transparent p-5 font-mono text-sm leading-6 outline-none" spellCheck={false} /> : <pre className={`min-h-0 flex-1 overflow-auto p-5 font-mono text-sm leading-6 ${isCode ? "language-auto" : ""}`}><code>{value}</code></pre>}{editing && <div className="border-t px-5 py-3" style={{ borderColor: "var(--ink-line)" }}>{saveError && <p className="mb-2 text-sm" role="alert" style={{ color: "var(--cinnabar)" }}>{saveError}</p>}<div className="flex justify-end"><button type="button" disabled={saving} onClick={async () => { setSaving(true); setSaveError(null); try { await onSave(value, file.mimeType); setEditing(false); } catch (error) { setSaveError(agentWorkspaceErrorMessage(error, t) || errorMessage); } finally { setSaving(false); } }} className="rounded-md px-4 py-2 text-xs font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{saving ? t.saving : t.save}</button></div></div>}</PaperCard></div>;
 }
 function PageLoading({ children }: { children: string }) { return <div className="flex flex-1 items-center justify-center py-24 text-sm" style={{ color: "var(--ink-faint)" }}>{children}</div>; }
 function PageMessage({ children }: { children: ReactNode }) { return <div className="flex flex-1 flex-col items-center justify-center px-4 py-24 text-center text-sm" style={{ color: "var(--ink-mid)" }}>{children}</div>; }

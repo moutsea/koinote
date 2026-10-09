@@ -448,6 +448,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/admin/announcements":
 		return method == http.MethodGet || method == http.MethodPost
+	case "/api/admin/agent-repositories/storage":
+		return method == http.MethodPut
 	case "/api/announcements/unread":
 		return method == http.MethodGet
 	case "/api/mcp/tokens":
@@ -462,6 +464,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/agent/workspace/storage":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/repositories":
+		return method == http.MethodGet
+	case "/api/agent/github-credential":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/agent/workspaces/import/github":
+		return method == http.MethodPost
 	case "/api/agent/workspaces":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/workspace":
@@ -523,8 +531,27 @@ func desktopRequestAllowed(r *http.Request) bool {
 	if rest, found := strings.CutPrefix(path, "/api/agent/workspace/files/"); found {
 		return rest != "" && !strings.Contains(rest, "/") && method == http.MethodGet
 	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/repositories/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && parts[0] != "" {
+			return method == http.MethodGet
+		}
+		if len(parts) != 2 || parts[0] == "" {
+			return false
+		}
+		switch parts[1] {
+		case "star":
+			return method == http.MethodPut || method == http.MethodDelete
+		case "fork", "clone":
+			return method == http.MethodPost
+		}
+		return false
+	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/workspaces/"); found {
 		parts := strings.Split(rest, "/")
+		if len(parts) == 2 && parts[0] != "" && parts[1] == "sharing" {
+			return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+		}
 		if len(parts) >= 2 && parts[0] != "" && parts[1] == "commits" {
 			if len(parts) == 2 {
 				return method == http.MethodGet

@@ -51,6 +51,9 @@ export function DocumentCoverDialog({
   const [prompt, setPrompt] = useState(initial.coverPrompt || "");
   const [defaultCover, setDefaultCover] = useState<WechatGeneratedCover | null>(null);
   const [cover, setCover] = useState<WechatGeneratedCover | null>(null);
+  const [referenceImage, setReferenceImage] = useState<{ name: string; source: string } | null>(null);
+  const [referenceReading, setReferenceReading] = useState(false);
+  const referenceReader = useRef<FileReader | null>(null);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +94,8 @@ export function DocumentCoverDialog({
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
+      referenceReader.current?.abort();
+      referenceReader.current = null;
       abortRef.current?.abort();
       saveAbortRef.current?.abort();
       mountedRef.current = false;
@@ -126,14 +131,42 @@ export function DocumentCoverDialog({
     setDefaultCover(null);
   }
 
+  function selectReferenceImage(file?: File) {
+    if (!file || generating || savingRef.current) return;
+    referenceReader.current?.abort();
+    referenceReader.current = null;
+    setReferenceReading(false);
+    setReferenceImage(null);
+    if (!/^(image\/(png|jpeg|gif|webp))$/.test(file.type) || file.size === 0 || file.size > 5 * 1024 * 1024) {
+      setError(t.editor.wechatCoverReferenceInvalid); return;
+    }
+    setError(null);
+    setReferenceReading(true);
+    const reader = new FileReader();
+    referenceReader.current = reader;
+    reader.onload = () => {
+      if (!mountedRef.current || referenceReader.current !== reader) return;
+      referenceReader.current = null;
+      setReferenceReading(false);
+      if (typeof reader.result === "string") setReferenceImage({ name: file.name, source: reader.result });
+    };
+    reader.onerror = () => {
+      if (!mountedRef.current || referenceReader.current !== reader) return;
+      referenceReader.current = null;
+      setReferenceReading(false);
+      setError(t.editor.wechatCoverReferenceFailed);
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function generate() {
-    if (!member || !prompt.trim() || abortRef.current || savingRef.current) return;
+    if (!member || !prompt.trim() || abortRef.current || savingRef.current || referenceReader.current) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setGenerating(true);
     setError(null);
     try {
-      const result = await generateWechatCover(prompt.trim(), ratio, controller.signal);
+      const result = await generateWechatCover(prompt.trim(), ratio, controller.signal, referenceImage?.source);
       if (controller.signal.aborted) return;
       setCover(result.cover);
       void queryClient.invalidateQueries({ queryKey: AGENT_CREDITS_QUERY_KEY });
@@ -144,7 +177,7 @@ export function DocumentCoverDialog({
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      setGenerating(false);
+      if (mountedRef.current) setGenerating(false);
     }
   }
 
@@ -181,7 +214,7 @@ export function DocumentCoverDialog({
     }
   }
 
-  const controlsDisabled = saving || generating;
+  const controlsDisabled = saving || generating || referenceReading;
   const coverOptions: Array<{ value: WechatCoverMode; label: string; hint: string }> = [
     { value: "default", label: t.editor.wechatCoverDefault, hint: t.editor.wechatCoverDefaultHint },
     { value: "article", label: t.editor.wechatCoverArticle, hint: t.editor.wechatCoverArticleHint },
@@ -240,6 +273,12 @@ export function DocumentCoverDialog({
         {mode === "ai" && (
           <>
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={!member || controlsDisabled} rows={3} maxLength={1200} placeholder={t.editor.wechatCoverPromptPlaceholder} className="mt-4 w-full resize-y rounded-lg border border-black/10 bg-transparent px-2.5 py-2 text-xs leading-relaxed outline-none focus:border-emerald-500/50 disabled:opacity-50 dark:border-white/15" />
+            <div className="mt-3 space-y-2">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-black/10 px-3 py-2 text-xs dark:border-white/15"><ImagePlus className="h-3.5 w-3.5" />{t.editor.wechatCoverReferenceUpload}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={!member || controlsDisabled} className="sr-only" onChange={(event) => { selectReferenceImage(event.target.files?.[0]); event.target.value = ""; }} /></label>
+              <p className="text-[10px] leading-5 text-neutral-400">{t.editor.wechatCoverReferenceHint}</p>
+              {referenceReading && <p role="status" className="text-xs text-neutral-400">{t.editor.wechatCoverReferenceReading}</p>}
+              {referenceImage && <div className="flex items-center gap-3 rounded-lg border border-black/10 p-2 dark:border-white/15"><img src={referenceImage.source} alt={t.editor.wechatCoverReferencePreview} className="h-14 w-20 rounded object-contain" /><span className="min-w-0 flex-1 truncate text-xs">{referenceImage.name}</span><button type="button" disabled={controlsDisabled} aria-label={t.editor.wechatCoverReferenceRemove} onClick={() => setReferenceImage(null)} className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-4 w-4" /></button></div>}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" disabled={!member || controlsDisabled || !prompt.trim()} onClick={() => void generate()} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-700 disabled:opacity-45 dark:text-emerald-300">{generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}{selectedSource ? t.editor.wechatCoverRegenerate : t.editor.wechatCoverGenerate}</button>
               <span className="text-[10px] text-neutral-400">{t.editor.wechatCoverCreditCost}</span>

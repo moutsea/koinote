@@ -48,7 +48,7 @@ func init() {
 		newAgentWorkspaceMCPTool(mcp.Tool{Name: "manage_agent_workspace", Title: "Manage Agent repository", Description: "Rename or permanently delete a private Skills/Agent repository using its expected revision.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)}}, true, (*App).mcpManageAgentWorkspace),
 		newAgentWorkspaceMCPTool(mcp.Tool{
 			Name: "update_agent_workspace", Title: "Update agent workspace",
-			Description: fmt.Sprintf("Incrementally update your private Skills/Agent repository with changed files in upsert and paths in delete. Read the current revision first and redact sensitive data. Each file may be up to %d MiB; keep the entire JSON request below %d MiB including base64. Split only upsert/delete batches, using each returned revision. Legacy files requires replaceAll: true and the COMPLETE file set in ONE request; never batch files.", agentWorkspaceMaxFileBytes>>20, mcpAgentWorkspaceMaxRequestBytes>>20),
+			Description: fmt.Sprintf("Incrementally update your private Skills/Agent repository with changed files in upsert and paths in delete. Read the current revision first and redact sensitive data. Supply a nonempty comment (at most 500 characters) explaining every change; never include secrets. Each file may be up to %d MiB; keep the entire JSON request below %d MiB including base64. Split only upsert/delete batches, using each returned revision. Legacy files requires replaceAll: true and the COMPLETE file set in ONE request; never batch files.", agentWorkspaceMaxFileBytes>>20, mcpAgentWorkspaceMaxRequestBytes>>20),
 			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 		}, true, (*App).mcpUpdateAgentWorkspace),
 		newAgentWorkspaceMCPTool(mcp.Tool{
@@ -73,7 +73,7 @@ func init() {
 		}, false, (*App).mcpReadAgentWorkspaceCommitFile),
 		newAgentWorkspaceMCPTool(mcp.Tool{
 			Name: "restore_agent_workspace_commit", Title: "Restore repository files",
-			Description: "Replace all current repository files with a retained revision after the user requests a restore. Creates a new revision and preserves the current repository name and description. Requires the current expectedRevision; on conflict, read again and review the changes before retrying.",
+			Description: "Replace all current repository files with a retained revision after the user requests a restore. Creates a new revision and preserves the current repository name and description. Requires the current expectedRevision. Include a comment (at most 500 characters) explaining the restore without secrets; older clients may omit comment; on conflict, read again and review the changes before retrying.",
 			Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 		}, true, (*App).mcpRestoreAgentWorkspaceCommit),
 	}

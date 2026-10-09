@@ -2004,6 +2004,13 @@ export const zh: Messages = {
     wechatCoverAi: "AI 生成",
     wechatCoverAiHint: "按提示词生成专属封面",
     wechatCoverAiRequired: "请先填写提示词并生成封面，或改选其他封面来源。",
+    wechatCoverReferenceUpload: "上传参考图",
+    wechatCoverReferenceHint: "可选 PNG、JPEG、GIF 或 WebP，最大 5 MiB、3,600 万像素。点击生成时才发送给已配置的图片服务，不随文档保存。",
+    wechatCoverReferenceReading: "正在读取图片…",
+    wechatCoverReferencePreview: "参考图预览",
+    wechatCoverReferenceRemove: "移除参考图",
+    wechatCoverReferenceInvalid: "请选择不超过 5 MiB 的 PNG、JPEG、GIF 或 WebP 图片。",
+    wechatCoverReferenceFailed: "参考图读取失败，请重试。",
     wechatCoverPromptPlaceholder:
       "描述封面的主题、画面和风格，例如：深蓝夜空下的城市书桌，克制、现代、留出标题空间…",
     wechatCoverRatio: "封面比例",

@@ -39,7 +39,8 @@ import (
 
 const (
 	wechatCoverPromptMaxRunes       = 1200
-	wechatCoverGenerateRequestBytes = 8 << 10
+	wechatCoverGenerateRequestBytes = 7 << 20
+	wechatCoverReferenceMaxBytes    = 5 << 20
 	wechatCoverProviderMaxBytes     = 30 << 20
 	wechatGeneratedCoverMaxBytes    = 20 << 20
 	wechatThumbMaxBytes             = 64 << 10
@@ -133,9 +134,14 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 		writeWechatPublishError(w, errWechatCoverModelUnavailable)
 		return
 	}
+	if !a.rateLimit().allow("wechat-cover:"+strconv.Itoa(user.ID), wechatCoverGenerateLimit, wechatCoverGenerateWindow) {
+		httpx.ErrorCode(w, http.StatusTooManyRequests, "too_many_requests", "Too many cover generation requests")
+		return
+	}
 	var input struct {
-		Prompt string `json:"prompt"`
-		Ratio  string `json:"ratio"`
+		Prompt               string `json:"prompt"`
+		Ratio                string `json:"ratio"`
+		ReferenceImageSource string `json:"referenceImageSource,omitempty"`
 	}
 	if !decodeWechatJSONBody(w, r, wechatCoverGenerateRequestBytes, &input) {
 		return
@@ -149,8 +155,9 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Invalid cover prompt or ratio")
 		return
 	}
-	if !a.rateLimit().allow("wechat-cover:"+strconv.Itoa(user.ID), wechatCoverGenerateLimit, wechatCoverGenerateWindow) {
-		httpx.ErrorCode(w, http.StatusTooManyRequests, "too_many_requests", "Too many cover generation requests")
+	reference, err := prepareWechatCoverReference(input.ReferenceImageSource)
+	if err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "wechat_cover_input_invalid", "Reference image must be a valid PNG, JPEG, GIF or WebP upload of at most 5 MiB and 36 megapixels")
 		return
 	}
 	reservation, err := a.reserveStandaloneCredits(
@@ -182,7 +189,7 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	}()
 	generationContext, cancelGeneration := context.WithTimeout(r.Context(), wechatCoverGenerationRunLimit)
 	defer cancelGeneration()
-	cover, err := a.generateWechatCover(generationContext, input.Prompt, input.Ratio)
+	cover, err := a.generateWechatCoverWithReference(generationContext, input.Prompt, input.Ratio, reference)
 	if err != nil {
 		log.Printf("wechat cover generate: %v", err)
 		writeWechatPublishError(w, err)
@@ -219,35 +226,80 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Reference uploads are inline only: arbitrary remote URLs are never fetched.
+func prepareWechatCoverReference(source string) ([]byte, error) {
+	if source == "" {
+		return nil, nil
+	}
+	header, encoded, ok := strings.Cut(source, ",")
+	if !ok || len(encoded) > base64.StdEncoding.EncodedLen(wechatCoverReferenceMaxBytes) {
+		return nil, errors.New("invalid reference image")
+	}
+	switch header {
+	case "data:image/png;base64", "data:image/jpeg;base64", "data:image/gif;base64", "data:image/webp;base64":
+	default:
+		return nil, errors.New("invalid reference format")
+	}
+	raw, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(raw) == 0 || len(raw) > wechatCoverReferenceMaxBytes {
+		return nil, errors.New("invalid reference size or encoding")
+	}
+	// Decode with a pixel bound, resize and re-encode as JPEG, removing metadata.
+	return prepareWechatContentImage(raw)
+}
+
 func (a *App) generateWechatCover(ctx context.Context, prompt, ratio string) (wechatCoverImage, error) {
+	return a.generateWechatCoverWithReference(ctx, prompt, ratio, nil)
+}
+
+func (a *App) generateWechatCoverWithReference(ctx context.Context, prompt, ratio string, reference []byte) (wechatCoverImage, error) {
 	endpoint, err := wechatCoverGenerationEndpoint(a.cfg.WechatCoverImageBaseURL)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
 	ratioWidth, ratioHeight, ok := parseWechatCoverRatio(ratio)
 	if !ok {
-		return wechatCoverImage{}, errors.New("invalid cover ratio")
+		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, errors.New("invalid cover ratio"))
 	}
 	size := "1536x1024"
 	if ratioWidth == ratioHeight {
 		size = "1024x1024"
 	}
 	composition := fmt.Sprintf("Target aspect ratio: %s. Keep the subject and every essential detail comfortably inside the frame; the result will be center-cropped to this ratio.", ratio)
-	payload, err := json.Marshal(map[string]any{
-		"model":  a.cfg.WechatCoverImageModel,
-		"prompt": "Create a polished WeChat Official Account article cover. No logos, watermarks, QR codes, or unreadable text. " + composition + " User brief: " + prompt,
-		"n":      1,
-		"size":   size,
-	})
-	if err != nil {
+	providerPrompt := "Create a polished WeChat Official Account article cover. No logos, watermarks, QR codes, or unreadable text. " + composition
+	var payload bytes.Buffer
+	contentType := "application/json"
+	if len(reference) > 0 {
+		endpoint = strings.TrimSuffix(endpoint, "/generations") + "/edits"
+		writer := multipart.NewWriter(&payload)
+		for key, value := range map[string]string{"model": a.cfg.WechatCoverImageModel, "prompt": providerPrompt + " Use the reference image for visual direction and create a new original cover. User brief: " + prompt, "n": "1", "size": size} {
+			if err := writer.WriteField(key, value); err != nil {
+				return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+			}
+		}
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", `form-data; name="image[]"; filename="reference.jpg"`)
+		header.Set("Content-Type", "image/jpeg")
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		if _, err = part.Write(reference); err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		if err = writer.Close(); err != nil {
+			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+		}
+		contentType = writer.FormDataContentType()
+	} else if err := json.NewEncoder(&payload).Encode(map[string]any{"model": a.cfg.WechatCoverImageModel, "prompt": providerPrompt + " User brief: " + prompt, "n": 1, "size": size}); err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &payload)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
 	request.Header.Set("Authorization", "Bearer "+a.cfg.WechatCoverImageAPIKey)
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", contentType)
 	request.Header.Set("Accept", "application/json")
 	client := a.wechatCoverHTTPClient
 	if client == nil {

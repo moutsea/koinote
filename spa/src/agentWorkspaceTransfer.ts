@@ -8,6 +8,11 @@ export class AgentWorkspaceTransferError extends Error {
   constructor(public code: "transferChanged" | "transferInvalidPath" | "transferTooLarge") { super(code); }
 }
 
+export type AgentWorkspaceTransferSource = {
+  readWorkspace: (signal?: AbortSignal) => ReturnType<typeof getAgentWorkspace>;
+  readFile: (fileId: number, signal?: AbortSignal) => ReturnType<typeof getAgentWorkspaceFile>;
+};
+
 // The native bridge expands bytes into number arrays. Bound the entire batch,
 // not just simultaneous requests, before downloading or allocating ZIP buffers.
 export const AGENT_WORKSPACE_TRANSFER_MAX_BYTES = 64 << 20;
@@ -36,54 +41,106 @@ export function validateAgentWorkspaceTransferPaths(files: Pick<AgentWorkspaceFi
   }
 }
 
+function waitForTransferRetry(delay: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, delay);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
 export async function loadAgentWorkspaceFiles(
   snapshot: AgentWorkspace,
   selectedIDs: Set<number>,
   onProgress: (completed: number, total: number) => void,
   signal?: AbortSignal,
+  source?: AgentWorkspaceTransferSource,
+  onRateLimit?: (waiting: boolean) => void,
 ): Promise<ConfigVaultFile[]> {
   const files = snapshot.files.filter((file) => selectedIDs.has(file.fileId));
   if (!files.length || files.length !== selectedIDs.size) throw new AgentWorkspaceTransferError("transferChanged");
   if (agentWorkspaceTransferTooLarge(files)) throw new AgentWorkspaceTransferError("transferTooLarge");
   validateAgentWorkspaceTransferPaths(files);
-  const checkRevision = async () => {
-    signal?.throwIfAborted();
-    const { workspace } = await getAgentWorkspace(snapshot.workspaceId);
-    if (!workspace || workspace.revision !== snapshot.revision) throw new AgentWorkspaceTransferError("transferChanged");
-    signal?.throwIfAborted();
-  };
-  await checkRevision();
-  const result: ConfigVaultFile[] = new Array(files.length);
-  let next = 0;
-  let completed = 0;
-  let failure: unknown;
-  onProgress(0, files.length);
-  // Limit simultaneous full-file reads (each file may be 5 MiB).
-  await Promise.all(Array.from({ length: Math.min(4, files.length) }, async () => {
-    while (next < files.length && !failure) {
-      const index = next++;
-      const expected = files[index];
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  const transferSignal = controller.signal;
+  const abort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  // A single cooldown pauses all four readers, including the final manifest
+  // check. Only the rejected read is retried; verified files stay in memory.
+  let blockedUntil = 0;
+  async function readWithRetry<T>(read: () => Promise<T>): Promise<T> {
+    for (let retries = 0; ; retries++) {
+      transferSignal.throwIfAborted();
+      while (Date.now() < blockedUntil) await waitForTransferRetry(blockedUntil - Date.now(), transferSignal);
+      transferSignal.throwIfAborted();
+      onRateLimit?.(false);
       try {
-        signal?.throwIfAborted();
-        const { file } = await getAgentWorkspaceFile(expected.fileId);
-        signal?.throwIfAborted();
-        if (file.contentBase64.length > 4 * Math.ceil(expected.sizeBytes / 3)) throw new AgentWorkspaceTransferError("transferChanged");
-        const binary = atob(file.contentBase64);
-        const bytes = new Uint8Array(binary.length);
-        for (let offset = 0; offset < binary.length; offset++) bytes[offset] = binary.charCodeAt(offset);
-        if (file.fileId !== expected.fileId || file.path !== expected.path || file.sha256 !== expected.sha256 || bytes.length !== expected.sizeBytes || await sha256Hex(bytes) !== expected.sha256) {
-          throw new AgentWorkspaceTransferError("transferChanged");
-        }
-        result[index] = { path: expected.path, bytes };
-        onProgress(++completed, files.length);
+        return await read();
       } catch (error) {
-        failure = error instanceof ApiError && error.status === 404 ? new AgentWorkspaceTransferError("transferChanged") : error;
+        if (!(error instanceof ApiError) || error.status !== 429 || retries >= 3) throw error;
+        const delay = Math.max(1000, error.retryAfterMs ?? 60_000);
+        // Do not retry early when the server asks for an unusually long wait.
+        // Bound each read so a persistently rate-limited transfer can fail visibly.
+        if (!Number.isFinite(delay) || delay > 300_000) throw error;
+        blockedUntil = Math.max(blockedUntil, Date.now() + delay);
+        onRateLimit?.(true);
       }
     }
-  }));
-  if (failure) throw failure;
-  await checkRevision();
-  return result;
+  }
+  const checkRevision = async () => {
+    let workspace: AgentWorkspace | null | undefined;
+    try {
+      ({ workspace } = await readWithRetry(() => source ? source.readWorkspace(transferSignal) : getAgentWorkspace(snapshot.workspaceId, transferSignal)));
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 409)) throw new AgentWorkspaceTransferError("transferChanged");
+      throw error;
+    }
+    if (!workspace || workspace.revision !== snapshot.revision) throw new AgentWorkspaceTransferError("transferChanged");
+    transferSignal.throwIfAborted();
+  };
+  try {
+    await checkRevision();
+    const result: ConfigVaultFile[] = new Array(files.length);
+    let next = 0;
+    let completed = 0;
+    let failure: unknown;
+    onProgress(0, files.length);
+    // Limit simultaneous full-file reads (each file may be 5 MiB).
+    await Promise.all(Array.from({ length: Math.min(4, files.length) }, async () => {
+      while (next < files.length && !transferSignal.aborted) {
+        const index = next++;
+        const expected = files[index];
+        try {
+          const { file } = await readWithRetry(() => source ? source.readFile(expected.fileId, transferSignal) : getAgentWorkspaceFile(expected.fileId, transferSignal));
+          transferSignal.throwIfAborted();
+          if (file.contentBase64.length > 4 * Math.ceil(expected.sizeBytes / 3)) throw new AgentWorkspaceTransferError("transferChanged");
+          const binary = atob(file.contentBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let offset = 0; offset < binary.length; offset++) bytes[offset] = binary.charCodeAt(offset);
+          if (file.fileId !== expected.fileId || file.path !== expected.path || file.sha256 !== expected.sha256 || bytes.length !== expected.sizeBytes || await sha256Hex(bytes) !== expected.sha256) {
+            throw new AgentWorkspaceTransferError("transferChanged");
+          }
+          transferSignal.throwIfAborted();
+          result[index] = { path: expected.path, bytes };
+          onProgress(++completed, files.length);
+        } catch (error) {
+          if (!transferSignal.aborted) {
+            failure = error instanceof ApiError && (error.status === 404 || error.status === 409) ? new AgentWorkspaceTransferError("transferChanged") : error;
+            controller.abort(failure); // Wake other readers waiting on the shared cooldown.
+          }
+        }
+      }
+    }));
+    if (failure) throw failure;
+    transferSignal.throwIfAborted();
+    await checkRevision();
+    return result;
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    onRateLimit?.(false);
+  }
 }
 
 export async function saveAgentWorkspaceZip(files: ConfigVaultFile[], name: string): Promise<boolean> {

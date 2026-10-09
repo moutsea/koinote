@@ -1,3 +1,4 @@
+import { AgentGitHubImportForm } from "../components/AgentGitHubImportForm";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, ChevronRight, Cloud, Edit3, FolderGit2, LoaderCircle, LockKeyhole, Plus, Search, Settings2, ShieldCheck, Trash2 } from "lucide-react";
@@ -21,6 +22,7 @@ export function AgentWorkspaceRepositoriesPage({ embedded = false }: { embedded?
   const storage = useQuery({ queryKey: ["agent-workspace-storage"], queryFn: getAgentWorkspaceStorage, enabled, retry: false });
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [editingID, setEditingID] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -40,7 +42,7 @@ export function AgentWorkspaceRepositoriesPage({ embedded = false }: { embedded?
     mutationFn: (workspace: AgentWorkspaceSummary) => deleteAgentWorkspace(workspace.workspaceId, workspace.revision),
     onSuccess() { void queryClient.invalidateQueries({ queryKey: ["agent-workspaces"] }); },
   });
-  const openCreate = () => { create.reset(); setName(""); setDescription(""); setEditingID(null); setShowCreate(true); };
+  const openCreate = () => { setShowGitHubImport(false); create.reset(); setName(""); setDescription(""); setEditingID(null); setShowCreate(true); };
   const closeCreate = () => { create.reset(); setName(""); setDescription(""); setShowCreate(false); };
   useEffect(() => {
     if (editingID !== null && !repositories.data?.workspaces.some((item) => item.workspaceId === editingID)) setEditingID(null);
@@ -53,11 +55,12 @@ export function AgentWorkspaceRepositoriesPage({ embedded = false }: { embedded?
   if (session.isLoading) return <PageLoading>{t.dashboard.loading}</PageLoading>;
   if (!user) return <PageMessage><p>{t.dashboard.loginRequired}</p><Link to="/login" className="mt-4 inline-flex rounded-full px-5 py-2.5 text-sm font-semibold" style={{ background: "var(--cinnabar)", color: "white" }}>{t.dashboard.goLogin}</Link></PageMessage>;
   if (user.isLocalMode) return <PageMessage>{t.agentWorkspace.localMode}</PageMessage>;
-  if (user.membershipTier !== "lifetime") return <PageMessage><p>{t.agentWorkspace.membersOnly}</p><Link to="/pricing" className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.mcp.upgrade}<ArrowRight className="h-4 w-4" /></Link></PageMessage>;
+  if (user.membershipTier !== "lifetime") return <PageMessage><p>{t.agentWorkspace.membersOnly}</p><Link to="/repositories" className="mt-4 block text-sm underline">{t.agentWorkspace.publicRepositories}</Link><Link to="/pricing" className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}>{t.mcp.upgrade}<ArrowRight className="h-4 w-4" /></Link></PageMessage>;
   if (settings.isLoading) return <PageLoading>{t.agentWorkspace.loading}</PageLoading>;
   if (settings.isError) return <PageMessage>{t.agentWorkspace.repositoryLoadFailed}</PageMessage>;
 
   const content = <>
+    <div className="mb-4 flex flex-wrap items-center gap-4"><Link to="/repositories" className="text-sm underline">{t.agentWorkspace.publicRepositories}</Link>{enabled && <button type="button" className="rounded-lg border px-3 py-2 text-xs font-semibold" onClick={() => { setShowCreate(false); setEditingID(null); setShowGitHubImport(true); }}>{t.agentWorkspace.githubImport}</button>}</div>
     {!embedded && <>
       <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-faint)" }}><Cloud className="h-3.5 w-3.5" /><span>Skills / Agent</span><ChevronRight className="h-3.5 w-3.5" /><span style={{ color: "var(--ink-mid)" }}>{t.agentWorkspace.repositoryHubTitle}</span></div>
       <header className="mt-6 flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: "var(--ink-line)" }}>
@@ -69,7 +72,7 @@ export function AgentWorkspaceRepositoriesPage({ embedded = false }: { embedded?
     {enabled && <div className="mt-6"><AgentWorkspaceStorageCard storage={storage.data?.storage} loading={storage.isFetching} error={storage.isError} onRetry={() => void storage.refetch()} /></div>}
     {!enabled ? <EnablePanel /> : <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_16rem]">
       <main className="min-w-0">
-        {showCreate ? <CreateRepositoryView name={name} description={description} t={t} pending={create.isPending} error={create.isError} onName={setName} onDescription={setDescription} onSubmit={() => create.mutate()} onCancel={closeCreate} /> : <>
+        {showCreate ? <CreateRepositoryView name={name} description={description} t={t} pending={create.isPending} error={create.isError} onName={setName} onDescription={setDescription} onSubmit={() => create.mutate()} onCancel={closeCreate} /> : showGitHubImport ? <AgentGitHubImportForm onClose={() => setShowGitHubImport(false)} /> : <>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold" style={{ color: "var(--ink-strong)" }}>{t.agentWorkspace.repositoriesTab}</h2><p className="mt-1 text-xs" style={{ color: "var(--ink-faint)" }}>{t.agentWorkspace.repositoryCount.replace("{count}", String(repositories.data?.workspaces.length ?? 0))}</p></div><label className="relative block sm:w-64"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--ink-faint)" }} /><span className="sr-only">{t.agentWorkspace.searchRepositories}</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.agentWorkspace.searchRepositoriesPlaceholder} className="w-full rounded-lg border bg-transparent py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--ink-strong)]" style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }} /></label></div>
           {editingWorkspace && <><MetadataForm name={editName} description={editDescription} t={t} submitLabel={t.agentWorkspace.saveRepository} pending={save.isPending} onName={setEditName} onDescription={setEditDescription} onSubmit={() => save.mutate()} onCancel={() => setEditingID(null)} />{save.isError && <p className="-mt-2 mb-4 text-sm" role="alert" style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.repositoryLoadFailed}</p>}</>}
           {repositories.isLoading ? <LoadingList /> : repositories.isError ? <PaperCard className="p-8 text-center text-sm"><p style={{ color: "var(--cinnabar)" }}>{t.agentWorkspace.repositoryLoadFailed}</p></PaperCard> : filtered.length === 0 ? <PaperCard className="p-10 text-center"><FolderGit2 className="mx-auto h-9 w-9" style={{ color: "var(--ink-faint)" }} /><p className="mt-3 text-sm" style={{ color: "var(--ink-mid)" }}>{search ? t.agentWorkspace.noSearchResults : t.agentWorkspace.noRepositories}</p>{!search && <button type="button" onClick={openCreate} className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: "var(--ink-strong)", color: "var(--ink-paper)" }}><Plus className="h-3.5 w-3.5" />{t.agentWorkspace.createRepository}</button>}</PaperCard> : <div className="space-y-3">{filtered.map((workspace) => <RepositoryItem key={workspace.workspaceId} workspace={workspace} locale={locale} t={t} from={embedded ? "space" : "hub"} onEdit={() => { setEditName(workspace.name); setEditDescription(workspace.description); setEditingID(workspace.workspaceId); setShowCreate(false); }} onDelete={async () => { if (await confirmAction(t.agentWorkspace.deleteRepositoryConfirm)) remove.mutate(workspace); }} deletePending={remove.isPending} />)}</div>}

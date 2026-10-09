@@ -26,6 +26,7 @@ export type User = {
 
 // 带后端错误码的错误对象：code 供前端 i18n 翻译，message 为英文兜底。
 export class ApiError extends Error {
+  retryAfterMs?: number;
   code?: string;
   email?: string;
   status: number;
@@ -124,7 +125,13 @@ async function toApiError(response: Response): Promise<ApiError> {
     );
   }
 
-  return new ApiError(response.status, message, code, email);
+  const error = new ApiError(response.status, message, code, email);
+  const retryAfter = response.headers.get("Retry-After")?.trim();
+  if (response.status === 429 && retryAfter) {
+    const delay = /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : /[a-z]/i.test(retryAfter) ? Date.parse(retryAfter) - Date.now() : NaN;
+    if (Number.isFinite(delay)) error.retryAfterMs = Math.max(0, delay);
+  }
+  return error;
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -611,7 +618,19 @@ export type AgentWorkspaceFileContent = AgentWorkspaceFile & {
   contentBase64: string;
 };
 
+export type AgentGitHubSource = {
+  repositoryUrl: string;
+  author: string;
+  authorUrl: string;
+  ref: string;
+  commitSha: string;
+  license: string;
+  private?: boolean;
+};
+
 export type AgentWorkspace = {
+  githubSource?: AgentGitHubSource;
+
   workspaceId: number;
   name: string;
   description: string;
@@ -645,11 +664,11 @@ export function updateAgentWorkspaceStorage(allocatedBytes: number) {
     method: "PUT", body: JSON.stringify({ allocatedBytes }),
   });
 }
-export type AgentWorkspaceCommit = { commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
+export type AgentWorkspaceCommit = { comment: string; commitId: string; revision: number; parentRevision?: number | null; action: string; restoredFrom?: number | null; name: string; description: string; fileCount: number; sizeBytes: number; createdAt: string };
 export function listAgentWorkspaceCommits(workspaceId: number) { return apiJson<{ commits: AgentWorkspaceCommit[]; nextBefore?: number | null }>(`/api/agent/workspaces/${workspaceId}/commits`); }
-export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number, allowSensitive = false) {
+export function restoreAgentWorkspaceCommit(workspaceId: number, revision: number, expectedRevision: number, allowSensitive = false, comment?: string) {
   return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/workspaces/${workspaceId}/commits/${revision}/restore`, {
-    method: "POST", body: JSON.stringify({ expectedRevision, allowSensitive }),
+    method: "POST", body: JSON.stringify({ expectedRevision, allowSensitive, comment }),
   });
 }
 
@@ -688,19 +707,22 @@ export function deleteAgentWorkspace(workspaceId: number, expectedRevision: numb
   });
 }
 
-export function getAgentWorkspace(workspaceId?: number) {
+export function getAgentWorkspace(workspaceId?: number, signal?: AbortSignal) {
   return apiJson<{ workspace: AgentWorkspace | null }>(
     workspaceId ? `/api/agent/workspaces/${workspaceId}` : "/api/agent/workspace",
+    { signal },
   );
 }
 
-export function getAgentWorkspaceFile(fileId: number) {
+export function getAgentWorkspaceFile(fileId: number, signal?: AbortSignal) {
   return apiJson<{ file: AgentWorkspaceFileContent }>(
     `/api/agent/workspace/files/${fileId}`,
+    { signal },
   );
 }
 
 export function updateAgentWorkspace(input: {
+  comment?: string;
   expectedRevision: number;
   files: Array<{ path: string; contentBase64: string; mimeType?: string }>;
   allowSensitive?: boolean;
@@ -717,6 +739,7 @@ export function updateAgentWorkspace(input: {
 }
 
 export function patchAgentWorkspace(input: {
+  comment?: string;
   expectedRevision: number;
   upsert?: Array<{ path: string; contentBase64: string; mimeType?: string }>;
   delete?: string[];
@@ -1038,12 +1061,13 @@ export function generateWechatCover(
   prompt: string,
   ratio: WechatCoverRatio,
   signal?: AbortSignal,
+  referenceImageSource?: string,
 ) {
   return apiJson<{ cover: WechatGeneratedCover }>(
     "/api/wechat/cover/generate",
     {
       method: "POST",
-      body: JSON.stringify({ prompt, ratio }),
+      body: JSON.stringify({ prompt, ratio, referenceImageSource }),
       signal,
     },
   );

@@ -276,6 +276,16 @@ const settingsRoute = createRoute({
     "SettingsPage",
   ),
 });
+const agentPublicRepositoriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/repositories",
+  component: lazyRouteComponent(() => import("./pages/AgentPublicRepositoriesPage"), "AgentPublicRepositoriesPage"),
+});
+const agentPublicRepositoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/repositories/$repositoryId",
+  component: lazyRouteComponent(() => import("./pages/AgentPublicRepositoryPage"), "AgentPublicRepositoryPage"),
+});
 const agentWorkspaceRepositoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/agent/workspaces/$workspaceId",
@@ -410,6 +420,8 @@ const routeTree = rootRoute.addChildren([
   agentWorkspaceSettingsRoute,
   legacyAgentWorkspaceSettingsRoute,
   agentWorkspaceRepositoryRoute,
+  agentPublicRepositoriesRoute,
+  agentPublicRepositoryRoute,
   spaceRoute,
   aiSettingsRoute,
   mcpActivityRoute,

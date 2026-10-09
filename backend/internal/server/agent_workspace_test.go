@@ -116,7 +116,19 @@ func TestAgentWorkspaceHistoryPruningKeepsNewestRevisionAndCleansBlobs(t *testin
 	if commitsBefore < 5 {
 		t.Fatalf("commits before pruning = %d, want at least 5", commitsBefore)
 	}
-	if _, err := pool.Exec(ctx, `SELECT prune_agent_workspace_quota_history($1, 1)`, workspace.WorkspaceID); err != nil {
+	// An impossible budget must leave every historical revision intact.
+	if _, err := pool.Exec(ctx, `SELECT prune_agent_workspace_quota_history($1,1)`, workspace.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	var afterImpossible int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM agent_workspace_commits WHERE workspace_id=$1`, workspace.WorkspaceID).Scan(&afterImpossible); err != nil || afterImpossible != commitsBefore {
+		t.Fatal("impossible quota discarded history", err)
+	}
+	var achievableBudget int64
+	if err := pool.QueryRow(ctx, `SELECT agent_workspace_storage_bytes($1)-COALESCE(sum(octet_length(b.content)),0) FROM agent_workspace_blobs b WHERE b.workspace_id=$2 AND NOT EXISTS(SELECT 1 FROM agent_workspace_files f WHERE f.workspace_id=b.workspace_id AND f.sha256=b.sha256)`, userID, workspace.WorkspaceID).Scan(&achievableBudget); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT prune_agent_workspace_quota_history($1, $2)`, workspace.WorkspaceID, achievableBudget); err != nil {
 		t.Fatalf("prune quota history: %v", err)
 	}
 	var commitsAfter, blobsAfter int
@@ -174,7 +186,11 @@ func TestAgentWorkspaceQuotaPruningOnlyTouchesWrittenWorkspace(t *testing.T) {
 		t.Fatalf("large budget pruned history: commits=%d", got)
 	}
 
-	if _, err := pool.Exec(ctx, `SELECT prune_agent_workspace_quota_history($1, 1)`, first.WorkspaceID); err != nil {
+	var achievableBudget int64
+	if err := pool.QueryRow(ctx, `SELECT agent_workspace_storage_bytes($1)-COALESCE(sum(octet_length(b.content)),0) FROM agent_workspace_blobs b WHERE b.workspace_id=$2 AND NOT EXISTS(SELECT 1 FROM agent_workspace_files f WHERE f.workspace_id=b.workspace_id AND f.sha256=b.sha256)`, userID, first.WorkspaceID).Scan(&achievableBudget); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT prune_agent_workspace_quota_history($1, $2)`, first.WorkspaceID, achievableBudget); err != nil {
 		t.Fatalf("prune quota history: %v", err)
 	}
 	if got := countCommits(first.WorkspaceID); got != 1 {

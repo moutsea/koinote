@@ -2108,6 +2108,13 @@ export const ja: Messages = {
     wechatCoverAiHint: "プロンプトからカバーを作成",
     wechatCoverAiRequired:
       "プロンプトを入力してカバーを生成するか、別のソースを選んでください。",
+    wechatCoverReferenceUpload: "参考画像を選択",
+    wechatCoverReferenceHint: "PNG、JPEG、GIF、WebP（5 MiB・3,600 万画素まで、任意）。生成時にのみ設定済みの画像サービスに送信し、文書には保存しません。",
+    wechatCoverReferenceReading: "画像を読み込み中…",
+    wechatCoverReferencePreview: "参考画像のプレビュー",
+    wechatCoverReferenceRemove: "参考画像を削除",
+    wechatCoverReferenceInvalid: "5 MiB 以下の PNG、JPEG、GIF、WebP 画像を選んでください。",
+    wechatCoverReferenceFailed: "参考画像を読み込めませんでした。再試行してください。",
     wechatCoverPromptPlaceholder:
       "テーマ、構図、雰囲気を説明してください。例：深い青の夜空と都会の机、モダンで控えめ、タイトル用の余白…",
     wechatCoverRatio: "カバー比率",

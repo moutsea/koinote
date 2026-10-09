@@ -12,6 +12,7 @@ import (
 )
 
 type agentWorkspaceCommit struct {
+	Comment        string    `json:"comment"`
 	CommitID       string    `json:"commitId"`
 	Revision       int64     `json:"revision"`
 	ParentRevision *int64    `json:"parentRevision"`
@@ -34,7 +35,7 @@ type agentWorkspaceCommitFile struct {
 func scanAgentWorkspaceCommit(row pgx.Row) (agentWorkspaceCommit, error) {
 	var commit agentWorkspaceCommit
 	err := row.Scan(&commit.CommitID, &commit.Revision, &commit.ParentRevision, &commit.Action,
-		&commit.RestoredFrom, &commit.Name, &commit.Description, &commit.FileCount, &commit.SizeBytes, &commit.CreatedAt)
+		&commit.RestoredFrom, &commit.Name, &commit.Description, &commit.FileCount, &commit.SizeBytes, &commit.CreatedAt, &commit.Comment)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = errAgentWorkspaceNotFound
 	}
@@ -122,12 +123,13 @@ func (a *App) agentWorkspaceCommitRestore(w http.ResponseWriter, r *http.Request
 	var input struct {
 		ExpectedRevision *int64 `json:"expectedRevision"`
 		AllowSensitive   bool   `json:"allowSensitive"`
+		Comment          string `json:"comment,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.ExpectedRevision == nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "revision_required", "expectedRevision is required")
 		return
 	}
-	view, err := a.mutateAgentWorkspaceWithHistory(r.Context(), user.ID, workspaceID, *input.ExpectedRevision, nil, nil, true, &revision, input.AllowSensitive && agentWorkspaceSensitiveOverrideAllowed(r))
+	view, err := a.mutateAgentWorkspaceWithHistory(r.Context(), user.ID, workspaceID, *input.ExpectedRevision, nil, nil, true, &revision, input.AllowSensitive && agentWorkspaceSensitiveOverrideAllowed(r), input.Comment)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return

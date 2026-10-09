@@ -25,6 +25,8 @@ const harness = {
   workspaceFiles: [],
   fileContents: new Map(),
   fileWait: null,
+  scannedFiles: [],
+  uploadFiles: [],
   revisionResponses: [],
   nativeCalls: [],
   saveResult: true,
@@ -93,6 +95,10 @@ const harness = {
       harness.workspaceRevision = args[2] + 1;
       return { workspace: { workspaceId: 7, revision: harness.workspaceRevision, files: [] } };
     }
+    if (method === "updateAgentWorkspace" || method === "patchAgentWorkspace") {
+      harness.workspaceRevision++;
+      return { workspace: { workspaceId: 7, revision: harness.workspaceRevision, files: harness.workspaceFiles } };
+    }
     if (method === "getAgentWorkspaceFile") {
       if (harness.fileWait) await harness.fileWait;
       const file = harness.fileContents.get(args[0]);
@@ -150,15 +156,19 @@ const bundle = await build({
         export const Link = ({ to, params, search, hash, children }) => createElement("a", {
           href: to.replace("$workspaceId", params?.workspaceId ?? "") + (hash ? "#" + hash : ""), "data-search": JSON.stringify(search),
         }, children);`,
+      "../components/AgentGitHubCredentialCard": "export const AgentGitHubCredentialCard = () => null;",
+      "../components/AgentRepositorySharingCard": "export const AgentRepositorySharingCard = () => null;",
       "../components/AgentWorkspaceReadme": `import { createElement } from "react";
         export const AgentWorkspaceReadme = props => createElement("div", null,
           createElement("button", { onClick: props.onCopy, disabled: props.copying, "data-copied": String(props.copied) }, "copy-prompt"),
-          props.promptError && createElement("p", { role: "alert" }, props.promptErrorMessage));`,
+          props.promptError && createElement("p", { role: "alert" }, props.promptErrorMessage),
+          createElement("button", { onClick: () => props.onImport(globalThis.__agentAccessTest.uploadFiles) }, "test-upload"),
+          createElement("button", { onClick: props.onScanLocal }, "test-scan"));`,
       "./desktop/runtime": "export const isDesktopRuntime = () => globalThis.__agentAccessTest.desktop;",
       "./desktop/network": "export const desktopFetch = () => { throw new Error('Unexpected desktop request'); };",
       "./desktop/offlineStore": "export const desktopResolveImageSource = () => { throw new Error('Unexpected offline image request'); };",
       "../desktop/runtime": "export const isDesktopRuntime = () => globalThis.__agentAccessTest.desktop; export const desktopAPIOrigin = () => 'https://koinote.example';",
-      "../desktop/configFiles": "export const desktopScanAgentWorkspaceFiles = async () => []; export const desktopRestoreConfigFiles = (...args) => globalThis.__agentAccessTest.restoreFiles('folder', ...args); export const desktopRestoreConfigFilesToHome = (...args) => globalThis.__agentAccessTest.restoreFiles('home', ...args);",
+      "../desktop/configFiles": "export const desktopScanAgentWorkspaceFiles = async () => globalThis.__agentAccessTest.scannedFiles; export const desktopRestoreConfigFiles = (...args) => globalThis.__agentAccessTest.restoreFiles('folder', ...args); export const desktopRestoreConfigFilesToHome = (...args) => globalThis.__agentAccessTest.restoreFiles('home', ...args);",
       "@tauri-apps/api/core": "export const invoke = (...args) => globalThis.__agentAccessTest.save(...args);",
       "../confirmAction": "export const confirmAction = (...args) => globalThis.__agentAccessTest.confirm(...args);",
       "../modalStack": "export const pushModal = () => () => {};",
@@ -200,8 +210,8 @@ try {
     return new Response(JSON.stringify({ workspace: { workspaceId: 7 } }), { status: 200 });
   };
   await realRestoreAgentWorkspaceCommit(7, 0, 1);
-  await realRestoreAgentWorkspaceCommit(7, 0, 1, true);
-  assert.deepEqual(restoreRequests.map(({ body }) => body), [{ expectedRevision: 1, allowSensitive: false }, { expectedRevision: 1, allowSensitive: true }]);
+  await realRestoreAgentWorkspaceCommit(7, 0, 1, true, "Restore reviewed settings");
+  assert.deepEqual(restoreRequests.map(({ body }) => body), [{ expectedRevision: 1, allowSensitive: false }, { expectedRevision: 1, allowSensitive: true, comment: "Restore reviewed settings" }]);
   assert.ok(restoreRequests.every(({ path, method, credentials }) => path === "/api/agent/workspaces/7/commits/0/restore" && method === "POST" && credentials === "include"));
   globalThis.fetch = originalFetch;
   await mount(AgentWorkspaceSettingsPage);
@@ -395,7 +405,7 @@ try {
   assert.ok(document.querySelector('[role="alert"]'));
   assert.equal(clipboard.length, 1);
   harness.failTokenList = false;
-  harness.commits = [{ commitId: "historical", revision: 0, action: "patch", createdAt: "2026-10-08T00:00:00Z" }];
+  harness.commits = [{ commitId: "historical", revision: 0, action: "patch", createdAt: "2026-10-08T00:00:00Z", comment: "Restore reviewed settings" }];
   const sensitiveRestoreError = () => new ApiError(422, 'sensitive data detected in "settings.json"', "sensitive_data_detected");
   const restoreCalls = () => calls.filter((call) => call.method === "restoreAgentWorkspaceCommit").map((call) => call.args);
   const resetRestore = async (responses = [], confirmations = [true, true]) => {
@@ -413,23 +423,42 @@ try {
 
   await resetRestore([sensitiveRestoreError(), null]);
   await click(zh.agentWorkspace.restore);
-  assert.deepEqual(restoreCalls(), [[7, 0, 1], [7, 0, 1, true]], "only confirmed sensitive restores send allowSensitive");
+  assert.deepEqual(restoreCalls(), [[7, 0, 1, false, ""], [7, 0, 1, true, ""]], "only confirmed sensitive restores send allowSensitive");
   assert.deepEqual(harness.confirmations, [zh.agentWorkspace.restoreCommitConfirm.replace("{revision}", "0"), zh.agentWorkspace.restoreSensitiveConfirm.replace("{revision}", "0")]);
   assert.equal(document.querySelector('[role="alert"]'), null);
   for (const method of ["getAgentWorkspace", "listAgentWorkspaceCommits", "getAgentWorkspaceStorage"]) {
     assert.ok(calls.some((call) => call.method === method), `successful restore refreshes ${method}`);
   }
 
+  await resetRestore([new ApiError(422, "Sensitive comment", "sensitive_comment")]);
+  await click(zh.agentWorkspace.restore);
+  assert.equal(restoreCalls().length, 1, "sensitive comments are not retried with allowSensitive");
+  assert.equal(harness.confirmations.length, 1, "no misleading sensitive-file confirmation for a comment");
+  assert.equal(document.querySelector('[role="alert"]').textContent, zh.agentWorkspace.changeCommentSensitive);
+
+  await resetRestore([sensitiveRestoreError(), null]);
+  assert.ok(document.body.textContent.includes("Restore reviewed settings"), "history displays the change description");
+  await act(async () => {
+    const input = [...document.querySelectorAll("textarea")].find(element => element.getAttribute("placeholder") === zh.agentWorkspace.changeCommentHint);
+    assert.ok(Boolean(input), "the optional change description is editable");
+    const props = input[Object.keys(input).find(key => key.startsWith("__reactProps"))];
+    props.onChange({ target: { value: "Recover reviewed settings" } });
+  });
+  await click(zh.agentWorkspace.restore);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1, false, "Recover reviewed settings"], [7, 0, 1, true, "Recover reviewed settings"]], "sensitive confirmation preserves the change description");
+  assert.equal(document.querySelector('textarea').value, "", "successful restore clears its description");
+
+
   await resetRestore([sensitiveRestoreError()], [true, false]);
   await click(zh.agentWorkspace.restore);
-  assert.deepEqual(restoreCalls(), [[7, 0, 1]], "declining the sensitive override never retries");
+  assert.deepEqual(restoreCalls(), [[7, 0, 1, false, ""]], "declining the sensitive override never retries");
   assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.restoreSensitiveData));
   assert.ok(document.querySelector('[role="alert"]').textContent.includes("settings.json"));
 
   for (const failure of [new ApiError(409, "conflict", "revision_conflict"), new Error("network unavailable")]) {
     await resetRestore([failure]);
     await click(zh.agentWorkspace.restore);
-    assert.deepEqual(restoreCalls(), [[7, 0, 1]], "ordinary errors never bypass checks or retry automatically");
+    assert.deepEqual(restoreCalls(), [[7, 0, 1, false, ""]], "ordinary errors never bypass checks or retry automatically");
     assert.equal(harness.confirmations.length, 1);
     assert.ok(document.querySelector('[role="alert"]').textContent.includes(failure instanceof ApiError ? zh.agentWorkspace.scanRevisionConflict : failure.message));
     harness.restoreResponses = [null];
@@ -441,14 +470,14 @@ try {
   let confirmRestore;
   harness.confirmationWait = new Promise((resolve) => { confirmRestore = resolve; });
   await click(zh.agentWorkspace.restore);
-  assert.deepEqual(restoreCalls(), [[7, 0, 1]]);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1, false, ""]]);
   assert.ok([...document.querySelectorAll("button")].find((button) => button.textContent === zh.agentWorkspace.restore).disabled, "restore remains pending during confirmation");
   // A background refresh must not silently change the revision covered by consent.
   await act(async () => client.setQueryData(["agent-workspace", 7], { workspace: { ...client.getQueryData(["agent-workspace", 7]).workspace, revision: 9 } }));
   await act(async () => confirmRestore());
   await settle();
   harness.confirmationWait = null;
-  assert.deepEqual(restoreCalls(), [[7, 0, 1], [7, 0, 1, true]]);
+  assert.deepEqual(restoreCalls(), [[7, 0, 1, false, ""], [7, 0, 1, true, ""]]);
   assert.ok(document.querySelector('[role="alert"]').textContent.includes(zh.agentWorkspace.scanRevisionConflict), "a conflict on the confirmed retry is visible");
 
   // Repository export must preserve binary content and a single captured revision.
@@ -458,6 +487,40 @@ try {
   harness.workspaceFiles = cloudFiles.map(({ contentBase64, ...metadata }) => metadata);
   harness.fileContents = new Map(cloudFiles.map(file => [file.fileId, file]));
   const snapshot = { workspaceId: 7, name: "测试仓库", revision: 3, files: harness.workspaceFiles };
+  const setComment = async value => act(async () => {
+    const input = document.querySelector(`textarea[placeholder="${zh.agentWorkspace.changeCommentHint}"]`);
+    input[Object.keys(input).find(key => key.startsWith("__reactProps"))].onChange({target:{value}});
+  });
+  const currentComment = () => document.querySelector(`textarea[placeholder="${zh.agentWorkspace.changeCommentHint}"]`).value;
+  harness.uploadFiles = [new File(["# Upload"], "SKILL.md", {type:"text/markdown"})];
+  await mount(AgentWorkspaceRepositoryPage);
+  await setComment("Upload this skill");
+  await click("test-upload");
+  assert.equal(calls.findLast(call => call.method === "updateAgentWorkspace").args[0].comment, "Upload this skill");
+  assert.equal(currentComment(), "", "successful upload clears its description");
+
+  harness.desktop = true;
+  harness.scannedFiles = [{path:cloudFiles[0].path, bytes:Buffer.from("# Changed local skill")}];
+  await mount(AgentWorkspaceRepositoryPage);
+  await setComment("Sync local skill");
+  await click("test-scan");
+  await click(zh.agentWorkspace.scanReviewUpload + zh.agentWorkspace.scanReviewUploading);
+  assert.equal(calls.findLast(call => call.method === "patchAgentWorkspace").args[0].comment, "Sync local skill");
+  assert.equal(currentComment(), "", "successful local upload clears its description");
+
+  await setComment("Edit skill");
+  await act(async () => {
+    const fileButton=[...document.querySelectorAll("button")].find(button => button.textContent.includes("README.md"));
+    assert.ok(fileButton); fileButton.click();
+  });
+  await settle();
+  await click(zh.agentWorkspace.edit);
+  await click(zh.agentWorkspace.save);
+  assert.equal(calls.findLast(call => call.method === "patchAgentWorkspace").args[0].comment, "Edit skill");
+  assert.equal(currentComment(), "", "successful editor save clears its description");
+  harness.workspaceRevision = 3;
+  harness.desktop = false;
+  await act(async()=>root.render(null));
   const selectedIDs = new Set([21, 23]);
   const loaded = await loadAgentWorkspaceFiles(snapshot, selectedIDs, () => {});
   assert.deepEqual(loaded.map(file => file.path), [cloudFiles[0].path, cloudFiles[2].path]);
@@ -555,6 +618,20 @@ try {
   await settle();
   harness.fileWait = null;
   assert.equal(harness.nativeCalls.length, 0, "leaving the dialog aborts before local writes");
+
+  let transferClosed = false;
+  const originalFile = harness.fileContents.get(cloudFiles[0].fileId);
+  harness.fileContents.set(cloudFiles[0].fileId, new ApiError(429, "rate limited", "rate_limited"));
+  await mount(AgentWorkspaceTransferDialog, { ...transferProps, onClose() { transferClosed = true; } });
+  await click(zh.agentWorkspace.transferConfirmSync);
+  assert.ok(document.querySelector('[role="status"]').textContent.includes(zh.agentWorkspace.transferRateLimited), "rate-limit waiting is visible");
+  const cancelTransfer = [...document.querySelectorAll("button")].find(button => button.textContent === zh.agentWorkspace.scanReviewCancel);
+  assert.ok(cancelTransfer && !cancelTransfer.disabled, "users can cancel while the readers wait");
+  await click(zh.agentWorkspace.scanReviewCancel);
+  assert.ok(transferClosed);
+  assert.equal(harness.nativeCalls.length, 0, "cancelling the retry wait never reaches the local writer");
+  await act(async () => root.render(null));
+  harness.fileContents.set(cloudFiles[0].fileId, originalFile);
 
   const folderProps = { ...transferProps, workspace: { ...snapshot, files: snapshot.files.slice(1) } };
   harness.confirmationResults = [false];

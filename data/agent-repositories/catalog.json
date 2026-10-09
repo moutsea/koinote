@@ -1,0 +1,4557 @@
+{
+  "schemaVersion": 1,
+  "collectedOn": "2026-10-09",
+  "repositories": [
+    {
+      "repositoryUrl": "https://github.com/Leonxlnx/taste-skill",
+      "author": "Leonxlnx",
+      "authorUrl": "https://github.com/Leonxlnx",
+      "name": "Leonxlnx/taste-skill",
+      "description": "面向网页和移动端的视觉设计、布局、品牌风格及界面改进 Skills。",
+      "category": "界面设计",
+      "githubStars": 94018,
+      "starsCheckedAt": "2026-10-09T14:15:36.467408+00:00",
+      "defaultBranch": "main",
+      "commitSha": "18dfc928b135629e0eddfdd445a06400d04ed439",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "4575a543ab88dad12ccea7d97e563d0bce5b448b06072e65d3264497dad326df",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 64,
+      "skillCount": 13,
+      "sizeBytes": 6533211,
+      "contentSha256": "2c93388e15b8a3795a0c35699dda5020fde658268fabd1e871a18a146deaefc4",
+      "requestId": "11a411b7-2c99-4aae-8b2e-b84ef60b133e"
+    },
+    {
+      "repositoryUrl": "https://github.com/ayghri/i-have-adhd",
+      "author": "ayghri",
+      "authorUrl": "https://github.com/ayghri",
+      "name": "ayghri/i-have-adhd",
+      "description": "让编码 Agent 优先给出重点，采用更易阅读的结构化表达。",
+      "category": "沟通与提示词",
+      "githubStars": 56034,
+      "starsCheckedAt": "2026-10-09T14:15:36.468721+00:00",
+      "defaultBranch": "main",
+      "commitSha": "723af7d9afaf43eb871dbcce6129e2bf80de90d5",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "8acbb618089b738404f76ac60fca1aaa995d9a87995eddf95f0b777acd7f7d2c",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 73,
+      "skillCount": 2,
+      "sizeBytes": 617972,
+      "contentSha256": "9af7cd3b354a3e74e533a06cf20cca7d29cbf61a0f3a72da0c79fd25c202585c",
+      "requestId": "0214e00e-3eaf-4a61-b4df-d53a9a74872c"
+    },
+    {
+      "repositoryUrl": "https://github.com/blader/humanizer",
+      "author": "blader",
+      "authorUrl": "https://github.com/blader",
+      "name": "blader/humanizer",
+      "description": "减少 AI 写作痕迹，改善表达、语气和可读性。",
+      "category": "写作润色",
+      "githubStars": 55119,
+      "starsCheckedAt": "2026-10-09T13:56:27.682826+00:00",
+      "defaultBranch": "main",
+      "commitSha": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "4ac4810254ab36d45419141aeb8e69bf50652cfafe5b2dab947d06d44e5cbf96",
+          "sizeBytes": 1066
+        }
+      ],
+      "fileCount": 14,
+      "skillCount": 1,
+      "sizeBytes": 65888,
+      "contentSha256": "c6a55437a292b622b3bb4709bcf52723afa0fdf6145272dff26c2ea892e578b2",
+      "requestId": "ab327d36-3265-4921-b73c-0726d381b2bd"
+    },
+    {
+      "repositoryUrl": "https://github.com/kepano/obsidian-skills",
+      "author": "kepano",
+      "authorUrl": "https://github.com/kepano",
+      "name": "kepano/obsidian-skills",
+      "description": "Obsidian 的 Markdown、Bases、Canvas、CLI 及网页内容整理 Skills。",
+      "category": "知识管理",
+      "githubStars": 49319,
+      "starsCheckedAt": "2026-10-09T13:58:11.930549+00:00",
+      "defaultBranch": "main",
+      "commitSha": "3ccff5338ea700537839b21900aa5358a0402c98",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "64c64d48361edfe8610016441bf593256ea9b67f133b00f47c55aa29ee878567",
+          "sizeBytes": 1077
+        }
+      ],
+      "fileCount": 15,
+      "skillCount": 6,
+      "sizeBytes": 56601,
+      "contentSha256": "c3d45d5f1d4ede49fbb6641de7abd1d953c759977e93c250a72cfa7154bbeaff",
+      "requestId": "9b734dc1-724b-4e8b-8adc-335c5634ce48"
+    },
+    {
+      "repositoryUrl": "https://github.com/emilkowalski/skills",
+      "author": "emilkowalski",
+      "authorUrl": "https://github.com/emilkowalski",
+      "name": "emilkowalski/skills",
+      "description": "设计工程、界面动画、移动端体验和交互细节的 Skills。",
+      "category": "界面设计",
+      "githubStars": 44607,
+      "starsCheckedAt": "2026-10-09T14:15:36.426932+00:00",
+      "defaultBranch": "main",
+      "commitSha": "e8a175de22ae1e49370fc144c1f3bb9aeedf988d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "4ff5bdb7887ec1435c9cab0e8d1a7caee704d894d65c2a008ccc68b1cc2f260b",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 28,
+      "skillCount": 14,
+      "sizeBytes": 285193,
+      "contentSha256": "f40cf496290f6eb203390948ce14247ca88a1b87dd60ede1a26e2c0a541c556f",
+      "requestId": "3ac7e843-9c9c-4279-bdf7-f73d2d4b8658"
+    },
+    {
+      "repositoryUrl": "https://github.com/virgiliojr94/book-to-skill",
+      "author": "virgiliojr94",
+      "authorUrl": "https://github.com/virgiliojr94",
+      "name": "virgiliojr94/book-to-skill",
+      "description": "把用户有权使用的技术文档或 PDF 转为可复用的阅读与实践 Skill。",
+      "category": "学习与研究",
+      "githubStars": 34294,
+      "starsCheckedAt": "2026-10-09T14:38:28.187692+00:00",
+      "defaultBranch": "master",
+      "commitSha": "e180fc46365e8c1aab0120778cc8a40b9515324b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "be9b04bccfb4bdab63de13663307c229c0aa5ca69b692e9c351ff7053da9faca",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 121,
+      "skillCount": 1,
+      "sizeBytes": 1909423,
+      "contentSha256": "8bc47523a9e72f51fb9a44b571caeb0271617059860d1e4410e788883a1d2ff7",
+      "requestId": "adddd574-7cd3-4918-afe0-3121d30e0e55"
+    },
+    {
+      "repositoryUrl": "https://github.com/vercel-labs/skills",
+      "author": "vercel-labs",
+      "authorUrl": "https://github.com/vercel-labs",
+      "name": "vercel-labs/skills",
+      "description": "Vercel 的 Skills 发现、安装与管理工具，附带查找 Skills 的技能和维护示例。",
+      "category": "Skills 管理",
+      "githubStars": 33531,
+      "starsCheckedAt": "2026-10-09T14:38:30.535424+00:00",
+      "defaultBranch": "main",
+      "commitSha": "e878c4502674f84094dc27b5ad94ddaf64f22551",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "661142e53c313d2bb5e1b055f5c0a39001450ff1b5e27b89dc4bc7de9a6352ca",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 137,
+      "skillCount": 3,
+      "sizeBytes": 1208104,
+      "contentSha256": "2fa73ebe4f32cd49d081743886cafedacf9bd54d450d980a0ca93f6d4f9afee6",
+      "requestId": "e56820de-334e-45b6-bfae-26c446e52b16"
+    },
+    {
+      "repositoryUrl": "https://github.com/phuryn/pm-skills",
+      "author": "phuryn",
+      "authorUrl": "https://github.com/phuryn",
+      "name": "phuryn/pm-skills",
+      "description": "覆盖产品发现、策略、用户研究、路线图、发布和增长的 Skills。",
+      "category": "产品管理",
+      "githubStars": 26856,
+      "starsCheckedAt": "2026-10-09T13:56:30.202951+00:00",
+      "defaultBranch": "main",
+      "commitSha": "55c8ec095af22a62729937c7f5c85d837ce84306",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a2c922f9b81b4f40347ddfa79c38eda0f1278b5a6d108bd4099b4da254c774ee",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 151,
+      "skillCount": 69,
+      "sizeBytes": 6269497,
+      "contentSha256": "a89b7932bc3aef5fe8fe038850fe58b091abbddb9353885120ac8cbbf30eb0c0",
+      "requestId": "4343d63d-6e99-42ca-abc9-73fcbe0fb492"
+    },
+    {
+      "repositoryUrl": "https://github.com/cloudflare/security-audit-skill",
+      "author": "cloudflare",
+      "authorUrl": "https://github.com/cloudflare",
+      "name": "cloudflare/security-audit-skill",
+      "description": "Cloudflare 提供的多阶段代码安全审查流程，包含发现复核和结构化报告。",
+      "category": "安全审查",
+      "githubStars": 26812,
+      "starsCheckedAt": "2026-10-09T14:15:36.635405+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e598e694aa506650c7192d5ea3be0e50aca0d356ea00551c53429f0b01eb6391",
+          "sizeBytes": 1078
+        }
+      ],
+      "fileCount": 22,
+      "skillCount": 1,
+      "sizeBytes": 322698,
+      "contentSha256": "00d15958900fb86982d5568f26034bd49f5f766a3fdd07039922a8b18fd0a2a2",
+      "requestId": "2d230550-4983-49c2-9d03-12a99cd85b77"
+    },
+    {
+      "repositoryUrl": "https://github.com/nidhinjs/prompt-master",
+      "author": "nidhinjs",
+      "authorUrl": "https://github.com/nidhinjs",
+      "name": "nidhinjs/prompt-master",
+      "description": "针对不同 AI 工具组织任务背景、目标与约束，编写和改进提示词。",
+      "category": "沟通与提示词",
+      "githubStars": 14202,
+      "starsCheckedAt": "2026-10-09T14:15:39.131721+00:00",
+      "defaultBranch": "main",
+      "commitSha": "2bd92518e26bf659e21e3d9ab90573fcf3ddeccb",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "29e8ba0b54274eaa92b7cb074fe1765ba7b83993e0d2605e5308c6972a47daa7",
+          "sizeBytes": 1077
+        }
+      ],
+      "fileCount": 5,
+      "skillCount": 1,
+      "sizeBytes": 78046,
+      "contentSha256": "cdb0eb1a8c9d48f9c4ae63f645eac4630b21dc4d0b1462f1565d2cc55d8466b1",
+      "requestId": "55923f2b-f278-49d7-9b93-308e5452d0d8"
+    },
+    {
+      "repositoryUrl": "https://github.com/kangarooking/cangjie-skill",
+      "author": "kangarooking",
+      "authorUrl": "https://github.com/kangarooking",
+      "name": "kangarooking/cangjie-skill",
+      "description": "将书籍、长视频和播客内容整理为结构化知识与可执行 Skills。",
+      "category": "知识管理",
+      "githubStars": 11088,
+      "starsCheckedAt": "2026-10-09T14:38:37.027276+00:00",
+      "defaultBranch": "main",
+      "commitSha": "a28de55ba881b9928956a55048f743f7a9e3b23e",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1126322e2cc8d165adc4c792eeb195717de2bcc7b39be1ce77959d78e87ef685",
+          "sizeBytes": 1056
+        }
+      ],
+      "fileCount": 367,
+      "skillCount": 36,
+      "sizeBytes": 6863746,
+      "contentSha256": "31b03bfe7e8f03f123587f6cdb472b391272c47ffbfa18d4ebf0c5966003dbfd",
+      "requestId": "e4b05c7d-4dec-40db-9192-0e47454f75d9"
+    },
+    {
+      "repositoryUrl": "https://github.com/lewislulu/html-ppt-skill",
+      "author": "lewislulu",
+      "authorUrl": "https://github.com/lewislulu",
+      "name": "lewislulu/html-ppt-skill",
+      "description": "使用主题、布局和动画模板创建 HTML 演示文稿。",
+      "category": "演示与可视化",
+      "githubStars": 8618,
+      "starsCheckedAt": "2026-10-09T14:15:42.517402+00:00",
+      "defaultBranch": "main",
+      "commitSha": "fd1629067909ff55b36b905476de4e5f26062a1f",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a5ed4059e25a3ec35e439abd2623753d1f42d4aa4989ffb5c6b7a97b61f6a949",
+          "sizeBytes": 1084
+        }
+      ],
+      "fileCount": 239,
+      "skillCount": 1,
+      "sizeBytes": 10926507,
+      "contentSha256": "c0c1b2d68afd2b11b4e228270bbb8db4c1c7c81ab2d838db30b9ea0464369822",
+      "requestId": "9972bf86-580f-4502-b431-9920ca07924b"
+    },
+    {
+      "repositoryUrl": "https://github.com/SimoneAvogadro/android-reverse-engineering-skill",
+      "author": "SimoneAvogadro",
+      "authorUrl": "https://github.com/SimoneAvogadro",
+      "name": "SimoneAvogadro/android-reverse-engineering-skill",
+      "description": "面向授权 Android 应用分析的工作流，涵盖 APK 检查、反编译与运行时分析。",
+      "category": "Android 分析",
+      "githubStars": 8018,
+      "starsCheckedAt": "2026-10-09T14:38:40.385132+00:00",
+      "defaultBranch": "master",
+      "commitSha": "04fe39c7dcc8efa0ce39a331862fb76407d2d9dd",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "dfe9d057673303add648c200d36d70815e28269f8b30ec42238347497a2782dc",
+          "sizeBytes": 10766
+        }
+      ],
+      "fileCount": 25,
+      "skillCount": 1,
+      "sizeBytes": 180803,
+      "contentSha256": "dfa3dd63d5a29ca1b03ea59198a13be6bf31ac04e061915ef789fe99e5b66dbb",
+      "requestId": "958d6868-ac51-4414-8082-52de3f721ea9"
+    },
+    {
+      "repositoryUrl": "https://github.com/jakubkrehel/skills",
+      "author": "jakubkrehel",
+      "authorUrl": "https://github.com/jakubkrehel",
+      "name": "jakubkrehel/skills",
+      "description": "帮助构建界面、完善交互和设计细节的 Skills 集合。",
+      "category": "界面设计",
+      "githubStars": 7626,
+      "starsCheckedAt": "2026-10-09T14:15:45.277683+00:00",
+      "defaultBranch": "main",
+      "commitSha": "d574cc8a576dc24256ad38268b8d03d86724a1b3",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "ed1dfe988fc40511b4845ccd9050a143a2002fee3bedc8064c47fa342b5d8d4f",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 72,
+      "skillCount": 13,
+      "sizeBytes": 291131,
+      "contentSha256": "f9bf882d9ba74b36825d6347ceadf6ab7026355cf72abeb4a3bc2b9f89cdb98e",
+      "requestId": "7853dd10-ac78-4f3f-87b6-668508eac329"
+    },
+    {
+      "repositoryUrl": "https://github.com/lijigang/ljg-skills",
+      "author": "lijigang",
+      "authorUrl": "https://github.com/lijigang",
+      "name": "lijigang/ljg-skills",
+      "description": "覆盖阅读、论文理解、概念解释、类比、学习和中文写作的 Skills。",
+      "category": "学习与研究",
+      "githubStars": 7475,
+      "starsCheckedAt": "2026-10-09T14:15:45.276359+00:00",
+      "defaultBranch": "master",
+      "commitSha": "9e75497a950d2cc58ab9e6871f76405144687bd9",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "24807dd5a0d4ef9f3c94e197e80ad2b6198b3381339b9bc3ab78cfc36eee4502",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 148,
+      "skillCount": 26,
+      "sizeBytes": 2321961,
+      "contentSha256": "0d90ce5361ca803abf8841bd9654717b176e3eae545c784163b2e01e8e994d28",
+      "requestId": "c144e9fe-771e-4ec5-86be-aa5960f87f15"
+    },
+    {
+      "repositoryUrl": "https://github.com/alchaincyf/darwin-skill",
+      "author": "alchaincyf",
+      "authorUrl": "https://github.com/alchaincyf",
+      "name": "alchaincyf/darwin-skill",
+      "description": "通过评估、改进、测试以及保留或回滚结果来迭代 Skills。",
+      "category": "Agent 工作流",
+      "githubStars": 6232,
+      "starsCheckedAt": "2026-10-09T14:15:49.286926+00:00",
+      "defaultBranch": "master",
+      "commitSha": "8a8b66258e3c45d6ae4aea39719468c6428fcb0a",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0d42df9f8e8f49debfe0b33187a2f9d6fe78b6c376a299c1dad681c796e9b202",
+          "sizeBytes": 1076
+        }
+      ],
+      "fileCount": 38,
+      "skillCount": 1,
+      "sizeBytes": 5310711,
+      "contentSha256": "cd11b50bc21cf65deb15e2b59a26c9c2f1f6f3f352fec081480c6b4f36e27d09",
+      "requestId": "5d6a92e4-6e54-42a1-bf23-c3b29fc02f40"
+    },
+    {
+      "repositoryUrl": "https://github.com/s1dashu/ip-as-logo-skill",
+      "author": "s1dashu",
+      "authorUrl": "https://github.com/s1dashu",
+      "name": "s1dashu/ip-as-logo-skill",
+      "description": "规划简洁、圆润的 IP 角色与吉祥物标识，提供风格约束和设计提示。",
+      "category": "品牌设计",
+      "githubStars": 5866,
+      "starsCheckedAt": "2026-10-09T14:38:44.669197+00:00",
+      "defaultBranch": "main",
+      "commitSha": "acb834c717bcd0a487c49732d08397ba280d690b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b8f39925b1c36ca531c5e663aeb7ba427f94a526495785b4d1b2797fae8f2546",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 5,
+      "skillCount": 1,
+      "sizeBytes": 739718,
+      "contentSha256": "184d3321cd491d01b68fe68372ec63067cc113d7c58431f269a1de87f8c25013",
+      "requestId": "1b678b30-cdba-4a03-8af5-2e7bd5a14b81"
+    },
+    {
+      "repositoryUrl": "https://github.com/Hisn00w/ASu-skills",
+      "author": "Hisn00w",
+      "authorUrl": "https://github.com/Hisn00w",
+      "name": "Hisn00w/ASu-skills",
+      "description": "面向简历改进、岗位投递、面试准备与软件开发的实用 Skills 集合。",
+      "category": "求职与开发",
+      "githubStars": 5496,
+      "starsCheckedAt": "2026-10-09T14:15:49.483672+00:00",
+      "defaultBranch": "main",
+      "commitSha": "4306ec6aa1722b16ee8ff9a75a414eb5e04541ff",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "06398ce806fbba7c3298c63e94026f992ddf79fae8e8d744085a58e8444a98cc",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 176,
+      "skillCount": 9,
+      "sizeBytes": 12750264,
+      "contentSha256": "321dd7c80b3a2f31486d4c94e9622b14bea3ec0f6fe01cfdc26230e1168b0b1e",
+      "requestId": "3bca4d34-1d5c-41ed-8982-6db3dd0f312c"
+    },
+    {
+      "repositoryUrl": "https://github.com/humanlayer/skills",
+      "author": "humanlayer",
+      "authorUrl": "https://github.com/humanlayer",
+      "name": "humanlayer/skills",
+      "description": "HumanLayer 的研究、规划、实现、验证、可视化审查和 Agent 控制流程。",
+      "category": "开发工作流",
+      "githubStars": 5150,
+      "starsCheckedAt": "2026-10-09T14:15:50.603472+00:00",
+      "defaultBranch": "main",
+      "commitSha": "653b6411c1f70c275a18e37673b042ff99f67ceb",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5f13c18ea00ea5c1384f41745feeca774079164f7f59a92e4ac0899ad217b26f",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 102,
+      "skillCount": 7,
+      "sizeBytes": 351523,
+      "contentSha256": "fdf5039611ff493c2f6f44f68a1d1746458cd1bf175b7b78e0e7fd68cb0d5511",
+      "requestId": "82efbb2d-7aaf-4dff-b196-c24464674575"
+    },
+    {
+      "repositoryUrl": "https://github.com/vinvcn/mattpocock-skills-zh-CN",
+      "author": "vinvcn",
+      "authorUrl": "https://github.com/vinvcn",
+      "name": "vinvcn/mattpocock-skills-zh-CN",
+      "description": "Matt Pocock 开发 Skills 的简体中文版本，保留原始 MIT 版权声明。",
+      "category": "开发工作流",
+      "githubStars": 4691,
+      "starsCheckedAt": "2026-10-09T14:38:47.377853+00:00",
+      "defaultBranch": "main",
+      "commitSha": "bf98e53f92089fec9b4885f128a565d7eac0337f",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "sizeBytes": 1068
+        },
+        {
+          "path": "LICENSE.zh-CN.md",
+          "sha256": "091813fbbf1fbd0b507d3979479a05ffb5c608d7593453f461a9a18e2a577ae3",
+          "sizeBytes": 1049
+        },
+        {
+          "path": "dsh-plugin/LICENSE",
+          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 170,
+      "skillCount": 38,
+      "sizeBytes": 942699,
+      "contentSha256": "442d607ca452e8156bf6373053595c5166dcf821a58f6db6fa32044b8fef434e",
+      "requestId": "560d5ba7-99ee-4162-80b0-6fcc9f98cfe2"
+    },
+    {
+      "repositoryUrl": "https://github.com/Ryze-AI-Adgent/open-seo-mcp-skills",
+      "author": "Ryze-AI-Adgent",
+      "authorUrl": "https://github.com/Ryze-AI-Adgent",
+      "name": "Ryze-AI-Adgent/open-seo-mcp-skills",
+      "description": "SEO 与 GEO 工作流，覆盖关键词、排名、网站审计和搜索可见性；部分功能需要 Ryze MCP。",
+      "category": "营销与增长",
+      "githubStars": 4623,
+      "starsCheckedAt": "2026-10-09T14:38:47.822334+00:00",
+      "defaultBranch": "main",
+      "commitSha": "81ac50e95131c8172b3afd9ac4994de6ae455a04",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2df13980592521711925f0cf7acccc27167f6b825e774f19bbe07fae0c9f9436",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 14,
+      "skillCount": 8,
+      "sizeBytes": 4076617,
+      "contentSha256": "d7881077338463ef0dedd96a57c164dd171c861f7e3ab2d6f13f4acc6aaf775a",
+      "requestId": "fb115f34-cd92-4d2d-b965-71ad9c3a7991"
+    },
+    {
+      "repositoryUrl": "https://github.com/BuilderIO/skills",
+      "author": "BuilderIO",
+      "authorUrl": "https://github.com/BuilderIO",
+      "name": "BuilderIO/skills",
+      "description": "Builder.io 的开发规划、界面编辑、代码审查和 Agent 任务管理 Skills。",
+      "category": "开发工作流",
+      "githubStars": 4552,
+      "starsCheckedAt": "2026-10-09T14:15:52.441731+00:00",
+      "defaultBranch": "main",
+      "commitSha": "68d86be7a0e1ad585406cbe19cdf7ec8a8504498",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d50194829dc398b96028624dba48eb20c7a51e49d4a20aedf3f8dc24773f4d45",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 88,
+      "skillCount": 25,
+      "sizeBytes": 4875162,
+      "contentSha256": "6332d0a9825161365e72fe749e1b209a7e244227938335555c717b9386856e7b",
+      "requestId": "1cfbd689-282b-40cb-84e8-ea9446e2b937"
+    },
+    {
+      "repositoryUrl": "https://github.com/eternityspring/shuohao-skills",
+      "author": "eternityspring",
+      "authorUrl": "https://github.com/eternityspring",
+      "name": "eternityspring/shuohao-skills",
+      "description": "中文短剧创作流程，涵盖角色设定、改编大纲、美术设定、剧本和分镜。",
+      "category": "内容创作",
+      "githubStars": 4297,
+      "starsCheckedAt": "2026-10-09T14:15:52.809490+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c27ea0e49c009a2b3c43dec40b702597ab56e1d9",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b1d2870f1a00e4d7f56576e5f0870cba109e041f8af66866cf5b499478e654e7",
+          "sizeBytes": 11359
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "4a439a29366f485f5ef493a804a4c77a23b41d31eaf97eb66b921e5484bc597d",
+          "sizeBytes": 714
+        }
+      ],
+      "fileCount": 118,
+      "skillCount": 6,
+      "sizeBytes": 6242173,
+      "contentSha256": "7adb83104e2d97dca326346ce8c34f7188dda2481ae1f77b1f010bf0e1383a78",
+      "requestId": "6b8c66f5-8e08-4553-ab7a-b60a4cbc91c4"
+    },
+    {
+      "repositoryUrl": "https://github.com/google-gemini/gemini-skills",
+      "author": "google-gemini",
+      "authorUrl": "https://github.com/google-gemini",
+      "name": "google-gemini/gemini-skills",
+      "description": "Google Gemini 官方 API、SDK 及模型与 Agent 交互 Skills。",
+      "category": "AI 应用开发",
+      "githubStars": 4258,
+      "starsCheckedAt": "2026-10-09T14:15:53.786870+00:00",
+      "defaultBranch": "main",
+      "commitSha": "832c8f94114dc343d86ff27296fe9335b45affa0",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "sizeBytes": 11357
+        }
+      ],
+      "fileCount": 18,
+      "skillCount": 3,
+      "sizeBytes": 172132,
+      "contentSha256": "dadd96078b5852e10c8e0122bb7fae3927df42d29740af3093074882cfa68e17",
+      "requestId": "b7474e48-d96f-422b-a348-5d50cdaf40dd"
+    },
+    {
+      "repositoryUrl": "https://github.com/dexhunter/seedance2-skill",
+      "author": "dexhunter",
+      "authorUrl": "https://github.com/dexhunter",
+      "name": "dexhunter/seedance2-skill",
+      "description": "为 Seedance 视频生成组织分镜、镜头语言、画面风格和提示词。",
+      "category": "视频创作",
+      "githubStars": 4231,
+      "starsCheckedAt": "2026-10-09T14:38:49.924706+00:00",
+      "defaultBranch": "main",
+      "commitSha": "516284d5bab58361bfdfed3cc96cee3e837d4c44",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "56abf51bba5502dcc1cd014c9adea5787cd9eec67421858484b660ec97922978",
+          "sizeBytes": 1072
+        }
+      ],
+      "fileCount": 8,
+      "skillCount": 2,
+      "sizeBytes": 2137573,
+      "contentSha256": "170a3239dffe87b42141abf58d79dbb1f620448f1d5e8b16da9745361807302e",
+      "requestId": "c70a5f56-93ad-4cb0-889b-e7b30725f6d1"
+    },
+    {
+      "repositoryUrl": "https://github.com/davidondrej/skills",
+      "author": "davidondrej",
+      "authorUrl": "https://github.com/davidondrej",
+      "name": "davidondrej/skills",
+      "description": "涵盖任务协作、开发运维、网页研究、文档整理和 Skill 编写的个人 Skills 集合。",
+      "category": "Agent 工作流",
+      "githubStars": 4112,
+      "starsCheckedAt": "2026-10-09T14:15:53.527907+00:00",
+      "defaultBranch": "main",
+      "commitSha": "7874889bd037d411f6079e38ee8601557c4a8995",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1bd321a3b9cfa8d4af2105e20edd69d830df0b28e83a1b0255558f888e493981",
+          "sizeBytes": 1069
+        },
+        {
+          "path": "skills/research-and-web/browser-use/LICENSE.md",
+          "sha256": "135c57671b0ee957669b05a0ca00cc06f645496d351e2e732832c6e276da9a5e",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 135,
+      "skillCount": 57,
+      "sizeBytes": 542456,
+      "contentSha256": "c955dc649e63b227239ff914d52a551084790850aacba38e45343fef841737e6",
+      "requestId": "60546e1f-b0ad-4880-952d-2e9eb11bcf9c"
+    },
+    {
+      "repositoryUrl": "https://github.com/KKKKhazix/human-writing",
+      "author": "KKKKhazix",
+      "authorUrl": "https://github.com/KKKKhazix",
+      "name": "KKKKhazix/human-writing",
+      "description": "中文创作与改稿，改善语言风格、人物语气及 AI 化表达。",
+      "category": "写作润色",
+      "githubStars": 4003,
+      "starsCheckedAt": "2026-10-09T14:15:54.327849+00:00",
+      "defaultBranch": "main",
+      "commitSha": "4fda173f3fef7fb808f3eba991eeb2528ea4b189",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "32ca81a9ae10dda7d18963c9eae733477073906b15ee498d02033c8966dbdcaa",
+          "sizeBytes": 1089
+        },
+        {
+          "path": "human-writing/LICENSE",
+          "sha256": "32ca81a9ae10dda7d18963c9eae733477073906b15ee498d02033c8966dbdcaa",
+          "sizeBytes": 1089
+        }
+      ],
+      "fileCount": 16,
+      "skillCount": 1,
+      "sizeBytes": 105259,
+      "contentSha256": "9855fb9603c3c86ac869a3f4fe8ed0d95efb83384e59716f731548b3d0f3d146",
+      "requestId": "e69a0914-0177-467f-b484-b619367c4be9"
+    },
+    {
+      "repositoryUrl": "https://github.com/Dimillian/Skills",
+      "author": "Dimillian",
+      "authorUrl": "https://github.com/Dimillian",
+      "name": "Dimillian/Skills",
+      "description": "Swift、SwiftUI、iOS 调试、macOS 打包、代码审查与应用发布工作流。",
+      "category": "Apple 平台开发",
+      "githubStars": 3987,
+      "starsCheckedAt": "2026-10-09T14:15:54.740528+00:00",
+      "defaultBranch": "main",
+      "commitSha": "05ba982bfeb0d77d3c97d4542b0ee15034d05f84",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "df17aae89ce4705d0a6e5f7b46eeea3b9023967ecad948f8779b47039eb55a8b",
+          "sizeBytes": 1072
+        }
+      ],
+      "fileCount": 102,
+      "skillCount": 16,
+      "sizeBytes": 273143,
+      "contentSha256": "bc6572f9e0402bfe0f5b5b255c576a1cc9cfe85279c390c60e9a86feb64ca495",
+      "requestId": "0b3f23d4-9144-4fdb-97b0-4fedae779f04"
+    },
+    {
+      "repositoryUrl": "https://github.com/sanyuan0704/sanyuan-skills",
+      "author": "sanyuan0704",
+      "authorUrl": "https://github.com/sanyuan0704",
+      "name": "sanyuan0704/sanyuan-skills",
+      "description": "代码审查 Skills，覆盖设计原则、安全、性能、错误处理和边界情况。",
+      "category": "代码审查",
+      "githubStars": 3937,
+      "starsCheckedAt": "2026-10-09T14:15:55.362461+00:00",
+      "defaultBranch": "main",
+      "commitSha": "08b6572ef108f22d4e8a3ecf9182a4bbef097744",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5551cd5528c5b712af67df3752b26223413b48cb03c412e9a062643942a4974f",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 32,
+      "skillCount": 6,
+      "sizeBytes": 169454,
+      "contentSha256": "387950e3af5ff8502a2bbdfaba995f3482608d155a198230e70a99c28e17fb28",
+      "requestId": "68952204-a68a-4716-99a0-cb2eeaa45eb2"
+    },
+    {
+      "repositoryUrl": "https://github.com/charlie947/social-media-skills",
+      "author": "charlie947",
+      "authorUrl": "https://github.com/charlie947",
+      "name": "charlie947/social-media-skills",
+      "description": "社交媒体选题、文案、内容矩阵、图片设计、短视频脚本和数据复盘。",
+      "category": "营销与增长",
+      "githubStars": 3839,
+      "starsCheckedAt": "2026-10-09T14:15:55.768972+00:00",
+      "defaultBranch": "main",
+      "commitSha": "8cefb5b6d03757885faa6918bd8bfaef202a83db",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "ed17713237d18555a34c208bf0cb1ce347faa937731d509e265ce91be660e218",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 28,
+      "skillCount": 17,
+      "sizeBytes": 187939,
+      "contentSha256": "6ec32163e8b8800c3dbc1dffb74f8689dc40668a2a3562f9e436ef8535b590fe",
+      "requestId": "f20592ef-67e0-4e60-8fae-a0312cbd16df"
+    },
+    {
+      "repositoryUrl": "https://github.com/gotalab/cc-sdd",
+      "author": "gotalab",
+      "authorUrl": "https://github.com/gotalab",
+      "name": "gotalab/cc-sdd",
+      "description": "从需求、设计与任务拆解到实现和审查的规格驱动开发流程，包含多种 Agent 的适配模板。",
+      "category": "开发工作流",
+      "githubStars": 3708,
+      "starsCheckedAt": "2026-10-09T14:38:53.071851+00:00",
+      "defaultBranch": "main",
+      "commitSha": "e2a0c671aef37a482404905b409ab5c27092b25b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b63b38d2dd9673c2321c1d7cab50d2b970b264e7a3aa23ecf2dc26baad21ab07",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 560,
+      "skillCount": 154,
+      "sizeBytes": 3374491,
+      "contentSha256": "778ba6eb25effbc2cd51573faaafc7d2ace6727892b8f66f34ef7a43daf3c9f5",
+      "requestId": "6b16bb2a-8a03-47e3-acab-1088c42b259c"
+    },
+    {
+      "repositoryUrl": "https://github.com/axtonliu/axton-obsidian-visual-skills",
+      "author": "axtonliu",
+      "authorUrl": "https://github.com/axtonliu",
+      "name": "axtonliu/axton-obsidian-visual-skills",
+      "description": "将文本转换为 Obsidian Canvas、Excalidraw 和 Mermaid 可视化。",
+      "category": "知识管理",
+      "githubStars": 3641,
+      "starsCheckedAt": "2026-10-09T14:15:56.142826+00:00",
+      "defaultBranch": "main",
+      "commitSha": "1265976d9746a84858b4b7b42fb86a215aa93de9",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a1d23715a7f1487f4021c4a7ce47b4b78dd1aae92f59dd142fbe7eef9908ea4d",
+          "sizeBytes": 1066
+        }
+      ],
+      "fileCount": 17,
+      "skillCount": 3,
+      "sizeBytes": 1423261,
+      "contentSha256": "e8677ef80c0c38c9ae4a879461f85051fd084f9d5c1165e197fc45c2c4fb79a7",
+      "requestId": "507c1916-ca68-400e-abb9-4093dfe0ec2c"
+    },
+    {
+      "repositoryUrl": "https://github.com/plannotator/effective-html",
+      "author": "plannotator",
+      "authorUrl": "https://github.com/plannotator",
+      "name": "plannotator/effective-html",
+      "description": "创建交互式 HTML 说明、线框图、原型、计划和图表。",
+      "category": "演示与可视化",
+      "githubStars": 3588,
+      "starsCheckedAt": "2026-10-09T14:38:55.817897+00:00",
+      "defaultBranch": "main",
+      "commitSha": "2ac1dfecb0f2474e75260cb6d3c9b9d6d9b5062e",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "7ac10b31d49a69e45db579c2cc747d91fc169f560ef968c8068732cfe5f8455d",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 197,
+      "skillCount": 6,
+      "sizeBytes": 25164575,
+      "contentSha256": "1fd2faec9f54ec092090895c64b27551a6127d8d22724e93427cc3ad18134699",
+      "requestId": "0e304318-4c15-4230-9f52-33278ec0dd62"
+    },
+    {
+      "repositoryUrl": "https://github.com/PenglongHuang/chinese-novelist-skill",
+      "author": "PenglongHuang",
+      "authorUrl": "https://github.com/PenglongHuang",
+      "name": "PenglongHuang/chinese-novelist-skill",
+      "description": "中文长篇小说规划与连载写作，包含人物、创作记忆、章节结构和一致性检查。",
+      "category": "内容创作",
+      "githubStars": 3339,
+      "starsCheckedAt": "2026-10-09T14:39:01.458099+00:00",
+      "defaultBranch": "master",
+      "commitSha": "6a64a04651036aa519c6354a93d6e01d68a9c22a",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "27315737dd6b5dd75d99eb148fa32fc3cafdeb1e51ea0b8b6242e88acf9a2117",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 29,
+      "skillCount": 1,
+      "sizeBytes": 909148,
+      "contentSha256": "ec568f469a29837638c71ea04180c2b5d8bb4ac156233b8dd585997f5bd0ee09",
+      "requestId": "c3e4603d-8468-4210-bd85-8c194e41c55f"
+    },
+    {
+      "repositoryUrl": "https://github.com/pasky/chrome-cdp-skill",
+      "author": "pasky",
+      "authorUrl": "https://github.com/pasky",
+      "name": "pasky/chrome-cdp-skill",
+      "description": "通过 Chrome DevTools Protocol 连接已有浏览器标签页并完成浏览器操作。",
+      "category": "浏览器自动化",
+      "githubStars": 3272,
+      "starsCheckedAt": "2026-10-09T14:39:01.515915+00:00",
+      "defaultBranch": "main",
+      "commitSha": "ffea76a24b0471663ddd9d9f24335bbc442b6266",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "84ebc74e7a1aaac00d48450b4ed715fbb9372ea57de9dbfdeef55dd30f1750af",
+          "sizeBytes": 1062
+        }
+      ],
+      "fileCount": 6,
+      "skillCount": 1,
+      "sizeBytes": 40147,
+      "contentSha256": "f4325a0b2d791a7012588746ad32daa2616e40ba526a191ef3dec7cb3933f1ee",
+      "requestId": "4ab93a6a-3cb0-4a81-b9e3-62d8bc422239"
+    },
+    {
+      "repositoryUrl": "https://github.com/lackeyjb/playwright-skill",
+      "author": "lackeyjb",
+      "authorUrl": "https://github.com/lackeyjb",
+      "name": "lackeyjb/playwright-skill",
+      "description": "使用 Playwright 进行网页操作、浏览器自动化和测试。",
+      "category": "浏览器自动化",
+      "githubStars": 3182,
+      "starsCheckedAt": "2026-10-09T13:58:16.825455+00:00",
+      "defaultBranch": "main",
+      "commitSha": "dd47a6a023e249eb1b36e9e943eab89d0900865d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c9104b65859edbe0df0255c2adbad01b147b58a02fa2aff1c2e5736512e8a143",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 24,
+      "skillCount": 1,
+      "sizeBytes": 61587,
+      "contentSha256": "8e19cc69c7209505b7c0785751c2bb9e9b9c4c4e40baf7339f5ba83d8c84f726",
+      "requestId": "71fb8732-5378-4bc3-95c1-0db6c595c55d"
+    },
+    {
+      "repositoryUrl": "https://github.com/bergside/awesome-design-skills",
+      "author": "bergside",
+      "authorUrl": "https://github.com/bergside",
+      "name": "bergside/awesome-design-skills",
+      "description": "不同视觉风格的 DESIGN.md 与 SKILL.md 模板，覆盖网页布局、配色和排版。",
+      "category": "界面设计",
+      "githubStars": 3102,
+      "starsCheckedAt": "2026-10-09T14:39:04.851684+00:00",
+      "defaultBranch": "main",
+      "commitSha": "f631a09b4fcc0166f2e2c1a8c81906ef680c57e8",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "56e2dc0100744b958d87e5fc790f4e5ed2b5f483d6f2cbade4b6f7a0f5a03862",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 215,
+      "skillCount": 67,
+      "sizeBytes": 11076884,
+      "contentSha256": "ab3031d381a04faa77b6aa4c06cbd7914be5da0648404d6d40f2b4344a85f2dc",
+      "requestId": "debd4a79-5282-4f89-a78e-d82f2fbada08"
+    },
+    {
+      "repositoryUrl": "https://github.com/NarratorAI-Studio/narrator-ai-cli-skill",
+      "author": "NarratorAI-Studio",
+      "authorUrl": "https://github.com/NarratorAI-Studio",
+      "name": "NarratorAI-Studio/narrator-ai-cli-skill",
+      "description": "通过配套 narrator-ai-cli 完成视频解说制作和相关媒体工作流。",
+      "category": "视频创作",
+      "githubStars": 3030,
+      "starsCheckedAt": "2026-10-09T14:39:07.006139+00:00",
+      "defaultBranch": "main",
+      "commitSha": "4b17c6f2175bd532c92db778a847f8fb6bdd3177",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0c930f9bb6705a9fb15c56264763fb4e866a7b6f1feaa9017096dda7efe62597",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 14,
+      "skillCount": 1,
+      "sizeBytes": 100603,
+      "contentSha256": "22cfc71480ae19cba254df81262fea5602793e2a65ed0412c2ac80fe7f440b88",
+      "requestId": "2079dc43-54b4-4d91-819e-e2f9632852dd"
+    },
+    {
+      "repositoryUrl": "https://github.com/cloudflare/skills",
+      "author": "cloudflare",
+      "authorUrl": "https://github.com/cloudflare",
+      "name": "cloudflare/skills",
+      "description": "Cloudflare 官方 Skills，涵盖 Workers、Agents、Durable Objects、部署和性能优化。",
+      "category": "云端开发",
+      "githubStars": 3017,
+      "starsCheckedAt": "2026-10-09T13:56:29.647150+00:00",
+      "defaultBranch": "main",
+      "commitSha": "a18ffe2a99448ebff262fc87915b0fd14bab9b70",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+          "sizeBytes": 11357
+        }
+      ],
+      "fileCount": 316,
+      "skillCount": 16,
+      "sizeBytes": 1082951,
+      "contentSha256": "d202ea71e4a3d415a44bf22158ad1648879065d5da9759f6f3a725e7e5c222df",
+      "requestId": "44487782-0316-43d5-b9ee-e388c159dde5"
+    },
+    {
+      "repositoryUrl": "https://github.com/Owl-Listener/designer-skills",
+      "author": "Owl-Listener",
+      "authorUrl": "https://github.com/Owl-Listener",
+      "name": "Owl-Listener/designer-skills",
+      "description": "覆盖用户研究、设计系统、交互、设计评审和交付协作的 Skills。",
+      "category": "设计研究",
+      "githubStars": 2864,
+      "starsCheckedAt": "2026-10-09T14:39:11.767267+00:00",
+      "defaultBranch": "main",
+      "commitSha": "9a6930cf84a822eb458624bd11c61aac5bbdf224",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1400d572fb60897f7970a763fb73d1aa7804b71bad41bf6e45061de7b7a09ac1",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 205,
+      "skillCount": 111,
+      "sizeBytes": 810091,
+      "contentSha256": "47d95fab5f07724db7128316a20175b54f19b95de3c6251ed57f860686c1563a",
+      "requestId": "969269d3-67d9-4465-b9d7-65474e098af2"
+    },
+    {
+      "repositoryUrl": "https://github.com/typesafe-ai/skills",
+      "author": "typesafe-ai",
+      "authorUrl": "https://github.com/typesafe-ai",
+      "name": "typesafe-ai/skills",
+      "description": "TypeSafe 官方 System One API 集成 Skill。",
+      "category": "AI 应用开发",
+      "githubStars": 2638,
+      "starsCheckedAt": "2026-10-09T14:15:58.602980+00:00",
+      "defaultBranch": "main",
+      "commitSha": "65a39f393687675ce170e6094757de20370365b9",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "835f233f1d6ed84a9b9a351aba0689b47644a4137d6316911fc7957bde523b02",
+          "sizeBytes": 1068
+        },
+        {
+          "path": "skills/typesafe-ai/LICENSE",
+          "sha256": "835f233f1d6ed84a9b9a351aba0689b47644a4137d6316911fc7957bde523b02",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 6,
+      "skillCount": 1,
+      "sizeBytes": 14214,
+      "contentSha256": "43e44d2f987eca6e216a2ad03c2aa6d8ade3027e31b9e2ae9742938f0d8e48b2",
+      "requestId": "134f3501-6a3d-41ba-b11c-f98d110efe9f"
+    },
+    {
+      "repositoryUrl": "https://github.com/badlogic/pi-skills",
+      "author": "badlogic",
+      "authorUrl": "https://github.com/badlogic",
+      "name": "badlogic/pi-skills",
+      "description": "面向 Pi 编码 Agent 的实用 Skills，兼容 Claude Code 与 Codex CLI。",
+      "category": "Agent 工作流",
+      "githubStars": 2595,
+      "starsCheckedAt": "2026-10-09T14:15:59.615154+00:00",
+      "defaultBranch": "main",
+      "commitSha": "90bb51cae36515a648515b633a81c0c6efc8c74d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e6ff539dd8bf53d0b7bbc4673e2217eb696e16586f70c478c719300f91a326d7",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 31,
+      "skillCount": 8,
+      "sizeBytes": 158597,
+      "contentSha256": "718fa20891b5bbef373cd56e622d5759f862680997f800082c0b8103cd8348db",
+      "requestId": "59283597-a19e-47ee-b059-091ca2137a5b"
+    },
+    {
+      "repositoryUrl": "https://github.com/Haojae/scipilot-figure-skill",
+      "author": "Haojae",
+      "authorUrl": "https://github.com/Haojae",
+      "name": "Haojae/scipilot-figure-skill",
+      "description": "帮助分析数据并制作论文图表，包含绘图方案、数据检查和可视化陷阱参考。",
+      "category": "科研可视化",
+      "githubStars": 2583,
+      "starsCheckedAt": "2026-10-09T14:39:18.745366+00:00",
+      "defaultBranch": "main",
+      "commitSha": "43098ddb9e6a6d142218540c114f9ed38922fc42",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9138113e804093683aea49033b274c7ab35babce90c3acb86eae115d44585671",
+          "sizeBytes": 1063
+        }
+      ],
+      "fileCount": 18,
+      "skillCount": 1,
+      "sizeBytes": 177188,
+      "contentSha256": "cecb885b140c2cb719190531eaa78c1a12da97898a6eb880e693509ca6211fbf",
+      "requestId": "0c9f553c-c2f6-4f48-9596-169c83a9326b"
+    },
+    {
+      "repositoryUrl": "https://github.com/chengyi-ai/native-subtitle-quote-image",
+      "author": "chengyi-ai",
+      "authorUrl": "https://github.com/chengyi-ai",
+      "name": "chengyi-ai/native-subtitle-quote-image",
+      "description": "保留视频内嵌字幕并精确取帧，生成适用于社交媒体的竖版长图。",
+      "category": "内容创作",
+      "githubStars": 2526,
+      "starsCheckedAt": "2026-10-09T14:39:19.649306+00:00",
+      "defaultBranch": "main",
+      "commitSha": "d68c80bd4b42e7f6ab5cade12241772f9a6273bf",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3bc29ed45f6090b76421337ae9d01f11eb746340fa890a280d1997e0abb1b5db",
+          "sizeBytes": 1063
+        }
+      ],
+      "fileCount": 72,
+      "skillCount": 1,
+      "sizeBytes": 4771755,
+      "contentSha256": "1bd6b04a9f126b97e41f64faf083a22e74cf8602b936d3f5dbaf9c667428834f",
+      "requestId": "3da44e18-3069-461f-b7f8-f8394305fd28"
+    },
+    {
+      "repositoryUrl": "https://github.com/Appllama/appllama-skills",
+      "author": "Appllama",
+      "authorUrl": "https://github.com/Appllama",
+      "name": "Appllama/appllama-skills",
+      "description": "参考移动应用设计模式，规划并构建具有原生体验的应用界面。",
+      "category": "移动端设计",
+      "githubStars": 2505,
+      "starsCheckedAt": "2026-10-09T14:15:59.587731+00:00",
+      "defaultBranch": "main",
+      "commitSha": "dd5caaec3d5d50ad7fc0324da238119c6b7c3707",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "14cffee850f5c761273dfc49798cddc96786b4520c23f3ed1da727c334f07476",
+          "sizeBytes": 1103
+        }
+      ],
+      "fileCount": 18,
+      "skillCount": 2,
+      "sizeBytes": 67853,
+      "contentSha256": "4a3621cb60fafe021b6fdf0d9a0c4fb479989fd51a5e0b8994c7733c566146b0",
+      "requestId": "73debfb1-a72e-414d-bc67-48bddbfc1e2b"
+    },
+    {
+      "repositoryUrl": "https://github.com/Adkid-Zephyr/anti-defensive-writing-Skill",
+      "author": "Adkid-Zephyr",
+      "authorUrl": "https://github.com/Adkid-Zephyr",
+      "name": "Adkid-Zephyr/anti-defensive-writing-Skill",
+      "description": "改进论文中的防御性和含糊表达，提供中英文学术写作原则与提示词。",
+      "category": "写作润色",
+      "githubStars": 2457,
+      "starsCheckedAt": "2026-10-09T14:39:21.495254+00:00",
+      "defaultBranch": "main",
+      "commitSha": "82d31402caa0db1790026824399044538483171b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "fdf440e5214588d9edcdc1ec315cddbd8525fe509242c24989a8472d283325f4",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 14,
+      "skillCount": 2,
+      "sizeBytes": 35860,
+      "contentSha256": "d111847664ecb9515d32c0b12a37746ae6a81e5ba755d26f1535298a0a4ea141",
+      "requestId": "22984608-1f28-4e04-ac65-4a1df5316631"
+    },
+    {
+      "repositoryUrl": "https://github.com/elayadesign/ai-design-skills",
+      "author": "elayadesign",
+      "authorUrl": "https://github.com/elayadesign",
+      "name": "elayadesign/ai-design-skills",
+      "description": "用于网页与产品界面设计的轻量 Skills，整理布局、排版和视觉细节原则。",
+      "category": "界面设计",
+      "githubStars": 2358,
+      "starsCheckedAt": "2026-10-09T14:16:00.998666+00:00",
+      "defaultBranch": "main",
+      "commitSha": "1c1e97cb9878e236552c772092dda7adcdddbcb2",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5f9af6ce7083838497676a8dfa651ad8e2559fdabd4586afc73587beec476b0e",
+          "sizeBytes": 1062
+        }
+      ],
+      "fileCount": 4,
+      "skillCount": 1,
+      "sizeBytes": 19861,
+      "contentSha256": "1ba2fb3fad31bb39dfe9bf84c2332aa95210c5a1222ce6977d7c5b74b77a5372",
+      "requestId": "4c397a36-f14a-49c1-92ef-c521c7a76e1f"
+    },
+    {
+      "repositoryUrl": "https://github.com/larashero3-dotcom/writing-dna-skill",
+      "author": "larashero3-dotcom",
+      "authorUrl": "https://github.com/larashero3-dotcom",
+      "name": "larashero3-dotcom/writing-dna-skill",
+      "description": "分析用户提供的写作样本，整理语言习惯与风格规则，形成可复用的写作资产。",
+      "category": "写作润色",
+      "githubStars": 2348,
+      "starsCheckedAt": "2026-10-09T14:39:25.684651+00:00",
+      "defaultBranch": "main",
+      "commitSha": "ee3d97ee27268004b5187d97711161f44fc4aae4",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1126322e2cc8d165adc4c792eeb195717de2bcc7b39be1ce77959d78e87ef685",
+          "sizeBytes": 1056
+        }
+      ],
+      "fileCount": 33,
+      "skillCount": 2,
+      "sizeBytes": 220070,
+      "contentSha256": "fb21d69eda1ad79643e7adeeb201b5a34def6a82522f3a97fc79fad7a41890c6",
+      "requestId": "29a96dda-9078-4f61-b15b-b82d18a4dcb1"
+    },
+    {
+      "repositoryUrl": "https://github.com/noamseg/interview-coach-skill",
+      "author": "noamseg",
+      "authorUrl": "https://github.com/noamseg",
+      "name": "noamseg/interview-coach-skill",
+      "description": "交互式面试训练与反馈，帮助组织经历、改进回答并准备面试。",
+      "category": "求职与面试",
+      "githubStars": 2340,
+      "starsCheckedAt": "2026-10-09T14:39:25.696080+00:00",
+      "defaultBranch": "main",
+      "commitSha": "634a8dd8689e0420c21e5f0c8ae3cfa9e1a7ab7e",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d67d11206d1c1343a45fa99ef00c0fc40afabeca69f08e1adccbc9bacf8cdff2",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 51,
+      "skillCount": 1,
+      "sizeBytes": 750664,
+      "contentSha256": "95195c2bd02643046a9c03a4f233b1ac669e540d15fdadf5b8d78b31a0b4d4df",
+      "requestId": "98562b95-7a3e-4447-8e45-545104f5792e"
+    },
+    {
+      "repositoryUrl": "https://github.com/amElnagdy/delegate-skills",
+      "author": "amElnagdy",
+      "authorUrl": "https://github.com/amElnagdy",
+      "name": "amElnagdy/delegate-skills",
+      "description": "将明确的编码任务交给独立 Agent CLI 执行，再审查变更并整合结果。",
+      "category": "Agent 工作流",
+      "githubStars": 2338,
+      "starsCheckedAt": "2026-10-09T14:16:02.750165+00:00",
+      "defaultBranch": "master",
+      "commitSha": "8ef02103ad99b53801f2b13d04755313fbbfafb2",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "dffe5f1e6f7e1c2ecc0eb684e452c941fe6b71f142196af0d7f1d57604048e64",
+          "sizeBytes": 1083
+        }
+      ],
+      "fileCount": 158,
+      "skillCount": 18,
+      "sizeBytes": 1636436,
+      "contentSha256": "a0da8a1e26ea74bd2a08306ec6f24648ea161048e92580802b06dc261c3481d8",
+      "requestId": "f6c87e1d-3190-4fcf-878e-c5fc6e4c1ee5"
+    },
+    {
+      "repositoryUrl": "https://github.com/Weizhena/Deep-Research-skills",
+      "author": "Weizhena",
+      "authorUrl": "https://github.com/Weizhena",
+      "name": "Weizhena/Deep-Research-skills",
+      "description": "带有人为检查环节的结构化深度研究流程，支持多种编码 Agent。",
+      "category": "学习与研究",
+      "githubStars": 2319,
+      "starsCheckedAt": "2026-10-09T14:16:03.137446+00:00",
+      "defaultBranch": "master",
+      "commitSha": "6ce38f60e3f8b22502c29873f96503a4e0c5addb",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1883a89d5fe9b87f5137eb7f2755df95a95c6c75aaf8eb1d9eec2cb794471c72",
+          "sizeBytes": 1066
+        }
+      ],
+      "fileCount": 44,
+      "skillCount": 20,
+      "sizeBytes": 598386,
+      "contentSha256": "269fd95bb6d0dc05d3175bfcb07cd0b32551aac80eb15c21fb9a16416c00d267",
+      "requestId": "bf56ce9a-739c-4032-b0d7-a82e51eed23e"
+    },
+    {
+      "repositoryUrl": "https://github.com/Sahir619/fable-method",
+      "author": "Sahir619",
+      "authorUrl": "https://github.com/Sahir619",
+      "name": "Sahir619/fable-method",
+      "description": "以思考、行动和验证组织 Agent 任务，附带工作流评估与改进工具。",
+      "category": "Agent 工作流",
+      "githubStars": 2298,
+      "starsCheckedAt": "2026-10-09T14:16:03.426549+00:00",
+      "defaultBranch": "main",
+      "commitSha": "9924067e82bd48cf3b0426378db93238bfb33e9b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "36a8775a8dc54a63bf00c34319a59ec1a9185cabaea25e67738dd5cb2bfb10ac",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 147,
+      "skillCount": 5,
+      "sizeBytes": 2118457,
+      "contentSha256": "e9ffd26fcae416f6abf35bab48d825b0085ea9322f5e694e103a8ec0225ab11a",
+      "requestId": "90126225-ab52-45d7-9a8c-e83b7fc31a42"
+    },
+    {
+      "repositoryUrl": "https://github.com/LottieFiles/motion-design-skill",
+      "author": "LottieFiles",
+      "authorUrl": "https://github.com/LottieFiles",
+      "name": "LottieFiles/motion-design-skill",
+      "description": "LottieFiles 的动效设计 Skill，涵盖时序、缓动、编排和界面动画原则。",
+      "category": "动效设计",
+      "githubStars": 2019,
+      "starsCheckedAt": "2026-10-09T14:39:28.967515+00:00",
+      "defaultBranch": "main",
+      "commitSha": "f9a8a041b85185ee4881b3471d3415e939aac772",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9fc2e8685daa09e28d54b6afa8a38f168417c5735a3cd676c80c159785e93a80",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 20,
+      "skillCount": 1,
+      "sizeBytes": 61257,
+      "contentSha256": "f1d316abc3cb669ebdd55e0da560dc45f5e19b9cb84c180a7a5e96fe3ee635e5",
+      "requestId": "317484cb-5601-4f3f-a170-b481b3fe9bcc"
+    },
+    {
+      "repositoryUrl": "https://github.com/cbrock84/headcount",
+      "author": "cbrock84",
+      "authorUrl": "https://github.com/cbrock84",
+      "name": "cbrock84/headcount",
+      "description": "按职能部门组织的专业工作流 Skills，覆盖产品、工程、运营和业务支持。",
+      "category": "团队工作流",
+      "githubStars": 2017,
+      "starsCheckedAt": "2026-10-09T14:39:29.609855+00:00",
+      "defaultBranch": "main",
+      "commitSha": "98d1c17d480f606060102a781f9a8601690685f7",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2dec83f130fcd40ed46432c82f629ea8d2a061bca9ffa82ff5f584ae97723973",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 446,
+      "skillCount": 180,
+      "sizeBytes": 5413453,
+      "contentSha256": "8ace72c8e9bca63a6e2a76e42f01a6248defad25b0300a0f7403bab825044538",
+      "requestId": "b37e7b43-fe77-48f5-9145-cda082ceff8f"
+    },
+    {
+      "repositoryUrl": "https://github.com/yetone/native-feel-skill",
+      "author": "yetone",
+      "authorUrl": "https://github.com/yetone",
+      "name": "yetone/native-feel-skill",
+      "description": "跨平台桌面应用的原生体验设计，涵盖窗口、交互、架构与发布前检查。",
+      "category": "桌面应用设计",
+      "githubStars": 1930,
+      "starsCheckedAt": "2026-10-09T14:39:31.349785+00:00",
+      "defaultBranch": "master",
+      "commitSha": "9bd88c6378e1a80a4da165f3ee7bebb761a74945",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+          "sizeBytes": 1063
+        }
+      ],
+      "fileCount": 13,
+      "skillCount": 1,
+      "sizeBytes": 110627,
+      "contentSha256": "ed0c1aa1456f4db528c9cc3396d5ab53cbcfdbe31fba025cb87f4aa3a260cfcb",
+      "requestId": "70ebef4e-0c2e-47c7-81e9-2159e7fb0370"
+    },
+    {
+      "repositoryUrl": "https://github.com/nanaism/yomiyasu",
+      "author": "nanaism",
+      "authorUrl": "https://github.com/nanaism",
+      "name": "nanaism/yomiyasu",
+      "description": "将 AI 生成的日文润色为自然、易读的日语表达。",
+      "category": "写作润色",
+      "githubStars": 1796,
+      "starsCheckedAt": "2026-10-09T14:16:07.459498+00:00",
+      "defaultBranch": "main",
+      "commitSha": "373356eb874af5184962c88e925ea7eb58450318",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "79d802f15bc8caf67f1a83c1bdbe214ccb41a0a0275f9046b329b89c65ee1fca",
+          "sizeBytes": 1064
+        },
+        {
+          "path": "skills/yomiyasu/LICENSE",
+          "sha256": "79d802f15bc8caf67f1a83c1bdbe214ccb41a0a0275f9046b329b89c65ee1fca",
+          "sizeBytes": 1064
+        }
+      ],
+      "fileCount": 219,
+      "skillCount": 1,
+      "sizeBytes": 1266125,
+      "contentSha256": "ce2cae7a37fea47c291fb0980d87b9518b2eb2729adb4143ca02ac8261b90118",
+      "requestId": "41985f1b-8692-4318-9eff-3407583f1630"
+    },
+    {
+      "repositoryUrl": "https://github.com/adamlyttleapps/claude-skill-aso-appstore-screenshots",
+      "author": "adamlyttleapps",
+      "authorUrl": "https://github.com/adamlyttleapps",
+      "name": "adamlyttleapps/claude-skill-aso-appstore-screenshots",
+      "description": "规划和生成 App Store 展示截图，涵盖卖点组织、视觉布局和商店展示。",
+      "category": "应用上架",
+      "githubStars": 1773,
+      "starsCheckedAt": "2026-10-09T14:39:36.455930+00:00",
+      "defaultBranch": "main",
+      "commitSha": "87e1c8054eec3a601835770e7d208a79d3ebcb19",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0724f66e8e4f6a81d5eb81abcd45610d3534ce53aee918a18be5588a4c8f8342",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 9,
+      "skillCount": 1,
+      "sizeBytes": 80081,
+      "contentSha256": "b8afeabdeaf882c13ce1f5d76dea379f4372d7b3f4032d34dcf6ae6709a5830c",
+      "requestId": "e2b36993-e09c-41bb-8ab4-b72007044de6"
+    },
+    {
+      "repositoryUrl": "https://github.com/tourmind-com/Tourmind-Booking-Skills",
+      "author": "tourmind-com",
+      "authorUrl": "https://github.com/tourmind-com",
+      "name": "tourmind-com/Tourmind-Booking-Skills",
+      "description": "通过 TourMind API 搜索酒店与航班、比较报价并处理预订；使用时需要对应服务凭据。",
+      "category": "旅行工具",
+      "githubStars": 1728,
+      "starsCheckedAt": "2026-10-09T14:39:38.490571+00:00",
+      "defaultBranch": "main",
+      "commitSha": "6ffd73c352b0b0affb61554d632d7c125c64be6c",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "f7b70afaf3b7bfbdbfd3ee18ce7359c9495604448843210b561ecb274ffe945c",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 21,
+      "skillCount": 2,
+      "sizeBytes": 327806,
+      "contentSha256": "c316aa86da21028ae1189e979430d367622fdf2aaa920da9988b5203015929b6",
+      "requestId": "f7c0d797-8c33-427a-8d44-1a5165544eab"
+    },
+    {
+      "repositoryUrl": "https://github.com/Jakeschincariol/linkedin-agent-skill",
+      "author": "Jakeschincariol",
+      "authorUrl": "https://github.com/Jakeschincariol",
+      "name": "Jakeschincariol/linkedin-agent-skill",
+      "description": "LinkedIn 文案、评论、回复、个人资料优化、内容计划与文字润色。",
+      "category": "营销与增长",
+      "githubStars": 1656,
+      "starsCheckedAt": "2026-10-09T14:16:08.362873+00:00",
+      "defaultBranch": "main",
+      "commitSha": "add2c23882fe79180737d242ff80a5da205eda6a",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+          "sizeBytes": 1073
+        }
+      ],
+      "fileCount": 22,
+      "skillCount": 11,
+      "sizeBytes": 95566,
+      "contentSha256": "0d7c97018c3a8aa45e3d91565bef812287dcd0a9d9b63ecf09c60f88a4ca88b7",
+      "requestId": "0d6f18a8-4098-49c8-b439-4d5132ec4583"
+    },
+    {
+      "repositoryUrl": "https://github.com/GBSOSS/skill-from-masters",
+      "author": "GBSOSS",
+      "authorUrl": "https://github.com/GBSOSS",
+      "name": "GBSOSS/skill-from-masters",
+      "description": "参考领域专家的方法论，构建结构清晰、便于复用的 Agent Skills。",
+      "category": "Skills 编写",
+      "githubStars": 1588,
+      "starsCheckedAt": "2026-10-09T14:39:40.779694+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c4d27d29bfda00f73c23abd4990f700a6d3df480",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "06dcddbb6908a0c6dd4a9e8ec822eea41d5a460a53089fecccc8a68049e99241",
+          "sizeBytes": 1056
+        }
+      ],
+      "fileCount": 15,
+      "skillCount": 4,
+      "sizeBytes": 102619,
+      "contentSha256": "87f8baed2070474bb718e2d8f1286baba141e90fcb9bb556c9fa8600250fd171",
+      "requestId": "84be1c8d-d051-4953-82d9-0831a6d254bf"
+    },
+    {
+      "repositoryUrl": "https://github.com/PrathamLearnsToCode/paper2code",
+      "author": "PrathamLearnsToCode",
+      "authorUrl": "https://github.com/PrathamLearnsToCode",
+      "name": "PrathamLearnsToCode/paper2code",
+      "description": "把 arXiv 论文中的方法整理成可实现的步骤与代码，辅助论文复现。",
+      "category": "学习与研究",
+      "githubStars": 1530,
+      "starsCheckedAt": "2026-10-09T14:39:42.651397+00:00",
+      "defaultBranch": "main",
+      "commitSha": "fcffce7a1250659ed74f2a96cdf54595c92306c4",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "6634dc4144fd840e5eb1b700f65b48168422b3b2f33d9617d26c5776093a8567",
+          "sizeBytes": 1080
+        }
+      ],
+      "fileCount": 49,
+      "skillCount": 1,
+      "sizeBytes": 342747,
+      "contentSha256": "47c884406117dcce12678dafbbb94821d96b615d72089ba035ffccb46095997b",
+      "requestId": "75be7142-7255-470e-862f-776b9bac817c"
+    },
+    {
+      "repositoryUrl": "https://github.com/imxv/Pretty-mermaid-skills",
+      "author": "imxv",
+      "authorUrl": "https://github.com/imxv",
+      "name": "imxv/Pretty-mermaid-skills",
+      "description": "生成和渲染 Mermaid 图表，支持主题、SVG 与终端输出。",
+      "category": "演示与可视化",
+      "githubStars": 1523,
+      "starsCheckedAt": "2026-10-09T14:16:10.642903+00:00",
+      "defaultBranch": "main",
+      "commitSha": "e234ab73c2992f03c36db04fd55ebb90abca9c45",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d84c4702c346daabcfeefec4c691a36eb394360927c384c64798bbab97e8fb41",
+          "sizeBytes": 1087
+        }
+      ],
+      "fileCount": 54,
+      "skillCount": 1,
+      "sizeBytes": 1037677,
+      "contentSha256": "cdb98f50c754c1c0c85172c5e9bd4c2bb2e5e6758cc67f10bc1a10f7fa023b2d",
+      "requestId": "f80ca7db-ab49-4421-a2d9-51475245726d"
+    },
+    {
+      "repositoryUrl": "https://github.com/ai-evals-course/evals-skills",
+      "author": "ai-evals-course",
+      "authorUrl": "https://github.com/ai-evals-course",
+      "name": "ai-evals-course/evals-skills",
+      "description": "引导编码 Agent 为实际 AI 产品设计和搭建评估流程。",
+      "category": "AI 应用开发",
+      "githubStars": 1475,
+      "starsCheckedAt": "2026-10-09T14:16:11.783401+00:00",
+      "defaultBranch": "main",
+      "commitSha": "80d5f7b0127c7572ed9e9339937adbfd7240ffeb",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "sizeBytes": 11357
+        }
+      ],
+      "fileCount": 26,
+      "skillCount": 9,
+      "sizeBytes": 1670337,
+      "contentSha256": "350b1bc0a53c6c7ea4895f2d6aabffc9fa847608b4210ea13f6cf0a9148c3129",
+      "requestId": "c434503d-c8b7-4d64-bda0-3bedb5f4b6ac"
+    },
+    {
+      "repositoryUrl": "https://github.com/hamen/material-3-skill",
+      "author": "hamen",
+      "authorUrl": "https://github.com/hamen",
+      "name": "hamen/material-3-skill",
+      "description": "Material Design 3 组件、设计令牌、主题、响应式布局与一致性检查。",
+      "category": "界面设计",
+      "githubStars": 1459,
+      "starsCheckedAt": "2026-10-09T14:39:43.914107+00:00",
+      "defaultBranch": "master",
+      "commitSha": "14385f2bf3804d8779f8b4db2604211f1e70b4c1",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "032688e90ca77b75568e8e0d8c4dcd6d541f0a02041877ce0cdca4f3d8c4cc0e",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 16,
+      "skillCount": 1,
+      "sizeBytes": 1270795,
+      "contentSha256": "337ab939efecd7aacd35fd5ed25de722c7ead75cfaf1f2bc7c1ad13856cce196",
+      "requestId": "ec4aa936-4097-45a9-acbc-1f727d9f9aef"
+    },
+    {
+      "repositoryUrl": "https://github.com/jsmastery-pro/skills",
+      "author": "jsmastery-pro",
+      "authorUrl": "https://github.com/jsmastery-pro",
+      "name": "jsmastery-pro/skills",
+      "description": "JS Mastery 的 Agent 开发流程与实用工程 Skills。",
+      "category": "开发工作流",
+      "githubStars": 1452,
+      "starsCheckedAt": "2026-10-09T14:16:13.392143+00:00",
+      "defaultBranch": "main",
+      "commitSha": "43b69e44c9ca905fe3a3418ccdf4102255e20d40",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d8a7353e74d11693ea2ee5f0f2e131212497b17c6828800f704f303ab1366df6",
+          "sizeBytes": 1075
+        }
+      ],
+      "fileCount": 83,
+      "skillCount": 9,
+      "sizeBytes": 581177,
+      "contentSha256": "3c0d1bddacbcc2fa2506c61fe537a044b18e5350c0db737a495a7b72705e1f2a",
+      "requestId": "f37fcfce-15d9-4217-b7da-ca96cc50d543"
+    },
+    {
+      "repositoryUrl": "https://github.com/backnotprop/pstack",
+      "author": "backnotprop",
+      "authorUrl": "https://github.com/backnotprop",
+      "name": "backnotprop/pstack",
+      "description": "面向 AI 辅助工程的开发原则与 Skills，强调明确要求、实现依据和结果验证。",
+      "category": "开发工作流",
+      "githubStars": 1408,
+      "starsCheckedAt": "2026-10-09T14:39:44.823301+00:00",
+      "defaultBranch": "main",
+      "commitSha": "3a604672c46cd8187d2b19980eae0a34f9f91138",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 166,
+      "skillCount": 54,
+      "sizeBytes": 3510236,
+      "contentSha256": "b0a86942944a62fff3eb80b77669ff13da47d26f87adf0c9fcf6355da84864bf",
+      "requestId": "fc4f3807-a4ea-4f4e-98c4-b8ac467172ad"
+    },
+    {
+      "repositoryUrl": "https://github.com/ziguishian/xhs-visual-director-skill",
+      "author": "ziguishian",
+      "authorUrl": "https://github.com/ziguishian",
+      "name": "ziguishian/xhs-visual-director-skill",
+      "description": "规划小红书图文的逐页结构、视觉风格、图像提示词、文案与自检流程。",
+      "category": "内容创作",
+      "githubStars": 1389,
+      "starsCheckedAt": "2026-10-09T14:39:46.007612+00:00",
+      "defaultBranch": "main",
+      "commitSha": "5c730c688f2c7e64f798d611608997ffba43813d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2a3e91b866143966d11feb15bce0cb89d40eac5e09df17a53d9210e60af3dda3",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 26,
+      "skillCount": 1,
+      "sizeBytes": 5049660,
+      "contentSha256": "f30930f135417049209b856e48811f062d6e0b21093187c2352a07f695800b67",
+      "requestId": "13cb670a-6ac3-402a-8651-d1e37bb0ed5b"
+    },
+    {
+      "repositoryUrl": "https://github.com/truongduy2611/app-store-preflight-skills",
+      "author": "truongduy2611",
+      "authorUrl": "https://github.com/truongduy2611",
+      "name": "truongduy2611/app-store-preflight-skills",
+      "description": "提交前检查 iOS 和 macOS 项目中可能影响 App Store 审核的问题。",
+      "category": "Apple 平台开发",
+      "githubStars": 1382,
+      "starsCheckedAt": "2026-10-09T14:16:14.710202+00:00",
+      "defaultBranch": "main",
+      "commitSha": "e52e007036fb6edea104b6b49eb01f69c155ad51",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5650e1ecba2cb8df386cd319bceb545594560f23b8f84b00d8f9346caca9b134",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 28,
+      "skillCount": 1,
+      "sizeBytes": 85571,
+      "contentSha256": "0dbac8fd82ed92d796b0a0c4b51e9e7f45abb0e684bdf874225f745b844fd240",
+      "requestId": "371c5011-091d-4810-9685-0ed008e32c7d"
+    },
+    {
+      "repositoryUrl": "https://github.com/gamedev-skills/awesome-gamedev-agent-skills",
+      "author": "gamedev-skills",
+      "authorUrl": "https://github.com/gamedev-skills",
+      "name": "gamedev-skills/awesome-gamedev-agent-skills",
+      "description": "涵盖 Godot、Unity、Unreal、Phaser、PixiJS、Three.js 等引擎的游戏开发 Skills。",
+      "category": "游戏开发",
+      "githubStars": 1377,
+      "starsCheckedAt": "2026-10-09T14:16:15.684075+00:00",
+      "defaultBranch": "main",
+      "commitSha": "0a70cfc64672d512c5b5b6006b5dcb5cf90dbdbd",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "6f82dcfeb95a1c0a0452180a3b16f21bf82111780018fed59d95a052b5b75f6c",
+          "sizeBytes": 11395
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "2dcb65b1c5be24e5ba11e937f3996100f4e980d8cf8ac5b30ba1d70dae6c40f8",
+          "sizeBytes": 883
+        }
+      ],
+      "fileCount": 196,
+      "skillCount": 75,
+      "sizeBytes": 2982065,
+      "contentSha256": "bfbeca6cc3b97014f15577e2d51f4122efc4c0808a89fd7376cdaf5b693f3191",
+      "requestId": "41943e1e-868e-40ab-b9f5-9591df621d75"
+    },
+    {
+      "repositoryUrl": "https://github.com/boyang-hu/website-rebuild-skill",
+      "author": "boyang-hu",
+      "authorUrl": "https://github.com/boyang-hu",
+      "name": "boyang-hu/website-rebuild-skill",
+      "description": "通过页面镜像、源代码分析和自动对比，重建有权使用的网站界面。",
+      "category": "前端开发",
+      "githubStars": 1376,
+      "starsCheckedAt": "2026-10-09T14:39:46.380027+00:00",
+      "defaultBranch": "main",
+      "commitSha": "830647fbe4e31cda85319df69b48514bd224ad79",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "54dbfbc5ea64c294cc8fce9eee9afe9e5290b63fd63e33a083342c4f5377e52f",
+          "sizeBytes": 1066
+        }
+      ],
+      "fileCount": 156,
+      "skillCount": 1,
+      "sizeBytes": 2911447,
+      "contentSha256": "94b2eeaf782f41dee3de3f0e64006a257797a89773f0bcbf27d553f5c25cae68",
+      "requestId": "13b49bc5-be0e-4e09-9e7c-e93f38330369"
+    },
+    {
+      "repositoryUrl": "https://github.com/lishix520/academic-paper-skills",
+      "author": "lishix520",
+      "authorUrl": "https://github.com/lishix520",
+      "name": "lishix520/academic-paper-skills",
+      "description": "学术论文规划与写作流程，包含策略设计、正文组织和质量检查。",
+      "category": "学习与研究",
+      "githubStars": 1372,
+      "starsCheckedAt": "2026-10-09T14:16:15.974545+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c325557646e9418939ccc7b99171b149ad6314f1",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5607eb3ddad20aed055df92cb65e534dd7a652bf92dfa578ea23d40f79c78442",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 16,
+      "skillCount": 2,
+      "sizeBytes": 192720,
+      "contentSha256": "acc0f81974b2dc487eb7d4eb8d18b64bcc1303f1cecbc94f02e281e32bbef55d",
+      "requestId": "ef1951bd-5a90-4110-a948-29b5f1ecb839"
+    },
+    {
+      "repositoryUrl": "https://github.com/bevibing/tutor-skills",
+      "author": "bevibing",
+      "authorUrl": "https://github.com/bevibing",
+      "name": "bevibing/tutor-skills",
+      "description": "将文档、PDF 和代码库组织成便于学习的 Obsidian 知识库。",
+      "category": "学习与研究",
+      "githubStars": 1340,
+      "starsCheckedAt": "2026-10-09T14:16:17.079858+00:00",
+      "defaultBranch": "main",
+      "commitSha": "397110c9fefbc6bd5444277686600aec28063c05",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0ff5035ab0fd227727981ed95743bf97521ccda391654eeec2466c52bffca21c",
+          "sizeBytes": 1060
+        }
+      ],
+      "fileCount": 13,
+      "skillCount": 2,
+      "sizeBytes": 47856,
+      "contentSha256": "c858fcbb1e4a2c632cae6102336f72cfa72ab27e448b2bc24086b66fcc9165aa",
+      "requestId": "f6f0165a-6be0-4533-82e7-7b283f30519f"
+    },
+    {
+      "repositoryUrl": "https://github.com/onvoyage-ai/gtm-engineer-skills",
+      "author": "onvoyage-ai",
+      "authorUrl": "https://github.com/onvoyage-ai",
+      "name": "onvoyage-ai/gtm-engineer-skills",
+      "description": "网站 AEO、GEO 与搜索可见性检查，提供框架相关的改进流程。",
+      "category": "营销与增长",
+      "githubStars": 1321,
+      "starsCheckedAt": "2026-10-09T14:16:18.828813+00:00",
+      "defaultBranch": "main",
+      "commitSha": "3777930184a10b25ab36bb2fc4da6c0f6cfcc187",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "03b1065a1f6a99272a5c36677f795423071ab060bdff1593b0ea3b3956635b0e",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 75,
+      "skillCount": 12,
+      "sizeBytes": 1953283,
+      "contentSha256": "28cec9f0161af98f1aead92f9a9bf5aa493b268c5c9bf09eb45793f4cd83cffe",
+      "requestId": "d7de3e2b-a5e6-436b-a6fa-7ebc218ecc0e"
+    },
+    {
+      "repositoryUrl": "https://github.com/huangkiki/dailypaper-skills",
+      "author": "huangkiki",
+      "authorUrl": "https://github.com/huangkiki",
+      "name": "huangkiki/dailypaper-skills",
+      "description": "论文搜集、阅读、整理和知识沉淀的研究工作流 Skills。",
+      "category": "学习与研究",
+      "githubStars": 1279,
+      "starsCheckedAt": "2026-10-09T14:16:19.098408+00:00",
+      "defaultBranch": "main",
+      "commitSha": "10c9921357dee38c8a342c8dd89b4b773758c104",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "498c6c5c534d36610b100637379845f67bd516b54b7d4aaf8a8dd6766aaef467",
+          "sizeBytes": 10774
+        }
+      ],
+      "fileCount": 64,
+      "skillCount": 7,
+      "sizeBytes": 1668248,
+      "contentSha256": "2349148858b684a9aafc449134bee50c13674694b0b3e8fd4fef8aa7ca26c098",
+      "requestId": "750c7019-1ad8-43bb-9800-15e544178407"
+    },
+    {
+      "repositoryUrl": "https://github.com/kharmanskyi/open-steps",
+      "author": "kharmanskyi",
+      "authorUrl": "https://github.com/kharmanskyi",
+      "name": "kharmanskyi/open-steps",
+      "description": "帮助 Agent 用直白语言汇报任务状态、给出判断并组织可执行步骤。",
+      "category": "沟通与提示词",
+      "githubStars": 1279,
+      "starsCheckedAt": "2026-10-09T14:16:18.494770+00:00",
+      "defaultBranch": "main",
+      "commitSha": "4fa744ba8ea06ccf128a39853824c46ac391dd00",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "931e60f9dc6a8cf839ec055e1554b3bbd0b480951800c8885c94db29a33a253b",
+          "sizeBytes": 1074
+        }
+      ],
+      "fileCount": 110,
+      "skillCount": 8,
+      "sizeBytes": 651376,
+      "contentSha256": "e108154e003a9382fa772b3c763c51f9ecf5f169c67a2b69332bf66c2d3e9669",
+      "requestId": "fddb6799-7513-4b5f-8913-6a1e5310525d"
+    },
+    {
+      "repositoryUrl": "https://github.com/langchain-ai/langchain-skills",
+      "author": "langchain-ai",
+      "authorUrl": "https://github.com/langchain-ai",
+      "name": "langchain-ai/langchain-skills",
+      "description": "LangChain 官方 Skills，涵盖 LangChain、LangGraph、Deep Agents、RAG 与评估。",
+      "category": "AI 应用开发",
+      "githubStars": 1275,
+      "starsCheckedAt": "2026-10-09T14:16:19.684000+00:00",
+      "defaultBranch": "main",
+      "commitSha": "16a992f09ab3ccfb642dd4f08d350d833d1990bf",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "4ec67e4ca6e6721dba849b2ca82261597c86a61ee214bbf21416006b7b2d0478",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 76,
+      "skillCount": 22,
+      "sizeBytes": 598756,
+      "contentSha256": "a12327d62fa10d1be957a8f634a8a7cbf8ee6709ab22460535e3c21aaddeaeeb",
+      "requestId": "afb78281-e529-4981-920e-b7081aeec5da"
+    },
+    {
+      "repositoryUrl": "https://github.com/conorluddy/ios-simulator-skill",
+      "author": "conorluddy",
+      "authorUrl": "https://github.com/conorluddy",
+      "name": "conorluddy/ios-simulator-skill",
+      "description": "帮助 Agent 构建、运行和操作 iOS 模拟器中的应用。",
+      "category": "Apple 平台开发",
+      "githubStars": 1268,
+      "starsCheckedAt": "2026-10-09T14:16:20.227433+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c535422ab4ee550c8994c179583f805cb0cb01b1",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "c85c6f44a27a6c05102eacbb1f81fdb4a59a4253e594a93cf7fe1e11960464ea",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 79,
+      "skillCount": 1,
+      "sizeBytes": 725307,
+      "contentSha256": "5c2bcb8752afada67c67955d3a19d8184aa974b599c9064128fbd9026017de8c",
+      "requestId": "89a45a16-710e-4863-9f9e-1e63d3e4ff6d"
+    },
+    {
+      "repositoryUrl": "https://github.com/Jakeschincariol/replica-skill",
+      "author": "Jakeschincariol",
+      "authorUrl": "https://github.com/Jakeschincariol",
+      "name": "Jakeschincariol/replica-skill",
+      "description": "围绕应用分析、原型重建、测试和体验改进组织开发任务。",
+      "category": "产品与开发",
+      "githubStars": 1263,
+      "starsCheckedAt": "2026-10-09T14:39:54.055549+00:00",
+      "defaultBranch": "main",
+      "commitSha": "77c9436fb3d18c3d58169efb8caf4fe906b0dc51",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+          "sizeBytes": 1073
+        }
+      ],
+      "fileCount": 39,
+      "skillCount": 11,
+      "sizeBytes": 163015,
+      "contentSha256": "1fb356e1c2caf7b1ceae446fd159742da8ab2df4b35a99ef2f60828c50189899",
+      "requestId": "1ba7587b-4364-41b0-b4b3-f48647e7f968"
+    },
+    {
+      "repositoryUrl": "https://github.com/amElnagdy/guard-skills",
+      "author": "amElnagdy",
+      "authorUrl": "https://github.com/amElnagdy",
+      "name": "amElnagdy/guard-skills",
+      "description": "对 AI 生成的代码、测试与文档进行质量检查，识别常见实现问题。",
+      "category": "代码审查",
+      "githubStars": 1260,
+      "starsCheckedAt": "2026-10-09T14:16:21.572859+00:00",
+      "defaultBranch": "master",
+      "commitSha": "ffa26036b7b5e77b20b5d679304a703b6fd1a43d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b336404532649bdfd6b5c7558146c2e193c1287b633655ca103483c6ffe79857",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 38,
+      "skillCount": 5,
+      "sizeBytes": 174097,
+      "contentSha256": "2c3119ce0e0c2d0fb937fcd43941e4b18eef16d499ac3e2313929de97f848bde",
+      "requestId": "a4019cb0-58ea-411c-80e6-83850f0c8053"
+    },
+    {
+      "repositoryUrl": "https://github.com/AvdLee/Xcode-Build-Optimization-Agent-Skill",
+      "author": "AvdLee",
+      "authorUrl": "https://github.com/AvdLee",
+      "name": "AvdLee/Xcode-Build-Optimization-Agent-Skill",
+      "description": "通过基准测试、构建设置和开发流程检查来优化 Xcode 构建。",
+      "category": "Apple 平台开发",
+      "githubStars": 1253,
+      "starsCheckedAt": "2026-10-09T14:16:21.654376+00:00",
+      "defaultBranch": "main",
+      "commitSha": "6bd7b596cd688b1127ded00e812b1b6937ec35d6",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "8f5fd8e5cddb015b5627e45e68b256356586144288a4a0a3db87e38bcb0c9155",
+          "sizeBytes": 1076
+        }
+      ],
+      "fileCount": 62,
+      "skillCount": 6,
+      "sizeBytes": 1685157,
+      "contentSha256": "f8161ee74935f7b1fecd803ad580e1ba7b5ced77c1def7bdaeb542f9b2fa49fb",
+      "requestId": "4fa2f88c-f3df-4e3f-a0c5-c563cb5fccf5"
+    },
+    {
+      "repositoryUrl": "https://github.com/pashov/skills",
+      "author": "pashov",
+      "authorUrl": "https://github.com/pashov",
+      "name": "pashov/skills",
+      "description": "Pashov Audit Group 的智能合约分析与安全审计 Skills。",
+      "category": "智能合约安全",
+      "githubStars": 1235,
+      "starsCheckedAt": "2026-10-09T14:39:59.167507+00:00",
+      "defaultBranch": "main",
+      "commitSha": "92b0ea6786e6c210bc9a839e4813d50876c1c550",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "ec93590d18a065c385712fd6b1c86d4f3732b9d89e990604ebd3afeb7bb17d12",
+          "sizeBytes": 1079
+        }
+      ],
+      "fileCount": 97,
+      "skillCount": 5,
+      "sizeBytes": 9443716,
+      "contentSha256": "b7b3ca408549ae9ff665604aeda4aa308afac57abdfe317e16983df09dd5dbd0",
+      "requestId": "5da0c6e2-a087-4ed4-a907-67818d61bbea"
+    },
+    {
+      "repositoryUrl": "https://github.com/Spark-To-Paper-Skills/paperjury",
+      "author": "Spark-To-Paper-Skills",
+      "authorUrl": "https://github.com/Spark-To-Paper-Skills",
+      "name": "Spark-To-Paper-Skills/paperjury",
+      "description": "论文投稿前的审查、意见整理、修订与验证工作流。",
+      "category": "学习与研究",
+      "githubStars": 1220,
+      "starsCheckedAt": "2026-10-09T14:40:01.802433+00:00",
+      "defaultBranch": "main",
+      "commitSha": "53c75e86285dc5b38e8d60c6eb0b0adaf4838250",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "235b47b3dfd980d387497fe862d5c22125fcd2b5e3e8151f26f1cc34857b4b34",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 82,
+      "skillCount": 1,
+      "sizeBytes": 7538294,
+      "contentSha256": "b92ab0ea75b43446db354f6f1ec8fc0738488e170593bae53bbc02c1ed773ce4",
+      "requestId": "64ede1a6-be64-4ee2-a074-5c3a0e70165a"
+    },
+    {
+      "repositoryUrl": "https://github.com/adamlyttleapps/claude-skill-app-onboarding-questionnaire",
+      "author": "adamlyttleapps",
+      "authorUrl": "https://github.com/adamlyttleapps",
+      "name": "adamlyttleapps/claude-skill-app-onboarding-questionnaire",
+      "description": "设计问卷式应用引导流程，组织问题、分支、进度和结果展示。",
+      "category": "移动端设计",
+      "githubStars": 1215,
+      "starsCheckedAt": "2026-10-09T14:40:02.491297+00:00",
+      "defaultBranch": "main",
+      "commitSha": "5bc4786d80f2c23de60b3ba02773e919ed8fd091",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0724f66e8e4f6a81d5eb81abcd45610d3534ce53aee918a18be5588a4c8f8342",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 4,
+      "skillCount": 1,
+      "sizeBytes": 30621,
+      "contentSha256": "aa23a4ecbbd055e2cbb03921553d7da8de4715d92e315e82b3beb00ebb20d39c",
+      "requestId": "63ae1b65-51b0-40c0-9b9f-3928eced00b1"
+    },
+    {
+      "repositoryUrl": "https://github.com/ferdinandobons/startup-skill",
+      "author": "ferdinandobons",
+      "authorUrl": "https://github.com/ferdinandobons",
+      "name": "ferdinandobons/startup-skill",
+      "description": "创业想法验证、竞争分析和产品规划的 Skills。",
+      "category": "产品与创业",
+      "githubStars": 1178,
+      "starsCheckedAt": "2026-10-09T14:16:24.101003+00:00",
+      "defaultBranch": "main",
+      "commitSha": "a5f97c317b93caedbb49d28f20e9ec283b2ec087",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "7d3ca7d693ecb335de6d4f61ba9a644d2f521ce44f918c6cb0730c46ab109416",
+          "sizeBytes": 1072
+        }
+      ],
+      "fileCount": 57,
+      "skillCount": 4,
+      "sizeBytes": 488692,
+      "contentSha256": "badc881067dbb1ea1255aff84eec1d94433536f3274add88b00b197f0f8f8ddd",
+      "requestId": "0e535af9-78ad-4d94-a4a3-8147cd43e85a"
+    },
+    {
+      "repositoryUrl": "https://github.com/MoizIbnYousaf/ai-agent-skills",
+      "author": "MoizIbnYousaf",
+      "authorUrl": "https://github.com/MoizIbnYousaf",
+      "name": "MoizIbnYousaf/ai-agent-skills",
+      "description": "跨多种编码 Agent 的 Skills 安装与管理工具，附带技能模板和示例。",
+      "category": "Skills 管理",
+      "githubStars": 1149,
+      "starsCheckedAt": "2026-10-09T14:40:06.689368+00:00",
+      "defaultBranch": "main",
+      "commitSha": "6d95c788aa22ce39a4807b9a4c31c758a2036dc6",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "44e5409f18121d54a0dda11413cd1c6c51a44f78d156975dba4d9fe06b6664fc",
+          "sizeBytes": 1072
+        }
+      ],
+      "fileCount": 94,
+      "skillCount": 18,
+      "sizeBytes": 1373985,
+      "contentSha256": "0dff0983c7159ab4492025352b72f4e51a8196de79dcd7591eb1da24cbbca70a",
+      "requestId": "cc28b3c8-8c9d-4fae-acc2-d116c5bbaeba"
+    },
+    {
+      "repositoryUrl": "https://github.com/carnot-tech/jinba-consulting-pptx-skill",
+      "author": "carnot-tech",
+      "authorUrl": "https://github.com/carnot-tech",
+      "name": "carnot-tech/jinba-consulting-pptx-skill",
+      "description": "制作咨询风格的 PowerPoint 演示文稿，提供构图、图表与版式规则。",
+      "category": "演示与可视化",
+      "githubStars": 1144,
+      "starsCheckedAt": "2026-10-09T14:40:08.365658+00:00",
+      "defaultBranch": "main",
+      "commitSha": "78aa9fe811e2f747ee38b546d8a4287ddf251ff9",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e3657574eb820fc722c7a1dd41a7a02afcd72974abf16c0dc2b58fe124b2aa19",
+          "sizeBytes": 1071
+        }
+      ],
+      "fileCount": 31,
+      "skillCount": 1,
+      "sizeBytes": 3065401,
+      "contentSha256": "089cd336bb4c376aa371231aa1b6083b9b5b584727dc5d01eccc5daaabb57f29",
+      "requestId": "9603d567-0588-4ec3-b499-d827c145c8bf"
+    },
+    {
+      "repositoryUrl": "https://github.com/Gabberflast/academic-pptx-skill",
+      "author": "Gabberflast",
+      "authorUrl": "https://github.com/Gabberflast",
+      "name": "Gabberflast/academic-pptx-skill",
+      "description": "学术演示的论证结构、行动标题、图表与引用规范；配合单独安装的 PPTX 生成工具使用。",
+      "category": "演示与可视化",
+      "githubStars": 1138,
+      "starsCheckedAt": "2026-10-09T14:16:25.826654+00:00",
+      "defaultBranch": "main",
+      "commitSha": "9f2b703ffe8d1449851617665ab1ffb3516d54ac",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "20d9c009d0e5d7150da5e081c8d5a81463731dcf338323992a74a0648e6fb542",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 6,
+      "skillCount": 1,
+      "sizeBytes": 238243,
+      "contentSha256": "cf5cad84b6535316916926b075c2d127435e73ec868012e4a045b2233e1df17e",
+      "requestId": "904b9827-be08-49b2-9290-f31397f27064"
+    },
+    {
+      "repositoryUrl": "https://github.com/libtv-labs/libtv-skills",
+      "author": "libtv-labs",
+      "authorUrl": "https://github.com/libtv-labs",
+      "name": "libtv-labs/libtv-skills",
+      "description": "LibTV 视频创作服务的 Agent Skill，使用时需要配套服务和账号配置。",
+      "category": "视频创作",
+      "githubStars": 1138,
+      "starsCheckedAt": "2026-10-09T14:40:08.895853+00:00",
+      "defaultBranch": "main",
+      "commitSha": "c609246c1eca69f6bc129bcbb5d64c36734e4a4a",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "f9209da70e868f531222a9c2e75e195d67d8cde93ee1ec0cdb47002ffe0e0bf0",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 10,
+      "skillCount": 1,
+      "sizeBytes": 38592,
+      "contentSha256": "44d07cd2887f735883605e50f52c188d7af305160587edc5212a1b88d163f455",
+      "requestId": "031891fe-504b-412d-a709-d29b4deb8cab"
+    },
+    {
+      "repositoryUrl": "https://github.com/nexscope-ai/eCommerce-Skills",
+      "author": "nexscope-ai",
+      "authorUrl": "https://github.com/nexscope-ai",
+      "name": "nexscope-ai/eCommerce-Skills",
+      "description": "电商选品、营销、供应链和经营分析，覆盖 Amazon、Shopify、Etsy 等平台。",
+      "category": "营销与增长",
+      "githubStars": 1106,
+      "starsCheckedAt": "2026-10-09T14:16:26.451021+00:00",
+      "defaultBranch": "main",
+      "commitSha": "ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "ea4c0fa8d65010101a252d82ac6ac399a5000dcaaa5d6bc116383b6f5488bfbf",
+          "sizeBytes": 1067
+        }
+      ],
+      "fileCount": 212,
+      "skillCount": 162,
+      "sizeBytes": 2278803,
+      "contentSha256": "d06151bafed625bd1a78551aaca57686e9db8973f531993c3761ef38490e5b93",
+      "requestId": "39b454a0-00de-4b32-8e1f-ea786f5ef189"
+    },
+    {
+      "repositoryUrl": "https://github.com/raroque/vibe-security-skill",
+      "author": "raroque",
+      "authorUrl": "https://github.com/raroque",
+      "name": "raroque/vibe-security-skill",
+      "description": "检查 AI 辅助开发应用中的常见安全问题，提供代码审查流程。",
+      "category": "安全审查",
+      "githubStars": 1104,
+      "starsCheckedAt": "2026-10-09T14:40:11.192969+00:00",
+      "defaultBranch": "main",
+      "commitSha": "850938f20f6915e7c3688d85c0a838f7909c87bb",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d43d0919779524481c37b181ac261af455284fc9504c497f3f3c30af67b19100",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 15,
+      "skillCount": 1,
+      "sizeBytes": 40979,
+      "contentSha256": "8aef0803aaf04352ba916d587478a19955cb38f9db454e86b65048da29c284c4",
+      "requestId": "c5243f03-43ea-4c54-be24-f90feaefb5e9"
+    },
+    {
+      "repositoryUrl": "https://github.com/Kappaemme-git/codex-first-customer-finder-skill",
+      "author": "Kappaemme-git",
+      "authorUrl": "https://github.com/Kappaemme-git",
+      "name": "Kappaemme-git/codex-first-customer-finder-skill",
+      "description": "根据近期公开信息识别潜在首批客户，整理需求线索和证据。",
+      "category": "产品与创业",
+      "githubStars": 1075,
+      "starsCheckedAt": "2026-10-09T14:40:13.403797+00:00",
+      "defaultBranch": "main",
+      "commitSha": "d3f6964bd989745ac183edbd545c588a68451146",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "688e55c45116f53aef1e232a9ae4e22c84a566ba3e9dc63513207b31db2ce0a1",
+          "sizeBytes": 1074
+        }
+      ],
+      "fileCount": 17,
+      "skillCount": 1,
+      "sizeBytes": 112413,
+      "contentSha256": "c6a8aebf9a98a2ff6281977fb6de29a9795af9a66b812fedf641db88f05e24bd",
+      "requestId": "e4d19cc0-734e-4289-91f7-ed58b9aeb5b8"
+    },
+    {
+      "repositoryUrl": "https://github.com/rorkai/app-store-connect-cli-skills",
+      "author": "rorkai",
+      "authorUrl": "https://github.com/rorkai",
+      "name": "rorkai/app-store-connect-cli-skills",
+      "description": "通过 App Store Connect CLI 处理应用发布和相关管理工作。",
+      "category": "Apple 平台开发",
+      "githubStars": 1064,
+      "starsCheckedAt": "2026-10-09T14:16:26.839321+00:00",
+      "defaultBranch": "main",
+      "commitSha": "9c7e769f09a18237c9bd9c70f70aef65f0cd0391",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "56fde5f70d5af10b746863208dee6bf0b99e49066da1f76e1800c760e276139b",
+          "sizeBytes": 1070
+        }
+      ],
+      "fileCount": 43,
+      "skillCount": 25,
+      "sizeBytes": 278330,
+      "contentSha256": "b3ff57baaca200d832b252b507851149541d38500071639a096c1157ffabfd4e",
+      "requestId": "4ea19b23-33d2-448a-a662-4453ff11061f"
+    },
+    {
+      "repositoryUrl": "https://github.com/zhnnky329/MathModeling-skills",
+      "author": "zhnnky329",
+      "authorUrl": "https://github.com/zhnnky329",
+      "name": "zhnnky329/MathModeling-skills",
+      "description": "数学建模竞赛的分阶段工作流，涵盖分析、求解与 Python、MATLAB 代码实现。",
+      "category": "数学建模",
+      "githubStars": 1061,
+      "starsCheckedAt": "2026-10-09T14:40:15.765262+00:00",
+      "defaultBranch": "main",
+      "commitSha": "0b46e9c78335624ed3738b86087b6e8ff9ac1f0d",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "19bceccae3458e3997bfe6c143cb157a0962f165825af213cf47ddda93c3aa34",
+          "sizeBytes": 1069
+        },
+        {
+          "path": "plugins/mathmodeling-skills/LICENSE",
+          "sha256": "19bceccae3458e3997bfe6c143cb157a0962f165825af213cf47ddda93c3aa34",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 152,
+      "skillCount": 87,
+      "sizeBytes": 683362,
+      "contentSha256": "94c666755713edb9c103b0fa6d327f8492ddb885d1fda99a47f1bc4b4b41196e",
+      "requestId": "0722e012-eaa4-407c-a935-0b0b0939fb6e"
+    },
+    {
+      "repositoryUrl": "https://github.com/numman-ali/n-skills",
+      "author": "numman-ali",
+      "authorUrl": "https://github.com/numman-ali",
+      "name": "numman-ali/n-skills",
+      "description": "面向 Claude Code、Codex 和 openskills 的插件目录与配套 Skills。",
+      "category": "Skills 管理",
+      "githubStars": 1051,
+      "starsCheckedAt": "2026-10-09T14:40:15.764628+00:00",
+      "defaultBranch": "main",
+      "commitSha": "fdabc47a713c9e00925296f1d9c65e139dce3ed4",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "00de30d94c76755d154847b78dec32058eb0a34ff94d6a75b38c9cc46564738b",
+          "sizeBytes": 10759
+        }
+      ],
+      "fileCount": 68,
+      "skillCount": 5,
+      "sizeBytes": 660671,
+      "contentSha256": "45566e683a0b8f7bd34e80b7920246ab4d107598dcb17339b387c5c4184765a0",
+      "requestId": "c81070ad-1d66-4572-bfe9-c8ac55d10abe"
+    },
+    {
+      "repositoryUrl": "https://github.com/agiwhitelist/auteur",
+      "author": "agiwhitelist",
+      "authorUrl": "https://github.com/agiwhitelist",
+      "name": "agiwhitelist/auteur",
+      "description": "以镜头与叙事思路规划网页视觉，包含设计约束、素材组织和界面检查。",
+      "category": "界面设计",
+      "githubStars": 1035,
+      "starsCheckedAt": "2026-10-09T14:40:18.514386+00:00",
+      "defaultBranch": "main",
+      "commitSha": "9bca227df9877e60dc45d49783c8cbd885eccd9b",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "030435fc8e382b307cd0d592b43c307634abae20b69da361d356fea230ee0672",
+          "sizeBytes": 1069
+        }
+      ],
+      "fileCount": 49,
+      "skillCount": 1,
+      "sizeBytes": 2970144,
+      "contentSha256": "50f32a9afb75d6207f2eaf60b4a149f22ed098ddc2fb9d12940740091a37a64f",
+      "requestId": "ed57220f-6d3f-4003-99a4-5ceff15ba4bd"
+    },
+    {
+      "repositoryUrl": "https://github.com/Raymondhou0917/speak-human-tw",
+      "author": "Raymondhou0917",
+      "authorUrl": "https://github.com/Raymondhou0917",
+      "name": "Raymondhou0917/speak-human-tw",
+      "description": "繁体中文润色，改善 AI 化表达、词汇习惯与标点。",
+      "category": "写作润色",
+      "githubStars": 1033,
+      "starsCheckedAt": "2026-10-09T14:16:28.143640+00:00",
+      "defaultBranch": "master",
+      "commitSha": "2b71bc06fc56c51d0f0f6939ef894b9e83190c19",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "36272b8d83c5cbbb8f3e9168637c3379795ffaa2fc4c280dadac29a2cdfdcf56",
+          "sizeBytes": 1083
+        }
+      ],
+      "fileCount": 29,
+      "skillCount": 1,
+      "sizeBytes": 1832575,
+      "contentSha256": "8471f7297b8a793011e309c3235e23f1461639a22986cac25bcfd017c47ba651",
+      "requestId": "ccc18025-a49d-474e-a439-54761c52954f"
+    },
+    {
+      "repositoryUrl": "https://github.com/kostja94/marketing-skills",
+      "author": "kostja94",
+      "authorUrl": "https://github.com/kostja94",
+      "name": "kostja94/marketing-skills",
+      "description": "覆盖 SEO、社交媒体、落地页、付费广告和增长策略的营销 Skills。",
+      "category": "营销与增长",
+      "githubStars": 1026,
+      "starsCheckedAt": "2026-10-09T14:16:28.269608+00:00",
+      "defaultBranch": "main",
+      "commitSha": "8dd89c57395e4dbe079f0387a495c6b9795818a2",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9f06c77b8931e39ae797195faa02c45a9d1785c844d6aa1dcb2056a52fbaa6f5",
+          "sizeBytes": 1065
+        }
+      ],
+      "fileCount": 188,
+      "skillCount": 172,
+      "sizeBytes": 900550,
+      "contentSha256": "661ba2080f96f92a56e7de50d92824a931d37501fb7270d621041e9d858051ba",
+      "requestId": "a711520c-dff1-443d-9d37-7e92012d2726"
+    },
+    {
+      "repositoryUrl": "https://github.com/dzhng/skills",
+      "author": "dzhng",
+      "authorUrl": "https://github.com/dzhng",
+      "name": "dzhng/skills",
+      "description": "从想法探索、规格编写、实现到审查和研究的工程 Skills。",
+      "category": "开发工作流",
+      "githubStars": 1021,
+      "starsCheckedAt": "2026-10-09T14:16:28.934196+00:00",
+      "defaultBranch": "main",
+      "commitSha": "d51322866ffa298838346960414d18a221b52588",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "653bb41fb060605c0e01fd72e6e6be72bffef192e0ab6ae8b0cd4abf9ba8d040",
+          "sizeBytes": 1068
+        },
+        {
+          "path": "skills/engineering/retro/LICENSE",
+          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 72,
+      "skillCount": 30,
+      "sizeBytes": 1700752,
+      "contentSha256": "aba44e9eba98ee7df58fac50f906e6c8c9154e96d94c922022657ad93eb75117",
+      "requestId": "beacc2cd-409d-41ba-8292-74ec2d82c3b8"
+    },
+    {
+      "repositoryUrl": "https://github.com/google-gemma/gemma-skills",
+      "author": "google-gemma",
+      "authorUrl": "https://github.com/google-gemma",
+      "name": "google-gemma/gemma-skills",
+      "description": "Google Gemma 官方 Skills，提供模型使用和模型与 Agent 交互的工作流。",
+      "category": "AI 应用开发",
+      "githubStars": 1007,
+      "starsCheckedAt": "2026-10-09T14:40:22.186820+00:00",
+      "defaultBranch": "main",
+      "commitSha": "f86bcc6a40c8de2d153f36bac0d02dea217eb39b",
+      "license": "Apache-2.0",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "sizeBytes": 11357
+        }
+      ],
+      "fileCount": 14,
+      "skillCount": 2,
+      "sizeBytes": 95169,
+      "contentSha256": "e9ce9968d45081708f34346d9bda05708dd3ec870d0acc901a749af3925b1c85",
+      "requestId": "5fddd884-a6a1-4505-8658-505d967fa952"
+    },
+    {
+      "repositoryUrl": "https://github.com/pengjunchi0/codex-visio-paper-figure-skill",
+      "author": "pengjunchi0",
+      "authorUrl": "https://github.com/pengjunchi0",
+      "name": "pengjunchi0/codex-visio-paper-figure-skill",
+      "description": "将科研图表转为可编辑的 Visio 等格式，方便论文作者调整图形细节。",
+      "category": "科研可视化",
+      "githubStars": 1005,
+      "starsCheckedAt": "2026-10-09T14:40:22.219943+00:00",
+      "defaultBranch": "main",
+      "commitSha": "816960dd9608d21d3f47a2af8768c5a00464988a",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "16e5537c7ba3001f82ac16d8a15d9fd12db2de25981e3318b881c26c809b9d75",
+          "sizeBytes": 1068
+        }
+      ],
+      "fileCount": 8,
+      "skillCount": 1,
+      "sizeBytes": 47613,
+      "contentSha256": "a87b81b12df338911ee08d423439610c75a5c39fe1aef56b51a492e2a9527878",
+      "requestId": "85a2f09b-78f0-441f-9a9c-0e3fb473447a"
+    }
+  ],
+  "deferred": [
+    {
+      "repositoryUrl": "https://github.com/obra/superpowers",
+      "githubStars": 296786,
+      "commitSha": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+      "reasons": [
+        "sensitive data detected in \"skills/brainstorming/scripts/server.cjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mattpocock/skills",
+      "githubStars": 282091,
+      "commitSha": "49dd158d1076134a641b33efb035946536778336",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：AGENTS.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/anthropics/skills",
+      "githubStars": 180111,
+      "commitSha": "9d630808e4add0a7146de4af9384155d5dee350a",
+      "reasons": [
+        "混合许可证；文档类 Skills 包含限制再分发的条款，暂不整库收录。",
+        "整库许可证需单独核对：None",
+        "sensitive data detected in \"skills/claude-api/csharp/claude-api/README.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "githubStars": 134126,
+      "commitSha": "50d8a7de0900119855614541f15a1a616691eb33",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：gallery/data/styles.csv",
+        "sensitive data detected in \".claude/skills/design/scripts/icon/generate.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Graphify-Labs/graphify",
+      "githubStars": 124918,
+      "commitSha": "5b74d7d74911cf435c8f1636b6f96ea202cc6246",
+      "reasons": [
+        "单文件超过 5 MiB：docs/discord-banner.png",
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/addyosmani/agent-skills",
+      "githubStars": 103688,
+      "commitSha": "1401c8b8030e023baeebb31781a6653fe8e93026",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.opencode/skills",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mvanhorn/last30days-skill",
+      "githubStars": 63824,
+      "commitSha": "a3b73fc5f3fb3a464d6dfb7660eec7ef1dc6d366",
+      "reasons": [
+        "单文件超过 5 MiB：media/pr-assets/last30days-ad.gif"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/coreyhaines31/marketingskills",
+      "githubStars": 53890,
+      "commitSha": "1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/VoltAgent/awesome-openclaw-skills",
+      "githubStars": 53016,
+      "commitSha": "01583d57f727519006058633830b767ade714c0b",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/zhayujie/CowAgent",
+      "githubStars": 47298,
+      "commitSha": "4c97822d2541e1b2e84d11bd65ed61e9649107cd",
+      "reasons": [
+        "sensitive data detected in \".github/workflows/release-overlay.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Yuan1z0825/nature-skills",
+      "githubStars": 46870,
+      "commitSha": "2a20e4a0868ef9094257cb5386cfe623454ae092",
+      "reasons": [
+        "sensitive data detected in \"skills/nature-academic-search/mcp-server/sources/pubmed.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/zhaoxuya520/reverse-skill",
+      "githubStars": 40402,
+      "commitSha": "cab634bd855fc287f6e420c1f36fd1a6b9245960",
+      "reasons": [
+        "CTF-Sandbox-Orchestrator/LICENSE 包含非商业及其他使用限制，暂不整库收录。",
+        "sensitive data detected in \"skills/field-journal/2026-05-25_pentest-cf-access-sibling-subdomain-cookie-poisoning.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/wshobson/agents",
+      "githubStars": 40308,
+      "commitSha": "46891e7e60da0e52baf1050b7b6391b64e84c6d9",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/VoltAgent/awesome-agent-skills",
+      "githubStars": 35417,
+      "commitSha": "8e70c976525abe568c6d6698f555bf57218aac80",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills",
+      "githubStars": 34029,
+      "commitSha": "54a798831d2266a3ca61ce68a7acb80b81160d57",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alchaincyf/nuwa-skill",
+      "githubStars": 33878,
+      "commitSha": "fe0374687037c4cc51a65c1e0c145afe2981dc69",
+      "reasons": [
+        "单文件超过 5 MiB：advisory-board.png, cover-distill-minds.png"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/vercel-labs/agent-skills",
+      "githubStars": 32117,
+      "commitSha": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "reasons": [
+        "整库许可证需单独核对：None",
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/googleworkspace/cli",
+      "githubStars": 31284,
+      "commitSha": "a3768d0e82ad83cca2da97724e46bea4ff0e6dbd",
+      "reasons": [
+        "sensitive data detected in \"crates/google-workspace-cli/src/auth.rs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alirezarezvani/claude-skills",
+      "githubStars": 27915,
+      "commitSha": "19392f7a08264ed00486a251f5b2098321771f94",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.codex/skills/a11y-audit, .codex/skills/ab-test-setup, .codex/skills/ad-creative",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/OthmanAdi/planning-with-files",
+      "githubStars": 27356,
+      "commitSha": "41f60aeca8bae0b145ec0e9421a7abd747ae2b69",
+      "reasons": [
+        "单文件超过 5 MiB：media/pwf-context-story-v1.gif, media/v3-banner.png",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/JimLiu/baoyu-skills",
+      "githubStars": 26472,
+      "commitSha": "1567581c26ec29f4216c6e6835415bf30343b0e3",
+      "reasons": [
+        "sensitive data detected in \"packages/baoyu-fetch/src/adapters/youtube/transcript.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/agentskills/agentskills",
+      "githubStars": 25991,
+      "commitSha": "69ef37e9424c0a7ea9dd2293b559e43ec8176379",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/titanwings/distilly",
+      "githubStars": 25437,
+      "commitSha": "b830d3dcbde006370f141155795b89021e3a947b",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/flipped-aurora/gin-vue-admin",
+      "githubStars": 25052,
+      "commitSha": "bcc3d1475aa0ea9bf24e281888fb53be1452a2e8",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/KKKKhazix/khazix-skills",
+      "githubStars": 21274,
+      "commitSha": "322346ded8129436b3f64707789a73e732ae24d9",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：neat-freak/evals/fixtures/eval-1-routine-dev-sync/workspace/taskflow/AGENTS.md, neat-freak/evals/fixtures/eval-2-memory-conflict/workspace/notesapp/AGENTS.md, neat-freak/evals/fixtures/eval-4-cross-project/workspace/auth-center/AGENTS.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/google/skills",
+      "githubStars": 21075,
+      "commitSha": "82f5db4c8b72a5801957b5a087c2fb14209ddcc4",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：plugins/cloud/data-cloud/alloydb, plugins/cloud/data-cloud/alloydb-omni, plugins/cloud/data-cloud/bigquery-data-analytics"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/NVIDIA/SkillSpector",
+      "githubStars": 19763,
+      "commitSha": "5edc347c320bd516f8ff38df200a63831bf92e80",
+      "reasons": [
+        "sensitive data detected in \".env.example\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/teng-lin/notebooklm-py",
+      "githubStars": 19666,
+      "commitSha": "1d8920fddb49aa6ad4b0ad4548c3047a4d0e22ce",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/SkillOpt",
+      "githubStars": 18156,
+      "commitSha": "343db229dbd5ddaf9df6b1d5540d8bcdb2604d5c",
+      "reasons": [
+        "sensitive data detected in \"scripts/eval_only.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering",
+      "githubStars": 18098,
+      "commitSha": "58b55a8921758d13453b440704fb1b5b208c0b0e",
+      "reasons": [
+        "sensitive data detected in \"examples/interleaved-thinking/reasoning_trace_optimizer/cli.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tradecatlabs/vibe-coding-cn",
+      "githubStars": 17332,
+      "commitSha": "fe16b4c563ca6de9b9c865deede9e26fcb803852",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：skills/auto-skill/scripts/Skill_Seekers-development, skills/auto-skill/scripts/skill-seekers-configs, skills/auto-skill/scripts/skill-seekers-src"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/greensock/gsap-skills",
+      "githubStars": 16075,
+      "commitSha": "aed9cfd3277740755f6bfc1155c7aa645403b760",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md, GEMINI.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/yusufkaraaslan/Skill_Seekers",
+      "githubStars": 15121,
+      "commitSha": "5b5d8dfca263fa76e6daae9f292890b311ef36aa",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：api/configs_repo",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/MiniMax-AI/skills",
+      "githubStars": 13676,
+      "commitSha": "60aaae52bb2af8162732751a4332f62a5fef518b",
+      "reasons": [
+        "sensitive data detected in \"skills/flutter-dev/references/forms.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Orchestra-Research/AI-Research-SKILLs",
+      "githubStars": 13388,
+      "commitSha": "773a52944ba4747a18bd4ae9ade53fff041adcbc",
+      "reasons": [
+        "单文件超过 5 MiB：video-promo/ai-research-skills-promo/public/music.wav"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tandpfun/skill-icons",
+      "githubStars": 13237,
+      "commitSha": "7f7e691e71aec64e8354bf697835e009d1ad80f8",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ConardLi/garden-skills",
+      "githubStars": 12785,
+      "commitSha": "aaf9a82f5efd73e87cc0998edc398e75bfc35901",
+      "reasons": [
+        "单文件超过 5 MiB：website/web-design-website/public/video.mp4"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/trimstray/test-your-sysadmin-skills",
+      "githubStars": 11875,
+      "commitSha": "d566322e4f6a656fb835bf34712a67db269d5f2d",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Jeffallan/claude-skills",
+      "githubStars": 11792,
+      "commitSha": "1be15d8064f88fc25216442406d40add8fd23b53",
+      "reasons": [
+        "sensitive data detected in \"skills/atlassian-mcp/references/authentication-patterns.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/MemTensor/MemOS",
+      "githubStars": 11773,
+      "commitSha": "a7367d07e55db61099f7b4e2c1108bc5831a24f3",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/handsomestWei/patent-disclosure-skill",
+      "githubStars": 11198,
+      "commitSha": "6935a14d342ed9c7a07440c999d1b7bf1852a701",
+      "reasons": [
+        "sensitive data detected in \"skills/patent-oa/tools/config.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/huggingface/skills",
+      "githubStars": 11151,
+      "commitSha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+      "reasons": [
+        "sensitive data detected in \"skills/train-sentence-transformers/references/hf_jobs_execution.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tigerless-labs/autoharness",
+      "githubStars": 10759,
+      "commitSha": "9eec6232587ff2c4deeded00ac467de19532d763",
+      "reasons": [
+        "sensitive data detected in \"src/autoharness/lib/redaction_rules.toml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alchaincyf/zhangxuefeng-skill",
+      "githubStars": 10434,
+      "commitSha": "3501b1e679cf595a6af800619af757aba46d7574",
+      "reasons": [
+        "单文件超过 5 MiB：assets/hero.gif"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Agents365-ai/drawio-skill",
+      "githubStars": 10026,
+      "commitSha": "88fd9236bc532aac4c25cb008a8bd59bc650b904",
+      "reasons": [
+        "sensitive data detected in \"examples/architecture-studio/codebase/checkout/persistence.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AgriciDaniel/claude-ads",
+      "githubStars": 9838,
+      "commitSha": "ac21644933910419529bcf81efb95a9ca71edf81",
+      "reasons": [
+        "sensitive data detected in \"scripts/generate_image.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ibelick/ui-skills",
+      "githubStars": 9547,
+      "commitSha": "587ea305b948ad34f0c2d5c2ea4211d428f66ed8",
+      "reasons": [
+        "公开检查拒绝凭据文件路径：.env.example"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/genspark-ai/genoffice",
+      "githubStars": 9088,
+      "commitSha": "1ca5e9adfc1807a158db19741eff825dba9ab757",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/nexu-io/html-anything",
+      "githubStars": 9054,
+      "commitSha": "553ed98c283f9c0f489902d035416a972d6a9699",
+      "reasons": [
+        "sensitive data detected in \"next/src/lib/deploy/url-check.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Tencent/BrowserSkill",
+      "githubStars": 8511,
+      "commitSha": "7ba5ea9d947d7fc6927f03988ea0f922db5d2357",
+      "reasons": [
+        "sensitive data detected in \"apps/extension/src/content/record-capture.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/google-labs-code/stitch-skills",
+      "githubStars": 8454,
+      "commitSha": "0337446dadde6f8c94210444e2aa9d546126480f",
+      "reasons": [
+        "sensitive data detected in \"plugins/stitch-design/skills/upload-to-stitch/scripts/upload_to_stitch.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jnMetaCode/superpowers-zh",
+      "githubStars": 8281,
+      "commitSha": "2daf57c0fb157521de24c62ac9c3254630eefbed",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：AGENTS.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/NomaDamas/k-skill",
+      "githubStars": 7823,
+      "commitSha": "50d7bb30f9e2d6b8b09da1055d497fe616820e30",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/android/skills",
+      "githubStars": 7736,
+      "commitSha": "42dc2270e96032bd860bb94511e440aa00a43125",
+      "reasons": [
+        "sensitive data detected in \"identity/restore-credentials/references/android/identity/passkeys/sign-in-with-passkeys.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Gentleman-Programming/gentle-ai",
+      "githubStars": 7626,
+      "commitSha": "417c7a24edbbdb6c691a38dc5b75316399a358a8",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/trailofbits/skills",
+      "githubStars": 7446,
+      "commitSha": "82fe8226252622fa807643bdca1710901198553a",
+      "reasons": [
+        "整库许可证需单独核对：CC-BY-SA-4.0",
+        "包含当前导入器不接受的符号链接或子模块：plugins/modern-python/hooks/shims/pip3, plugins/modern-python/hooks/shims/python3",
+        "sensitive data detected in \"plugins/constant-time-analysis/skills/constant-time-analysis/references/swift.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/zenstory-ai/oh-story-claudecode",
+      "githubStars": 7384,
+      "commitSha": "87f2e7e223077023e0b0c0796d5704c1b0b02088",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.agents/skills"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/SnailSploit/Claude-Red",
+      "githubStars": 7365,
+      "commitSha": "739512a8588b28ff3b554e669391c22508602878",
+      "reasons": [
+        "sensitive data detected in \"Skills/api/offensive-api-security/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Master-cai/Research-Paper-Writing-Skills",
+      "githubStars": 7354,
+      "commitSha": "77e7c2c1ba06f7d71844873147665437a03aac1b",
+      "reasons": [
+        "优先收录通用学术写作仓库；该项目引用外部课程笔记，需要单独确认来源许可。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tw93/Waza",
+      "githubStars": 7188,
+      "commitSha": "20b26d9352413db5e000639c40199bf9f8ccde90",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/wbh604/UZI-Skill",
+      "githubStars": 7131,
+      "commitSha": "650788c54a9b2e042bf7f983f16dbf8d727fce1d",
+      "reasons": [
+        "sensitive data detected in \"skills/deep-analysis/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/MengTo/Skills",
+      "githubStars": 6681,
+      "commitSha": "83a47fee32f0b6349bff1fede99257a5ef03dc93",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/SawyerHood/dev-browser",
+      "githubStars": 6656,
+      "commitSha": "a25e7672e199153b2f5b52a841a62436a28d925f",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ningzimu/codex-ppt-skill",
+      "githubStars": 6591,
+      "commitSha": "6d76c0eded7f8a8b0c4e304697e6f2bda7c408b2",
+      "reasons": [
+        "单文件超过 5 MiB：assets/good-skill-design.pptx"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AlphaGBM/skills",
+      "githubStars": 6486,
+      "commitSha": "b625a392c83dd39f7a4735c19ca3f0e7ead851a9",
+      "reasons": [
+        "sensitive data detected in \"cli/docs/CLI_USAGE.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/therealXiaomanChu/ex-skill",
+      "githubStars": 6458,
+      "commitSha": "a7c06380fe74d0872840830fa6d4b863363c1f12",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/anysearch-ai/anysearch-skill",
+      "githubStars": 6407,
+      "commitSha": "9b91ee215164de60d61c7d63789c891a1948b039",
+      "reasons": [
+        "公开检查拒绝凭据文件路径：.env.example"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/czlonkowski/n8n-skills",
+      "githubStars": 6398,
+      "commitSha": "cb6caa7b3ae8d4206c768d7f69f598438ef25595",
+      "reasons": [
+        "sensitive data detected in \"skills/n8n-code-javascript/BUILTIN_FUNCTIONS.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/heilcheng/awesome-agent-skills",
+      "githubStars": 6265,
+      "commitSha": "de9056857eb0e96da833469d2ee3ac392058225d",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/browser-act/skills",
+      "githubStars": 6124,
+      "commitSha": "11c057b03f92101642cadc9f840564574120d184",
+      "reasons": [
+        "sensitive data detected in \"solutions/ecommerce/airbnb-listing-detail/scripts/listing-detail.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/antfu/skills",
+      "githubStars": 5955,
+      "commitSha": "feb0f3aba6566426f12230e7fc7a10d97c1293bb",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：sources/nitro, sources/nuxt, sources/pinia"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/xingkongliang/skills-manager",
+      "githubStars": 5821,
+      "commitSha": "b2dba38d498930f23821445bf762cb25e8583436",
+      "reasons": [
+        "单文件超过 5 MiB：assets/demo.gif, assets/icon-tray-source-original.png"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Fokkyp/SoftwareCopyright-Skill",
+      "githubStars": 5801,
+      "commitSha": "947d5963194bfda8ce57b8b454b486f13359dee4",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：skills/software-copyright-materials"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/twostraws/SwiftUI-Agent-Skill",
+      "githubStars": 5261,
+      "commitSha": "f9800713b24580bc444931949aad4519128605e8",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：swiftui-pro/skills/swiftui-pro/references"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/iflytek/skillhub",
+      "githubStars": 5166,
+      "commitSha": "72429e6f69ac5d04e8314b1eed2f8c055809c9f5",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/RyanFitzgerald/devportfolio",
+      "githubStars": 4984,
+      "commitSha": "852d650fb0a8cf0c98f874af5a56a0a9b7d7d4b7",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/remotion-dev/skills",
+      "githubStars": 4946,
+      "commitSha": "32b241b97f4e0e4ab61fe9a41b05e6e64503f8c5",
+      "reasons": [
+        "整库许可证需单独核对：None",
+        "sensitive data detected in \"skills/remotion-best-practices/remotion-docs/REFERENCE.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/elementalsouls/Claude-BugHunter",
+      "githubStars": 4825,
+      "commitSha": "3eb7c5068f09081416626fdf25c11c0e328313cd",
+      "reasons": [
+        "LICENSE-CONTENT / NOTICE 对内容另设条款，不能仅按根目录 MIT 标签分发。",
+        "sensitive data detected in \"USAGE.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/joe-shenouda/awesome-cyber-skills",
+      "githubStars": 4718,
+      "commitSha": "c0681bf3f0e25490efb5d2f75e503fa9e6427ff8",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/zLanqing/codex-claude-academic-skills",
+      "githubStars": 4683,
+      "commitSha": "7ed6377f0efb6a38951b48ef03b19d996e454b1f",
+      "reasons": [
+        "sensitive data detected in \"scientific-toolkit-skill/references/scientific-skills/citation-management/scripts/search_pubmed.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/antvis/mcp-server-chart",
+      "githubStars": 4393,
+      "commitSha": "e2a8fb7c185e17c75c067817ff1a2acfddf49aa1",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/sergebulaev/linkedin-skills",
+      "githubStars": 4392,
+      "commitSha": "bfa41ff5d2b137f6023f88d9c9fda68d75b4ed5f",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.claude/skills/linkedin-comment-drafter, .claude/skills/linkedin-content-planner, .claude/skills/linkedin-employee-advocacy"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/0x0funky/agent-sprite-forge",
+      "githubStars": 4369,
+      "commitSha": "5324342fdfab72430f4e9604f3fe427009f8596d",
+      "reasons": [
+        "单文件超过 5 MiB：src/pokemonlike2.png",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Observal/Observal",
+      "githubStars": 4279,
+      "commitSha": "3bc173c64650540ed516f813db01f0029588ab12",
+      "reasons": [
+        "sensitive data detected in \".env.example\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/JimLiu/baoyu-design",
+      "githubStars": 4270,
+      "commitSha": "6530033592bf7fa58bc1a5a2a2ad278da45213a9",
+      "reasons": [
+        "sensitive data detected in \"skills/baoyu-design/references/upstream-sync/built-in-skills.json\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/danyuchn/asd-ste100-skill",
+      "githubStars": 4227,
+      "commitSha": "32511c6992ecb5f1971e46a2943f2e6adceedafe",
+      "reasons": [
+        "涉及 ASD-STE100 标准规则的再整理，尚需核对标准文本与项目自身内容的授权边界。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/skill-recorder",
+      "githubStars": 4213,
+      "commitSha": "b05d59036182e897e1a60e90651e775cf5f97e8d",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/muxuuu/serenity-skill",
+      "githubStars": 4058,
+      "commitSha": "7175becb67cccdeae1ae03cbb8428fe1954b892d",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/evalstate/fast-agent",
+      "githubStars": 3928,
+      "commitSha": "9574ab5db872ef714dfc59ffc1a97f88593553b6",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：skills-repo",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/nowork-studio/notfair-plugin",
+      "githubStars": 3913,
+      "commitSha": "f3ca1378948d08ae3316f44e8e9923dc094c2e17",
+      "reasons": [
+        "sensitive data detected in \"seo/seo-analysis/scripts/fetch_wordpress_content.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/HughYau/qiushi-skill",
+      "githubStars": 3811,
+      "commitSha": "5ace7173b2d71fa7848c56a29f74b39d611c6cb3",
+      "reasons": [
+        "与首批已有方法论仓库用途重叠，作为候补。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/glitternetwork/pinme",
+      "githubStars": 3748,
+      "commitSha": "7822b0501607786958ecb458f3bd02a061933efa",
+      "reasons": [
+        "sensitive data detected in \"bin/utils/prebuiltDistConfig.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AvdLee/SwiftUI-Agent-Skill",
+      "githubStars": 3668,
+      "commitSha": "204dba7c67256a8b707ee3fbc5759a824191974f",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：swiftui-expert-skill"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ericosiu/ai-marketing-skills",
+      "githubStars": 3617,
+      "commitSha": "8088e1a167804d5615f6e982f62e5b4b6ff8f2f1",
+      "reasons": [
+        "sensitive data detected in \"content-ops/scripts/content-transform.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/foryourhealth111-pixel/Vibe-Skills",
+      "githubStars": 3616,
+      "commitSha": "ddcaa2affca93c1efe026d008b6b93709e5fb7e2",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/davepoon/buildwithclaude",
+      "githubStars": 3608,
+      "commitSha": "616deb5c66db0b06a6afeb7ae675e70a1b6e3b34",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/NVIDIA/skills",
+      "githubStars": 3547,
+      "commitSha": "6d3523563914a577e26425854988c7d3f02ed0b7",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/white0dew/XiaohongshuSkills",
+      "githubStars": 3487,
+      "commitSha": "e190969ce4418db36a9ce381c6aac6d741a6d5ec",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/FireRedTeam/FireRed-OpenStoryline",
+      "githubStars": 3472,
+      "commitSha": "c9e945215586f45c12a61c1951ee9a8e9c43a027",
+      "reasons": [
+        "sensitive data detected in \".claude/skills/openstoryline-install/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/notdog1998/yourself-skill",
+      "githubStars": 3435,
+      "commitSha": "9deb1a87b1231fec85cadf2ef690fa49fef519ca",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/samber/cc-skills-golang",
+      "githubStars": 3431,
+      "commitSha": "8e899e20ff0cd4dc524af3993e4c62d8ee8c5717",
+      "reasons": [
+        "sensitive data detected in \"skills/golang-security/references/secrets.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ljagiello/ctf-skills",
+      "githubStars": 3421,
+      "commitSha": "c332c7be1b27cb64639a20124ac55ba916adef92",
+      "reasons": [
+        "sensitive data detected in \"ctf-crypto/modern-ciphers-2.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jinchenma94/bazi-skill",
+      "githubStars": 3408,
+      "commitSha": "112a5d84cd1a001a0038cafca3be68d93e4c0cc9",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/himself65/finance-skills",
+      "githubStars": 3385,
+      "commitSha": "01fc7b4b34aeb1d1fb3ae9e6e809d46df9d87e30",
+      "reasons": [
+        "sensitive data detected in \"opencli-plugins/tradingview/lib/cookies.js\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ScrapeCreators/social-media-research-skills",
+      "githubStars": 3383,
+      "commitSha": "64ba7b4dea71e130d2712ffb6c1c1024b3b7c4b2",
+      "reasons": [
+        "sensitive data detected in \"skills/scrapecreators-api/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Norman-bury/research-writing-skill",
+      "githubStars": 3382,
+      "commitSha": "6f7959554b4614d879d79cb4ece9ed04a7c8a88c",
+      "reasons": [
+        "单文件超过 5 MiB：img/gemini-federated-calibration-diagram.png"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/yanliudesign/mono-color-skill",
+      "githubStars": 3380,
+      "commitSha": "c8ff70597ddedcd65f21a0b528f6a70c35690b0a",
+      "reasons": [
+        "单文件超过 5 MiB：examples/example-sardines.png"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/google-deepmind/science-skills",
+      "githubStars": 3229,
+      "commitSha": "68832757cbbf941c620b71df5756cf6e5cc287b0",
+      "reasons": [
+        "sensitive data detected in \"skills/literature_search_openalex/scripts/openalex_cli.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Forward-Future/loopy",
+      "githubStars": 3174,
+      "commitSha": "75966cbd572a4185064971c9fe5e9c52e8f8456d",
+      "reasons": [
+        "sensitive data detected in \"loop-library/scripts/check.mjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alexa/alexa-skills-kit-sdk-for-nodejs",
+      "githubStars": 3135,
+      "commitSha": "ea88cef4a72a44abf1aff6083472ba08a665862a",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jherrodthomas/automotive-skills-suite",
+      "githubStars": 3130,
+      "commitSha": "026bb63b8eb596832a6b9ee8feac3c042789ebb7",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/filtalgo/Filtmall-Shopping-Skill",
+      "githubStars": 3124,
+      "commitSha": "9904c8df53c97cb0feb17f2915451a319e8eef83",
+      "reasons": [
+        "assets/LICENSE 声明素材为专有资产，不能只按根目录 Apache-2.0 标签整库收录。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/skills",
+      "githubStars": 3094,
+      "commitSha": "3898ec894e90afdfdae982a925db28b6a7b334e3",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.github/plugins/microsoft-foundry/skills/foundry-governance, .github/plugins/microsoft-foundry/skills/foundry-hosted-agents, .github/plugins/microsoft-foundry/skills/foundry-iq-knowledge-bases",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/RKiding/Awesome-finance-skills",
+      "githubStars": 3061,
+      "commitSha": "853f09b4d0baae747759ed31e21ed5c5b2316a5f",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Nanako0129/sepia",
+      "githubStars": 3055,
+      "commitSha": "d6cc9cbe9f9302552e6b4627756c7a9eb55affd1",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.agents/skills/sepia, .qwenpaw-plugin/skills"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Agentchengfeng/chengfeng-videocut-skills",
+      "githubStars": 3044,
+      "commitSha": "a33b43e08c34fa8beeb5e78498e852f4e80975a5",
+      "reasons": [
+        "sensitive data detected in \"plugins/chengfeng-videocut/scripts/bug-report.test.cjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/nateherkai/scroll-craft",
+      "githubStars": 3011,
+      "commitSha": "75d81f74e83692add18cd7a8a8e078b8a887a579",
+      "reasons": [
+        "公开检查拒绝凭据文件路径：.env.example"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tradermonty/claude-trading-skills",
+      "githubStars": 2977,
+      "commitSha": "eab8d5cb97b9982d915944cdaa2df972fa396b22",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：examples/daily-market-dashboard/.claude/skills",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/bergside/design-md-chrome",
+      "githubStars": 2975,
+      "commitSha": "8e07614fb18752ab1ee14dd65a8ff93e63c9b13b",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/xstongxue/best-skills",
+      "githubStars": 2963,
+      "commitSha": "9aa4e555950da6e43e7d98c5f0c7b70264204850",
+      "reasons": [
+        "包含 office-file-process、pdf 等目录的限制性许可证，暂不整库收录。",
+        "sensitive data detected in \"skills/dev-workflow/reference/review-kit/guides/java.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ciembor/agent-rules-books",
+      "githubStars": 2940,
+      "commitSha": "893a88a6fce3a80c565bf39ac65021b43a8b2990",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：_rule-workbench/a-philosophy-of-software-design/full.md, _rule-workbench/clean-architecture/full.md, _rule-workbench/clean-code/full.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/addyosmani/web-quality-skills",
+      "githubStars": 2910,
+      "commitSha": "afa8da942115f2961fdbfa80807ea0b232ff6c00",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.gemini/skills, codex/skills"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/aaron-he-zhu/aaron-marketing-skills",
+      "githubStars": 2893,
+      "commitSha": "4daf795452b4251ff4008e4f09b35d8a89342766",
+      "reasons": [
+        "sensitive data detected in \"influencer/target/campaign-planner/references/templates.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/vuejs-ai/skills",
+      "githubStars": 2892,
+      "commitSha": "c9d355ff23f654309dd02006be671859df0a134c",
+      "reasons": [
+        "sensitive data detected in \"skills/vue-debug-guides/reference/reactivity-same-tick-batching.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/op7418/Claude-to-IM-skill",
+      "githubStars": 2887,
+      "commitSha": "536908f5e9bd65a151ca4cb4b08d3fedc1a43b4d",
+      "reasons": [
+        "sensitive data detected in \"src/__tests__/logger.test.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ningzimu/image-to-editable-ppt-skill",
+      "githubStars": 2846,
+      "commitSha": "b7be494e31a0ed56ef98716891db5474606b8cdf",
+      "reasons": [
+        "sensitive data detected in \"skills/image-to-editable-ppt/cli/editppt/runtime/configure_image_backend.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/twostraws/Swift-Agent-Skills",
+      "githubStars": 2837,
+      "commitSha": "a6d22db7216206f75e8e391e78b26a7500ae7aa2",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/hotcoffeeshake/tong-jincheng-skill",
+      "githubStars": 2833,
+      "commitSha": "c9caaa9a6576f581c29d016c60bbe935908e20d5",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/dominikmartn/nothing-design-skill",
+      "githubStars": 2812,
+      "commitSha": "74affbb786af098b18503467b205c10a7df30126",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/elementalsouls/Claude-OSINT",
+      "githubStars": 2794,
+      "commitSha": "13d920413448c026b52ac74efee0f1eb39dd81ff",
+      "reasons": [
+        "LICENSE-CONTENT 对内容另设条款，不能仅按根目录 MIT 标签分发。",
+        "sensitive data detected in \".github/workflows/lint.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/supabase/agent-skills",
+      "githubStars": 2708,
+      "commitSha": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/yaojingang/yao-meta-skill",
+      "githubStars": 2696,
+      "commitSha": "f5d8f681372edae1915991e2de0c23dc306dd30f",
+      "reasons": [
+        "sensitive data detected in \"scripts/output_provider_matrix.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/expo/skills",
+      "githubStars": 2685,
+      "commitSha": "d4f484024fec15196bfd3c272e953e3f983972cf",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md, eval-harness"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/rohitg00/awesome-claude-code-toolkit",
+      "githubStars": 2684,
+      "commitSha": "ebdf1d596d2cde5c5cceb32177e8d1cf4829e7d9",
+      "reasons": [
+        "sensitive data detected in \"commands/security/secrets-scan.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AMAP-ML/SkillClaw",
+      "githubStars": 2677,
+      "commitSha": "3938f7537645c961d94498a0a79fc0a977019595",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/zenstory-ai/drama-skills",
+      "githubStars": 2657,
+      "commitSha": "c2426e03c0e7722bebcc6a488b6658dc38c65ac3",
+      "reasons": [
+        "sensitive data detected in \"skills/short-drama/scripts/dashboard_server.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Paramchoudhary/ResumeSkills",
+      "githubStars": 2622,
+      "commitSha": "74ae19e7c62b0516d1c298328e5544976c12da5d",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.agent/skills/executive-resume-writer, .agent/skills/interview-prep-generator, .agent/skills/job-description-analyzer"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/perkfly/ex-skill",
+      "githubStars": 2548,
+      "commitSha": "c5ece53ab66948c6ea53e0df51c60a6ca0e96ea8",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/softaworks/agent-toolkit",
+      "githubStars": 2541,
+      "commitSha": "3027f20f3181758385a1bb8c022d4041dfb4de84",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md",
+        "GitHub repository archive is invalid"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/lennney/stop-that-shit",
+      "githubStars": 2518,
+      "commitSha": "694bbd59e26b522cd63801a01590ccaa77c7fe84",
+      "reasons": [
+        "sensitive data detected in \".hermes-plugin/runtime/stop-that-shit.cjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/romainsimon/paperasse",
+      "githubStars": 2511,
+      "commitSha": "f2e15c43112ddda9b80f53822185a21b6ad3b099",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：commissaire-aux-comptes/company.example.json, commissaire-aux-comptes/data, comptable/company.example.json"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/majidmanzarpour/threejs-game-skills",
+      "githubStars": 2456,
+      "commitSha": "8286774b22a2566bf894dbc825825c16921866af",
+      "reasons": [
+        "sensitive data detected in \"scripts/tests/test_tripo_jobs.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/QingYunA/answer-me-with-html",
+      "githubStars": 2455,
+      "commitSha": "19b2b5b07676d3e65c83ca9a7b6621f300b54c92",
+      "reasons": [
+        "sensitive data detected in \"skills/answer-me-with-html/scripts/am.mjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/kaankiziltug/logo-design-skill",
+      "githubStars": 2422,
+      "commitSha": "0ecf52e9a4b3ac92b714f7cc6e3148ab8c774134",
+      "reasons": [
+        "包含大量第三方品牌标识参考素材，需要单独确认再分发范围。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/yaklang/hack-skills",
+      "githubStars": 2414,
+      "commitSha": "6fbf0bc8d5c71830d62543a308d8744606c43d7c",
+      "reasons": [
+        "sensitive data detected in \"skills/business-logic-vulnerabilities/SCENARIOS.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/FrancyJGLisboa/agent-skills-platform",
+      "githubStars": 2403,
+      "commitSha": "0c6900a0597622791d1daaafc1c19b2fead0e8d4",
+      "reasons": [
+        "sensitive data detected in \".github/workflows/desktop-release.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/DenisSergeevitch/agents-best-practices",
+      "githubStars": 2376,
+      "commitSha": "28e87b5460addc7b4ed5886240bdacd94ee497e3",
+      "reasons": [
+        "sensitive data detected in \"references/skills-and-connectors.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/wondelai/skills",
+      "githubStars": 2366,
+      "commitSha": "c172996495bed0fcd26896a9416b2093fd7073f0",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.agents/skills/37signals-way, .agents/skills/architecture-optimization, .agents/skills/blue-ocean-strategy"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AgriciDaniel/claude-blog",
+      "githubStars": 2347,
+      "commitSha": "2500d4c765034864cede2bf215d00ccd4d7d6fb8",
+      "reasons": [
+        "sensitive data detected in \"brain/scripts/ingest_source.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/romenrg/evergreen-skills-developers",
+      "githubStars": 2281,
+      "commitSha": "a5de036c3325362fb2ed7b3a52c3668ff53681b9",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/op7418/Youtube-clipper-skill",
+      "githubStars": 2226,
+      "commitSha": "f31f077ee0905c95a510a6f34bbd0c3c85b15129",
+      "reasons": [
+        "公开检查拒绝凭据文件路径：.env.example"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/OpenCoworkAI/open-cowork",
+      "githubStars": 2198,
+      "commitSha": "910467306e950c249c448e6589051d4865d371b7",
+      "reasons": [
+        "内置文档类 Skills 的 LICENSE.txt 含限制条款，暂不整库收录。",
+        "sensitive data detected in \".github/workflows/codex-pr-review.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/LeoYeAI/openclaw-master-skills",
+      "githubStars": 2160,
+      "commitSha": "e5199b56ae1ff72e141586c17695563486c46702",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/appeeky/aso-skills",
+      "githubStars": 2160,
+      "commitSha": "3919d7c27402d92c7ef698f2016174b874ea189e",
+      "reasons": [
+        "sensitive data detected in \"guides/appeeky-mcp.mdx\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Leanmcp/gateway-skills",
+      "githubStars": 2112,
+      "commitSha": "7a708ce17d05bd390da88b2350f4b794d9427f18",
+      "reasons": [
+        "sensitive data detected in \"skills/fireworks-inference/references/runner-scripts.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/awesome-skills/code-review-skill",
+      "githubStars": 2076,
+      "commitSha": "4850184dfd7765ea7b3c5c4e9b6cf8e0815ee7cb",
+      "reasons": [
+        "sensitive data detected in \"reference/django.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/GuDaStudio/skills",
+      "githubStars": 2018,
+      "commitSha": "d0e8b1d4bed2f1aaf77185aece1f17b78933feb2",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：collaborating-with-codex, collaborating-with-gemini",
+        "未发现 SKILL.md，首批优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mcollina/skills",
+      "githubStars": 1950,
+      "commitSha": "72b72751477157ebda36203eaffac701ac5df5ae",
+      "reasons": [
+        "sensitive data detected in \"skills/fastify/rules/authentication.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/autoclaw-cc/xiaohongshu-skills",
+      "githubStars": 1948,
+      "commitSha": "b043748282a57e347c52f517dfb59819121134ab",
+      "reasons": [
+        "sensitive data detected in \"docs/superpowers/plans/2026-05-19-xhs-netlogger.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Hommy-master/capcut-mate",
+      "githubStars": 1934,
+      "commitSha": "b4e39e9451031dd348b4a187bc4799dd540a065a",
+      "reasons": [
+        "单文件超过 5 MiB：config/sticker.json, tools/ffprobe",
+        "超过整库文件数或总大小限制。",
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/kajisho5/ffmpeg-skill",
+      "githubStars": 1904,
+      "commitSha": "008333aaf6722083392eb6bd8bd67b59884a2a26",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/coldteadotai/pr-lens",
+      "githubStars": 1897,
+      "commitSha": "7a9115c8202da4db030be5954ada8862e6135dce",
+      "reasons": [
+        "sensitive data detected in \"README.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/questflowai/investorskills",
+      "githubStars": 1897,
+      "commitSha": "2844d7809a73c01e769c8c1c7ae8189788db4d9e",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/coji/natural-japanese",
+      "githubStars": 1893,
+      "commitSha": "9a78a42964096da509b8f3e011f0085a5f080151",
+      "reasons": [
+        "sensitive data detected in \"corpus/experiments/rhythm/reader-study/worker-configuration.d.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/u14app/neo-chat",
+      "githubStars": 1867,
+      "commitSha": "f135fd5bf741e7d244f2e566d6e9d937c3aa2fd9",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/timescale/pg-aiguide",
+      "githubStars": 1862,
+      "commitSha": "187be00d317a51210c132010d947f4546ffb5eef",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：skills/postgres/references/backfill-strategies.md, skills/postgres/references/complete-example.md, skills/postgres/references/design-postgis-tables.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ReScienceLab/opc-skills",
+      "githubStars": 1848,
+      "commitSha": "b8ab023b72d6bd4b1e6813ea87abe05215e5c4f9",
+      "reasons": [
+        "sensitive data detected in \".agents/skills/seo-geo/scripts/dataforseo_api.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/qufei1993/skills-hub",
+      "githubStars": 1730,
+      "commitSha": "48ddca5d21f3dc1bba68ddedef5fa19c1574f696",
+      "reasons": [
+        "sensitive data detected in \".github/workflows/linux-desktop.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/rmyndharis/antigravity-skills",
+      "githubStars": 1721,
+      "commitSha": "e74905446c74f8689b58e172d6fc209ee45786b6",
+      "reasons": [
+        "sensitive data detected in \"skills/api-design-principles/references/rest-best-practices.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alchaincyf/huashu-skills",
+      "githubStars": 1690,
+      "commitSha": "2efea35738efa06abbfa9acaee923fcef0732a14",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/AvdLee/Swift-Concurrency-Agent-Skill",
+      "githubStars": 1678,
+      "commitSha": "d5770817d2622e1585b1f7eaebc791a9cb0959c8",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：swift-concurrency"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/callstackincubator/agent-skills",
+      "githubStars": 1666,
+      "commitSha": "59e9d17446a248b21d86f078fcd0bd2d36db1ca4",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md, plugins/building-react-native-apps/skills/create-react-native-library, plugins/building-react-native-apps/skills/react-native-best-practices"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/feiskyer/claude-code-settings",
+      "githubStars": 1658,
+      "commitSha": "95dab59a62b2031adcb7abf25ae0a60b8a13fdb2",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：plugins/codex-skill/skills/codex-skill, plugins/nanobanana-skill/skills/nanobanana-skill, plugins/youtube-transcribe-skill/skills/youtube-transcribe-skill"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/activeloopai/hivemind",
+      "githubStars": 1623,
+      "commitSha": "e054fb161de7ae1e3466fb93496713f4d3c82da7",
+      "reasons": [
+        "sensitive data detected in \"src/hooks/shared/redact.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jtydhr88/screenwriting-skills",
+      "githubStars": 1617,
+      "commitSha": "51115f18d160aa8b2ac5813e4432b6f0b425358f",
+      "reasons": [
+        "NOTICE 明确指出第三方书籍、剧本引文不由根目录 MIT 授权，暂缓整库收录。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/tjboudreaux/cc-thinking-skills",
+      "githubStars": 1614,
+      "commitSha": "7b8fece345dfaa11773be7152ccd194589cb5437",
+      "reasons": [
+        "sensitive data detected in \"evals/datasets/calibrated/debugging-fault-localization-candidate-pool.jsonl\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Memento-Teams/Memento-Skills",
+      "githubStars": 1573,
+      "commitSha": "ee9b9a45efd093d669c06fe318b4b1dceb246d19",
+      "reasons": [
+        "sensitive data detected in \"core/skill/retrieval/qwen_recall.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/cookiy-ai/user-research-skill",
+      "githubStars": 1566,
+      "commitSha": "21eea10a34d3c9b4e711e3d19f0457603dd33e19",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：plugins/user-research/skills/user-research-cookiy/SKILL.md, plugins/user-research/skills/user-research-cookiy/references"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/plugin87/ux-ui-agent-skills",
+      "githubStars": 1560,
+      "commitSha": "9f40d9be7281a5247eeefd802f32e90c7bc8e523",
+      "reasons": [
+        "同类设计内容已有多个，首批优先较轻量的仓库。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/azure-skills",
+      "githubStars": 1554,
+      "commitSha": "cb1af2f0930ce2bd69fd4a627612eb76e171c17d",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/elvisun/newsjack",
+      "githubStars": 1528,
+      "commitSha": "b5a8dc87cb34fb3629a760b529d73972f441a86a",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：plugins/newsjack/.mcp.json, plugins/newsjack/skills",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Oldcircle/geo-sleuth",
+      "githubStars": 1527,
+      "commitSha": "5d88e82f6c797151f0273e92b7c2db6a344831e2",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/skills-directory/skill-codex",
+      "githubStars": 1456,
+      "commitSha": "0cf3e4b6e801cae209fc27a50440b453b44af910",
+      "reasons": [
+        "单一代理调用功能已由首批协作类仓库覆盖，作为候补。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/daymade/claude-code-skills",
+      "githubStars": 1447,
+      "commitSha": "ee211c33300a4a45293e07635b17aeacca356c4e",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：AGENTS.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/bbylw/ui-ux-pro-max-skill-cn",
+      "githubStars": 1437,
+      "commitSha": "dd17b017d130d3ba0e84a44f9ac96ee3e50ffc21",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/CloudAI-X/claude-workflow-v2",
+      "githubStars": 1419,
+      "commitSha": "3b5a89ec1c106dd387e372aec073f9401336382a",
+      "reasons": [
+        "sensitive data detected in \"examples/orchestration/comprehensive-code-review/sample-outputs/04-test-architect-report.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/wuji-labs/nopua",
+      "githubStars": 1401,
+      "commitSha": "44010e045b7dd72b16d760ceefd7a8d408dabf37",
+      "reasons": [
+        "sensitive data detected in \"benchmark/test-project/configs/inference_config.yaml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/RefoundAI/lenny-skills",
+      "githubStars": 1381,
+      "commitSha": "13598cc54e09399bc1bc1398b0fca284110efb2f",
+      "reasons": [
+        "基于第三方播客内容，暂缓整库收录以核对来源许可。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Dimillian/CodexSkillManager",
+      "githubStars": 1369,
+      "commitSha": "3f2d809c19cd18f5b0d74997c3457760fd819035",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/skillsgate/skillsgate",
+      "githubStars": 1362,
+      "commitSha": "7acf56efc700faedd9e17714510b825c9a219ec4",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/specstoryai/getspecstory",
+      "githubStars": 1350,
+      "commitSha": "b3254d4ae4fe15c40c4a68e7a73b23b7ddedbb51",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：specstory-cli/.cursor/commands, specstory-cli/AGENT.md",
+        "单文件超过 5 MiB：specstory-cli/.specstory/history/2026-09-14_22-23-08Z-ok-i-regularly-review.md, specstory-cli/.specstory/history/2026-09-17_21-31-10Z-the-following-is-the.md",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Anil-matcha/awesome-muse-connectors",
+      "githubStars": 1347,
+      "commitSha": "d6dc5d8044b55230837f1f337a3f12923db76c2e",
+      "reasons": [
+        "sensitive data detected in \"connectors/cloudinary/bin/cloudinary.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/JuneYaooo/gpt-image2-ppt-skills",
+      "githubStars": 1342,
+      "commitSha": "2d57ef8127b83e8232a1be4e9515f0b3cc9fc91e",
+      "reasons": [
+        "sensitive data detected in \".env.example\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/first-fluke/oh-my-agent",
+      "githubStars": 1338,
+      "commitSha": "f6d700f4e9765cc6127f732334ebd7637253a14c",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/utkusen/sast-skills",
+      "githubStars": 1329,
+      "commitSha": "db52227eab1043bf122cbff7206fac6708b4d6c9",
+      "reasons": [
+        "sensitive data detected in \"sast-files/.agents/skills/sast-hardcodedsecrets/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/yaojingang/yao-open-skills",
+      "githubStars": 1323,
+      "commitSha": "093996ec61366c1c4e6e82b34f0f3fa52871832f",
+      "reasons": [
+        "sensitive data detected in \"skills/yao-doctor-skill/scripts/scan_security_skills.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/BehiSecc/VibeSec-Skill",
+      "githubStars": 1315,
+      "commitSha": "0590993b35ad51961f65a4d01cf1196dfead05bb",
+      "reasons": [
+        "sensitive data detected in \"SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/uphiago/recon-skills",
+      "githubStars": 1293,
+      "commitSha": "1260244136edc6ae698d76d3d526f503e322778d",
+      "reasons": [
+        "sensitive data detected in \"meta/google-dorks-catalog/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/huytieu/COG-second-brain",
+      "githubStars": 1267,
+      "commitSha": "36ac9d78d66e61a41d6471ae88c2b844737fc853",
+      "reasons": [
+        "sensitive data detected in \".claude/skills/release-video/scripts/gen_audio.sh\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mikehasa/golive-skill",
+      "githubStars": 1255,
+      "commitSha": "7a55f26adb35d54c8b248e6f95e60092bd9e0707",
+      "reasons": [
+        "sensitive data detected in \"skills/golive/scripts/golive.mjs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alibaba-flyai/flyai-skill",
+      "githubStars": 1254,
+      "commitSha": "86fe2cc3e25464d0e0bd6a769b27b5f9f3b04128",
+      "reasons": [
+        "单文件超过 5 MiB：assets/demo.gif"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Gentleman-Programming/gentle-shell",
+      "githubStars": 1248,
+      "commitSha": "bac48909ce775588e2429c771c1932d396ee47dd",
+      "reasons": [
+        "sensitive data detected in \"extensions/gentle-ai.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/higgsfield-ai/skills",
+      "githubStars": 1248,
+      "commitSha": "f83af0bc1d937c8119099a11f8ebbf5e6fb99819",
+      "reasons": [
+        "sensitive data detected in \"higgsfield-websites/references/security.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/sentient-agi/EvoSkill",
+      "githubStars": 1246,
+      "commitSha": "36f6f04952293d7054145550c2b9f0b0411bff1c",
+      "reasons": [
+        "sensitive data detected in \"src/cli/commands/init.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alchaincyf/x-mentor-skill",
+      "githubStars": 1246,
+      "commitSha": "f913c720135e54828dc1ea8f4fa256a5e32fe5bb",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/gooseworks-ai/goose-skills",
+      "githubStars": 1239,
+      "commitSha": "c650c6d4156af77ef2ef6bb3fffcea104c653df8",
+      "reasons": [
+        "单文件超过 5 MiB：parts/phone-chat/1.1.2/assets/fonts/NotoColorEmoji.ttf, parts/phone-chat/1.1.3/assets/fonts/NotoColorEmoji.ttf, parts/phone-chat/1.1.4/assets/fonts/NotoColorEmoji.ttf"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/skills-for-fabric",
+      "githubStars": 1234,
+      "commitSha": "bc42aaf734771bf752c1d7082dd91e5a6ca72b9f",
+      "reasons": [
+        "sensitive data detected in \"plugins/fabric-skills/skills/databricks-migration/resources/code-patterns.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Spark-To-Paper-Skills/spark-to-paper-skills",
+      "githubStars": 1227,
+      "commitSha": "c17149def034bc777462de612926c8e3b6d01b8c",
+      "reasons": [
+        "单文件超过 5 MiB：docs/showcase/bearing_fault_diagnosis.pdf, docs/showcase/leaf_disease.pdf, docs/showcase/leaf_disease_leakage.pdf"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Anionex/agent-vision-toolkit",
+      "githubStars": 1220,
+      "commitSha": "1384ef40f4bcc8d0213a20b2f6502e943ccb1fbb",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：dsh-vision-toolkit"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/chubbyguan/chubbyskills",
+      "githubStars": 1209,
+      "commitSha": "1b759b181f746541ae0f07f43d8d18b99a622670",
+      "reasons": [
+        "sensitive data detected in \"tests/test_check_env_credentials.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/leezythu/maoxuan-skill",
+      "githubStars": 1206,
+      "commitSha": "4376a65020b1fd96af65052ccd30accaddedc3f1",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Aaronontheweb/dotnet-skills",
+      "githubStars": 1205,
+      "commitSha": "e426ed93a9f3215cd21b277fdfa6bfccd3457945",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/CreminiAI/skillpack",
+      "githubStars": 1203,
+      "commitSha": "13792e12e8392972f47e02f2695015da8e649467",
+      "reasons": [
+        "sensitive data detected in \"src/runtime/adapters/web.ts\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alibaba/skill-up",
+      "githubStars": 1166,
+      "commitSha": "6f0a37a11af42efc42562ac7cf97f198f7d9d360",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/917Dhj/DeepPaperNote",
+      "githubStars": 1165,
+      "commitSha": "1cedf36af303c9907c671a43433ff446582f08c0",
+      "reasons": [
+        "sensitive data detected in \"skills/deeppapernote/scripts/common.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Pika-Labs/Pika-Skills",
+      "githubStars": 1163,
+      "commitSha": "affe0a99aea6a5e02df039e336665ccba11718c6",
+      "reasons": [
+        "sensitive data detected in \"pikastream-video-meeting/scripts/pikastreaming_videomeeting.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/itsmostafa/aws-agent-skills",
+      "githubStars": 1162,
+      "commitSha": "e786d25128a6018d42bd7bcb8c47c531ff31c0f0",
+      "reasons": [
+        "sensitive data detected in \"skills/cognito/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/alexa-samples/skill-sample-nodejs-fact",
+      "githubStars": 1155,
+      "commitSha": "97d4f1670963cc13e117e194354d92c253dfd4cb",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/adithya-s-k/manim_skill",
+      "githubStars": 1152,
+      "commitSha": "cef045011722d285692e3381d12d4d637da56e18",
+      "reasons": [
+        "子目录 skills/manimgl-best-practices/LICENSE.txt 为 CC BY-NC-SA-4.0，不能仅按根目录 MIT 标签整库收录。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/mateaix/mateclaw",
+      "githubStars": 1149,
+      "commitSha": "10aad3be6c45afca65b572dc6d9d8808957e9a68",
+      "reasons": [
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/BagelHole/DevOps-Security-Agent-Skills",
+      "githubStars": 1148,
+      "commitSha": "0365f57a079b1332f95cf26e31dd2d5332a8399f",
+      "reasons": [
+        "sensitive data detected in \"devops/orchestration/argocd-gitops/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/cookiy-ai/sell-sessions-skill",
+      "githubStars": 1140,
+      "commitSha": "c107696ec1f005d9b32f5b40de939e9edd76b177",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/DaoYiSec/SecSkills",
+      "githubStars": 1132,
+      "commitSha": "1867eb6b71889af8632107884e9d0235510f9f78",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/rohitg00/awesome-claude-design",
+      "githubStars": 1130,
+      "commitSha": "7f60ee56b9340f8c2671a08c2d8aab4037546a64",
+      "reasons": [
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/wzyn20051216/solidworks-automation-skill",
+      "githubStars": 1123,
+      "commitSha": "48f99dd7b20f072f3ae65285ba8d1c70516c6d97",
+      "reasons": [
+        "sensitive data detected in \".github/workflows/windows-release.yml\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/openclaw/agent-skills",
+      "githubStars": 1104,
+      "commitSha": "7e733069bc6d4e4e77adddb4fb4fcaca5a15e021",
+      "reasons": [
+        "sensitive data detected in \"skills/agent-transcript/scripts/agent-transcript\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/lixiaoxiao9888-create/manju-laoli-skill",
+      "githubStars": 1101,
+      "commitSha": "079df685f7cf2f0de635362bd359c233db38f9fe",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/chrisbanes/skills",
+      "githubStars": 1093,
+      "commitSha": "037aab9b71617b446f37ee106c7c117565cf352a",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/titanwings/ex-skill",
+      "githubStars": 1087,
+      "commitSha": "523cfc6da85f3bb8e81eb15818c40f89a6efee93",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/agenmod/immortal-skill",
+      "githubStars": 1078,
+      "commitSha": "cdab91b37982d0d3ca78eb2da6727a8f75d8bca8",
+      "reasons": [
+        "sensitive data detected in \"collectors/dingtalk.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/shang-zhu/violin",
+      "githubStars": 1075,
+      "commitSha": "7a86852ced84624b1849abee6d7444c0904a73ea",
+      "reasons": [
+        "单文件超过 5 MiB：api/static/demo/hassan_gpt_oss_en.mp4, api/static/demo/hassan_gpt_oss_ko.mp4, assets/demo_en.mp4"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Kotlin/kotlin-agent-skills",
+      "githubStars": 1074,
+      "commitSha": "c2f90697bf71966a117a13340d5fff787f004140",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：plugins/kotlin-agent-skills/skills"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/forcedotcom/sf-skills",
+      "githubStars": 1066,
+      "commitSha": "1fdd8dd86b7301ed5c57131a3c7e8f25abdf85c4",
+      "reasons": [
+        "单文件超过 5 MiB：plugins/builder/salesforce-development/vendor/apex-ls/dist/server.node.js, plugins/builder/salesforce-development/vendor/apex-ls/dist/worker.platform.js",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/kerpopule/hermes-jev-skills",
+      "githubStars": 1061,
+      "commitSha": "b22a21f365720cb7cf06f9b229c095176b39cdb9",
+      "reasons": [
+        "sensitive data detected in \"router-dashboard/server.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/star23/Day1Global-Skills",
+      "githubStars": 1059,
+      "commitSha": "562c14b0c0bc84abff755181ead30ebea613d063",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jezweb/claude-skills",
+      "githubStars": 1053,
+      "commitSha": "1260fa7439b36b18dbf16648ccc7fb44783f6c23",
+      "reasons": [
+        "sensitive data detected in \"archive/plugins/cloudflare/skills/cloudflare-worker-builder/references/deployment.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/getsentry/skills",
+      "githubStars": 1044,
+      "commitSha": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "reasons": [
+        "包含当前导入器不接受的符号链接或子模块：.agents/skills, CLAUDE.md"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Jane-xiaoer/claude-skill-web-clone",
+      "githubStars": 1040,
+      "commitSha": "0269e0e08a3783184ec641d341e7d57065d4a5f8",
+      "reasons": [
+        "导入和公开文件检查通过，因主题重叠、素材体积或首批用途覆盖，暂列候补；尚未执行完整发布和 Fork 验证。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/ZeroPointRepo/youtube-skills",
+      "githubStars": 1038,
+      "commitSha": "4f7994b94e7d5e250c3b51102d609992e04d5d0d",
+      "reasons": [
+        "sensitive data detected in \"README.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/Auriti-Labs/geo-optimizer-skill",
+      "githubStars": 1023,
+      "commitSha": "0e1ffc88aa2300c81a4596283c061df8bb0c5f56",
+      "reasons": [
+        "sensitive data detected in \"src/geo_optimizer/cli/citations_cmd.py\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/undefined-ui/second-brain-os",
+      "githubStars": 1019,
+      "commitSha": "c7fa35bd955ef9ea9a0d8fb04d2b80b8f6ad6c1f",
+      "reasons": [
+        "sensitive data detected in \"docs/02-setup/mcp-obsidian.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/jiweiyeah/Skills-Manager",
+      "githubStars": 1015,
+      "commitSha": "bc3c8bd68cfe9a58a80b7c3631a8ed531d950823",
+      "reasons": [
+        "sensitive data detected in \"src-tauri/src/commands/auth.rs\"; redact keys, tokens, passwords, and private keys before uploading or restoring"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/limingrui679-design/high-stakes-analytics-decision-lab",
+      "githubStars": 1009,
+      "commitSha": "af98eecf347f0d15182fc68a2349d0dabaec1de4",
+      "reasons": [
+        "单文件超过 5 MiB：examples/real-data-cases/projects/bike-demand-operations/data/raw/citibike-jc-2021-station-hour.csv, examples/real-data-cases/projects/cross-city-311-shift/data/raw/cross-city-311-daily.csv",
+        "超过整库文件数或总大小限制。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/aiming-lab/SkillRL",
+      "githubStars": 1002,
+      "commitSha": "4d984d455b9b02f0bad283cbe9ab3d66a7e5b89d",
+      "reasons": [
+        "单文件超过 5 MiB：agent_system/environments/env_package/webshop/webshop/web_agent_site/envs/chromedriver",
+        "未发现 SKILL.md，优先收录实际 Skills 内容。"
+      ]
+    },
+    {
+      "repositoryUrl": "https://github.com/inference-sh/skills",
+      "githubStars": 763,
+      "commitSha": "0aabdc6f47f757b772515265e4710452834c8696",
+      "reasons": [
+        "整库许可证需单独核对：None",
+        "sensitive data detected in \"sdk/javascript-sdk/SKILL.md\"; redact keys, tokens, passwords, and private keys before uploading or restoring",
+        "低于首批 1,000 Star 门槛。"
+      ]
+    }
+  ]
+}
