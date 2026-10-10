@@ -323,6 +323,8 @@ Repository history displays change descriptions. Browser uploads, edits and rest
 
 Publishing checks file contents, credential paths and public metadata without a sensitive-content override. Content scan results are reused by repository, file hash and scanner policy, so unchanged files are not read again; paths and public metadata are checked each time. Published files share the repository's quota-accounted storage and survive history pruning. These operations distribute files and create private copies; Git transport and automatic upstream merges are not included.
 
+Repository contents (including history, public snapshots and GitHub imports) use a dedicated private **Cloudflare R2** bucket. PostgreSQL retains metadata, permissions, version indexes and logical quotas. Reads remain authorized; Forks share immutable objects with independent references, so deleting the source does not break a copy. Existing content migrates only after verified upload and read-back; failed R2 uploads never fall back to database storage. See the [storage and migration guide](docs/AGENT_REPOSITORY_STORAGE.md).
+
 ### Import from GitHub
 
 Members with repository sync enabled can select **Import from GitHub** under My Space → Skills/Agent repositories, enter a repository URL and optionally a branch, tag or commit. Imports create private copies; publication requires a separate review and confirmation. Public repositories need no GitHub token. For private repositories, save a [GitHub token](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#download-a-repository-archive-zip) with **Contents: read** permission for selected repositories in My Space settings. Tokens are encrypted, show only their last four characters, can be removed, and never appear in public content or AI instructions.
@@ -456,6 +458,8 @@ docker compose up -d postgres         # database
 npm run backend:dev                   # backend (runs migrations automatically)
 npm run dev                           # frontend → http://localhost:5273
 ```
+
+For local development without a Worker, explicitly set `AGENT_REPOSITORY_STORAGE=database` in `.env`. To test repository R2 storage, use `r2` with a local `WORKER_URL` and matching internal tokens. Production always uses R2.
 
 Image upload needs wrangler as well — the R2 binding only exists on the Worker
 side, and wrangler ships a local emulation:
@@ -597,6 +601,20 @@ rebuild; use `docker compose up -d --build backend`. Otherwise the code changes
 and the behaviour doesn't, with no error to tell you.
 
 ## Deploy
+
+**Official production backend (verified through Cloudflare DNS and SSH on 2026-10-10)**
+
+| Item | Current value |
+| --- | --- |
+| Origin IP | `172.245.27.245` |
+| SSH | `ssh -p 22 root@172.245.27.245` (using an authorized SSH key) |
+| Hostname | `racknerd-b143cc6` |
+| Project directory | `/opt/koinote` |
+| Backend domain | `api.koinote.app` (Cloudflare proxy enabled) |
+
+To locate the origin, inspect the `api` A record under Cloudflare → `koinote.app` → DNS → Records;
+public DNS queries for the proxied domain do not directly identify the origin IP. When migrating
+servers, update that record, the GitHub Actions `VPS_HOST` / `VPS_HOST_KEY` secrets, and this section.
 
 ```bash
 npm run build     # → spa/dist

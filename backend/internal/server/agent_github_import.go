@@ -635,6 +635,18 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 	if err != nil {
 		return empty, err
 	}
+	// Retry an acknowledged import without creating any R2 objects.
+	if existing, err := completedGitHubImport(ctx, a.db, userID, requestID, fingerprint); err != nil {
+		return empty, err
+	} else if existing != nil {
+		return *existing, nil
+	}
+	staged, err := a.stageAgentRepositoryFiles(ctx, userID, files)
+	if err != nil {
+		return empty, err
+	}
+	defer a.expireAgentRepositoryStaging(ctx, staged)
+
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return empty, err
@@ -651,17 +663,16 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 		return *existing, nil
 	}
 	var enabled bool
-	var count int
 	var previous int64
-	err = tx.QueryRow(ctx, `SELECT COALESCE((SELECT enabled FROM agent_workspace_settings WHERE user_id=$1),false),(SELECT count(*) FROM agent_workspaces WHERE user_id=$1 AND deleted_at IS NULL),agent_workspace_storage_bytes($1)`, userID).Scan(&enabled, &count, &previous)
+	err = tx.QueryRow(ctx, `SELECT COALESCE((SELECT enabled FROM agent_workspace_settings WHERE user_id=$1),false),agent_workspace_storage_bytes($1)`, userID).Scan(&enabled, &previous)
 	if err != nil {
 		return empty, err
 	}
 	if !enabled {
 		return empty, errAgentWorkspaceDisabled
 	}
-	if count >= agentWorkspaceMaxRepositories {
-		return empty, errAgentWorkspaceLimit
+	if err = checkAgentRepositoryCapacity(ctx, tx, userID); err != nil {
+		return empty, err
 	}
 	var id int64
 	err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description,github_source,github_import_request_id,github_import_fingerprint) VALUES($1,$2,$3,$4,$5::uuid,$6) RETURNING id`, userID, name, description, source, requestID, fingerprint).Scan(&id)
@@ -669,10 +680,11 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 		return empty, err
 	}
 	for _, file := range files {
-		if _, err = tx.Exec(ctx, `INSERT INTO agent_workspace_files(workspace_id,path,content,mime_type,size_bytes,sha256) VALUES($1,$2,$3,$4,$5,$6)`, id, file.Path, file.Content, file.MimeType, len(file.Content), file.SHA256); err != nil {
+		if err := insertAgentRepositoryFile(ctx, tx, id, file, staged); err != nil {
 			return empty, err
 		}
 	}
+
 	if _, err = tx.Exec(ctx, `SELECT record_agent_workspace_commit($1,'import',NULL,$2)`, id, "Imported from GitHub: "+source.RepositoryURL+" @ "+source.CommitSHA); err != nil {
 		return empty, err
 	}

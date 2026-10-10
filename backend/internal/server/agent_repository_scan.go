@@ -95,16 +95,24 @@ func (a *App) checkAgentRepositoryPublication(ctx context.Context, userID int, i
 			hashes = append(hashes, hash)
 		}
 		// A blob shared by multiple paths is transferred and scanned only once.
-		rows, err = tx.Query(ctx, `SELECT DISTINCT ON (sha256) sha256,content
- FROM agent_workspace_files WHERE workspace_id=$1 AND sha256=ANY($2::text[])
- ORDER BY sha256,id`, id, hashes)
+		rows, err = tx.Query(ctx, `SELECT DISTINCT ON (f.sha256) f.sha256,f.content,b.r2_object_key,f.size_bytes
+ FROM agent_workspace_files f LEFT JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
+ WHERE f.workspace_id=$1 AND f.sha256=ANY($2::text[])
+ ORDER BY f.sha256,f.id`, id, hashes)
 		if err != nil {
 			return scans, err
 		}
 		for rows.Next() {
 			var hash string
 			var content []byte
-			if err = rows.Scan(&hash, &content); err != nil {
+			var objectKey *string
+			var size int64
+			if err = rows.Scan(&hash, &content, &objectKey, &size); err != nil {
+				rows.Close()
+				return scans, err
+			}
+			content, err = a.readAgentRepositoryContent(ctx, content, objectKey, hash, size, 0, agentWorkspaceMaxFileBytes)
+			if err != nil {
 				rows.Close()
 				return scans, err
 			}

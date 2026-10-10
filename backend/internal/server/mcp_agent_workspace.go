@@ -136,12 +136,14 @@ func (a *App) mcpReadAgentWorkspaceFile(ctx context.Context, _ *mcp.CallToolRequ
 	}
 	var view mcpAgentWorkspaceFileChunk
 	var content []byte
+	var objectKey *string
 	err = a.db.QueryRow(ctx, `
-		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, substring(f.content FROM $3::int FOR $4::int)
+		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, substring(f.content FROM $3::int FOR $4::int), b.r2_object_key
 		FROM agent_workspace_files f
+        LEFT JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
 		JOIN agent_workspaces w ON w.id = f.workspace_id
 		WHERE f.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL
-	`, input.FileID, principal.User.ID, input.Offset+1, limit).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content)
+	`, input.FileID, principal.User.ID, input.Offset+1, limit).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content, &objectKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, mcpAgentWorkspaceFileChunk{}, errors.New("agent workspace file not found")
@@ -150,6 +152,10 @@ func (a *App) mcpReadAgentWorkspaceFile(ctx context.Context, _ *mcp.CallToolRequ
 	}
 	if err := input.mcpAgentWorkspaceReadRange.checkFile(view.SizeBytes, view.SHA256); err != nil {
 		return nil, mcpAgentWorkspaceFileChunk{}, err
+	}
+	content, err = a.readAgentRepositoryContent(ctx, content, objectKey, view.SHA256, view.SizeBytes, input.Offset, limit)
+	if err != nil {
+		return nil, mcpAgentWorkspaceFileChunk{}, mcpInternalError("read agent workspace file", err)
 	}
 	view.mcpAgentWorkspaceChunkRange = newMCPAgentWorkspaceChunkRange(input.Offset, int64(len(content)), view.SizeBytes)
 	view.ContentBase64 = encodeAgentWorkspaceContent(content)

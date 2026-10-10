@@ -33,6 +33,9 @@ func main() {
 	if cfg.SessionSecret == "" {
 		log.Fatal("必须设置 SESSION_SECRET。生成一个：openssl rand -base64 48")
 	}
+	if err := cfg.ValidateAgentRepositoryStorage(); err != nil {
+		log.Fatal(err)
+	}
 	if cfg.IsProduction() && cfg.EmailVerificationSecret == "" {
 		log.Fatal("生产环境必须设置独立的 EMAIL_VERIFICATION_SECRET。生成一个：openssl rand -base64 48")
 	}
@@ -151,6 +154,7 @@ func main() {
 	app.StartMCPAuditCleanup(backgroundCtx)
 	app.StartConfigSyncCleanup(backgroundCtx)
 	app.StartAgentRepositoryCleanup(backgroundCtx)
+	app.StartAgentRepositoryObjectMaintenance(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),

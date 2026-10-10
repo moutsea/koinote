@@ -22,8 +22,8 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ### Changed
 
-- Unlocked configuration revisions can be synced again on the same page without re-entering the password; refreshing or changing the cloud revision requires unlocking again.
-- Enabling Skills/Agent repositories no longer requires a token. Repository tokens live in My Space settings, separately from document MCP tokens; Copy for AI Agent guides you there only when a usable read/write token is missing.
+- Unlocked configuration revisions can be synced again on the same page without re-entering the password; refreshing or changing the cloud revision requires unlocking again. The public repository directory is now named Skills/Agent Hub.
+- Enabling Skills/Agent repositories no longer requires a token. Repository tokens live in My Space settings, separately from document MCP tokens; Copy for AI Agent guides you there only when a usable read/write token is missing. Skills/Agent file contents, retained history, public snapshots and GitHub imports now use private Cloudflare R2 storage; existing content migrates after upload and integrity verification. PostgreSQL retains metadata and permissions, and Forks retain independent references.
 - Desktop sync checks cloud updates at startup, on reconnection and window focus, and every 30 seconds while visible. Only local changes trigger uploads; unchanged or failed background checks stay quiet, and hidden windows do not poll.
 - Updating an older development/AI configuration snapshot removes Agent files such as `CLAUDE.md` and `.claude/skills/*` from that snapshot. Export those files or upload them to an Agent repository before updating; local files remain unchanged.
 - WeChat draft sync reuses uploaded article images by account and image content, reducing repeat-sync and retry delays without changing image quality or covers. Existing clients need no update.

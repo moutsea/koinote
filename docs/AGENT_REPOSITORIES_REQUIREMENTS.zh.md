@@ -484,10 +484,11 @@ Manifest URL：<固定版本的 HTTPS API 地址>
 
 复用当前用户、会员、HTTP 鉴权、桌面钥匙串、限流、审计和 revision 设计，但不复用普通文档正文或文档表作为托管空间、仓库或文件容器。Hosted Workspace 与后续 Repository 使用独立资源、独立页面和独立 API；两者默认都不参与普通文档搜索、分享、导出或 MCP 文档查询。
 
-原始文本可存 PostgreSQL。需要托管二进制 assets 时使用受控的私有对象存储，通过仓库文件 API 授权读取，不能直接复用公开图床 URL 作为私有文件地址。
+所有仓库文件正文（文本及二进制 assets，含历史、公开快照、GitHub 导入）使用独立的私有 Cloudflare R2；PostgreSQL 仅保留索引、权限、元数据与逻辑配额。通过仓库文件 API 授权读取，不暴露对象键，不复用公开图床 URL。既有 BYTEA 上传并回读校验后清除；迁移可重试且不改变 revision。详见 [存储与迁移](AGENT_REPOSITORY_STORAGE.md)。
 
 ```text
-网页 / 桌面账号模式 ──登录与托管 API──▶ Go Agent 配置服务 ──▶ PostgreSQL
+网页 / 桌面账号模式 ──登录与托管 API──▶ Go Agent 配置服务 ──▶ PostgreSQL（元数据与权限）
+                                   └──内部鉴权──▶ Worker ──▶ 私有 R2（文件）
                                            └─▶ 私有文件存储
 用户的 Agent ──后续公开 API / 受限私有授权──▶ 同一配置服务
 未来可选 MCP ──薄协议适配───────────────────┘
@@ -696,7 +697,7 @@ MCP 是后续可选适配：只包装同一仓库业务服务，免费仓库读�
 
 - `files` 整体替换须显式传 `replaceAll: true`，一次提交完整文件集；仅 `upsert` / `delete` 可以分批。
 - 当前与历史文件读取每次最多 8 KiB，按 `nextOffset` 继续并携带 `expectedSHA256`，逐块解码后拼接原始字节。
-- 恢复在同一事务内检查历史内容，Agent Token 无法跳过敏感信息检查；网页收到敏感信息错误后须再次确认，并沿用原 expectedRevision 重试，取消不重试，冲突与其他错误必须显示。恢复及文件更新的审计记录仓库与操作前后版本。
+- 恢复先在只读一致性快照中检查不可变历史内容，再在写入事务内重新核对仓库、当前 revision 和历史版本仍存在，Agent Token 无法跳过敏感信息检查；网页收到敏感信息错误后须再次确认，并沿用原 expectedRevision 重试，取消不重试，冲突与其他错误必须显示。恢复及文件更新的审计记录仓库与操作前后版本。
 - OpenClaw 2026.6.10 实测支持 `mcp add --header`，但保存前的默认探测不会展开环境变量，须用 `--no-probe` 保存引用后再执行 `doctor --probe`。已用临时账号和本地 Koinote MCP 验证鉴权成功，配置保留 `${KOINOTE_AGENT_TOKEN}`，未保存明文。
 - 仓库 MCP 请求限 8 MiB，文档 MCP 仍限 2 MiB，超限（包括流式上传）统一返回 413。
 - 存储查询共享只含仓库字段的类型和查询，不统计个人文档、图片或配置快照。

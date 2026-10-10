@@ -16,9 +16,36 @@ var (
 	errAgentWorkspaceFileRange        = errors.New("offset exceeds file size")
 )
 
-// Called under the same user lock and transaction as restore, before any mutation.
-func checkAgentWorkspaceRestoreContent(ctx context.Context, tx pgx.Tx, workspaceID, revision int64) error {
-	rows, err := tx.Query(ctx, `SELECT f.path, b.content
+// Scan an immutable historical revision in a read-only snapshot. The mutation
+// must recheck both the selected repository and its current revision under lock.
+func (a *App) preflightAgentWorkspaceRestore(ctx context.Context, userID int, workspaceID, expectedRevision, revision int64) (int64, error) {
+	tx, err := a.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	id, err := resolveAgentWorkspaceID(ctx, tx, userID, workspaceID)
+	if err != nil {
+		return 0, err
+	}
+	var current int64
+	if err = tx.QueryRow(ctx, `SELECT revision FROM agent_workspaces WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, id, userID).Scan(&current); err != nil {
+		return 0, err
+	}
+	if current != expectedRevision {
+		return 0, errAgentWorkspaceConflict
+	}
+	if err = checkAgentWorkspaceRevision(ctx, tx, userID, id, revision); err != nil {
+		return 0, err
+	}
+	if err = a.checkAgentWorkspaceRestoreContent(ctx, tx, id, revision); err != nil {
+		return 0, err
+	}
+	return id, tx.Commit(ctx)
+}
+
+func (a *App) checkAgentWorkspaceRestoreContent(ctx context.Context, tx agentWorkspaceQuerier, workspaceID, revision int64) error {
+	rows, err := tx.Query(ctx, `SELECT f.path, b.content, b.r2_object_key, f.sha256, f.size_bytes
  FROM agent_workspace_commit_files f JOIN agent_workspace_blobs b USING (workspace_id, sha256)
  WHERE f.workspace_id = $1 AND f.revision = $2`, workspaceID, revision)
 	if err != nil {
@@ -28,7 +55,14 @@ func checkAgentWorkspaceRestoreContent(ctx context.Context, tx pgx.Tx, workspace
 	for rows.Next() {
 		var path string
 		var content []byte
-		if err := rows.Scan(&path, &content); err != nil {
+		var objectKey *string
+		var hash string
+		var size int64
+		if err := rows.Scan(&path, &content, &objectKey, &hash, &size); err != nil {
+			return err
+		}
+		content, err = a.readAgentRepositoryContent(ctx, content, objectKey, hash, size, 0, agentWorkspaceMaxFileBytes)
+		if err != nil {
 			return err
 		}
 		if agentWorkspaceSensitiveContent(content) {
@@ -171,12 +205,13 @@ func (a *App) loadAgentWorkspaceCommitFileRange(ctx context.Context, userID int,
 	}
 	var file agentWorkspaceCommitFileContent
 	var content []byte
+	var objectKey *string
 	err = tx.QueryRow(ctx, `
-		SELECT f.path, f.mime_type, f.size_bytes, f.sha256, substring(b.content FROM $5::int FOR $6::int)
+		SELECT f.path, f.mime_type, f.size_bytes, f.sha256, substring(b.content FROM $5::int FOR $6::int), b.r2_object_key
 		FROM agent_workspace_commit_files f JOIN agent_workspace_blobs b USING (workspace_id, sha256)
 		JOIN agent_workspaces w ON w.id = f.workspace_id
 		WHERE w.id = $1 AND w.user_id = $2 AND f.revision = $3 AND f.path = $4 AND w.deleted_at IS NULL
-	`, workspaceID, userID, revision, path, offset+1, limit).Scan(&file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content)
+	`, workspaceID, userID, revision, path, offset+1, limit).Scan(&file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = errAgentWorkspaceFileNotFound
 	}
@@ -187,6 +222,10 @@ func (a *App) loadAgentWorkspaceCommitFileRange(ctx context.Context, userID int,
 		return agentWorkspaceCommitFileContent{}, errAgentWorkspaceFileRange
 	}
 	if err := tx.Commit(ctx); err != nil {
+		return agentWorkspaceCommitFileContent{}, err
+	}
+	content, err = a.readAgentRepositoryContent(ctx, content, objectKey, file.SHA256, file.SizeBytes, offset, limit)
+	if err != nil {
 		return agentWorkspaceCommitFileContent{}, err
 	}
 	file.ContentBase64 = base64.StdEncoding.EncodeToString(content)

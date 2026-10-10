@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,61 @@ import (
 
 	"koinote/backend/internal/config"
 )
+
+func TestAgentRepositorySystemSlots(t *testing.T) {
+	pool := newGCTestPool(t)
+	app := New(config.Config{SessionSecret: "system-catalog-slots"}, pool)
+	ctx := context.Background()
+	for _, test := range []struct {
+		name    string
+		admin   bool
+		bonus   int64
+		allowed bool
+	}{
+		{"ordinary member", false, 0, false},
+		{"ordinary member with storage grant", false, 200000000, false},
+		{"administrator without system grant", true, 0, false},
+		{"system-funded administrator", true, 200000000, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			user := seedMCPUser(t, pool, app, membershipTierLifetime)
+			if _, err := pool.Exec(ctx, `UPDATE users SET is_admin=$2 WHERE id=$1`, user.ID, test.admin); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO agent_workspace_storage_quotas(user_id,bonus_bytes) VALUES($1,$2)`, user.ID, test.bonus); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO agent_workspaces(user_id,name) SELECT $1,'Existing '||n FROM generate_series(1,100) n`, user.ID); err != nil {
+				t.Fatal(err)
+			}
+			_, err := app.createAgentWorkspace(ctx, user.ID, "Catalog repository", "", "en")
+			if !test.allowed {
+				if !errors.Is(err, errAgentWorkspaceLimit) {
+					t.Fatalf("expected repository limit, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = pool.Exec(ctx, `INSERT INTO agent_workspaces(user_id,name) SELECT $1,'More '||n FROM generate_series(102,199) n`, user.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = app.createAgentWorkspace(ctx, user.ID, "Last system slot", "", "en"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = app.createAgentWorkspace(ctx, user.ID, "Over system limit", "", "en"); !errors.Is(err, errAgentWorkspaceLimit) {
+				t.Fatalf("system slots must remain bounded: %v", err)
+			}
+			if _, err = pool.Exec(ctx, `UPDATE users SET is_admin=false WHERE id=$1`, user.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = app.createAgentWorkspace(ctx, user.ID, "Former admin", "", "en"); !errors.Is(err, errAgentWorkspaceLimit) {
+				t.Fatalf("removed admin must not retain extra slots: %v", err)
+			}
+		})
+	}
+}
 
 func TestAgentRepositorySystemStorage(t *testing.T) {
 	pool := newGCTestPool(t)

@@ -186,6 +186,15 @@ jobs:
       # upload/download 两步和一份保留策略，而构建只要几秒。
       - run: npm run build
 
+      - name: 准备私有仓库 R2 存储
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler r2 bucket info koinote-agent-repositories --env production || \
+            npx wrangler r2 bucket create koinote-agent-repositories --env production
+          # 不配置 r2.dev 或自定义公开域名；所有文件读取经过后端权限校验。
+
       # 后端部署走 SSH：把源码同步到 VPS 再重建容器。
       #
       # 为什么不在 CI 里构建镜像推到 registry：那要多一个 registry 账号、
@@ -534,6 +543,19 @@ jobs:
         env:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+
+      - name: 验证仓库 R2 访问
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts "root@$HOST" 'sh -s' <<'REMOTE'
+          set -eu
+          cd /opt/koinote
+          docker compose exec -T backend sh -c '
+            status=$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w "%{http_code}" -H "X-Koinote-Internal-Token: $BACKEND_INTERNAL_TOKEN" "$WORKER_URL/api/internal/agent-repository-objects/health")
+            test "$status" = "204" || { echo "Repository R2 health check failed: HTTP $status"; exit 1; }
+          '
+          REMOTE
 
       - name: 启动并验证数据库异地备份
         env:

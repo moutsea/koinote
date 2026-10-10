@@ -48,9 +48,18 @@ func TestMCPBodyLimitPreservesFlush(t *testing.T) {
 }
 
 func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
+	for _, mode := range []string{"database", "r2"} {
+		t.Run(mode, func(t *testing.T) { runMCPAgentRepositoryReviewRegressions(t, mode) })
+	}
+}
+
+func runMCPAgentRepositoryReviewRegressions(t *testing.T, mode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "mcp-review-regression", AppURL: "http://127.0.0.1"}, pool)
+	if mode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
 	server := httptest.NewServer(app.Routes())
 	t.Cleanup(server.Close)
 	user := seedMCPUser(t, pool, app, membershipTierLifetime)
@@ -115,9 +124,22 @@ func TestMCPAgentRepositoryReviewRegressions(t *testing.T) {
 		if err != nil || unchanged.Revision != clean.Revision {
 			t.Fatalf("rejected restore mutated revision: %+v %v", unchanged, err)
 		}
-		var stored string
-		if err := pool.QueryRow(ctx, `SELECT convert_from(content,'UTF8') FROM agent_workspace_files WHERE workspace_id=$1 AND path='settings.txt'`, view.WorkspaceID).Scan(&stored); err != nil || stored != "api_key=<REDACTED>" {
-			t.Fatalf("rejected restore changed content: %q %v", stored, err)
+		var fileID int64
+		for _, f := range unchanged.Files {
+			if f.Path == "settings.txt" {
+				fileID = f.FileID
+			}
+		}
+		response := callLLMChannelAPI(t, app, cookie, http.MethodGet, fmt.Sprintf("/api/agent/workspace/files/%d", fileID), "")
+		var stored struct {
+			File agentWorkspaceFileContentView `json:"file"`
+		}
+		if response.Code != http.StatusOK {
+			t.Fatalf("current file: %d %s", response.Code, response.Body.String())
+		}
+		decodeJSONResponse(t, response, &stored)
+		if stored.File.ContentBase64 != base64.StdEncoding.EncodeToString([]byte("api_key=<REDACTED>")) {
+			t.Fatal("rejected restore changed content")
 		}
 		var audited int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM mcp_audit_logs WHERE user_id=$1 AND workspace_id=$2 AND source_revision=$3 AND expected_revision=$4 AND resulting_revision IS NULL AND doc_id IS NULL AND result='error'`, user.ID, view.WorkspaceID, sensitiveRevision, clean.Revision).Scan(&audited); err != nil || audited != 1 {

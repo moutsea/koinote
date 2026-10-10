@@ -52,6 +52,8 @@ type Config struct {
 	// WorkerURL 是 Cloudflare Worker 的基址。后端调它删除 R2 对象，并通过
 	// Email binding 发送注册验证码。空表示图片回收不启动、验证码发信返回 503。
 	WorkerURL string
+	// Production repository content is stored in R2; database mode is development-only.
+	AgentRepositoryStorage string
 
 	// ImageQuotaBytes 是每用户的图床上限，来自 IMAGE_QUOTA_MB。
 	//
@@ -182,6 +184,7 @@ func Load() Config {
 		AutoMigrate:                   getenv("AUTO_MIGRATE", "true") == "true",
 		MigrationsDir:                 getenv("MIGRATIONS_DIR", "migrations"),
 		WorkerURL:                     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
+		AgentRepositoryStorage:        strings.ToLower(strings.TrimSpace(getenv("AGENT_REPOSITORY_STORAGE", "r2"))),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 
@@ -255,6 +258,25 @@ func (c Config) Addr() string {
 
 func (c Config) IsProduction() bool {
 	return c.NodeEnv == "production"
+}
+
+// Database storage is an explicit local-development escape hatch, never a
+// fallback after an R2 failure. Invalid production configuration fails at startup.
+func (c Config) ValidateAgentRepositoryStorage() error {
+	if c.AgentRepositoryStorage == "database" && !c.IsProduction() {
+		return nil
+	}
+	if c.AgentRepositoryStorage != "r2" {
+		return fmt.Errorf("AGENT_REPOSITORY_STORAGE must be r2 (database is permitted only outside production)")
+	}
+	u, err := url.Parse(c.WorkerURL)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && (c.IsProduction() || u.Scheme != "http")) {
+		return fmt.Errorf("repository R2 storage requires a valid WORKER_URL (HTTPS in production)")
+	}
+	if strings.TrimSpace(c.InternalToken) == "" {
+		return fmt.Errorf("repository R2 storage requires BACKEND_INTERNAL_TOKEN")
+	}
+	return nil
 }
 
 // StripeEnabled 表示 Checkout 与成功页确认所需的密钥和 Price 已就绪。

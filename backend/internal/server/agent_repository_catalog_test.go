@@ -53,6 +53,14 @@ func TestCuratedAgentRepositories(t *testing.T) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "catalog-release-test"}, pool)
+	enableRepositoryR2Fixture(t, app)
+	defer func() {
+		var n int
+		err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL) + (SELECT count(*) FROM agent_workspace_files WHERE content IS NOT NULL)`).Scan(&n)
+		if err != nil || n != 0 {
+			t.Errorf("catalog left %d database payloads: %v", n, err)
+		}
+	}()
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
 	recipient := seedMCPUser(t, pool, app, membershipTierLifetime)
 	if _, err = pool.Exec(ctx, `UPDATE users SET is_admin=true WHERE id=$1`, owner.ID); err != nil {

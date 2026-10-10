@@ -16,9 +16,27 @@ import (
 )
 
 func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
+	for _, storage := range []string{"database", "r2"} {
+		t.Run(storage, func(t *testing.T) { runTestMCPAgentRepositoriesEndToEnd(t, storage) })
+	}
+}
+
+func runTestMCPAgentRepositoriesEndToEnd(t *testing.T, storageMode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "repository-mcp-test", AppURL: "http://127.0.0.1"}, pool)
+	if storageMode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
+	if storageMode == "r2" {
+		defer func() {
+			var n int
+			err := pool.QueryRow(context.Background(), `SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL`).Scan(&n)
+			if err != nil || n != 0 {
+				t.Errorf("R2 operation left %d database blobs: %v", n, err)
+			}
+		}()
+	}
 	server := httptest.NewServer(app.Routes())
 	t.Cleanup(server.Close)
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
@@ -192,7 +210,7 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 			t.Fatal(err)
 		}
 		for i := 0; i < 28; i++ {
-			paged, err = app.patchAgentWorkspace(ctx, owner.ID, paged.WorkspaceID, paged.Revision, []agentWorkspaceFile{{Path: "note.txt", Content: []byte(fmt.Sprint(i)), MimeType: "text/plain"}}, nil)
+			paged, err = app.patchAgentWorkspace(ctx, owner.ID, paged.WorkspaceID, paged.Revision, []agentWorkspaceFile{repositoryTestFile("note.txt", fmt.Sprint(i))}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -237,9 +255,27 @@ func TestMCPAgentRepositoriesEndToEnd(t *testing.T) {
 }
 
 func TestMCPAgentRepositoryAcceptsMaximumFileSize(t *testing.T) {
+	for _, storage := range []string{"database", "r2"} {
+		t.Run(storage, func(t *testing.T) { runTestMCPAgentRepositoryAcceptsMaximumFileSize(t, storage) })
+	}
+}
+
+func runTestMCPAgentRepositoryAcceptsMaximumFileSize(t *testing.T, storageMode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "large-repository-mcp-test", AppURL: "http://127.0.0.1"}, pool)
+	if storageMode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
+	if storageMode == "r2" {
+		defer func() {
+			var n int
+			err := pool.QueryRow(context.Background(), `SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL`).Scan(&n)
+			if err != nil || n != 0 {
+				t.Errorf("R2 operation left %d database blobs: %v", n, err)
+			}
+		}()
+	}
 	server := httptest.NewServer(app.Routes())
 	t.Cleanup(server.Close)
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)

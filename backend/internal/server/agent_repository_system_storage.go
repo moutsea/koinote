@@ -16,6 +16,31 @@ import (
 
 var errAgentSystemStorageInvalid = errors.New("invalid system repository storage grant")
 
+const agentRepositorySystemBonusSlots = 100
+
+// Call while holding the account advisory lock. System-funded administrators
+// get catalog slots in addition to their ordinary repositories; a storage
+// bonus alone must never raise an ordinary account's repository limit.
+func checkAgentRepositoryCapacity(ctx context.Context, q imageUsageQuerier, userID int) error {
+	var count int
+	var systemFundedAdmin bool
+	err := q.QueryRow(ctx, `SELECT
+	 (SELECT count(*) FROM agent_workspaces WHERE user_id=$1 AND deleted_at IS NULL),
+	 u.is_admin AND COALESCE(q.bonus_bytes,0)>0
+	 FROM users u LEFT JOIN agent_workspace_storage_quotas q ON q.user_id=u.id WHERE u.id=$1`, userID).Scan(&count, &systemFundedAdmin)
+	if err != nil {
+		return err
+	}
+	limit := agentWorkspaceMaxRepositories
+	if systemFundedAdmin {
+		limit += agentRepositorySystemBonusSlots
+	}
+	if count >= limit {
+		return errAgentWorkspaceLimit
+	}
+	return nil
+}
+
 // The platform catalog uses a system grant, not a reservation from personal
 // storage. A minimum makes retries and partial catalog imports idempotent and
 // preserves any larger grant already assigned to the managing account.

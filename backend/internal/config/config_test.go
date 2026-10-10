@@ -558,3 +558,30 @@ func TestValidateWechatAPIProxyConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentRepositoryStorageConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cfg   Config
+		valid bool
+	}{
+		{"production R2", Config{NodeEnv: "production", AgentRepositoryStorage: "r2", WorkerURL: "https://example.com", InternalToken: "test"}, true},
+		{"local database", Config{NodeEnv: "development", AgentRepositoryStorage: "database"}, true},
+		{"production database forbidden", Config{NodeEnv: "production", AgentRepositoryStorage: "database"}, false},
+		{"missing R2 endpoint", Config{AgentRepositoryStorage: "r2", InternalToken: "test"}, false},
+		{"missing R2 token", Config{AgentRepositoryStorage: "r2", WorkerURL: "https://example.com"}, false},
+		{"HTTP leaks production token", Config{NodeEnv: "production", AgentRepositoryStorage: "r2", WorkerURL: "http://example.com", InternalToken: "test"}, false},
+		{"local R2", Config{AgentRepositoryStorage: "r2", WorkerURL: "http://localhost:8788", InternalToken: "test"}, true},
+		{"typo", Config{AgentRepositoryStorage: "R22"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.cfg.ValidateAgentRepositoryStorage(); (err == nil) != tc.valid {
+				t.Fatalf("validation: %v", err)
+			}
+		})
+	}
+	t.Setenv("AGENT_REPOSITORY_STORAGE", "")
+	if got := Load().AgentRepositoryStorage; got != "r2" {
+		t.Fatalf("default storage=%q", got)
+	}
+}

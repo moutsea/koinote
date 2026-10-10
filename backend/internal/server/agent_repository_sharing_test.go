@@ -43,9 +43,27 @@ func repositoryTestFile(path, content string) agentWorkspaceFile {
 }
 
 func TestAgentRepositoryPublicationSnapshotAndRevocation(t *testing.T) {
+	for _, storage := range []string{"database", "r2"} {
+		t.Run(storage, func(t *testing.T) { runTestAgentRepositoryPublicationSnapshotAndRevocation(t, storage) })
+	}
+}
+
+func runTestAgentRepositoryPublicationSnapshotAndRevocation(t *testing.T, storageMode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "repository-sharing-test", AppURL: "https://koinote.example"}, pool)
+	if storageMode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
+	if storageMode == "r2" {
+		defer func() {
+			var n int
+			err := pool.QueryRow(context.Background(), `SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL`).Scan(&n)
+			if err != nil || n != 0 {
+				t.Errorf("R2 operation left %d database blobs: %v", n, err)
+			}
+		}()
+	}
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
 	other := seedMCPUser(t, pool, app, membershipTierLifetime)
 	free := seedMCPUser(t, pool, app, membershipTierFree)
@@ -159,9 +177,27 @@ func TestAgentRepositoryPublicationSnapshotAndRevocation(t *testing.T) {
 }
 
 func TestAgentRepositoryForkIsolationIdempotencyAndQuota(t *testing.T) {
+	for _, storage := range []string{"database", "r2"} {
+		t.Run(storage, func(t *testing.T) { runTestAgentRepositoryForkIsolationIdempotencyAndQuota(t, storage) })
+	}
+}
+
+func runTestAgentRepositoryForkIsolationIdempotencyAndQuota(t *testing.T, storageMode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "fork-test", AppURL: "https://koinote.example"}, pool)
+	if storageMode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
+	if storageMode == "r2" {
+		defer func() {
+			var n int
+			err := pool.QueryRow(context.Background(), `SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL`).Scan(&n)
+			if err != nil || n != 0 {
+				t.Errorf("R2 operation left %d database blobs: %v", n, err)
+			}
+		}()
+	}
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
 	dest := seedMCPUser(t, pool, app, membershipTierLifetime)
 	free := seedMCPUser(t, pool, app, membershipTierFree)
@@ -257,6 +293,13 @@ func TestAgentRepositoryForkIsolationIdempotencyAndQuota(t *testing.T) {
 	}
 	callRepositoryAPI(t, app, mcpSessionCookie(app, dest.AuthUserID), http.MethodGet, fmt.Sprintf("/api/agent/workspaces/%d", forkID), "", 200)
 	callRepositoryAPI(t, app, nil, http.MethodGet, fmt.Sprintf("/api/agent/repositories/%d", source.WorkspaceID), "", 404)
+	if storageMode == "r2" {
+		// Read actual bytes after the source is gone, not only the fork manifest.
+		if _, err = app.loadAgentWorkspaceCommitFile(ctx, dest.ID, forkID, 0, "README.md"); err != nil {
+			t.Fatal(err)
+		}
+		assertRepositoryHasNoDatabaseContent(t, app, forkID)
+	}
 	// Fill another member's quota with valid-sized files, and ensure a failed
 	// fork leaves neither a destination repository nor a provenance record.
 	full := seedMCPUser(t, pool, app, membershipTierLifetime)

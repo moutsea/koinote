@@ -377,14 +377,20 @@ func (a *App) publicAgentRepositoryFileGet(w http.ResponseWriter, r *http.Reques
 	}
 	var file agentWorkspaceFileContentView
 	var content []byte
-	err = a.db.QueryRow(r.Context(), `SELECT f.file_id,f.path,f.mime_type,f.size_bytes,f.sha256,b.content
+	var objectKey *string
+	err = a.db.QueryRow(r.Context(), `SELECT f.file_id,f.path,f.mime_type,f.size_bytes,f.sha256,b.content,b.r2_object_key
  FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
  JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
- WHERE p.workspace_id=$1 AND p.revision=$2 AND f.file_id=$3 AND w.deleted_at IS NULL`, id, revision, fileID).Scan(&file.FileID, &file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content)
+ WHERE p.workspace_id=$1 AND p.revision=$2 AND f.file_id=$3 AND w.deleted_at IS NULL`, id, revision, fileID).Scan(&file.FileID, &file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeAgentWorkspaceError(w, errAgentWorkspaceNotFound)
 		return
 	}
+	if err != nil {
+		writeAgentWorkspaceError(w, err)
+		return
+	}
+	content, err = a.readAgentRepositoryContent(r.Context(), content, objectKey, file.SHA256, file.SizeBytes, 0, agentWorkspaceMaxFileBytes)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -472,19 +478,22 @@ func (a *App) forkAgentRepository(ctx context.Context, userID int, id, revision 
 	if publishedRevision != revision {
 		return empty, errAgentWorkspaceConflict
 	}
-	var count int
 	var previousBytes int64
-	if err = tx.QueryRow(ctx, `SELECT count(*) FROM agent_workspaces WHERE user_id=$1 AND deleted_at IS NULL`, userID).Scan(&count); err != nil {
+	if err = checkAgentRepositoryCapacity(ctx, tx, userID); err != nil {
 		return empty, err
-	}
-	if count >= agentWorkspaceMaxRepositories {
-		return empty, errAgentWorkspaceLimit
 	}
 	if err = tx.QueryRow(ctx, `SELECT agent_workspace_storage_bytes($1)`, userID).Scan(&previousBytes); err != nil {
 		return empty, err
 	}
 	var newID int64
 	if err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description,github_source) VALUES($1,$2,$3,$4) RETURNING id`, userID, name, description, githubSource).Scan(&newID); err != nil {
+		return empty, err
+	}
+	// Fork references immutable R2 objects. Its own blob rows keep those objects
+	// alive even after the source publication or source account is deleted.
+	if _, err = tx.Exec(ctx, `INSERT INTO agent_workspace_blobs(workspace_id,sha256,content,size_bytes,r2_object_key,content_scan_policy,content_scan_sensitive)
+ SELECT DISTINCT $1::bigint,b.sha256,b.content,b.size_bytes,b.r2_object_key,b.content_scan_policy,b.content_scan_sensitive
+ FROM agent_repository_publication_files f JOIN agent_workspace_blobs b USING(workspace_id,sha256) WHERE f.workspace_id=$2`, newID, id); err != nil {
 		return empty, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO agent_workspace_files(workspace_id,path,content,mime_type,size_bytes,sha256)

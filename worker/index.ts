@@ -1,3 +1,4 @@
+import { handleAgentRepositoryObject } from "./agentRepositoryObjects";
 /**
  * Koinote Cloudflare Worker
  *
@@ -59,6 +60,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     (request.method === "GET" || request.method === "HEAD")
   ) {
     return Response.redirect(DESKTOP_RELEASES_URL, 302);
+  }
+
+  if (url.pathname.startsWith("/api/internal/agent-repository-objects/")) {
+    return handleAgentRepositoryObject(request, env);
   }
 
   // 图片上传由 Worker 直接落 R2，不转发给后端——

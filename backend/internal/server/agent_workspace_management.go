@@ -121,6 +121,8 @@ func agentWorkspaceIDFromRequest(w http.ResponseWriter, r *http.Request) (int64,
 func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.Is(err, errAgentRepositoryStorage):
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "repository_storage_unavailable", errAgentRepositoryStorage.Error())
 	case errors.Is(err, errAgentWorkspaceCommentSensitive):
 		httpx.ErrorCode(w, 422, "sensitive_comment", err.Error())
 	case errors.Is(err, errAgentWorkspaceCommentInvalid):
@@ -215,6 +217,15 @@ func (a *App) createAgentWorkspace(ctx context.Context, userID int, name, descri
 	if err != nil {
 		return agentWorkspaceView{}, err
 	}
+	readme := []byte(agentWorkspaceREADMEForLocale(a.cfg.AppURL, locale))
+	readmeHash := sha256.Sum256(readme)
+	file := agentWorkspaceFile{Path: "README.md", Content: readme, MimeType: "text/markdown", SHA256: hex.EncodeToString(readmeHash[:])}
+	staged, err := a.stageAgentRepositoryFiles(ctx, userID, []agentWorkspaceFile{file})
+	if err != nil {
+		return agentWorkspaceView{}, err
+	}
+	defer a.expireAgentRepositoryStaging(ctx, staged)
+
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return agentWorkspaceView{}, err
@@ -223,12 +234,8 @@ func (a *App) createAgentWorkspace(ctx context.Context, userID int, name, descri
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
 		return agentWorkspaceView{}, err
 	}
-	var count int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM agent_workspaces WHERE user_id = $1 AND deleted_at IS NULL`, userID).Scan(&count); err != nil {
+	if err := checkAgentRepositoryCapacity(ctx, tx, userID); err != nil {
 		return agentWorkspaceView{}, err
-	}
-	if count >= agentWorkspaceMaxRepositories {
-		return agentWorkspaceView{}, errAgentWorkspaceLimit
 	}
 	var previousBytes int64
 	if err := tx.QueryRow(ctx, `SELECT agent_workspace_storage_bytes($1)`, userID).Scan(&previousBytes); err != nil {
@@ -240,14 +247,10 @@ func (a *App) createAgentWorkspace(ctx context.Context, userID int, name, descri
 	`, userID, name, description).Scan(&workspaceID); err != nil {
 		return agentWorkspaceView{}, err
 	}
-	readme := []byte(agentWorkspaceREADMEForLocale(a.cfg.AppURL, locale))
-	readmeHash := sha256.Sum256(readme)
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO agent_workspace_files (workspace_id, path, content, mime_type, size_bytes, sha256)
-		VALUES ($1, 'README.md', $2, 'text/markdown', $3, $4)
-	`, workspaceID, readme, len(readme), hex.EncodeToString(readmeHash[:])); err != nil {
+	if err := insertAgentRepositoryFile(ctx, tx, workspaceID, file, staged); err != nil {
 		return agentWorkspaceView{}, err
 	}
+
 	if _, err := tx.Exec(ctx, `SELECT record_agent_workspace_commit($1, 'create')`, workspaceID); err != nil {
 		return agentWorkspaceView{}, err
 	}

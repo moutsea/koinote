@@ -233,12 +233,14 @@ func (a *App) agentWorkspaceFileGet(w http.ResponseWriter, r *http.Request) {
 	}
 	var view agentWorkspaceFileContentView
 	var content []byte
+	var objectKey *string
 	err = a.db.QueryRow(r.Context(), `
-		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, f.content
+		SELECT f.id, f.path, f.mime_type, f.size_bytes, f.sha256, f.content, b.r2_object_key
 		FROM agent_workspace_files f
+        LEFT JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
 		JOIN agent_workspaces w ON w.id = f.workspace_id
 		WHERE f.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL
-	`, parsedFileID, user.ID).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content)
+	`, parsedFileID, user.ID).Scan(&view.FileID, &view.Path, &view.MimeType, &view.SizeBytes, &view.SHA256, &content, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Agent workspace file not found")
 		return
@@ -246,6 +248,11 @@ func (a *App) agentWorkspaceFileGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("agent workspace file get: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+	content, err = a.readAgentRepositoryContent(r.Context(), content, objectKey, view.SHA256, view.SizeBytes, 0, agentWorkspaceMaxFileBytes)
+	if err != nil {
+		writeAgentWorkspaceError(w, err)
 		return
 	}
 	view.ContentBase64 = base64.StdEncoding.EncodeToString(content)
@@ -562,6 +569,30 @@ func (a *App) mutateAgentWorkspaceWithHistory(ctx context.Context, userID int, w
 	if expectedRevision < 0 {
 		return agentWorkspaceView{}, errAgentWorkspaceConflict
 	}
+	var scannedRestoreID int64
+	if restoreRevision != nil && !allowSensitiveRestore {
+		var err error
+		scannedRestoreID, err = a.preflightAgentWorkspaceRestore(ctx, userID, workspaceID, expectedRevision, *restoreRevision)
+		if err != nil {
+			return agentWorkspaceView{}, err
+		}
+	}
+	// Check ownership/revision before staging; recheck under the account lock below.
+	if a.agentObjectStore != nil && len(files) > 0 {
+		current, lookupErr := a.loadAgentWorkspace(ctx, userID, workspaceID)
+		if lookupErr != nil && !(errors.Is(lookupErr, errAgentWorkspaceNotFound) && workspaceID == 0 && expectedRevision == 0) {
+			return agentWorkspaceView{}, lookupErr
+		}
+		if lookupErr == nil && current.Revision != expectedRevision {
+			return agentWorkspaceView{}, errAgentWorkspaceConflict
+		}
+	}
+	staged, err := a.stageAgentRepositoryFiles(ctx, userID, files)
+	if err != nil {
+		return agentWorkspaceView{}, err
+	}
+	defer a.expireAgentRepositoryStaging(ctx, staged)
+
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return agentWorkspaceView{}, err
@@ -595,6 +626,9 @@ func (a *App) mutateAgentWorkspaceWithHistory(ctx context.Context, userID int, w
 	if currentRevision != expectedRevision {
 		return agentWorkspaceView{}, errAgentWorkspaceConflict
 	}
+	if scannedRestoreID != 0 && selectedID != scannedRestoreID {
+		return agentWorkspaceView{}, errAgentWorkspaceConflict
+	}
 	if restoreRevision != nil {
 		var exists bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_workspace_commits WHERE workspace_id = $1 AND revision = $2)`, selectedID, *restoreRevision).Scan(&exists); err != nil {
@@ -602,11 +636,6 @@ func (a *App) mutateAgentWorkspaceWithHistory(ctx context.Context, userID int, w
 		}
 		if !exists {
 			return agentWorkspaceView{}, errAgentWorkspaceRevisionNotFound
-		}
-		if !allowSensitiveRestore {
-			if err := checkAgentWorkspaceRestoreContent(ctx, tx, selectedID, *restoreRevision); err != nil {
-				return agentWorkspaceView{}, err
-			}
 		}
 	}
 	if _, err := tx.Exec(ctx, `SELECT record_agent_workspace_commit($1, 'baseline')`, selectedID); err != nil {
@@ -642,16 +671,11 @@ func (a *App) mutateAgentWorkspaceWithHistory(ctx context.Context, userID int, w
 		}
 	}
 	for _, file := range files {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO agent_workspace_files (workspace_id, path, content, mime_type, size_bytes, sha256)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (workspace_id, path) DO UPDATE SET content = EXCLUDED.content,
-				mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes, sha256 = EXCLUDED.sha256
-			WHERE agent_workspace_files.sha256 <> EXCLUDED.sha256 OR agent_workspace_files.mime_type <> EXCLUDED.mime_type
-		`, selectedID, file.Path, file.Content, file.MimeType, len(file.Content), file.SHA256); err != nil {
+		if err := insertAgentRepositoryFile(ctx, tx, selectedID, file, staged); err != nil {
 			return agentWorkspaceView{}, err
 		}
 	}
+
 	var fileCount int
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM agent_workspace_files WHERE workspace_id = $1`, selectedID).Scan(&fileCount); err != nil {
 		return agentWorkspaceView{}, err

@@ -270,9 +270,27 @@ func TestGitHubRequestsAndCredentialsAreBounded(t *testing.T) {
 }
 
 func TestGitHubImportPublishesOriginalAttributionAndForkPreservesIt(t *testing.T) {
+	for _, storage := range []string{"database", "r2"} {
+		t.Run(storage, func(t *testing.T) { runTestGitHubImportPublishesOriginalAttributionAndForkPreservesIt(t, storage) })
+	}
+}
+
+func runTestGitHubImportPublishesOriginalAttributionAndForkPreservesIt(t *testing.T, storageMode string) {
 	ctx := context.Background()
 	pool := newGCTestPool(t)
 	app := New(config.Config{SessionSecret: "github-import-test", AppURL: "https://koinote.example"}, pool)
+	if storageMode == "r2" {
+		enableRepositoryR2Fixture(t, app)
+	}
+	if storageMode == "r2" {
+		defer func() {
+			var n int
+			err := pool.QueryRow(context.Background(), `SELECT count(*) FROM agent_workspace_blobs WHERE content IS NOT NULL`).Scan(&n)
+			if err != nil || n != 0 {
+				t.Errorf("R2 operation left %d database blobs: %v", n, err)
+			}
+		}()
+	}
 	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
 	recipient := seedMCPUser(t, pool, app, membershipTierLifetime)
 	free := seedMCPUser(t, pool, app, membershipTierFree)

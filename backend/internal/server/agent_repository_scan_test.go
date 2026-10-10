@@ -20,7 +20,7 @@ type publicationReadTrace struct {
 type publicationReadTraceKey struct{}
 
 func (trace *publicationReadTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	return context.WithValue(ctx, publicationReadTraceKey{}, strings.Contains(data.SQL, "SELECT DISTINCT ON (sha256) sha256,content"))
+	return context.WithValue(ctx, publicationReadTraceKey{}, strings.Contains(data.SQL, "SELECT DISTINCT ON (f.sha256) f.sha256,f.content"))
 }
 func (trace *publicationReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	if scanning, _ := ctx.Value(publicationReadTraceKey{}).(bool); scanning {

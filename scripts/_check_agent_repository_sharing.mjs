@@ -130,7 +130,7 @@ async function consent(value) {
   await act(async()=>props.onChange({target:{checked:value}}));await settle();
 }
 try {
-  assert.equal(labels.publicRepositories, "公开仓库");
+  assert.equal(labels.publicRepositories, "Skills/Agent Hub");
   assert.equal(labels.githubImport, "从 GitHub 导入");
   assert.equal(labels.starRepository, "收藏");
   assert.equal(labels.changeComment, "变更说明（可选）");

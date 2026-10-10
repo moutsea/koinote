@@ -19,6 +19,7 @@ import (
 )
 
 type App struct {
+	agentObjectStore        agentRepositoryObjectStore
 	githubHTTPClient        *http.Client
 	githubImportOnce        sync.Once
 	githubImportSlots       chan struct{}
@@ -87,6 +88,10 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 			cfg.HostMetricsProcPath,
 			cfg.HostMetricsFilesystemPath,
 		),
+	}
+	if cfg.IsProduction() || cfg.AgentRepositoryStorage == "r2" {
+		app.agentObjectStore = &workerAgentRepositoryObjects{baseURL: cfg.WorkerURL, token: cfg.InternalToken,
+			client: &http.Client{Timeout: 45 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	}
 	if cfg.StripeClientEnabled() {
 		app.stripeCheckout = stripe.NewClient(cfg.StripeSecretKey).V1CheckoutSessions
