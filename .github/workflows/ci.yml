@@ -107,7 +107,9 @@ jobs:
         # 它们会 skip，包括 SQL 类型推导和跨引擎正则捕获语义断言。
         env:
           TEST_DATABASE_URL: postgres://koinote:koinote@localhost:5432/koinote?sslmode=disable
-        run: go test -race ./...
+        # 整包真实数据库回归在较慢的 runner 上会超过 Go 默认的 10 分钟；
+        # 保留全部测试和 race 检查，给整包执行留出时间。
+        run: go test -race -timeout 20m ./...
 
       # 确认上一步没有静默 skip 掉数据库校验。
       #
