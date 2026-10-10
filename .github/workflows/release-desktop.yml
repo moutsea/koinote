@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds public Skills/Agent repositories with anonymous Clone, local sync, credential-free AI instructions, member-only Fork, and Stars. GitHub imports preserve the original author, repository link, commit and license. Authors publish explicit snapshots and can withdraw them; private changes stay private until republished. Downloads resume after rate limits, file history supports change descriptions, and repeated publication reuses sensitivity scans. AI WeChat covers can now use an uploaded reference image."
+          notes="Koinote Desktop $version refreshes Skills/Agent Hub with clearer repository cards and GitHub-style README previews, including tables, task lists, highlighted code and sanitized HTML. Relative file links support refresh, sharing and browser history, and snapshot images load on demand. Original GitHub attribution, Clone, Fork and Stars remain available."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,12 +239,10 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 新增「公开仓库」入口：任何人可浏览 Skills/Agent 仓库、Clone 下载或同步到本机，付费用户可 Fork 为保留来源的私有副本。
-          - 支持从 GitHub 导入仓库，公开及 Fork 后保留原作者、原始链接、导入版本与许可证；登录用户可 Star 收藏。
-          - 作者明确确认后发布当前快照，后续私有修改不会自动公开；可随时撤回共享，发布前检查敏感内容。
-          - 公开仓库可复制无需凭证的同步指令给 AI Agent；下载遇到限流会等待后继续，并保留文件选择、覆盖备份和完整性校验。
-          - 文件历史支持变更说明，兼容旧 Agent；重复发布复用未变内容的敏感扫描结果，Clone 失败重试不重复计数。
-          - AI 微信封面支持上传参考图，并可预览、替换或移除；参考图不保存到文章。
+          - 优化 Skills/Agent Hub 仓库卡片和详情布局，保留 GitHub 原作者、原始链接与许可证。
+          - README 按 GitHub 风格渲染 Markdown：支持表格、任务列表、代码高亮和经过安全过滤的 HTML，并可切换查看源码。
+          - 仓库内相对链接支持打开对应文件、刷新、分享和浏览器返回；相对图片从公开快照按需加载。
+          - 保留 Clone 下载、本机同步、复制给 AI Agent、Fork 与收藏功能。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -258,12 +256,10 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Browse public Skills/Agent repositories and Clone them as ZIPs or sync them locally without signing in. Members can Fork private copies with source attribution.
-          - Import GitHub repositories while preserving the original author, repository link, imported commit and license through publication and Forks. Signed-in users can Star repositories.
-          - Publish an explicitly reviewed snapshot after sensitivity checks. Later private edits stay private until republished, and authors can withdraw public access.
-          - Copy credential-free public sync instructions for an AI Agent. Rate-limited downloads wait and resume while retaining file selection, overwrite backups and integrity checks.
-          - File history supports change descriptions while keeping older Agents compatible. Republishing reuses scans for unchanged contents, and Clone retries do not inflate counts.
-          - AI-generated WeChat covers accept an uploaded reference image with preview, replacement and removal. Reference images are not saved to the article.
+          - Refreshed Skills/Agent Hub cards and repository details preserve the original GitHub author, source link and license.
+          - GitHub-style README rendering supports Markdown tables, task lists, highlighted code and sanitized HTML, with a source view.
+          - Relative file links survive refresh, sharing and browser history. Snapshot-relative images load on demand.
+          - Clone downloads, local sync, AI Agent handoff, Fork and Stars remain available.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

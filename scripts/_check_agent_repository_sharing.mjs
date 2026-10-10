@@ -21,7 +21,7 @@ const calls = [], navigations = [], confirmations = [];
 const h = globalThis.__sharingTest = {
   workspace, publicRepository, publication: null, source: null, labels: null,
   user: { id: 1, membershipTier: "lifetime" }, enabled: true, confirmResult: true, failPublish: false, failFork: false, withdrawn: false, privateCalls: 0,
-  navigate: async (target) => navigations.push(target),
+  navigate: async (target) => { navigations.push(target); if (target.to === "/repositories/$repositoryId") { h.search = target.search; h.hash = target.hash; } },
   confirm: async (message) => { confirmations.push(message); return h.confirmResult; },
   async api(path, init = {}) {
     const method = init.method ?? "GET";
@@ -62,6 +62,7 @@ const h = globalThis.__sharingTest = {
       return { workspace: { ...workspace, workspaceId: 8 } };
     }
     if (h.withdrawn) throw new ApiError(404, "withdrawn");
+    if (h.extraFiles?.[path]) return { file: h.extraFiles[path] };
     if (path.includes("/files/21?revision=3")) return { file: { ...workspace.files[0], contentBase64: bytes.toString("base64") } };
     if (path.startsWith("/api/agent/repositories/7")) return { repository: publicRepository };
     if (path.startsWith("/api/agent/repositories?")) return { repositories: [{ ...publicRepository, fileCount: 1, sizeBytes: bytes.length }], nextCursor: null };
@@ -79,6 +80,8 @@ const bundle = await build({
     export { AgentRepositorySharingCard } from "./spa/src/components/AgentRepositorySharingCard";
     export { AgentPublicRepositoryPage } from "./spa/src/pages/AgentPublicRepositoryPage";
     export { AgentPublicRepositoriesPage } from "./spa/src/pages/AgentPublicRepositoriesPage";
+    export { RepositoryMarkdown } from "./spa/src/components/RepositoryMarkdown";
+    export { repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES } from "./spa/src/agentRepositoryMarkdown";
     export { publicAgentRepositoryTransferSource, publicRepositoryClonePrompt } from "./spa/src/agentRepositorySharing";
     export { loadAgentWorkspaceFiles } from "./spa/src/agentWorkspaceTransfer";
     export { zh } from "./spa/src/i18n/zh";
@@ -98,17 +101,19 @@ const bundle = await build({
       "./desktop/runtime": "export const isDesktopRuntime=()=>false;",
       "../modalStack": "export const pushModal=()=>()=>{};",
       "@tanstack/react-router": `import {createElement} from 'react';
+        export {defaultStringifySearch} from '@tanstack/router-core';
         export const useParams=()=>({repositoryId:'7'});
+        export const useSearch=()=>globalThis.__sharingTest.search??{};
         export const useNavigate=()=>globalThis.__sharingTest.navigate;
-        export const useRouterState=({select})=>select({location:{pathname:'/repositories/7'}});
+        export const useRouterState=({select})=>select({location:{pathname:'/repositories/7',hash:globalThis.__sharingTest.hash??''}});
         export const Link=({to,params,search,children,...props})=>createElement('a',{...props,href:to.replace('$repositoryId',params?.repositoryId??'')},children);`,
     };
     builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(adapters,path) ? {path:path==='./api'?'../api':path,namespace:'sharing'} : undefined);
     builder.onLoad({ filter: /.*/, namespace: "sharing" }, ({path})=>({contents:adapters[path]}));
-    builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/react-query$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
+    builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
 const root = createRoot(document.getElementById("root"));
@@ -154,6 +159,11 @@ try {
 
   h.user={id:2,membershipTier:'free'};
   await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'Shared skill','SKILL.md is a rendered fallback when README is absent');
+  await click(labels.readmeSource);
+  assert.ok(document.querySelector('pre')?.textContent.startsWith('# Shared skill'),'source tab preserves Markdown');
+  await click(labels.readmeRendered);
+  assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'Shared skill');
   assert.ok(Boolean(document.querySelector('a[href="/pricing"]')),"free users get the Fork membership entry");
   assert.equal(button(labels.cloneRepository).disabled,false,"free users can clone");
   h.failStar=true;await click(`${labels.starRepository} · 0`);
@@ -201,6 +211,88 @@ try {
   h.user=null;
   await mount(AgentPublicRepositoriesPage);
   assert.ok(Boolean(document.querySelector('a[href="/repositories/7"]')),"public list works without a user session");
+
+  const source={repositoryUrl:'https://github.com/example/skills',author:'example',authorUrl:'https://github.com/example',commitSha:'a'.repeat(40),license:'MIT',ref:'main'};
+  const snapshotFiles=[{...workspace.files[0],fileId:30,path:'README.md'},{...workspace.files[0],fileId:31,path:'docs/使用指南.md'},{...workspace.files[0],fileId:32,path:'images/logo.png',mimeType:'image/png'}];
+  assert.equal(repositoryReadme(snapshotFiles).fileId,30);
+  assert.equal(repositoryReadme([{...snapshotFiles[0],path:'.github/README.md'}]).path,'.github/README.md');
+  assert.equal(repositoryResource('../images/logo.png','docs/使用指南.md',snapshotFiles,source,true).file.fileId,32);
+  assert.equal(repositoryResource('docs/%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97.md#安装','README.md',snapshotFiles,source).file.fileId,31);
+  assert.equal(repositoryResource('missing.md','README.md',snapshotFiles,source).href,source.repositoryUrl+'/blob/'+source.commitSha+'/missing.md');
+  assert.equal(repositoryResource('docs','README.md',snapshotFiles,source).href,source.repositoryUrl+'/tree/'+source.commitSha+'/docs');
+  for(const bad of ['javascript:alert(1)','data:text/html,x','file:///etc/passwd','https://user:password@example.org','/api/auth/logout','\\\\evil.com/a']) {
+    assert.equal(repositoryResource(bad,'README.md',snapshotFiles),undefined,`unsafe or unknown app-local resource: ${bad}`);
+  }
+  assert.equal(repositoryResource('http://example.org/logo.png','README.md',[],undefined,true),undefined);
+  assert.equal(repositoryResource('missing.png','README.md',[],{...source,private:true},true),undefined,'private upstream images are not requested');
+  const cut=repositoryPreview(Buffer.concat([Buffer.alloc(REPOSITORY_PREVIEW_BYTES-1,65),Buffer.from('中文')]).toString('base64'));
+  assert.equal(cut.truncated,true);assert.ok(!cut.text.includes('\ufffd'),'truncation respects UTF-8 boundaries');
+  assert.equal(repositoryPreview(Buffer.from([0,1,2]).toString('base64')).binary,true);
+  const opened=[];
+  await mount(RepositoryMarkdown,{repository:{...publicRepository,files:snapshotFiles,githubSource:source},onOpenFile:(...args)=>opened.push(args),content:`# Guide\n\n## 安装\n\n## 安装\n\n| Tool | Use |\n| --- | --- |\n| Agent | **Skills** |\n\n- [x] Ready\n- [ ] Pending\n\n> Review first\n\n\`\`\`js\nconst value = "safe";\n\`\`\`\n\n[Guide](docs/使用指南.md#安装) · [Section](#安装) · [External](https://example.org)\n\n<details><summary>More</summary>Details</details>\n<p align="center"><img src="https://example.org/badge.svg" alt="Badge" onerror="alert(1)"></p>\n<picture><source srcset="/api/unresolved-resource 1x"><img src="https://example.org/safe.png"></picture><script>alert(1)</script><iframe src="https://evil.example"></iframe><a href="javascript:alert(1)">Bad</a><form><input name="location"></form>`});
+  assert.equal(document.querySelectorAll('.repository-markdown table tbody tr').length,1);
+  assert.equal(document.querySelectorAll('.repository-markdown .task-list-item input[type="checkbox"][disabled]').length,2);
+  assert.equal(document.querySelector('h2')?.id,'user-content-安装');
+  assert.equal(document.querySelectorAll('h2')[1]?.id,'user-content-安装-1');
+  assert.ok(document.querySelector('pre code .hljs-keyword'),'code is highlighted');
+  assert.ok(document.querySelector('details summary'));
+  assert.equal(document.querySelector('p[align="center"] img').getAttribute('referrerPolicy'),'no-referrer');
+  assert.equal(document.querySelectorAll('script,iframe,form,source,[onerror],a[href^="javascript:"]').length,0,'embedded HTML cannot execute or submit');
+  assert.equal([...document.querySelectorAll('a')].find(a=>a.textContent==='External').rel,'noopener noreferrer');
+  assert.equal([...document.querySelectorAll('a')].find(a=>a.textContent==='Section').getAttribute('href'),repositoryFileHref(7,'README.md','安装'));
+  assert.equal([...document.querySelectorAll('a')].find(a=>a.textContent==='Guide').getAttribute('href'),repositoryFileHref(7,'docs/使用指南.md','安装'));
+  const guideProps=reactProps([...document.querySelectorAll('a')].find(a=>a.textContent==='Guide'));
+  guideProps.onClick({button:0,metaKey:true,preventDefault(){throw new Error('Command-click must keep native navigation');}});
+  assert.equal(opened.length,0);
+  await act(async()=>guideProps.onClick({button:0,preventDefault(){}}));
+  assert.equal(opened[0][0],31,'relative Markdown links open snapshot files');
+  await mount(RepositoryMarkdown,{content:'A note[^a].\n\n[^a]: Footnote text.\n\n<a name="legacy"></a>\n\n[Legacy anchor](#legacy)'});
+  for(const anchor of document.querySelectorAll('.repository-markdown a[href^="#"]')) {
+    assert.ok(document.getElementById(decodeURIComponent(anchor.getAttribute('href').slice(1))),'footnote references and back references reach sanitized IDs');
+  }
+
+  assert.deepEqual(parseRepositorySearch({file:'docs/使用指南.md'}),{file:'docs/使用指南.md'});
+  assert.deepEqual(parseRepositorySearch({file:['README.md']}),{});
+  const guideBytes=Buffer.from('# 使用指南\n\n## 安装\n\nInstructions.');
+  const guideFile={...snapshotFiles[1],sha256:createHash('sha256').update(guideBytes).digest('hex'),contentBase64:guideBytes.toString('base64')};
+  h.extraFiles={'/api/agent/repositories/7/files/31?revision=3':guideFile};
+  const originalFiles=publicRepository.files;
+  publicRepository.files=[...originalFiles,guideFile];
+  h.search={file:guideFile.path};h.hash='user-content-安装';
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'使用指南','direct file links survive a reload');
+  await click(labels.readmeBack);
+  assert.equal(navigations.at(-1).search.file,originalFiles[0].path,'file actions update the URL');
+  h.search={};h.hash='';
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'Shared skill','restoring a URL without a file restores README');
+  publicRepository.files=originalFiles;
+
+  const observers=[];
+  globalThis.IntersectionObserver=class {
+    constructor(callback){this.callback=callback;observers.push(this);}
+    observe(element){this.element=element;}
+    disconnect(){this.disconnected=true;}
+  };
+  const imageFile={...snapshotFiles[2],contentBase64:Buffer.from('image fixture').toString('base64')};
+  h.extraFiles['/api/agent/repositories/7/files/32?revision=3']=imageFile;
+  const imageCalls=()=>calls.filter(call=>call.path.includes('/files/32?')).length;
+  const beforeImage=imageCalls();
+  await mount(RepositoryMarkdown,{repository:{...publicRepository,files:snapshotFiles},content:'![Logo](images/logo.png)\n\n![Not an image](docs/使用指南.md)'});
+  assert.equal(imageCalls(),beforeImage,'offscreen snapshot images are not downloaded');
+  const guideCalls=calls.filter(call=>call.path.includes('/files/31?')).length;
+  assert.equal(observers.length,1,'non-image files are never observed or fetched as images');
+  await act(async()=>observers[0].callback([{isIntersecting:true}]));await settle();
+  assert.equal(imageCalls(),beforeImage+1);
+  assert.equal(calls.filter(call=>call.path.includes('/files/31?')).length,guideCalls);
+  assert.ok(document.querySelector('img[src^="blob:"]'),'visible snapshot images render with a blob URL');
+  const originalRevoke=URL.revokeObjectURL,revoked=[];
+  URL.revokeObjectURL=(url)=>{revoked.push(url);originalRevoke(url);};
+  await mount(RepositoryMarkdown,{content:'Done'});
+  URL.revokeObjectURL=originalRevoke;
+  assert.equal(revoked.length,1,'unmount releases the image blob');
+  assert.ok(observers[0].disconnected);
+  delete globalThis.IntersectionObserver;h.extraFiles=undefined;
 
   const files=await loadAgentWorkspaceFiles(publicRepository,new Set([21]),()=>{},undefined,publicAgentRepositoryTransferSource(publicRepository));
   assert.equal(Buffer.from(files[0].bytes).toString(),bytes.toString());
