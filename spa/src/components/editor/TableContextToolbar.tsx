@@ -66,6 +66,72 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(value, maximum));
 }
 
+type Viewport = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+function clipsOverflow(value: string) {
+  return value === "auto" || value === "scroll" || value === "hidden" || value === "clip";
+}
+
+function clipsVerticalOverflow(element: HTMLElement, value: string) {
+  if (value === "hidden" || value === "clip") return true;
+  if (!clipsOverflow(value)) return false;
+  // An x-only scroller can report a small scrollHeight delta for its
+  // horizontal scrollbar. Exclude that delta so .tableWrapper is not
+  // mistaken for the editor's vertical viewport.
+  const horizontalScrollbar = Math.max(0, element.offsetHeight - element.clientHeight);
+  return element.scrollHeight > element.clientHeight + horizontalScrollbar + 1;
+}
+
+/**
+ * The editor scrolls inside its own viewport. Fixed table controls still use
+ * viewport coordinates, so using window.innerHeight here lets them escape
+ * above the editor and overlap the application header after scrolling.
+ */
+function editorViewport(element: HTMLElement): Viewport {
+  const viewport: Viewport = {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  };
+  let ancestor = element.parentElement;
+  while (ancestor) {
+    const style = window.getComputedStyle(ancestor);
+    if (clipsVerticalOverflow(ancestor, style.overflowY)) {
+      const rect = ancestor.getBoundingClientRect();
+      viewport.top = Math.max(viewport.top, rect.top);
+      viewport.bottom = Math.min(viewport.bottom, rect.bottom);
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return viewport;
+}
+
+function horizontalTableViewport(
+  tableElement: HTMLElement,
+  viewport: Viewport,
+): Viewport {
+  let left = viewport.left;
+  let right = viewport.right;
+  let ancestor = tableElement.parentElement;
+  while (ancestor) {
+    const style = window.getComputedStyle(ancestor);
+    if (clipsOverflow(style.overflowX)) {
+      const rect = ancestor.getBoundingClientRect();
+      left = Math.max(left, rect.left);
+      right = Math.min(right, rect.right);
+      break;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return { ...viewport, left, right };
+}
+
 function measureTableLayout(editor: Editor): TableLayout | null {
   if (typeof window === "undefined" || !editor.isActive("table")) return null;
   const $cell = cellAround(editor.state.selection.$head);
@@ -81,24 +147,48 @@ function measureTableLayout(editor: Editor): TableLayout | null {
   const tableRect = tableElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const cellRect = cellElement.getBoundingClientRect();
-  if (tableRect.bottom < 0 || tableRect.top > window.innerHeight) return null;
+  const viewport = editorViewport(tableElement);
+  if (tableRect.bottom <= viewport.top || tableRect.top >= viewport.bottom) return null;
+  if (cellRect.bottom <= viewport.top || cellRect.top >= viewport.bottom) return null;
+
+  const tableViewport = horizontalTableViewport(tableElement, viewport);
+  if (cellRect.right <= tableViewport.left || cellRect.left >= tableViewport.right) {
+    return null;
+  }
+
+  const xMinimum = viewport.left + 8;
+  const xMaximum = viewport.right - 32;
+  const yMinimum = viewport.top + 8;
+  const yMaximum = viewport.bottom - 32;
+  const toolbarYMaximum = Math.max(yMinimum, viewport.bottom - 56);
+  const toolbarBelow = tableRect.top < viewport.top + 64;
+  const columnSelectX = clamp(cellRect.left, tableViewport.left, tableViewport.right - 24);
+  const columnSelectWidth = Math.max(
+    24,
+    Math.min(cellRect.width, tableViewport.right - columnSelectX),
+  );
+  const rowSelectY = clamp(rowRect.top, viewport.top, viewport.bottom - 24);
+  const rowSelectHeight = Math.max(
+    24,
+    Math.min(rowRect.bottom, viewport.bottom) - rowSelectY,
+  );
 
   return {
-    toolbarX: clamp(tableRect.left + tableRect.width / 2, 8, window.innerWidth - 8),
-    toolbarY: tableRect.top < 64
-      ? clamp(tableRect.bottom + 8, 8, window.innerHeight - 56)
-      : Math.max(8, tableRect.top - 8),
-    toolbarBelow: tableRect.top < 64,
-    rowControlX: clamp(rowRect.left - 52, 8, window.innerWidth - 32),
-    rowControlY: clamp(rowRect.top + rowRect.height / 2 - 12, 8, window.innerHeight - 32),
-    rowSelectX: clamp(rowRect.left - 28, 8, window.innerWidth - 32),
-    rowSelectY: Math.max(8, rowRect.top),
-    rowSelectHeight: Math.max(24, rowRect.height),
-    columnControlX: clamp(cellRect.left + cellRect.width - 12, 8, window.innerWidth - 32),
-    columnControlY: clamp(tableRect.top - 28, 8, window.innerHeight - 32),
-    columnSelectX: clamp(cellRect.left, 8, window.innerWidth - 32),
-    columnSelectY: clamp(tableRect.top - 28, 8, window.innerHeight - 32),
-    columnSelectWidth: Math.max(24, cellRect.width),
+    toolbarX: clamp(tableRect.left + tableRect.width / 2, xMinimum, viewport.right - 8),
+    toolbarY: toolbarBelow
+      ? yMinimum
+      : clamp(tableRect.top - 8, yMinimum, toolbarYMaximum),
+    toolbarBelow,
+    rowControlX: clamp(rowRect.left - 52, xMinimum, xMaximum),
+    rowControlY: clamp(rowRect.top + rowRect.height / 2 - 12, yMinimum, yMaximum),
+    rowSelectX: clamp(rowRect.left - 28, xMinimum, xMaximum),
+    rowSelectY,
+    rowSelectHeight,
+    columnControlX: clamp(cellRect.right - 12, tableViewport.left, tableViewport.right - 32),
+    columnControlY: clamp(tableRect.top - 28, yMinimum, yMaximum),
+    columnSelectX,
+    columnSelectY: clamp(tableRect.top - 28, yMinimum, yMaximum),
+    columnSelectWidth,
     alignment: currentAlignment(editor),
     headerRow: hasTableHeaderRow(editor),
     cellSelection: isTableCellSelection(editor),
