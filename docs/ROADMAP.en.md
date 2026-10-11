@@ -6,7 +6,7 @@ This roadmap records the product and engineering directions currently worth the 
 
 - [x] Account security: password recovery, password changes, and invalidating sessions on other devices.
 - [x] Mobile editor: replace the desktop document tree with a mobile document drawer.
-- [x] Desktop alpha: local-first macOS / Windows editing, system-browser PKCE, keychain storage, and retained conflicts.
+- [x] Desktop 1.0.0 stable: local-first macOS / Windows editing, system-browser PKCE, keychain storage, and retained conflicts.
 - [x] Fully local desktop mode: password encryption, local images, zero network access, account isolation, and verified one-time import.
 - [x] Backup and recovery: create a verifiable, downloadable, and restorable site backup workflow.
 - [x] Data portability: bulk-import `.md`, folders, and ZIP archives, and export every document, folder, and image at once.

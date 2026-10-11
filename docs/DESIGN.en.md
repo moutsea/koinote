@@ -384,8 +384,9 @@ the source stays unchanged. Later edits on either side are invisible to the othe
 creates another independent copy.
 
 CI compiles the Rust / Tauri app on both macOS and Windows. Update artifacts use an independent Tauri
-signature. Public distribution still needs Apple Developer ID signing and notarization plus a Windows
-code-signing certificate; those are platform reputation infrastructure rather than blockers for the local alpha.
+signature. The 1.0.0 stable release retains macOS ad-hoc signing without Apple Developer ID signing,
+notarization or Windows code-signing certificates. First installs may still trigger platform security
+prompts, and macOS updates may require renewed keychain permission.
 
 ## Invitation rewards
 

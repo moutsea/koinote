@@ -129,7 +129,7 @@ func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 		httpx.ErrorCode(w, 400, "invalid_comment", err.Error())
 	case errors.As(err, &sensitive):
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "sensitive_data_detected", err.Error())
-	case errors.Is(err, errAgentGitHubCredentialRequired):
+	case errors.Is(err, errAgentGitHubCredentialRequired), errors.Is(err, errAgentGitHubAccessDenied):
 		httpx.ErrorCode(w, http.StatusForbidden, "github_token_required", err.Error())
 	case errors.Is(err, errAgentGitHubCredentialInvalid):
 		httpx.ErrorCode(w, http.StatusBadRequest, "github_token_invalid", err.Error())
@@ -139,6 +139,8 @@ func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "github_repository_invalid", err.Error())
 	case errors.Is(err, errAgentGitHubRepositoryMissing):
 		httpx.ErrorCode(w, http.StatusNotFound, "github_repository_unavailable", err.Error())
+	case errors.Is(err, errAgentGitHubDownloadFailed):
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_repository_unavailable", err.Error())
 	case errors.Is(err, errAgentGitHubArchiveInvalid):
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "github_archive_invalid", err.Error())
 	case errors.Is(err, errAgentGitHubRateLimited), errors.Is(err, errAgentGitHubImportBusy):

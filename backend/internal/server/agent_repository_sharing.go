@@ -202,11 +202,7 @@ func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `DELETE FROM agent_repository_publication_files WHERE workspace_id=$1`, id); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO agent_repository_publication_files (workspace_id,file_id,path,mime_type,sha256,size_bytes)
- SELECT workspace_id,id,path,mime_type,sha256,size_bytes FROM agent_workspace_files WHERE workspace_id=$1`, id)
+		err = replaceAgentRepositoryPublicationFiles(ctx, tx, id)
 	}
 	if err != nil {
 		return err
@@ -222,6 +218,15 @@ func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func replaceAgentRepositoryPublicationFiles(ctx context.Context, tx pgx.Tx, id int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM agent_repository_publication_files WHERE workspace_id=$1`, id); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO agent_repository_publication_files (workspace_id,file_id,path,mime_type,sha256,size_bytes)
+ SELECT workspace_id,id,path,mime_type,sha256,size_bytes FROM agent_workspace_files WHERE workspace_id=$1`, id)
+	return err
 }
 
 func (a *App) allowPublicRepositoryRead(w http.ResponseWriter, r *http.Request) bool {

@@ -1,0 +1,68 @@
+name: Discover Skills Repositories
+
+on:
+  schedule:
+    # 05:37 Asia/Shanghai. Avoid the busiest top-of-hour scheduling window.
+    - cron: "37 21 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview up to 20 new popular Skills repositories without importing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Keep daily/manual jobs serialized without displacing a queued deployment.
+# A container replacement interrupts the command safely between transactions;
+# retries only fill the remaining daily allowance. CLI runs also use a DB lock.
+concurrency:
+  group: discover-system-repositories-production
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    if: github.repository == 'moutsea/koinote' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$HOST_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/repository_sync_key
+          printf '%s\n' "$HOST_KEY" > ~/.ssh/repository_sync_known_hosts
+          ssh-keygen -y -f ~/.ssh/repository_sync_key >/dev/null
+
+      - name: Discover and import popular Skills repositories
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          SYNC_GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$SYNC_GITHUB_TOKEN"
+          args="--discover"
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$DRY_RUN" = "false" ]; then
+            args="$args --apply"
+          fi
+          # Only fixed flags enter the SSH command.
+          # The short-lived GitHub token travels over stdin and is never saved.
+          printf '%s\n' "$SYNC_GITHUB_TOKEN" | ssh \
+            -i ~/.ssh/repository_sync_key \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/repository_sync_known_hosts \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            "root@$HOST" "sh /opt/koinote/deploy/sync-system-agent-repositories.sh $args"
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/repository_sync_key ~/.ssh/repository_sync_known_hosts

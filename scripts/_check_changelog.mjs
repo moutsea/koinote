@@ -45,8 +45,14 @@ const changelogMarkdown = readFileSync("CHANGELOG.md", "utf8");
 const current = parseChangelog(changelogMarkdown);
 const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
 assert.match(changelogMarkdown, /^## \[Unreleased\]\s*$/m);
-assert.equal(current[0]?.version, "Unreleased");
-assert.equal(current[0]?.date, undefined);
+// A release leaves an empty Unreleased heading, which the parser omits.
+assert.ok(["Unreleased", packageVersion].includes(current[0]?.version));
+if (current[0]?.version === "Unreleased") assert.equal(current[0]?.date, undefined);
+assert.deepEqual(
+  parseChangelog("## [Unreleased]\n\n## [1.0.0] - 2026-10-12\n\n### Added\n\n- Stable release.\n")
+    .map((release) => release.version),
+  ["1.0.0"],
+);
 const currentRelease = current.find((release) => release.version === packageVersion);
 assert.ok(currentRelease, `missing package release ${packageVersion}`);
 assert.match(currentRelease.date ?? "", /^\d{4}-\d{2}-\d{2}$/);

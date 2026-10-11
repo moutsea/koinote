@@ -37,14 +37,14 @@ access for Codex, Claude Code, OpenCode, OpenClaw, and other agents**, and
 **review-first AI optimization** for members: the model proposes title, body, and
 layout diffs, while the user decides which changes to apply.
 
-The repository also contains an alpha macOS / Windows client built with Tauri 2. It writes to
+The repository also contains a stable macOS / Windows client (1.0.0) built with Tauri 2. It writes to
 local SQLite first and syncs when the network returns. Sign-in stays in the system browser and
 returns a short-lived desktop session through `koinote://auth` with PKCE.
 
 Download the desktop client through the [Koinote download link](https://koinote.app/download),
 which redirects to the latest GitHub Release. Releases include macOS Apple Silicon, macOS Intel,
 and Windows x64 installers plus SHA-256 checksums. The client checks the Cloudflare R2 update
-service automatically. Alpha installers do not yet use paid platform
+service automatically. Current installers do not yet use paid platform
 certificates. macOS builds are ad-hoc signed but do not have Apple Developer ID signing or
 notarization, so macOS will still show a security warning on first launch. Updates may also prompt for keychain access again. If saved sign-in credentials cannot be read, the client offers a retry: unlock the login keychain and allow Koinote when macOS asks. A stable Apple Developer ID signing identity is needed for consistent app identity across releases; Tauri updater signatures do not replace it.
 
@@ -96,7 +96,7 @@ notarization, so macOS will still show a security warning on first launch. Updat
   are stored only as HMAC values
 - Users can immediately delete an account from Dashboard after typed-email confirmation; images are removed asynchronously and required financial records are detached and retained as required by law
 
-**Desktop client (alpha)**
+**Desktop client (stable)**
 
 - macOS and Windows share the React / TipTap UI; Tauri supplies the native window, SQLite, deep links, and OS keychain
 - A no-account local mode derives an AES-GCM key from a password, encrypts documents, folder names, and images in SQLite, and disables sync, sharing, billing, MCP, update checks, and every other network request
@@ -616,6 +616,8 @@ rebuild; use `docker compose up -d --build backend`. Otherwise the code changes
 and the behaviour doesn't, with no error to tell you.
 
 ## Deploy
+
+System-curated Skills/Agent repositories have a daily GitHub refresh job at 20:17 UTC, with preview mode, per-repository retries and preservation of the previous snapshot on failure. Refreshes verify the GitHub repository ID and nested licenses; full runs resume from saved progress after rate limits. A second job at 21:37 UTC discovers and publishes up to 20 new popular Skills repositories after license and sensitivity checks, with R2 storage and a daily allowance that survives retries. Deploy the new backend and workflow to enable it; see the [system catalog maintenance guide](data/agent-repositories/README.md#每日更新系统收录).
 
 **Official production backend (verified through Cloudflare DNS and SSH on 2026-10-10)**
 

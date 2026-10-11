@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version improves sign-in recovery, adds Skills/Agent Hub topic navigation and system/community filters, and turns AI article optimization into concrete editorial suggestions. API publishing keeps titles separate from article bodies, and table controls stay inside the editor viewport."
+          notes="Koinote Desktop $version is the first stable release. Skills/Agent Hub adds daily system repository refreshes and discovery of up to 20 popular repositories per day. My Space combines direct creation and GitHub import in one menu, alongside public Clone/Fork, cross-platform configuration sync and AI editorial suggestions."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -235,15 +235,15 @@ jobs:
             find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum
           ) > release-artifacts/SHA256SUMS.txt
           cat > release-notes.md <<EOF
-          # Koinote Desktop $version (Alpha)
+          # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
+          Koinote 1.0.0 正式发布。桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 修复客户端登录刷新中断后的恢复，避免并发请求覆盖凭据；系统钥匙串不可用时提供重试提示并保留本地文档。
-          - Skills/Agent Hub 新增主题导航、系统/社区筛选和分页搜索；精选 GitHub 仓库归属系统目录，保留原作者、来源和许可证。
-          - AI 优化围绕目标读者、点击理由、开头承接和段落逻辑给出具体修改，融入现有标题评价、正文建议和结构分析。
-          - 自媒体 API 同步独立发送标题，避免下游正文重复显示标题。
-          - 修复表格操作按钮滚动后越出编辑器的问题；顶部入口调整为“升级/credits”。
+          - Skills/Agent Hub 的系统收录每日更新，并每天发现最多 20 个热门新仓库；内容保存在私有 R2，保留原作者、GitHub 来源和许可证。
+          - 自动更新校验仓库身份、许可证和敏感内容；支持限流后续跑、下载中断重试及仓库改名，失败时保留旧版本。
+          - “我的空间”将 Skills/Agent Hub 放到设置旁；“新建仓库”整合“直接创建”和“从 GitHub 导入”。
+          - 支持公开 Clone、私有 Fork、跨系统配置恢复与“复制给 AI Agent”；配置同步包含 DeepSeek Harness。
+          - 保留登录恢复、离线文档和图片同步、专业编辑式 AI 优化及自媒体发布；API 同步独立发送标题，避免正文标题重复。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -251,21 +251,21 @@ jobs:
           - **macOS Intel 芯片**：文件名包含 \`x64\`
           - **Windows 64 位**：可选择 NSIS \`.exe\` 或 MSI \`.msi\`
 
-          当前 Alpha 安装包尚未购买代码签名证书。macOS 包已进行 ad-hoc 完整性签名，但没有 Apple Developer ID 与公证；首次运行请右键应用并选择“打开”，较新的 macOS 如仍拦截，请前往“系统设置 → 隐私与安全性”选择“仍要打开”。若系统仍提示应用“已损坏”，请先核对本页的 SHA-256，再运行 \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`。Windows 出现 SmartScreen 时请核对本页的 SHA-256 后选择“更多信息 → 仍要运行”。
+          当前安装包尚未配置平台代码签名证书。macOS 包已进行 ad-hoc 完整性签名，但没有 Apple Developer ID 与公证；首次运行请右键应用并选择“打开”，较新的 macOS 如仍拦截，请前往“系统设置 → 隐私与安全性”选择“仍要打开”。若系统仍提示应用“已损坏”，请先核对本页的 SHA-256，再运行 \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`。Windows 出现 SmartScreen 时请核对本页的 SHA-256 后选择“更多信息 → 仍要运行”。
 
           ---
 
-          Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
+          Koinote 1.0.0 is the first stable release. The desktop client uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Recover interrupted sign-in refreshes and prevent concurrent requests from replacing credentials; credential-store failures offer retry guidance while preserving local documents.
-          - Browse Skills/Agent Hub by topic, system/community source and paginated search. Curated GitHub repositories belong to the system catalog with original attribution and licenses.
-          - AI optimization turns reader fit, reasons to click, opening continuity and paragraph logic into concrete title, body and structure suggestions.
-          - API publishing sends the title separately from article bodies to avoid duplicate titles downstream.
-          - Table controls stay inside the editor viewport while scrolling; the Chinese navigation entry now reads “升级/credits”.
+          - System repositories in Skills/Agent Hub refresh daily, with discovery of up to 20 popular new repositories per day. Private R2 storage retains upstream attribution, GitHub links and licenses.
+          - Automatic updates verify repository identity, licenses and sensitive content; rate-limit recovery, interrupted downloads and repository renames preserve the previous snapshot on failure.
+          - My Space puts Skills/Agent Hub beside Settings and combines Create directly and Import from GitHub in the New repository menu.
+          - Public Clone, private Fork, cross-platform configuration restore and Copy for AI Agent are available, including DeepSeek Harness configuration sync.
+          - Includes sign-in recovery, offline document and image sync, editorial AI suggestions and publishing integrations. API publishing sends titles separately to avoid duplication in article bodies.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 
-          These Alpha installers do not use paid platform certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
+          These installers do not use platform code-signing certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
           EOF
 
       - uses: actions/setup-node@v4
@@ -311,5 +311,5 @@ jobs:
         run: |
           mapfile -d '' assets < <(find release-artifacts -type f -print0 | sort -z)
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-            --title "Koinote Desktop ${GITHUB_REF_NAME#desktop-v} (Alpha)" \
+            --title "Koinote Desktop ${GITHUB_REF_NAME#desktop-v}" --latest \
             --notes-file release-notes.md

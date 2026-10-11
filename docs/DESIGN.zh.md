@@ -349,8 +349,7 @@ revision 变化才拉取完整正文。桌面端每次启动后按账号同步�
 回滚。导入完成后这些副本走普通账号同步流程，源资料保持原样；以后任一侧的修改都不会反映到
 另一侧，重复导入也会再创建一套独立副本。
 
-CI 分别在 macOS 与 Windows 运行 Rust / Tauri 编译检查。更新包使用独立 Tauri 密钥签名；正式分发
-仍需要 Apple Developer ID、公证和 Windows 代码签名证书，这些属于平台信誉基础设施，不影响本地 alpha。
+CI 分别在 macOS 与 Windows 运行 Rust / Tauri 编译检查。更新包使用独立 Tauri 密钥签名。1.0.0 正式版沿用 macOS ad-hoc 签名，尚未配置 Apple Developer ID、公证和 Windows 代码签名证书；因此首次安装仍可能出现平台安全提醒，Mac 更新后也可能需要重新允许钥匙串访问。
 
 ## 邀请奖励
 

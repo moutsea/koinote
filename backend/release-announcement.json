@@ -1,52 +1,52 @@
 {
-  "version": "0.7.0",
+  "version": "1.0.0",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 0.7.0",
+      "title": "What's new in Koinote 1.0.0",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Lifetime members can bind up to five verified WeChat Official Accounts, choose a default, and save formatted articles to the selected account's draft box. Covers can use the Koinote default, an article image, or an AI-generated image at 20 credits per successful generation.",
-        "Added member-only AI optimization with Git-style title/body diffs, individual or bulk apply/dismiss actions, a 0–100 title score, and model-requested alternatives when the score is below 60. Reviews separate editorial changes from AST-validated Markdown layout changes and score hierarchy, readability, emphasis, rhythm, modules, and mobile presentation.",
-        "Lifetime membership now grants 1,000 credits. Built-in reviews cost 1 credit per 2,000 actual tokens, with Stripe packs of 3,000, 10,000, and 30,000 credits.",
-        "Added encrypted BYOK channels for OpenAI-compatible and Anthropic Messages APIs; BYOK reviews do not consume credits.",
-        "Added smart date-based and activity-based organization for documents outside manually managed folders, with adaptive month/week grouping and confirmation before bulk moves.",
-        "Added an administrator server-status dashboard for host CPU, memory, load, disk, uptime, and network throughput, using read-only host metrics in production."
+        "Skills/Agent Hub adds public Clone, member-only private Fork, Stars and GitHub imports with original attribution and licenses. System repositories use private R2 storage, refresh daily and discover up to 20 new popular Skills repositories per day. Updates check repository identity, licenses and sensitive content; failures preserve the previous snapshot and support retries.",
+        "Development/AI configuration sync now includes DeepSeek Harness under Coding agents, scanning default `.dsh` settings and profiles; credentials restore with owner-only access on macOS/Linux, while skills and AGENTS.md belong to the separate repository.",
+        "Skills/Agent and configuration sync menus now offer Copy for AI Agent with the MCP endpoint, read-only credentials and local merge instructions; configuration handoff uses a temporary credential scoped to one snapshot revision without sharing the migration password.",
+        "Local restore for Skills/Agent and development configurations maps known configuration locations across Windows, macOS and Linux, previews destinations and rejects path conflicts before writing; existing backups work without re-uploading.",
+        "Skills/Agent repository MCP now includes history browsing, revision restoration and storage queries, supports uploads up to 5 MiB and bounded chunked file reads, and uses a separate connection configuration alongside document MCP.",
+        "My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files."
       ]
     },
     "zh": {
-      "title": "Koinote 0.7.0 新功能",
+      "title": "Koinote 1.0.0 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "终生会员现在可以绑定最多 5 个已认证微信公众号、设置默认账号，并将排版后的文章直接保存到指定账号的草稿箱。封面可使用 Koinote 默认图、正文图片或 AI 生成图片；每次成功生成消耗 20 credits。",
-        "新增会员专属 AI 优化：以 Git Diff 展示标题与正文建议，可逐条或全部应用/忽略；标题按 0–100 分评估，低于 60 分时提供 2–3 个候选标题。审阅现已拆分为内容优化与结构排版，并基于 Markdown AST 从层级、可读性、重点、节奏、模块和移动端六个维度给出安全的排版建议。",
-        "终生会员赠送 1,000 credits；内置模型每 2,000 个实际 token 消耗 1 credit，并支持 3,000、10,000、30,000 credits 三档 Stripe 充值。",
-        "新增加密保存的 OpenAI 兼容与 Anthropic Messages BYOK 渠道，使用自己的模型不消耗 credits。",
-        "新增智能整理与活跃度整理：仅整理用户未手动管理的文档，按数量自适应采用月份或周分组，并在批量移动前二次确认。",
-        "管理后台新增整机状态监控，可查看宿主机 CPU、内存、负载、磁盘、运行时间与网络吞吐量；生产环境通过只读挂载采集宿主机指标。"
+        "Skills/Agent Hub 支持公开 Clone、会员私有 Fork、Star 收藏和 GitHub 导入，保留原作者、来源和许可证。系统仓库存储于私有 R2，每日更新并发现最多 20 个未收录的热门 Skills 仓库；校验仓库身份、许可证及敏感信息，失败时保留旧快照并支持重试。",
+        "开发/AI 配置云端同步新增 DeepSeek Harness，归入「编码 Agent」并扫描默认 `.dsh` 配置及 profiles；凭据文件在 macOS/Linux 恢复为仅本人可读写，Skills 与 AGENTS.md 归入独立仓库。",
+        "Skills/Agent 和开发配置的同步菜单新增「复制给 AI Agent」，一键携带 MCP 地址、只读凭证与本机合并指令；开发配置使用绑定单个快照版本的短期凭证，迁移密码不交给 Agent。",
+        "Skills/Agent 与开发配置的本机恢复支持 Windows、macOS、Linux 已知配置目录映射；显示实际落点并在写入前拦截路径冲突，旧备份无需重新上传。",
+        "Skills/Agent 仓库 MCP 补齐历史查询、版本恢复和用量查询，支持最大 5 MiB 上传和分块读取；独立连接配置可与文档 MCP 同时使用。",
+        "「我的空间」新增 Skills/Agent 仓库和加密的开发/AI 配置快照，支持一键扫描上传、文件树勾选与内容预览、敏感数据过滤，以及恢复本机文件前的确认。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 0.7.0",
+      "title": "Nouveautés de Koinote 1.0.0",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Les membres à vie peuvent désormais lier jusqu’à cinq comptes officiels WeChat vérifiés, choisir un compte par défaut et enregistrer les articles mis en forme dans sa boîte de brouillons. La couverture peut être l’image Koinote par défaut, une image de l’article ou une image générée par IA ; chaque génération réussie coûte 20 credits.",
-        "Ajout de l’optimisation IA réservée aux membres : diffs Git pour le titre et le corps, application ou rejet individuel et global, score du titre sur 100 et 2 à 3 alternatives sous 60. L’analyse sépare désormais le contenu de la structure, avec des modifications Markdown validées par AST et six scores pour la hiérarchie, la lisibilité, la mise en valeur, le rythme, les modules et le mobile.",
-        "L’adhésion à vie accorde 1 000 credits. Le modèle intégré consomme 1 credit par tranche de 2 000 tokens réellement utilisés, avec des packs Stripe de 3 000, 10 000 et 30 000 credits.",
-        "Ajout de canaux BYOK chiffrés pour les API compatibles OpenAI et Anthropic Messages ; les revues BYOK ne consomment aucun credit.",
-        "Ajout du rangement intelligent par date et par activité pour les documents hors dossiers gérés manuellement, avec regroupement adaptatif par mois ou semaine et confirmation avant les déplacements en masse.",
-        "Ajout d’un tableau de bord administrateur pour le CPU, la mémoire, la charge, le disque, la durée de fonctionnement et le débit réseau de l’hôte, à partir de métriques montées en lecture seule en production."
+        "Skills/Agent Hub propose Clone public, Fork privé pour les membres, étoiles et import GitHub avec attribution et licences. Les dépôts système sont stockés dans R2 privé, actualisés chaque jour et enrichis de 20 nouveaux dépôts Skills populaires au maximum. Les contrôles d’identité, de licence et de données sensibles préservent la version précédente en cas d’échec et permettent une reprise.",
+        "La synchronisation des configurations de développement/IA prend en charge DeepSeek Harness dans les agents de codage, avec les paramètres et profils `.dsh` ; les identifiants sont restaurés avec un accès réservé au propriétaire sur macOS/Linux, et les skills et AGENTS.md rejoignent le dépôt séparé.",
+        "Les menus de synchronisation Skills/Agent et des configurations proposent de copier le point MCP, un accès en lecture seule et les instructions de fusion pour un agent IA ; les configurations utilisent un accès temporaire à une seule révision, sans partager le mot de passe de migration.",
+        "La restauration locale des Skills/Agent et configurations de développement adapte les dossiers reconnus entre Windows, macOS et Linux, affiche les destinations et bloque les conflits avant écriture ; les anciennes sauvegardes restent utilisables.",
+        "Le MCP des dépôts Skills/Agent permet de consulter et restaurer l’historique, de vérifier le stockage et d’envoyer des fichiers jusqu’à 5 MiB et de les lire par blocs, avec une connexion distincte du MCP des documents.",
+        "Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale."
       ]
     },
     "ja": {
-      "title": "Koinote 0.7.0 の新機能",
+      "title": "Koinote 1.0.0 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "終身会員は最大 5 つの認証済み WeChat 公式アカウントを登録し、既定のアカウントを選んで整形済みの記事を下書きボックスへ保存できるようになりました。カバーは Koinote の既定画像、本文画像、AI 生成画像から選択でき、生成成功 1 回につき 20 credits を消費します。",
-        "会員向け AI 最適化を追加しました。タイトルと本文の提案を Git Diff 形式で表示し、個別または一括で適用・無視できます。タイトルは 0–100 点で評価し、60 点未満では 2–3 件の候補を提示します。内容改善と構成・レイアウトを分離し、Markdown AST を使って階層、読みやすさ、強調、リズム、モジュール、モバイル表示を安全に評価・修正します。",
-        "終身会員に 1,000 credits を付与します。内蔵モデルは実使用 2,000 token ごとに 1 credit を消費し、Stripe で 3,000、10,000、30,000 credits のパックを購入できます。",
-        "OpenAI 互換および Anthropic Messages の BYOK チャネルを暗号化して保存でき、BYOK では credits を消費しません。",
-        "手動管理フォルダー以外の文書を対象に、件数に応じて月・週単位を切り替えるスマート整理とアクティビティ整理を追加し、一括移動前に確認できるようにしました。",
-        "管理画面にホスト全体の CPU、メモリ、負荷、ディスク、稼働時間、ネットワーク帯域を表示するサーバーステータスを追加しました。本番環境では読み取り専用のホスト指標を使用します。"
+        "Skills/Agent Hub は公開 Clone、会員向けプライベート Fork、Star、GitHub インポートに対応し、原作者・出典・ライセンスを保持します。システム収録リポジトリは非公開 R2 に保存し、毎日更新するとともに未収録の人気 Skills を最大 20 件追加します。リポジトリの識別情報、ライセンス、機密情報を検査し、失敗時は旧版を保持して再試行できます。",
+        "開発/AI 設定の同期で DeepSeek Harness をコーディング Agent に追加し、既定の `.dsh` 設定とプロファイルを検出します。macOS/Linux では認証情報を所有者のみ読み書き可能な権限で復元し、Skills と AGENTS.md は専用リポジトリに分類します。",
+        "Skills/Agentと開発設定の同期メニューにAI Agent用コピーを追加しました。MCP接続先、読み取り専用トークン、ローカルマージ手順をまとめて渡せます。開発設定には単一リビジョン専用の一時トークンを使い、移行パスワードは共有しません。",
+        "Skills/Agent と開発設定のローカル復元で、Windows・macOS・Linux の既知の設定フォルダーを変換します。保存先を表示し、書き込み前にパスの競合を検出します。既存のバックアップも再アップロードせず利用できます。",
+        "Skills/Agent リポジトリ MCP で履歴の参照・復元と使用量の確認が可能になり、最大 5 MiB のアップロードと分割読み取りに対応しました。文書 MCP と併用できる独立した接続設定を提供します。",
+        "マイスペースに Skills/Agent リポジトリと暗号化した開発/AI 設定スナップショットを追加しました。ワンクリックでのスキャンとアップロード、ファイル選択と内容のプレビュー、機密データの除外、ローカル復元前の確認に対応します。"
       ]
     }
   }

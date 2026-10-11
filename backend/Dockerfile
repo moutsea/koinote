@@ -10,6 +10,7 @@ RUN go mod download
 
 COPY . .
 RUN go build -ldflags="-s -w" -o /out/koinote-backend ./cmd/server
+RUN go build -ldflags="-s -w" -o /out/koinote-repository-sync ./cmd/sync-agent-repositories
 
 # ---- runtime ----
 FROM alpine:3.21
@@ -18,6 +19,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates curl && adduser -D -u 10001 koinote
 
 COPY --from=builder /out/koinote-backend /app/koinote-backend
+COPY --from=builder /out/koinote-repository-sync /app/koinote-repository-sync
 COPY --from=builder /src/migrations /app/migrations
 COPY --from=builder /src/release-announcement.json /app/release-announcement.json
 

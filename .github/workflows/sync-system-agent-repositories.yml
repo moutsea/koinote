@@ -1,0 +1,78 @@
+name: Sync System Repositories
+
+on:
+  schedule:
+    # 04:17 Asia/Shanghai. Avoid the busiest top-of-hour scheduling window.
+    - cron: "17 20 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview changes without updating the catalog
+        type: boolean
+        default: true
+      workspace_id:
+        description: Optional system repository ID (empty means all)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# Keep daily/manual jobs serialized without displacing a queued deployment.
+# A container replacement interrupts the command safely between transactions;
+# full retries resume from a durable checkpoint. Preview and targeted retries
+# leave that checkpoint unchanged. CLI runs also use a DB lock.
+concurrency:
+  group: sync-system-repositories-production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'moutsea/koinote' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$HOST_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/repository_sync_key
+          printf '%s\n' "$HOST_KEY" > ~/.ssh/repository_sync_known_hosts
+          ssh-keygen -y -f ~/.ssh/repository_sync_key >/dev/null
+
+      - name: Refresh system GitHub repositories
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          SYNC_GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          WORKSPACE_ID: ${{ inputs.workspace_id }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$SYNC_GITHUB_TOKEN"
+          args=""
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$DRY_RUN" = "false" ]; then
+            args="--apply"
+          fi
+          if [ -n "$WORKSPACE_ID" ]; then
+            [[ "$WORKSPACE_ID" =~ ^[1-9][0-9]{0,17}$ ]] || { echo "Invalid workspace ID"; exit 1; }
+            args="$args --workspace-id $WORKSPACE_ID"
+          fi
+          # Only fixed flags and a validated integer enter the SSH command.
+          # The short-lived GitHub token travels over stdin and is never saved.
+          printf '%s\n' "$SYNC_GITHUB_TOKEN" | ssh \
+            -i ~/.ssh/repository_sync_key \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/repository_sync_known_hosts \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            "root@$HOST" "sh /opt/koinote/deploy/sync-system-agent-repositories.sh $args"
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/repository_sync_key ~/.ssh/repository_sync_known_hosts

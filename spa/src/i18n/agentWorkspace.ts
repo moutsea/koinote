@@ -1,4 +1,7 @@
 export const agentWorkspace: Record<string, string> = {
+  createDirectly: "Create directly",
+  createDirectlyDescription: "Create a new repository and add your own files.",
+  githubImportOptionDescription: "Import a GitHub repository as a private copy.",
   starRepository: "Star",
   unstarRepository: "Unstar",
   starCount: "{count} Stars",
@@ -308,6 +311,9 @@ export const agentWorkspace: Record<string, string> = {
 
 export const agentWorkspaceZh: Record<string, string> = {
   ...agentWorkspace,
+  createDirectly: "直接创建",
+  createDirectlyDescription: "创建新仓库，自行添加文件。",
+  githubImportOptionDescription: "将 GitHub 仓库导入为私有副本。",
   starRepository: "收藏",
   unstarRepository: "取消收藏",
   starCount: "{count} 个收藏",
@@ -616,6 +622,9 @@ export const agentWorkspaceZh: Record<string, string> = {
 };
 
 export const agentWorkspaceFr: Record<string, string> = {
+  createDirectly: "Créer directement",
+  createDirectlyDescription: "Créez un dépôt et ajoutez vos fichiers.",
+  githubImportOptionDescription: "Importez un dépôt GitHub comme copie privée.",
   starRepository: "Ajouter aux favoris",
   unstarRepository: "Retirer des favoris",
   starCount: "{count} favoris",
@@ -924,6 +933,9 @@ export const agentWorkspaceFr: Record<string, string> = {
 };
 
 export const agentWorkspaceJa: Record<string, string> = {
+  createDirectly: "直接作成",
+  createDirectlyDescription: "新しいリポジトリを作成し、ファイルを追加します。",
+  githubImportOptionDescription: "GitHub リポジトリを非公開コピーとして取り込みます。",
   starRepository: "Star を付ける",
   unstarRepository: "Star を外す",
   starCount: "{count} 件の Star",

@@ -63,6 +63,7 @@ type agentGitHubImportInput struct {
 }
 
 type agentGitHubSource struct {
+	RepositoryID  int64  `json:"repositoryId,omitempty"`
 	RepositoryURL string `json:"repositoryUrl"`
 	Author        string `json:"author"`
 	AuthorURL     string `json:"authorUrl"`
@@ -73,6 +74,11 @@ type agentGitHubSource struct {
 }
 
 type githubRepositoryMetadata struct {
+	ID            int64  `json:"id"`
+	Stars         int    `json:"stargazers_count"`
+	Fork          bool   `json:"fork"`
+	Archived      bool   `json:"archived"`
+	Disabled      bool   `json:"disabled"`
 	Name          string `json:"name"`
 	FullName      string `json:"full_name"`
 	Description   string `json:"description"`
@@ -332,19 +338,26 @@ func (a *App) githubRequest(ctx context.Context, endpoint, token string, accept 
 }
 
 var (
-	errAgentGitHubRateLimited = errors.New("GitHub rate limit reached; try again later")
-	errAgentGitHubImportBusy  = errors.New("GitHub imports are busy; try again later")
-	errAgentGitHubLicense     = errors.New("choose a supported license or retain the original GitHub license")
-	githubCommitPattern       = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
-	githubLicensePattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.+-]{0,99}$`)
+	errAgentGitHubRateLimited    = errors.New("GitHub rate limit reached; try again later")
+	errAgentGitHubAccessDenied   = errors.New("the GitHub token cannot access this repository; check its repository permissions")
+	errAgentGitHubDownloadFailed = errors.New("GitHub repository download failed; try again later")
+	errAgentGitHubImportBusy     = errors.New("GitHub imports are busy; try again later")
+	errAgentGitHubLicense        = errors.New("choose a supported license or retain the original GitHub license")
+	githubCommitPattern          = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
+	githubLicensePattern         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.+-]{0,99}$`)
 )
 
 func githubResponseError(response *http.Response) error {
 	if response.StatusCode == http.StatusTooManyRequests || (response.StatusCode == http.StatusForbidden && (response.Header.Get("X-RateLimit-Remaining") == "0" || response.Header.Get("Retry-After") != "")) {
 		return errAgentGitHubRateLimited
 	}
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+	if response.StatusCode == http.StatusUnauthorized {
 		return errAgentGitHubCredentialRequired
+	}
+	if response.StatusCode == http.StatusForbidden {
+		// A valid token can lack access to just one repository. Batch jobs must
+		// continue past that repository rather than treating the token as expired.
+		return errAgentGitHubAccessDenied
 	}
 	return errAgentGitHubRepositoryMissing
 }
@@ -367,13 +380,13 @@ func (a *App) githubRead(ctx context.Context, endpoint, token string, accept str
 
 func (a *App) fetchGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
 	metadata, files, source, err := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, token, publicOnly)
-	if token != "" && errors.Is(err, errAgentGitHubCredentialRequired) {
+	if token != "" && (errors.Is(err, errAgentGitHubCredentialRequired) || errors.Is(err, errAgentGitHubAccessDenied)) {
 		publicMetadata, publicFiles, publicSource, publicErr := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, "", publicOnly)
 		if publicErr == nil {
 			return publicMetadata, publicFiles, publicSource, nil
 		}
 		// Preserve actionable credential guidance for private repositories.
-		if !errors.Is(publicErr, errAgentGitHubRepositoryMissing) && !errors.Is(publicErr, errAgentGitHubCredentialRequired) {
+		if !errors.Is(publicErr, errAgentGitHubRepositoryMissing) && !errors.Is(publicErr, errAgentGitHubCredentialRequired) && !errors.Is(publicErr, errAgentGitHubAccessDenied) {
 			return publicMetadata, nil, nil, publicErr
 		}
 	}
@@ -381,18 +394,28 @@ func (a *App) fetchGitHubRepository(ctx context.Context, owner, repo, requestedR
 }
 
 func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
-	var metadata githubRepositoryMetadata
-	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json")
+	metadata, source, err := a.resolveGitHubRepository(ctx, owner, repo, requestedRef, token, publicOnly)
 	if err != nil {
 		return metadata, nil, nil, err
 	}
+	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, token)
+	return metadata, files, source, err
+}
+
+// Resolve separately so daily checks can skip downloading an unchanged archive.
+func (a *App) resolveGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, *agentGitHubSource, error) {
+	var metadata githubRepositoryMetadata
+	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json")
+	if err != nil {
+		return metadata, nil, err
+	}
 	if json.Unmarshal(data, &metadata) != nil || !githubRepositorySegmentPattern.MatchString(metadata.Owner.Login) || !githubRepositorySegmentPattern.MatchString(metadata.Name) || metadata.Owner.Login == "." || metadata.Owner.Login == ".." || metadata.Name == "." || metadata.Name == ".." || !strings.EqualFold(metadata.FullName, metadata.Owner.Login+"/"+metadata.Name) {
-		return metadata, nil, nil, errAgentGitHubRepositoryMissing
+		return metadata, nil, errAgentGitHubRepositoryMissing
 	}
 	// System entries must be public. Reject before resolving a commit or reading
 	// archive contents, even when the administrator's token can access them.
 	if publicOnly && metadata.Private {
-		return metadata, nil, nil, errAgentGitHubRepositoryInvalid
+		return metadata, nil, errAgentGitHubRepositoryInvalid
 	}
 	// Attribution comes from the canonical API owner, never caller-supplied fields
 	// or the author of the most recent commit (who may only be a contributor).
@@ -402,49 +425,63 @@ func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, r
 		ref = metadata.DefaultBranch
 	}
 	if ref == "" || validateGitHubRef(ref) != nil {
-		return metadata, nil, nil, errAgentGitHubRepositoryInvalid
+		return metadata, nil, errAgentGitHubRepositoryInvalid
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
 	data, err = a.githubRead(ctx, apiURL+"/commits/"+url.PathEscape(ref), token, "application/vnd.github.sha")
 	if err != nil {
-		return metadata, nil, nil, err
+		return metadata, nil, err
 	}
 	commit := strings.TrimSpace(string(data))
 	if !githubCommitPattern.MatchString(commit) {
-		return metadata, nil, nil, errAgentGitHubRepositoryMissing
-	}
-	// Download by resolved commit, so a moving branch cannot falsify provenance.
-	response, err := a.githubRequest(ctx, apiURL+"/zipball/"+commit, token, "application/vnd.github+json")
-	if err != nil {
-		return metadata, nil, nil, errAgentGitHubRepositoryMissing
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return metadata, nil, nil, githubResponseError(response)
-	}
-	if response.ContentLength > githubArchiveMaxBytes {
-		return metadata, nil, nil, errAgentGitHubArchiveInvalid
-	}
-	// Keep the compressed archive off the heap and private even for private repos.
-	archiveFile, err := os.CreateTemp("", "koinote-github-*.zip")
-	if err != nil {
-		return metadata, nil, nil, err
-	}
-	defer func() { _ = archiveFile.Close(); _ = os.Remove(archiveFile.Name()) }()
-	size, err := io.Copy(archiveFile, io.LimitReader(response.Body, githubArchiveMaxBytes+1))
-	if err != nil || size > githubArchiveMaxBytes {
-		return metadata, nil, nil, errAgentGitHubArchiveInvalid
-	}
-	files, err := readGitHubArchive(ctx, archiveFile, size)
-	if err != nil {
-		return metadata, nil, nil, err
+		return metadata, nil, errAgentGitHubRepositoryMissing
 	}
 	license := "UNLICENSED"
 	if metadata.License != nil && metadata.License.SPDXID != "NOASSERTION" && githubLicensePattern.MatchString(metadata.License.SPDXID) {
 		license = metadata.License.SPDXID
 	}
-	source := &agentGitHubSource{RepositoryURL: "https://github.com/" + owner + "/" + repo, Author: owner, AuthorURL: "https://github.com/" + owner, Ref: ref, CommitSHA: commit, License: license, Private: metadata.Private}
-	return metadata, files, source, nil
+	source := &agentGitHubSource{RepositoryID: metadata.ID, RepositoryURL: "https://github.com/" + owner + "/" + repo, Author: owner, AuthorURL: "https://github.com/" + owner, Ref: ref, CommitSHA: commit, License: license, Private: metadata.Private}
+	return metadata, source, nil
+}
+
+func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit, token string) ([]agentWorkspaceFile, error) {
+	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
+	// Download by resolved commit, so a moving branch cannot falsify provenance.
+	response, err := a.githubRequest(ctx, apiURL+"/zipball/"+commit, token, "application/vnd.github+json")
+	if err != nil {
+		return nil, errAgentGitHubRepositoryMissing
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, githubResponseError(response)
+	}
+	if response.ContentLength > githubArchiveMaxBytes {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	// Keep the compressed archive off the heap and private even for private repos.
+	archiveFile, err := os.CreateTemp("", "koinote-github-*.zip")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = archiveFile.Close(); _ = os.Remove(archiveFile.Name()) }()
+	size, err := io.Copy(archiveFile, io.LimitReader(response.Body, githubArchiveMaxBytes+1))
+	if size > githubArchiveMaxBytes {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// Transport/local I/O failures are retryable. Treating them as malformed
+		// archives would put otherwise eligible discovery candidates on cooldown.
+		// Do not expose the raw error: redirected URLs may contain signed tokens.
+		return nil, errAgentGitHubDownloadFailed
+	}
+	files, err := readGitHubArchive(ctx, archiveFile, size)
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]agentWorkspaceFile, error) {

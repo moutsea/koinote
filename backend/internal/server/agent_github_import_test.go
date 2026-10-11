@@ -471,9 +471,12 @@ func TestGitHubImportConcurrentRetryAndQuotaRollback(t *testing.T) {
 
 func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 	archive := githubArchive(t, githubArchiveEntry{"root/SKILL.md", "# Skill", 0})
-	for _, names := range [][2]string{{"acme", "commits"}, {"commits", "demo"}} {
-		t.Run(strings.Join(names[:], "/"), func(t *testing.T) {
-			owner, repo := names[0], names[1]
+	for _, tc := range []struct {
+		owner, repo string
+		status      int
+	}{{"acme", "commits", 401}, {"commits", "demo", 401}, {"acme", "commits", 403}, {"commits", "demo", 403}} {
+		t.Run(fmt.Sprintf("%s/%s/%d", tc.owner, tc.repo, tc.status), func(t *testing.T) {
+			owner, repo := tc.owner, tc.repo
 			base := "/repos/" + owner + "/" + repo
 			calls := 0
 			app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -481,7 +484,7 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 				status, body := 200, ""
 				accept := "application/vnd.github+json"
 				if r.Header.Get("Authorization") != "" {
-					status = 401
+					status = tc.status
 				} else {
 					switch r.URL.Path {
 					case base:
@@ -506,7 +509,7 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 			}
 		})
 	}
-	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests} {
 		calls := 0
 		app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			calls++
@@ -519,6 +522,16 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 		_, _, _, err := app.fetchGitHubRepository(context.Background(), "o", "r", "", "expired-token", false)
 		if status == 401 && (!errors.Is(err, errAgentGitHubCredentialRequired) || calls != 2) {
 			t.Fatalf("lost private repo credential guidance: %v", err)
+		}
+		if status == 403 && (!errors.Is(err, errAgentGitHubAccessDenied) || calls != 2) {
+			t.Fatalf("lost repository permission guidance: %v", err)
+		}
+		if status == 401 || status == 403 {
+			response := httptest.NewRecorder()
+			writeAgentWorkspaceError(response, err)
+			if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"github_token_required"`) {
+				t.Fatalf("import UI credential guidance changed: %d %s", response.Code, response.Body.String())
+			}
 		}
 		if status == 429 && (!errors.Is(err, errAgentGitHubRateLimited) || calls != 1) {
 			t.Fatalf("retried a rate limit anonymously: %v", err)

@@ -111,7 +111,7 @@
 
 ## 文件与验证
 
-- [catalog.json](catalog.json)：固定 commit、原作者和链接、许可证文件哈希、全仓文件摘要、采集时 Star 数，以及未收录候选的具体原因。`contentSha256` 是文件按 UTF-8 路径排序后，将每个 `path + NUL + sha256 + LF` 连接起来的 SHA-256。
+- [catalog.json](catalog.json)：GitHub 数字仓库 ID、固定 commit、原作者和链接、许可证文件哈希、全仓文件摘要、采集时 Star 数，以及未收录候选的具体原因。数字 ID 来自原始采集记录，逐项核对了来源与固定 SHA。`contentSha256` 是文件按 UTF-8 路径排序后，将每个 `path + NUL + sha256 + LF` 连接起来的 SHA-256。
 - [导入脚本](../../scripts/seed_agent_repositories.py)：通过正式的登录、管理员系统仓库导入和公开接口执行，不直接写数据库、不改变会员资格、不跳过敏感检查。首批公共内容由系统提供容量，不预留或扣减个人空间。
 - 下载的原始 ZIP 和 GitHub 元数据保存在本机 `output/agent-repository-curation/`（已被 Git 忽略）。上线导入会重新从 GitHub 获取固定 commit，并核对清单摘要；不依赖这份本地缓存，也不将第三方仓库打包进应用程序。
 - 已用这些真实 ZIP 在临时 PostgreSQL 数据库中跑过完整导入、公开、匿名下载全部 8,095 个文件和 Fork；核对了每个下载文件的 SHA-256、原作者、来源链接和许可证。连续执行两次未产生重复仓库；公开目录分页完整展示全部 100 个仓库。
@@ -161,7 +161,69 @@ python3 scripts/seed_agent_repositories.py \
 
 上述命令仍只预览，实际执行时附加前文的 `--apply`、站点和账号凭据参数。撤回某条目后，只选择仍计划公开的仓库执行，避免将它再次公开。
 
-更新和撤回均在这个管理账号的仓库页面完成。公开显示的作者仍是原 GitHub 作者，来源和许可信息由既有 GitHub 导入流程保存。
+撤回和重新发布在 Admin 的系统仓库管理中完成。公开显示的作者仍是原 GitHub 作者。清单导入脚本仅用于首次收录；后续更新使用下面的每日任务，不能用固定初始版本的导入清单覆盖新版本。
+
+## 每日更新系统收录
+
+`.github/workflows/sync-system-agent-repositories.yml` 每天 UTC 20:17（北京时间次日 04:17）运行。任务读取数据库中全部存活的系统仓库，而非固定的 100 条初始清单，以后新增的系统收录也会自动加入。没有 GitHub 来源的条目会记录为跳过；个人仓库和用户 Fork 不在更新范围内。
+
+合入 `main` 并完成包含 `/app/koinote-repository-sync` 的后端镜像及迁移（截至 `0093_agent_repository_sync_safety.sql`）部署后，定时任务即可工作。若第一次定时触发早于后端部署完成，会因缺少命令而失败，部署后可手动重试。任务复用已有的 `VPS_HOST`、`VPS_SSH_KEY`、`VPS_HOST_KEY`，使用当次工作流自带的短期 `github.token` 读取公开 GitHub 仓库，不需要管理员 Cookie、个人 GitHub Token 或新的长期密钥。数据库和 R2 凭据只在现有后端容器内使用。
+
+更新规则：
+
+- 跟踪 GitHub **当前默认分支**，而不是初次导入固定的 SHA；先解析提交 SHA，有变化才按该 SHA 下载归档。提交未变化时不下载、不上传、不增加版本或刷新发布时间；若 GitHub 数字身份相同但仓库改名或转移，仍更新内部及已有公开快照中的来源地址和作者信息，保留原提交、引用和个人 Fork。预览只报告该变更；正式更新记入系统审计，结果为 `updated` / `source_updated`，重复运行返回 `unchanged`。
+- 更新前核对 GitHub 数字 ID；同一个仓库改名或转移后仍可更新，同名地址被另一个仓库复用时拒绝更新，即使 SHA 相同也不能绕过检查。迁移 `0093` 用原始采集时的数字 ID 补齐首批 100 条匹配的系统记录；匹配导入 ID、URL 和 SHA，保留已有身份。其他旧记录缺少数字 ID 时返回 `repository_identity_mismatch`，须核实来源后处理，不根据当前 URL 自动认领身份。
+- 保留 Koinote 仓库 ID、公开链接、人工整理的名称、简介和分类、Star/Clone 记录及用户 Fork；更新 GitHub 来源和提交信息，归档内的许可证原样保留。只上传新的内容哈希，复用已有 R2 文件。
+- 文件、来源、版本、历史、公开快照与系统审计在同一事务内更新。公开条目同步到新版本；未公开或已撤回的条目仅更新内部文件，不会重新公开。下载期间发生管理员撤回、重新发布或版本修改时，本条更新取消，保留管理员操作。
+- 凭据扫描、敏感路径、单文件 5 MiB、整库 64 MiB、2,000 文件及归档结构校验继续生效。自动更新与首次自动收录共用 MIT / Apache-2.0 的许可证文件检查，核对根许可证、嵌套许可证与 NOTICE；缺失、无法识别或包含已识别限制时返回 `license_review_required`，交由人工核对。仅根 SPDX 标识不变不足以放行。来源不可访问、变为私有、许可证标识改变或变为未指定、扫描失败、R2 写入失败时保留原来的完整快照。
+- 每条独立处理，普通失败不阻止其他条目；单仓库拒绝访问（普通 HTTP 403，`github_access_denied`）也继续处理后面的仓库。凭据失效（HTTP 401，`github_credentials_invalid`）、GitHub 限流（HTTP 429 或带限流响应头的 403）或任务中断则停止余下部分。正式全量运行逐条持久化进度，下次手动或定时全量运行从中断条目继续，不再花费请求额度重复检查已完成的前半部分；完成余下部分后清零进度，下一轮重新遍历全部。普通单条失败在下一轮完整遍历时重试。删除已完成条目不丢失进度。预览始终检查全量，单仓库重试只处理指定条目，两者都不改变全量进度。
+- 已人工审核的补充许可证文本可按 GitHub 数字仓库 ID、精确路径、根 SPDX 和实际内容 SHA-256 复用审核结论。当前仅包括初始目录中 `vinvcn/mattpocock-skills-zh-CN` 的 `LICENSE.zh-CN.md`：该译本明确以根目录英文 MIT 许可证为准，审批记录见后端 `agent_repository_license.go`，摘要与 `catalog.json` 一致。译本内容改变、出现在其他路径或仓库时须重新审核；此例外不替代根许可证，也不跳过其他嵌套许可证、NOTICE 或敏感信息检查。首次自动收录与更新共用此规则。
+- 日志逐条输出状态和汇总，失败以非零状态结束。续跑汇总的 `resumedAfter` 表示起始位置，`total` 为本次剩余条目数；未完成时的 `resumeAfter` 表示下次接续的位置。任务不会自动等待 GitHub 额度恢复，确认恢复后可手动重跑，或等待下次定时接续；成功的条目不会重复改版。
+- 数据库锁防止重复任务同时更新。部署替换容器时可能中断任务；已完成事务保留，进行中的事务回滚，可从工作流手动重试。每次任务最多运行一小时。
+
+在 GitHub Actions 选择 **Sync System Repositories → Run workflow** 可以手动运行。默认 `dry_run=true` 仅检查和预览，不改数据库或 R2；取消勾选才实际更新。`workspace_id` 留空处理全部，也可填写 Koinote 仓库数字 ID 单独重试。
+
+维护人员也可在生产主机上运行同一个脚本。以下命令从已设置的环境变量读取 GitHub token，通过标准输入送入容器，不写进参数或文件：
+
+```sh
+cd /opt/koinote
+# 预览全部系统仓库
+printf '%s\n' "$GITHUB_TOKEN" | sh deploy/sync-system-agent-repositories.sh
+# 实际更新全部系统仓库
+printf '%s\n' "$GITHUB_TOKEN" | sh deploy/sync-system-agent-repositories.sh --apply
+# 单独更新指定仓库
+printf '%s\n' "$GITHUB_TOKEN" | sh deploy/sync-system-agent-repositories.sh --apply --workspace-id 42
+```
+
+GitHub 的定时工作流可能延迟；公开仓库连续 60 天没有活动时，GitHub 会自动停用定时任务，恢复后需在 Actions 重新启用。详见 [GitHub schedule 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+
+## 每日发现热门 Skills 仓库
+
+`.github/workflows/discover-system-agent-repositories.yml` 每天 UTC 21:37（北京时间次日 **05:37**）执行，与 04:17 的已有仓库更新任务错开。新增目标是**每天最多 20 个尚未系统收录的热门 Skills 仓库**，自动公开到 Skills/Agent Hub。文件存入现有私有 R2，保留 GitHub 原作者、原始链接、固定提交和原始许可证文件；不归属管理员个人账号，不占用个人配额。默认分类为 Agent，可在后台调整。
+
+筛选与运行规则：
+
+- 使用 GitHub 官方仓库搜索，合并 `skills` 名称/简介及 `agent-skills`、`claude-skills`、`skills` 主题的候选，按 Star 数从高到低处理；最低 **100 Stars**，仅接受公开、非 Fork、未归档、未禁用的仓库。每组最多读取前 300 条，一次最多进一步检查 100 个未收录候选。搜索不完整时停止，等待重试。
+- 解析默认分支的固定提交后下载整库，要求有非空的 `SKILL.md`。沿用整库导入的大小、文件数量、敏感内容、敏感路径和归档结构限制，不执行上游代码或 Skills 指令。
+- 自动收录沿用初始目录的 MIT / Apache-2.0 范围，要求根许可证文本与 GitHub 声明相符。嵌套许可证无法识别或包含限制条款、NOTICE 存在已识别的例外时跳过；已有人工审查中待核对来源许可的仓库也不会自动放行。这是保守筛选，不能代替完整的授权审查；其他许可证或复杂素材仓库仍走人工审核。
+- 按 GitHub 数字 ID 和来源 URL 去重，重命名后的新收录条目仍识别为同一仓库；旧目录没有数字 ID 的记录以 URL 兼容。已撤回的系统条目不会重新上架。新收录的记账记录在仓库被删除后仍保留，防止重新导入；普通用户的私有导入不阻止系统收录。
+- 按**北京时间自然日**记账；同日重跑只补足尚缺的名额，删除仓库不退还当天名额。每个仓库的文件、历史、公开快照、系统审计和每日记账原子提交，重跑不会留下重复或半成品仓库。数据库锁和事务内的二次检查防止并发超过 20 个；跨日仍未完成的任务在下一次提交前停止。
+- 策略不符的候选记录原因并冷却 7 天，避免每天反复下载同一批不合格的高 Star 仓库；暂时性的 GitHub / R2 失败可以立即重试；归档下载断线、短读或超时记为 `github_download_failed`，返回失败且不写入七天冷却，恢复网络后可立即补收。真正的归档校验失败仍按策略跳过。单仓库普通 403 记录失败后继续，凭据失效或 GitHub 限流时停止，与更新任务一致。沿用系统目录 1,000 个存活仓库的现有容量上限，到达上限时明确报错，不提高个人额度。
+- 候选不足或本次检查预算用尽时，汇总输出 `remaining` 缺口与 `outcome` 原因，不放宽规则补数；实际处理失败返回非零退出码，已经成功的收录保留。下次已有仓库更新任务会自动覆盖新增条目。
+
+部署包含 `0092_agent_repository_discovery.sql` 的后端及工作流后启用，凭据与每日更新任务相同。可在 Actions 的 **Discover Skills Repositories → Run workflow** 手动预览（默认 `dry_run=true`）或取消勾选后收录。预览会搜索、下载和校验，但不写数据库、冷却记录或 R2，也不消耗每日名额。
+
+主机上也可复用同一个维护脚本：
+
+```sh
+cd /opt/koinote
+# 预览今天还可新增的热门仓库
+printf '%s\n' "$GITHUB_TOKEN" | sh deploy/sync-system-agent-repositories.sh --discover
+# 实际补足今天最多 20 个名额
+printf '%s\n' "$GITHUB_TOKEN" | sh deploy/sync-system-agent-repositories.sh --discover --apply
+```
+
+`--discover` 不能与 `--workspace-id` 一起使用。不要把管理员凭证或个人 GitHub Token 写进工作流。GitHub 搜索的排序、分页和独立限流见 [官方 Search API 文档](https://docs.github.com/en/rest/search/search#search-repositories)。定时延迟、长期无活动停用和部署中断后的手动重试规则与上面的更新任务相同。
 
 ## 暂未收录
 

@@ -1,6 +1,6 @@
 {
   "name": "koinote",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -96,7 +96,7 @@
     "docker:down": "docker compose down",
     "backend:dev": "cd backend && go run ./cmd/server",
     "seed:agent-repositories": "python3 scripts/seed_agent_repositories.py",
-    "test:agent-catalog": "python3 scripts/test_seed_agent_repositories.py",
+    "test:agent-catalog": "python3 scripts/test_seed_agent_repositories.py && python3 scripts/test_sync_system_agent_repositories.py",
     "go:test": "cd backend && go vet ./... && go test ./...",
     "test:agent-repository-storage": "node scripts/_check_agent_repository_storage.mjs"
   },
