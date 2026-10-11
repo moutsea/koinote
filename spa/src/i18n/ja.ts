@@ -973,7 +973,7 @@ export const ja: Messages = {
     button: "AI 最適化",
     title: "AI 最適化",
     description:
-      "コード変更のようにタイトル、本文、Markdown レイアウトをレビューし、承認した変更だけを反映します。",
+      "クリックする理由、冒頭の訴求、本文が期待に応えるかを編集者の視点で確認します。変更は承認後に適用されます。",
     membersOnly: "この機能は永久会員のみ利用できます。",
     upgrade: "永久会員にアップグレード",
     localModeUnavailable:
@@ -1011,7 +1011,7 @@ export const ja: Messages = {
     tasks: {
       title: {
         label: "タイトル最適化",
-        description: "明確さ、魅力、約束との整合性を確認",
+        description: "対象読者、クリックする理由、本文との一致を確認",
       },
       proofread: {
         label: "誤字・不自然な文の確認",
@@ -1023,7 +1023,7 @@ export const ja: Messages = {
       },
       paragraph: {
         label: "段落最適化",
-        description: "段落間の論理、重複、論証の順序を確認",
+        description: "冒頭の訴求、論理、読むリズム、筆者らしさを確認",
       },
     },
     start: "レビューを開始",
@@ -1066,7 +1066,7 @@ export const ja: Messages = {
     deepAnalysisStarting: "開始中…",
     deepAnalysisExpandHint: "この項目を選択すると費用を確認できます。",
     deepReviewBadge: "詳細分析 · {dimension}",
-    titleScore: "タイトル魅力度 {score}/100",
+    titleScore: "タイトル編集評価 {score}/100",
     suggestions: "変更提案",
     before: "変更前",
     after: "変更後",
@@ -2343,6 +2343,14 @@ function hello(name) {
     },
   },
   desktopAuth: {
+    sessionUnavailable: "ログイン状態を確認できません",
+    credentialsUnavailable: "システムの資格情報ストアに保存されたログイン情報にアクセスできません。Mac ではログインキーチェーンを解除し、macOS に求められた場合は Koinote のアクセスを許可してから再試行してください。",
+    sessionRetryHint: "サービスまたはネットワークが一時的に利用できません。保存済みのログイン情報は保持されています。再試行してください。",
+    accountMismatch: "認証されたアカウントが保存済みのアカウントと一致しません。ログイン情報とローカル文書は保持されています。同期を再開するには再認証してください。",
+    reauthorize: "再認証",
+    reauthorizeOpened: "ブラウザーで認証を完了してから、アプリに戻ってください。",
+    retrySession: "再試行",
+
     eyebrow: "デスクトップアプリ",
     title: "Koinote アプリを承認",
     description:

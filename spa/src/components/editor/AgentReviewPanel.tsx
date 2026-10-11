@@ -1603,7 +1603,10 @@ function ReviewDetail({
           className="mt-4 border-l-2 pl-3"
           style={{ borderColor: "var(--ink-line)" }}
         >
-          <p className="text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
+          <p
+            className="whitespace-pre-wrap text-sm leading-6"
+            style={{ color: "var(--ink-mid)" }}
+          >
             {review.summary}
           </p>
         </div>

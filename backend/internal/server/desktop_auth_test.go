@@ -409,8 +409,8 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	if pair2.RefreshToken == pair1.RefreshToken || pair2.AccessToken == pair1.AccessToken {
 		t.Fatal("refresh must rotate both opaque tokens")
 	}
-	if status := accessSessionStatus(pair1.AccessToken); status != http.StatusUnauthorized {
-		t.Fatalf("old access token status=%d after refresh", status)
+	if status := accessSessionStatus(pair1.AccessToken); status != http.StatusOK {
+		t.Fatalf("in-flight access token must survive normal refresh: status=%d", status)
 	}
 	pair1RefreshHash := sha256.Sum256([]byte(pair1.RefreshToken))
 	if _, err := pool.Exec(ctx, `

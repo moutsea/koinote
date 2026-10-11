@@ -1,5 +1,6 @@
 import type { AgentGitHubSource, AgentWorkspaceFile } from "./api";
 import { defaultStringifySearch } from "@tanstack/react-router";
+import { parseRepositoryDirectorySearch, type RepositoryDirectorySearch } from "./agentRepositoryDirectory";
 
 export const REPOSITORY_PREVIEW_BYTES = 256 * 1024;
 export const isRepositoryMarkdown = (path: string) => /\.(md|markdown|mdown)$/i.test(path);
@@ -13,8 +14,8 @@ export function repositoryFileHref(workspaceId: number, path: string, fragment?:
   return `/repositories/${workspaceId}${defaultStringifySearch({ file: path })}${fragment ? `#${encodeURIComponent(repositoryAnchorID(fragment))}` : ""}`;
 }
 
-export function parseRepositorySearch(search: Record<string, unknown>): { file?: string } {
-  return typeof search.file === "string" && search.file.length <= 4096 ? { file: search.file } : {};
+export function parseRepositorySearch(search: Record<string, unknown>): RepositoryDirectorySearch & { file?: string } {
+  return { ...parseRepositoryDirectorySearch(search), file: typeof search.file === "string" && search.file.length <= 4096 ? search.file : undefined };
 }
 
 export function repositoryReadme(files: AgentWorkspaceFile[]) {

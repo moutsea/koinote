@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   FileText,
+  FolderGit2,
   Gauge,
   HardDrive,
   Image,
@@ -36,6 +37,7 @@ import {
 import { useSession } from "../auth";
 import { PaperCard } from "../components/Ink";
 import { AnnouncementAdminPanel } from "../components/AnnouncementAdminPanel";
+import { SystemRepositoriesAdminPanel } from "../components/SystemRepositoriesAdminPanel";
 import { FeedbackAdminPanel } from "../components/FeedbackAdminPanel";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n, interpolate, type Locale } from "../i18n";
@@ -49,6 +51,7 @@ const DATE_LOCALE: Record<Locale, string> = {
 };
 
 type AdminTab =
+  | "system-repositories"
   | "overview"
   | "growth"
   | "revenue"
@@ -148,7 +151,7 @@ export function AdminPage() {
             {t.admin.subtitle}
           </p>
         </div>
-        {activeTab !== "announcements" && (
+        {activeTab !== "announcements" && activeTab !== "system-repositories" && (
           <button
             type="button"
             disabled={refreshQuery.isFetching}
@@ -175,7 +178,9 @@ export function AdminPage() {
         aria-labelledby={`admin-tab-${activeTab}`}
         className="mt-6"
       >
-        {activeTab === "announcements" ? (
+        {activeTab === "system-repositories" ? (
+          <SystemRepositoriesAdminPanel />
+        ) : activeTab === "announcements" ? (
           <AnnouncementAdminPanel />
         ) : activeTab === "feedback" ? (
           <FeedbackAdminPanel
@@ -231,6 +236,7 @@ function AdminTabs({
     { id: "growth", label: t.admin.tabGrowth, icon: <MousePointerClick /> },
     { id: "revenue", label: t.admin.tabRevenue, icon: <Coins /> },
     { id: "users", label: t.admin.tabUsers, icon: <Users /> },
+    { id: "system-repositories", label: t.agentWorkspace.systemRepositories, icon: <FolderGit2 /> },
     { id: "server", label: t.admin.tabServer, icon: <Server /> },
     {
       id: "announcements",

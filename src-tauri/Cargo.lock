@@ -1411,6 +1411,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2447,8 +2457,9 @@ dependencies = [
 
 [[package]]
 name = "koinote-desktop"
-version = "0.1.75"
+version = "0.1.76"
 dependencies = [
+ "fs2",
  "keyring",
  "log",
  "objc2-app-kit",

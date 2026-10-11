@@ -2,10 +2,8 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 #[cfg(desktop)]
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Mutex,
-};
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 #[cfg(desktop)]
 use tauri::{
     menu::{
@@ -26,6 +24,7 @@ const KEYRING_SERVICE: &str = "app.koinote.desktop.local";
 #[cfg(not(koinote_local))]
 const KEYRING_SERVICE: &str = "app.koinote.desktop";
 const SESSION_ENTRY: &str = "session";
+static SESSION_LOCK: Mutex<()> = Mutex::new(());
 const PENDING_AUTH_ENTRY: &str = "pending-auth";
 const LEGACY_X_BROWSER_CREDENTIALS_ENTRY: &str = "x-browser-credentials";
 const DATABASE_URL: &str = "sqlite:koinote-offline.db";
@@ -668,13 +667,15 @@ fn desktop_set_menu_enabled(_enabled_actions: Vec<String>) -> Result<bool, Strin
     Ok(false)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredSession {
     access_token: String,
     refresh_token: String,
     account_id: String,
     user_json: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    refresh_request_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -773,19 +774,139 @@ fn clear_entry(name: &str) -> Result<(), String> {
     }
 }
 
+// macOS can run two copies of the app. Also serialize between processes sharing
+// the same keychain service; dropping the file releases the OS lock after a crash.
+fn lock_desktop_session(
+    app: &tauri::AppHandle,
+) -> Result<(std::sync::MutexGuard<'static, ()>, std::fs::File), String> {
+    // The mutex holds no mutable session state. After a panic, validate the
+    // authoritative keychain value under the process/file locks before reuse.
+    let guard = SESSION_LOCK
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(directory.join("session.lock"))
+        .map_err(|error| error.to_string())?;
+    fs2::FileExt::lock_exclusive(&file).map_err(|error| error.to_string())?;
+    recover_poisoned_session_lock(&SESSION_LOCK, || read_json(SESSION_ENTRY))?;
+    Ok((guard, file))
+}
+
+// Called while both locks are held. Failed reads or invalid account data leave
+// the lock poisoned and the credentials intact so the user can retry safely.
+fn recover_poisoned_session_lock(
+    mutex: &std::sync::Mutex<()>,
+    read: impl FnOnce() -> Result<Option<StoredSession>, String>,
+) -> Result<(), String> {
+    if !mutex.is_poisoned() {
+        return Ok(());
+    }
+    if let Some(session) = read()? {
+        let user: serde_json::Value =
+            serde_json::from_str(&session.user_json).map_err(|_| "session_invalid".to_string())?;
+        if !session.access_token.starts_with("knt_app_at_")
+            || !session.refresh_token.starts_with("knt_app_rt_")
+            || session.account_id.is_empty()
+            || user.get("authUserId").and_then(|id| id.as_str())
+                != Some(session.account_id.as_str())
+        {
+            return Err("session_invalid".into());
+        }
+    }
+    mutex.clear_poison();
+    Ok(())
+}
+
 #[tauri::command]
-fn desktop_session_store(session: StoredSession) -> Result<(), String> {
+fn desktop_session_store(app: tauri::AppHandle, session: StoredSession) -> Result<(), String> {
+    let _guard = lock_desktop_session(&app)?;
     store_json(SESSION_ENTRY, &session)
 }
 
 #[tauri::command]
-fn desktop_session_get() -> Result<Option<StoredSession>, String> {
+fn desktop_session_get(app: tauri::AppHandle) -> Result<Option<StoredSession>, String> {
+    let _guard = lock_desktop_session(&app)?;
     read_json(SESSION_ENTRY)
 }
 
 #[tauri::command]
-fn desktop_session_clear() -> Result<(), String> {
+fn desktop_session_clear(app: tauri::AppHandle) -> Result<(), String> {
+    let _guard = lock_desktop_session(&app)?;
     clear_entry(SESSION_ENTRY)
+}
+
+// Every read/modify/write shares the same native lock. JS request ordering alone
+// cannot prevent a late refresh or profile update overwriting a newer login.
+#[tauri::command]
+fn desktop_session_prepare_refresh(
+    app: tauri::AppHandle,
+    access_token: String,
+    request_id: String,
+) -> Result<Option<StoredSession>, String> {
+    let _guard = lock_desktop_session(&app)?;
+    let Some(mut session) = read_json::<StoredSession>(SESSION_ENTRY)? else {
+        return Ok(None);
+    };
+    if session.access_token == access_token && session.refresh_request_id.is_none() {
+        session.refresh_request_id = Some(request_id);
+        store_json(SESSION_ENTRY, &session)?;
+    }
+    Ok(Some(session))
+}
+
+fn session_matches(
+    session: &StoredSession,
+    refresh_token: &str,
+    request_id: &Option<String>,
+) -> bool {
+    session.refresh_token == refresh_token && &session.refresh_request_id == request_id
+}
+
+#[tauri::command]
+fn desktop_session_replace(
+    app: tauri::AppHandle,
+    expected_refresh_token: String,
+    expected_request_id: Option<String>,
+    session: Option<StoredSession>,
+) -> Result<Option<StoredSession>, String> {
+    let _guard = lock_desktop_session(&app)?;
+    let current = read_json::<StoredSession>(SESSION_ENTRY)?;
+    if current
+        .as_ref()
+        .is_some_and(|value| session_matches(value, &expected_refresh_token, &expected_request_id))
+    {
+        match &session {
+            Some(value) => store_json(SESSION_ENTRY, value)?,
+            None => clear_entry(SESSION_ENTRY)?,
+        }
+        return Ok(session);
+    }
+    Ok(current)
+}
+
+#[tauri::command]
+fn desktop_session_update_user(
+    app: tauri::AppHandle,
+    account_id: String,
+    user_json: String,
+) -> Result<(), String> {
+    let _guard = lock_desktop_session(&app)?;
+    if let Some(mut session) = read_json::<StoredSession>(SESSION_ENTRY)? {
+        if session.account_id == account_id {
+            session.user_json = user_json;
+            store_json(SESSION_ENTRY, &session)?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1199,7 +1320,8 @@ const AGENT_WORKSPACE_SCAN_ROOTS: &[&str] = &[
     ".continue/rules",
 ];
 
-const AGENT_WORKSPACE_SCAN_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".dsh/AGENTS.md"];
+const AGENT_WORKSPACE_SCAN_FILES: &[&str] =
+    &["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".dsh/AGENTS.md"];
 
 const CONFIG_COMPLETE_DIRECTORIES: &[&str] = &[
     ".ssh",
@@ -1478,10 +1600,17 @@ fn collect_config_directory(
     }
     // Harness keeps runtime data beside its settings and profile definitions.
     // Do not walk session stores or attachments as configuration candidates.
-    if directory.strip_prefix(logical_home.join(".dsh")).ok()
+    if directory
+        .strip_prefix(logical_home.join(".dsh"))
+        .ok()
         .and_then(|path| path.components().next())
         .and_then(|part| part.as_os_str().to_str())
-        .is_some_and(|name| matches!(name, "sessions" | "storage" | "storages" | "attachments" | "uploads" | "state" | "data"))
+        .is_some_and(|name| {
+            matches!(
+                name,
+                "sessions" | "storage" | "storages" | "attachments" | "uploads" | "state" | "data"
+            )
+        })
     {
         return Ok(());
     }
@@ -1798,7 +1927,9 @@ fn restore_config_path_key(path: &str) -> String {
             other => folded.extend(other.to_lowercase()),
         }
     }
-    folded.nfd().collect::<String>()
+    folded
+        .nfd()
+        .collect::<String>()
         .split('/')
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
@@ -2220,6 +2351,9 @@ pub fn run() {
             desktop_session_store,
             desktop_session_get,
             desktop_session_clear,
+            desktop_session_prepare_refresh,
+            desktop_session_replace,
+            desktop_session_update_user,
             desktop_pending_auth_store,
             desktop_pending_auth_get,
             desktop_pending_auth_clear,
@@ -2245,6 +2379,71 @@ pub fn run() {
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    #[test]
+    fn desktop_poisoned_session_lock_requires_valid_persistent_state() {
+        let mutex = std::sync::Mutex::new(());
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = mutex.lock().unwrap();
+            panic!("simulate interrupted session command");
+        });
+        let _guard = mutex.lock().unwrap_or_else(|error| error.into_inner());
+        assert!(mutex.is_poisoned());
+        assert!(
+            recover_poisoned_session_lock(&mutex, || Err("keychain unavailable".into())).is_err()
+        );
+        assert!(mutex.is_poisoned());
+        let make_session = |user_json: &str| StoredSession {
+            access_token: "knt_app_at_test".into(),
+            refresh_token: "knt_app_rt_test".into(),
+            account_id: "a".into(),
+            user_json: user_json.into(),
+            refresh_request_id: None,
+        };
+        for invalid in ["invalid json", r#"{"authUserId":"b"}"#] {
+            assert!(
+                recover_poisoned_session_lock(&mutex, || Ok(Some(make_session(invalid)))).is_err()
+            );
+            assert!(mutex.is_poisoned());
+        }
+        assert!(
+            recover_poisoned_session_lock(&mutex, || Ok(Some(make_session(
+                r#"{"authUserId":"a"}"#
+            ))))
+            .is_ok()
+        );
+        assert!(!mutex.is_poisoned());
+        drop(_guard);
+        assert!(mutex.lock().is_ok());
+    }
+
+    #[test]
+    fn desktop_session_legacy_state_and_compare_guard() {
+        let legacy = r#"{"accessToken":"old-access","refreshToken":"old-refresh","accountId":"a","userJson":"{}"}"#;
+        let mut current: StoredSession = serde_json::from_str(legacy).unwrap();
+        assert!(session_matches(&current, "old-refresh", &None));
+        current.refresh_request_id = Some("attempt-a".into());
+        assert!(!session_matches(&current, "old-refresh", &None));
+        assert!(!session_matches(
+            &current,
+            "old-refresh",
+            &Some("attempt-b".into())
+        ));
+        assert!(session_matches(
+            &current,
+            "old-refresh",
+            &Some("attempt-a".into())
+        ));
+        current.refresh_token = "new-login-refresh".into();
+        assert!(!session_matches(
+            &current,
+            "old-refresh",
+            &Some("attempt-a".into())
+        ));
+        let persisted = serde_json::to_string(&current).unwrap();
+        let restored: StoredSession = serde_json::from_str(&persisted).unwrap();
+        assert_eq!(restored.refresh_request_id.as_deref(), Some("attempt-a"));
+    }
 
     #[test]
     fn restore_dialog_lists_paths_and_marks_high_risk_files() {
@@ -2650,22 +2849,36 @@ mod tests {
         assert!(AGENT_WORKSPACE_SCAN_ROOTS.contains(&".dsh/skills"));
         assert!(AGENT_WORKSPACE_SCAN_FILES.contains(&".dsh/AGENTS.md"));
         let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "koinote-deepseek-scan-{}-{timestamp}", std::process::id()
+            "koinote-deepseek-scan-{}-{timestamp}",
+            std::process::id()
         ));
         let expected = [
-            ".dsh/.credentials.yaml", ".dsh/.env", ".dsh/cordis.patch.yml",
-            ".dsh/profiles/web/cordis.patch.yml", ".dsh/profiles/web/package.json",
-            ".dsh/profiles/web/pnpm-lock.yaml", ".dsh/settings.yaml",
+            ".dsh/.credentials.yaml",
+            ".dsh/.env",
+            ".dsh/cordis.patch.yml",
+            ".dsh/profiles/web/cordis.patch.yml",
+            ".dsh/profiles/web/package.json",
+            ".dsh/profiles/web/pnpm-lock.yaml",
+            ".dsh/settings.yaml",
         ];
         let excluded = [
-            ".dsh/skills/demo/SKILL.md", ".dsh/skills/demo/config.json", ".dsh/AGENTS.md",
-            ".dsh/sessions/session/config.json", ".dsh/storage/index.json",
-            ".dsh/storages/session_projcache/session.json", ".dsh/storages/workspaces.json",
-            ".dsh/attachments/settings.json", ".dsh/state/index.json",
-            ".dsh/uploads/user.json", ".dsh/data/index.json",
-            ".dsh/cache/config.json", ".dsh/logs/settings.json",
+            ".dsh/skills/demo/SKILL.md",
+            ".dsh/skills/demo/config.json",
+            ".dsh/AGENTS.md",
+            ".dsh/sessions/session/config.json",
+            ".dsh/storage/index.json",
+            ".dsh/storages/session_projcache/session.json",
+            ".dsh/storages/workspaces.json",
+            ".dsh/attachments/settings.json",
+            ".dsh/state/index.json",
+            ".dsh/uploads/user.json",
+            ".dsh/data/index.json",
+            ".dsh/cache/config.json",
+            ".dsh/logs/settings.json",
             ".dsh/profiles/web/node_modules/plugin/package.json",
         ];
         for path in expected.iter().chain(excluded.iter()) {
@@ -2675,23 +2888,48 @@ mod tests {
         }
         let canonical_root = std::fs::canonicalize(&root).unwrap();
         let mut files = ConfigFileCollection::default();
-        collect_config_directory(&root.join(".dsh"), &root, &canonical_root, &mut files, false).unwrap();
+        collect_config_directory(
+            &root.join(".dsh"),
+            &root,
+            &canonical_root,
+            &mut files,
+            false,
+        )
+        .unwrap();
         let files = files.into_files();
-        assert_eq!(files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(), expected);
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
 
         let destination = root.join("restored");
         std::fs::create_dir(&destination).unwrap();
-        let restore_files = files.into_iter().map(|file| DesktopConfigRestoreFile {
-            path: file.path, bytes: file.bytes,
-        }).collect::<Vec<_>>();
-        assert_eq!(restore_config_files(&destination, &restore_files).unwrap(), expected.len());
+        let restore_files = files
+            .into_iter()
+            .map(|file| DesktopConfigRestoreFile {
+                path: file.path,
+                bytes: file.bytes,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            restore_config_files(&destination, &restore_files).unwrap(),
+            expected.len()
+        );
         for path in expected {
-            assert_eq!(std::fs::read(destination.join(path)).unwrap(), path.as_bytes());
+            assert_eq!(
+                std::fs::read(destination.join(path)).unwrap(),
+                path.as_bytes()
+            );
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let permissions = std::fs::metadata(destination.join(".dsh/.credentials.yaml")).unwrap().permissions();
+            let permissions = std::fs::metadata(destination.join(".dsh/.credentials.yaml"))
+                .unwrap()
+                .permissions();
             assert_eq!(permissions.mode() & 0o777, 0o600);
         }
         std::fs::remove_dir_all(root).unwrap();
@@ -2898,26 +3136,57 @@ mod tests {
 
     #[test]
     fn config_restore_rejects_unicode_aliases_before_any_writes() {
-        let root = std::env::temp_dir().join(format!("koinote-unicode-{}-{}", std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "koinote-unicode-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("existing.md"), b"original").unwrap();
         // Distinct names on a source filesystem can alias on the target, including
         // a file whose normalized name becomes another entry's parent directory.
         for second in ["skills/cafe\u{301}", "skills/cafe\u{301}/SKILL.md"] {
             let files = vec![
-                DesktopConfigRestoreFile { path: "existing.md".into(), bytes: b"changed".to_vec() },
-                DesktopConfigRestoreFile { path: "skills/caf\u{e9}".into(), bytes: b"first".to_vec() },
-                DesktopConfigRestoreFile { path: second.into(), bytes: b"second".to_vec() },
+                DesktopConfigRestoreFile {
+                    path: "existing.md".into(),
+                    bytes: b"changed".to_vec(),
+                },
+                DesktopConfigRestoreFile {
+                    path: "skills/caf\u{e9}".into(),
+                    bytes: b"first".to_vec(),
+                },
+                DesktopConfigRestoreFile {
+                    path: second.into(),
+                    bytes: b"second".to_vec(),
+                },
             ];
-            assert_eq!(restore_config_files(&root, &files), Err("config_path_duplicate".into()));
-            assert_eq!(std::fs::read(root.join("existing.md")).unwrap(), b"original");
+            assert_eq!(
+                restore_config_files(&root, &files),
+                Err("config_path_duplicate".into())
+            );
+            assert_eq!(
+                std::fs::read(root.join("existing.md")).unwrap(),
+                b"original"
+            );
             assert!(!root.join("skills").exists());
-            let paths = files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
-            assert_eq!(config_restore::home_paths(&paths, &config_restore::HomeLocations {
-                platform: config_restore::Platform::Mac,
-                roaming: Ok("AppData/Roaming".into()), xdg: Ok(".config".into()),
-            }), Err("config_platform_path_conflict".into()));
+            let paths = files
+                .iter()
+                .map(|file| file.path.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                config_restore::home_paths(
+                    &paths,
+                    &config_restore::HomeLocations {
+                        platform: config_restore::Platform::Mac,
+                        roaming: Ok("AppData/Roaming".into()),
+                        xdg: Ok(".config".into()),
+                    }
+                ),
+                Err("config_platform_path_conflict".into())
+            );
         }
         std::fs::remove_dir_all(root).unwrap();
     }

@@ -1,3 +1,5 @@
+import { DesktopAccountMismatchError } from "../desktop/sessionErrors";
+import { DesktopSessionError } from "../components/DesktopSessionError";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -88,6 +90,10 @@ export function DesktopHomePage() {
         <LoaderCircle className="h-5 w-5 animate-spin" aria-label={t.dashboard.loading} />
       </div>
     );
+  }
+
+  if (session.isError && (!user || session.error instanceof DesktopAccountMismatchError)) {
+    return <DesktopSessionError error={session.error} retrying={session.isFetching} onRetry={() => { void session.refetch(); }} />;
   }
 
   if (!user) return <DesktopLoginPage />;

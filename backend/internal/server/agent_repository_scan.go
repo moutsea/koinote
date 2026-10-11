@@ -34,7 +34,7 @@ func (scans agentRepositoryContentScans) save(ctx context.Context, q interface {
 
 // The read-only snapshot does not lock out writes. Its revision must still be
 // rechecked by the publication transaction after scanning and caching finish.
-func (a *App) checkAgentRepositoryPublication(ctx context.Context, userID int, id, revision int64) (agentRepositoryContentScans, error) {
+func (a *App) checkAgentRepositoryPublicationForOwner(ctx context.Context, ownerID *int, id, revision int64) (agentRepositoryContentScans, error) {
 	scans := agentRepositoryContentScans{policy: agentWorkspaceSensitivePolicyID()}
 	tx, err := a.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -43,7 +43,7 @@ func (a *App) checkAgentRepositoryPublication(ctx context.Context, userID int, i
 	defer func() { _ = tx.Rollback(ctx) }()
 	var current int64
 	var name, description string
-	err = tx.QueryRow(ctx, `SELECT revision,name,description FROM agent_workspaces WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, id, userID).Scan(&current, &name, &description)
+	err = tx.QueryRow(ctx, `SELECT revision,name,description FROM agent_workspaces WHERE id=$1 AND user_id IS NOT DISTINCT FROM $2::integer AND deleted_at IS NULL`, id, ownerID).Scan(&current, &name, &description)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return scans, errAgentWorkspaceNotFound
 	}

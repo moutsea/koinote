@@ -32,14 +32,14 @@ Authorization: Bearer <your-token>
   },
   "article": {
     "title": "Article title",
-    "markdown": "# Article title\n\nBody",
-    "html": "<h1>Article title</h1><p>Body</p>",
+    "markdown": "Body",
+    "html": "<p>Body</p>",
     "coverImageSource": "https://cdn.example.com/cover.png"
   }
 }
 ```
 
-`coverImageSource` is optional: it is omitted when no cover is configured; otherwise, it contains the cover URL with surrounding whitespace removed. Receivers may also accept an empty string from older versions as no cover. `markdown` contains the title and `html` is generated from the document theme. Handle the request by `event` and `version`; unknown fields may be ignored.
+`coverImageSource` is optional: it is omitted when no cover is configured; otherwise, it contains the cover URL with surrounding whitespace removed. Receivers may also accept an empty string from older versions as no cover. `title` supplies the article title separately. `markdown` and the theme-rendered `html` contain only the body, without automatically prepending the article title; headings written by the user remain intact. Older clients may still prepend the title to the body. Handle the request by `event` and `version`; unknown fields may be ignored.
 
 ## Limits and recommendations
 

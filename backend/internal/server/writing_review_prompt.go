@@ -13,14 +13,15 @@ import (
 const maxAgentPatchTextBytes = 128 << 10
 
 type generatedWritingReview struct {
-	Summary           string                      `json:"summary"`
-	TitleScore        int                         `json:"titleScore"`
-	TitleAssessment   string                      `json:"titleAssessment"`
-	TitleSuggestions  []generatedTitleSuggestion  `json:"titleSuggestions"`
-	BodySuggestions   []generatedBodySuggestion   `json:"bodySuggestions"`
-	BodyPatches       []generatedBodySuggestion   `json:"bodyPatches"`
-	LayoutAssessment  []writingReviewDimension    `json:"layoutAssessment"`
-	LayoutSuggestions []generatedLayoutSuggestion `json:"layoutSuggestions"`
+	EditorialContext  *writingReviewEditorialContext `json:"-"`
+	Summary           string                         `json:"summary"`
+	TitleScore        int                            `json:"titleScore"`
+	TitleAssessment   string                         `json:"titleAssessment"`
+	TitleSuggestions  []generatedTitleSuggestion     `json:"titleSuggestions"`
+	BodySuggestions   []generatedBodySuggestion      `json:"bodySuggestions"`
+	BodyPatches       []generatedBodySuggestion      `json:"bodyPatches"`
+	LayoutAssessment  []writingReviewDimension       `json:"layoutAssessment"`
+	LayoutSuggestions []generatedLayoutSuggestion    `json:"layoutSuggestions"`
 }
 
 type generatedTitleSuggestion struct {
@@ -49,7 +50,7 @@ type generatedBodySuggestion struct {
 	Before     string `json:"before"`
 	After      string `json:"after"`
 	Reason     string `json:"reason"`
-	SourceTask string `json:"-"`
+	SourceTask string `json:"sourceTask,omitempty"`
 }
 
 type generatedLayoutSuggestion struct {
@@ -111,6 +112,7 @@ type writingReviewValidationScope struct {
 
 	DropRejectedSuggestions bool
 	SourceTask              string
+	AllowedSourceTasks      map[string]struct{}
 
 	// Blocks 是 content 的解析结果。传入可以省掉一次 goldmark 全文解析：
 	// 同一份 content 在建计划、每个任务校验、重试、merge 里要走好几遍。
@@ -234,6 +236,18 @@ func parseAndValidateWritingReviewWithScopes(
 	for _, suggestion := range generated.BodySuggestions {
 		category := strings.ToLower(strings.TrimSpace(suggestion.Category))
 		reason := strings.TrimSpace(suggestion.Reason)
+		sourceTask := scope.SourceTask
+		if suggestion.SourceTask != "" {
+			sourceTask = suggestion.SourceTask
+		}
+		if scope.AllowedSourceTasks != nil {
+			if _, allowed := scope.AllowedSourceTasks[sourceTask]; !allowed {
+				if dropRejectedSuggestions {
+					continue
+				}
+				return validatedWritingReview{}, fmt.Errorf("%w: body source task is outside selected scope", errAgentLLMInvalidResponse)
+			}
+		}
 		_, defaultCategory := writingSuggestionCategories[category]
 		_, focusedCategory := allowedBodyCategories[category]
 		if (allowedBodyCategories == nil && !defaultCategory) ||
@@ -270,10 +284,6 @@ func parseAndValidateWritingReviewWithScopes(
 			return validatedWritingReview{}, fmt.Errorf("%w: body suggestion uses content outside its prompt scope", errAgentLLMInvalidResponse)
 		}
 		seenBefore[suggestion.Before] = struct{}{}
-		sourceTask := scope.SourceTask
-		if suggestion.SourceTask != "" {
-			sourceTask = suggestion.SourceTask
-		}
 		bodyRanges = append(bodyRanges, validatedWritingSuggestion{
 			Target:     "body",
 			Kind:       "content",

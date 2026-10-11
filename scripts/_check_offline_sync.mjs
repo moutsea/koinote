@@ -943,7 +943,7 @@ const desktopAuth = readFileSync(
 );
 assert.match(
   desktopAuth,
-  /response\.status === 400 \|\| response\.status === 401[\s\S]*?clearDesktopSession\(\)[\s\S]*?return null/,
+  /response\.status === 401 && body\?\.code === "desktop_token_invalid"[\s\S]*?replaceDesktopSession\(existing, null\)/,
   "只有明确无效的 refresh token 才能清除桌面会话",
 );
 assert.match(

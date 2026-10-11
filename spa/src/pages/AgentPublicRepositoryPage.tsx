@@ -5,8 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, getAgentWorkspaceSettings } from "../api";
-import { forkPublicAgentRepository, getAgentRepositorySharing, getPublicAgentRepository, getPublicAgentRepositoryFile, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, REPOSITORY_SHARING_QUERY_KEY, PUBLIC_REPOSITORIES_QUERY_KEY, setAgentRepositorySharing, type PublicAgentRepository } from "../agentRepositorySharing";
+import { forkPublicAgentRepository, getAgentRepositorySharing, getPublicAgentRepository, getPublicAgentRepositoryFile, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, REPOSITORY_SHARING_QUERY_KEY, PUBLIC_REPOSITORIES_QUERY_KEY, SYSTEM_REPOSITORIES_QUERY_KEY, setAgentRepositorySharing, type PublicAgentRepository } from "../agentRepositorySharing";
 import { isRepositoryMarkdown, repositoryAnchorID, repositoryPreview, repositoryReadme, REPOSITORY_PREVIEW_BYTES } from "../agentRepositoryMarkdown";
+import { parseRepositoryDirectorySearch } from "../agentRepositoryDirectory";
 import { RepositoryMarkdown } from "../components/RepositoryMarkdown";
 import { formatBytes } from "../storage";
 import { useSession } from "../auth";
@@ -23,7 +24,9 @@ import { useI18n } from "../i18n";
 export function AgentPublicRepositoryPage() {
   const { repositoryId } = useParams({ from: "/repositories/$repositoryId" });
   const id = Number(repositoryId);
-  const { file: selected } = useSearch({ from: "/repositories/$repositoryId" });
+  const routeSearch = useSearch({ from: "/repositories/$repositoryId" });
+  const { file: selected } = routeSearch;
+  const directorySearch = parseRepositoryDirectorySearch(routeSearch);
   const hash = useRouterState({ select: (state) => state.location.hash });
   const fragment = hash?.replace(/^user-content-/, "");
   const { t, locale } = useI18n();
@@ -38,9 +41,9 @@ export function AgentPublicRepositoryPage() {
   const repository = detail.data?.repository;
   // Owners can withdraw here even when private workspace sync is disabled.
   // A 404 simply means the signed-in viewer does not own this repository.
-  const ownership = useQuery({ queryKey: [REPOSITORY_SHARING_QUERY_KEY, id, user?.id], queryFn: () => getAgentRepositorySharing(id), enabled: Boolean(user && !user.isLocalMode && repository), retry: false });
+  const ownership = useQuery({ queryKey: [REPOSITORY_SHARING_QUERY_KEY, id, user?.id, Boolean(repository?.systemManaged)], queryFn: () => getAgentRepositorySharing(id, Boolean(repository?.systemManaged)), enabled: Boolean(user && !user.isLocalMode && repository && (!repository.systemManaged || user.isAdmin)), retry: false });
   const withdraw = useMutation({
-    mutationFn: () => setAgentRepositorySharing(id, ownership.data!.currentRevision, "", true),
+    mutationFn: () => setAgentRepositorySharing(id, ownership.data!.currentRevision, "", true, Boolean(repository?.systemManaged)),
     onSuccess: async () => {
       setTransfer(null);
       copy.clear();
@@ -49,6 +52,7 @@ export function AgentPublicRepositoryPage() {
         client.invalidateQueries({ queryKey: ["public-agent-file", id] }),
         client.invalidateQueries({ queryKey: [REPOSITORY_SHARING_QUERY_KEY, id] }),
         client.invalidateQueries({ queryKey: [PUBLIC_REPOSITORIES_QUERY_KEY] }),
+        client.invalidateQueries({ queryKey: [SYSTEM_REPOSITORIES_QUERY_KEY] }),
         client.invalidateQueries({ queryKey: ["agent-workspace-storage"] }),
       ]);
     },
@@ -85,7 +89,7 @@ export function AgentPublicRepositoryPage() {
     const file = repository?.files.find((item) => item.fileId === fileId);
     if (!file) return;
     setRaw(false);
-    void navigate({ to: "/repositories/$repositoryId", params: { repositoryId }, search: { file: file.path }, hash: anchor ? repositoryAnchorID(anchor) : "", resetScroll: false, hashScrollIntoView: false });
+    void navigate({ to: "/repositories/$repositoryId", params: { repositoryId }, search: { ...directorySearch, file: file.path }, hash: anchor ? repositoryAnchorID(anchor) : "", resetScroll: false, hashScrollIntoView: false });
     if (anchor && file.path === previewFile?.path) {
       const target = document.getElementById(repositoryAnchorID(anchor));
       if (target && previewRef.current?.contains(target)) target.scrollIntoView?.({ block: "start" });
@@ -114,12 +118,12 @@ export function AgentPublicRepositoryPage() {
   const star = useMutation({ mutationFn: () => updatePublicAgentRepositoryStar(id, !repository?.starred), onSuccess: async () => {
     await Promise.all([client.invalidateQueries({ queryKey: ["public-agent-repository", id] }), client.invalidateQueries({ queryKey: [PUBLIC_REPOSITORIES_QUERY_KEY] })]);
   } });
-  const back = <Link to="/repositories" className="text-sm underline">← {labels.publicRepositories}</Link>;
+  const back = <Link to="/repositories" search={directorySearch} className="text-sm underline">← {labels.publicRepositories}</Link>;
   if (detail.isPending && Number.isSafeInteger(id) && id > 0) return <PageContainer className="flex-1 py-8">{back}<p className="mt-5">{labels.loading}</p></PageContainer>;
   if (!repository || detail.isError) return <PageContainer className="flex-1 py-8">{back}<p role="alert" className="mt-5">{labels.sharingUnavailable}</p><button type="button" onClick={() => void detail.refetch()} className="mt-3 underline">{labels.refresh}</button></PageContainer>;
   return <PageContainer className="repository-detail flex-1 py-8 sm:py-10">
     {back}
-    <header className="mt-6 border-b pb-6"><div className="flex items-start gap-3"><FolderGit2 className="mt-1 h-6 w-6 shrink-0 text-[var(--ink-mid)]" aria-hidden="true" /><h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{repository.name}</h1></div><p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-[var(--ink-mid)]">{repository.description}</p><div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-mid)]"><span className="rounded-full border px-2 py-0.5">{labels.hubPublicBadge}</span><span>{repository.license}</span><span>{labels.fileCount.replace("{count}", String(repository.files.length))}</span><span>{formatBytes(repository.files.reduce((total, file) => total + file.sizeBytes, 0))}</span><span>r{repository.revision}</span></div></header>
+    <header className="mt-6 border-b pb-6"><div className="flex items-start gap-3"><FolderGit2 className="mt-1 h-6 w-6 shrink-0 text-[var(--ink-mid)]" aria-hidden="true" /><h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{repository.name}</h1></div><p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-[var(--ink-mid)]">{repository.description}</p><div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-mid)]"><span className="rounded-full border px-2 py-0.5">{repository.systemManaged ? labels.hubSystemBadge : labels.hubPublicBadge}</span><span>{repository.license}</span><span>{labels.fileCount.replace("{count}", String(repository.files.length))}</span><span>{formatBytes(repository.files.reduce((total, file) => total + file.sizeBytes, 0))}</span><span>r{repository.revision}</span></div></header>
     <div className="mt-6 flex flex-wrap items-start gap-3">
       {!user || user.isLocalMode ? <Link to="/login" className="rounded-full border px-4 py-2 text-sm">{labels.starRepository} · {t.dashboard.goLogin}</Link> : <button type="button" disabled={star.isPending} aria-pressed={repository.starred} onClick={() => star.mutate()} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm disabled:opacity-50"><Star className={`h-4 w-4 ${repository.starred ? "fill-current" : ""}`} />{repository.starred ? labels.unstarRepository : labels.starRepository} · {repository.starCount ?? 0}</button>}
       <LocalSyncMenu label={labels.cloneRepository} disabled={!repository.files.length || clone.isPending} download={!isDesktopRuntime()} onKoinote={() => { clone.reset(); void clone.mutateAsync({ snapshot: repository, method: isDesktopRuntime() ? "home" : "zip" }).then((snapshot) => { if (activeCloneContext.current === cloneContext) setTransfer(snapshot); }).catch(() => {}); }} onAgent={() => { clone.reset(); void copy.copy(async () => publicRepositoryClonePrompt(await clone.mutateAsync({ snapshot: repository, method: "agent" }), locale)).catch(() => {}); }} />

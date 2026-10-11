@@ -32,14 +32,14 @@ Authorization: Bearer <your-token>
   },
   "article": {
     "title": "文章标题",
-    "markdown": "# 文章标题\n\n正文",
-    "html": "<h1>文章标题</h1><p>正文</p>",
+    "markdown": "正文",
+    "html": "<p>正文</p>",
     "coverImageSource": "https://cdn.example.com/cover.png"
   }
 }
 ```
 
-`coverImageSource` 是可选字段，没有设置封面时会省略，设置后发送去除首尾空白的封面地址。接收方也可以兼容旧版发送的空字符串，将其视为没有封面。`markdown` 是包含标题的完整 Markdown，`html` 是按文档主题生成的可发布 HTML。接口应按 `event` 和 `version` 处理协议版本，未识别的字段可以忽略。
+`coverImageSource` 是可选字段，没有设置封面时会省略，设置后发送去除首尾空白的封面地址。接收方也可以兼容旧版发送的空字符串，将其视为没有封面。`title` 单独提供文章标题；`markdown` 和按文档主题生成的 `html` 只发送正文，不再自动添加文章标题，正文中用户自行编写的标题仍会保留。旧版客户端可能仍在正文前添加文章标题。接口应按 `event` 和 `version` 处理协议版本，未识别的字段可以忽略。
 
 ## 限制与建议
 

@@ -29,7 +29,7 @@ func TestBuildWritingReviewTaskPlanSplitsOnlyLongBodies(t *testing.T) {
 	}
 	for _, task := range shortPlan.Tasks {
 		wantWave := agentReviewWaveEdit
-		if task.Stage == agentReviewTaskTitle || task.Stage == agentReviewTaskLayout {
+		if task.Stage == agentReviewTaskTitle || task.Stage == agentReviewTaskLayout || task.Stage == agentReviewTaskDocument {
 			wantWave = agentReviewWaveDiagnose
 		}
 		if task.Wave != wantWave || task.WantsPriorFindings != (wantWave == agentReviewWaveEdit) {
@@ -68,7 +68,7 @@ func TestBuildWritingReviewTaskPlanHonorsSelectedTasks(t *testing.T) {
 		{name: "title", selected: []string{"title"}, wantStages: []agentReviewTaskStage{agentReviewTaskTitle}},
 		{name: "proofread", selected: []string{"proofread"}, wantStages: []agentReviewTaskStage{agentReviewTaskBody}},
 		{name: "structure", selected: []string{"structure"}, wantStages: []agentReviewTaskStage{agentReviewTaskLayout}},
-		{name: "paragraph", selected: []string{"paragraph"}, wantStages: []agentReviewTaskStage{agentReviewTaskDocument}},
+		{name: "paragraph", selected: []string{"paragraph"}, wantStages: []agentReviewTaskStage{agentReviewTaskDocument, agentReviewTaskBody}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -206,7 +206,7 @@ func TestAgentReviewTaskProgressStartsOneWaveAtATime(t *testing.T) {
 	progress.start(tasksForWave(agentReviewWaveDiagnose))
 	assertStatuses(map[agentReviewTaskStage]string{
 		agentReviewTaskTitle: "running", agentReviewTaskLayout: "running",
-		agentReviewTaskDocument: "pending", agentReviewTaskBody: "pending",
+		agentReviewTaskDocument: "running", agentReviewTaskBody: "pending",
 	})
 	progress.start(tasksForWave(agentReviewWaveEdit))
 	assertStatuses(map[agentReviewTaskStage]string{
@@ -1417,7 +1417,7 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 	if countWritingReviewTasks(plan, agentReviewTaskDocument) != 1 {
 		t.Fatalf("plan must contain exactly one whole-document task: %+v", plan.Tasks)
 	}
-	if countWritingReviewTasks(plan, agentReviewTaskBody) < 2 {
+	if countWritingReviewTasks(plan, agentReviewTaskBody) < agentReviewTaskConcurrency {
 		t.Fatalf("test document did not split into enough body chunks: %+v", plan.Tasks)
 	}
 
@@ -1461,8 +1461,7 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 			responseText = `{"summary":"The article is already focused.","titleScore":80,"titleAssessment":"The title is clear and supported.","titleSuggestions":[]}`
 		case strings.Contains(system, "Other reviewers handle the title"):
 			documentRequests.Add(1)
-			editWave = true
-			responseText = `{"bodySuggestions":[]}`
+			responseText = `{"summary":"The opening hides the reader's practical question.","editorialContext":{"readerGoal":"Find a concrete answer","voice":"Preserve specific observations","priorities":[{"goal":"retention","quote":"第 00 段：","problem":"Background hides the question","direction":"Introduce the supported question sooner"}]},"bodySuggestions":[]}`
 		case strings.Contains(system, `"bodySuggestions"`):
 			editWave = true
 			if bodyRequests.Add(1) == 1 {
@@ -1487,7 +1486,10 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 			if !strings.Contains(user, "PRIOR_FINDINGS:") {
 				editWithoutFindings.Add(1)
 			}
-			// 只有第二波参与并发计数：第一波只有标题和结构两个任务。
+			if !strings.Contains(user, `"readerGoal":"Find a concrete answer"`) || !strings.Contains(user, `"quote":"第 00 段："`) {
+				t.Error("line editor did not receive the grounded whole-article diagnosis")
+			}
+			// 只测量逐段编辑波次的并发；它必须等标题、结构和全文诊断完成。
 			current := inFlight.Add(1)
 			defer inFlight.Add(-1)
 			for {
@@ -1504,7 +1506,7 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 			case <-time.After(3 * time.Second):
 				t.Error("edit-wave tasks did not overlap")
 			}
-		} else if titleRequests.Load() > 0 && layoutRequests.Load() > 0 {
+		} else if titleRequests.Load() > 0 && layoutRequests.Load() > 0 && documentRequests.Load() > 0 {
 			diagnosisDone.Store(true)
 		}
 
@@ -1555,6 +1557,7 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 		t.Fatalf("body requests=%d, want %d", bodyRequests.Load(), want)
 	}
 	if result.TotalTokens != int(totalRequests.Load())*120 ||
+		review.Summary != "The opening hides the reader's practical question." ||
 		review.TitleScore != 80 || len(review.LayoutAssessment) != len(writingReviewDimensionIDs) {
 		t.Fatalf("merged review result=%+v review=%+v requests=%d", result, review, totalRequests.Load())
 	}
@@ -1671,7 +1674,7 @@ func TestAgentReviewProgressKeepsStageFailedAfterLateSuccess(t *testing.T) {
 func TestAgentReviewProgressRecordsDroppedSuggestions(t *testing.T) {
 	progress := agentReviewTaskProgress{
 		TotalTasks: 1,
-		Stages: []agentReviewStageProgress{{ID: agentReviewTaskBody, Status: "running", TotalTasks: 1}},
+		Stages:     []agentReviewStageProgress{{ID: agentReviewTaskBody, Status: "running", TotalTasks: 1}},
 	}
 	progress.record(writingReviewTaskOutcome{
 		Result: writingReviewTaskResult{

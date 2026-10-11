@@ -83,13 +83,15 @@ type agentWorkspaceFileContentView struct {
 }
 
 type agentWorkspaceView struct {
-	GitHubSource *agentGitHubSource       `json:"githubSource,omitempty"`
-	WorkspaceID  int64                    `json:"workspaceId"`
-	Name         string                   `json:"name"`
-	Description  string                   `json:"description"`
-	Revision     int64                    `json:"revision"`
-	UpdatedAt    string                   `json:"updatedAt"`
-	Files        []agentWorkspaceFileView `json:"files"`
+	SystemManaged bool                     `json:"systemManaged"`
+	Category      string                   `json:"category"`
+	GitHubSource  *agentGitHubSource       `json:"githubSource,omitempty"`
+	WorkspaceID   int64                    `json:"workspaceId"`
+	Name          string                   `json:"name"`
+	Description   string                   `json:"description"`
+	Revision      int64                    `json:"revision"`
+	UpdatedAt     string                   `json:"updatedAt"`
+	Files         []agentWorkspaceFileView `json:"files"`
 }
 
 func (a *App) agentWorkspaceGet(w http.ResponseWriter, r *http.Request) {
@@ -515,12 +517,17 @@ func loadAgentWorkspaceFrom(ctx context.Context, queries agentWorkspaceQuerier, 
 	if err != nil {
 		return agentWorkspaceView{}, err
 	}
+	return loadAgentWorkspaceForOwner(ctx, queries, &userID, selectedID)
+}
+
+// A nil owner is reserved for administrator-only system catalog operations.
+func loadAgentWorkspaceForOwner(ctx context.Context, queries agentWorkspaceQuerier, ownerID *int, workspaceID int64) (agentWorkspaceView, error) {
 	rows, err := queries.Query(ctx, `
-		SELECT w.id, w.name, w.description, w.revision, w.updated_at, w.github_source,
+		SELECT w.id, w.name, w.description, w.revision, w.updated_at, w.github_source, w.is_system, w.hub_category,
 		       f.id, f.path, f.mime_type, f.size_bytes, f.sha256
 		FROM agent_workspaces w LEFT JOIN agent_workspace_files f ON f.workspace_id = w.id
-		WHERE w.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL ORDER BY f.path
-	`, selectedID, userID)
+		WHERE w.id = $1 AND w.user_id IS NOT DISTINCT FROM $2::integer AND w.deleted_at IS NULL ORDER BY f.path
+	`, workspaceID, ownerID)
 	if err != nil {
 		return agentWorkspaceView{}, err
 	}
@@ -530,7 +537,7 @@ func loadAgentWorkspaceFrom(ctx context.Context, queries agentWorkspaceQuerier, 
 		var updatedAt time.Time
 		var fileID, sizeBytes *int64
 		var filePath, mimeType, sha *string
-		if err := rows.Scan(&view.WorkspaceID, &view.Name, &view.Description, &view.Revision, &updatedAt, &view.GitHubSource,
+		if err := rows.Scan(&view.WorkspaceID, &view.Name, &view.Description, &view.Revision, &updatedAt, &view.GitHubSource, &view.SystemManaged, &view.Category,
 			&fileID, &filePath, &mimeType, &sizeBytes, &sha); err != nil {
 			return agentWorkspaceView{}, err
 		}

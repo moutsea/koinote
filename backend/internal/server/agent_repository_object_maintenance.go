@@ -24,7 +24,7 @@ func (a *App) migrateAgentRepositoryObjects(ctx context.Context, limit int) (int
 	type legacyBlob struct {
 		workspace int64
 		hash      string
-		user      int
+		user      *int
 	}
 	var batch []legacyBlob
 	for rows.Next() {
@@ -50,7 +50,7 @@ func (a *App) migrateAgentRepositoryObjects(ctx context.Context, limit int) (int
 		if err != nil {
 			return migrated, err
 		}
-		staged, err := a.stageAgentRepositoryFiles(ctx, b.user, []agentWorkspaceFile{{Content: content, SHA256: b.hash}})
+		staged, err := a.stageAgentRepositoryFilesForOwner(ctx, b.user, []agentWorkspaceFile{{Content: content, SHA256: b.hash}})
 		if err != nil {
 			return migrated, err
 		}
@@ -66,7 +66,7 @@ func (a *App) migrateAgentRepositoryObjects(ctx context.Context, limit int) (int
 				return err
 			}
 			defer tx.Rollback(ctx)
-			if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, b.user); err != nil {
+			if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(b.user)); err != nil {
 				return err
 			}
 			result, err := tx.Exec(ctx, `UPDATE agent_workspace_blobs SET content=NULL,r2_object_key=$3

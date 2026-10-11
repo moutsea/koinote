@@ -11,13 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"koinote/backend/internal/httpx"
 )
 
-const publicRepositoryPageSize = 24
+const publicRepositoryPageSize = 12
 
 type agentRepositoryPublication struct {
 	agentWorkspaceView
@@ -37,10 +36,26 @@ type agentRepositorySource struct {
 // Sharing changes require an interactive user session, never an Agent token.
 // Revocation remains available even after membership or sync has been disabled.
 func (a *App) agentRepositorySharing(w http.ResponseWriter, r *http.Request) {
+	a.agentRepositorySharingForScope(w, r, false)
+}
+
+func (a *App) agentSystemRepositorySharing(w http.ResponseWriter, r *http.Request) {
+	a.agentRepositorySharingForScope(w, r, true)
+}
+
+func (a *App) agentRepositorySharingForScope(w http.ResponseWriter, r *http.Request, system bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireUser(w, r)
+	authorize := a.requireUser
+	if system {
+		authorize = a.requireAdmin
+	}
+	user, ok := authorize(w, r)
 	if !ok {
 		return
+	}
+	var ownerID *int
+	if !system {
+		ownerID = &user.ID
 	}
 	id, ok := agentWorkspaceIDFromRequest(w, r)
 	if !ok {
@@ -48,7 +63,7 @@ func (a *App) agentRepositorySharing(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		var currentRevision int64
-		err := a.db.QueryRow(r.Context(), `SELECT revision FROM agent_workspaces WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, id, user.ID).Scan(&currentRevision)
+		err := a.db.QueryRow(r.Context(), `SELECT revision FROM agent_workspaces WHERE id=$1 AND user_id IS NOT DISTINCT FROM $2::integer AND deleted_at IS NULL`, id, ownerID).Scan(&currentRevision)
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeAgentWorkspaceError(w, errAgentWorkspaceNotFound)
 			return
@@ -75,7 +90,7 @@ func (a *App) agentRepositorySharing(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{"publication": publication, "source": sourceValue, "currentRevision": currentRevision})
 		return
 	}
-	if r.Method == http.MethodPut {
+	if r.Method == http.MethodPut && !system {
 		if user.MembershipTier != membershipTierLifetime {
 			httpx.ErrorCode(w, http.StatusForbidden, "membership_required", "Lifetime membership is required")
 			return
@@ -89,15 +104,20 @@ func (a *App) agentRepositorySharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		ExpectedRevision *int64 `json:"expectedRevision"`
-		License          string `json:"license"`
+		ExpectedRevision *int64  `json:"expectedRevision"`
+		License          string  `json:"license"`
+		Category         *string `json:"category"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if json.NewDecoder(r.Body).Decode(&input) != nil || input.ExpectedRevision == nil || *input.ExpectedRevision < 0 {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "expectedRevision is required")
 		return
 	}
-	err := a.setAgentRepositoryPublication(r.Context(), user.ID, id, *input.ExpectedRevision, input.License, r.Method == http.MethodDelete)
+	if input.Category != nil && !agentRepositoryCategoryAllowed(*input.Category) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid repository category")
+		return
+	}
+	err := a.setAgentRepositoryPublicationForOwner(r.Context(), ownerID, user.ID, id, *input.ExpectedRevision, input.License, r.Method == http.MethodDelete, input.Category)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -121,10 +141,14 @@ func agentRepositorySensitivePath(value string) bool {
 }
 
 func (a *App) setAgentRepositoryPublication(ctx context.Context, userID int, id, revision int64, license string, revoke bool) error {
+	return a.setAgentRepositoryPublicationForOwner(ctx, &userID, userID, id, revision, license, revoke, nil)
+}
+
+func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID *int, actorID int, id, revision int64, license string, revoke bool, category *string) error {
 	var scans agentRepositoryContentScans
 	var err error
 	if !revoke {
-		scans, err = a.checkAgentRepositoryPublication(ctx, userID, id, revision)
+		scans, err = a.checkAgentRepositoryPublicationForOwner(ctx, ownerID, id, revision)
 		if err != nil {
 			return err
 		}
@@ -134,13 +158,13 @@ func (a *App) setAgentRepositoryPublication(ctx context.Context, userID int, id,
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(ownerID)); err != nil {
 		return err
 	}
 	var current int64
 	var name, description string
 	var githubSource *agentGitHubSource
-	err = tx.QueryRow(ctx, `SELECT revision, name, description, github_source FROM agent_workspaces WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE`, id, userID).Scan(&current, &name, &description, &githubSource)
+	err = tx.QueryRow(ctx, `SELECT revision, name, description, github_source FROM agent_workspaces WHERE id=$1 AND user_id IS NOT DISTINCT FROM $2::integer AND deleted_at IS NULL FOR UPDATE`, id, ownerID).Scan(&current, &name, &description, &githubSource)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errAgentWorkspaceNotFound
 	}
@@ -155,6 +179,14 @@ func (a *App) setAgentRepositoryPublication(ctx context.Context, userID int, id,
 	} else {
 		if !agentRepositoryLicenseAllowed(license) && (githubSource == nil || githubSource.License != license) {
 			return errAgentGitHubLicense
+		}
+		if category != nil {
+			if !agentRepositoryCategoryAllowed(*category) {
+				return errors.New("invalid repository category")
+			}
+			if _, err = tx.Exec(ctx, `UPDATE agent_workspaces SET hub_category=$2 WHERE id=$1`, id, *category); err != nil {
+				return err
+			}
 		}
 		// Recording a baseline makes this safe for repositories created by older clients.
 		if _, err = tx.Exec(ctx, `SELECT record_agent_workspace_commit($1, 'baseline')`, id); err != nil {
@@ -182,6 +214,13 @@ func (a *App) setAgentRepositoryPublication(ctx context.Context, userID int, id,
 	if _, err = tx.Exec(ctx, `SELECT prune_agent_workspace_history($1,100000000)`, id); err != nil {
 		return err
 	}
+	action := "publish"
+	if revoke {
+		action = "unpublish"
+	}
+	if err = recordAgentRepositorySystemEvent(ctx, tx, ownerID, actorID, id, action, revision); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -196,80 +235,6 @@ func (a *App) allowPublicRepositoryRead(w http.ResponseWriter, r *http.Request) 
 	return false
 }
 
-func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request) {
-	if !a.allowPublicRepositoryRead(w, r) {
-		return
-	}
-	var cursor struct {
-		PublishedAt time.Time `json:"publishedAt"`
-		ID          int64     `json:"id"`
-	}
-	if raw := r.URL.Query().Get("cursor"); raw != "" {
-		if len(raw) > 400 {
-			httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
-			return
-		}
-		decoded, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || json.Unmarshal(decoded, &cursor) != nil || cursor.PublishedAt.IsZero() || cursor.ID <= 0 {
-			httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
-			return
-		}
-	}
-	viewer, err := a.publicRepositoryViewerID(r)
-	if err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	if utf8.RuneCountInString(query) > 80 {
-		httpx.ErrorCode(w, 400, "bad_request", "Search is too long")
-		return
-	}
-	rows, err := a.db.Query(r.Context(), `SELECT p.workspace_id,p.name,p.description,p.revision,p.published_at,count(f.path),COALESCE(sum(f.size_bytes),0)::bigint,p.license,p.github_source,
- (SELECT COALESCE((SELECT star_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0)),
- EXISTS(SELECT 1 FROM agent_repository_stars s WHERE s.workspace_id=p.workspace_id AND s.user_id=$5),
- (SELECT COALESCE((SELECT clone_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0))
- FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
- LEFT JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id
- WHERE w.deleted_at IS NULL AND ($1::bigint=0 OR (p.published_at,p.workspace_id)<($4::timestamptz,$1)) AND ($2='' OR strpos(lower(p.name||' '||p.description),lower($2))>0)
- GROUP BY p.workspace_id ORDER BY p.published_at DESC,p.workspace_id DESC LIMIT $3`, cursor.ID, query, publicRepositoryPageSize+1, cursor.PublishedAt, viewer)
-	if err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	defer rows.Close()
-	type summary struct {
-		agentWorkspaceSummary
-		agentRepositoryEngagement
-		License      string             `json:"license"`
-		GitHubSource *agentGitHubSource `json:"githubSource,omitempty"`
-	}
-	items := []summary{}
-	for rows.Next() {
-		var item summary
-		if err = rows.Scan(&item.WorkspaceID, &item.Name, &item.Description, &item.Revision, &item.UpdatedAt, &item.FileCount, &item.SizeBytes, &item.License, &item.GitHubSource, &item.StarCount, &item.Starred, &item.CloneCount); err != nil {
-			writeAgentWorkspaceError(w, err)
-			return
-		}
-		items = append(items, item)
-	}
-	if err = rows.Err(); err != nil {
-		writeAgentWorkspaceError(w, err)
-		return
-	}
-	var next *string
-	if len(items) > publicRepositoryPageSize {
-		items = items[:publicRepositoryPageSize]
-		last := items[len(items)-1]
-		cursor.PublishedAt = last.UpdatedAt
-		cursor.ID = last.WorkspaceID
-		encoded, _ := json.Marshal(cursor)
-		value := base64.RawURLEncoding.EncodeToString(encoded)
-		next = &value
-	}
-	httpx.JSON(w, 200, map[string]any{"repositories": items, "nextCursor": next})
-}
-
 func (a *App) loadPublicAgentRepository(ctx context.Context, id int64, revision *int64) (*agentRepositoryPublication, error) {
 	return a.loadPublicAgentRepositoryForViewer(ctx, id, revision, nil)
 }
@@ -282,7 +247,7 @@ func (a *App) loadPublicAgentRepositoryForViewer(ctx context.Context, id int64, 
 	defer func() { _ = tx.Rollback(ctx) }()
 	var result agentRepositoryPublication
 	var published time.Time
-	err = tx.QueryRow(ctx, `SELECT p.workspace_id,p.name,p.description,p.revision,p.published_at,p.license,p.github_source FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE p.workspace_id=$1 AND w.deleted_at IS NULL AND ($2::bigint IS NULL OR p.revision=$2)`, id, revision).Scan(&result.WorkspaceID, &result.Name, &result.Description, &result.Revision, &published, &result.License, &result.GitHubSource)
+	err = tx.QueryRow(ctx, `SELECT p.workspace_id,p.name,p.description,p.revision,p.published_at,p.license,p.github_source,w.is_system,w.hub_category FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE p.workspace_id=$1 AND w.deleted_at IS NULL AND ($2::bigint IS NULL OR p.revision=$2)`, id, revision).Scan(&result.WorkspaceID, &result.Name, &result.Description, &result.Revision, &published, &result.License, &result.GitHubSource, &result.SystemManaged, &result.Category)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errAgentWorkspaceNotFound
 	}

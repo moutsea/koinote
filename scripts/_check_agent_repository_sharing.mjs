@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom";
 
 const require = createRequire(import.meta.url);
 const { window } = parseHTML("<html><body><div id='root'></div></body></html>");
-Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { window, self: window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
 // Linkedom does not reflect the textarea defaultValue used by React on mount.
 Object.defineProperty(window.HTMLTextAreaElement.prototype, "defaultValue", {
   get() { return this.textContent; }, set(value) { this.textContent = value; }, configurable: true,
@@ -20,8 +20,17 @@ const publicRepository = { ...workspace, starCount:0, starred:false, cloneCount:
 const calls = [], navigations = [], confirmations = [];
 const h = globalThis.__sharingTest = {
   workspace, publicRepository, publication: null, source: null, labels: null,
+  search: {}, directorySearch: {}, routeListeners: new Set(),
   user: { id: 1, membershipTier: "lifetime" }, enabled: true, confirmResult: true, failPublish: false, failFork: false, withdrawn: false, privateCalls: 0,
-  navigate: async (target) => { navigations.push(target); if (target.to === "/repositories/$repositoryId") { h.search = target.search; h.hash = target.hash; } },
+  navigate: async (target) => {
+    const key = target.to === "/repositories" ? "directorySearch" : "search";
+    const search = typeof target.search === "function" ? target.search(h[key]) : target.search;
+    navigations.push({ ...target, search });
+    if (target.to === "/repositories" || target.to === "/repositories/$repositoryId") {
+      h[key] = search ?? {}; h.hash = target.hash;
+      for (const listener of h.routeListeners) listener();
+    }
+  },
   confirm: async (message) => { confirmations.push(message); return h.confirmResult; },
   async api(path, init = {}) {
     const method = init.method ?? "GET";
@@ -36,12 +45,14 @@ const h = globalThis.__sharingTest = {
       if (h.failImport) throw new ApiError(422, "sensitive", "sensitive_data_detected");
       return { workspace: { ...workspace, workspaceId: 9 } };
     }
+    if (path === "/api/admin/agent-repositories") return { repositories: [{ ...publicRepository, fileCount: 1, sizeBytes: bytes.length, systemManaged: true, publishedRevision: h.publication ? 3 : null }] };
     if (path.endsWith("/sharing")) {
       if (method === "GET") return { publication: h.publication, source: h.source, currentRevision: h.privateRevision ?? workspace.revision };
       if (h.privateRevision !== undefined && body.expectedRevision !== h.privateRevision) throw new ApiError(409, "changed", "revision_conflict");
       if (h.failPublish) throw new ApiError(422, "sensitive", "sensitive_data_detected");
+      if (method === "PUT" && body.category && h.detailWorkspace) h.detailWorkspace = { ...h.detailWorkspace, category: body.category };
       if (method === "DELETE" && h.revokePublic) h.withdrawn = true;
-      h.publication = method === "DELETE" ? null : { ...publicRepository, license: body.license };
+      h.publication = method === "DELETE" ? null : { ...publicRepository, license: body.license, category: body.category ?? 'other' };
       return { success: true };
     }
     if (path.endsWith("/star")) {
@@ -65,7 +76,20 @@ const h = globalThis.__sharingTest = {
     if (h.extraFiles?.[path]) return { file: h.extraFiles[path] };
     if (path.includes("/files/21?revision=3")) return { file: { ...workspace.files[0], contentBase64: bytes.toString("base64") } };
     if (path.startsWith("/api/agent/repositories/7")) return { repository: publicRepository };
-    if (path.startsWith("/api/agent/repositories?")) return { repositories: [{ ...publicRepository, fileCount: 1, sizeBytes: bytes.length }], nextCursor: null };
+    if (path.startsWith("/api/agent/repositories?")) {
+      const params=new URL(path,'https://koinote.example').searchParams;
+      if (h.failDirectoryPage === (params.get('cursor') ?? 'first')) throw new ApiError(503,'Temporary directory failure');
+      const entries=h.directory ?? [{...publicRepository,category:'other',fileCount:1,sizeBytes:bytes.length}];
+      const searched=entries.filter(item=>(item.name+' '+item.description+' '+(item.githubSource?.author??'')).toLowerCase().includes((params.get('q')??'').toLowerCase()));
+      const facets=[];
+      for(const item of searched) {
+        let facet=facets.find(f=>f.category===item.category&&f.systemManaged===Boolean(item.systemManaged));
+        if(!facet) {facet={category:item.category,systemManaged:Boolean(item.systemManaged),count:0};facets.push(facet);} facet.count++;
+      }
+      const filtered=searched.filter(item=>(!params.get('category')||item.category===params.get('category'))&&(!params.get('source')||Boolean(item.systemManaged)===(params.get('source')==='system')));
+      const start=Number(params.get('cursor')??0),size=h.directoryPageSize??12;
+      return {repositories:filtered.slice(start,start+size),total:filtered.length,facets,nextCursor:start+size<filtered.length?String(start+size):null};
+    }
     throw new Error(`Unexpected API ${method} ${path}`);
   },
 };
@@ -73,13 +97,15 @@ const bundle = await build({
   stdin: { resolveDir: process.cwd(), contents: `
     export { createElement, act } from "react";
     export { createRoot } from "react-dom/client";
-    export { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+    export { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
     export { ApiError } from "./api";
     export { AgentGitHubImportForm } from "./spa/src/components/AgentGitHubImportForm";
     export { AgentGitHubCredentialCard } from "./spa/src/components/AgentGitHubCredentialCard";
+    export { SystemRepositoriesAdminPanel } from "./spa/src/components/SystemRepositoriesAdminPanel";
     export { AgentRepositorySharingCard } from "./spa/src/components/AgentRepositorySharingCard";
     export { AgentPublicRepositoryPage } from "./spa/src/pages/AgentPublicRepositoryPage";
     export { AgentPublicRepositoriesPage } from "./spa/src/pages/AgentPublicRepositoriesPage";
+    export { parseRepositoryDirectorySearch } from "./spa/src/agentRepositoryDirectory";
     export { RepositoryMarkdown } from "./spa/src/components/RepositoryMarkdown";
     export { repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES } from "./spa/src/agentRepositoryMarkdown";
     export { publicAgentRepositoryTransferSource, publicRepositoryClonePrompt } from "./spa/src/agentRepositorySharing";
@@ -88,6 +114,7 @@ const bundle = await build({
   ` }, bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
   plugins: [{ name: "sharing-adapters", setup(builder) {
     const api = `export class ApiError extends Error { constructor(status,message,code) { super(message);this.status=status;this.code=code; } }
+      export const AGENT_WORKSPACE_QUERY_KEY=['agent-workspace'];
       export const apiJson=(...args)=>globalThis.__sharingTest.api(...args);
       export const getAgentWorkspaceSettings=async()=>({enabled:globalThis.__sharingTest.enabled});
       export const getAgentWorkspace=()=>{globalThis.__sharingTest.privateCalls++;throw new Error('Private API used');};
@@ -100,22 +127,25 @@ const bundle = await build({
       "../desktop/runtime": "export const isDesktopRuntime=()=>false;",
       "./desktop/runtime": "export const isDesktopRuntime=()=>false;",
       "../modalStack": "export const pushModal=()=>()=>{};",
-      "@tanstack/react-router": `import {createElement} from 'react';
-        export {defaultStringifySearch} from '@tanstack/router-core';
+      "@tanstack/react-router": `import {createElement,useSyncExternalStore} from 'react';
+        import {defaultStringifySearch} from '@tanstack/router-core';
+        export {defaultStringifySearch};
+        const subscribe=(listener)=>{globalThis.__sharingTest.routeListeners.add(listener);return ()=>globalThis.__sharingTest.routeListeners.delete(listener);};
         export const useParams=()=>({repositoryId:'7'});
-        export const useSearch=()=>globalThis.__sharingTest.search??{};
+        export const useSearch=({from}={})=>useSyncExternalStore(subscribe,()=>globalThis.__sharingTest[from==='/repositories'?'directorySearch':'search']);
         export const useNavigate=()=>globalThis.__sharingTest.navigate;
         export const useRouterState=({select})=>select({location:{pathname:'/repositories/7',hash:globalThis.__sharingTest.hash??''}});
-        export const Link=({to,params,search,children,...props})=>createElement('a',{...props,href:to.replace('$repositoryId',params?.repositoryId??'')},children);`,
+        export const Link=({to,params,search,children,...props})=>createElement('a',{...props,href:to.replace('$repositoryId',params?.repositoryId??'')+defaultStringifySearch(search??{})},children);`,
     };
     builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(adapters,path) ? {path:path==='./api'?'../api':path,namespace:'sharing'} : undefined);
     builder.onLoad({ filter: /.*/, namespace: "sharing" }, ({path})=>({contents:adapters[path]}));
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, ApiError, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
+const emptyFilters={q:undefined,source:undefined,category:undefined};
 const root = createRoot(document.getElementById("root"));
 let client;
 async function settle() { for (let i=0;i<3;i++) await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));}); }
@@ -156,6 +186,29 @@ try {
   await click(zh.space.syncCancel);
   await click(labels.revokeSharing);
   assert.equal(h.publication,null);assert.ok(document.body.textContent.includes(labels.sharingRevoked));
+
+  // The private detail query remains mounted while publication comes and goes.
+  // Its category must not fall back to the pre-publication value after withdrawal.
+  h.detailWorkspace={...workspace,category:'other'};
+  function SharingWithDetail() {
+    const detail=useQuery({queryKey:['agent-workspace',7],queryFn:async()=>({workspace:h.detailWorkspace})});
+    return detail.data ? createElement(AgentRepositorySharingCard,{workspace:detail.data.workspace}) : null;
+  }
+  await mount(SharingWithDetail);
+  const categorySelector=`select[aria-label="${labels.hubCategoryLabel}"]`;
+  await input(categorySelector,'writing');await consent(true);
+  h.failPublish=true;await click(labels.publishSnapshot);
+  assert.equal(client.getQueryData(['agent-workspace',7]).workspace.category,'other','failed publication must not change the detail cache');
+  h.failPublish=false;await click(labels.publishSnapshot);
+  assert.equal(client.getQueryData(['agent-workspace',7]).workspace.category,'writing','publishing refreshes the workspace category');
+  // Changing the draft selection before withdrawal must not save that draft.
+  await input(categorySelector,'product');await click(labels.revokeSharing);
+  assert.equal(reactProps(document.querySelector(categorySelector)).value,'writing','withdrawal keeps the last published category');
+  assert.equal(client.getQueryData(['agent-workspace',7]).workspace.category,'writing');
+  await consent(true);await click(labels.publishSnapshot);
+  assert.equal(calls.findLast(call=>call.method==='PUT'&&call.path.endsWith('/sharing')).body.category,'writing','republishing preserves classification');
+  await click(labels.revokeSharing);
+  delete h.detailWorkspace;
 
   h.user={id:2,membershipTier:'free'};
   await mount(AgentPublicRepositoryPage);
@@ -251,8 +304,12 @@ try {
     assert.ok(document.getElementById(decodeURIComponent(anchor.getAttribute('href').slice(1))),'footnote references and back references reach sanitized IDs');
   }
 
-  assert.deepEqual(parseRepositorySearch({file:'docs/使用指南.md'}),{file:'docs/使用指南.md'});
-  assert.deepEqual(parseRepositorySearch({file:['README.md']}),{});
+  assert.deepEqual(parseRepositorySearch({file:'docs/使用指南.md'}),{...emptyFilters,file:'docs/使用指南.md'});
+  assert.deepEqual(parseRepositorySearch({file:['README.md']}),{...emptyFilters,file:undefined});
+  assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
+  assert.deepEqual(parseRepositoryDirectorySearch({q:['skills'],source:'admin',category:'invalid'}),emptyFilters);
+  assert.deepEqual(parseRepositoryDirectorySearch({q:'x'.repeat(81),source:['system'],category:['design']}),emptyFilters);
+  assert.equal(parseRepositoryDirectorySearch({q:'🛠'.repeat(80)}).q,'🛠'.repeat(80),'search validation uses the backend character limit');
   const guideBytes=Buffer.from('# 使用指南\n\n## 安装\n\nInstructions.');
   const guideFile={...snapshotFiles[1],sha256:createHash('sha256').update(guideBytes).digest('hex'),contentBase64:guideBytes.toString('base64')};
   h.extraFiles={'/api/agent/repositories/7/files/31?revision=3':guideFile};
@@ -379,7 +436,7 @@ try {
   await settle();
   assert.equal(document.querySelector('select').value,'Apache-2.0',"background state really changed while confirming");
   await act(async()=>answer(true));await settle();
-  assert.deepEqual(calls.findLast(call=>call.path.endsWith('/sharing')&&call.method==='PUT').body,{expectedRevision:3,license:'MIT'},"publish uses the approved snapshot and license");
+  assert.deepEqual(calls.findLast(call=>call.path.endsWith('/sharing')&&call.method==='PUT').body,{expectedRevision:3,license:'MIT',category:'other'},"publish uses the approved snapshot and license");
   assert.ok(document.body.textContent.includes(labels.sharingConflict),"newer private changes produce a visible conflict");
   assert.equal(h.publication,null,"unapproved files never become public");
   assert.equal(document.querySelector('input[type="checkbox"]').checked,false,"new revision needs renewed consent");
@@ -392,7 +449,166 @@ try {
   await act(async()=>answer(true));await settle();
   assert.equal(calls.filter(call=>call.path.endsWith('/sharing')&&call.method==='PUT').length,publications,"leaving the page cancels a pending confirmation");
   h.confirm=originalConfirm;
-  console.log('Repository sharing, confirmed revisions, Chinese labels, Star, Clone, GitHub import and attribution checks passed');
+  // System curation is public provenance, never the curator's private ownership.
+  publicRepository.systemManaged=true;h.publication=publicRepository;h.withdrawn=false;h.privateRevision=3;
+  h.user={id:2,membershipTier:'free'};calls.length=0;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.body.textContent.includes(labels.hubSystemBadge));
+  assert.ok(!calls.some(call=>call.path.endsWith('/sharing')), 'members never request private ownership of system repos');
+  await mount(AgentPublicRepositoriesPage);
+  assert.ok(document.body.textContent.includes(labels.hubSystemBadge));
+  h.user={id:1,isAdmin:true,membershipTier:'free'};calls.length=0;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(calls.some(call=>call.path==='/api/admin/agent-repositories/7/sharing'&&call.method==='GET'));
+  await click(labels.revokeSharing);
+  assert.equal(calls.findLast(call=>call.method==='DELETE').path,'/api/admin/agent-repositories/7/sharing');
+  await mount(SystemRepositoriesAdminPanel);
+  assert.ok(document.body.textContent.includes(labels.systemRepositoriesDescription));
+  assert.ok(document.body.textContent.includes(labels.systemUnpublished));
+  await click(labels.publishSnapshot);
+  assert.equal(calls.findLast(call=>call.method==='PUT').path,'/api/admin/agent-repositories/7/sharing');
+  assert.ok(document.body.textContent.includes(labels.publishedRevision.replace('{revision}','3')));
+  h.failPublish=true;
+  await click(labels.revokeSharing);
+  assert.ok(document.body.textContent.includes(labels.sharingSensitive), 'system management failures are visible');
+  h.failPublish=false;
+  h.user=null;h.directoryPageSize=2;
+  h.directory=[
+    {workspaceId:101,name:'Design one',systemManaged:true,category:'design'},
+    {workspaceId:102,name:'Build tools',systemManaged:true,category:'development'},
+    {workspaceId:103,name:'Community design',systemManaged:false,category:'design'},
+    {workspaceId:104,name:'Design two',systemManaged:true,category:'design'},
+    {workspaceId:105,name:'Writing tools',systemManaged:false,category:'writing'},
+    {workspaceId:106,name:'Focus agent',systemManaged:true,category:'design'},
+  ].map(item=>({...publicRepository,fileCount:1,sizeBytes:bytes.length,...item}));
+  await mount(AgentPublicRepositoriesPage);
+  const cards=()=>[...document.querySelectorAll('[data-repository-card]')].map(card=>card.querySelector('h3').textContent);
+  async function filter(label) {const target=[...document.querySelectorAll('button[aria-pressed]')].find(b=>b.textContent.startsWith(label));assert.ok(target,`Missing filter ${label}`);await act(async()=>target.click());await settle();}
+  assert.deepEqual(cards(),['Design one','Build tools']);
+  await filter(labels.hubCategory_design);
+  assert.deepEqual(cards(),['Design one','Community design']);
+  await filter(labels.hubSystemBadge);
+  assert.deepEqual(cards(),['Design one','Design two']);
+  assert.ok(document.body.textContent.includes(labels.hubResultCount.replace('{count}','3')));
+  const filteredRequest=new URL(calls.findLast(call=>call.path.startsWith('/api/agent/repositories?')).path,'https://koinote.example');
+  assert.equal(filteredRequest.searchParams.get('source'),'system');
+  assert.equal(filteredRequest.searchParams.get('category'),'design');
+  assert.equal(filteredRequest.searchParams.has('cursor'),false,'changing filters starts at the first page');
+  await click(labels.loadMore);
+  assert.deepEqual(cards(),['Design one','Design two','Focus agent'],'filters reach repositories beyond the initial page');
+  await filter(labels.hubCommunity);
+  assert.deepEqual(cards(),['Community design']);
+  await click(labels.hubClearFilters);
+  await input('input[type="search"]','Focus');await submit();
+  assert.deepEqual(cards(),['Focus agent']);
+  await filter(labels.hubCategory_writing);
+  assert.equal(cards().length,0);assert.ok(document.body.textContent.includes(labels.hubEmptyFiltered));
+  await click(labels.hubClearFilters);
+  assert.deepEqual(cards(),['Design one','Build tools']);
+  await input('input[type="search"]','  Portable  ');await submit();
+  await filter(labels.hubCategory_design);await filter(labels.hubSystemBadge);
+  const savedFilters={q:'Portable',source:'system',category:'design'};
+  assert.deepEqual(h.directorySearch,savedFilters,'all committed filters are stored in the URL');
+  await click(labels.loadMore);
+  const selectedCards=cards();
+  const detailHref=document.querySelector('[data-repository-card] a').getAttribute('href');
+  const detailSearch=parseRepositorySearch(Object.fromEntries(new URL(detailHref,'https://koinote.example').searchParams));
+  assert.deepEqual(detailSearch,{...savedFilters,file:undefined},'repository links retain the directory context');
+  // Keep the query client alive as the real router does when changing pages.
+  publicRepository.files=[...originalFiles,guideFile];
+  h.extraFiles={...h.extraFiles,'/api/agent/repositories/7/files/31?revision=3':guideFile};
+  h.search={...detailSearch,file:guideFile.path};h.hash='';
+  await act(async()=>root.render(createElement(QueryClientProvider,{client},createElement(AgentPublicRepositoryPage))));await settle();
+  await click(labels.readmeBack);
+  assert.deepEqual(parseRepositoryDirectorySearch(navigations.at(-1).search),savedFilters,'README navigation preserves the directory context');
+  const backHref=[...document.querySelectorAll('a')].find(a=>a.textContent===`← ${labels.publicRepositories}`).getAttribute('href');
+  const backSearch=parseRepositoryDirectorySearch(Object.fromEntries(new URL(backHref,'https://koinote.example').searchParams));
+  assert.deepEqual(backSearch,savedFilters,'Back to Hub links retain filters');
+  publicRepository.files=originalFiles;
+  await act(async()=>root.render(createElement(QueryClientProvider,{client},createElement(AgentPublicRepositoriesPage))));await settle();
+  assert.deepEqual(cards(),selectedCards,'returning to the directory retains filters and loaded pages');
+  assert.equal(document.querySelector('input[type="search"]').value,'Portable');
+  assert.equal(document.querySelector('.hub-source-button[aria-pressed="true"]').textContent,`${labels.hubSystemBadge}3`);
+  assert.equal(document.querySelector('.hub-category-button[aria-pressed="true"]').textContent,`${labels.hubCategory_design}3`);
+  await click(labels.hubClearFilters);
+  assert.deepEqual(h.directorySearch,{},'clear removes all URL filters');
+  // Browser Back/Forward can change the URL without remounting the directory.
+  await act(async()=>h.navigate({to:'/repositories',search:backSearch}));await settle();
+  assert.deepEqual(cards(),selectedCards);
+  assert.equal(document.querySelector('input[type="search"]').value,'Portable','history navigation restores the input');
+  await mount(AgentPublicRepositoriesPage);
+  assert.deepEqual(cards(),['Design one','Design two'],'a fresh load restores filters from the URL');
+  assert.equal(document.querySelector('input[type="search"]').value,'Portable');
+  await click(labels.hubClearFilters);h.search={};
+  delete h.directory;delete h.directoryPageSize;
+
+  // Use the installed router: validateSearch results are merged with raw URL
+  // values, and defaultParseSearch JSON-parses numbers, booleans and objects.
+  const {createRouter,createRootRoute,createRoute,defaultParseSearch}=await import('@tanstack/react-router');
+  const {createMemoryHistory}=await import('@tanstack/history');
+  const routeRoot=createRootRoute();
+  const directoryRoute=createRoute({getParentRoute:()=>routeRoot,path:'/repositories',validateSearch:parseRepositoryDirectorySearch});
+  const detailRoute=createRoute({getParentRoute:()=>routeRoot,path:'/repositories/$repositoryId',validateSearch:parseRepositorySearch});
+  const router=createRouter({routeTree:routeRoot.addChildren([directoryRoute,detailRoute]),isServer:true,history:createMemoryHistory({initialEntries:['/repositories']})});
+  for(const [raw,expected] of [
+    ['?q=123',{q:'123'}],
+    ['?q=true',{q:'true'}],
+    ['?q=null',{}],
+    ['?q=%7B%22text%22%3A%22skills%22%7D',{}],
+    ['?q=%5B%22skills%22%5D&source=%5B%22system%22%5D&category=null',{}],
+    ['?q='+ 'x'.repeat(81)+'&source=admin&category=unknown',{}],
+    ['?q=%20skills%20&source=system&category=design',{q:'skills',source:'system',category:'design'}],
+    ['?q=%22123%22&source=community&category=writing',{q:'123',source:'community',category:'writing'}],
+  ]) {
+    const matched=router.matchRoutes('/repositories',defaultParseSearch(raw)).at(-1).search;
+    assert.deepEqual(matched,{...emptyFilters,...expected},`real route must normalize ${raw}`);
+    h.directorySearch=matched;
+    await mount(AgentPublicRepositoriesPage);
+    assert.equal(document.querySelector('input[type="search"]').value,expected.q??'');
+    await submit();
+    const request=new URL(calls.findLast(call=>call.path.startsWith('/api/agent/repositories?')).path,'https://koinote.example');
+    assert.equal(request.searchParams.get('q'),expected.q??'');
+    assert.equal(request.searchParams.get('source'),expected.source??null);
+    assert.equal(request.searchParams.get('category'),expected.category??null);
+    const location=router.buildLocation({to:'/repositories',search:matched});
+    const roundTrip=router.matchRoutes('/repositories',defaultParseSearch(new URL(location.href,'https://koinote.example').search)).at(-1).search;
+    assert.deepEqual(roundTrip,{...emptyFilters,...expected},'normalized filters survive URL serialization and reload');
+  }
+  assert.deepEqual(router.matchRoutes('/repositories/7',defaultParseSearch('?q=null&category=unknown&file=%5B%22README.md%22%5D')).at(-1).search,{...emptyFilters,file:undefined},'detail routes also overwrite invalid URL values');
+  h.directorySearch={};
+
+  // A failed refetch and a failed next-page request require different retries.
+  h.directoryPageSize=2;
+  h.directory=Array.from({length:5},(_,index)=>({...publicRepository,workspaceId:200+index,name:`Retry ${index}`,category:'design',systemManaged:true,fileCount:1,sizeBytes:bytes.length}));
+  h.failDirectoryPage='first';
+  await mount(AgentPublicRepositoriesPage);
+  assert.ok(document.querySelector('[role="alert"]'),'initial-load failure is visible');
+  delete h.failDirectoryPage;
+  let beforeRetry=calls.length;
+  await click(labels.refresh);
+  assert.deepEqual(calls.slice(beforeRetry).map(call=>new URL(call.path,'https://koinote.example').searchParams.get('cursor')),[null],'initial-load retry starts at the first page');
+  assert.deepEqual(cards(),['Retry 0','Retry 1']);
+  await click(labels.loadMore);
+  h.directory[0]={...h.directory[0],name:'Updated Retry 0'};
+  h.directory[2]={...h.directory[2],name:'Updated Retry 2'};
+  h.failDirectoryPage='2';
+  await act(async()=>client.invalidateQueries({queryKey:['public-agent-repositories']}));await settle();
+  assert.ok(document.querySelector('[role="alert"]'),'background refetch failure is visible');
+  delete h.failDirectoryPage;beforeRetry=calls.length;
+  await click(labels.refresh);
+  assert.deepEqual(calls.slice(beforeRetry).map(call=>new URL(call.path,'https://koinote.example').searchParams.get('cursor')),[null,'2'],'refetch retry refreshes all loaded pages instead of appending the next page');
+  assert.deepEqual(cards(),['Updated Retry 0','Retry 1','Updated Retry 2','Retry 3'],'refetch retry replaces stale content');
+  assert.equal(document.querySelector('[role="alert"]'),null);
+  h.failDirectoryPage='4';
+  await click(labels.loadMore);
+  assert.ok(document.querySelector('[role="alert"]'),'next-page failure is visible');
+  delete h.failDirectoryPage;beforeRetry=calls.length;
+  await click(labels.refresh);
+  assert.deepEqual(calls.slice(beforeRetry).map(call=>new URL(call.path,'https://koinote.example').searchParams.get('cursor')),['4'],'next-page retry reuses its cursor');
+  assert.deepEqual(cards(),['Updated Retry 0','Retry 1','Updated Retry 2','Retry 3','Retry 4']);
+  assert.equal(document.querySelector('[role="alert"]'),null);
+  delete h.directory;delete h.directoryPageSize;
+  console.log('Repository sharing/category retention, system ownership, Hub filters/navigation/pagination, real-router URL validation, refetch/page retries, confirmed revisions, Star, Clone and attribution checks passed');
 } finally {
   await act(async()=>root.unmount());client?.clear();stop();delete globalThis.__sharingTest;
 }

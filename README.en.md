@@ -46,7 +46,7 @@ which redirects to the latest GitHub Release. Releases include macOS Apple Silic
 and Windows x64 installers plus SHA-256 checksums. The client checks the Cloudflare R2 update
 service automatically. Alpha installers do not yet use paid platform
 certificates. macOS builds are ad-hoc signed but do not have Apple Developer ID signing or
-notarization, so macOS will still show a security warning on first launch.
+notarization, so macOS will still show a security warning on first launch. Updates may also prompt for keychain access again. If saved sign-in credentials cannot be read, the client offers a retry: unlock the login keychain and allow Koinote when macOS asks. A stable Apple Developer ID signing identity is needed for consistent app identity across releases; Tauri updater signatures do not replace it.
 
 > The current open-source scope covers editing, image hosting, export, sharing, MCP,
 > membership, and review-first AI optimization for titles, body copy, and Markdown structure.
@@ -211,7 +211,7 @@ Desktop ── local SQLite ───────────▶ offline writes 
 
 Browser sessions use stateless HMAC-SHA256 signed cookies. Desktop sessions use opaque access and
 refresh tokens whose SHA-256 hashes are stored in PostgreSQL so rotation, revocation, and password-change
-invalidation remain authoritative.
+invalidation remain authoritative. New clients persist a random retry secret in the system credential store before refreshing, so the same operation can recover after a lost response or backend restart; the backend stores only recovery hashes. Normal rotation caps old access tokens to a 60-second grace period for in-flight requests, never extending their original expiry or resetting the grace on retries. Logout, password changes and invalid replay still revoke the session. Account mismatches offer explicit reauthorization while preserving local data. Deploy the backend and migration `0090_desktop_refresh_recovery.sql` before releasing the new client; the migration preserves existing sessions.
 
 ## Agent document access (MCP)
 
@@ -313,6 +313,7 @@ Write tokens can also call `sync_document_to_feishu` to create or update a bound
 
 Use **Public sharing** on your repository page to review the files, choose a license and explicitly publish the current version. Later private uploads, edits and history restores stay private until you publish again. Each repository offers one current public snapshot; publishing a different revision stops public reads of the previous one.
 
+- **Browse:** explore topics, filter system-curated repositories or community shares, and search the full public directory by purpose or GitHub author. Each page contains 12 repositories; topic counts cover all results. Mobile topic navigation scrolls horizontally. Publishers can choose a category.
 - **Clone:** anyone can browse and preview public repositories, download selected files, sync them through the desktop client, or copy credential-free download and merge instructions for their AI Agent. File verification, cross-platform path mapping and overwrite backups are reused; no repository token is needed. Rate-limited downloads pause and resume without fetching completed files again; you can cancel while waiting.
 - **Fork:** members with repository sync enabled can create an independent private copy, charged to their own repository capacity, with the source revision and license preserved. Forks do not automatically track upstream changes.
 - **Withdrawal:** authors can withdraw public access from their repository or its public detail page, including after disabling sync. Deleting the source also stops public access. Previously downloaded or forked copies remain with their recipients.
@@ -333,7 +334,7 @@ Public listings, details and Forks preserve the **original GitHub author (the re
 
 Imports allow up to 2,000 files, 5 MiB per file and 64 MiB extracted, within your repository capacity. Sensitive content, unsafe paths and symlinks cause the entire import to fail. Repository code is never executed; submodules and Git LFS objects are not fetched. Downloads are pinned to the resolved commit, and retries with the same request ID do not create duplicate repositories.
 
-An [initial public repository catalog and import guide](data/agent-repositories/README.md) contains 100 verified GitHub Skills repositories, pinned to reviewed commits with original authors, links and licenses preserved. After sharing is deployed, a platform administrator explicitly imports the catalog with system-funded capacity that does not reserve personal storage; server startup does not publish it automatically.
+An [initial public repository catalog and import guide](data/agent-repositories/README.md) contains 100 verified GitHub Skills repositories, pinned to reviewed commits with original authors, links and licenses preserved. An administrator explicitly imports it into the independently owned system catalog, without using personal repository slots or storage. The Admin panel manages withdrawal and publication; deleting a curator account does not delete the catalog. Users’ own imports and forks remain personal repositories. Startup does not automatically publish new entries.
 
 ## Skills/Agent repository access (MCP)
 
@@ -383,7 +384,7 @@ Lifetime members can open **AI optimization** from the editor toolbar. The edito
 the current draft first, then asks the selected model for a reviewable change set instead
 of allowing it to overwrite the article. Every suggestion includes its rationale, removed
 text, and replacement text, and can be applied or dismissed on its own or together with the
-rest. Titles receive a 0–100 attractiveness score; scores below 60 require 2–3 distinct
+rest. Titles receive a 0–100 editorial score, not a click-through forecast; scores below 60 require 2–3 distinct
 alternatives. Body edits must anchor to source text that appears exactly once in the document,
 so overlapping, stale, or ambiguous changes are rejected. Applying a suggestion still checks
 the latest revision and leaves a restorable history version.
@@ -397,9 +398,23 @@ layout suggestions that overlap a text edit are excluded from the review queue. 
 select any structure dimension for a second, deeper analysis of paragraph, article, or argument-level
 changes using more context from the article.
 
-After submission, the first wave runs title analysis and the six-dimension structure diagnosis in
-parallel. The second wave gives those findings to document-level developmental editing and Markdown
-body-chunk tasks, while at most three model calls run at once. Progress and completed partial
+The review considers why readers would click, whether the actual opening holds their attention,
+how the body delivers its promise, and where reading becomes difficult. These findings inform the
+existing title assessment, body edits and six structure dimensions. Repairable problems become
+reviewable edits with specific reader benefits and relevant tradeoffs; the overview stays brief.
+Specialist articles keep their intended audience, and the model must not invent figures, experiences
+or promised results. These methods adapt `dbs-content-value`, `dbs-title-cover-intro`, `dbs-resonate`,
+`dbs-script-flow` and `dbs-ai-check` from [dontbesilent2025/dbskill](https://github.com/dontbesilent2025/dbskill),
+with the author's permission, referencing commit
+[`f24ea08`](https://github.com/dontbesilent2025/dbskill/tree/f24ea08ae4b50660a1575554eb58903fa6d60f01).
+Resonance, continuity and voice checks feed the existing review. Video-specific advice is adapted
+to the article's genre; sentence patterns are not treated as proof of AI authorship.
+
+After submission, the first wave runs the selected title, structure and whole-article diagnoses in
+parallel. The second wave gives source-validated findings to body-chunk tasks, while at most three
+model calls run at once. Paragraph optimization covers both local expression and cross-section
+reasoning. When proofreading is also selected, both share the chunk calls and candidate budget;
+proofreading alone remains limited to concrete errors. Progress and completed partial
 suggestions are durable across navigation and reloads. If validation rejects one response, only that
 subtask is retried; partial suggestions remain read-only until every track finishes so later results
 cannot target an already-edited draft. To bound cost on very long documents, standard structure

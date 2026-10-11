@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version refreshes Skills/Agent Hub with clearer repository cards and GitHub-style README previews, including tables, task lists, highlighted code and sanitized HTML. Relative file links support refresh, sharing and browser history, and snapshot images load on demand. Original GitHub attribution, Clone, Fork and Stars remain available."
+          notes="Koinote Desktop $version improves sign-in recovery, adds Skills/Agent Hub topic navigation and system/community filters, and turns AI article optimization into concrete editorial suggestions. API publishing keeps titles separate from article bodies, and table controls stay inside the editor viewport."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -239,10 +239,11 @@ jobs:
 
           Koinote 桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
 
-          - 优化 Skills/Agent Hub 仓库卡片和详情布局，保留 GitHub 原作者、原始链接与许可证。
-          - README 按 GitHub 风格渲染 Markdown：支持表格、任务列表、代码高亮和经过安全过滤的 HTML，并可切换查看源码。
-          - 仓库内相对链接支持打开对应文件、刷新、分享和浏览器返回；相对图片从公开快照按需加载。
-          - 保留 Clone 下载、本机同步、复制给 AI Agent、Fork 与收藏功能。
+          - 修复客户端登录刷新中断后的恢复，避免并发请求覆盖凭据；系统钥匙串不可用时提供重试提示并保留本地文档。
+          - Skills/Agent Hub 新增主题导航、系统/社区筛选和分页搜索；精选 GitHub 仓库归属系统目录，保留原作者、来源和许可证。
+          - AI 优化围绕目标读者、点击理由、开头承接和段落逻辑给出具体修改，融入现有标题评价、正文建议和结构分析。
+          - 自媒体 API 同步独立发送标题，避免下游正文重复显示标题。
+          - 修复表格操作按钮滚动后越出编辑器的问题；顶部入口调整为“升级/credits”。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -256,10 +257,11 @@ jobs:
 
           Koinote Desktop uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
 
-          - Refreshed Skills/Agent Hub cards and repository details preserve the original GitHub author, source link and license.
-          - GitHub-style README rendering supports Markdown tables, task lists, highlighted code and sanitized HTML, with a source view.
-          - Relative file links survive refresh, sharing and browser history. Snapshot-relative images load on demand.
-          - Clone downloads, local sync, AI Agent handoff, Fork and Stars remain available.
+          - Recover interrupted sign-in refreshes and prevent concurrent requests from replacing credentials; credential-store failures offer retry guidance while preserving local documents.
+          - Browse Skills/Agent Hub by topic, system/community source and paginated search. Curated GitHub repositories belong to the system catalog with original attribution and licenses.
+          - AI optimization turns reader fit, reasons to click, opening continuity and paragraph logic into concrete title, body and structure suggestions.
+          - API publishing sends the title separately from article bodies to avoid duplicate titles downstream.
+          - Table controls stay inside the editor viewport while scrolling; the Chinese navigation entry now reads “升级/credits”.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

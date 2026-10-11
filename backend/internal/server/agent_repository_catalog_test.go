@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"koinote/backend/internal/config"
-	"koinote/backend/internal/model"
 )
 
 // Opt-in release-data check: uses downloaded, pinned upstream archives, the
@@ -42,6 +41,7 @@ func TestCuratedAgentRepositories(t *testing.T) {
 	var catalog struct {
 		Repositories []struct {
 			Name          string `json:"name"`
+			RequestID     string `json:"requestId"`
 			CommitSHA     string `json:"commitSha"`
 			RepositoryURL string `json:"repositoryUrl"`
 			SizeBytes     int64  `json:"sizeBytes"`
@@ -61,27 +61,29 @@ func TestCuratedAgentRepositories(t *testing.T) {
 			t.Errorf("catalog left %d database payloads: %v", n, err)
 		}
 	}()
-	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
+	owner := seedMCPUser(t, pool, app, membershipTierFree)
 	recipient := seedMCPUser(t, pool, app, membershipTierLifetime)
 	if _, err = pool.Exec(ctx, `UPDATE users SET is_admin=true WHERE id=$1`, owner.ID); err != nil {
 		t.Fatal(err)
 	}
+	var catalogRequestIDs []string
+	for _, item := range catalog.Repositories {
+		catalogRequestIDs = append(catalogRequestIDs, item.RequestID)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM agent_repository_system_events WHERE workspace_id IN (SELECT id FROM agent_workspaces WHERE is_system AND github_import_request_id=ANY($1::uuid[]))`, catalogRequestIDs)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM agent_workspaces WHERE is_system AND github_import_request_id=ANY($1::uuid[])`, catalogRequestIDs)
+	})
 	var totalBytes int64
 	for _, item := range catalog.Repositories {
 		totalBytes += item.SizeBytes
 	}
-	for _, user := range []model.User{owner, recipient} {
-		userID := user.ID
-		if _, err = pool.Exec(ctx, `INSERT INTO agent_workspace_settings(user_id,enabled) VALUES($1,true)`, userID); err != nil {
-			t.Fatal(err)
-		}
-		// The catalog owner receives system capacity from the seeding script.
-		// An ordinary user who forks the catalog still uses their own quota.
-		if userID == recipient.ID {
-			if _, err = app.allocateAgentWorkspaceStorage(ctx, user, max(0, totalBytes-agentWorkspaceDefaultQuotaBytes)); err != nil {
-				t.Fatal(err)
-			}
-		}
+	// Ordinary members who fork the catalog still use their own quota.
+	if _, err = pool.Exec(ctx, `INSERT INTO agent_workspace_settings(user_id,enabled) VALUES($1,true)`, recipient.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = app.allocateAgentWorkspaceStorage(ctx, recipient, max(0, totalBytes-agentWorkspaceDefaultQuotaBytes)); err != nil {
+		t.Fatal(err)
 	}
 	app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		for _, item := range catalog.Repositories {
@@ -150,7 +152,7 @@ func TestCuratedAgentRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	for run := range 2 {
-		cmd := exec.Command("python3", filepath.Join(root, "scripts/seed_agent_repositories.py"), "--apply", "--base-url", server.URL, "--owner-email", owner.Email, "--cookie-file", cookiePath)
+		cmd := exec.Command("python3", filepath.Join(root, "scripts/seed_agent_repositories.py"), "--apply", "--base-url", server.URL, "--admin-email", owner.Email, "--cookie-file", cookiePath)
 		cmd.Env = append(os.Environ(), "KOINOTE_DESKTOP_TOKEN=")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -158,12 +160,12 @@ func TestCuratedAgentRepositories(t *testing.T) {
 		}
 		t.Logf("catalog run %d completed", run+1)
 		storage, err := app.loadAgentWorkspaceStorage(ctx, pool, owner)
-		if err != nil || storage.BonusBytes != totalBytes || storage.AllocatedBytes != 0 || storage.PersonalUsedBytes != 0 {
+		if err != nil || storage.BonusBytes != 0 || storage.AllocatedBytes != 0 || storage.PersonalUsedBytes != 0 {
 			t.Fatalf("catalog must be system-funded without repeat grants or personal allocation: %+v, %v", storage, err)
 		}
 	}
 	var imports, publications int
-	if err = pool.QueryRow(ctx, `SELECT count(*),count(p.workspace_id) FROM agent_workspaces w LEFT JOIN agent_repository_publications p ON p.workspace_id=w.id WHERE user_id=$1`, owner.ID).Scan(&imports, &publications); err != nil || imports != len(catalog.Repositories) || publications != imports {
+	if err = pool.QueryRow(ctx, `SELECT count(*),count(p.workspace_id) FROM agent_workspaces w LEFT JOIN agent_repository_publications p ON p.workspace_id=w.id WHERE w.is_system AND w.github_import_request_id=ANY($1::uuid[])`, catalogRequestIDs).Scan(&imports, &publications); err != nil || imports != len(catalog.Repositories) || publications != imports {
 		t.Fatalf("duplicate or missing catalog records: %d/%d, %v", imports, publications, err)
 	}
 	// The catalog spans multiple real directory pages. Check completeness, order
@@ -201,7 +203,7 @@ func TestCuratedAgentRepositories(t *testing.T) {
 	for _, item := range catalog.Repositories {
 		t.Run(item.Name, func(t *testing.T) {
 			var id int64
-			if err := pool.QueryRow(ctx, `SELECT id FROM agent_workspaces WHERE user_id=$1 AND github_source->>'repositoryUrl'=$2`, owner.ID, item.RepositoryURL).Scan(&id); err != nil {
+			if err := pool.QueryRow(ctx, `SELECT id FROM agent_workspaces WHERE is_system AND github_source->>'repositoryUrl'=$1`, item.RepositoryURL).Scan(&id); err != nil {
 				t.Fatal(err)
 			}
 			publication, err := app.loadPublicAgentRepository(ctx, id, nil)

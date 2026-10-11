@@ -84,11 +84,12 @@ export function MediaExportDialog({
     () => extractWechatArticleImages(editor),
     [editor, currentMarkdown],
   );
-  const exportMetadata = parseArticleMetadata(currentMarkdown, title).metadata;
+  const exportArticle = parseArticleMetadata(currentMarkdown, title);
+  const exportMetadata = exportArticle.metadata;
   const exportTitle = exportMetadata.title || title;
   const exportPlainText = buildMediaMarkdown(
     exportTitle,
-    parseArticleMetadata(currentMarkdown, title).body,
+    exportArticle.body,
   );
   const [platform, setPlatform] = useState<MediaPlatform>("wechat");
   const [customPlatformId, setCustomPlatformId] = useState<string | null>(null);
@@ -391,11 +392,13 @@ export function MediaExportDialog({
         setError(t.editor.saveFailed);
         return;
       }
-      const html = await prepareZhihuHTML(true, true);
+      // API destinations receive the title separately; only clipboard exports
+      // prepend it to the Markdown/HTML body.
+      const html = await prepareZhihuHTML(true);
       if (!html) return;
       const result = await publishCustomMediaPlatform(docId, selectedCustomPlatform.platformId, {
         title: exportTitle,
-        markdown: exportPlainText,
+        markdown: exportArticle.body,
         html,
         ...(coverImageSource?.trim() ? { coverImageSource: coverImageSource.trim() } : {}),
       });
@@ -763,7 +766,7 @@ export function MediaExportDialog({
             docId={docId}
             title={exportTitle}
             coverImageSource={coverImageSource}
-            markdownBody={parseArticleMetadata(currentMarkdown, title).body}
+            markdownBody={exportArticle.body}
             description={exportMetadata.digest}
             articleImages={articleImages}
             localMode={localMode}

@@ -146,7 +146,11 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
 	mux.HandleFunc("GET /api/admin/server-status", a.adminServerStatus)
 	mux.HandleFunc("GET /api/admin/feedback", a.adminFeedbackList)
-	mux.HandleFunc("PUT /api/admin/agent-repositories/storage", a.agentRepositorySystemStoragePut)
+	mux.HandleFunc("GET /api/admin/agent-repositories", a.agentSystemRepositoriesList)
+	mux.HandleFunc("POST /api/admin/agent-repositories/import/github", a.agentSystemGitHubImportPost)
+	mux.HandleFunc("GET /api/admin/agent-repositories/{workspaceId}/sharing", a.agentSystemRepositorySharing)
+	mux.HandleFunc("PUT /api/admin/agent-repositories/{workspaceId}/sharing", a.agentSystemRepositorySharing)
+	mux.HandleFunc("DELETE /api/admin/agent-repositories/{workspaceId}/sharing", a.agentSystemRepositorySharing)
 	mux.HandleFunc("GET /api/admin/announcements", a.adminAnnouncementsList)
 	mux.HandleFunc("POST /api/admin/announcements", a.adminAnnouncementPublish)
 	mux.HandleFunc("DELETE /api/admin/announcements/{announcementId}", a.adminAnnouncementWithdraw)
@@ -344,8 +348,14 @@ func (a *App) withCORS(next http.Handler) http.Handler {
 // ---------- 用户查询 ----------
 
 func (a *App) getUserByAuthUserID(ctx context.Context, authUserID string) (model.User, error) {
+	return queryUserByAuthUserID(ctx, a.db, authUserID)
+}
+
+func queryUserByAuthUserID(ctx context.Context, query interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, authUserID string) (model.User, error) {
 	var u model.User
-	err := a.db.QueryRow(ctx, `
+	err := query.QueryRow(ctx, `
 		SELECT id, auth_user_id, email, username, nickname, avatar_url,
 		       is_verified, is_admin, password_hash IS NOT NULL, session_version,
 		       membership_tier, membership_granted_at,

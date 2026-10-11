@@ -160,7 +160,7 @@ func githubImportClient(t *testing.T, archive []byte, token string, private bool
 func TestGitHubArchiveValidation(t *testing.T) {
 	good := githubArchive(t, githubArchiveEntry{"root/", "", os.ModeDir | 0700}, githubArchiveEntry{"root/skills/demo/SKILL.md", "# Skill\nCookie = process.env.COOKIE_VALUE", 0}, githubArchiveEntry{"root/LICENSE", "MPL-2.0", 0})
 	app := &App{githubHTTPClient: githubImportClient(t, good, "", false)}
-	_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "feature/import", "")
+	_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "feature/import", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +500,7 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 				}
 				return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 			})}}
-			_, files, source, err := app.fetchGitHubRepository(context.Background(), owner, repo, "", "expired-token")
+			_, files, source, err := app.fetchGitHubRepository(context.Background(), owner, repo, "", "expired-token", false)
 			if err != nil || len(files) != 1 || source.Author != owner || calls != 4 {
 				t.Fatalf("anonymous fallback failed: %v calls=%d", err, calls)
 			}
@@ -516,12 +516,38 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 			}
 			return &http.Response{StatusCode: code, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 		})}}
-		_, _, _, err := app.fetchGitHubRepository(context.Background(), "o", "r", "", "expired-token")
+		_, _, _, err := app.fetchGitHubRepository(context.Background(), "o", "r", "", "expired-token", false)
 		if status == 401 && (!errors.Is(err, errAgentGitHubCredentialRequired) || calls != 2) {
 			t.Fatalf("lost private repo credential guidance: %v", err)
 		}
 		if status == 429 && (!errors.Is(err, errAgentGitHubRateLimited) || calls != 1) {
 			t.Fatalf("retried a rate limit anonymously: %v", err)
 		}
+	}
+}
+
+func TestGitHubSystemImportRejectsPrivateBeforeReadingContent(t *testing.T) {
+	for _, token := range []string{"", "admin-token"} {
+		t.Run(fmt.Sprintf("authenticated=%t", token != ""), func(t *testing.T) {
+			app := &App{}
+			upstream := githubImportClient(t, nil, token, true)
+			calls := 0
+			app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.URL.Path != "/repos/octo/demo" {
+					t.Fatalf("read private content: %s", r.URL.Path)
+				}
+				return upstream.Transport.RoundTrip(r)
+			})}
+			_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "", token, true)
+			if !errors.Is(err, errAgentGitHubRepositoryInvalid) || calls != 1 || files != nil || source != nil {
+				t.Fatalf("private system import: calls=%d error=%v", calls, err)
+			}
+		})
+	}
+	app := &App{githubHTTPClient: githubImportClient(t, githubArchive(t, githubArchiveEntry{"root/SKILL.md", "# Private skill", 0}), "admin-token", true)}
+	_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "", "admin-token", false)
+	if err != nil || len(files) != 1 || source == nil || !source.Private {
+		t.Fatalf("personal private imports regressed: %v", err)
 	}
 }

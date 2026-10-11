@@ -5,7 +5,7 @@ export const zh: Messages = {
   nav: {
     editor: "编辑器",
     download: "下载客户端",
-    pricing: "升级",
+    pricing: "升级/credits",
     docs: "文档",
     docsHome: "文档中心",
     aiGuide: "AI 优化",
@@ -957,7 +957,7 @@ export const zh: Messages = {
     button: "AI 优化",
     title: "AI 优化",
     description:
-      "像审查代码一样检查标题、正文和结构排版，只在你确认后落实改动。",
+      "从编辑角度检查读者为什么点击、开头能否留人、正文是否兑现承诺；改动由你确认。",
     membersOnly: "此功能仅对终生会员开放。",
     upgrade: "升级终生会员",
     localModeUnavailable: "本地模式不会连接网络，因此无法使用 AI 优化。",
@@ -991,7 +991,7 @@ export const zh: Messages = {
     tasks: {
       title: {
         label: "标题优化",
-        description: "检查标题的清晰度、吸引力和承诺",
+        description: "检查目标读者、点击动机与正文承诺",
       },
       proofread: {
         label: "错别字与病句审查",
@@ -1003,7 +1003,7 @@ export const zh: Messages = {
       },
       paragraph: {
         label: "段落优化",
-        description: "检查跨段落的逻辑、重复和论证顺序",
+        description: "检查开头吸引力、论证、阅读节奏与作者表达",
       },
     },
     start: "开始优化",
@@ -1043,7 +1043,7 @@ export const zh: Messages = {
     deepAnalysisStarting: "正在启动…",
     deepAnalysisExpandHint: "选中这一维后才能查看花费。",
     deepReviewBadge: "深入分析 · {dimension}",
-    titleScore: "标题吸引力 {score}/100",
+    titleScore: "标题编辑评分 {score}/100",
     suggestions: "改动建议",
     before: "原文",
     after: "建议",
@@ -2225,6 +2225,14 @@ function hello(name) {
     },
   },
   desktopAuth: {
+    sessionUnavailable: "暂时无法确认登录状态",
+    credentialsUnavailable: "Koinote 无法访问系统凭据库中保存的登录信息。Mac 用户请解锁登录钥匙串，并在 macOS 提示时允许 Koinote 访问，然后重试。",
+    sessionRetryHint: "服务或网络暂时不可用，已保留保存的登录信息，请稍后重试。",
+    accountMismatch: "账号验证结果与本机保存的账号不一致。已保留原登录信息和本地文档，请重新授权以恢复同步。",
+    reauthorize: "重新授权",
+    reauthorizeOpened: "请在浏览器中完成授权，然后返回客户端。",
+    retrySession: "重试",
+
     eyebrow: "桌面客户端",
     title: "授权 Koinote 客户端",
     description:

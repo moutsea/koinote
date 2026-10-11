@@ -63,7 +63,7 @@ export type WechatExportResult = {
 export type WechatExportOptions = {
   includeGeoCorpus?: boolean;
   geoText?: string;
-  /** 草稿箱接口已经单独接收标题，正文里不应再重复渲染一个 H1。 */
+  /** API 同步单独发送标题，应设为 false；复制全文时默认保留标题。 */
   includeTitle?: boolean;
 };
 

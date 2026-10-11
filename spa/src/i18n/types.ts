@@ -1641,6 +1641,14 @@ export interface Messages {
     categories: Record<string, string>;
   };
   desktopAuth: {
+    sessionUnavailable: string;
+    credentialsUnavailable: string;
+    sessionRetryHint: string;
+    accountMismatch: string;
+    reauthorize: string;
+    reauthorizeOpened: string;
+    retrySession: string;
+
     eyebrow: string;
     title: string;
     description: string;

@@ -95,6 +95,8 @@ class API:
 
 
 def verify_repository(item, view):
+    if view.get("systemManaged") is not True:
+        raise ValueError("Repository must belong to the system catalog")
     source = view.get("githubSource") or {}
     expected = {key: item[key] for key in ("repositoryUrl", "author", "authorUrl", "commitSha", "license")}
     if any(source.get(key) != value for key, value in expected.items()) or source.get("private"):
@@ -111,32 +113,26 @@ def verify_repository(item, view):
         raise ValueError("Repository metadata was edited; refusing to republish it")
 
 
-def publish_catalog(api, catalog, owner_email, *, system_bonus_bytes=None):
+def catalog_category(item, groups):
+    return next((key for key, names in groups.items() if item["category"] in names), "other")
+
+
+def publish_catalog(api, catalog, admin_email):
     user = api.request("GET", "/api/auth/session")["user"]
-    if user["email"].casefold() != owner_email.casefold():
-        raise ValueError("Authenticated account does not match --owner-email")
-    if user["membershipTier"] != "lifetime":
-        raise ValueError("The managing account must have repository write access")
+    if user["email"].casefold() != admin_email.casefold():
+        raise ValueError("Authenticated account does not match --admin-email")
     if not user.get("isAdmin"):
-        raise ValueError("The platform catalog requires an administrator managing account")
-    if not api.request("GET", "/api/agent/workspace/settings")["enabled"]:
-        raise ValueError("Enable Skills/Agent cloud sync in the managing account first")
-    # Check that sharing has been deployed before creating any private imports.
-    api.request("GET", "/api/agent/repositories", authenticated=False)
-    # System-funded capacity never reserves personal storage. Keep the normal
-    # included quota as headroom, and grant at least the full catalog's bytes.
-    budget = system_bonus_bytes if system_bonus_bytes is not None else sum(item["sizeBytes"] for item in catalog["repositories"])
-    storage = api.request("PUT", "/api/admin/agent-repositories/storage", {
-        "ownerEmail": owner_email, "minimumBonusBytes": budget,
-    })["storage"]
-    if storage["bonusBytes"] < budget:
-        raise ValueError("System repository storage was not provisioned")
+        raise ValueError("The platform catalog requires an administrator")
+    # Verify the dedicated system API before importing. Never change a user's
+    # personal settings, allocation or bonus, even for a partial catalog run.
+    api.request("GET", "/api/admin/agent-repositories")
+    groups = json.loads((CATALOG.parent / "categories.json").read_text(encoding="utf-8"))
     pending = []
     # Import and verify every entry before making any new entry public. The fixed
     # request IDs recover an interrupted run without creating duplicate workspaces.
     for index, item in enumerate(catalog["repositories"], start=1):
         print(f"Importing [{index}/{len(catalog['repositories'])}] {item['name']} @ {item['commitSha'][:12]}", flush=True)
-        view = api.request("POST", "/api/agent/workspaces/import/github", {
+        view = api.request("POST", "/api/admin/agent-repositories/import/github", {
             "repositoryUrl": item["repositoryUrl"], "ref": item["commitSha"],
             "name": item["name"], "description": item["description"], "requestId": item["requestId"],
         })["workspace"]
@@ -147,7 +143,7 @@ def publish_catalog(api, catalog, owner_email, *, system_bonus_bytes=None):
     # last so a fresh launch displays the curated order without changing sorting.
     for item, view in reversed(pending):
         workspace_id, revision = view["workspaceId"], view["revision"]
-        sharing = f"/api/agent/workspaces/{workspace_id}/sharing"
+        sharing = f"/api/admin/agent-repositories/{workspace_id}/sharing"
         current = api.request("GET", sharing)
         if current["currentRevision"] != revision:
             raise ValueError("Repository changed during import; refusing to publish")
@@ -157,7 +153,7 @@ def publish_catalog(api, catalog, owner_email, *, system_bonus_bytes=None):
             if publication["revision"] != revision or publication["license"] != item["license"]:
                 raise ValueError("An existing publication differs; review it before continuing")
         else:
-            api.request("PUT", sharing, {"expectedRevision": revision, "license": item["license"]})
+            api.request("PUT", sharing, {"expectedRevision": revision, "license": item["license"], "category": catalog_category(item, groups)})
         # Verify what an anonymous visitor actually sees, not just the owner view.
         public = api.request("GET", f"/api/agent/repositories/{workspace_id}", authenticated=False)["repository"]
         verify_repository(item, public)
@@ -184,7 +180,7 @@ def main():
     parser.add_argument("--catalog", type=Path, default=CATALOG)
     parser.add_argument("--apply", action="store_true", help="Import and publish the catalog (default: show plan only)")
     parser.add_argument("--base-url", help="Explicit target Koinote origin")
-    parser.add_argument("--owner-email", help="Must match the authenticated managing account")
+    parser.add_argument("--admin-email", "--owner-email", dest="admin_email", help="Must match the authenticated administrator; repositories belong to the system")
     parser.add_argument("--cookie-file", type=Path, help="Required with --apply: private file containing the browser session Cookie header; never committed")
     parser.add_argument("--only", action="append", metavar="OWNER/REPO", help="Select one repository; repeat to import a batch or resume specific entries")
     args = parser.parse_args()
@@ -196,15 +192,14 @@ def main():
     if not args.apply:
         print("Plan only. No server was contacted and no repositories were published.")
         return
-    if not args.base_url or not args.owner_email:
-        parser.error("--apply requires --base-url and --owner-email")
+    if not args.base_url or not args.admin_email:
+        parser.error("--apply requires --base-url and --admin-email")
     if not args.cookie_file:
         parser.error("--apply requires --cookie-file with a browser session; desktop access tokens expire after 15 minutes and cannot finish a full catalog import")
     credential = {"Cookie": args.cookie_file.read_text(encoding="utf-8").strip()}
     if any(not value or "\r" in value or "\n" in value for value in credential.values()):
         raise ValueError("Invalid credential format")
-    publish_catalog(API(args.base_url, credential), catalog, args.owner_email.strip(),
-                    system_bonus_bytes=sum(item["sizeBytes"] for item in full_catalog["repositories"]))
+    publish_catalog(API(args.base_url, credential), catalog, args.admin_email.strip())
 
 
 if __name__ == "__main__":

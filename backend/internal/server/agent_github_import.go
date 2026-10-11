@@ -191,7 +191,7 @@ func (a *App) agentGitHubCredentialGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) agentGitHubCredentialPut(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireLifetimeMember(w, r)
+	user, ok := a.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -200,6 +200,10 @@ func (a *App) agentGitHubCredentialPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	if !user.IsAdmin && user.MembershipTier != membershipTierLifetime {
+		httpx.ErrorCode(w, http.StatusForbidden, "membership_required", "Lifetime membership is required")
+		return
+	}
 	var input struct {
 		Token string `json:"token"`
 	}
@@ -361,10 +365,10 @@ func (a *App) githubRead(ctx context.Context, endpoint, token string, accept str
 	return data, nil
 }
 
-func (a *App) fetchGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
-	metadata, files, source, err := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, token)
+func (a *App) fetchGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
+	metadata, files, source, err := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, token, publicOnly)
 	if token != "" && errors.Is(err, errAgentGitHubCredentialRequired) {
-		publicMetadata, publicFiles, publicSource, publicErr := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, "")
+		publicMetadata, publicFiles, publicSource, publicErr := a.fetchGitHubRepositoryWithToken(ctx, owner, repo, requestedRef, "", publicOnly)
 		if publicErr == nil {
 			return publicMetadata, publicFiles, publicSource, nil
 		}
@@ -376,7 +380,7 @@ func (a *App) fetchGitHubRepository(ctx context.Context, owner, repo, requestedR
 	return metadata, files, source, err
 }
 
-func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, requestedRef, token string) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
+func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, []agentWorkspaceFile, *agentGitHubSource, error) {
 	var metadata githubRepositoryMetadata
 	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json")
 	if err != nil {
@@ -384,6 +388,11 @@ func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, r
 	}
 	if json.Unmarshal(data, &metadata) != nil || !githubRepositorySegmentPattern.MatchString(metadata.Owner.Login) || !githubRepositorySegmentPattern.MatchString(metadata.Name) || metadata.Owner.Login == "." || metadata.Owner.Login == ".." || metadata.Name == "." || metadata.Name == ".." || !strings.EqualFold(metadata.FullName, metadata.Owner.Login+"/"+metadata.Name) {
 		return metadata, nil, nil, errAgentGitHubRepositoryMissing
+	}
+	// System entries must be public. Reject before resolving a commit or reading
+	// archive contents, even when the administrator's token can access them.
+	if publicOnly && metadata.Private {
+		return metadata, nil, nil, errAgentGitHubRepositoryInvalid
 	}
 	// Attribution comes from the canonical API owner, never caller-supplied fields
 	// or the author of the most recent commit (who may only be a contributor).
@@ -533,10 +542,10 @@ func githubImportFingerprint(input agentGitHubImportInput) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func completedGitHubImport(ctx context.Context, queries agentWorkspaceQuerier, userID int, requestID, fingerprint string) (*agentWorkspaceView, error) {
+func completedGitHubImportForOwner(ctx context.Context, queries agentWorkspaceQuerier, ownerID *int, requestID, fingerprint string) (*agentWorkspaceView, error) {
 	var id int64
 	var previous string
-	err := queries.QueryRow(ctx, `SELECT id,github_import_fingerprint FROM agent_workspaces WHERE user_id=$1 AND github_import_request_id=$2::uuid AND deleted_at IS NULL`, userID, requestID).Scan(&id, &previous)
+	err := queries.QueryRow(ctx, `SELECT id,github_import_fingerprint FROM agent_workspaces WHERE user_id IS NOT DISTINCT FROM $1::integer AND github_import_request_id=$2::uuid AND deleted_at IS NULL`, ownerID, requestID).Scan(&id, &previous)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -546,15 +555,31 @@ func completedGitHubImport(ctx context.Context, queries agentWorkspaceQuerier, u
 	if previous != fingerprint {
 		return nil, errAgentWorkspaceConflict
 	}
-	view, err := loadAgentWorkspaceFrom(ctx, queries, userID, id)
+	view, err := loadAgentWorkspaceForOwner(ctx, queries, ownerID, id)
 	return &view, err
 }
 
 func (a *App) agentGitHubImportPost(w http.ResponseWriter, r *http.Request) {
+	a.agentGitHubImport(w, r, false)
+}
+
+func (a *App) agentSystemGitHubImportPost(w http.ResponseWriter, r *http.Request) {
+	a.agentGitHubImport(w, r, true)
+}
+
+func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := a.requireLifetimeMember(w, r)
-	if !ok || !a.requireAgentWorkspaceEnabled(w, r, user.ID) {
+	authorize := a.requireLifetimeMember
+	if system {
+		authorize = a.requireAdmin
+	}
+	user, ok := authorize(w, r)
+	if !ok || (!system && !a.requireAgentWorkspaceEnabled(w, r, user.ID)) {
 		return
+	}
+	var ownerID *int
+	if !system {
+		ownerID = &user.ID
 	}
 	var input agentGitHubImportInput
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
@@ -580,7 +605,7 @@ func (a *App) agentGitHubImportPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fingerprint := githubImportFingerprint(input)
-	existing, err := completedGitHubImport(r.Context(), a.db, user.ID, input.RequestID, fingerprint)
+	existing, err := completedGitHubImportForOwner(r.Context(), a.db, ownerID, input.RequestID, fingerprint)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -609,7 +634,7 @@ func (a *App) agentGitHubImportPost(w http.ResponseWriter, r *http.Request) {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
-	metadata, files, source, err := a.fetchGitHubRepository(ctx, owner, repo, ref, token)
+	metadata, files, source, err := a.fetchGitHubRepository(ctx, owner, repo, ref, token, system)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -621,7 +646,7 @@ func (a *App) agentGitHubImportPost(w http.ResponseWriter, r *http.Request) {
 	if description == "" {
 		description = string([]rune(metadata.Description)[:min(500, utf8.RuneCountInString(metadata.Description))])
 	}
-	view, err := a.importGitHubRepository(ctx, user.ID, input.RequestID, fingerprint, name, description, files, source)
+	view, err := a.importGitHubRepositoryForOwner(ctx, ownerID, user.ID, input.RequestID, fingerprint, name, description, files, source)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -630,18 +655,25 @@ func (a *App) agentGitHubImportPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID, fingerprint, name, description string, files []agentWorkspaceFile, source *agentGitHubSource) (agentWorkspaceView, error) {
+	return a.importGitHubRepositoryForOwner(ctx, &userID, userID, requestID, fingerprint, name, description, files, source)
+}
+
+func (a *App) importGitHubRepositoryForOwner(ctx context.Context, ownerID *int, actorID int, requestID, fingerprint, name, description string, files []agentWorkspaceFile, source *agentGitHubSource) (agentWorkspaceView, error) {
 	var empty agentWorkspaceView
+	if ownerID == nil && (source == nil || source.Private) {
+		return empty, errAgentGitHubRepositoryInvalid
+	}
 	name, description, err := validateAgentWorkspaceMetadata(name, description)
 	if err != nil {
 		return empty, err
 	}
 	// Retry an acknowledged import without creating any R2 objects.
-	if existing, err := completedGitHubImport(ctx, a.db, userID, requestID, fingerprint); err != nil {
+	if existing, err := completedGitHubImportForOwner(ctx, a.db, ownerID, requestID, fingerprint); err != nil {
 		return empty, err
 	} else if existing != nil {
 		return *existing, nil
 	}
-	staged, err := a.stageAgentRepositoryFiles(ctx, userID, files)
+	staged, err := a.stageAgentRepositoryFilesForOwner(ctx, ownerID, files)
 	if err != nil {
 		return empty, err
 	}
@@ -652,30 +684,22 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 		return empty, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(ownerID)); err != nil {
 		return empty, err
 	}
-	existing, err := completedGitHubImport(ctx, tx, userID, requestID, fingerprint)
+	existing, err := completedGitHubImportForOwner(ctx, tx, ownerID, requestID, fingerprint)
 	if err != nil {
 		return empty, err
 	}
 	if existing != nil {
 		return *existing, nil
 	}
-	var enabled bool
-	var previous int64
-	err = tx.QueryRow(ctx, `SELECT COALESCE((SELECT enabled FROM agent_workspace_settings WHERE user_id=$1),false),agent_workspace_storage_bytes($1)`, userID).Scan(&enabled, &previous)
+	previous, err := checkAgentRepositoryImportCapacity(ctx, tx, ownerID)
 	if err != nil {
 		return empty, err
 	}
-	if !enabled {
-		return empty, errAgentWorkspaceDisabled
-	}
-	if err = checkAgentRepositoryCapacity(ctx, tx, userID); err != nil {
-		return empty, err
-	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description,github_source,github_import_request_id,github_import_fingerprint) VALUES($1,$2,$3,$4,$5::uuid,$6) RETURNING id`, userID, name, description, source, requestID, fingerprint).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description,github_source,github_import_request_id,github_import_fingerprint,is_system) VALUES($1,$2,$3,$4,$5::uuid,$6,$1::integer IS NULL) RETURNING id`, ownerID, name, description, source, requestID, fingerprint).Scan(&id)
 	if err != nil {
 		return empty, err
 	}
@@ -688,11 +712,14 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 	if _, err = tx.Exec(ctx, `SELECT record_agent_workspace_commit($1,'import',NULL,$2)`, id, "Imported from GitHub: "+source.RepositoryURL+" @ "+source.CommitSHA); err != nil {
 		return empty, err
 	}
-	if err = checkAgentWorkspaceQuota(ctx, tx, userID, previous); err != nil {
+	if err = checkAgentRepositoryOwnerQuota(ctx, tx, ownerID, previous); err != nil {
 		return empty, err
 	}
-	view, err := loadAgentWorkspaceFrom(ctx, tx, userID, id)
+	view, err := loadAgentWorkspaceForOwner(ctx, tx, ownerID, id)
 	if err != nil {
+		return empty, err
+	}
+	if err = recordAgentRepositorySystemEvent(ctx, tx, ownerID, actorID, id, "import", view.Revision); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(ctx); err != nil {

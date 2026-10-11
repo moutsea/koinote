@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 import urllib.error
 
-from seed_agent_repositories import API, CATALOG, NoRedirect, content_digest, load_catalog, publish_catalog, select_repositories, verify_repository
+from seed_agent_repositories import API, CATALOG, NoRedirect, content_digest, catalog_category, load_catalog, publish_catalog, select_repositories, verify_repository
 
 
 class FakeAPI:
@@ -19,9 +19,8 @@ class FakeAPI:
         self.calls = []
         self.published = None
         self.is_admin = True
-        self.bonus_bytes = 0
         self.view = {
-            "workspaceId": 42, "revision": 0, "name": item["name"], "description": item["description"],
+            "systemManaged": True, "workspaceId": 42, "revision": 0, "name": item["name"], "description": item["description"],
             "githubSource": {key: item[key] for key in ("repositoryUrl", "author", "authorUrl", "commitSha", "license")},
             "files": copy.deepcopy(item["licenseFiles"]),
         }
@@ -29,15 +28,10 @@ class FakeAPI:
     def request(self, method, path, data=None, **kwargs):
         self.calls.append((method, path, data))
         if path.endswith("/session"):
-            return {"user": {"email": "owner@example.com", "membershipTier": "lifetime", "isAdmin": self.is_admin}}
-        if path.endswith("/settings"):
-            return {"enabled": True}
-        if path == "/api/agent/repositories":
+            return {"user": {"email": "owner@example.com", "membershipTier": "free", "isAdmin": self.is_admin}}
+        if path == "/api/admin/agent-repositories":
             return {"repositories": []}
-        if path == "/api/admin/agent-repositories/storage":
-            self.bonus_bytes = max(self.bonus_bytes, data["minimumBonusBytes"])
-            return {"storage": {"bonusBytes": self.bonus_bytes, "allocatedBytes": 0}}
-        if path.endswith("/import/github"):
+        if path == "/api/admin/agent-repositories/import/github":
             return {"workspace": self.view}
         if path.endswith("/sharing"):
             if method == "PUT":
@@ -65,6 +59,15 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(all(item["skillCount"] > 0 for item in catalog["repositories"]))
         self.assertTrue(all(item["githubStars"] >= 1000 for item in catalog["repositories"]))
 
+    def test_catalog_topics_are_classified(self):
+        groups = json.loads((CATALOG.parent / "categories.json").read_text())
+        raw_topics = {topic for topics in groups.values() for topic in topics}
+        catalog = load_catalog(CATALOG)
+        self.assertTrue(all(item["category"] in raw_topics for item in catalog["repositories"]))
+        publish_catalog(self.api, self.catalog, "owner@example.com")
+        published = next(body for method, path, body in self.api.calls if method == "PUT" and path.endswith("/sharing"))
+        self.assertEqual(published["category"], catalog_category(self.item, json.loads((CATALOG.parent / "categories.json").read_text())))
+
     def test_select_batch_keeps_ids_and_order(self):
         catalog = load_catalog(CATALOG)
         selected = select_repositories(catalog, [catalog["repositories"][4]["name"].upper(), catalog["repositories"][1]["name"]])
@@ -87,7 +90,7 @@ class CatalogTests(unittest.TestCase):
     def test_desktop_token_only_stops_before_network(self):
         from seed_agent_repositories import main
         secret = "synthetic-desktop-review-token"
-        args = ["seed_agent_repositories.py", "--apply", "--base-url", self.api.base_url, "--owner-email", "owner@example.com"]
+        args = ["seed_agent_repositories.py", "--apply", "--base-url", self.api.base_url, "--admin-email", "owner@example.com"]
         with patch("sys.argv", args), patch.dict(os.environ, {"KOINOTE_DESKTOP_TOKEN": secret}), patch.object(API, "request", side_effect=AssertionError("network")) as request, patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()) as error:
             with self.assertRaises(SystemExit) as stopped:
                 main()
@@ -102,7 +105,7 @@ class CatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cookie_file = Path(directory) / "session"
             cookie_file.write_text("session=browser-test-session\n", encoding="utf-8")
-            args = ["seed_agent_repositories.py", "--apply", "--base-url", self.api.base_url, "--owner-email", "owner@example.com", "--cookie-file", str(cookie_file)]
+            args = ["seed_agent_repositories.py", "--apply", "--base-url", self.api.base_url, "--admin-email", "owner@example.com", "--cookie-file", str(cookie_file)]
             with patch("sys.argv", args), patch.dict(os.environ, {"KOINOTE_DESKTOP_TOKEN": "synthetic-desktop-review-token"}), patch("seed_agent_repositories.publish_catalog") as publish, patch("sys.stdout", new=io.StringIO()):
                 main()
         publish.assert_called_once()
@@ -126,11 +129,15 @@ class CatalogTests(unittest.TestCase):
             publish_catalog(self.api, self.catalog, "owner@example.com")
         self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
 
-    def test_partial_import_uses_full_catalog_system_budget(self):
-        publish_catalog(self.api, self.catalog, "owner@example.com", system_bonus_bytes=200_000_000)
-        grant = next(body for _, path, body in self.api.calls if path == "/api/admin/agent-repositories/storage")
-        self.assertEqual(grant, {"ownerEmail": "owner@example.com", "minimumBonusBytes": 200_000_000})
-        self.assertFalse(any(path == "/api/agent/workspace/storage" for _, path, _ in self.api.calls))
+    def test_system_import_never_uses_personal_storage_or_settings(self):
+        publish_catalog(self.api, self.catalog, "owner@example.com")
+        self.assertTrue(all("/api/agent/workspace" not in path and not path.endswith("/storage") for _, path, _ in self.api.calls))
+
+    def test_personal_repository_response_is_rejected(self):
+        self.api.view["systemManaged"] = False
+        with self.assertRaisesRegex(ValueError, "system catalog"):
+            publish_catalog(self.api, self.catalog, "owner@example.com")
+        self.assertIsNone(self.api.published)
 
     def test_wrong_attribution_and_private_sources_are_rejected(self):
         for key, value in (("author", "imposter"), ("license", "UNLICENSED"), ("private", True), ("commitSha", "0" * 40)):
@@ -147,9 +154,6 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(imports[0], imports[1])
         self.assertEqual(imports[0]["ref"], self.item["commitSha"])
         self.assertEqual(sum(method == "PUT" and path.endswith("/sharing") for method, path, _ in self.api.calls), 1)
-        grants = [body for _, path, body in self.api.calls if path == "/api/admin/agent-repositories/storage"]
-        self.assertEqual(grants[0], grants[1])
-        self.assertEqual(self.api.bonus_bytes, self.item["sizeBytes"])
 
     def test_rate_limit_retry_keeps_same_request(self):
         api = API("https://koinote.example", {"Cookie": "test-session"})

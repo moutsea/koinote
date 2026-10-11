@@ -86,6 +86,9 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		if review.TitleScore == nil || *review.TitleScore != 55 || len(review.Suggestions) != 3 {
 			t.Fatalf("title score or suggestions missing: %+v", review)
 		}
+		if review.Summary == nil || *review.Summary != "The opening needs a concrete reader benefit. Keep the specific observations." {
+			t.Fatalf("whole-article editorial diagnosis was not persisted: %v", review.Summary)
+		}
 		for _, suggestion := range review.Suggestions {
 			wantSource := ""
 			switch {
@@ -653,12 +656,21 @@ func agentReviewTaskJSONForTest(system, title, bodyBefore string) string {
 		return string(encoded)
 	}
 	if strings.Contains(system, `"bodySuggestions"`) {
-		encoded, _ := json.Marshal(map[string]any{
+		payload := map[string]any{
 			"bodySuggestions": []map[string]string{{
 				"category": "clarity", "before": bodyBefore, "after": "The first paragraph is concise.",
 				"reason": "This removes unnecessary wording without changing the claim.",
 			}},
-		})
+		}
+		if strings.Contains(system, `"editorialContext"`) {
+			payload["summary"] = "The opening needs a concrete reader benefit. Keep the specific observations."
+			payload["editorialContext"] = writingReviewEditorialContext{
+				ReaderGoal: "Readers looking for a concrete explanation", Voice: "Specific observations",
+				Priorities: []writingReviewEditorialIssue{{Goal: "retention", Quote: bodyBefore,
+					Problem: "The opening postpones its useful point", Direction: "Lead with the point already supported by the article"}},
+			}
+		}
+		encoded, _ := json.Marshal(payload)
 		return string(encoded)
 	}
 	if strings.Contains(system, `"layoutAssessment"`) {

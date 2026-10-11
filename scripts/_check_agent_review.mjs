@@ -560,7 +560,7 @@ assert.doesNotMatch(
   /accepted\[suggestion\.Before\]/,
   "已通过的建议必须从 Validated 重建，不能按 Before 匹配原始输出",
 );
-includes("首轮诊断注入长度有硬上界", tasks, "agentReviewPriorFindingsBytes          = 6 << 10");
+includes("首轮诊断注入长度有硬上界", tasks, "agentReviewPriorFindingsBytes          = 8 << 10");
 
 // 逐条丢弃：一条锚点写错不能连累同一份响应里写对的建议。
 includes("单条建议不合法只丢这一条", prompt, "if dropRejectedSuggestions {");
@@ -623,7 +623,7 @@ includes("服务端使用 Markdown AST", layout, "goldmark.DefaultParser().Parse
 includes("拆段必须逐字保留原文", layout, 'strings.Join(suggestion.Segments, "") != block.Source');
 includes("先诊断内容价值再润色", tasks, "Infer the writing surface, intended reader, governing message");
 includes("开头承诺要被正文兑现", tasks, "An opening that promises something the body never pays off");
-includes("移动端长文可读性", tasks, "Review the thumb-scrolling experience");
+includes("移动端长文可读性", tasks, "Judge scanning and reading on a narrow screen");
 includes("AI 腔检测", tasks, "smooth repetitive parallelism");
 includes("标题承诺必须有证据", tasks, "promise-to-evidence fit");
 includes("标题备选必须有据可依", tasks, "must be supported by the supplied outline and excerpts");

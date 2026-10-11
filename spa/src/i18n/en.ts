@@ -985,7 +985,7 @@ export const en: Messages = {
     button: "AI optimization",
     title: "AI optimization",
     description:
-      "Review the title, body, and Markdown layout like a code change; nothing changes until you approve it.",
+      "Review why readers would click, whether the opening holds attention, and how the article delivers. You approve every edit.",
     membersOnly: "This feature is available to lifetime members only.",
     upgrade: "Upgrade to lifetime",
     localModeUnavailable:
@@ -1023,7 +1023,7 @@ export const en: Messages = {
     tasks: {
       title: {
         label: "Title optimization",
-        description: "Review clarity, appeal, and promise",
+        description: "Check reader fit, reasons to click and the title’s promise",
       },
       proofread: {
         label: "Proofreading",
@@ -1037,7 +1037,7 @@ export const en: Messages = {
       paragraph: {
         label: "Paragraph optimization",
         description:
-          "Review logic, repetition, and argument order across paragraphs",
+          "Review the opening, reasoning, reading flow and author’s voice",
       },
     },
     start: "Start review",
@@ -1080,7 +1080,7 @@ export const en: Messages = {
     deepAnalysisStarting: "Starting…",
     deepAnalysisExpandHint: "Select this dimension to view its cost.",
     deepReviewBadge: "Deep analysis · {dimension}",
-    titleScore: "Title appeal {score}/100",
+    titleScore: "Title editorial score {score}/100",
     suggestions: "Suggested changes",
     before: "Before",
     after: "After",
@@ -2369,6 +2369,14 @@ function hello(name) {
     },
   },
   desktopAuth: {
+    sessionUnavailable: "Your sign-in could not be checked",
+    credentialsUnavailable: "Koinote could not access the saved sign-in in your system credential store. On Mac, unlock your login keychain and allow Koinote if macOS asks, then try again.",
+    sessionRetryHint: "The service or network is temporarily unavailable. Your saved sign-in has been kept. Please try again.",
+    accountMismatch: "The verified account differs from the saved account. Your sign-in and local documents have been kept. Authorize again to restore sync.",
+    reauthorize: "Authorize again",
+    reauthorizeOpened: "Complete authorization in your browser, then return to the app.",
+    retrySession: "Retry",
+
     eyebrow: "Desktop app",
     title: "Authorize the Koinote app",
     description:

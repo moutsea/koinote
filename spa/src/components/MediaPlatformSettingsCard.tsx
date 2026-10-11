@@ -188,8 +188,8 @@ Content-Type: application/json
   "source": { "app": "koinote", "documentId": "...", "revision": 7 },
   "article": {
     "title": "文章标题",
-    "markdown": "# 文章标题\\n\\n正文",
-    "html": "<h1>文章标题</h1><p>正文</p>",
+    "markdown": "正文",
+    "html": "<p>正文</p>",
     "coverImageSource": "https://..."
   }
 }`;

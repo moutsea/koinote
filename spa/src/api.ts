@@ -3,6 +3,7 @@
 // credentials:"include" 让浏览器带上 koinote_session cookie，实现基于 cookie 的会话。
 
 import { isDesktopRuntime } from "./desktop/runtime";
+import { DesktopAccountMismatchError, DesktopCredentialStoreError } from "./desktop/sessionErrors";
 import { isDesktopAuthenticationRejection } from "./desktop/networkPolicy";
 import { isDesktopLocalImageURL } from "./desktop/offlineImagesCore";
 
@@ -335,24 +336,29 @@ export async function getSession() {
       },
     };
   }
+  const { getStoredDesktopSession, getCachedDesktopUser, updateCachedDesktopUser } =
+    await import("./desktop/auth");
+  // An empty credential store is a signed-out state, including offline. Keep
+  // login/local mode accessible without waiting for the server; read failures
+  // still propagate so an inaccessible keychain is never mistaken for logout.
+  if (!(await getStoredDesktopSession())) return { user: null };
   try {
     const result = await apiJson<{ user: User }>("/api/auth/session");
-    const { updateCachedDesktopUser } = await import("./desktop/auth");
     await updateCachedDesktopUser(result.user);
     return result;
   } catch (error) {
-    // 只有 401/403 明确证明凭证无效；Worker 或后端返回 5xx 时仍应使用
+    if (error instanceof DesktopCredentialStoreError || error instanceof DesktopAccountMismatchError) throw error;
+    // 只有后端带明确错误码的认证拒绝才证明凭证无效；网关错误或 5xx 仍应使用
     // 钥匙串里的最后一次身份打开本地文档，否则“服务端故障”会把离线客户端
     // 错误地送回登录页。受保护 API 的同步仍会失败，不会因此越权。
     if (
       error instanceof ApiError &&
-      isDesktopAuthenticationRejection(error.status)
+      isDesktopAuthenticationRejection(error.status) &&
+      ["unauthorized", "session_expired", "desktop_token_invalid"].includes(error.code ?? "")
     ) {
       throw error;
     }
-    const { getCachedDesktopUser } = await import("./desktop/auth");
     const user = await getCachedDesktopUser();
-    if (!user) throw error;
     return { user };
   }
 }
@@ -629,6 +635,8 @@ export type AgentGitHubSource = {
 };
 
 export type AgentWorkspace = {
+  systemManaged?: boolean;
+  category?: string;
   githubSource?: AgentGitHubSource;
 
   workspaceId: number;

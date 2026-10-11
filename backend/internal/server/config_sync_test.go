@@ -253,7 +253,7 @@ func TestConfigSyncRevocationAndTransferLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 		token := issue(t, pair.AccessToken)
-		rotated, err := app.rotateDesktopRefreshToken(ctx, pair.RefreshToken)
+		rotated, err := app.rotateDesktopRefreshToken(ctx, pair.RefreshToken, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -265,7 +265,7 @@ func TestConfigSyncRevocationAndTransferLimits(t *testing.T) {
 			t.Fatalf("desktop logout: %d", got)
 		}
 		assertRevoked(t, token)
-		if _, err := app.rotateDesktopRefreshToken(ctx, rotated.RefreshToken); err == nil {
+		if _, err := app.rotateDesktopRefreshToken(ctx, rotated.RefreshToken, ""); err == nil {
 			t.Fatal("logged-out family was refreshable")
 		}
 		pair, err = app.issueDesktopTokenPair(ctx, pool, owner.ID, "")

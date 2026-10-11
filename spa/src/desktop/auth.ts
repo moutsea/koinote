@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { DesktopAccountMismatchError, DesktopCredentialStoreError } from "./sessionErrors";
 import type { User } from "../api";
 import {
   desktopAPIOrigin,
@@ -27,6 +28,7 @@ export type StoredDesktopSession = {
   refreshToken: string;
   accountId: string;
   userJson: string;
+  refreshRequestId?: string;
 };
 
 type PendingAuthorization = {
@@ -345,8 +347,13 @@ async function exchangeDesktopCallback(callback: URL): Promise<void> {
   await clearPendingAuthorization();
 }
 
+async function sessionCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  try { return await invoke<T>(command, args); }
+  catch { throw new DesktopCredentialStoreError(); }
+}
+
 export function getStoredDesktopSession(): Promise<StoredDesktopSession | null> {
-  return invoke<StoredDesktopSession | null>("desktop_session_get");
+  return sessionCommand("desktop_session_get");
 }
 
 export async function getCachedDesktopUser(): Promise<User | null> {
@@ -355,38 +362,43 @@ export async function getCachedDesktopUser(): Promise<User | null> {
   try {
     return JSON.parse(session.userJson) as User;
   } catch {
-    await clearDesktopSession();
-    return null;
+    // A malformed cached profile is not proof that the credentials expired.
+    throw new DesktopCredentialStoreError();
   }
 }
 
 export async function updateCachedDesktopUser(user: User): Promise<void> {
-  const session = await getStoredDesktopSession();
-  if (!session) return;
-  await invoke("desktop_session_store", {
-    session: { ...session, userJson: JSON.stringify(user) },
+  await sessionCommand("desktop_session_update_user", {
+    accountId: user.authUserId, userJson: JSON.stringify(user),
   });
 }
 
 export function clearDesktopSession(): Promise<void> {
-  return invoke("desktop_session_clear");
+  return sessionCommand("desktop_session_clear");
 }
 
 export function cancelDesktopAuthorization(): Promise<void> {
   return clearPendingAuthorization();
 }
 
-export async function refreshDesktopSession(): Promise<StoredDesktopSession | null> {
+export async function refreshDesktopSession(staleAccessToken?: string): Promise<StoredDesktopSession | null> {
   if (refreshPromise) return refreshPromise;
-  refreshPromise = refreshDesktopSessionOnce().finally(() => {
+  refreshPromise = refreshDesktopSessionOnce(staleAccessToken).finally(() => {
     refreshPromise = null;
   });
   return refreshPromise;
 }
 
-async function refreshDesktopSessionOnce(): Promise<StoredDesktopSession | null> {
-  const existing = await getStoredDesktopSession();
-  if (!existing) return null;
+async function refreshDesktopSessionOnce(staleAccessToken?: string): Promise<StoredDesktopSession | null> {
+  const current = await getStoredDesktopSession();
+  if (!current) return null;
+  if (staleAccessToken && current.accessToken !== staleAccessToken) return current;
+  // Persist the attempt before sending. A lost response, failed keychain write,
+  // app restart or backend deployment can then retry the exact same operation.
+  const existing = await sessionCommand<StoredDesktopSession | null>("desktop_session_prepare_refresh", {
+    accessToken: current.accessToken, requestId: randomBase64URL(32),
+  });
+  if (!existing || existing.accessToken !== current.accessToken) return existing;
   const response = await desktopRawFetch("/api/auth/desktop/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -394,29 +406,44 @@ async function refreshDesktopSessionOnce(): Promise<StoredDesktopSession | null>
       grantType: "refresh_token",
       clientId: CLIENT_ID,
       refreshToken: existing.refreshToken,
+      refreshRequestId: existing.refreshRequestId,
     }),
   });
   if (!response.ok) {
-    if (response.status === 400 || response.status === 401) {
-      await clearDesktopSession();
-      return null;
+    const body = await response.json().catch(() => null) as { code?: string } | null;
+    // Gateway/HTML errors are not authoritative credential rejection.
+    if (response.status === 401 && body?.code === "desktop_token_invalid") {
+      return replaceDesktopSession(existing, null);
     }
     throw new Error(`Desktop refresh failed (${response.status})`);
   }
   const tokens = (await response.json()) as DesktopTokenResponse;
-  return storeDesktopSession(tokens);
+  const next = desktopSessionFromTokens(tokens);
+  if (next.accountId !== existing.accountId) throw new DesktopAccountMismatchError();
+  return replaceDesktopSession(existing, next);
 }
 
-async function storeDesktopSession(
-  tokens: DesktopTokenResponse,
-): Promise<StoredDesktopSession> {
-  const session: StoredDesktopSession = {
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    accountId: tokens.user.authUserId,
-    userJson: JSON.stringify(tokens.user),
+function desktopSessionFromTokens(tokens: DesktopTokenResponse): StoredDesktopSession {
+  if (!tokens.accessToken?.startsWith("knt_app_at_") || !tokens.refreshToken?.startsWith("knt_app_rt_") || !tokens.user?.authUserId) {
+    throw new Error("desktop_token_response_invalid");
+  }
+  return {
+    accessToken: tokens.accessToken, refreshToken: tokens.refreshToken,
+    accountId: tokens.user.authUserId, userJson: JSON.stringify(tokens.user),
   };
-  await invoke("desktop_session_store", { session });
+}
+
+async function replaceDesktopSession(expected: StoredDesktopSession, session: StoredDesktopSession | null): Promise<StoredDesktopSession | null> {
+  return sessionCommand("desktop_session_replace", {
+    expectedRefreshToken: expected.refreshToken,
+    expectedRequestId: expected.refreshRequestId ?? null,
+    session,
+  });
+}
+
+async function storeDesktopSession(tokens: DesktopTokenResponse): Promise<StoredDesktopSession> {
+  const session = desktopSessionFromTokens(tokens);
+  await sessionCommand("desktop_session_store", { session });
   return session;
 }
 

@@ -7,6 +7,10 @@
 
 @layer components {
   .repository-hub *, .repository-detail * { border-color: var(--ink-line); }
+  .hub-intro { background: linear-gradient(115deg, var(--ink-paper-soft) 45%, var(--ink-wash)); }
+  .repository-hub button:focus-visible { outline: 2px solid var(--cinnabar); outline-offset: 3px; }
+  .repository-hub input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+
 }
 
 /* GitHub-like document typography, scoped away from the editor and site chrome. */

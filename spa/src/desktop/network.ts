@@ -1,10 +1,10 @@
 import {
-  clearDesktopSession,
   getStoredDesktopSession,
   refreshDesktopSession,
 } from "./auth";
 import { shouldAttachDesktopAuthorization } from "./networkPolicy";
 import { desktopAPIOrigin } from "./runtime";
+import { DesktopSessionChangedError } from "./sessionErrors";
 import { desktopRawFetch } from "./transport";
 
 export async function desktopFetch(
@@ -18,21 +18,22 @@ export async function desktopFetch(
   if (!authenticated) {
     return fetchWithSession(path, init, undefined);
   }
-  const session = await getStoredDesktopSession();
-  let response = await fetchWithSession(
-    path,
-    init,
-    session?.accessToken,
-  );
-  if (response.status !== 401 || !session) return response;
-
-  const refreshed = await refreshDesktopSession();
-  if (!refreshed) {
-    await clearDesktopSession();
-    return response;
+  const initial = await getStoredDesktopSession();
+  let session = initial;
+  // Bound retries; only a changed access token justifies another API attempt.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetchWithSession(path, init, session?.accessToken);
+    if (response.status !== 401 || !session) return response;
+    if (init?.signal?.aborted) throw init.signal.reason;
+    const refreshed = await refreshDesktopSession(session.accessToken);
+    if (!refreshed) return response;
+    // A late request from the old account must never be replayed as a new user.
+    if (refreshed.accountId !== initial?.accountId) throw new DesktopSessionChangedError();
+    if (refreshed.accessToken === session.accessToken) return response;
+    session = refreshed;
   }
-  response = await fetchWithSession(path, init, refreshed.accessToken);
-  return response;
+  // Token churn is transient, not evidence that the account has signed out.
+  throw new DesktopSessionChangedError();
 }
 
 async function fetchWithSession(

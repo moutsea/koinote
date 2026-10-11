@@ -1,3 +1,4 @@
+import type { RepositoryCategory, RepositoryFacet, RepositorySource } from "./agentRepositoryDirectory";
 import { apiJson, type AgentWorkspace, type AgentWorkspaceFileContent, type AgentWorkspaceSummary } from "./api";
 export { publicRepositoryClonePrompt } from "./agentRepositoryClonePrompt";
 import type { AgentWorkspaceTransferSource } from "./agentWorkspaceTransfer";
@@ -8,16 +9,19 @@ export type AgentRepositorySource = { workspaceId: number | null; revision: numb
 export const REPOSITORY_SHARING_QUERY_KEY = "agent-repository-sharing";
 export const PUBLIC_REPOSITORIES_QUERY_KEY = "public-agent-repositories";
 export const REPOSITORY_LICENSES = ["UNLICENSED", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "CC0-1.0", "CC-BY-4.0"] as const;
-export function getAgentRepositorySharing(id: number) {
-  return apiJson<{ publication: PublicAgentRepository | null; source: AgentRepositorySource | null; currentRevision: number }>(`/api/agent/workspaces/${id}/sharing`);
+export function getAgentRepositorySharing(id: number, system = false) {
+  return apiJson<{ publication: PublicAgentRepository | null; source: AgentRepositorySource | null; currentRevision: number }>(`${system ? "/api/admin/agent-repositories" : "/api/agent/workspaces"}/${id}/sharing`);
 }
-export function setAgentRepositorySharing(id: number, expectedRevision: number, license: string, revoke = false) {
-  return apiJson<{ success: boolean }>(`/api/agent/workspaces/${id}/sharing`, { method: revoke ? "DELETE" : "PUT", body: JSON.stringify({ expectedRevision, license }) });
+export function setAgentRepositorySharing(id: number, expectedRevision: number, license: string, revoke = false, system = false, category?: RepositoryCategory) {
+  return apiJson<{ success: boolean }>(`${system ? "/api/admin/agent-repositories" : "/api/agent/workspaces"}/${id}/sharing`, { method: revoke ? "DELETE" : "PUT", body: JSON.stringify({ expectedRevision, license, category }) });
 }
-export function listPublicAgentRepositories(query: string, cursor?: string) {
+export type PublicRepositorySummary = AgentWorkspaceSummary & AgentRepositoryEngagement & { license: string };
+export function listPublicAgentRepositories(query: string, cursor?: string, filters: { source?: RepositorySource; category?: RepositoryCategory | "" } = {}) {
   const params = new URLSearchParams({ q: query });
   if (cursor !== undefined) params.set("cursor", cursor);
-  return apiJson<{ repositories: (AgentWorkspaceSummary & AgentRepositoryEngagement & { license: string })[]; nextCursor: string | null }>(`/api/agent/repositories?${params}`);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.category) params.set("category", filters.category);
+  return apiJson<{ repositories: PublicRepositorySummary[]; nextCursor: string | null; total?: number; facets?: RepositoryFacet[] }>(`/api/agent/repositories?${params}`);
 }
 export function getPublicAgentRepository(id: number, revision?: number, signal?: AbortSignal) {
   return apiJson<{ repository: PublicAgentRepository }>(`/api/agent/repositories/${id}${revision === undefined ? "" : `?revision=${revision}`}`, { signal });
@@ -40,4 +44,10 @@ export function updatePublicAgentRepositoryStar(id: number, starred: boolean) {
 }
 export function recordPublicAgentRepositoryClone(repository: AgentWorkspace, requestId: string, method: "zip" | "home" | "agent") {
  return apiJson<AgentRepositoryEngagement>(`/api/agent/repositories/${repository.workspaceId}/clone`, { method: "POST", body: JSON.stringify({ expectedRevision: repository.revision, requestId, method }) });
+}
+
+export const SYSTEM_REPOSITORIES_QUERY_KEY = "system-agent-repositories";
+export type SystemAgentRepository = AgentWorkspaceSummary & { systemManaged: true; publishedRevision: number | null };
+export function listSystemAgentRepositories() {
+  return apiJson<{ repositories: SystemAgentRepository[] }>("/api/admin/agent-repositories");
 }

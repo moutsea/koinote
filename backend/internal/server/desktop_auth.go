@@ -30,6 +30,7 @@ const (
 	desktopLocalRedirectURI     = "koinote-local://auth"
 	desktopAuthorizationCodeTTL = 5 * time.Minute
 	desktopAccessTokenTTL       = 15 * time.Minute
+	desktopAccessRotationGrace  = time.Minute
 	desktopRefreshTokenTTL      = 30 * 24 * time.Hour
 	desktopAuthorizationPrefix  = "knt_app_code_"
 	desktopAccessTokenPrefix    = "knt_app_at_"
@@ -117,11 +118,12 @@ func (a *App) desktopToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		GrantType    string `json:"grantType"`
-		ClientID     string `json:"clientId"`
-		Code         string `json:"code"`
-		CodeVerifier string `json:"codeVerifier"`
-		RefreshToken string `json:"refreshToken"`
+		GrantType        string `json:"grantType"`
+		ClientID         string `json:"clientId"`
+		Code             string `json:"code"`
+		CodeVerifier     string `json:"codeVerifier"`
+		RefreshToken     string `json:"refreshToken"`
+		RefreshRequestID string `json:"refreshRequestId"`
 	}
 	if !decodeAuthBody(w, r, &body) {
 		return
@@ -137,7 +139,7 @@ func (a *App) desktopToken(w http.ResponseWriter, r *http.Request) {
 	case "authorization_code":
 		response, err = a.exchangeDesktopAuthorizationCode(r.Context(), strings.TrimSpace(body.Code), strings.TrimSpace(body.CodeVerifier))
 	case "refresh_token":
-		response, err = a.rotateDesktopRefreshToken(r.Context(), strings.TrimSpace(body.RefreshToken))
+		response, err = a.rotateDesktopRefreshToken(r.Context(), strings.TrimSpace(body.RefreshToken), strings.TrimSpace(body.RefreshRequestID))
 	default:
 		desktopTokenError(w)
 		return
@@ -160,31 +162,14 @@ func (a *App) desktopRevoke(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
 		return
 	}
-	hash := sha256.Sum256([]byte(token))
-	command, err := a.db.Exec(r.Context(), `
-		WITH target AS (
-			SELECT refresh_token_id FROM desktop_access_tokens
-			WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
-		), revoked_refresh AS (
-			UPDATE desktop_refresh_tokens
-			SET revoked_at = COALESCE(revoked_at, now())
-			WHERE id IN (SELECT refresh_token_id FROM target)
-			RETURNING family_id
-		)
-		UPDATE desktop_access_tokens
-		SET revoked_at = COALESCE(revoked_at, now())
-		WHERE refresh_token_id IN (
-			SELECT id FROM desktop_refresh_tokens
-			WHERE family_id IN (SELECT family_id FROM revoked_refresh)
-		)
-	`, hash[:])
+	err := a.revokeDesktopSession(r.Context(), token)
+	if errors.Is(err, errDesktopTokenInvalid) {
+		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
+		return
+	}
 	if err != nil {
 		log.Printf("desktop revoke: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
-		return
-	}
-	if command.RowsAffected() == 0 {
-		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -231,9 +216,17 @@ func (a *App) exchangeDesktopAuthorizationCode(ctx context.Context, code, verifi
 	return response, nil
 }
 
-func (a *App) rotateDesktopRefreshToken(ctx context.Context, refreshToken string) (desktopTokenResponse, error) {
+// Recovery is opt-in for new clients. A retry must present both the old refresh
+// token and the same independently random secret saved before the first request.
+func (a *App) rotateDesktopRefreshToken(ctx context.Context, refreshToken, requestID string) (desktopTokenResponse, error) {
 	if !strings.HasPrefix(refreshToken, desktopRefreshTokenPrefix) {
 		return desktopTokenResponse{}, errDesktopTokenInvalid
+	}
+	if requestID != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(requestID)
+		if err != nil || len(decoded) != 32 || base64.RawURLEncoding.EncodeToString(decoded) != requestID {
+			return desktopTokenResponse{}, errDesktopTokenInvalid
+		}
 	}
 	hash := sha256.Sum256([]byte(refreshToken))
 	tx, err := a.db.Begin(ctx)
@@ -241,25 +234,63 @@ func (a *App) rotateDesktopRefreshToken(ctx context.Context, refreshToken string
 		return desktopTokenResponse{}, err
 	}
 	defer tx.Rollback(ctx)
-	var tokenID int64
-	var userID int
 	var familyID string
-	var revoked, expired, sessionInvalid bool
-	err = tx.QueryRow(ctx, `
-		SELECT token.id, token.user_id, token.family_id,
-		       token.revoked_at IS NOT NULL,
-		       token.expires_at <= now(),
-		       token.session_version <> u.session_version
-		FROM desktop_refresh_tokens token
-		JOIN users u ON u.id = token.user_id
-		WHERE token.token_hash = $1
-		FOR UPDATE OF token
-	`, hash[:]).Scan(&tokenID, &userID, &familyID, &revoked, &expired, &sessionInvalid)
+	err = tx.QueryRow(ctx, `SELECT family_id FROM desktop_refresh_tokens WHERE token_hash = $1`, hash[:]).Scan(&familyID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return desktopTokenResponse{}, errDesktopTokenInvalid
 	}
 	if err != nil {
 		return desktopTokenResponse{}, err
+	}
+	// Serialize parent recovery, successor rotation, and explicit logout together.
+	if err = lockDesktopTokenFamily(ctx, tx, familyID); err != nil {
+		return desktopTokenResponse{}, err
+	}
+	var tokenID int64
+	var userID int
+	var revoked, expired, sessionInvalid bool
+	var storedRequestHash, successorHash []byte
+	err = tx.QueryRow(ctx, `
+		SELECT token.id, token.user_id, token.revoked_at IS NOT NULL,
+		       token.expires_at <= now(), token.session_version <> u.session_version,
+		       token.refresh_request_hash, token.recovery_refresh_hash
+		FROM desktop_refresh_tokens token JOIN users u ON u.id = token.user_id
+		WHERE token.token_hash = $1 FOR UPDATE OF token FOR SHARE OF u
+	`, hash[:]).Scan(&tokenID, &userID, &revoked, &expired, &sessionInvalid, &storedRequestHash, &successorHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return desktopTokenResponse{}, errDesktopTokenInvalid
+	}
+	if err != nil {
+		return desktopTokenResponse{}, err
+	}
+	requestHash := sha256.Sum256([]byte(requestID))
+	if revoked && !expired && !sessionInvalid && requestID != "" && hmac.Equal(storedRequestHash, requestHash[:]) {
+		successor := desktopRecoveryRefreshToken(refreshToken, requestID)
+		derivedHash := sha256.Sum256([]byte(successor))
+		if !hmac.Equal(successorHash, derivedHash[:]) {
+			return desktopTokenResponse{}, errDesktopTokenInvalid
+		}
+		var successorID int64
+		err = tx.QueryRow(ctx, `SELECT id FROM desktop_refresh_tokens
+			WHERE token_hash = $1 AND family_id = $2 AND user_id = $3
+			AND revoked_at IS NULL AND expires_at > now()
+			AND session_version = (SELECT session_version FROM users WHERE id = $3)
+			FOR UPDATE`, successorHash, familyID, userID).Scan(&successorID)
+		// Never resurrect a successor revoked by logout, password changes or rotation.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return desktopTokenResponse{}, errDesktopTokenInvalid
+		}
+		if err != nil {
+			return desktopTokenResponse{}, err
+		}
+		response, err := a.issueDesktopAccessToken(ctx, tx, userID, successorID, successor)
+		if err != nil {
+			return desktopTokenResponse{}, err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return desktopTokenResponse{}, err
+		}
+		return response, nil
 	}
 	if revoked || expired || sessionInvalid {
 		if err := revokeDesktopTokenFamily(ctx, tx, familyID); err != nil {
@@ -270,17 +301,27 @@ func (a *App) rotateDesktopRefreshToken(ctx context.Context, refreshToken string
 		}
 		return desktopTokenResponse{}, errDesktopTokenInvalid
 	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE desktop_refresh_tokens SET revoked_at = now(), last_used_at = now() WHERE id = $1
-	`, tokenID); err != nil {
+	var nextRefresh string
+	if requestID != "" {
+		nextRefresh = desktopRecoveryRefreshToken(refreshToken, requestID)
+		nextHash := sha256.Sum256([]byte(nextRefresh))
+		_, err = tx.Exec(ctx, `UPDATE desktop_refresh_tokens SET refresh_request_hash = $2, recovery_refresh_hash = $3 WHERE id = $1`, tokenID, requestHash[:], nextHash[:])
+		if err != nil {
+			return desktopTokenResponse{}, err
+		}
+	}
+	if _, err = tx.Exec(ctx, `UPDATE desktop_refresh_tokens SET revoked_at = now(), last_used_at = now() WHERE id = $1`, tokenID); err != nil {
 		return desktopTokenResponse{}, err
 	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE desktop_access_tokens SET revoked_at = COALESCE(revoked_at, now()) WHERE refresh_token_id = $1
-	`, tokenID); err != nil {
+	// Allow requests already in flight to finish, but cap old access credentials
+	// to one minute. LEAST must never extend a token that expires sooner, and
+	// idempotent recovery above must never reset this grace period.
+	if _, err = tx.Exec(ctx, `UPDATE desktop_access_tokens
+		SET expires_at = LEAST(expires_at, now() + $2::interval)
+		WHERE refresh_token_id = $1 AND revoked_at IS NULL`, tokenID, durationInterval(desktopAccessRotationGrace)); err != nil {
 		return desktopTokenResponse{}, err
 	}
-	response, err := a.issueDesktopTokenPair(ctx, tx, userID, familyID)
+	response, err := a.issueDesktopTokenPairWithRefresh(ctx, tx, userID, familyID, nextRefresh)
 	if err != nil {
 		return desktopTokenResponse{}, err
 	}
@@ -288,6 +329,43 @@ func (a *App) rotateDesktopRefreshToken(ctx context.Context, refreshToken string
 		return desktopTokenResponse{}, err
 	}
 	return response, nil
+}
+
+func desktopRecoveryRefreshToken(parent, requestID string) string {
+	mac := hmac.New(sha256.New, []byte(parent))
+	mac.Write([]byte("koinote-desktop-refresh-recovery-v1\x00" + requestID))
+	return desktopRefreshTokenPrefix + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func lockDesktopTokenFamily(ctx context.Context, tx desktopTokenTx, familyID string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('desktop-token-family'), hashtext($1))`, familyID)
+	return err
+}
+
+func (a *App) revokeDesktopSession(ctx context.Context, token string) error {
+	hash := sha256.Sum256([]byte(token))
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var familyID string
+	err = tx.QueryRow(ctx, `SELECT r.family_id FROM desktop_access_tokens a
+		JOIN desktop_refresh_tokens r ON r.id = a.refresh_token_id
+		WHERE a.token_hash = $1 AND a.revoked_at IS NULL AND a.expires_at > now()`, hash[:]).Scan(&familyID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errDesktopTokenInvalid
+	}
+	if err != nil {
+		return err
+	}
+	if err = lockDesktopTokenFamily(ctx, tx, familyID); err != nil {
+		return err
+	}
+	if err = revokeDesktopTokenFamily(ctx, tx, familyID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 type desktopTokenTx interface {
@@ -314,13 +392,17 @@ func revokeDesktopTokenFamily(ctx context.Context, tx desktopTokenTx, familyID s
 }
 
 func (a *App) issueDesktopTokenPair(ctx context.Context, tx desktopTokenTx, userID int, familyID string) (desktopTokenResponse, error) {
+	return a.issueDesktopTokenPairWithRefresh(ctx, tx, userID, familyID, "")
+}
+
+func (a *App) issueDesktopTokenPairWithRefresh(ctx context.Context, tx desktopTokenTx, userID int, familyID, refreshToken string) (desktopTokenResponse, error) {
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM desktop_refresh_tokens
 		WHERE id IN (
 			SELECT id FROM desktop_refresh_tokens
 			WHERE expires_at <= now()
 			ORDER BY expires_at
-			LIMIT 500
+			LIMIT 500 FOR UPDATE SKIP LOCKED
 		)
 	`); err != nil {
 		return desktopTokenResponse{}, err
@@ -332,35 +414,38 @@ func (a *App) issueDesktopTokenPair(ctx context.Context, tx desktopTokenTx, user
 			return desktopTokenResponse{}, err
 		}
 	}
-	refreshToken, err := randomPrefixedToken(desktopRefreshTokenPrefix, 32)
-	if err != nil {
-		return desktopTokenResponse{}, err
-	}
-	accessToken, err := randomPrefixedToken(desktopAccessTokenPrefix, 32)
-	if err != nil {
-		return desktopTokenResponse{}, err
+	if refreshToken == "" {
+		var err error
+		refreshToken, err = randomPrefixedToken(desktopRefreshTokenPrefix, 32)
+		if err != nil {
+			return desktopTokenResponse{}, err
+		}
 	}
 	tokenID, err := randomUUID()
 	if err != nil {
 		return desktopTokenResponse{}, err
 	}
 	refreshHash := sha256.Sum256([]byte(refreshToken))
-	accessHash := sha256.Sum256([]byte(accessToken))
 	var refreshID int64
-	var authUserID string
 	err = tx.QueryRow(ctx, `
-		WITH selected AS (
-			SELECT auth_user_id, session_version FROM users WHERE id = $1
-		), inserted AS (
-			INSERT INTO desktop_refresh_tokens (
-				token_id, family_id, user_id, token_hash, session_version, expires_at
-			)
-			SELECT $2, $3, $1, $4, session_version, now() + $5::interval FROM selected
-			RETURNING id
-		)
-		SELECT inserted.id, selected.auth_user_id FROM inserted CROSS JOIN selected
-	`, userID, tokenID, familyID, refreshHash[:], durationInterval(desktopRefreshTokenTTL)).Scan(&refreshID, &authUserID)
+		INSERT INTO desktop_refresh_tokens (token_id, family_id, user_id, token_hash, session_version, expires_at)
+		SELECT $2, $3, $1, $4, session_version, now() + $5::interval FROM users WHERE id = $1
+		RETURNING id
+	`, userID, tokenID, familyID, refreshHash[:], durationInterval(desktopRefreshTokenTTL)).Scan(&refreshID)
 	if err != nil {
+		return desktopTokenResponse{}, err
+	}
+	return a.issueDesktopAccessToken(ctx, tx, userID, refreshID, refreshToken)
+}
+
+func (a *App) issueDesktopAccessToken(ctx context.Context, tx desktopTokenTx, userID int, refreshID int64, refreshToken string) (desktopTokenResponse, error) {
+	accessToken, err := randomPrefixedToken(desktopAccessTokenPrefix, 32)
+	if err != nil {
+		return desktopTokenResponse{}, err
+	}
+	accessHash := sha256.Sum256([]byte(accessToken))
+	var authUserID string
+	if err = tx.QueryRow(ctx, `SELECT auth_user_id FROM users WHERE id = $1`, userID).Scan(&authUserID); err != nil {
 		return desktopTokenResponse{}, err
 	}
 	if err := tx.QueryRow(ctx, `
@@ -372,7 +457,7 @@ func (a *App) issueDesktopTokenPair(ctx context.Context, tx desktopTokenTx, user
 	`, accessHash[:], refreshID, userID, durationInterval(desktopAccessTokenTTL)).Scan(new(int64)); err != nil {
 		return desktopTokenResponse{}, err
 	}
-	user, err := a.getUserByAuthUserID(ctx, authUserID)
+	user, err := queryUserByAuthUserID(ctx, tx, authUserID)
 	if err != nil {
 		return desktopTokenResponse{}, err
 	}
@@ -448,8 +533,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/admin/announcements":
 		return method == http.MethodGet || method == http.MethodPost
-	case "/api/admin/agent-repositories/storage":
-		return method == http.MethodPut
+	case "/api/admin/agent-repositories":
+		return method == http.MethodGet
+	case "/api/admin/agent-repositories/import/github":
+		return method == http.MethodPost
 	case "/api/announcements/unread":
 		return method == http.MethodGet
 	case "/api/mcp/tokens":
@@ -546,6 +633,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 			return method == http.MethodPost
 		}
 		return false
+	}
+	if rest, found := strings.CutPrefix(path, "/api/admin/agent-repositories/"); found {
+		parts := strings.Split(rest, "/")
+		return len(parts) == 2 && parts[0] != "" && parts[1] == "sharing" && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete)
 	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/workspaces/"); found {
 		parts := strings.Split(rest, "/")

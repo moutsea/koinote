@@ -18,6 +18,7 @@ import { isDesktopRuntime } from "./desktop/runtime";
 import { installDesktopSyncQueryRefresh } from "./desktop/syncQueries";
 import { installDropNavigationGuard } from "./dropNavigation";
 import { parseRepositorySearch } from "./agentRepositoryMarkdown";
+import { parseRepositoryDirectorySearch } from "./agentRepositoryDirectory";
 
 const queryClient = new QueryClient();
 const desktopRuntime = isDesktopRuntime();
@@ -280,6 +281,7 @@ const settingsRoute = createRoute({
 const agentPublicRepositoriesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/repositories",
+  validateSearch: parseRepositoryDirectorySearch,
   component: lazyRouteComponent(() => import("./pages/AgentPublicRepositoriesPage"), "AgentPublicRepositoriesPage"),
 });
 const agentPublicRepositoryRoute = createRoute({

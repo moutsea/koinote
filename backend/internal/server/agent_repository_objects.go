@@ -147,12 +147,18 @@ type agentRepositoryStagedObject struct {
 // mutations leave durable, reclaimable reservations, never untracked objects.
 // Network I/O finishes before callers acquire their account/workspace locks.
 func (a *App) stageAgentRepositoryFiles(ctx context.Context, userID int, files []agentWorkspaceFile) (map[string]string, error) {
+	return a.stageAgentRepositoryFilesForOwner(ctx, &userID, files)
+}
+
+func (a *App) stageAgentRepositoryFilesForOwner(ctx context.Context, ownerID *int, files []agentWorkspaceFile) (map[string]string, error) {
 	if a.agentObjectStore == nil || len(files) == 0 {
 		return nil, nil
 	}
-	var budget int64
-	if err := a.db.QueryRow(ctx, `SELECT GREATEST(agent_workspace_quota_bytes($1),agent_workspace_storage_bytes($1))`, userID).Scan(&budget); err != nil {
-		return nil, err
+	budget := int64(githubImportMaxBytes)
+	if ownerID != nil {
+		if err := a.db.QueryRow(ctx, `SELECT GREATEST(agent_workspace_quota_bytes($1),agent_workspace_storage_bytes($1))`, *ownerID).Scan(&budget); err != nil {
+			return nil, err
+		}
 	}
 	var bytes int64
 	for _, file := range files {

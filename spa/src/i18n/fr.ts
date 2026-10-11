@@ -996,7 +996,7 @@ export const fr: Messages = {
     button: "Optimisation IA",
     title: "Optimisation IA",
     description:
-      "Analysez le titre, le corps et la mise en page Markdown comme une modification de code ; rien ne change sans votre accord.",
+      "Analysez les raisons de cliquer, l’accroche et la réponse apportée par l’article. Vous validez chaque modification.",
     membersOnly: "Cette fonction est réservée aux membres à vie.",
     upgrade: "Devenir membre à vie",
     localModeUnavailable:
@@ -1034,7 +1034,7 @@ export const fr: Messages = {
     tasks: {
       title: {
         label: "Optimisation du titre",
-        description: "Vérifier la clarté, l’attrait et la promesse",
+        description: "Vérifier le public visé, l’envie de cliquer et la promesse du titre",
       },
       proofread: {
         label: "Correction",
@@ -1048,7 +1048,7 @@ export const fr: Messages = {
       paragraph: {
         label: "Optimisation des paragraphes",
         description:
-          "Vérifier la logique, les répétitions et l’ordre de l’argumentation",
+          "Examiner l’accroche, le raisonnement, le rythme et la voix de l’auteur",
       },
     },
     start: "Lancer l’analyse",
@@ -1091,7 +1091,7 @@ export const fr: Messages = {
     deepAnalysisStarting: "Démarrage…",
     deepAnalysisExpandHint: "Sélectionnez cette dimension pour voir son coût.",
     deepReviewBadge: "Analyse approfondie · {dimension}",
-    titleScore: "Attractivité du titre : {score}/100",
+    titleScore: "Évaluation éditoriale du titre : {score}/100",
     suggestions: "Modifications proposées",
     before: "Avant",
     after: "Après",
@@ -2408,6 +2408,14 @@ function hello(name) {
     },
   },
   desktopAuth: {
+    sessionUnavailable: "Impossible de vérifier votre connexion",
+    credentialsUnavailable: "Koinote ne peut pas accéder à la connexion enregistrée dans le gestionnaire d’identifiants du système. Sur Mac, déverrouillez le trousseau de session et autorisez Koinote si macOS le demande, puis réessayez.",
+    sessionRetryHint: "Le service ou le réseau est temporairement indisponible. Votre connexion enregistrée a été conservée. Réessayez.",
+    accountMismatch: "Le compte vérifié diffère du compte enregistré. Votre connexion et vos documents locaux sont conservés. Autorisez à nouveau pour rétablir la synchronisation.",
+    reauthorize: "Autoriser à nouveau",
+    reauthorizeOpened: "Terminez l’autorisation dans votre navigateur, puis revenez dans l’application.",
+    retrySession: "Réessayer",
+
     eyebrow: "Application de bureau",
     title: "Autoriser l’application Koinote",
     description:
