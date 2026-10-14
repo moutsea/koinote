@@ -23,12 +23,26 @@ let undoSkippedItems = [];
 const savedPreviews = new Map();
 let confirmDiscard = false;
 const calls = { undo: [], apply: [], confirm: 0, estimate: [], create: [], prepare: [] };
+// Library shown in the document picker before generating.
+let libraryFolders = [
+  { folderId: "aug", name: "2026年8月", parentFolderId: null, organizerKind: "smart" },
+  { folderId: "week", name: "第 3 周", parentFolderId: "aug", organizerKind: "smart" },
+  { folderId: "work", name: "Work", parentFolderId: null, organizerKind: null },
+];
+let libraryDocuments = [
+  { docId: "doc", title: "文章", folderId: "week", sortOrder: 0, revision: 1, organizedAt: "2026-08-20T00:00:00Z" },
+  { docId: "conflict-doc", title: "冲突", folderId: "week", sortOrder: 1, revision: 1, organizedAt: null },
+  { docId: "filed", title: "已归类", folderId: "work", sortOrder: 0, revision: 1, organizedAt: "2026-09-01T00:00:00Z" },
+  { docId: "fresh", title: "新文章", folderId: null, sortOrder: 0, revision: 1, organizedAt: null },
+];
 globalThis.__organizerTest = {
+  libraryDocuments: () => structuredClone(libraryDocuments),
+  libraryFolders: () => structuredClone(libraryFolders),
   desktop: () => desktopMode,
   prepare: async ids => { calls.prepare.push(ids); return [...localConflicts]; },
-  estimate: async (include, exclude) => { calls.estimate.push({ include, exclude }); return { count: 1, skipped: 0, reservedCredits: 1, providerMode: 'builtin' }; },
-  create: async (id, include, estimate, exclude) => {
-    assert.ok(desktopMode, 'unexpected generation'); calls.create.push({ id, include, exclude });
+  estimate: async (docIds, exclude) => { calls.estimate.push({ docIds, exclude }); return { count: docIds.length, skipped: 0, reservedCredits: 1, providerMode: 'builtin' }; },
+  create: async (id, docIds, estimate, exclude) => {
+    assert.ok(desktopMode, 'unexpected generation'); calls.create.push({ id, docIds, exclude });
     latest = { id, status: 'ready', data, creditsCharged: 1, errorCode: '' };
     return structuredClone({ organization: latest });
   },
@@ -66,7 +80,9 @@ const adapters = {
     export const undoDocumentOrganization=test.undo;
     export const applyDocumentOrganizationPreview=test.apply;
     export const estimateDocumentOrganization=test.estimate;
-    export const createDocumentOrganization=test.create;`,
+    export const createDocumentOrganization=test.create;
+    export const listDocuments=async()=>({documents:test.libraryDocuments()});
+    export const listFolders=async()=>({folders:test.libraryFolders()});`,
   "../../i18n": "export const useI18n=()=>({t:globalThis.__organizerLabels}); export const interpolate=(text,values)=>text.replace(/\\{(\\w+)\\}/g,(_,key)=>String(values[key]));",
   "../../confirmAction": "export const confirmAction=globalThis.__organizerTest.confirm;",
   "../../modalStack": "export const pushModal=()=>()=>{};",
@@ -99,7 +115,7 @@ const waitFor = async predicate => {
     if (predicate()) return;
     await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
   }
-  assert.fail("dialog did not reach the expected state");
+  assert.fail(`dialog did not reach the expected state: ${document.body.textContent.slice(0, 600)}`);
 };
 const click = async text => { const target = button(text); assert.ok(target, `button ${text}`); assert.equal(target.disabled, false); await act(async () => { target.click(); if (target.closest("form") && target.getAttribute("type") !== "button") target.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); }); };
 const tagInputs = () => [...document.querySelectorAll('article input[aria-label]')].filter(input => input.getAttribute("aria-label").includes(labels.tags));
@@ -227,11 +243,32 @@ try {
   await render();
   await waitFor(() => button(labels.generate) && !button(labels.generate).disabled);
   assert.deepEqual(calls.estimate.at(-1).exclude, ["conflict-doc"], "estimate must exclude local conflicts");
+  // Default: documents in automatic buckets (even previously organized) and
+  // never-organized documents; conflicts are shown but cannot be picked.
+  assert.deepEqual(calls.estimate.at(-1).docIds, ["doc", "fresh"], "default selection covers automatic buckets and unorganized documents");
   assert.ok(document.body.textContent.includes(labels.excludedConflicts.replace("{count}", "1")));
+  assert.ok(document.body.textContent.includes(labels.automaticFolder), "automatic folders are marked in the picker");
+  const pickerBox = label => document.querySelector(`input[aria-label="${label}"]`);
+  const augBox = pickerBox(labels.selectFolder.replace("{name}", "2026年8月"));
+  assert.equal(augBox.checked, true, "a folder whose available documents are all picked is checked");
+  // Linkedom's click() neither toggles a checkbox nor dispatches the click React listens to.
+  await act(async () => { augBox.checked = !augBox.checked; augBox.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true })); });
+  await act(async () => new Promise(resolve => setTimeout(resolve, 400)));
+  await waitFor(() => JSON.stringify(calls.estimate.at(-1).docIds) === JSON.stringify(["fresh"]));
+  await click(labels.selectAll);
+  await act(async () => new Promise(resolve => setTimeout(resolve, 400)));
+  await waitFor(() => JSON.stringify(calls.estimate.at(-1).docIds) === JSON.stringify(["doc", "filed", "fresh"]));
+  await click(labels.selectNone);
+  await waitFor(() => button(labels.generate).disabled);
+  assert.ok(document.body.textContent.includes(labels.empty), "an empty selection cannot generate");
+  await click(labels.selectDefault);
+  await act(async () => new Promise(resolve => setTimeout(resolve, 400)));
+  await waitFor(() => !button(labels.generate).disabled && JSON.stringify(calls.estimate.at(-1).docIds) === JSON.stringify(["doc", "fresh"]));
   await click(labels.generate);
   await openArticle();
   await waitFor(() => tagInputs().length === 2);
   assert.deepEqual(calls.create.at(-1).exclude, ["conflict-doc"], "generation must use the same exclusions as its estimate");
+  assert.deepEqual(calls.create.at(-1).docIds, ["doc", "fresh"], "generation must organize exactly the picked documents");
   await click(labels.apply.replace("{count}", "1"));
   await waitFor(() => button(labels.undo));
   assert.deepEqual(calls.prepare.at(-1), ["doc"], "apply must check only selected documents for conflicts");

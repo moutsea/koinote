@@ -1,6 +1,6 @@
 {
   "name": "koinote",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -99,7 +99,7 @@
     "test:agent-catalog": "python3 scripts/test_seed_agent_repositories.py && python3 scripts/test_sync_system_agent_repositories.py",
     "go:test": "cd backend && go vet ./... && go test ./...",
     "test:agent-repository-storage": "node scripts/_check_agent_repository_storage.mjs",
-    "test:ai-organizer": "esbuild spa/src/components/editor/aiOrganizerCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_ai_organizer_bundle.mjs --log-level=error && node scripts/_check_ai_organizer.mjs && node scripts/_check_ai_organizer_preview.mjs && node scripts/_check_ai_organizer_dialog.mjs; ec=$?; rm -f scripts/_ai_organizer_bundle.mjs; exit $ec"
+    "test:ai-organizer": "esbuild spa/src/components/editor/aiOrganizerCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_ai_organizer_bundle.mjs --log-level=error && node scripts/_check_ai_organizer.mjs && node scripts/_check_ai_organizer_preview.mjs && node scripts/_check_ai_organizer_dialog.mjs && node scripts/_check_ai_organizer_selection.mjs; ec=$?; rm -f scripts/_ai_organizer_bundle.mjs; exit $ec"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",

@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version removes empty automatic date folders from AI organization previews and applied results, preserves occupied and manual folders, and restores the original structure on undo."
+          notes="Koinote Desktop $version lets you pick the documents to organize from a document tree, and AI organization now re-files documents out of automatic date and activity folders instead of keeping them."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,13 +237,13 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 修复 AI 整理后残留空时间目录的问题。
+          Koinote $version 让 AI 整理按内容重新归类，不再沿用旧的时间目录。
 
-          - 预览和应用结果会清理已空的自动“年月 → 周”目录，撤销时恢复原目录结构和文章位置。
-          - 保留手动目录、已改为主题的目录，以及仍含未勾选或回收站文章的目录。
-          - 已有待应用预览无需重新生成，不会因此再次调用 AI 或消耗 credits。
+          - 点击“AI 整理”先弹出文件树，可勾选要整理的文档或整个文件夹；默认勾选未整理的文档和自动时间 / 活跃度目录里的文档。
+          - 自动生成的“年月 → 周”和活跃度目录不再作为目标，AI 在其中新建的主题目录会改到外面创建；仅建议留在原时间目录的文档需手动确认。
+          - 清空的自动目录在应用时删除，撤销时恢复；手动建立或改过名的目录保留。
 
-          1.1.3 客户端可在版本提醒中点击“立即升级”；也可通过启动后的自动检查或账户菜单升级。
+          可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
           - **macOS Apple 芯片**：文件名包含 \`aarch64\`
           - **macOS Intel 芯片**：文件名包含 \`x64\`
@@ -253,13 +253,13 @@ jobs:
 
           ---
 
-          Koinote $version fixes empty date folders left behind after AI organization.
+          Koinote $version makes AI organization re-file documents by content instead of keeping old date folders.
 
-          - Previews and applied results remove empty automatic month/week folders. Undo restores the original structure and article locations.
-          - Manual folders, repurposed topic folders and folders containing unchecked or trashed articles are preserved.
-          - Existing pending previews gain cleanup without regeneration, another AI call or additional credits.
+          - AI organization opens with a document tree to pick documents or whole folders. Unorganized documents and documents in automatic date or activity folders are picked by default.
+          - Automatic month/week and activity folders are no longer destinations. Topics the model nests inside them are created outside instead; suggestions that only keep a document there need manual review.
+          - Emptied automatic folders are removed on apply and restored on undo. Manual and renamed folders are preserved.
 
-          Version 1.1.3 clients can use Upgrade now in release announcements. Automatic startup checks and the account menu remain available.
+          Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 
           These installers do not use platform code-signing certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
           EOF

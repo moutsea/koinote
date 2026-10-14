@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-10-14
+
+### Added
+
+- Le classement IA s’ouvre sur une arborescence permettant de choisir précisément les documents à organiser. Cocher un dossier sélectionne tout son contenu ; les documents non organisés et ceux des dossiers automatiques de dates ou d’activité sont cochés par défaut, y compris ceux déjà organisés.
+
+### Fixed
+
+- Le classement IA ne conserve plus les dossiers automatiques de dates ou d’activité. Ils ne sont plus proposés comme destination : les nouveaux thèmes que le modèle y créerait sont créés à l’extérieur, et les suggestions qui se contentent d’y laisser un document doivent être vérifiées manuellement. Les dossiers vidés sont supprimés à l’application et restaurés à l’annulation.
+
 ## [1.1.4] - 2026-10-14
 
 ### Changed

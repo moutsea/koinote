@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-10-14
+
+### Added
+
+- AI organization opens with a document tree to pick exactly which documents to organize. Folders select everything inside them; unorganized documents and documents in automatic date or activity folders are picked by default, including previously organized ones.
+
+### Fixed
+
+- AI organization no longer keeps automatic date or activity folders. They are never offered as destinations: new topics the model nests inside them are created outside instead, and suggestions that only keep a document in such a folder need manual review. Emptied folders are removed on apply and restored on undo.
+
 ## [1.1.4] - 2026-10-14
 
 ### Changed

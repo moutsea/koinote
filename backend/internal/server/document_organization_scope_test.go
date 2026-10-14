@@ -108,12 +108,21 @@ func TestOrganizationAutomaticFoldersAreNotTopicExamples(t *testing.T) {
 	}
 	for _, kind := range []string{"smart", "activity", "manual"} {
 		i := slices.IndexFunc(input.Folders, func(f struct{ FolderID, OrganizerKind string }) bool { return f.FolderID == folderByKind[kind] })
-		want := kind
-		if kind == "manual" {
-			want = ""
-		}
-		if i < 0 || input.Folders[i].OrganizerKind != want {
-			t.Fatalf("missing folder provenance for %s: %+v", kind, input.Folders)
+		if kind == "smart" {
+			// A generated date bucket is obsolete and never a destination.
+			if i >= 0 {
+				t.Fatalf("obsolete date bucket offered as a destination: %+v", input.Folders)
+			}
+		} else {
+			// "2026-10" is not a recency label, so this activity folder counts
+			// as renamed by the user and keeps its provenance marker.
+			want := kind
+			if kind == "manual" {
+				want = ""
+			}
+			if i < 0 || input.Folders[i].OrganizerKind != want {
+				t.Fatalf("missing folder provenance for %s: %+v", kind, input.Folders)
+			}
 		}
 		if !slices.ContainsFunc(input.Documents, func(d organizationDocument) bool { return d.DocID == docByKind[kind] }) {
 			t.Fatalf("missing candidate %s", kind)

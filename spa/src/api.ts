@@ -2471,14 +2471,16 @@ export function latestDocumentOrganization() {
 export function getDocumentOrganization(id: string) {
   return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}`);
 }
-export function estimateDocumentOrganization(includeOrganized: boolean, excludeDocIds: string[] = []) {
+// docIds is the exact set picked in the document tree; previously organized
+// documents are included when picked.
+export function estimateDocumentOrganization(docIds: string[], excludeDocIds: string[] = []) {
   return apiJson<{ count: number; skipped: number; reservedCredits: number; providerMode: string }>("/api/document-organizations/estimate", {
-    method: "POST", body: JSON.stringify({ includeOrganized, excludeDocIds }),
+    method: "POST", body: JSON.stringify({ includeOrganized: true, docIds, excludeDocIds }),
   });
 }
-export function createDocumentOrganization(requestId: string, includeOrganized: boolean, estimate: { providerMode: string; reservedCredits: number }, excludeDocIds: string[] = []) {
+export function createDocumentOrganization(requestId: string, docIds: string[], estimate: { providerMode: string; reservedCredits: number }, excludeDocIds: string[] = []) {
   return apiJson<{ organization: DocumentOrganization }>("/api/document-organizations", {
-    method: "POST", body: JSON.stringify({ requestId, includeOrganized, providerMode: estimate.providerMode, maxReservedCredits: estimate.reservedCredits, excludeDocIds }),
+    method: "POST", body: JSON.stringify({ requestId, includeOrganized: true, docIds, providerMode: estimate.providerMode, maxReservedCredits: estimate.reservedCredits, excludeDocIds }),
   });
 }
 export function applyDocumentOrganizationPreview(id: string, items: OrganizationChoice[], orders: OrganizationOrder[] = []) {

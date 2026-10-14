@@ -22,7 +22,13 @@ type organizationRequest struct {
 	RequestID          string   `json:"requestId"`
 	IncludeOrganized   bool     `json:"includeOrganized"`
 	ExcludeDocIDs      []string `json:"excludeDocIds"`
+	// DocIDs, when present (even empty), is the exact set the user picked in
+	// the document tree. Absent means the legacy organized-state filter.
+	DocIDs []string `json:"docIds"`
 }
+
+// A picked document ID is ~40 JSON bytes; leave room for whole libraries.
+const organizationRequestLimit = 1 << 20
 
 func decodeOrganizationRequest(w http.ResponseWriter, r *http.Request, dest any, limit int64) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
@@ -200,10 +206,10 @@ func (a *App) documentOrganizationEstimate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var input organizationRequest
-	if !decodeOrganizationRequest(w, r, &input, 64<<10) {
+	if !decodeOrganizationRequest(w, r, &input, organizationRequestLimit) {
 		return
 	}
-	data, _, err := a.prepareOrganization(r.Context(), user.ID, input.IncludeOrganized, input.ExcludeDocIDs)
+	data, _, err := a.prepareOrganizationScope(r.Context(), user.ID, input.IncludeOrganized, input.ExcludeDocIDs, input.DocIDs)
 	if err != nil {
 		writeOrganizationError(w, err)
 		return
@@ -225,7 +231,7 @@ func (a *App) documentOrganizationCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var input organizationRequest
-	if !decodeOrganizationRequest(w, r, &input, 64<<10) {
+	if !decodeOrganizationRequest(w, r, &input, organizationRequestLimit) {
 		return
 	}
 	if !validUUID(input.RequestID) {
@@ -246,7 +252,7 @@ func (a *App) documentOrganizationCreate(w http.ResponseWriter, r *http.Request)
 		httpx.ErrorCode(w, 429, "rate_limited", "Try again later")
 		return
 	}
-	data, prompts, err := a.prepareOrganization(r.Context(), user.ID, input.IncludeOrganized, input.ExcludeDocIDs)
+	data, prompts, err := a.prepareOrganizationScope(r.Context(), user.ID, input.IncludeOrganized, input.ExcludeDocIDs, input.DocIDs)
 	if err != nil {
 		writeOrganizationError(w, err)
 		return
@@ -372,12 +378,13 @@ func (a *App) runOrganization(userID int, id string, data organizationData, prom
 func (a *App) runOrganizationWithContext(ctx context.Context, userID int, id string, data organizationData, prompts []agentLLMPrompt, provider agentLLMProvider, reservationID string) {
 	var total, billable agentLLMResult
 	consecutiveUnbilled := 0
+	obsolete := organizationObsoleteFolderIDs(data.TimeFolders)
 	for batch, prompt := range prompts {
 		prompt = organizationPromptWithPrior(prompt, data.Items[:batch*organizationBatchSize])
 		start := batch * organizationBatchSize
 		end := min(start+organizationBatchSize, len(data.Items))
 		result, err := a.generateOrganizationBatch(ctx, userID, id, prompt, data.Items[start:end], data.Folders, provider)
-		suggestions := result.Suggestions
+		suggestions := retargetOrganizationSuggestions(result.Suggestions, data.Items[start:end], data.Folders, obsolete)
 		if err == nil {
 			err = addAgentLLMUsage(&total, result.Usage)
 		}

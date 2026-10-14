@@ -1618,8 +1618,15 @@ export interface Messages {
 
       title: string;
       description: string;
-      include: string;
-      includeHint: string;
+      pickerTitle: string;
+      pickerHint: string;
+      pickerEmpty: string;
+      selectedCount: string;
+      selectFolder: string;
+      automaticFolder: string;
+      selectAll: string;
+      selectNone: string;
+      selectDefault: string;
       generate: string;
       preview: string;
       edit: string;

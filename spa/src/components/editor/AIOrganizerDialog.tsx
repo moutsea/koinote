@@ -6,7 +6,7 @@ import { Logo } from "../Logo";
 import {
   AGENT_CREDITS_QUERY_KEY, ApiError, applyDocumentOrganizationPreview,
   createDocumentOrganization, estimateDocumentOrganization, getDocumentOrganization,
-  latestDocumentOrganization, undoDocumentOrganization,
+  latestDocumentOrganization, listDocuments, listFolders, undoDocumentOrganization,
   type DocumentOrganization, type OrganizationChoice,
 } from "../../api";
 import { confirmAction } from "../../confirmAction";
@@ -16,6 +16,8 @@ import { isDesktopRuntime } from "../../desktop/runtime";
 import { organizationChoices, organizationDrafts, organizationPollInterval, type OrganizationDraft } from "./aiOrganizerCore";
 import { organizationPreviewOrders } from "./aiOrganizerPreviewCore";
 import { AIOrganizerPreview } from "./AIOrganizerPreview";
+import { AIOrganizerDocumentPicker } from "./AIOrganizerDocumentPicker";
+import { defaultOrganizerSelection, organizerRequestIds } from "./aiOrganizerSelectionCore";
 
 export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   member: boolean; localMode: boolean; onPrepare: () => Promise<boolean>; onClose: () => void;
@@ -24,7 +26,8 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   const { t } = useI18n(); const l = t.editor.aiOrganizer;
   const queryClient = useQueryClient();
   const enabled = member && !localMode;
-  const [include, setInclude] = useState(false);
+  // null until the library loads; then the user's picked document IDs.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
   const [selection, setSelection] = useState<DocumentOrganization | null>(null);
   const [prepared, setPrepared] = useState(false);
   const [prepareAttempt, setPrepareAttempt] = useState(0);
@@ -102,9 +105,30 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
     void prepareRef.current().then(() => { if (!cancelled) setPrepared(true); }).catch(e => { if (!cancelled) setError(message(e)); });
     return () => { cancelled = true; };
   }, [enabled, prepareAttempt]);
-  const estimate = useQuery({
-    queryKey: ["document-organization-estimate", include, prepareAttempt, excludedDocIDs], queryFn: () => estimateDocumentOrganization(include, excludedDocIDs),
+  // Read after prepare so the desktop tree reflects the synced cloud library.
+  const library = useQuery({
+    queryKey: ["document-organization-library", prepareAttempt],
+    queryFn: async () => {
+      const [{ documents }, { folders }] = await Promise.all([listDocuments(), listFolders()]);
+      return { documents, folders };
+    },
     enabled: enabled && prepared && !running && !ready, retry: false, staleTime: 0,
+  });
+  useEffect(() => {
+    if (library.data && !picked) setPicked(defaultOrganizerSelection(library.data.folders, library.data.documents));
+  }, [library.data, picked]);
+  const unavailable = useMemo(() => new Set(excludedDocIDs), [excludedDocIDs]);
+  const requestIds = useMemo(() => library.data && picked ? organizerRequestIds(library.data.documents, picked, unavailable) : null, [library.data, picked, unavailable]);
+  // Debounce estimates while the user is ticking boxes (the endpoint is rate limited).
+  const [estimateIds, setEstimateIds] = useState<string[] | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setEstimateIds(requestIds), 350);
+    return () => clearTimeout(timer);
+  }, [requestIds]);
+  const estimateSettled = JSON.stringify(estimateIds) === JSON.stringify(requestIds);
+  const estimate = useQuery({
+    queryKey: ["document-organization-estimate", estimateIds, prepareAttempt, excludedDocIDs], queryFn: () => estimateDocumentOrganization(estimateIds!, excludedDocIDs),
+    enabled: enabled && prepared && !running && !ready && Boolean(estimateIds?.length), retry: false, staleTime: 0,
   });
   useEffect(() => {
     if (!view || view.status !== "ready") return;
@@ -116,7 +140,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
         ? Object.fromEntries(Object.entries(current).filter(([docId]) => remaining.has(docId))) : current);
       return;
     }
-    initializedID.current = view.id; setDrafts(organizationDrafts(view.data.items)); setInclude(view.data.includeOrganized); setDirty(false);
+    initializedID.current = view.id; setDrafts(organizationDrafts(view.data.items)); setDirty(false);
   }, [view]);
 
   async function accept(next: DocumentOrganization, refresh: boolean, select = true) {
@@ -143,9 +167,9 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   const generate = useMutation({
     mutationFn: async () => {
       const excluded = await prepare();
-      if (JSON.stringify(excluded) !== JSON.stringify(excludedDocIDs)) throw new ApiError(409, l.changedEstimate, "organization_estimate_changed");
+      if (JSON.stringify(excluded) !== JSON.stringify(excludedDocIDs) || !estimateSettled) throw new ApiError(409, l.changedEstimate, "organization_estimate_changed");
       requestID.current ??= crypto.randomUUID();
-      return createDocumentOrganization(requestID.current, include, estimate.data!, excluded);
+      return createDocumentOrganization(requestID.current, estimateIds!, estimate.data!, excluded);
     },
     onSuccess: async result => { requestID.current = null; initializedID.current = null; setError(""); setUndoNotice(null); await accept(result.organization, false); },
     onError: e => {
@@ -210,7 +234,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   }
   async function newRun() {
     if (dirty && !(await confirmAction(`${l.discard}\n\n${l.discardDetail}`))) return;
-    setDismissedLatest(true); setSelection(null); setDrafts({}); setDirty(false); setError(""); setUndoNotice(null); setInclude(false); requestID.current = null; initializedID.current = null; setPrepareAttempt(n => n + 1);
+    setDismissedLatest(true); setSelection(null); setDrafts({}); setDirty(false); setError(""); setUndoNotice(null); setPicked(null); requestID.current = null; initializedID.current = null; setPrepareAttempt(n => n + 1);
   }
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-3 backdrop-blur-sm sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) void close(); }}>
     <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="ai-organizer-title" className="flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-black/10 bg-[#faf9f6] shadow-2xl outline-none dark:border-white/10 dark:bg-neutral-950">
@@ -230,11 +254,12 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
             {view?.status === "failed" && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">{view.errorCode === "insufficient_credits" ? l.insufficient : l.failed}</p>}
             {undoSkippedTitles.length === 0 && (applied || view?.status === "undone" || undoNotice) && <div className="mb-4 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"><Check className="h-5 w-5 shrink-0" />{undoNotice || view?.status === "undone" ? l.undone : l.applied}</div>}
             {!ready && <div className="rounded-xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
-              <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={include} disabled={busy} onChange={e => { setInclude(e.target.checked); requestID.current = null; }} className="accent-cinnabar-500" />{l.include}</label>
-              <p className="ml-6 mt-1 text-xs leading-relaxed text-neutral-500">{l.includeHint}</p>
+              {!prepared || library.isLoading || !picked ? (library.isError ? <p role="alert" className="text-sm">{l.error}</p> : <p className="text-sm">{l.preparing}</p>) : library.data && <AIOrganizerDocumentPicker
+                folders={library.data.folders} documents={library.data.documents} selected={picked} unavailable={unavailable} disabled={busy}
+                onChange={next => { setPicked(next); requestID.current = null; }} />}
               <div className="mt-5 border-t border-black/5 pt-4 text-sm dark:border-white/10">
-                {!prepared || estimate.isFetching ? <p>{l.preparing}</p> : estimate.data ? <><p>{interpolate(l.estimate, estimate.data)}</p><p className="mt-2 text-xs text-neutral-500">{estimate.data.providerMode === "builtin" ? interpolate(l.credits, { count: estimate.data.reservedCredits }) : l.byok}</p>{estimate.data.count === 0 && <p className="mt-4 text-neutral-500">{l.empty}</p>}</> : <p role="alert">{l.error}</p>}
-                {(!prepared || estimate.isError) && <button type="button" disabled={busy} onClick={() => { setError(""); setPrepareAttempt(n => n + 1); }} className="mt-3 underline">{l.newRun}</button>}
+                {!prepared || !picked ? null : !requestIds?.length ? <p className="text-neutral-500">{l.empty}</p> : !estimateSettled || estimate.isFetching ? <p>{l.preparing}</p> : estimate.data ? <><p>{interpolate(l.estimate, estimate.data)}</p><p className="mt-2 text-xs text-neutral-500">{estimate.data.providerMode === "builtin" ? interpolate(l.credits, { count: estimate.data.reservedCredits }) : l.byok}</p>{estimate.data.count === 0 && <p className="mt-4 text-neutral-500">{l.empty}</p>}</> : <p role="alert">{l.error}</p>}
+                {(!prepared || estimate.isError || library.isError) && <button type="button" disabled={busy} onClick={() => { setError(""); setPicked(null); setPrepareAttempt(n => n + 1); }} className="mt-3 underline">{l.newRun}</button>}
               </div>
             </div>}
             {ready && view.data.items.length === 0 && <p className="py-8 text-center text-sm text-neutral-500">{l.empty}</p>}
@@ -258,7 +283,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
         <div className="flex flex-wrap items-center justify-end gap-2">
           {undoTarget && <button type="button" disabled={busy || running} title={new Date(undoTarget.appliedAt).toLocaleString()} onClick={() => { setError(""); undo.mutate(undoTarget.id); }} className="flex items-center gap-1 rounded-lg border border-black/10 px-3 py-2 text-sm disabled:opacity-50 dark:border-white/15"><RotateCcw className="h-4 w-4" />{undoTarget.id === view?.id ? l.undo : l.undoPrevious}</button>}
           {ready && <button type="button" disabled={busy} onClick={() => void newRun()} className="rounded-lg px-3 py-2 text-sm text-neutral-500">{l.newRun}</button>}
-          {enabled && !loading && !running && (ready ? <button type="button" disabled={busy || parsed.invalid || !parsed.choices.length} onClick={() => { setError(""); apply.mutate(); }} className="rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : interpolate(l.apply, { count: parsed.choices.length })}</button> : <button type="button" disabled={busy || !prepared || !estimate.data?.count || estimate.isFetching || estimate.isError} onClick={() => { setError(""); generate.mutate(); }} className="flex items-center gap-2 rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{l.generate}</button>)}
+          {enabled && !loading && !running && (ready ? <button type="button" disabled={busy || parsed.invalid || !parsed.choices.length} onClick={() => { setError(""); apply.mutate(); }} className="rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : interpolate(l.apply, { count: parsed.choices.length })}</button> : <button type="button" disabled={busy || !prepared || !requestIds?.length || !estimateSettled || !estimate.data?.count || estimate.isFetching || estimate.isError} onClick={() => { setError(""); generate.mutate(); }} className="flex items-center gap-2 rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{l.generate}</button>)}
         </div>
       </footer>
     </div>

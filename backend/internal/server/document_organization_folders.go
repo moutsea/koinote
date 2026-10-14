@@ -12,6 +12,8 @@ import (
 
 type organizationTimeFolder struct {
 	organizationFolder
+	// Empty in snapshots saved before activity buckets were also obsolete.
+	Kind          string    `json:"kind,omitempty"`
 	DocumentCount int       `json:"documentCount"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
@@ -26,16 +28,31 @@ var organizationCalendarName = regexp.MustCompile(`(?i)^(?:` +
 	`(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec) [0-9]{1,2}|[0-9]{1,2} (?:janv\.|févr\.|mars|avr\.|mai|juin|juil\.|août|sept\.|oct\.|nov\.|déc\.)|` +
 	`日期未知|日付不明|unknown date|date inconnue)$`)
 
+// Recency labels produced by the activity strategy in supported locales.
+var organizationActivityName = regexp.MustCompile(`(?i)^(?:` +
+	`最近 7 天|8–30 天|31–90 天|91–365 天|一年以上|最近 7 日|8〜30 日|31〜90 日|91〜365 日|1 年以上|` +
+	`last 7 days|8–30 days|31–90 days|91–365 days|over one year|` +
+	`7 derniers jours|8–30 jours|31–90 jours|91–365 jours|plus d’un an)$`)
+
+func organizationObsoleteFolderName(kind, name string) bool {
+	name = strings.TrimSpace(name)
+	return (kind == "smart" && organizationCalendarName.MatchString(name)) ||
+		(kind == "activity" && organizationActivityName.MatchString(name))
+}
+
+// Automatic date/recency buckets that still carry their generated label. They
+// are never valid destinations: AI organization re-files their documents by
+// topic and removes the buckets once they are empty.
 func loadOrganizationTimeFolders(ctx context.Context, db organizationQuerier, userID int, expected []organizationFolder) ([]organizationTimeFolder, error) {
 	current, err := loadOrganizationFolders(ctx, db, userID)
 	if err != nil {
 		return nil, err
 	}
 	validate := organizationFolderPathValidator(expected, current)
-	rows, err := db.Query(ctx, `SELECT f.folder_id,f.name,COALESCE(p.folder_id,''),f.created_at,f.updated_at,
+	rows, err := db.Query(ctx, `SELECT f.folder_id,f.name,COALESCE(p.folder_id,''),f.organizer_kind,f.created_at,f.updated_at,
         (SELECT count(*) FROM documents d WHERE d.user_id=$1 AND d.folder_id=f.id)
         FROM folders f LEFT JOIN folders p ON p.id=f.parent_id
-        WHERE f.user_id=$1 AND f.organizer_kind='smart' ORDER BY f.folder_id`, userID)
+        WHERE f.user_id=$1 AND f.organizer_kind IS NOT NULL ORDER BY f.folder_id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -43,14 +60,69 @@ func loadOrganizationTimeFolders(ctx context.Context, db organizationQuerier, us
 	result := []organizationTimeFolder{}
 	for rows.Next() {
 		var folder organizationTimeFolder
-		if err := rows.Scan(&folder.ID, &folder.Name, &folder.ParentID, &folder.CreatedAt, &folder.UpdatedAt, &folder.DocumentCount); err != nil {
+		if err := rows.Scan(&folder.ID, &folder.Name, &folder.ParentID, &folder.Kind, &folder.CreatedAt, &folder.UpdatedAt, &folder.DocumentCount); err != nil {
 			return nil, err
 		}
-		if organizationCalendarName.MatchString(strings.TrimSpace(folder.Name)) && validate(folder.ID) == nil {
+		if organizationObsoleteFolderName(folder.Kind, folder.Name) && validate(folder.ID) == nil {
 			result = append(result, folder)
 		}
 	}
 	return result, rows.Err()
+}
+
+func organizationObsoleteFolderIDs(folders []organizationTimeFolder) map[string]bool {
+	ids := make(map[string]bool, len(folders))
+	for _, folder := range folders {
+		ids[folder.ID] = true
+	}
+	return ids
+}
+
+// organizationInObsoleteBranch reports whether a folder is an obsolete bucket
+// or nested anywhere inside one; such a destination would keep the bucket.
+func organizationInObsoleteBranch(folders []organizationFolder, obsolete map[string]bool, id string) bool {
+	for seen := 0; id != "" && seen <= maxFolderDepth; seen++ {
+		if obsolete[id] {
+			return true
+		}
+		i := slices.IndexFunc(folders, func(f organizationFolder) bool { return f.ID == id })
+		if i < 0 {
+			return false
+		}
+		id = folders[i].ParentID
+	}
+	return false
+}
+
+// retargetOrganizationChoice moves a destination out of obsolete buckets.
+// Obsolete levels are dropped from the path; the remaining folder names below
+// the topmost bucket become new folders under that bucket's parent, so
+// "2026年9月/AI行业动态" becomes "AI行业动态" at the bucket's level. It returns
+// false when nothing remains, i.e. the model only kept the time bucket.
+func retargetOrganizationChoice(choice organizationChoice, folders []organizationFolder, obsolete map[string]bool) (organizationChoice, bool) {
+	if !organizationInObsoleteBranch(folders, obsolete, choice.FolderID) {
+		return choice, true
+	}
+	var chain []organizationFolder
+	for id := choice.FolderID; id != "" && len(chain) <= maxFolderDepth; {
+		i := slices.IndexFunc(folders, func(f organizationFolder) bool { return f.ID == id })
+		if i < 0 {
+			break
+		}
+		chain = append(chain, folders[i])
+		id = folders[i].ParentID
+	}
+	slices.Reverse(chain)
+	top := slices.IndexFunc(chain, func(f organizationFolder) bool { return obsolete[f.ID] })
+	names := []string{}
+	for _, folder := range chain[top+1:] {
+		if !obsolete[folder.ID] {
+			names = append(names, folder.Name)
+		}
+	}
+	choice.FolderID = chain[top].ParentID
+	choice.NewFolders = append(names, choice.NewFolders...)
+	return choice, len(choice.NewFolders) > 0
 }
 
 func pruneOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, data *organizationData) error {
@@ -72,7 +144,7 @@ func pruneOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, da
 		if folder.DocumentCount > 0 {
 			continue
 		}
-		result, err := tx.Exec(ctx, `DELETE FROM folders f WHERE f.user_id=$1 AND f.folder_id=$2 AND f.organizer_kind='smart'
+		result, err := tx.Exec(ctx, `DELETE FROM folders f WHERE f.user_id=$1 AND f.folder_id=$2 AND f.organizer_kind IS NOT NULL
             AND NOT EXISTS(SELECT 1 FROM documents d WHERE d.folder_id=f.id)
             AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=f.id)`, userID, folder.ID)
 		if err != nil {
@@ -104,9 +176,13 @@ func restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, 
 		if present[folder.ID] || validate(folder.ID) != nil || (folder.ParentID != "" && !present[folder.ParentID]) {
 			continue
 		}
+		kind := folder.Kind
+		if kind == "" {
+			kind = "smart"
+		}
 		result, err := tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name,parent_id,organizer_kind,created_at,updated_at)
-            VALUES($1,$2,$3,(SELECT id FROM folders WHERE user_id=$2 AND folder_id=$4),'smart',$5,$6)
-            ON CONFLICT(folder_id) DO NOTHING`, folder.ID, userID, folder.Name, folder.ParentID, folder.CreatedAt, folder.UpdatedAt)
+            VALUES($1,$2,$3,(SELECT id FROM folders WHERE user_id=$2 AND folder_id=$4),$7,$5,$6)
+            ON CONFLICT(folder_id) DO NOTHING`, folder.ID, userID, folder.Name, folder.ParentID, folder.CreatedAt, folder.UpdatedAt, kind)
 		if err != nil {
 			return nil, err
 		}
@@ -117,4 +193,39 @@ func restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, 
 		current = append(current, folder.organizationFolder)
 	}
 	return current, nil
+}
+
+// retargetOrganizationSuggestions enforces that model output never keeps an
+// obsolete bucket alive. A suggestion that only keeps the document in a bucket
+// has no usable destination and becomes an unchecked item for manual review,
+// which also keeps a batch of such answers free of platform credits.
+func retargetOrganizationSuggestions(suggestions []organizationSuggestion, items []organizationItem, folders []organizationFolder, obsolete map[string]bool) []organizationSuggestion {
+	if len(obsolete) == 0 {
+		return suggestions
+	}
+	result := make([]organizationSuggestion, 0, len(suggestions))
+	for _, s := range suggestions {
+		if s.NeedsReview {
+			result = append(result, s)
+			continue
+		}
+		choice, ok := retargetOrganizationChoice(s.organizationChoice, folders, obsolete)
+		if ok {
+			if _, err := validateOrganizationChoice(choice, folders); err != nil {
+				ok = false
+			}
+		}
+		if !ok {
+			i := slices.IndexFunc(items, func(item organizationItem) bool { return item.DocID == s.DocID })
+			if i >= 0 {
+				fallback := organizationFallback(items[i])
+				fallback.Reason = s.Reason
+				result = append(result, fallback)
+				continue
+			}
+		}
+		s.organizationChoice = choice
+		result = append(result, s)
+	}
+	return result
 }

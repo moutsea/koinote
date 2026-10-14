@@ -1,32 +1,32 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.4",
+      "title": "What's new in Koinote 1.1.5",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "AI organization previews now show the cleanup of empty automatic date folders and explain removal on apply and restoration on undo."
+        "AI organization opens with a document tree to pick exactly which documents to organize. Folders select everything inside them; unorganized documents and documents in automatic date or activity folders are picked by default, including previously organized ones."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.4 新功能",
+      "title": "Koinote 1.1.5 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "AI 整理预览提前显示空时间目录的清理效果，并提示应用时清理、撤销时恢复。"
+        "AI 整理先弹出文件树，可勾选要整理的文档；勾选文件夹即选中其中全部文档。默认勾选未整理的文档和自动时间 / 活跃度目录里的文档（包括以前整理过的）。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.4",
+      "title": "Nouveautés de Koinote 1.1.5",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "L’aperçu du classement IA montre le nettoyage des dossiers de date automatiques vides et explique leur suppression à l’application et leur restauration à l’annulation."
+        "Le classement IA s’ouvre sur une arborescence permettant de choisir précisément les documents à organiser. Cocher un dossier sélectionne tout son contenu ; les documents non organisés et ceux des dossiers automatiques de dates ou d’activité sont cochés par défaut, y compris ceux déjà organisés."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.4 の新機能",
+      "title": "Koinote 1.1.5 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "AI 整理のプレビューに空の自動日付フォルダーの整理結果を表示し、適用時の削除と取り消し時の復元を案内します。"
+        "AI 整理の開始時にドキュメントツリーを表示し、整理するドキュメントを選べるようになりました。フォルダーを選ぶと中のドキュメントをすべて選択します。未整理のドキュメントと自動の日付・更新頻度フォルダー内のドキュメント（整理済みを含む）が既定で選択されます。"
       ]
     }
   }
