@@ -339,6 +339,23 @@ try {
   ], orders: [
     {folderId:"",newFolders:["Archive"],docIds:["second","doc"]},
   ] }, "apply must submit exactly the dragged destinations and managed tags, excluding unchecked documents");
+  await act(async () => root.render(null)); client.clear(); lastApplied = null;
+  const timeFolders = [
+    { id: "month", name: "2026年8月", parentId: "", documentCount: 0 },
+    { id: "week", name: "第 2 周", parentId: "month", documentCount: 1 },
+  ];
+  latest = { id: "calendar-preview", status: "ready", creditsCharged: 1, errorCode: "", data: {
+    ...data, folders: timeFolders, timeFolders,
+    items: [{ ...item, folderId: "week", suggested: { ...item.suggested, newFolders: ["Topics"] } }],
+  } };
+  await render(); await waitFor(() => document.querySelector('[data-preview-document="doc"]'));
+  assert.equal(directory('["month",[]]'), undefined, "an obsolete empty time branch must not render in the result tree");
+  assert.equal(location("doc"), '["",["Topics"]]');
+  assert.ok(document.body.textContent.includes(labels.cleanupTimeFolders.replace("{count}", "2")), "explain that empty date folders will be removed on apply");
+  latest = { ...latest, data: { ...latest.data, timeFolders: timeFolders.map(folder => ({ ...folder, documentCount: folder.id === "week" ? 2 : 0 })) } };
+  await act(async () => client.setQueryData(["document-organization", latest.id], { organization: latest }));
+  await waitFor(() => directory('["week",[]]'));
+  assert.ok(directory('["week",[]]'), "folder occupancy refresh preserves documents outside the editable preview");
   console.log("AI organizer dialog: lossless tags, pinned preview, discard protection, deleted-item pruning, prior undo and reload passed");
 } finally {
   await act(async () => root.unmount()); client.clear();

@@ -1560,6 +1560,7 @@ export interface Messages {
     newDocumentHere: string;
     treeMenu: string;
     aiOrganizer: {
+      cleanupTimeFolders: string;
       treeHint: string;
       previewScope: string;
       searchTree: string;

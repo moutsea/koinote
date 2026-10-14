@@ -35,7 +35,7 @@ export function AIOrganizerPreview({ data, drafts, busy, onChange }: {
   const treeViewport = useRef<HTMLElement>(null);
   const dragging = useRef<string | null>(null);
   const orderFocus = useRef<{ docId: string; direction: string } | null>(null);
-  const tree = useMemo(() => buildOrganizationPreview(data.items, data.folders, drafts, extras), [data.items, data.folders, drafts, extras]);
+  const tree = useMemo(() => buildOrganizationPreview(data.items, data.folders, drafts, extras, data.timeFolders), [data.items, data.folders, data.timeFolders, drafts, extras]);
   useEffect(() => {
     const pending = orderFocus.current;
     if (!pending) return;
@@ -238,6 +238,7 @@ export function AIOrganizerPreview({ data, drafts, busy, onChange }: {
     <div className="border-b border-black/5 p-4 dark:border-white/10">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">{l.preview}</h3><span className="text-xs text-neutral-500">{interpolate(l.selected, { count: selectedCount })}</span></div>
       <p className="mt-2 text-xs leading-relaxed text-neutral-500">{l.treeHint}</p>
+      {tree.removedDirectoryCount > 0 && <p className="mt-2 text-xs leading-relaxed text-neutral-500">{interpolate(l.cleanupTimeFolders, { count: tree.removedDirectoryCount })}</p>}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="relative min-w-0 flex-1 basis-40"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-neutral-400" /><input type="search" aria-label={l.searchTree} placeholder={l.searchTree} value={search} onChange={event => setSearch(event.target.value)} className={`${inputClass} pl-8`} /></label>
         <button type="button" title={l.expandAll} aria-label={l.expandAll} onClick={() => setCollapsed(new Set())} className="rounded p-2 hover:bg-black/5 dark:hover:bg-white/10"><ChevronDown className="h-4 w-4" /></button>

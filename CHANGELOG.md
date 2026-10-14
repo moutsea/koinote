@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-14
+
+### Changed
+
+- AI organization previews now show the cleanup of empty automatic date folders and explain removal on apply and restoration on undo.
+
+### Fixed
+
+- AI organization previews and application now remove empty automatic date folders, with the original structure restored on undo. Manual or repurposed topic folders and folders containing excluded or trashed articles are preserved. Existing previews gain cleanup without regeneration.
+
 ## [1.1.3] - 2026-10-14
 
 ### Added

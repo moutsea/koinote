@@ -216,6 +216,12 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 	if err != nil {
 		return err
 	}
+	if undo {
+		folders, err = restoreOrganizationTimeFolders(ctx, tx, userID, data, folders)
+		if err != nil {
+			return err
+		}
+	}
 	expectedFolders := append([]organizationFolder{}, data.Folders...)
 	if undo {
 		expectedFolders = append(expectedFolders, data.CreatedFolders...)
@@ -426,6 +432,9 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 		}
 		status = "undone"
 	} else {
+		if err := pruneOrganizationTimeFolders(ctx, tx, userID, &data); err != nil {
+			return err
+		}
 		status = "applied"
 	}
 	raw, err = json.Marshal(data)

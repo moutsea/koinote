@@ -2103,6 +2103,7 @@ export const zh: Messages = {
     newDocumentHere: "在此新建文档",
     treeMenu: "文件树操作",
     aiOrganizer: {
+      cleanupTimeFolders: "应用时将清理 {count} 个已空的自动时间目录，撤销整理可恢复。",
       "treeHint": "拖动文章到目录可换目录，拖到其他文章上方或下方可排序，也可用行尾的上移、下移按钮。点击文章编辑标签，目录旁可新建子目录。调整位置的文章会自动勾选，应用后生效。",
       "previewScope": "仅展示本次整理的文章；其他文章保持不变。所有调整在点击「应用」后生效。",
       "searchTree": "搜索文章、目录或标签",

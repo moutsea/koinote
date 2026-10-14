@@ -2282,6 +2282,7 @@ export const fr: Messages = {
     newDocumentHere: "Nouveau document ici",
     treeMenu: "Actions sur l'arborescence",
     aiOrganizer: {
+      cleanupTimeFolders: "L’application supprimera {count} dossiers de date automatiques vides. L’annulation les restaurera.",
       "treeHint": "Glissez un article sur un dossier pour le déplacer, ou au-dessus ou en dessous d’un autre pour modifier l’ordre. Les boutons haut/bas de chaque ligne permettent aussi de le réordonner. Cliquez sur un article pour modifier les tags, ou sur le bouton du dossier pour créer un sous-dossier. Les articles déplacés sont cochés automatiquement. Appliquez pour enregistrer.",
       "previewScope": "Seuls les articles de cette organisation sont affichés ; les autres restent inchangés. Les modifications prennent effet après application.",
       "searchTree": "Rechercher articles, dossiers ou tags",

@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-14
+
+### Changed
+
+- L’aperçu du classement IA montre le nettoyage des dossiers de date automatiques vides et explique leur suppression à l’application et leur restauration à l’annulation.
+
+### Fixed
+
+- L’aperçu et l’application du classement IA suppriment les dossiers de date automatiques vides, restaurés en cas d’annulation. Les dossiers manuels, réutilisés par thème ou contenant des articles exclus ou dans la corbeille sont conservés. Les aperçus existants en bénéficient sans nouvelle génération.
+
 ## [1.1.3] - 2026-10-14
 
 ### Added

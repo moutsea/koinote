@@ -78,16 +78,18 @@ type organizationData struct {
 	Items          []organizationItem        `json:"items"`
 	// Track all prompt sources, including skipped documents used as examples or
 	// tag vocabulary, so permanent deletion can stop subsequent model requests.
-	InputDocumentIDs []string             `json:"inputDocumentIds,omitempty"`
-	Folders          []organizationFolder `json:"folders"`
-	CreatedFolders   []organizationFolder `json:"createdFolders"`
-	IncludeOrganized bool                 `json:"includeOrganized"`
-	Completed        int                  `json:"completed"`
-	Skipped          int                  `json:"skipped"`
-	ProviderMode     string               `json:"providerMode"`
-	ReservedCredits  int64                `json:"reservedCredits"`
-	UnbilledBatches  int                  `json:"unbilledBatches,omitempty"`
-	StopReason       string               `json:"stopReason,omitempty"`
+	InputDocumentIDs []string                 `json:"inputDocumentIds,omitempty"`
+	Folders          []organizationFolder     `json:"folders"`
+	CreatedFolders   []organizationFolder     `json:"createdFolders"`
+	TimeFolders      []organizationTimeFolder `json:"timeFolders,omitempty"`
+	RemovedFolders   []organizationTimeFolder `json:"removedFolders,omitempty"`
+	IncludeOrganized bool                     `json:"includeOrganized"`
+	Completed        int                      `json:"completed"`
+	Skipped          int                      `json:"skipped"`
+	ProviderMode     string                   `json:"providerMode"`
+	ReservedCredits  int64                    `json:"reservedCredits"`
+	UnbilledBatches  int                      `json:"unbilledBatches,omitempty"`
+	StopReason       string                   `json:"stopReason,omitempty"`
 }
 type organizationView struct {
 	ID             string           `json:"id"`
@@ -220,6 +222,10 @@ func (a *App) prepareOrganization(ctx context.Context, userID int, include bool,
 		return data, nil, err
 	}
 	folderKinds, err := loadOrganizationFolderKinds(ctx, tx, userID)
+	if err != nil {
+		return data, nil, err
+	}
+	data.TimeFolders, err = loadOrganizationTimeFolders(ctx, tx, userID, data.Folders)
 	if err != nil {
 		return data, nil, err
 	}
@@ -448,6 +454,11 @@ func (a *App) loadOrganization(ctx context.Context, userID int, id string) (orga
 	err := a.db.QueryRow(ctx, `SELECT organization_id::text,status,data,credits_charged,error_code FROM document_organizations WHERE user_id=$1 AND organization_id=$2::uuid`, userID, id).Scan(&view.ID, &view.Status, &data, &view.CreditsCharged, &view.ErrorCode)
 	if err == nil {
 		err = json.Unmarshal(data, &view.Data)
+	}
+	if err == nil && view.Status == "ready" {
+		// Also enrich previews generated before empty-folder cleanup existed.
+		// No new model call or credits are needed to correct the tree preview.
+		view.Data.TimeFolders, err = loadOrganizationTimeFolders(ctx, a.db, userID, view.Data.Folders)
 	}
 	return view, err
 }

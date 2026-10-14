@@ -66,3 +66,25 @@ const above = moveOrganizationDocument(onlyC, "c", rootTarget, folders, orderIte
 assert.deepEqual(buildOrganizationPreview(orderItems, folders, above).root.documents.map(item => item.docId), ["c", "a", "b", "d"]);
 assert.deepEqual(buildOrganizationPreview(orderItems, folders, {...above,c:{...above.c,selected:false}}).root.documents.map(item => item.docId), ["a", "b", "c", "d"], "deselecting the moved article restores its original position");
 console.log("AI organization preview: repeated before/after moves, cross-folder order and deselection passed");
+
+const calendarFolders = [
+  { id: "month", name: "2026年8月", parentId: "" },
+  { id: "week", name: "第 2 周", parentId: "month" },
+  { id: "empty-week", name: "第 3 周", parentId: "month" },
+  { id: "manual-date", name: "2026年8月", parentId: "" },
+];
+const calendarItems = [{ docId: "calendar-doc", title: "SQL", folderId: "week", tags: [] }];
+const calendarDrafts = { "calendar-doc": { selected: true, folderId: "", newPath: "Databases", tags: [] } };
+const timeFolders = calendarFolders.slice(0, 3).map(folder => ({ ...folder, documentCount: folder.id === "week" ? 1 : 0 }));
+const calendarTree = buildOrganizationPreview(calendarItems, calendarFolders, calendarDrafts, [], timeFolders);
+assert.equal(calendarTree.removedDirectoryCount, 3);
+assert.deepEqual(calendarTree.root.children.map(node => node.name).sort(), ["2026年8月", "Databases"].sort(), "remove empty automatic branches but retain a manually created date folder");
+assert.ok(calendarTree.directories.has('["manual-date",[]]'));
+const uncheckedCalendar = buildOrganizationPreview(calendarItems, calendarFolders, { "calendar-doc": { ...calendarDrafts["calendar-doc"], selected: false } }, [], timeFolders);
+assert.ok(uncheckedCalendar.directories.has('["week",[]]'), "unchecking a move restores the source folder immediately");
+const occupiedCalendar = buildOrganizationPreview(calendarItems, calendarFolders, calendarDrafts, [], timeFolders.map(folder => ({ ...folder, documentCount: folder.id === "week" ? 2 : 0 })));
+assert.ok(occupiedCalendar.directories.has('["week",[]]'), "excluded, organized or trashed documents outside the preview prevent cleanup");
+const manualChild = { id: "manual-child", name: "Reference", parentId: "week" };
+assert.ok(buildOrganizationPreview(calendarItems, [...calendarFolders, manualChild], calendarDrafts, [], timeFolders).directories.has('["week",[]]'), "a manual child folder keeps its time-folder ancestors");
+assert.ok(buildOrganizationPreview(calendarItems, calendarFolders, calendarDrafts, [{ folderId: "week", newFolders: ["New topic"] }], timeFolders).directories.has('["week",[]]'), "an explicitly created child remains visible");
+console.log("AI organization preview: empty time-folder pruning, deselection and occupied/manual folder protection passed");

@@ -2448,6 +2448,7 @@ export function permanentlyDeleteDocument(docId: string, confirmation: string) {
 }
 
 export type OrganizationFolder = { id: string; name: string; parentId: string };
+export type OrganizationTimeFolder = OrganizationFolder & { documentCount: number };
 export type OrganizationChoice = { docId: string; folderId: string; newFolders: string[]; tags: string[] };
 export type OrganizationOrder = { folderId: string; newFolders: string[]; docIds: string[] };
 export type OrganizationItem = {
@@ -2460,6 +2461,7 @@ export type DocumentOrganization = {
   id: string; status: "running" | "ready" | "applied" | "undone" | "failed";
   creditsCharged: number; errorCode: string;
   data: { items: OrganizationItem[]; folders: OrganizationFolder[];
+    timeFolders?: OrganizationTimeFolder[];
     createdFolders: OrganizationFolder[]; completed: number; skipped: number;
     includeOrganized: boolean; providerMode: string; reservedCredits: number; unbilledBatches?: number; stopReason?: "timeout" | "failure_limit" | "failure_ratio" };
 };

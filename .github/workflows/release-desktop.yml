@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds a direct upgrade action to desktop release announcements and improves AI organization of documents previously filed into automatic date or activity folders."
+          notes="Koinote Desktop $version removes empty automatic date folders from AI organization previews and applied results, preserves occupied and manual folders, and restores the original structure on undo."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,13 +237,13 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 是客户端升级入口与 AI 整理分类补丁。
+          Koinote $version 修复 AI 整理后残留空时间目录的问题。
 
-          - 版本提醒增加“立即升级”，直接进入检查、下载并重启流程，无需打开账户菜单。新入口从本版本开始生效。
-          - 修复更新器正在加载或后台检查时点击无响应的问题，保留升级前保存文档和下载重试。
-          - AI 整理区分自动时间 / 活跃度目录与主题分类，不再把旧自动归档当作已确认的分类参考。
+          - 预览和应用结果会清理已空的自动“年月 → 周”目录，撤销时恢复原目录结构和文章位置。
+          - 保留手动目录、已改为主题的目录，以及仍含未勾选或回收站文章的目录。
+          - 已有待应用预览无需重新生成，不会因此再次调用 AI 或消耗 credits。
 
-          已安装旧版的用户可通过启动后的自动检查或账户菜单完成本次升级。
+          1.1.3 客户端可在版本提醒中点击“立即升级”；也可通过启动后的自动检查或账户菜单升级。
 
           - **macOS Apple 芯片**：文件名包含 \`aarch64\`
           - **macOS Intel 芯片**：文件名包含 \`x64\`
@@ -253,13 +253,13 @@ jobs:
 
           ---
 
-          Koinote $version improves desktop upgrades and AI organization.
+          Koinote $version fixes empty date folders left behind after AI organization.
 
-          - Desktop release announcements now offer an Upgrade now button to enter the check, download and restart flow without the account menu. This entry point becomes available starting with this version.
-          - Clicks during updater loading or background checks are handled reliably. Saving documents before installation and download retries remain in place.
-          - AI organization distinguishes automatic date/activity folders from topic classifications instead of treating previous automatic filing as a confirmed example.
+          - Previews and applied results remove empty automatic month/week folders. Undo restores the original structure and article locations.
+          - Manual folders, repurposed topic folders and folders containing unchecked or trashed articles are preserved.
+          - Existing pending previews gain cleanup without regeneration, another AI call or additional credits.
 
-          Existing clients can install this release through the automatic startup check or the account menu.
+          Version 1.1.3 clients can use Upgrade now in release announcements. Automatic startup checks and the account menu remain available.
 
           These installers do not use platform code-signing certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
           EOF

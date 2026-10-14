@@ -2244,6 +2244,7 @@ export const en: Messages = {
     newDocumentHere: "New document here",
     treeMenu: "File tree actions",
     aiOrganizer: {
+      cleanupTimeFolders: "Applying will remove {count} empty automatic date folders. Undo will restore them.",
       "treeHint": "Drag an article onto a folder to move it, or above or below another article to reorder it. You can also use the up/down buttons on each row. Click an article to edit tags; use the folder button to add a subfolder. Moved articles are checked automatically. Apply to save.",
       "previewScope": "Only articles in this run are shown; other articles stay unchanged. Edits take effect when you apply the preview.",
       "searchTree": "Search articles, folders or tags",

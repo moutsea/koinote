@@ -1,4 +1,4 @@
-import type { OrganizationFolder, OrganizationItem, OrganizationOrder } from "../../api";
+import type { OrganizationFolder, OrganizationItem, OrganizationOrder, OrganizationTimeFolder } from "../../api";
 import { organizationChoices, organizationDestination, type OrganizationDraft } from "./aiOrganizerCore";
 
 export type PreviewDestination = { folderId: string; newFolders: string[] };
@@ -8,7 +8,7 @@ export type PreviewDirectory = PreviewDestination & {
 };
 export const previewDirectoryKey = (target: PreviewDestination) => JSON.stringify([target.folderId, target.newFolders]);
 
-export function buildOrganizationPreview(items: OrganizationItem[], folders: OrganizationFolder[], drafts: Record<string, OrganizationDraft>, extras: PreviewDestination[] = []) {
+export function buildOrganizationPreview(items: OrganizationItem[], folders: OrganizationFolder[], drafts: Record<string, OrganizationDraft>, extras: PreviewDestination[] = [], timeFolders: OrganizationTimeFolder[] = []) {
   const root: PreviewDirectory = { key: previewDirectoryKey({ folderId: "", newFolders: [] }), name: "", folderId: "", newFolders: [], path: [], children: [], documents: [], count: 0 };
   const directories = new Map<string, PreviewDirectory>([[root.key, root]]);
   const folderMap = new Map(folders.map(folder => [folder.id, folder]));
@@ -74,7 +74,25 @@ export function buildOrganizationPreview(items: OrganizationItem[], folders: Org
     return node.count;
   }
   sort(root);
-  return { root, directories, locations };
+  const timeFolderCounts = new Map(timeFolders.map(folder => [folder.id, folder.documentCount]));
+  const originalCounts = new Map<string, number>();
+  for (const item of items) originalCounts.set(item.folderId, (originalCounts.get(item.folderId) ?? 0) + 1);
+  let removedDirectoryCount = 0;
+  function retain(node: PreviewDirectory): boolean {
+    node.children = node.children.filter(retain);
+    const count = timeFolderCounts.get(node.folderId);
+    // Counts include excluded/previously organized articles and trash. A
+    // folder absent from this preview can still contain real documents.
+    const outsidePreview = Math.max(0, (count ?? 0) - (originalCounts.get(node.folderId) ?? 0));
+    if (node !== root && !node.newFolders.length && count !== undefined && !outsidePreview && !node.documents.length && !node.children.length) {
+      directories.delete(node.key);
+      removedDirectoryCount++;
+      return false;
+    }
+    return true;
+  }
+  retain(root);
+  return { root, directories, locations, removedDirectoryCount };
 }
 
 export function moveOrganizationDocument(drafts: Record<string, OrganizationDraft>, docId: string, target: PreviewDestination, folders: OrganizationFolder[], items: OrganizationItem[], anchor?: { docId: string; edge: "before" | "after" }) {
