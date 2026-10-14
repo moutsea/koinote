@@ -1,6 +1,7 @@
 import type { DocumentOrganization, OrganizationChoice, OrganizationFolder, OrganizationItem } from "../../api";
 
-export type OrganizationDraft = { selected: boolean; folderId: string; newPath: string; tags: string[] };
+export type OrganizationPlacement = { sequence: number; anchorDocId?: string; edge?: "before" | "after" };
+export type OrganizationDraft = { selected: boolean; folderId: string; newPath: string; tags: string[]; placement?: OrganizationPlacement };
 export function organizationDrafts(items: OrganizationItem[]): Record<string, OrganizationDraft> {
   return Object.fromEntries(items.filter(item => item.suggested).map(item => [item.docId, {
     selected: !item.needsReview, folderId: item.suggested!.folderId,
@@ -27,8 +28,22 @@ export function organizationChoices(drafts: Record<string, OrganizationDraft>, f
     });
     const path = organizationPath(folders, draft.folderId);
     if (path.length + newFolders.length > 8 || newFolders.some(name => !name || name === "." || name === ".." || /[\\\x00-\x1f\x7f-\x9f]/.test(name) || [...name].length > 60) || tags.length > 5 || tags.some(tag => [...tag].length > 32 || /[\x00-\x1f\x7f-\x9f]/.test(tag))) throw new Error("invalid_organization");
-    return { docId, folderId: draft.folderId, newFolders, tags };
+    return { docId, ...organizationDestination(folders, draft.folderId, newFolders), tags };
   });
+}
+
+// Apply reuses an existing child with the same name. Resolve that same path in
+// the preview, while keeping genuinely different same-name folders separate.
+export function organizationDestination(folders: OrganizationFolder[], folderId: string, newFolders: string[]) {
+  let consumed = 0;
+  for (const name of newFolders) {
+    const matches = folders.filter(folder => folder.parentId === folderId && folder.name === name);
+    if (matches.length > 1) throw new Error("organization_ambiguous_folder");
+    if (!matches.length) break;
+    folderId = matches[0].id;
+    consumed++;
+  }
+  return { folderId, newFolders: newFolders.slice(consumed) };
 }
 
 // A restored running task can have no detail data yet. Keep polling after a

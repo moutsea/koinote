@@ -48,8 +48,8 @@ globalThis.__organizerTest = {
     savedPreviews.set(id, organization);
     return structuredClone({ organization });
   },
-  apply: async (id, items) => {
-    calls.apply.push({ id, items });
+  apply: async (id, items, orders = []) => {
+    calls.apply.push({ id, items, ...(orders.length ? {orders} : {}) });
     const organization = { ...(id === latest.id ? latest : savedPreviews.get(id)), status: "applied" };
     savedPreviews.set(id, organization);
     if (latest.id === id) latest = organization;
@@ -74,7 +74,7 @@ const adapters = {
   "../../desktop/offlineStore": "export const desktopPrepareLibraryForOrganization=globalThis.__organizerTest.prepare; export const syncDesktopNow=async()=>({state:'idle'});",
   "../Logo": "export const Logo=()=>null;",
   "@tanstack/react-router": "export const Link=()=>null; export const useNavigate=()=>()=>{};",
-  "lucide-react": "const Icon=()=>null; export const ArrowRight=Icon, Check=Icon, Folder=Icon, LoaderCircle=Icon, Plus=Icon, RotateCcw=Icon, X=Icon;",
+  "lucide-react": "const Icon=()=>null; export const ArrowUp=Icon, ArrowDown=Icon, ArrowRight=Icon, Check=Icon, Folder=Icon, LoaderCircle=Icon, Plus=Icon, RotateCcw=Icon, X=Icon, ChevronDown=Icon, ChevronRight=Icon, FileText=Icon, FolderPlus=Icon, GripVertical=Icon, Search=Icon, Tags=Icon;",
 };
 const bundle = await build({
   stdin: { contents: `export {createElement,act} from 'react'; export {createRoot} from 'react-dom/client';
@@ -101,10 +101,16 @@ const waitFor = async predicate => {
   }
   assert.fail("dialog did not reach the expected state");
 };
-const click = async text => { const target = button(text); assert.ok(target, `button ${text}`); assert.equal(target.disabled, false); await act(async () => target.click()); };
-const tagInputs = () => [...document.querySelectorAll('input[aria-label]')].filter(input => input.getAttribute("aria-label").includes(labels.tags));
+const click = async text => { const target = button(text); assert.ok(target, `button ${text}`); assert.equal(target.disabled, false); await act(async () => { target.click(); if (target.closest("form") && target.getAttribute("type") !== "button") target.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); }); };
+const tagInputs = () => [...document.querySelectorAll('article input[aria-label]')].filter(input => input.getAttribute("aria-label").includes(labels.tags));
+const openArticle = async (id = "doc") => {
+  await waitFor(() => document.querySelector(`[data-preview-document="${id}"] [data-edit-document]`));
+  const target = document.querySelector(`[data-preview-document="${id}"] [data-edit-document]`);
+  if (target.getAttribute("aria-expanded") !== "true") await act(async () => target.click());
+};
 try {
   await render();
+  await openArticle();
   await waitFor(() => tagInputs().length === 2 && button(labels.undoPrevious));
   assert.deepEqual(tagInputs().map(input => input.value), ["商业、营销", "Go"]);
   await click(labels.addTag);
@@ -152,7 +158,8 @@ try {
   await act(async () => root.render(null)); client.clear();
   latest = { ...latest, id: "deletion-preview", status: "ready", data: { ...data, items: [item, { ...item, docId: "deleted-doc", suggested: { ...item.suggested, docId: "deleted-doc" } }] } };
   await render();
-  await waitFor(() => tagInputs().length === 4);
+  await openArticle();
+  await waitFor(() => document.querySelectorAll("[data-preview-document]").length === 2 && tagInputs().length === 2);
   const keptInput = tagInputs()[0];
   await act(async () => {
     keptInput.type = "text";
@@ -161,7 +168,7 @@ try {
   });
   latest = { ...latest, data: { ...latest.data, items: [item] } };
   await act(async () => { await client.invalidateQueries({ queryKey: ["document-organization", latest.id] }); });
-  await waitFor(() => tagInputs().length === 2);
+  await waitFor(() => document.querySelectorAll("[data-preview-document]").length === 1);
   assert.deepEqual(tagInputs().map(input => input.value), ["保留修改", "Go"]);
   await click(labels.apply.replace("{count}", "1"));
   await waitFor(() => calls.apply.length === 2);
@@ -171,6 +178,7 @@ try {
     { id: "folder-a", name: "Same", parentId: "" }, { id: "folder-b", name: "Same", parentId: "" },
   ] } };
   await render();
+  await openArticle();
   await waitFor(() => tagInputs().length === 2);
   assert.ok(document.body.textContent.includes(labels.needsReview));
   assert.ok(document.body.textContent.includes(labels.unbilledBatches.replace("{count}", "1")));
@@ -178,7 +186,7 @@ try {
   await act(async () => { await client.invalidateQueries({ queryKey: ["document-organization", latest.id] }); });
   await waitFor(() => document.body.textContent.includes(labels.invalidBatchesByok.replace("{count}", "1")));
   assert.equal(button(labels.apply.replace("{count}", "0")).disabled, true);
-  const options = [...document.querySelectorAll("select option")].filter(option => option.value);
+  const options = [...document.querySelectorAll("select[data-destination-select] option")].filter(option => option.value !== '["",[]]');
   assert.equal(options.length, 2);
   assert.notEqual(options[0].textContent, options[1].textContent, "same-name destinations must be distinguishable");
   for (const [stopReason, message] of [["timeout", labels.partialTimeout], ["failure_limit", labels.partialFailureLimit], ["failure_ratio", labels.partialFailureRatio]]) {
@@ -186,21 +194,24 @@ try {
     latest = { ...latest, id: `partial-${stopReason}`, status: "ready", data: { ...data, stopReason, completed: 1, items: [item, { ...item, docId: "unfinished", title: "未完成的文章", suggested: { ...item.suggested, docId: "unfinished" }, needsReview: true, notAnalyzed: true }] } };
     await render();
     await waitFor(() => document.body.textContent.includes(message.replace("{done}", "1").replace("{total}", "2")));
+    assert.ok(document.body.textContent.includes(labels.notAnalyzedShort));
+    await openArticle("unfinished");
     assert.ok(document.body.textContent.includes(labels.notAnalyzed));
     assert.ok(!document.body.textContent.includes(labels.needsReview), "unfinished work must not be labeled as an invalid model suggestion");
-    assert.deepEqual([...document.querySelectorAll("article input[type=checkbox]")].map(input => input.checked), [true, false]);
+    assert.deepEqual([...document.querySelectorAll("input[data-preview-include]")].map(input => input.checked), [true, false]);
     assert.equal(button(labels.apply.replace("{count}", "1")).disabled, false, "completed suggestions must remain applicable");
   }
   for (const [status, message] of [[400, labels.providerRejected], [422, labels.providerRejected], [429, labels.providerRateLimited], [503, labels.providerUnavailable]]) {
     await act(async () => root.render(null)); client.clear();
     latest = { ...latest, id: `provider-${status}`, status: "ready", data: { ...data, unbilledBatches: 2, items: [item, { ...item, docId: "second", suggested: { ...item.suggested, docId: "second" } }].map(value => ({ ...value, needsReview: true, failureStatus: status })) } };
     await render();
+    await openArticle();
     const diagnostic = message.replace("{status}", status);
     await waitFor(() => document.body.textContent.includes(diagnostic));
     assert.equal([...document.querySelectorAll('[role="status"]')].filter(node => node.textContent === diagnostic).length, 1, "provider errors should be explained once per status");
     assert.ok(document.body.textContent.includes(labels.providerItem.replace("{status}", status)));
     assert.ok(!document.body.textContent.includes(labels.needsReview), "a rejected request must not be labeled as an invalid suggestion");
-    assert.deepEqual([...document.querySelectorAll("article input[type=checkbox]")].map(input => input.checked), [false, false]);
+    assert.deepEqual([...document.querySelectorAll("input[data-preview-include]")].map(input => input.checked), [false, false]);
     assert.equal(button(labels.apply.replace("{count}", "0")).disabled, true);
   }
   latest = { ...latest, status: "applied", data: { ...latest.data, items: [{ ...item, applySkipped: true }] } };
@@ -218,11 +229,116 @@ try {
   assert.deepEqual(calls.estimate.at(-1).exclude, ["conflict-doc"], "estimate must exclude local conflicts");
   assert.ok(document.body.textContent.includes(labels.excludedConflicts.replace("{count}", "1")));
   await click(labels.generate);
+  await openArticle();
   await waitFor(() => tagInputs().length === 2);
   assert.deepEqual(calls.create.at(-1).exclude, ["conflict-doc"], "generation must use the same exclusions as its estimate");
   await click(labels.apply.replace("{count}", "1"));
   await waitFor(() => button(labels.undo));
   assert.deepEqual(calls.prepare.at(-1), ["doc"], "apply must check only selected documents for conflicts");
+  // Edit the tree in place, then check the submitted plan.
+  await act(async () => root.render(null)); client.clear(); desktopMode = false; lastApplied = null;
+  const previewFolders = [{ id: "work", name: "Work", parentId: "" }, { id: "empty", name: "Empty", parentId: "" }];
+  latest = { id: "tree-preview", status: "ready", creditsCharged: 1, errorCode: "", data: { ...data, folders: previewFolders, items: [
+    { ...item, tags: ["Original"], suggested: { ...item.suggested, folderId: "work", newFolders: ["Guides"], tags: ["Go", "营销"] } },
+    { ...item, docId: "second", title: "Second", suggested: { docId: "second", folderId: "empty", newFolders: [], tags: ["go", "Notes"] } },
+    { ...item, docId: "excluded", title: "Excluded", tags: ["Keep"], needsReview: true, suggested: { docId: "excluded", folderId: "work", newFolders: [], tags: ["Private"] } },
+  ] } };
+  await render();
+  await waitFor(() => document.querySelectorAll("[data-preview-document]").length === 3);
+  assert.equal(document.querySelectorAll("aside").length, 0, "preview uses a single tree without a side pane");
+  assert.equal(document.querySelectorAll("article").length, 0, "article editors stay collapsed until requested");
+  await openArticle();
+  assert.equal(document.querySelectorAll("article").length, 1);
+  assert.ok(document.querySelector('[data-preview-document="doc"] article'), "article editor must be inside its tree row");
+  await openArticle("second");
+  assert.equal(document.querySelectorAll("article").length, 1, "opening another row keeps only one inline editor");
+  await act(async () => document.querySelector('[data-preview-document="second"] [data-edit-document]').click());
+  assert.equal(document.querySelectorAll("article").length, 0, "article can be collapsed again");
+  const docRow = id => document.querySelector(`[data-preview-document="${id}"]`);
+  const location = id => docRow(id).parentElement.closest("[data-preview-folder]").getAttribute("data-preview-folder");
+  const directory = key => [...document.querySelectorAll("[data-preview-folder]")].find(node => node.getAttribute("data-preview-folder") === key);
+  const setInput = async (input, value) => act(async () => {
+    if (input.type !== "search") input.type = "text";
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(input, value);
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
+  });
+  const drag = async (docId, key, local = true) => act(async () => {
+    const values = new Map(); const transfer = { setData: (key, value) => values.set(key, value), getData: key => values.get(key) ?? "" };
+    const event = type => Object.assign(new window.Event(type, { bubbles: true, cancelable: true }), { dataTransfer: transfer });
+    if (local) docRow(docId).querySelector("[data-edit-document]").dispatchEvent(event("dragstart"));
+    else transfer.setData("application/x-koinote-organization-document", docId);
+    directory(key).firstElementChild.dispatchEvent(event("dragover"));
+    directory(key).firstElementChild.dispatchEvent(event("drop"));
+  });
+  assert.equal(location("doc"), '["work",["Guides"]]');
+  assert.equal(location("excluded"), '["",[]]', "unchecked suggestions stay in their original locations");
+  await drag("doc", '["empty",[]]', false);
+  assert.equal(location("doc"), '["work",["Guides"]]', "external drag payloads must not modify a preview");
+  await drag("doc", '["empty",[]]');
+  assert.equal(location("doc"), '["empty",[]]');
+  await act(async () => directory('["",[]]').firstElementChild.querySelector("[data-create-directory]").click());
+  assert.ok(directory('["",[]]').querySelector("form"), "new folder is created inline at its parent");
+  await setInput(document.querySelector(`input[aria-label="${labels.directoryName}"]`), "Archive");
+  await click(labels.createDirectory);
+  assert.ok(directory('["",["Archive"]]'), "new folders must immediately become drop targets");
+  await drag("second", '["",["Archive"]]');
+  const insertAt = async (docId, anchorId, edge) => {
+    const values = new Map(); const transfer = {setData:(key,value)=>values.set(key,value),getData:key=>values.get(key)??""};
+    const target = docRow(anchorId);
+    target.getBoundingClientRect = () => ({top:10,height:40});
+    const event = type => Object.assign(new window.Event(type,{bubbles:true,cancelable:true}),{dataTransfer:transfer,clientY:edge==="before"?15:45});
+    const priorNotice = [...document.querySelectorAll('[role="status"]')].map(node=>node.textContent);
+    await act(async () => {
+      docRow(docId).querySelector("[data-edit-document]").dispatchEvent(event("dragstart"));
+      target.dispatchEvent(event("dragover"));
+    });
+    assert.deepEqual([...document.querySelectorAll('[role="status"]')].map(node=>node.textContent),priorNotice,"starting a drag must not shift drop targets by removing a notice");
+    assert.equal(target.querySelector("[data-preview-insertion]")?.getAttribute("data-preview-insertion"),edge,"show the insertion point before committing a drop");
+    await act(async () => target.dispatchEvent(event("drop")));
+    assert.equal(document.querySelector("[data-preview-insertion]"),null,"clear insertion marker after dropping");
+  };
+  await insertAt("doc", "second", "before");
+  assert.equal(location("doc"), '["",["Archive"]]', "dropping on an article also changes the destination folder");
+  await insertAt("doc", "second", "after");
+  assert.deepEqual([...directory('["",["Archive"]]').querySelectorAll("[data-preview-document]")].map(node=>node.getAttribute("data-preview-document")),["second","doc"]);
+  const orderedRows = () => [...directory('["",["Archive"]]').querySelectorAll("[data-preview-document]")].map(node => node.getAttribute("data-preview-document"));
+  assert.equal(docRow("second").querySelector('[data-move-document="up"]').disabled, true);
+  assert.equal(docRow("doc").querySelector('[data-move-document="down"]').disabled, true);
+  assert.equal(docRow("doc").querySelector('[data-move-document="up"]').getAttribute("aria-label"), labels.moveUp.replace("{title}", item.title));
+  await act(async () => docRow("doc").querySelector('[data-move-document="up"]').click());
+  assert.deepEqual(orderedRows(), ["doc", "second"], "row buttons reorder without a mouse drag");
+  await act(async () => docRow("doc").querySelector('[data-move-document="down"]').click());
+  assert.deepEqual(orderedRows(), ["second", "doc"], "down button restores the intended submitted order");
+  await click(labels.manageTags);
+  assert.equal(button(labels.manageTags).getAttribute("aria-expanded"), "true");
+  await click(labels.renameTag);
+  await setInput(document.querySelector(`input[aria-label="${labels.renameTag}"]`), "Notes");
+  await click(labels.saveTag);
+  await act(async () => document.querySelector(`button[aria-label="${labels.removeTag}: 营销"]`).click());
+  await setInput(document.querySelector(`input[aria-label="${labels.bulkTag}"]`), "Reviewed");
+  await click(labels.addTag);
+  await click(labels.manageTags);
+  assert.equal(button(labels.manageTags).getAttribute("aria-expanded"), "false");
+  assert.equal(document.querySelector("#organization-tag-manager"), null, "bulk tag controls collapse back into the toolbar");
+  await openArticle();
+  assert.deepEqual(tagInputs().map(input => input.value), ["Notes", "Reviewed"], "inline editor reflects bulk updates");
+  await setInput(tagInputs()[1], "Reviewed inline");
+  await act(async () => docRow("doc").querySelector("[data-edit-document]").click());
+  await openArticle();
+  assert.equal(tagInputs()[1].value, "Reviewed inline", "collapsing a row must preserve its edits");
+  await setInput(tagInputs()[1], "Reviewed");
+  await setInput(document.querySelector('input[type="search"]'), "Notes");
+  assert.equal(document.querySelectorAll("[data-preview-document]").length, 2, "tree search includes effective tags");
+  await setInput(document.querySelector('input[type="search"]'), "");
+  assert.ok(docRow("excluded").textContent.includes("Keep"), "excluded articles retain their effective tags");
+  await click(labels.apply.replace("{count}", "2"));
+  await waitFor(() => button(labels.undo));
+  assert.deepEqual(calls.apply.at(-1), { id: "tree-preview", items: [
+    { docId: "doc", folderId: "", newFolders: ["Archive"], tags: ["Notes", "Reviewed"] },
+    { docId: "second", folderId: "", newFolders: ["Archive"], tags: ["Notes", "Reviewed"] },
+  ], orders: [
+    {folderId:"",newFolders:["Archive"],docIds:["second","doc"]},
+  ] }, "apply must submit exactly the dragged destinations and managed tags, excluding unchecked documents");
   console.log("AI organizer dialog: lossless tags, pinned preview, discard protection, deleted-item pruning, prior undo and reload passed");
 } finally {
   await act(async () => root.unmount()); client.clear();

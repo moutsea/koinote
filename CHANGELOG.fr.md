@@ -4,6 +4,19 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-14
+
+### Changed
+
+- L’organisation IA affiche l’arborescence prévue, avec recherche, dossiers repliables, déplacement des articles par glisser-déposer, réorganisation et création de sous-dossiers. Des boutons haut/bas permettent aussi l’utilisation au clavier et au toucher.
+- Développez un article pour modifier ses tags et sa destination ou consulter les suggestions. La gestion des tags permet les ajouts, retraits, renommages et fusions en lot pour les articles cochés. Les changements sont enregistrés lors de l’application de l’aperçu.
+
+### Fixed
+
+- La réorganisation dans la barre latérale ne bloque plus l’annulation des dossiers et des tags. La restauration des positions compare l’ordre relatif et préserve les modifications manuelles ultérieures.
+- L’application vérifie uniquement l’ordre relatif des articles de référence décochés et signale un conflit si cet ordre change. Un simple réordonnancement ne modifie plus la date d’activité des articles.
+- Les modifications de l’aperçu utilisent des mises à jour fonctionnelles, et les boutons de réorganisation conservent le focus clavier.
+
 ## [1.1.1] - 2026-10-14
 
 ### Changed

@@ -44,6 +44,15 @@ type organizationChoice struct {
 	NewFolders []string `json:"newFolders"`
 	Tags       []string `json:"tags"`
 }
+type organizationOrder struct {
+	FolderID   string   `json:"folderId"`
+	NewFolders []string `json:"newFolders"`
+	DocIDs     []string `json:"docIds"`
+}
+type organizationFolderOrder struct {
+	FolderID string   `json:"folderId"`
+	DocIDs   []string `json:"docIds"`
+}
 type organizationItem struct {
 	DocID          string              `json:"docId"`
 	Title          string              `json:"title"`
@@ -63,7 +72,10 @@ type organizationItem struct {
 	UndoSkipped    bool                `json:"undoSkipped,omitempty"`
 }
 type organizationData struct {
-	Items []organizationItem `json:"items"`
+	AppliedOrders  []organizationOrder       `json:"appliedOrders,omitempty"`
+	OriginalOrders []organizationFolderOrder `json:"originalOrders,omitempty"`
+	ResultOrders   []organizationFolderOrder `json:"resultOrders,omitempty"`
+	Items          []organizationItem        `json:"items"`
 	// Track all prompt sources, including skipped documents used as examples or
 	// tag vocabulary, so permanent deletion can stop subsequent model requests.
 	InputDocumentIDs []string             `json:"inputDocumentIds,omitempty"`

@@ -101,7 +101,7 @@ func TestOrganizationFreeBatchLimit(t *testing.T) {
 						choices = append(choices, *item.Suggested)
 					}
 				}
-				if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 					t.Fatal(err)
 				}
 				remaining, _, err := a.prepareOrganization(ctx, user.ID, false, nil)

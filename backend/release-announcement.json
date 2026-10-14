@@ -1,36 +1,36 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.1",
+      "title": "What's new in Koinote 1.1.2",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "AI organization now allows at most two requests per batch and increases the output allowance after truncation. Timeouts, three consecutive batches without valid suggestions, or a failure rate of at least half after six batches preserve a partial preview; unfinished items stay unchecked, and only valid suggestions are billed.",
-        "AI organization is now an option alongside the existing strategies in the Organize documents menu, restoring the single sidebar entry."
+        "AI organization now previews the resulting folder tree with search, collapsible folders, whole-row dragging between folders, sibling reordering and new subfolders. Up/down buttons also support keyboard and touch interaction.",
+        "Expand articles in the tree to edit tags, choose destinations and inspect suggestions. Collapsible tag management supports bulk additions, removals, renaming and merging for checked articles. Changes are saved when the preview is applied."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.1 新功能",
+      "title": "Koinote 1.1.2 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "AI 整理每批最多请求两次，截断时增加输出额度；连续三个批次无有效建议、处理至少六批后失败占比达到一半，或分析超时时保留部分预览，未完成项默认不应用，仅有效建议计费。",
-        "AI 整理入口移入原「整理文档」弹出菜单，与智能整理、活跃度整理并列，侧栏恢复为单一入口。"
+        "AI 整理预览改为整理后的目录树，支持搜索、折叠、拖动文档行换目录和上下排序，以及新建子目录；新增上移 / 下移按钮，支持键盘和触屏操作。",
+        "文章在树中展开即可编辑标签、选择目标目录和查看整理理由；顶部标签管理支持批量添加、移除、重命名或合并勾选文章的标签，所有调整确认应用后生效。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.1",
+      "title": "Nouveautés de Koinote 1.1.2",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "L’organisation IA est limitée à deux requêtes par lot, avec une limite de sortie augmentée en cas de troncature. Un délai dépassé, trois lots consécutifs sans suggestion valide ou au moins la moitié de lots en échec après six lots conservent un aperçu partiel ; les documents inachevés restent désélectionnés et seules les suggestions valides sont facturées.",
-        "L’organisation par IA rejoint les options existantes du menu d’organisation des documents, avec un seul bouton dans la barre latérale."
+        "L’organisation IA affiche l’arborescence prévue, avec recherche, dossiers repliables, déplacement des articles par glisser-déposer, réorganisation et création de sous-dossiers. Des boutons haut/bas permettent aussi l’utilisation au clavier et au toucher.",
+        "Développez un article pour modifier ses tags et sa destination ou consulter les suggestions. La gestion des tags permet les ajouts, retraits, renommages et fusions en lot pour les articles cochés. Les changements sont enregistrés lors de l’application de l’aperçu."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.1 の新機能",
+      "title": "Koinote 1.1.2 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "AI 整理は各バッチ最大 2 回のリクエストに制限し、出力が途切れた場合は上限を増やします。タイムアウト、有効な提案のないバッチが 3 回連続、または 6 バッチ以上の処理後に失敗率が半数以上になると部分プレビューを保持し、未完了項目は未選択のまま、有効な提案のみ課金します。",
-        "AI 整理を既存の整理メニュー内の選択肢に移し、サイドバーの整理ボタンを一つに戻しました。"
+        "AI 整理を整理後のフォルダーツリーでプレビューできるようにしました。検索、折りたたみ、行全体のドラッグによる移動・並べ替え、サブフォルダー作成に対応し、キーボードやタッチで使える上下ボタンも追加しました。",
+        "記事をツリー内で展開してタグ・移動先を編集し、整理理由を確認できます。タグ管理から選択した記事のタグを一括追加・削除・名前変更・統合でき、変更はプレビューの適用時に保存されます。"
       ]
     }
   }

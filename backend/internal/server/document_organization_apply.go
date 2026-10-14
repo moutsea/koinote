@@ -20,7 +20,8 @@ func (a *App) documentOrganizationApply(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var input struct {
-		Items []organizationChoice `json:"items"`
+		Items  []organizationChoice `json:"items"`
+		Orders []organizationOrder  `json:"orders"`
 	}
 	if !decodeOrganizationRequest(w, r, &input, 2<<20) {
 		return
@@ -30,7 +31,7 @@ func (a *App) documentOrganizationApply(w http.ResponseWriter, r *http.Request) 
 		writeOrganizationError(w, pgx.ErrNoRows)
 		return
 	}
-	if err := a.applyOrganization(r.Context(), user.ID, id, input.Items, false); err != nil {
+	if err := a.applyOrganization(r.Context(), user.ID, id, input.Items, input.Orders, false); err != nil {
 		writeOrganizationError(w, err)
 		return
 	}
@@ -51,7 +52,7 @@ func (a *App) documentOrganizationUndo(w http.ResponseWriter, r *http.Request) {
 		writeOrganizationError(w, pgx.ErrNoRows)
 		return
 	}
-	if err := a.applyOrganization(r.Context(), user.ID, id, nil, true); err != nil {
+	if err := a.applyOrganization(r.Context(), user.ID, id, nil, nil, true); err != nil {
 		writeOrganizationError(w, err)
 		return
 	}
@@ -104,9 +105,9 @@ func organizationChildFolder(folders []organizationFolder, parentID, name string
 	return match, nil
 }
 
-func (a *App) applyOrganization(ctx context.Context, userID int, id string, choices []organizationChoice, undo bool) error {
+func (a *App) applyOrganization(ctx context.Context, userID int, id string, choices []organizationChoice, orders []organizationOrder, undo bool) error {
 	return retryOrganizationTransaction(ctx, func() error {
-		return a.applyOrganizationAttempt(ctx, userID, id, choices, undo)
+		return a.applyOrganizationAttempt(ctx, userID, id, choices, orders, undo)
 	})
 }
 
@@ -131,7 +132,7 @@ func retryOrganizationTransaction(ctx context.Context, run func() error) error {
 	return errOrganizationBusy
 }
 
-func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id string, choices []organizationChoice, undo bool) error {
+func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id string, choices []organizationChoice, orders []organizationOrder, undo bool) error {
 	tx, err := a.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return err
@@ -150,6 +151,31 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 	if err = json.Unmarshal(raw, &data); err != nil {
 		return err
 	}
+	selected := map[string]organizationChoice{}
+	if !undo {
+		if len(choices) == 0 {
+			return errOrganizationInput
+		}
+		for _, choice := range choices {
+			if _, exists := selected[choice.DocID]; exists {
+				return errOrganizationInput
+			}
+			normalized, e := validateOrganizationChoice(choice, data.Folders)
+			if e != nil {
+				return e
+			}
+			if !slices.ContainsFunc(data.Items, func(item organizationItem) bool { return item.DocID == choice.DocID && item.Suggested != nil }) {
+				return errOrganizationInput
+			}
+			selected[choice.DocID] = normalized
+		}
+	}
+	if !undo {
+		orders, err = normalizeOrganizationOrders(orders, data, selected)
+		if err != nil {
+			return err
+		}
+	}
 	// Resume a lost response only when the retried selection is the same.
 	if !undo && status == "applied" {
 		stored := map[string]organizationChoice{}
@@ -158,7 +184,7 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 				stored[item.DocID] = *item.Suggested
 			}
 		}
-		if len(stored) != len(choices) {
+		if len(stored) != len(choices) || !reflect.DeepEqual(data.AppliedOrders, orders) {
 			return errOrganizationConflict
 		}
 		for _, choice := range choices {
@@ -193,25 +219,6 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 	expectedFolders := append([]organizationFolder{}, data.Folders...)
 	if undo {
 		expectedFolders = append(expectedFolders, data.CreatedFolders...)
-	}
-	selected := map[string]organizationChoice{}
-	if !undo {
-		if len(choices) == 0 {
-			return errOrganizationInput
-		}
-		for _, choice := range choices {
-			if _, exists := selected[choice.DocID]; exists {
-				return errOrganizationInput
-			}
-			normalized, e := validateOrganizationChoice(choice, data.Folders)
-			if e != nil {
-				return e
-			}
-			if !slices.ContainsFunc(data.Items, func(item organizationItem) bool { return item.DocID == choice.DocID && item.Suggested != nil }) {
-				return errOrganizationInput
-			}
-			selected[choice.DocID] = normalized
-		}
 	}
 	// Lock and validate every affected document before creating any folders.
 	validateFolderPaths := organizationFolderPathValidator(expectedFolders, folders)
@@ -279,7 +286,47 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 	if !undo && len(currentDocuments) == 0 {
 		return errOrganizationNoActiveDocuments
 	}
-	for i, item := range data.Items {
+	if !undo {
+		if err := validateOrganizationOrderAnchors(ctx, tx, userID, data, orders, selected); err != nil {
+			return err
+		}
+		if err := captureOrganizationOriginalOrders(ctx, tx, userID, &data, orders, selected); err != nil {
+			return err
+		}
+	}
+	var undoPositions map[string]bool
+	if undo {
+		undoPositions, err = organizationUndoPositions(ctx, tx, userID, data)
+		if err != nil {
+			return err
+		}
+	}
+	// Restore earlier original positions first, so later insertions cannot shift
+	// a document that was already restored to its original position.
+	indices := make([]int, len(data.Items))
+	for i := range indices {
+		indices[i] = i
+	}
+	if undo {
+		slices.SortStableFunc(indices, func(a, b int) int {
+			left, right := data.Items[a], data.Items[b]
+			if left.FolderID < right.FolderID {
+				return -1
+			}
+			if left.FolderID > right.FolderID {
+				return 1
+			}
+			if left.SortOrder < right.SortOrder {
+				return -1
+			}
+			if left.SortOrder > right.SortOrder {
+				return 1
+			}
+			return 0
+		})
+	}
+	for _, i := range indices {
+		item := data.Items[i]
 		choice, chosen := selected[item.DocID]
 		if (!undo && (!chosen || item.ApplySkipped)) || (undo && (item.AppliedVersion == nil || item.UndoSkipped)) {
 			continue
@@ -287,8 +334,18 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 		if undo {
 			current := currentDocuments[item.DocID]
 			order := current.sortOrder
-			if current.folderID != item.FolderID {
+			_, explicitlyOrdered := undoPositions[item.DocID]
+			restorePosition := current.folderID != item.FolderID
+
+			if restorePosition {
 				order = item.SortOrder
+				if explicitlyOrdered {
+					// Restore classification even after manual sorting. Append first;
+					// relative positions are restored separately when still safe.
+					if err := tx.QueryRow(ctx, `SELECT COALESCE(max(sort_order)+1,0) FROM documents WHERE user_id=$1 AND folder_id IS NOT DISTINCT FROM (SELECT id FROM folders WHERE user_id=$1 AND folder_id=$2) AND trashed_at IS NULL`, userID, item.FolderID).Scan(&order); err != nil {
+						return err
+					}
+				}
 				// Make room instead of assigning an ordinal a later document occupies.
 				// Do not alter sibling order when undo only restores tags.
 				_, err = tx.Exec(ctx, `UPDATE documents SET sort_order=sort_order+1 WHERE user_id=$1 AND doc_id<>$2 AND folder_id IS NOT DISTINCT FROM (SELECT id FROM folders WHERE user_id=$1 AND folder_id=$3) AND sort_order >= $4`, userID, item.DocID, item.FolderID, order)
@@ -297,8 +354,8 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 				}
 			}
 			_, err = tx.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE user_id=$1 AND folder_id=$3),
-                sort_order=CASE WHEN folder_id IS NOT DISTINCT FROM (SELECT id FROM folders WHERE user_id=$1 AND folder_id=$3) THEN sort_order ELSE $4 END,
-                tags=$5,organized_at=$6,updated_at=now() WHERE user_id=$1 AND doc_id=$2`, userID, item.DocID, item.FolderID, order, item.Tags, item.OrganizedAt)
+                sort_order=CASE WHEN $7 THEN $4 ELSE sort_order END,
+                tags=$5,organized_at=$6,updated_at=CASE WHEN folder_id IS DISTINCT FROM (SELECT id FROM folders WHERE user_id=$1 AND folder_id=$3) OR tags IS DISTINCT FROM $5 THEN now() ELSE updated_at END WHERE user_id=$1 AND doc_id=$2`, userID, item.DocID, item.FolderID, order, item.Tags, item.OrganizedAt, restorePosition)
 		} else {
 			folderID := choice.FolderID
 			for _, name := range choice.NewFolders {
@@ -337,7 +394,7 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
     UPDATE documents d SET folder_id=(SELECT id FROM destination),
       sort_order=CASE WHEN d.folder_id IS NOT DISTINCT FROM (SELECT id FROM destination) THEN d.sort_order ELSE
         COALESCE((SELECT max(sort_order)+1 FROM documents WHERE user_id=$1 AND folder_id IS NOT DISTINCT FROM (SELECT id FROM destination) AND trashed_at IS NULL),0) END,
-      tags=$4,organized_at=now(),updated_at=now() WHERE d.user_id=$1 AND d.doc_id=$2 RETURNING organization_version`, userID, item.DocID, folderID, choice.Tags).Scan(&version)
+      tags=$4,organized_at=now(),updated_at=CASE WHEN d.folder_id IS DISTINCT FROM (SELECT id FROM destination) OR d.tags IS DISTINCT FROM $4 THEN now() ELSE d.updated_at END WHERE d.user_id=$1 AND d.doc_id=$2 RETURNING organization_version`, userID, item.DocID, folderID, choice.Tags).Scan(&version)
 			data.Items[i].AppliedVersion = &version
 			data.Items[i].Suggested = &choice
 		}
@@ -345,7 +402,16 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 			return err
 		}
 	}
+	if !undo {
+		if err := applyOrganizationOrders(ctx, tx, userID, &data, orders, selected, folders); err != nil {
+			return err
+		}
+		data.AppliedOrders = orders
+	}
 	if undo {
+		if err := undoOrganizationOrders(ctx, tx, userID, data, undoPositions); err != nil {
+			return err
+		}
 		// Only remove unchanged, empty folders created by this run. Purging a
 		// document removes its item, so these paths may not have been checked above.
 		// Preserve repurposed folders without blocking the remaining documents' undo.

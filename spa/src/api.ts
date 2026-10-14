@@ -2449,9 +2449,10 @@ export function permanentlyDeleteDocument(docId: string, confirmation: string) {
 
 export type OrganizationFolder = { id: string; name: string; parentId: string };
 export type OrganizationChoice = { docId: string; folderId: string; newFolders: string[]; tags: string[] };
+export type OrganizationOrder = { folderId: string; newFolders: string[]; docIds: string[] };
 export type OrganizationItem = {
   docId: string; title: string; revision: number; version: number;
-  folderId: string; tags: string[]; organizedAt: string | null;
+  folderId: string; sortOrder?: number; tags: string[]; organizedAt: string | null;
   suggested?: OrganizationChoice; reason: string; appliedVersion?: number;
   needsReview?: boolean; notAnalyzed?: boolean; failureStatus?: number; applySkipped?: boolean; undoSkipped?: boolean;
 };
@@ -2478,9 +2479,9 @@ export function createDocumentOrganization(requestId: string, includeOrganized: 
     method: "POST", body: JSON.stringify({ requestId, includeOrganized, providerMode: estimate.providerMode, maxReservedCredits: estimate.reservedCredits, excludeDocIds }),
   });
 }
-export function applyDocumentOrganizationPreview(id: string, items: OrganizationChoice[]) {
+export function applyDocumentOrganizationPreview(id: string, items: OrganizationChoice[], orders: OrganizationOrder[] = []) {
   return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}/apply`, {
-    method: "POST", body: JSON.stringify({ items }),
+    method: "POST", body: JSON.stringify({ items, orders }),
   });
 }
 export function undoDocumentOrganization(id: string) {

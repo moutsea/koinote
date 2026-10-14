@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Check, Folder, LoaderCircle, Plus, RotateCcw, X } from "lucide-react";
+import { Check, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { Logo } from "../Logo";
 import {
   AGENT_CREDITS_QUERY_KEY, ApiError, applyDocumentOrganizationPreview,
@@ -13,7 +13,9 @@ import { confirmAction } from "../../confirmAction";
 import { interpolate, useI18n } from "../../i18n";
 import { pushModal } from "../../modalStack";
 import { isDesktopRuntime } from "../../desktop/runtime";
-import { organizationChoices, organizationDrafts, organizationPath, organizationPollInterval, type OrganizationDraft } from "./aiOrganizerCore";
+import { organizationChoices, organizationDrafts, organizationPollInterval, type OrganizationDraft } from "./aiOrganizerCore";
+import { organizationPreviewOrders } from "./aiOrganizerPreviewCore";
+import { AIOrganizerPreview } from "./AIOrganizerPreview";
 
 export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   member: boolean; localMode: boolean; onPrepare: () => Promise<boolean>; onClose: () => void;
@@ -155,7 +157,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
     mutationFn: async () => {
       const choices = organizationChoices(drafts, view!.data.folders);
       await prepare(choices.map(item => item.docId));
-      return applyDocumentOrganizationPreview(view!.id, choices);
+      return applyDocumentOrganizationPreview(view!.id, choices, organizationPreviewOrders(view!.data.items, view!.data.folders, drafts));
     },
     onSuccess: result => { setUndoNotice(null); return accept(result.organization, true); }, onError: e => setError(message(e)),
   });
@@ -197,38 +199,15 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   }, []);
 
   const parsed = useMemo(() => {
-    if (!view) return { choices: [] as OrganizationChoice[], invalid: false };
-    try { return { choices: organizationChoices(drafts, view.data.folders), invalid: false }; }
-    catch { return { choices: [] as OrganizationChoice[], invalid: true }; }
-  }, [drafts, view]);
-  const groups = useMemo(() => {
-    if (!view) return [];
-    const result = new Map<string, { name: string; titles: string[] }>();
-    const titlesById = new Map(view.data.items.map(item => [item.docId, item.title]));
-    for (const choice of parsed.choices) {
-      const key = JSON.stringify([choice.folderId, choice.newFolders]);
-      const path = [...organizationPath(view.data.folders, choice.folderId), ...choice.newFolders];
-      const group = result.get(key) ?? { name: path.join(" / ") || l.root, titles: [] };
-      group.titles.push(titlesById.get(choice.docId) || t.editor.untitled); result.set(key, group);
-    }
-    return [...result.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name));
-  }, [parsed, view, l.root, t.editor.untitled]);
-  const folders = useMemo(() => {
-    const options = (view?.data.folders ?? []).map(f => ({ id: f.id, name: organizationPath(view!.data.folders, f.id).join(" / ") }));
-    const totals = new Map<string, number>(); const seen = new Map<string, number>();
-    for (const option of options) totals.set(option.name, (totals.get(option.name) ?? 0) + 1);
-    return options.map(option => {
-      const index = (seen.get(option.name) ?? 0) + 1; seen.set(option.name, index);
-      return totals.get(option.name)! > 1 ? { ...option, name: interpolate(l.duplicateFolder, { name: option.name, index }) } : option;
-    }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [view, l.duplicateFolder]);
+    if (!view) return { choices: [] as OrganizationChoice[], invalid: false, validationMessage: "" };
+    try { return { choices: organizationChoices(drafts, view.data.folders), invalid: false, validationMessage: "" }; }
+    catch (e) { return { choices: [] as OrganizationChoice[], invalid: true, validationMessage: e instanceof Error && e.message === "organization_ambiguous_folder" ? l.ambiguousFolder : l.invalid }; }
+  }, [drafts, view, l.ambiguousFolder, l.invalid]);
   const loading = latest.isLoading || (!selection && !dismissedLatest && !latest.isFetchedAfterMount) || (Boolean(selectedID) && query.isLoading);
   const providerFailures = [...new Set(view?.data.items.filter(item => item.needsReview && item.failureStatus).map(item => item.failureStatus!) ?? [])];
   function providerFailureMessage(status: number) {
     return interpolate(status === 429 ? l.providerRateLimited : [400, 413, 422].includes(status) ? l.providerRejected : l.providerUnavailable, { status });
   }
-  const inputClass = "w-full rounded-lg border border-black/10 bg-white px-2.5 py-2 text-sm outline-none focus:border-cinnabar-400 dark:border-white/15 dark:bg-neutral-900";
-  function update(docId: string, patch: Partial<OrganizationDraft>) { setDrafts(current => ({ ...current, [docId]: { ...current[docId], ...patch } })); setDirty(true); }
   async function newRun() {
     if (dirty && !(await confirmAction(`${l.discard}\n\n${l.discardDetail}`))) return;
     setDismissedLatest(true); setSelection(null); setDrafts({}); setDirty(false); setError(""); setUndoNotice(null); setInclude(false); requestID.current = null; initializedID.current = null; setPrepareAttempt(n => n + 1);
@@ -264,30 +243,8 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
               {view.data.stopReason && <p role="status" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{interpolate(view.data.stopReason === "timeout" ? l.partialTimeout : view.data.stopReason === "failure_ratio" ? l.partialFailureRatio : l.partialFailureLimit, { done: view.data.completed, total: view.data.items.length })}</p>}
               {providerFailures.map(status => <p key={status} role="status" className="mb-3 text-sm leading-relaxed text-amber-800 dark:text-amber-200">{providerFailureMessage(status)}</p>)}
               {(view.data.unbilledBatches ?? 0) > 0 && <p role="status" className="mb-3 text-sm text-neutral-500">{interpolate(view.data.providerMode === "builtin" ? l.unbilledBatches : l.invalidBatchesByok, { count: view.data.unbilledBatches! })}</p>}
-              {parsed.invalid && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{l.invalid}</p>}
-              <div className="grid items-start gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                <aside className="rounded-xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-neutral-900"><h3 className="mb-3 text-sm font-semibold">{l.preview}</h3><div className="space-y-4">{groups.map(([key, group]) => <div key={key}><p className="flex items-start gap-2 break-words text-sm font-medium"><Folder className="mt-0.5 h-4 w-4 shrink-0 text-cinnabar-500" />{group.name}<span className="ml-auto text-xs text-neutral-400">{group.titles.length}</span></p><ul className="ml-2 mt-2 space-y-1 border-l border-black/10 pl-4 text-xs text-neutral-500 dark:border-white/10">{group.titles.map((title, index) => <li key={index} className="truncate" title={title}>{title}</li>)}</ul></div>)}</div></aside>
-                <section className="space-y-3"><h3 className="text-sm font-semibold">{l.edit}</h3>{view.data.items.map(item => {
-                  const draft = drafts[item.docId]; if (!draft) return null;
-                  return <article key={item.docId} className={`rounded-xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-neutral-900 ${!draft.selected ? "opacity-60" : ""}`}>
-                    <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={draft.selected} disabled={busy} onChange={e => update(item.docId, { selected: e.target.checked })} className="accent-cinnabar-500" /><span className="break-words">{item.title || t.editor.untitled}</span></label>
-                    <p className="mb-3 ml-6 mt-1 text-xs leading-relaxed text-neutral-500">{item.notAnalyzed ? l.notAnalyzed : item.needsReview ? (item.failureStatus ? interpolate(l.providerItem, { status: item.failureStatus }) : l.needsReview) : item.reason}</p>
-                    <fieldset disabled={busy || !draft.selected} className="ml-6 space-y-3">
-                      <div className="flex items-center gap-2 text-xs text-neutral-400"><span className="truncate">{organizationPath(view.data.folders, item.folderId).join(" / ") || l.root}</span><ArrowRight className="h-3.5 w-3.5 shrink-0" /><span>{l.folder}</span></div>
-                      <select aria-label={`${item.title} — ${l.folder}`} className={inputClass} value={draft.folderId} onChange={e => update(item.docId, { folderId: e.target.value })}><option value="">{l.root}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>
-                      <label className="block text-xs text-neutral-500">{l.newFolder}<input className={`${inputClass} mt-1`} value={draft.newPath} placeholder={l.newFolderHint} onChange={e => update(item.docId, { newPath: e.target.value })} /></label>
-                      <div className="text-xs text-neutral-500">
-                        <p>{l.tags}</p><p className="mt-1">{l.tagsHint}</p>
-                        <div className="mt-2 space-y-2">{draft.tags.map((tag, index) => <div key={index} className="flex items-center gap-2">
-                          <input aria-label={`${item.title} — ${l.tags} ${index + 1}`} className={`${inputClass} min-w-0 flex-1`} value={tag} onChange={e => update(item.docId, { tags: draft.tags.map((value, i) => i === index ? e.target.value : value) })} />
-                          <button type="button" aria-label={`${l.removeTag}: ${tag}`} onClick={() => update(item.docId, { tags: draft.tags.filter((_, i) => i !== index) })} className="rounded p-1.5 hover:bg-black/5 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
-                        </div>)}</div>
-                        <button type="button" disabled={draft.tags.length >= 5} onClick={() => update(item.docId, { tags: [...draft.tags, ""] })} className="mt-2 flex items-center gap-1 disabled:opacity-40"><Plus className="h-3.5 w-3.5" />{l.addTag}</button>
-                      </div>
-                    </fieldset>
-                  </article>;
-                })}</section>
-              </div>
+              {parsed.invalid && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{parsed.validationMessage}</p>}
+              <AIOrganizerPreview key={view.id} data={view.data} drafts={drafts} busy={busy} onChange={update => { setDrafts(update); setDirty(true); }} />
             </>}
           </>}
         </>}

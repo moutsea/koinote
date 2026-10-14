@@ -6,6 +6,19 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-14
+
+### Changed
+
+- AI organization now previews the resulting folder tree with search, collapsible folders, whole-row dragging between folders, sibling reordering and new subfolders. Up/down buttons also support keyboard and touch interaction.
+- Expand articles in the tree to edit tags, choose destinations and inspect suggestions. Collapsible tag management supports bulk additions, removals, renaming and merging for checked articles. Changes are saved when the preview is applied.
+
+### Fixed
+
+- Sidebar reordering and ordinal renumbering no longer block undoing folders and tags. Position restoration compares relative order and preserves subsequent manual changes.
+- Applying a preview checks only the relative order of unchecked anchors and reports a conflict when those anchors change. Order-only changes no longer update article activity timestamps.
+- Preview edits use functional state updates, and reordering buttons retain keyboard focus.
+
 ## [1.1.1] - 2026-10-14
 
 ### Changed

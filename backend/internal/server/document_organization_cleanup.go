@@ -48,7 +48,9 @@ func purgeDocumentOrganizations(ctx context.Context, tx pgx.Tx, userID int, docI
 		return err
 	}
 	rows, err := tx.Query(ctx, `SELECT organization_id::text,status,data,reservation_id FROM document_organizations
-        WHERE user_id=$1 AND (data->'items' @> $2::jsonb OR data->'inputDocumentIds' ? $3::text)
+        WHERE user_id=$1 AND (data->'items' @> $2::jsonb OR data->'inputDocumentIds' ? $3::text
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(data->'originalOrders','[]'::jsonb)) o WHERE o->'docIds' ? $3::text)
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(data->'resultOrders','[]'::jsonb)) o WHERE o->'docIds' ? $3::text))
         ORDER BY organization_id FOR UPDATE`, userID, string(filter), docID)
 	if err != nil {
 		return err
@@ -89,6 +91,15 @@ func purgeDocumentOrganizations(ctx context.Context, tx pgx.Tx, userID int, docI
 		}
 		data.Items = items
 		data.Completed = completed
+		for i := range data.AppliedOrders {
+			data.AppliedOrders[i].DocIDs = slices.DeleteFunc(data.AppliedOrders[i].DocIDs, func(id string) bool { return id == docID })
+		}
+		data.AppliedOrders = slices.DeleteFunc(data.AppliedOrders, func(order organizationOrder) bool { return len(order.DocIDs) == 0 })
+		for _, snapshots := range [][]organizationFolderOrder{data.OriginalOrders, data.ResultOrders} {
+			for i := range snapshots {
+				snapshots[i].DocIDs = slices.DeleteFunc(snapshots[i].DocIDs, func(id string) bool { return id == docID })
+			}
+		}
 		data.InputDocumentIDs = slices.DeleteFunc(data.InputDocumentIDs, func(id string) bool { return id == docID })
 		raw, err := json.Marshal(data)
 		if err != nil {

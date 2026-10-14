@@ -195,7 +195,7 @@ func TestOrganizationUndoSkipsOnlyChangedItems(t *testing.T) {
 				choices = append(choices, choice)
 			}
 			id := organizationTestReady(t, a, user.ID, data)
-			if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+			if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 				t.Fatal(err)
 			}
 			switch change {
@@ -216,7 +216,7 @@ func TestOrganizationUndoSkipsOnlyChangedItems(t *testing.T) {
 				t.Fatal(err)
 			}
 			for retry := 0; retry < 2; retry++ {
-				if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -267,7 +267,7 @@ func TestOrganizationRetriesSerializationWithoutRegeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false) }()
+	go func() { done <- a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false) }()
 	for {
 		var waiting bool
 		if err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND objid=$1 AND NOT granted)`, user.ID).Scan(&waiting); err != nil {
@@ -333,10 +333,10 @@ func TestOrganizationTrashAndReorderDoNotBlock(t *testing.T) {
 	if _, err := a.trashDocument(ctx, user, doc.DocID, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 		t.Fatalf("retry after skipping trash: %v", err)
 	}
 	view, err := a.loadOrganization(ctx, user.ID, id)
@@ -354,7 +354,7 @@ func TestOrganizationTrashAndReorderDoNotBlock(t *testing.T) {
 	if _, err := a.trashDocument(ctx, user, other.DocID, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 		t.Fatalf("trash/order blocked undo: %v", err)
 	}
 	var preserved bool
@@ -397,7 +397,7 @@ func TestOrganizationUndoInsertsWithoutOrderCollisions(t *testing.T) {
 		choices = append(choices, choice)
 	}
 	id := organizationTestReady(t, a, user.ID, data)
-	if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	var movedAt time.Time
@@ -411,7 +411,7 @@ func TestOrganizationUndoInsertsWithoutOrderCollisions(t *testing.T) {
 	if _, err := db.Exec(ctx, `UPDATE documents SET sort_order=CASE WHEN doc_id=$2 THEN 0 ELSE 1 END WHERE user_id=$1 AND folder_id IS NULL`, user.ID, other.DocID); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	var ids []string
@@ -443,14 +443,14 @@ func TestOrganizationDuplicateFoldersUseExplicitIdentity(t *testing.T) {
 	choice := organizationChoice{doc.DocID, "", []string{"Same"}, []string{}}
 	data.Items[0].Suggested = &choice
 	id := organizationTestReady(t, a, user.ID, data)
-	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); !errors.Is(err, errOrganizationAmbiguousFolder) {
+	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); !errors.Is(err, errOrganizationAmbiguousFolder) {
 		t.Fatalf("ambiguous folder not explained: %v", err)
 	}
 	choice.FolderID, choice.NewFolders = folders[1], []string{}
-	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); err != nil {
 		t.Fatalf("explicit identity blocked: %v", err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 		t.Fatal(err)
 	}
 }

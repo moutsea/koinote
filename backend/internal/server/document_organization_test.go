@@ -71,15 +71,15 @@ func TestOrganizationApplyUndoAndSkip(t *testing.T) {
 	choice := organizationChoice{doc.DocID, "", []string{"Research", "Go"}, []string{"Go", "Databases"}}
 	data.Items[0].Suggested = &choice
 	id := organizationTestReady(t, a, user.ID, data)
-	if e := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); e != nil {
+	if e := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); e != nil {
 		t.Fatal(e)
 	}
-	if e := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); e != nil {
+	if e := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); e != nil {
 		t.Fatal("idempotent apply", e)
 	}
 	changed := choice
 	changed.Tags = []string{"Changed retry"}
-	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{changed}, false); err != errOrganizationConflict {
+	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{changed}, nil, false); err != errOrganizationConflict {
 		t.Fatalf("changed retry accepted: %v", err)
 	}
 	var content, cover, folder string
@@ -101,10 +101,10 @@ func TestOrganizationApplyUndoAndSkip(t *testing.T) {
 	if e != nil || len(included.Items) != 1 {
 		t.Fatalf("include: %+v %v", included, e)
 	}
-	if e := a.applyOrganization(ctx, user.ID, id, nil, true); e != nil {
+	if e := a.applyOrganization(ctx, user.ID, id, nil, nil, true); e != nil {
 		t.Fatal(e)
 	}
-	if e := a.applyOrganization(ctx, user.ID, id, nil, true); e != nil {
+	if e := a.applyOrganization(ctx, user.ID, id, nil, nil, true); e != nil {
 		t.Fatal("idempotent undo", e)
 	}
 	var folderID *int
@@ -139,7 +139,7 @@ func TestOrganizationConflictAtomicAndOwnership(t *testing.T) {
 	if _, e = db.Exec(ctx, `UPDATE documents SET revision=revision+1 WHERE doc_id=$1`, second.DocID); e != nil {
 		t.Fatal(e)
 	}
-	if e = a.applyOrganization(ctx, user.ID, id, choices, false); e != errOrganizationConflict {
+	if e = a.applyOrganization(ctx, user.ID, id, choices, nil, false); e != errOrganizationConflict {
 		t.Fatalf("expected conflict: %v", e)
 	}
 	var count int
@@ -164,7 +164,7 @@ func TestOrganizationConflictAtomicAndOwnership(t *testing.T) {
 	id = organizationTestReady(t, a, user.ID, data)
 	// Excluding an item does not mark it organized.
 	choice := organizationChoice{doc.DocID, "", []string{}, []string{"Confirmed"}}
-	if e = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); e != nil {
+	if e = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); e != nil {
 		t.Fatal(e)
 	}
 	pending, _, e := a.prepareOrganization(ctx, user.ID, false, nil)
@@ -172,7 +172,7 @@ func TestOrganizationConflictAtomicAndOwnership(t *testing.T) {
 		t.Fatalf("excluded: %+v %v", pending, e)
 	}
 	db.Exec(ctx, `UPDATE documents SET tags=ARRAY['Later manual change'] WHERE doc_id=$1`, doc.DocID)
-	if e = a.applyOrganization(ctx, user.ID, id, nil, true); e != nil {
+	if e = a.applyOrganization(ctx, user.ID, id, nil, nil, true); e != nil {
 		t.Fatalf("undo could not skip later change: %v", e)
 	}
 	view, e := a.loadOrganization(ctx, user.ID, id)
@@ -354,7 +354,7 @@ func TestOrganizationMoveRoundTripConflict(t *testing.T) {
 	if _, err = db.Exec(ctx, `UPDATE documents SET folder_id=NULL WHERE doc_id=$1`, doc.DocID); err != nil {
 		t.Fatal(err)
 	}
-	if err = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); err != errOrganizationConflict {
+	if err = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); err != errOrganizationConflict {
 		t.Fatalf("round-trip move was not detected: %v", err)
 	}
 }

@@ -56,7 +56,7 @@ func TestOrganizationLatestRetainsUndoAfterPreview(t *testing.T) {
 	choice := organizationChoice{doc.DocID, "", []string{}, []string{"Topic"}}
 	data.Items[0].Suggested = &choice
 	first := organizationTestReady(t, a, user.ID, data)
-	if err := a.applyOrganization(ctx, user.ID, first, []organizationChoice{choice}, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, first, []organizationChoice{choice}, nil, false); err != nil {
 		t.Fatal(err)
 	}
 	second := organizationTestReady(t, a, user.ID, data)
@@ -122,13 +122,13 @@ func TestOrganizationUnrelatedFolderChanges(t *testing.T) {
 	if _, err := db.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name) VALUES($1,$2,'Extra')`, extra, user.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); err != nil {
 		t.Fatalf("unrelated rename/create blocked apply: %v", err)
 	}
 	if _, err := db.Exec(ctx, `DELETE FROM folders WHERE folder_id=$1`, unrelated); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 		t.Fatalf("unrelated deletion blocked undo: %v", err)
 	}
 	var folders, organized int
@@ -162,15 +162,15 @@ func TestOrganizationUndoRejectsStaleEntry(t *testing.T) {
 		choice := organizationChoice{doc.DocID, "", []string{}, []string{"Topic"}}
 		data.Items[0].Suggested = &choice
 		id := organizationTestReady(t, a, user.ID, data)
-		if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); err != nil {
+		if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); err != nil {
 			t.Fatal(err)
 		}
 		ids = append(ids, id)
 	}
-	if err := a.applyOrganization(ctx, user.ID, ids[0], nil, true); err != errOrganizationConflict {
+	if err := a.applyOrganization(ctx, user.ID, ids[0], nil, nil, true); err != errOrganizationConflict {
 		t.Fatalf("an old tab undid an earlier run: %v", err)
 	}
-	if err := a.applyOrganization(ctx, user.ID, ids[1], nil, true); err != nil {
+	if err := a.applyOrganization(ctx, user.ID, ids[1], nil, nil, true); err != nil {
 		t.Fatalf("latest undo blocked: %v", err)
 	}
 	response := organizationTestRequest(t, a, user, "GET", "/api/document-organizations/latest", "")
@@ -207,7 +207,7 @@ func TestOrganizationRelevantFolderChangesStillConflict(t *testing.T) {
 				data.Items[0].Suggested = &choice
 				id := organizationTestReady(t, a, user.ID, data)
 				if phase == "undo" {
-					if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, false); err != nil {
+					if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, false); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -226,7 +226,7 @@ func TestOrganizationRelevantFolderChangesStillConflict(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				err = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, phase == "undo")
+				err = a.applyOrganization(ctx, user.ID, id, []organizationChoice{choice}, nil, phase == "undo")
 				if (phase == "apply" && err != errOrganizationConflict) || (phase == "undo" && err != nil) {
 					t.Fatalf("unexpected relevant-path outcome: %v", err)
 				}

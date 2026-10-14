@@ -76,12 +76,12 @@ func TestOrganizationPurgePreservesOtherItems(t *testing.T) {
 			historyID := organizationTestReady(t, a, user.ID, data)
 			id := organizationTestReady(t, a, user.ID, data)
 			if status == "applied" || status == "undone" {
-				if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if status == "undone" {
-				if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 					t.Fatal(err)
 				}
 			} else if status == "failed" {
@@ -135,7 +135,7 @@ func TestOrganizationPurgePreservesOtherItems(t *testing.T) {
 				t.Fatalf("purge changed undo ordering: %v %v", after, err)
 			}
 			if status == "applied" {
-				if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 					t.Fatalf("remaining document cannot be undone: %v", err)
 				}
 				var tags []string
@@ -143,7 +143,7 @@ func TestOrganizationPurgePreservesOtherItems(t *testing.T) {
 					t.Fatalf("remaining undo: %v %v", tags, err)
 				}
 			} else if status == "ready" {
-				if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{*view.Data.Items[0].Suggested}, false); err != nil {
+				if err := a.applyOrganization(ctx, user.ID, id, []organizationChoice{*view.Data.Items[0].Suggested}, nil, false); err != nil {
 					t.Fatalf("remaining preview cannot be applied: %v", err)
 				}
 			}
@@ -438,7 +438,7 @@ func TestOrganizationUndoAfterPurgePreservesChangedFolders(t *testing.T) {
 				choices = append(choices, choice)
 			}
 			id := organizationTestReady(t, a, user.ID, data)
-			if err := a.applyOrganization(ctx, user.ID, id, choices, false); err != nil {
+			if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
 				t.Fatal(err)
 			}
 			view, err := a.loadOrganization(ctx, user.ID, id)
@@ -475,7 +475,7 @@ func TestOrganizationUndoAfterPurgePreservesChangedFolders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := a.applyOrganization(ctx, user.ID, id, nil, true); err != nil {
+			if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
 				t.Fatalf("unrelated document could not be undone: %v", err)
 			}
 			var leafExists, secondExists, restored bool
