@@ -4,8 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Changed
+
+- Les suggestions de titres IA exploitent le corps de l’article, comparent plusieurs angles au titre original et présentent des citations vérifiées ainsi que les compromis concrets. Une note élevée ne bloque plus les alternatives ; les longs articles sont échantillonnés sur toute leur longueur dans une limite définie, dans le panneau de révision existant.
+
 ### Fixed
 
+- Les titres IA invalides ou dupliqués sont désormais écartés individuellement, sans perdre les alternatives valides ni interrompre la révision du texte et de sa structure, même si tous les titres sont rejetés.
 - L'application des suggestions d'optimisation IA conserve désormais l'image de couverture actuelle, son mode, son ratio et sa consigne, y compris lors d'une application individuelle, globale ou répétée. Les modifications suivantes n'enregistrent plus une couverture effacée.
 - La découverte du Skills/Agent Hub dispose désormais de cinq créneaux quotidiens pour reprendre les exécutions manquées ou interrompues. Les imports continuent au-delà des 100 premiers candidats jusqu'à la limite de 20 ajouts par jour, à partir des résultats enregistrés et avec les mêmes contrôles de sécurité et de licence. L'aperçu reste limité à 100 candidats.
 

@@ -637,9 +637,9 @@ func agentReviewTaskJSONForTest(system, title, bodyBefore string) string {
 			"summary":         "The article can be clearer and more specific.",
 			"titleScore":      55,
 			"titleAssessment": "The title is understandable but not specific enough.",
-			"titleSuggestions": []map[string]string{
-				{"after": "A specific and credible title", "reason": "It states the concrete value."},
-				{"after": "A clearer alternative title", "reason": "It helps the target reader understand the topic."},
+			"titleSuggestions": []map[string]any{
+				{"after": "A specific and credible title", "angle": "Specific reader benefit", "reason": "It states the concrete value.", "comparison": "Unlike the original, it names the benefit.", "evidence": []string{bodyBefore}},
+				{"after": "A clearer alternative title", "angle": "Reader situation", "reason": "It helps the target reader understand the topic.", "comparison": "It changes the emphasis to the reader situation.", "evidence": []string{bodyBefore}},
 			},
 		})
 		return string(encoded)

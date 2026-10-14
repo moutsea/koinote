@@ -6,8 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Changed
+
+- AI title suggestions now draw on the article body, compare distinct angles with the original and include source-checked quotes plus concrete tradeoffs. High scores no longer suppress alternatives; long articles use bounded, distributed samples and suggestions stay in the existing review panel.
+
 ### Fixed
 
+- Invalid or duplicate AI title candidates are now discarded individually, preserving valid alternatives and allowing body and structure reviews to complete even when all title candidates are rejected.
 - Applying AI optimization suggestions now preserves the article's current cover image, mode, ratio and prompt, including individual suggestions, Apply all and repeated requests, so subsequent edits no longer save a cleared cover.
 - Skills/Agent Hub discovery now has five daily execution windows to retry missed or interrupted runs. Actual imports continue past the first 100 candidates toward the daily limit of 20, resume from saved results and retain existing safety and license checks; previews remain limited to 100 candidates.
 

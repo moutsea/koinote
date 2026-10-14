@@ -241,6 +241,7 @@ const backend = fs.readFileSync("backend/internal/server/agent_reviews.go", "utf
 const llm = fs.readFileSync("backend/internal/server/agent_llm.go", "utf8");
 const prompt = fs.readFileSync("backend/internal/server/writing_review_prompt.go", "utf8");
 const tasks = fs.readFileSync("backend/internal/server/writing_review_tasks.go", "utf8");
+const titles = fs.readFileSync("backend/internal/server/writing_review_titles.go", "utf8");
 const layout = fs.readFileSync("backend/internal/server/markdown_structure_review.go", "utf8");
 
 function includes(label, source, fragment) {
@@ -592,7 +593,7 @@ includes("子任务进度持久化", backend, "storeAgentReviewTaskOutcome(");
 includes("内置模型按所有子任务预留", backend, "estimateAgentReviewPlanReservation(plan)");
 includes("Anthropic 能看到完整输出 schema", llm, "The response must conform to this exact JSON Schema");
 // 旧规则是"低分却给不满 2 个候选就整任务作废"，等于告诉模型打 60 分零候选最安全，
-// 于是绝大多数文章都拿不到候选标题。现在只守上限，候选数量由分数区间在提示词里决定。
+// 于是绝大多数文章都拿不到候选标题。现在只守上限，候选数量由与原标题比较后的实际价值决定。
 includes("候选标题数量仍有上限", prompt, "too many title suggestions");
 // 单次调用的整篇审阅链路已删除：它没有生产调用方，却和真实的分任务提示词并行
 // 维护，改真提示词时门禁不会红、改死代码时反而会红。
@@ -609,11 +610,12 @@ assert.doesNotMatch(
   /low-scoring title requires 2 or 3 alternatives/,
   "低分标题不再因候选不足而整任务作废",
 );
-includes("候选标题按分数区间给出", tasks, "60 to 84: return 1 or 2 alternatives");
+includes("候选数量不再由分数决定", titles, "score must never determine candidate count");
+assert.doesNotMatch(titles, /85 and above: return none|60 to 84:/);
 // 分数低却没给候选时，空状态不能说"标题已经足够好"
 includes("标题空状态按分数区分", panel, "t.agentReview.noTitleSuggestionsLowScore");
 includes("标题空状态复用已有分数判据", panel, "titleScoreNeedsAlternatives(review.titleScore ?? 100)");
-includes("提示词禁止为逃避候选而抬高分数", tasks, "never inflate it to reduce the work owed");
+includes("标题独立评分", titles, "Score independently of candidate count");
 includes("正文建议使用唯一精确锚点", prompt, "body anchor is not exact and unique");
 includes("提示词禁止编造事实", tasks, "Do not invent evidence");
 includes("提示词保护 Markdown 和媒体", tasks, "Markdown block markers, and deliberate formatting");
@@ -625,10 +627,10 @@ includes("先诊断内容价值再润色", tasks, "Infer the writing surface, in
 includes("开头承诺要被正文兑现", tasks, "An opening that promises something the body never pays off");
 includes("移动端长文可读性", tasks, "Judge scanning and reading on a narrow screen");
 includes("AI 腔检测", tasks, "smooth repetitive parallelism");
-includes("标题承诺必须有证据", tasks, "promise-to-evidence fit");
-includes("标题备选必须有据可依", tasks, "must be supported by the supplied outline and excerpts");
-includes("标题不得虚构权威和数字", tasks, "Never invent authority, figures, urgency, outcomes, pain points");
-includes("低分标题使用不同角度", tasks, "meaningfully different supported alternatives");
+includes("标题承诺必须有证据", titles, "promise-to-evidence fit");
+includes("标题备选必须有据可依", titles, "must be supported by the supplied sources");
+includes("标题不得虚构权威和数字", titles, "Never invent authority, figures, urgency, outcomes, pain points");
+includes("标题使用不同角度", titles, "meaningfully different supported alternatives");
 
 // ---------- 打开面板即看结果 ----------
 //

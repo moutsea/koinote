@@ -384,8 +384,15 @@ Lifetime members can open **AI optimization** from the editor toolbar. The edito
 the current draft first, then asks the selected model for a reviewable change set instead
 of allowing it to overwrite the article. Every suggestion includes its rationale, removed
 text, and replacement text, and can be applied or dismissed on its own or together with the
-rest. Titles receive a 0–100 editorial score, not a click-through forecast; scores below 60 require 2–3 distinct
-alternatives. Body edits must anchor to source text that appears exactly once in the document,
+rest. Titles receive a 0–100 editorial score, not a click-through forecast; the score no longer gates alternatives.
+The title pass extracts distinctive facts, reader situations and reading rewards, compares different angles
+against the original, and keeps up to three worthwhile alternatives with explicit tradeoffs. Each suggestion
+includes its reader benefit, comparison with the original and exact source quotes verified against the text
+actually sent to the model. Invalid or duplicate candidates are discarded individually, preserving valid alternatives;
+even if every candidate is rejected, body and structure reviews still complete. Articles within 64 KiB of source and 256 Markdown blocks are supplied in full;
+longer articles use distributed samples, including the beginning, middle and end of oversized blocks, with
+omissions marked. The title pass still uses one model call; estimates and billing include the larger context and output.
+Body edits must anchor to source text that appears exactly once in the document,
 so overlapping, stale, or ambiguous changes are rejected. Applying a suggestion still checks
 the latest revision and leaves a restorable history version.
 

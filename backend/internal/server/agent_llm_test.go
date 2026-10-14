@@ -67,9 +67,11 @@ func TestWritingReviewTaskPromptsCarryTheirRubric(t *testing.T) {
 	checksByPrompt := map[string][]string{
 		writingReviewTitleSystemPrompt: {
 			"promise-to-evidence fit",
-			"Never invent authority, figures, urgency, outcomes, pain points, or claims",
-			"never inflate it to reduce the work owed by the ranges below",
-			"must differ from the others in angle",
+			"Never invent authority, figures, urgency, outcomes, pain points, motives or causal claims",
+			"score must never determine candidate count",
+			"meaningfully different supported alternatives",
+			"Treat the ORIGINAL TITLE as a competing candidate",
+			"including the middle, lists, examples and conclusions",
 		},
 		writingReviewBodySystemPrompt: {
 			"state what a reader loses without it",
@@ -400,7 +402,7 @@ func TestExecuteWritingReviewTaskRetriesInvalidJSONAndSumsUsage(t *testing.T) {
   "titleScore": 55,
   "titleAssessment": "主题明确，但结果和受众不够具体。",
   "titleSuggestions": [
-    {"after": "24 小时部署 Qwen：从本地到公网的完整记录", "reason": "补足时间、对象和结果。"}
+    {"after": "24 小时部署 Qwen：从本地到公网的完整记录", "angle": "部署结果", "reason": "让正在部署模型的人看到操作范围。", "comparison": "比原标题具体，但强调了单次经历。", "evidence": ["24 小时内，我把 Qwen 从本地部署到了公网。"]}
   ]
 }`
 	requests := 0
@@ -436,7 +438,7 @@ func TestExecuteWritingReviewTaskRetriesInvalidJSONAndSumsUsage(t *testing.T) {
 	defer server.Close()
 
 	const title = "原标题"
-	const content = "这是原始句子。"
+	const content = "24 小时内，我把 Qwen 从本地部署到了公网。"
 	plan, err := buildWritingReviewTaskPlan(title, content, "title")
 	if err != nil {
 		t.Fatal(err)

@@ -675,12 +675,13 @@ func (a *App) runAgentReview(
 		func(outcome writingReviewTaskOutcome) error {
 			progress.record(outcome)
 			if outcome.Err == nil &&
-				(outcome.Result.Validated.DroppedBodySuggestions > 0 || outcome.Result.Validated.DroppedLayoutSuggestions > 0) {
+				(outcome.Result.Validated.DroppedTitleSuggestions > 0 || outcome.Result.Validated.DroppedBodySuggestions > 0 || outcome.Result.Validated.DroppedLayoutSuggestions > 0) {
 				log.Printf(
-					"agent review suggestions dropped review=%s task=%s stage=%s body=%d/%d layout=%d/%d",
+					"agent review suggestions dropped review=%s task=%s stage=%s title_dropped=%d body=%d/%d layout=%d/%d",
 					reviewID,
 					outcome.Result.Task.ID,
 					outcome.Result.Task.Stage,
+					outcome.Result.Validated.DroppedTitleSuggestions,
 					outcome.Result.Validated.DroppedBodySuggestions,
 					len(outcome.Result.Generated.BodySuggestions),
 					outcome.Result.Validated.DroppedLayoutSuggestions,

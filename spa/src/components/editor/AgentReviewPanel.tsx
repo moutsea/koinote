@@ -2336,7 +2336,7 @@ function SuggestionItem({
             )}
           </span>
           <p
-            className="mt-1 text-xs leading-5"
+            className="mt-1 whitespace-pre-line break-words text-xs leading-5"
             style={{ color: "var(--ink-mid)" }}
           >
             {suggestion.reason}

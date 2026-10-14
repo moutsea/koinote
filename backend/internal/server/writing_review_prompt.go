@@ -83,6 +83,7 @@ type validatedWritingReview struct {
 	TitleAssessment          string
 	LayoutAssessment         []writingReviewDimension
 	Suggestions              []validatedWritingSuggestion
+	DroppedTitleSuggestions  int
 	DroppedBodySuggestions   int
 	DroppedLayoutSuggestions int
 }
