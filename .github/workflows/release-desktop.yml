@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version improves the AI organization preview with an editable folder tree, drag-and-drop and accessible up/down ordering, inline article settings and bulk tag management. Undo preserves manual changes, stale anchor orders report conflicts, and reordering no longer changes article activity timestamps."
+          notes="Koinote Desktop $version adds a direct upgrade action to desktop release announcements and improves AI organization of documents previously filed into automatic date or activity folders."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,14 +237,13 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 是 AI 整理预览与交互补丁。
+          Koinote $version 是客户端升级入口与 AI 整理分类补丁。
 
-          - 在整理后的目录树中预览结果，支持拖动换目录、上下排序和新建子目录；上移 / 下移按钮支持键盘与触屏操作。
-          - 直接展开文章编辑标签、选择目标目录和查看整理理由，支持批量添加、移除、重命名或合并标签。
-          - 修复侧栏排序导致撤销受阻的问题，保留手动修改；参照顺序变化显示正确的冲突提示。
-          - 单纯排序不再修改文章更新时间，预览编辑使用函数式更新，排序按钮操作后保持键盘焦点。
+          - 版本提醒增加“立即升级”，直接进入检查、下载并重启流程，无需打开账户菜单。新入口从本版本开始生效。
+          - 修复更新器正在加载或后台检查时点击无响应的问题，保留升级前保存文档和下载重试。
+          - AI 整理区分自动时间 / 活跃度目录与主题分类，不再把旧自动归档当作已确认的分类参考。
 
-          从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
+          已安装旧版的用户可通过启动后的自动检查或账户菜单完成本次升级。
 
           - **macOS Apple 芯片**：文件名包含 \`aarch64\`
           - **macOS Intel 芯片**：文件名包含 \`x64\`
@@ -254,14 +253,13 @@ jobs:
 
           ---
 
-          Koinote $version improves AI organization previews and interactions.
+          Koinote $version improves desktop upgrades and AI organization.
 
-          - Preview the resulting folder tree, drag articles between folders or reorder them, and create subfolders. Up/down buttons also support keyboard and touch interaction.
-          - Expand articles to edit tags and destinations, inspect suggestions, and manage checked articles’ tags in bulk.
-          - Sidebar reordering no longer blocks classification undo. Manual changes are preserved and stale anchor orders report the correct conflict.
-          - Order-only changes preserve article activity timestamps. Preview edits use functional state updates and ordering buttons retain keyboard focus.
+          - Desktop release announcements now offer an Upgrade now button to enter the check, download and restart flow without the account menu. This entry point becomes available starting with this version.
+          - Clicks during updater loading or background checks are handled reliably. Saving documents before installation and download retries remain in place.
+          - AI organization distinguishes automatic date/activity folders from topic classifications instead of treating previous automatic filing as a confirmed example.
 
-          Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
+          Existing clients can install this release through the automatic startup check or the account menu.
 
           These installers do not use platform code-signing certificates. The macOS builds are integrity-protected with an ad-hoc signature but are not signed with an Apple Developer ID or notarized. Right-click the app and choose **Open** the first time; on newer macOS releases, you may also need **System Settings → Privacy & Security → Open Anyway**. If macOS still reports that the app is damaged, verify its SHA-256 checksum first, then run \`xattr -dr com.apple.quarantine /Applications/Koinote.app\`. On Windows, verify the SHA-256 checksum before choosing **More info → Run anyway** in SmartScreen.
           EOF

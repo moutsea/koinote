@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-14
+
+### Added
+
+- Les annonces de version proposent un bouton « Mettre à jour » donnant directement accès à la mise à jour du client. Il apparaît uniquement pour une version plus récente sur les clients compatibles ; les clics pendant le chargement ou une vérification en arrière-plan sont conservés.
+
+### Fixed
+
+- L’organisation IA distingue désormais les dossiers automatiques par date ou activité des classements thématiques, afin de ne plus traiter un ancien rangement automatique comme un exemple de classification confirmé.
+
 ## [1.1.2] - 2026-10-14
 
 ### Changed

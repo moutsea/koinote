@@ -1643,6 +1643,7 @@ export const ja: Messages = {
     releaseBadge: "Koinote {version} の新機能",
     manualBadge: "お知らせ",
     viewChangelog: "更新履歴を見る",
+    upgradeNow: "今すぐ更新",
     acknowledge: "確認しました",
     close: "お知らせを閉じる",
     markReadFailed:

@@ -1139,6 +1139,7 @@ export interface Messages {
     releaseBadge: string;
     manualBadge: string;
     viewChangelog: string;
+    upgradeNow: string;
     acknowledge: string;
     close: string;
     markReadFailed: string;

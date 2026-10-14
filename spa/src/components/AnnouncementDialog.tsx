@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BellRing, History, X } from "lucide-react";
+import { BellRing, Download, History, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   getUnreadAnnouncements,
@@ -9,6 +9,9 @@ import {
 } from "../api";
 import { useI18n, interpolate, type Locale } from "../i18n";
 import { pushModal } from "../modalStack";
+import { desktopFlavor, isDesktopRuntime } from "../desktop/runtime";
+import { isDesktopLocalModeSelected } from "../desktop/localMode";
+import { isNewerDesktopRelease, requestDesktopUpdateCheck } from "../desktop/updaterEvents";
 
 function announcementQueryKey(locale: Locale) {
   return ["announcements", "unread", locale] as const;
@@ -18,6 +21,15 @@ export function AnnouncementDialog() {
   const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const queryKey = announcementQueryKey(locale);
+  const desktopUpdatesEnabled = isDesktopRuntime() && desktopFlavor() === "production" && !isDesktopLocalModeSelected();
+  const installedVersion = useQuery({
+    queryKey: ["desktop-installed-version"],
+    queryFn: async () => (await import("@tauri-apps/api/app")).getVersion(),
+    enabled: desktopUpdatesEnabled,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const [updating, setUpdating] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -43,9 +55,9 @@ export function AnnouncementDialog() {
     },
   });
   const current =
-    announcements.data?.announcements.find(
+    (!updating && announcements.data?.announcements.find(
       (announcement) => !dismissedIds.has(announcement.id),
-    ) ?? null;
+    )) || null;
 
   const dismissCurrent = () => {
     if (!current) return;
@@ -74,6 +86,7 @@ export function AnnouncementDialog() {
 
   if (!current) return null;
 
+  const canUpgrade = desktopUpdatesEnabled && current.kind === "release" && current.version && installedVersion.data && isNewerDesktopRelease(current.version, installedVersion.data);
   const badge =
     current.kind === "release" && current.version
       ? interpolate(t.announcements.releaseBadge, { version: current.version })
@@ -186,11 +199,28 @@ export function AnnouncementDialog() {
             type="button"
             disabled={markRead.isPending}
             onClick={() => markRead.mutate(current.id)}
-            className="rounded-full px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-            style={{ background: "var(--cinnabar)" }}
+            className="rounded-full border px-5 py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
+            style={canUpgrade ? { borderColor: "var(--ink-line)", color: "var(--ink-strong)" } : { borderColor: "transparent", background: "var(--cinnabar)", color: "white" }}
           >
             {t.announcements.acknowledge}
           </button>
+          {canUpgrade && (
+            <button
+              type="button"
+              onClick={() => {
+                // Hide the notice queue while the updater takes over. A failed
+                // read receipt must not prevent checking for updates.
+                markRead.mutate(current.id);
+                setUpdating(true);
+                requestDesktopUpdateCheck();
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "var(--cinnabar)" }}
+            >
+              <Download className="h-4 w-4" />
+              {t.announcements.upgradeNow}
+            </button>
+          )}
         </div>
       </div>
     </div>

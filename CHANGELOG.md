@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-14
+
+### Added
+
+- Desktop release announcements now offer an Upgrade now button that opens the update flow directly. The button only appears for a newer release on supported desktop clients; pending clicks are retained while the updater loads, and manual checks join an ongoing background check.
+
+### Fixed
+
+- AI organization now distinguishes automatic date/activity folders from topic classifications, so earlier automatic filing no longer serves as a confirmed example that encourages retaining the old destination.
+
 ## [1.1.2] - 2026-10-14
 
 ### Changed

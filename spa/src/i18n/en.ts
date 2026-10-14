@@ -1663,6 +1663,7 @@ export const en: Messages = {
     releaseBadge: "What's new in Koinote {version}",
     manualBadge: "Announcement",
     viewChangelog: "View full changelog",
+    upgradeNow: "Upgrade now",
     acknowledge: "Got it",
     close: "Close announcement",
     markReadFailed:

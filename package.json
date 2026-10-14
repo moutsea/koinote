@@ -1,6 +1,6 @@
 {
   "name": "koinote",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -65,7 +65,7 @@
     "test:share-session": "node scripts/_check_share_session.mjs",
     "test:share-preview": "node scripts/_check_share_preview.mjs",
     "test:changelog": "esbuild spa/src/changelogCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_changelog_core_bundle.mjs --log-level=error && node scripts/_check_changelog.mjs; ec=$?; rm -f scripts/_changelog_core_bundle.mjs; exit $ec",
-    "test:announcements": "RELEASE_ANNOUNCEMENT_OUTPUT=scripts/_release_announcement_test.json node scripts/build_release_announcement.mjs && node scripts/_check_announcements.mjs; ec=$?; rm -f scripts/_release_announcement_test.json; exit $ec",
+    "test:announcements": "RELEASE_ANNOUNCEMENT_OUTPUT=scripts/_release_announcement_test.json node scripts/build_release_announcement.mjs && node scripts/_check_announcements.mjs && node scripts/_check_announcement_upgrade.mjs; ec=$?; rm -f scripts/_release_announcement_test.json; exit $ec",
     "test:document-transfer": "esbuild spa/src/documentTransferCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_document_transfer_core_bundle.mjs --log-level=error && esbuild spa/src/importArchiveCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_import_archive_core_bundle.mjs --log-level=error && esbuild spa/src/importImageCompressionCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_import_image_compression_core_bundle.mjs --log-level=error && node scripts/_check_document_transfer.mjs; ec=$?; rm -f scripts/_document_transfer_core_bundle.mjs scripts/_import_archive_core_bundle.mjs scripts/_import_image_compression_core_bundle.mjs; exit $ec",
     "test:shortcut": "esbuild spa/src/components/editor/saveShortcut.ts --bundle --format=esm --platform=neutral --outfile=scripts/_save_shortcut_bundle.mjs --log-level=error && node scripts/_check_save_shortcut.mjs; ec=$?; rm -f scripts/_save_shortcut_bundle.mjs; exit $ec",
     "test:i18n": "esbuild scripts/_i18n_entry.ts --bundle --format=esm --platform=neutral --outfile=scripts/_i18n_bundle.mjs --log-level=error && node scripts/_check_i18n.mjs; ec=$?; rm -f scripts/_i18n_bundle.mjs; exit $ec",

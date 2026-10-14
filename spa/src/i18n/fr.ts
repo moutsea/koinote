@@ -1682,6 +1682,7 @@ export const fr: Messages = {
     releaseBadge: "Nouveautés de Koinote {version}",
     manualBadge: "Annonce",
     viewChangelog: "Voir le journal complet",
+    upgradeNow: "Mettre à jour",
     acknowledge: "Compris",
     close: "Fermer l’annonce",
     markReadFailed:

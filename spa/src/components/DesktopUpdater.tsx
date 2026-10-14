@@ -7,7 +7,7 @@ import {
 import { Download, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DESKTOP_UPDATE_CHECK_EVENT } from "../desktop/updaterEvents";
+import { consumeDesktopUpdateCheck, DESKTOP_UPDATE_CHECK_EVENT } from "../desktop/updaterEvents";
 import {
   DESKTOP_UPDATE_DOWNLOAD_ATTEMPTS,
   DESKTOP_UPDATE_DOWNLOAD_RETRY_DELAYS_MS,
@@ -60,6 +60,8 @@ export function DesktopUpdater() {
   const [contentLength, setContentLength] = useState<number | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const checkingRef = useRef(false);
+  const interactiveCheckRef = useRef(false);
+  const installingRef = useRef(false);
   const availableUpdateRef = useRef<Update | null>(null);
   const contentLengthRef = useRef<number | null>(null);
   const nextScheduledCheckAtRef = useRef<number | null>(null);
@@ -67,10 +69,14 @@ export function DesktopUpdater() {
 
   const runCheck = useCallback(async (interactive: boolean) => {
     if (isDesktopLocalModeSelected() || desktopFlavor() === "local") return;
-    if (checkingRef.current || (!interactive && availableUpdateRef.current)) return;
+    if (installingRef.current || (!interactive && availableUpdateRef.current)) return;
+    if (interactive) {
+      interactiveCheckRef.current = true;
+      setPhase("checking");
+    }
+    if (checkingRef.current) return;
     checkingRef.current = true;
     setSaveFailed(false);
-    if (interactive) setPhase("checking");
     let succeeded = false;
     try {
       const update = await check({ timeout: 15_000 });
@@ -80,17 +86,18 @@ export function DesktopUpdater() {
         availableUpdateRef.current = update;
         setAvailableUpdate(update);
         setPhase("available");
-      } else if (interactive) {
+      } else if (interactiveCheckRef.current) {
         setPhase("current");
       }
     } catch {
-      if (interactive) setPhase("failed");
+      if (interactiveCheckRef.current) setPhase("failed");
     } finally {
       nextScheduledCheckAtRef.current = nextDesktopUpdateCheckAt(
         Date.now(),
         succeeded,
       );
       checkingRef.current = false;
+      interactiveCheckRef.current = false;
     }
   }, []);
 
@@ -101,13 +108,17 @@ export function DesktopUpdater() {
         void runCheck(false);
       }
     };
-    const handleManualCheck = () => void runCheck(true);
+    const handleManualCheck = () => {
+      consumeDesktopUpdateCheck();
+      void runCheck(true);
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") checkIfDue();
     };
     const handleOnline = () => void runCheck(false);
     const interval = window.setInterval(checkIfDue, DESKTOP_UPDATE_TIMER_TICK_MS);
     window.addEventListener(DESKTOP_UPDATE_CHECK_EVENT, handleManualCheck);
+    if (consumeDesktopUpdateCheck()) void runCheck(true);
     window.addEventListener("focus", checkIfDue);
     window.addEventListener("online", handleOnline);
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -127,7 +138,8 @@ export function DesktopUpdater() {
   }, [modalVisible]);
 
   function dismiss() {
-    if (phase === "installing") return;
+    if (installingRef.current) return;
+    interactiveCheckRef.current = false;
     if (availableUpdate) void availableUpdate.close();
     availableUpdateRef.current = null;
     setAvailableUpdate(null);
@@ -135,26 +147,30 @@ export function DesktopUpdater() {
   }
 
   async function installUpdate() {
+    if (installingRef.current) return;
     if (!availableUpdate) {
       await runCheck(true);
       return;
     }
-    const { prepareDesktopLogout } = await import("../desktop/logoutGuard");
-    if (!(await prepareDesktopLogout())) {
-      setSaveFailed(true);
-      setPhase("failed");
-      return;
-    }
+    installingRef.current = true;
     setSaveFailed(false);
     setPhase("installing");
     setDownloadedBytes(0);
     setContentLength(null);
     contentLengthRef.current = null;
     try {
+      const { prepareDesktopLogout } = await import("../desktop/logoutGuard");
+      if (!(await prepareDesktopLogout())) {
+        setSaveFailed(true);
+        setPhase("failed");
+        return;
+      }
       await downloadAndInstallWithRetry(availableUpdate, handleDownloadEvent);
       await relaunch();
     } catch {
       setPhase("failed");
+    } finally {
+      installingRef.current = false;
     }
   }
 

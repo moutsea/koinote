@@ -1577,6 +1577,7 @@ export const zh: Messages = {
     releaseBadge: "Koinote {version} 新功能",
     manualBadge: "站内提醒",
     viewChangelog: "查看完整更新",
+    upgradeNow: "立即升级",
     acknowledge: "知道了",
     close: "关闭提醒",
     markReadFailed: "暂时无法保存已读状态。你可以先关闭提醒，稍后再试。",
