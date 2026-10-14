@@ -591,6 +591,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodPost
 	case "/api/editor/tabs":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/document-organizations":
+		return method == http.MethodPost
+	case "/api/document-organizations/latest":
+		return method == http.MethodGet
+	case "/api/document-organizations/estimate":
+		return method == http.MethodPost
 	case "/api/folders":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/documents":
@@ -682,6 +688,13 @@ func desktopRequestAllowed(r *http.Request) bool {
 	}
 	if rest, found := strings.CutPrefix(path, "/api/media/custom-platforms/"); found {
 		return rest != "" && !strings.Contains(rest, "/") && (method == http.MethodPut || method == http.MethodDelete)
+	}
+	if rest, found := strings.CutPrefix(path, "/api/document-organizations/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && validUUID(parts[0]) {
+			return method == http.MethodGet
+		}
+		return len(parts) == 2 && validUUID(parts[0]) && (parts[1] == "apply" || parts[1] == "undo") && method == http.MethodPost
 	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/reviews/"); found {
 		parts := strings.Split(rest, "/")

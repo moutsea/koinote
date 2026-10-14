@@ -251,6 +251,13 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/settings/document-history", a.documentHistorySettingsPut)
 	mux.Handle("/mcp", a.mcpHandler())
 
+	mux.HandleFunc("GET /api/document-organizations/latest", a.documentOrganizationLatest)
+	mux.HandleFunc("GET /api/document-organizations/{organizationId}", a.documentOrganizationGet)
+	mux.HandleFunc("POST /api/document-organizations/estimate", a.documentOrganizationEstimate)
+	mux.HandleFunc("POST /api/document-organizations", a.documentOrganizationCreate)
+	mux.HandleFunc("POST /api/document-organizations/{organizationId}/apply", a.documentOrganizationApply)
+	mux.HandleFunc("POST /api/document-organizations/{organizationId}/undo", a.documentOrganizationUndo)
+
 	mux.HandleFunc("GET /api/folders", a.foldersList)
 	mux.HandleFunc("POST /api/folders", a.folderCreate)
 	mux.HandleFunc("PUT /api/folders/{folderId}", a.folderRename)

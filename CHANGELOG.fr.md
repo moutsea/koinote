@@ -4,6 +4,12 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-14
+
+### Added
+
+- L’organisation par contenu propose des dossiers et des tags dans un aperçu modifiable, ignore par défaut les documents déjà organisés et permet de les inclure explicitement. Le contenu et les couvertures sont préservés. L’annulation ignore les modifications ultérieures et affiche les titres concernés ; les lots sans suggestion valide ne coûtent aucun credit de la plateforme. Les clients synchronisent avant analyse et conservent les tags hors ligne.
+
 ### Changed
 
 - Les suggestions de titres IA exploitent le corps de l’article, comparent plusieurs angles au titre original et présentent des citations vérifiées ainsi que les compromis concrets. Une note élevée ne bloque plus les alternatives ; les longs articles sont échantillonnés sur toute leur longueur dans une limite définie, dans le panneau de révision existant.

@@ -18,6 +18,7 @@ for (const migration of readdirSync("src-tauri/migrations").filter((name) => nam
 const bind = (values) => Object.fromEntries(values.map((value, index) => [`$${index + 1}`, value]));
 const requests = [];
 const statuses = [];
+let organizationMetadataWrites = 0;
 let remoteDocument = {
   docId: "autosync-document", title: "Autosync", content: "Original", theme: "minimal", revision: 1,
   coverMode: "default", coverRatio: "2.35:1", coverImageSource: "", coverPrompt: "", folderId: null, sortOrder: 0,
@@ -31,7 +32,10 @@ const harness = {
   prepare: async () => true,
   database: {
     async select(sql, values = []) { return sqlite.prepare(sql).all(bind(values)); },
-    async execute(sql, values = []) { return { rowsAffected: Number(sqlite.prepare(sql).run(bind(values)).changes) }; },
+    async execute(sql, values = []) {
+      if (sql.includes("INSERT INTO offline_meta") && sql.includes("'document-organization-metadata'")) organizationMetadataWrites++;
+      return { rowsAffected: Number(sqlite.prepare(sql).run(bind(values)).changes) };
+    },
   },
   async fetch(path, init = {}) {
     requests.push({ path, ...init });
@@ -570,6 +574,36 @@ try {
   });
   assert.equal(remoteDocument.content, "Upload timer expires during read-only check", "cloud checks must not consume pending upload wakeups");
   assert.equal((await store.desktopSyncSummary()).pending, 0);
+  // Organization changes metadata without changing the content revision.
+  const beforeMetadata = organizationMetadataWrites;
+  await act(async () => {
+    await store.syncDesktopNow({ force: true, pullOnly: true, strictPull: true });
+    await store.syncDesktopNow({ force: true, pullOnly: true, strictPull: true });
+  });
+  assert.equal(organizationMetadataWrites, beforeMetadata, "unchanged metadata must not be rewritten");
+  remoteDocument = { ...remoteDocument, tags: ["Organized"], organizedAt: "2026-10-14T04:00:00Z", updatedAt: "2026-10-14T04:00:00Z" };
+  await act(async () => { await store.syncDesktopNow({ force: true, pullOnly: true, strictPull: true }); });
+  assert.equal(organizationMetadataWrites, beforeMetadata + 1);
+  const organizedSummary = (await store.desktopListDocuments()).documents.find(doc => doc.docId === remoteDocument.docId);
+  assert.deepEqual(organizedSummary.tags, ["Organized"]);
+  assert.equal(organizedSummary.updatedAt, remoteDocument.updatedAt, "metadata-only changes must refresh the sidebar timestamp");
+
+  sqlite.prepare("UPDATE offline_documents SET sync_state='conflict',last_error='document_revision_conflict' WHERE doc_id=?").run(remoteDocument.docId);
+  const conflictContent = (await store.desktopGetDocument(remoteDocument.docId)).document.content;
+  await act(async () => {
+    assert.deepEqual(await store.desktopPrepareLibraryForOrganization(), [remoteDocument.docId], "generation excludes conflicts instead of blocking the whole library");
+    assert.deepEqual(await store.desktopPrepareLibraryForOrganization(["unrelated-document"]), [remoteDocument.docId], "unrelated conflicts must not block applying or undoing");
+    await assert.rejects(store.desktopPrepareLibraryForOrganization([remoteDocument.docId]), /organization_sync_conflict/);
+    sqlite.prepare("INSERT INTO offline_folders(account_id,folder_id,name,sync_state) VALUES('account-1','legacy-conflict','Local folder','conflict')").run();
+    await assert.rejects(store.desktopPrepareLibraryForOrganization(), /organization_folder_sync_conflict/, "legacy folder conflicts need a specific explanation, not a save error");
+    assert.equal(sqlite.prepare("SELECT name FROM offline_folders WHERE folder_id='legacy-conflict'").get().name, 'Local folder');
+    sqlite.prepare("DELETE FROM offline_folders WHERE folder_id='legacy-conflict'").run();
+    harness.fail = true;
+    await assert.rejects(store.desktopPrepareLibraryForOrganization(), /document_save_failed/);
+    harness.fail = false;
+  });
+  assert.equal((await store.desktopGetDocument(remoteDocument.docId)).document.content, conflictContent, "preparation must preserve conflicted local content");
+  sqlite.prepare("UPDATE offline_documents SET sync_state='clean',last_error=NULL WHERE doc_id=?").run(remoteDocument.docId);
   await act(async () => root.render(null));
   const beforeUnmounted = requests.length;
   await advance(60_000);

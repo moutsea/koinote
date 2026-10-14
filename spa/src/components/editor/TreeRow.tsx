@@ -597,6 +597,12 @@ export function DocRow({
           >
             {title}
           </span>
+          {Boolean(doc.tags?.length) && (
+            <span className="mt-1 flex flex-wrap gap-1" title={doc.tags?.map(tag => `#${tag}`).join(" ")}>
+              {doc.tags?.slice(0, 2).map(tag => <span key={tag} className="max-w-24 truncate rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-white/10 dark:text-neutral-400">#{tag}</span>)}
+              {(doc.tags?.length ?? 0) > 2 && <span className="text-[10px] text-neutral-400">+{doc.tags!.length - 2}</span>}
+            </span>
+          )}
           {doc.updatedAt && (
             <span className="mt-0.5 block text-[11px] text-neutral-400">
               {new Date(doc.updatedAt).toLocaleDateString(DATE_LOCALE[locale])}

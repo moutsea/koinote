@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type { ApplyDocumentOrganizationResult } from "../../documentOrganizer";
+import { Logo } from "../Logo";
 import { interpolate, useI18n } from "../../i18n";
 import type { DocumentSummary, Folder } from "../../documents";
 import { IMPORT_FILE_ACCEPT } from "../../documentTransferCore";
@@ -93,9 +94,11 @@ export function DocumentList({
   notice,
   error,
   onOrganize,
+  onOpenAIOrganizer,
   autoEditFolderId,
   onAutoEditDone,
 }: {
+  onOpenAIOrganizer: () => void;
   documents: DocumentSummary[];
   folders: Folder[];
   activeDocId?: string;
@@ -1223,6 +1226,9 @@ export function DocumentList({
             )}
           </div>
         )}
+        <button type="button" onClick={() => { closeOrganizerMenu(); onOpenAIOrganizer(); }} disabled={loading || documents.length === 0 || Boolean(organizingStrategy)} className="mb-1 flex w-full items-center justify-center gap-2 rounded-lg bg-cinnabar-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-cinnabar-700 disabled:opacity-50">
+          <Logo className="h-5 w-5" variant="reversed" />{t.editor.aiOrganizer.title}
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -1241,7 +1247,7 @@ export function DocumentList({
           )}
           {organizingStrategy
             ? t.editor.organizer.organizing
-            : t.editor.organizer.button}
+            : t.editor.aiOrganizer.legacy}
         </button>
       </div>
 

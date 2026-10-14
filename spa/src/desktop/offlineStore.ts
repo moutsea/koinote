@@ -120,6 +120,7 @@ type DesktopSyncOptions = {
   force?: boolean;
   onlyIfPending?: boolean;
   pullOnly?: boolean;
+  strictPull?: boolean;
 };
 
 type DesktopSnapshotInitialization = {
@@ -1017,6 +1018,29 @@ export function desktopSyncEventName() {
   return DESKTOP_SYNC_EVENT;
 }
 
+export async function desktopPrepareLibraryForOrganization(docIds?: string[]): Promise<string[]> {
+  if (isDesktopLocalModeSelected()) throw new Error("document_save_failed");
+  const summary = await syncDesktopNow({ silent: true, force: true });
+  const account = await accountID();
+  const db = await database();
+  // Folder writes currently use create/update/delete, never conflict. Still
+  // recognize a legacy/invalid conflict row explicitly: ignoring an unsynced
+  // taxonomy would let the cloud organize against a different local tree.
+  const folderConflicts = await db.select<{ folder_id: string }[]>(
+    "SELECT folder_id FROM offline_folders WHERE account_id=$1 AND sync_state='conflict' LIMIT 1", [account],
+  );
+  if (folderConflicts.length) throw new Error("organization_folder_sync_conflict");
+  if (summary.state !== "idle" || summary.pending !== summary.conflicts) throw new Error("document_save_failed");
+  const conflicts = await db.select<{ doc_id: string }[]>(
+    "SELECT doc_id FROM offline_documents WHERE account_id=$1 AND sync_state='conflict' ORDER BY doc_id", [account],
+  );
+  const ids = conflicts.map(row => row.doc_id);
+  if (docIds?.some(id => ids.includes(id))) throw new Error("organization_sync_conflict");
+  // Generation excludes these documents from both candidates and references.
+  // Applying or undoing another document does not depend on their local drafts.
+  return ids;
+}
+
 export async function desktopListDocuments(): Promise<{ documents: DocumentSummary[] }> {
   const account = await accountID();
   await ensureInitialSnapshot(account);
@@ -1030,8 +1054,14 @@ export async function desktopListDocuments(): Promise<{ documents: DocumentSumma
   const rows = await Promise.all(
     storedRows.map((row) => readableDocumentRow(account, row)),
   );
+  const metadata = await db.select<{ value: string }[]>(
+    "SELECT value FROM offline_meta WHERE account_id = $1 AND key = 'document-organization-metadata'", [account],
+  );
+  let organizationMetadata: Record<string, Pick<DocumentSummary, "tags" | "organizedAt">> = {};
+  try { organizationMetadata = JSON.parse(metadata[0]?.value ?? "{}"); } catch { /* Old cache can be refreshed. */ }
   return {
     documents: rows.map((row) => ({
+      ...organizationMetadata[row.doc_id],
       docId: row.doc_id,
       title: row.title,
       folderId: row.folder_id,
@@ -2417,7 +2447,7 @@ function scheduleSync(delay = 1500) {
 
 async function performPreparedSync(options: DesktopSyncOptions): Promise<DesktopSyncSummary> {
   const account = await accountID();
-  if (options.pullOnly) return performRemoteCheck(account);
+  if (options.pullOnly) return performRemoteCheck(account, options.strictPull);
   if (!(await prepareDesktopSync())) {
     const summary = await calculateSummary(account, "error", "document_save_pending");
     notify(summary);
@@ -2454,8 +2484,11 @@ async function recordSuccessfulSync(account: string): Promise<void> {
   if (initialization) initialization.needsRetry = false;
 }
 
-async function performRemoteCheck(account: string): Promise<DesktopSyncSummary> {
-  if (!navigator.onLine) return desktopSyncSummary();
+async function performRemoteCheck(account: string, strict = false): Promise<DesktopSyncSummary> {
+  if (!navigator.onLine) {
+    if (strict) throw new Error("offline");
+    return desktopSyncSummary();
+  }
   remoteCheckTimes.set(account, Date.now());
   let changed = false;
   try {
@@ -2463,7 +2496,7 @@ async function performRemoteCheck(account: string): Promise<DesktopSyncSummary> 
     if (changed) await recordSuccessfulSync(account);
     const initialization = snapshotInitializations.get(account);
     if (initialization) initialization.needsRetry = false;
-  } catch {}
+  } catch (error) { if (strict) throw error; }
   const summary = await desktopSyncSummary();
   if (changed) notify(summary);
   return summary;
@@ -2874,6 +2907,21 @@ async function pullRemoteSnapshot(
   `, [account]);
   const localByID = new Map(localDocuments.map((row) => [row.doc_id, row]));
   const remoteIDs = new Set(documents.documents.map((document) => document.docId));
+  // Account-scoped metadata cache; the cloud owns tags and organization markers.
+  // It is never included in uploads, so older/offline clients cannot erase them.
+  const organizationMetadata = JSON.stringify(Object.fromEntries(documents.documents.map(doc => [doc.docId, {
+    tags: doc.tags ?? [], organizedAt: doc.organizedAt ?? null,
+  }])));
+  const previousOrganizationMetadata = await db.select<{ value: string }[]>(
+    "SELECT value FROM offline_meta WHERE account_id=$1 AND key='document-organization-metadata'", [account],
+  );
+  if (organizationMetadata !== previousOrganizationMetadata[0]?.value) {
+    await db.execute(`INSERT INTO offline_meta(account_id, key, value)
+      VALUES($1, 'document-organization-metadata', $2)
+      ON CONFLICT(account_id, key) DO UPDATE SET value=excluded.value`,
+      [account, organizationMetadata]);
+    options.onChange?.();
+  }
 
   for (const summary of documents.documents) {
     const local = localByID.get(summary.docId);
@@ -2887,22 +2935,25 @@ async function pullRemoteSnapshot(
     if (summary.revision === local.base_revision) {
       if (
         (summary.folderId !== local.folder_id && !local.folder_dirty) ||
-        (summary.sortOrder !== local.sort_order && !local.order_dirty)
+        (summary.sortOrder !== local.sort_order && !local.order_dirty) ||
+        (local.sync_state === "clean" && (summary.updatedAt ?? null) !== local.updated_at)
       ) {
         const result = await db.execute(`
           UPDATE offline_documents
           SET folder_id = CASE WHEN folder_dirty = 0 THEN $3 ELSE folder_id END,
               sort_order = CASE WHEN order_dirty = 0 THEN $4 ELSE sort_order END,
+              updated_at = CASE WHEN sync_state = 'clean' THEN $8 ELSE updated_at END,
               change_seq = change_seq + 1, last_error = NULL
           WHERE account_id = $1 AND doc_id = $2
             AND base_revision = $5 AND sync_state = $6 AND change_seq = $7
             AND (
               (folder_id IS NOT $3 AND folder_dirty = 0) OR
-              (sort_order IS NOT $4 AND order_dirty = 0)
+              (sort_order IS NOT $4 AND order_dirty = 0) OR
+              (sync_state = 'clean' AND updated_at IS NOT $8)
             )
         `, [
           account, summary.docId, summary.folderId, summary.sortOrder,
-          local.base_revision, local.sync_state, local.change_seq,
+          local.base_revision, local.sync_state, local.change_seq, summary.updatedAt ?? null,
         ]);
         markChanged(result.rowsAffected);
       }

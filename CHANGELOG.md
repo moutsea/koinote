@@ -6,6 +6,12 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-14
+
+### Added
+
+- One-click content organization proposes folders and tags in an editable result preview, skips previously organized documents by default, supports explicit reorganization, and preserves article content and covers. Undo skips later changes and lists affected titles; batches with no valid suggestions cost no platform credits. Desktop clients sync before analysis and cache tags for offline display.
+
 ### Changed
 
 - AI title suggestions now draw on the article body, compare distinct angles with the original and include source-checked quotes plus concrete tradeoffs. High scores no longer suppress alternatives; long articles use bounded, distributed samples and suggestions stay in the existing review panel.

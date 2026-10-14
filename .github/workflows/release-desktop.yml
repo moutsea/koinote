@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version is the first stable release. Skills/Agent Hub adds daily system repository refreshes and discovery of up to 20 popular repositories per day. My Space combines direct creation and GitHub import in one menu, alongside public Clone/Fork, cross-platform configuration sync and AI editorial suggestions."
+          notes="Koinote Desktop $version adds one-click AI document organization with editable folder and tag previews, automatic skipping of previously organized documents and undo that preserves later edits. Unusable batches cost no platform credits. AI title suggestions now use article evidence, AI optimization preserves covers, and Skills/Agent Hub discovery retries missed runs."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,13 +237,13 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote 1.0.0 正式发布。桌面客户端采用本地优先的 SQLite 存储，支持离线编辑、后台同步与冲突双副本恢复。
+          Koinote $version 新增文档一键整理，并改进 AI 标题建议与文章封面保护。
 
-          - Skills/Agent Hub 的系统收录每日更新，并每天发现最多 20 个热门新仓库；内容保存在私有 R2，保留原作者、GitHub 来源和许可证。
-          - 自动更新校验仓库身份、许可证和敏感内容；支持限流后续跑、下载中断重试及仓库改名，失败时保留旧版本。
-          - “我的空间”将 Skills/Agent Hub 放到设置旁；“新建仓库”整合“直接创建”和“从 GitHub 导入”。
-          - 支持公开 Clone、私有 Fork、跨系统配置恢复与“复制给 AI Agent”；配置同步包含 DeepSeek Harness。
-          - 保留登录恢复、离线文档和图片同步、专业编辑式 AI 优化及自媒体发布；API 同步独立发送标题，避免正文标题重复。
+          - 一键生成基于内容的目录与标签建议，先预览、手动调整后再应用；默认跳过已整理文档，可主动选择重新整理。
+          - 支持撤销并保留用户后续的手动修改，列出跳过的文档；保留文章正文、标题与封面，标签支持离线显示。
+          - 整理使用终身会员的内置模型或自有渠道。内置模型按用量结算，整个批次没有有效建议时不扣平台 credits；编辑预览、应用与撤销免费。
+          - AI 标题建议从正文提炼素材，展示有原文依据的候选和取舍；无效候选单独丢弃，不中断其他建议。
+          - 修复应用 AI 优化后封面被清空的问题；Skills/Agent Hub 每日收录新增多个重试时段，继续补足当天最多 20 个仓库。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -255,13 +255,13 @@ jobs:
 
           ---
 
-          Koinote 1.0.0 is the first stable release. The desktop client uses local-first SQLite storage with offline editing, background synchronization, and explicit conflict recovery.
+          Koinote $version adds one-click document organization, improves AI title suggestions and preserves article covers during optimization.
 
-          - System repositories in Skills/Agent Hub refresh daily, with discovery of up to 20 popular new repositories per day. Private R2 storage retains upstream attribution, GitHub links and licenses.
-          - Automatic updates verify repository identity, licenses and sensitive content; rate-limit recovery, interrupted downloads and repository renames preserve the previous snapshot on failure.
-          - My Space puts Skills/Agent Hub beside Settings and combines Create directly and Import from GitHub in the New repository menu.
-          - Public Clone, private Fork, cross-platform configuration restore and Copy for AI Agent are available, including DeepSeek Harness configuration sync.
-          - Includes sign-in recovery, offline document and image sync, editorial AI suggestions and publishing integrations. API publishing sends titles separately to avoid duplication in article bodies.
+          - Generate content-based folder and tag suggestions, preview and edit them before applying. Previously organized documents are skipped unless you explicitly include them.
+          - Undo preserves later manual changes and lists skipped documents. Body text, titles and covers stay intact, and tags are available offline.
+          - Organization uses lifetime members' built-in models or configured BYOK channels. Built-in usage is billed in credits, except batches with no valid suggestions; editing previews, applying and undoing are free.
+          - AI title suggestions use article evidence and explain their tradeoffs. Invalid candidates are discarded individually without interrupting other suggestions.
+          - Fixes covers being cleared after AI optimization. Skills/Agent Hub discovery now retries missed runs across several daily windows, filling the daily limit of up to 20 repositories.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

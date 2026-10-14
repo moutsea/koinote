@@ -201,6 +201,9 @@ func (a *App) purgeDocument(ctx context.Context, user userRef, docID, confirmati
 		return err
 	}
 	rows.Close()
+	if err := purgeDocumentOrganizations(ctx, tx, user.ID, strings.TrimSpace(docID)); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM documents WHERE id = $1`, documentID); err != nil {
 		return err
 	}

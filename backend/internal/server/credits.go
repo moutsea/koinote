@@ -454,6 +454,18 @@ func (a *App) releaseCreditReservation(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck -- commit below owns the successful path
 
+	balance, err := releaseCreditReservationTx(ctx, tx, userID, reservationID)
+	if err != nil {
+		return creditAccountBalance{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return creditAccountBalance{}, fmt.Errorf("commit credit release: %w", err)
+	}
+	return balance, nil
+}
+
+// Also used by document deletion so cancellation and credit release commit together.
+func releaseCreditReservationTx(ctx context.Context, tx pgx.Tx, userID int, reservationID string) (creditAccountBalance, error) {
 	balance, err := lockCreditAccount(ctx, tx, userID)
 	if err != nil {
 		return creditAccountBalance{}, err
@@ -472,9 +484,6 @@ func (a *App) releaseCreditReservation(
 		return creditAccountBalance{}, fmt.Errorf("lock released credit reservation: %w", err)
 	}
 	if status != "active" {
-		if err := tx.Commit(ctx); err != nil {
-			return creditAccountBalance{}, fmt.Errorf("commit repeated credit release: %w", err)
-		}
 		return balance, nil
 	}
 	if reserved > balance.Reserved {
@@ -496,9 +505,6 @@ func (a *App) releaseCreditReservation(
 		WHERE reservation_id = $1
 	`, reservationID); err != nil {
 		return creditAccountBalance{}, fmt.Errorf("mark credit reservation released: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return creditAccountBalance{}, fmt.Errorf("commit credit release: %w", err)
 	}
 	return balance, nil
 }

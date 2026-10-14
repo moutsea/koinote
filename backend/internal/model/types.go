@@ -42,8 +42,10 @@ type DocumentShare struct {
 
 // DocumentSummary 用于列表接口：不含 content，侧边栏渲染够用且省流量。
 type DocumentSummary struct {
-	DocID string `json:"docId"`
-	Title string `json:"title"`
+	Tags        []string   `json:"tags,omitempty"`
+	OrganizedAt *time.Time `json:"organizedAt,omitempty"`
+	DocID       string     `json:"docId"`
+	Title       string     `json:"title"`
 	// nil 表示在根下
 	FolderID  *string    `json:"folderId"`
 	SortOrder int64      `json:"sortOrder"`

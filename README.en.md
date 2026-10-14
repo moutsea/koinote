@@ -378,6 +378,20 @@ concatenate bytes before decoding text, and verify the full file hash.
 Storage queries include files and retained history, expose no personal document
 usage, and cannot allocate personal storage. Membership, feature enablement and token validity are checked on every request.
 
+## One-click document organization
+
+**Organize documents** at the bottom of the document sidebar proposes content-based folders and a few subject tags, reusing existing taxonomy and confirmed choices. It shows a cost estimate before generating an editable result preview. Change destinations, add subfolders, edit tags or exclude individual documents, then apply the selection together. The original date-based organizer remains available.
+
+Previously confirmed documents are skipped by default, even after content edits. Select **Include previously organized documents** to process them again. Background refreshes keep the current preview selected, and discarding edits requires confirmation. Apply and undo protect later classification changes and involved folder paths; apply also checks content revisions. Unrelated folder changes are allowed. Temporary database conflicts retry automatically; if the database remains busy, retry the same preview without regenerating it. Body text, titles and covers are preserved.
+
+Apply skips documents moved to trash and lists them in the result. Single-step undo checks each document, preserves later classification or related folder-path changes and lists skipped titles. The remaining documents regain their original folders, tags and organization markers while retaining trash status and subsequent ordering within an unchanged folder. Skipped outcomes are saved; retrying undo never overwrites those later changes. Documents returning to their original folder get space inserted for them to avoid duplicate sort positions. Undo remains available after a new or failed preview. Tags are edited individually, preserving punctuation within each tag. Same-named folders can be selected individually in the destination list. Repeated requests do not generate or charge twice.
+
+This uses the same lifetime membership and built-in credits / BYOK settings as AI optimization. Preview generation is billed by usage, except batches that produce no valid suggestions cost no platform credits and their unused reservations are released. Mixed batches are still billed by their usage. BYOK providers may charge even when no valid suggestions are produced. Editing, applying and undoing are free. Desktop clients save and synchronize first. Documents with sync conflicts are excluded from both classification and reference examples; unrelated documents can still be organized. Apply and undo only require the affected documents to be free of sync conflicts. Unsynced folder changes must still be resolved; unexpected folder conflict states get a specific explanation. Tags and modification times refresh from the cloud, and unchanged tag metadata is not rewritten to the local cache. Local mode retains date-based organization.
+
+Permanently deleting a document, including automatic trash expiry, also removes its information from saved organization records while preserving other documents' previews and undo information. Affected generation jobs stop and release reserved credits; late responses cannot write the deleted information back.
+
+Documents are analyzed in batches of eight, using bounded beginning/end excerpts for long documents. Invalid folder or tag suggestions fall back to that document's original classification, are marked for review and start unchecked; other valid suggestions remain usable. Responses with unidentifiable documents still fail. Runs have a 15-minute deadline; failed generation releases reserved credits, and expired jobs change status and release reservations together. Review the model's classification before applying it. Stored organization records contain metadata and undo information, not extra copies of document bodies.
+
 ## AI optimization
 
 Lifetime members can open **AI optimization** from the editor toolbar. The editor saves

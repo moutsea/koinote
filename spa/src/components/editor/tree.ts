@@ -33,6 +33,7 @@ export type FolderNode = {
 };
 
 export type DocNode = {
+  tags?: string[];
   docId: string;
   title: string;
   revision?: number;

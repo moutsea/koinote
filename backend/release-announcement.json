@@ -1,52 +1,36 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.0.0",
+      "title": "What's new in Koinote 1.1.0",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Skills/Agent Hub adds public Clone, member-only private Fork, Stars and GitHub imports with original attribution and licenses. System repositories use private R2 storage, refresh daily and discover up to 20 new popular Skills repositories per day. Updates check repository identity, licenses and sensitive content; failures preserve the previous snapshot and support retries.",
-        "Development/AI configuration sync now includes DeepSeek Harness under Coding agents, scanning default `.dsh` settings and profiles; credentials restore with owner-only access on macOS/Linux, while skills and AGENTS.md belong to the separate repository.",
-        "Skills/Agent and configuration sync menus now offer Copy for AI Agent with the MCP endpoint, read-only credentials and local merge instructions; configuration handoff uses a temporary credential scoped to one snapshot revision without sharing the migration password.",
-        "Local restore for Skills/Agent and development configurations maps known configuration locations across Windows, macOS and Linux, previews destinations and rejects path conflicts before writing; existing backups work without re-uploading.",
-        "Skills/Agent repository MCP now includes history browsing, revision restoration and storage queries, supports uploads up to 5 MiB and bounded chunked file reads, and uses a separate connection configuration alongside document MCP.",
-        "My Space now separates Skills/Agent repositories from encrypted development/AI configuration snapshots, with one-click local uploads, file selection and previews, sensitive-data filtering, and confirmation before restoring local files."
+        "One-click content organization proposes folders and tags in an editable result preview, skips previously organized documents by default, supports explicit reorganization, and preserves article content and covers. Undo skips later changes and lists affected titles; batches with no valid suggestions cost no platform credits. Desktop clients sync before analysis and cache tags for offline display.",
+        "AI title suggestions now draw on the article body, compare distinct angles with the original and include source-checked quotes plus concrete tradeoffs. High scores no longer suppress alternatives; long articles use bounded, distributed samples and suggestions stay in the existing review panel."
       ]
     },
     "zh": {
-      "title": "Koinote 1.0.0 新功能",
+      "title": "Koinote 1.1.0 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Skills/Agent Hub 支持公开 Clone、会员私有 Fork、Star 收藏和 GitHub 导入，保留原作者、来源和许可证。系统仓库存储于私有 R2，每日更新并发现最多 20 个未收录的热门 Skills 仓库；校验仓库身份、许可证及敏感信息，失败时保留旧快照并支持重试。",
-        "开发/AI 配置云端同步新增 DeepSeek Harness，归入「编码 Agent」并扫描默认 `.dsh` 配置及 profiles；凭据文件在 macOS/Linux 恢复为仅本人可读写，Skills 与 AGENTS.md 归入独立仓库。",
-        "Skills/Agent 和开发配置的同步菜单新增「复制给 AI Agent」，一键携带 MCP 地址、只读凭证与本机合并指令；开发配置使用绑定单个快照版本的短期凭证，迁移密码不交给 Agent。",
-        "Skills/Agent 与开发配置的本机恢复支持 Windows、macOS、Linux 已知配置目录映射；显示实际落点并在写入前拦截路径冲突，旧备份无需重新上传。",
-        "Skills/Agent 仓库 MCP 补齐历史查询、版本恢复和用量查询，支持最大 5 MiB 上传和分块读取；独立连接配置可与文档 MCP 同时使用。",
-        "「我的空间」新增 Skills/Agent 仓库和加密的开发/AI 配置快照，支持一键扫描上传、文件树勾选与内容预览、敏感数据过滤，以及恢复本机文件前的确认。"
+        "一键整理新增基于内容的分类、归档与标签建议，可在效果预览中修改目录和标签、排除单篇后统一应用；默认跳过已整理文档，支持手动勾选重新整理，保留正文与封面。撤销会跳过后续已修改的文档并列出标题；整批无有效建议的调用不扣平台 credits。客户端分析前先同步，标签支持离线显示。",
+        "AI 标题建议现在从正文提炼素材，将不同角度与原标题比较，并展示经过原文校验的引用和具体取舍。高分不再阻止生成备选；超长文按预算沿全文取样，建议仍使用现有审阅面板。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.0.0",
+      "title": "Nouveautés de Koinote 1.1.0",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Skills/Agent Hub propose Clone public, Fork privé pour les membres, étoiles et import GitHub avec attribution et licences. Les dépôts système sont stockés dans R2 privé, actualisés chaque jour et enrichis de 20 nouveaux dépôts Skills populaires au maximum. Les contrôles d’identité, de licence et de données sensibles préservent la version précédente en cas d’échec et permettent une reprise.",
-        "La synchronisation des configurations de développement/IA prend en charge DeepSeek Harness dans les agents de codage, avec les paramètres et profils `.dsh` ; les identifiants sont restaurés avec un accès réservé au propriétaire sur macOS/Linux, et les skills et AGENTS.md rejoignent le dépôt séparé.",
-        "Les menus de synchronisation Skills/Agent et des configurations proposent de copier le point MCP, un accès en lecture seule et les instructions de fusion pour un agent IA ; les configurations utilisent un accès temporaire à une seule révision, sans partager le mot de passe de migration.",
-        "La restauration locale des Skills/Agent et configurations de développement adapte les dossiers reconnus entre Windows, macOS et Linux, affiche les destinations et bloque les conflits avant écriture ; les anciennes sauvegardes restent utilisables.",
-        "Le MCP des dépôts Skills/Agent permet de consulter et restaurer l’historique, de vérifier le stockage et d’envoyer des fichiers jusqu’à 5 MiB et de les lire par blocs, avec une connexion distincte du MCP des documents.",
-        "Mon espace sépare désormais les dépôts Skills/Agent des instantanés chiffrés de configuration de développement/IA, avec envoi local en un clic, sélection et aperçu des fichiers, filtrage des données sensibles et confirmation avant la restauration locale."
+        "L’organisation par contenu propose des dossiers et des tags dans un aperçu modifiable, ignore par défaut les documents déjà organisés et permet de les inclure explicitement. Le contenu et les couvertures sont préservés. L’annulation ignore les modifications ultérieures et affiche les titres concernés ; les lots sans suggestion valide ne coûtent aucun credit de la plateforme. Les clients synchronisent avant analyse et conservent les tags hors ligne.",
+        "Les suggestions de titres IA exploitent le corps de l’article, comparent plusieurs angles au titre original et présentent des citations vérifiées ainsi que les compromis concrets. Une note élevée ne bloque plus les alternatives ; les longs articles sont échantillonnés sur toute leur longueur dans une limite définie, dans le panneau de révision existant."
       ]
     },
     "ja": {
-      "title": "Koinote 1.0.0 の新機能",
+      "title": "Koinote 1.1.0 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Skills/Agent Hub は公開 Clone、会員向けプライベート Fork、Star、GitHub インポートに対応し、原作者・出典・ライセンスを保持します。システム収録リポジトリは非公開 R2 に保存し、毎日更新するとともに未収録の人気 Skills を最大 20 件追加します。リポジトリの識別情報、ライセンス、機密情報を検査し、失敗時は旧版を保持して再試行できます。",
-        "開発/AI 設定の同期で DeepSeek Harness をコーディング Agent に追加し、既定の `.dsh` 設定とプロファイルを検出します。macOS/Linux では認証情報を所有者のみ読み書き可能な権限で復元し、Skills と AGENTS.md は専用リポジトリに分類します。",
-        "Skills/Agentと開発設定の同期メニューにAI Agent用コピーを追加しました。MCP接続先、読み取り専用トークン、ローカルマージ手順をまとめて渡せます。開発設定には単一リビジョン専用の一時トークンを使い、移行パスワードは共有しません。",
-        "Skills/Agent と開発設定のローカル復元で、Windows・macOS・Linux の既知の設定フォルダーを変換します。保存先を表示し、書き込み前にパスの競合を検出します。既存のバックアップも再アップロードせず利用できます。",
-        "Skills/Agent リポジトリ MCP で履歴の参照・復元と使用量の確認が可能になり、最大 5 MiB のアップロードと分割読み取りに対応しました。文書 MCP と併用できる独立した接続設定を提供します。",
-        "マイスペースに Skills/Agent リポジトリと暗号化した開発/AI 設定スナップショットを追加しました。ワンクリックでのスキャンとアップロード、ファイル選択と内容のプレビュー、機密データの除外、ローカル復元前の確認に対応します。"
+        "ワンクリック整理で内容に基づくフォルダーとタグを提案し、結果プレビューを編集してから適用できます。整理済み文書は既定で除外し、明示的な再整理に対応。取り消しは後から変更された文書をスキップしてタイトルを表示し、有効な提案がないバッチではプラットフォームの credits を消費しません。本文と表紙を保持し、デスクトップは分析前に同期してタグをオフライン表示用に保存します。",
+        "AI のタイトル提案が本文から素材を抽出し、異なる切り口を元のタイトルと比較するようになりました。原文と照合した引用と具体的なトレードオフを表示し、高評価でも代案を検討します。長文は上限内で全体から抽出し、既存のレビューパネルに表示します。"
       ]
     }
   }

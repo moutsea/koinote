@@ -1685,6 +1685,8 @@ export type SharedDocument = {
 
 // 列表接口不返回 content，只够侧边栏渲染
 export type DocumentSummary = {
+  tags?: string[];
+  organizedAt?: string | null;
   docId: string;
   title: string;
   /** null 表示在根下 */
@@ -2443,4 +2445,44 @@ export function permanentlyDeleteDocument(docId: string, confirmation: string) {
     `/api/documents/${encodeURIComponent(docId)}/permanent`,
     { method: "DELETE", body: JSON.stringify({ confirmation }) },
   );
+}
+
+export type OrganizationFolder = { id: string; name: string; parentId: string };
+export type OrganizationChoice = { docId: string; folderId: string; newFolders: string[]; tags: string[] };
+export type OrganizationItem = {
+  docId: string; title: string; revision: number; version: number;
+  folderId: string; tags: string[]; organizedAt: string | null;
+  suggested?: OrganizationChoice; reason: string; appliedVersion?: number;
+  needsReview?: boolean; applySkipped?: boolean; undoSkipped?: boolean;
+};
+export type DocumentOrganization = {
+  id: string; status: "running" | "ready" | "applied" | "undone" | "failed";
+  creditsCharged: number; errorCode: string;
+  data: { items: OrganizationItem[]; folders: OrganizationFolder[];
+    createdFolders: OrganizationFolder[]; completed: number; skipped: number;
+    includeOrganized: boolean; providerMode: string; reservedCredits: number; unbilledBatches?: number };
+};
+export function latestDocumentOrganization() {
+  return apiJson<{ organization: DocumentOrganization | null; lastApplied: { id: string; appliedAt: string } | null }>("/api/document-organizations/latest");
+}
+export function getDocumentOrganization(id: string) {
+  return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}`);
+}
+export function estimateDocumentOrganization(includeOrganized: boolean, excludeDocIds: string[] = []) {
+  return apiJson<{ count: number; skipped: number; reservedCredits: number; providerMode: string }>("/api/document-organizations/estimate", {
+    method: "POST", body: JSON.stringify({ includeOrganized, excludeDocIds }),
+  });
+}
+export function createDocumentOrganization(requestId: string, includeOrganized: boolean, estimate: { providerMode: string; reservedCredits: number }, excludeDocIds: string[] = []) {
+  return apiJson<{ organization: DocumentOrganization }>("/api/document-organizations", {
+    method: "POST", body: JSON.stringify({ requestId, includeOrganized, providerMode: estimate.providerMode, maxReservedCredits: estimate.reservedCredits, excludeDocIds }),
+  });
+}
+export function applyDocumentOrganizationPreview(id: string, items: OrganizationChoice[]) {
+  return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}/apply`, {
+    method: "POST", body: JSON.stringify({ items }),
+  });
+}
+export function undoDocumentOrganization(id: string) {
+  return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}/undo`, { method: "POST" });
 }
