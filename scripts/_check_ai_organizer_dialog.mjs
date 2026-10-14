@@ -181,6 +181,28 @@ try {
   const options = [...document.querySelectorAll("select option")].filter(option => option.value);
   assert.equal(options.length, 2);
   assert.notEqual(options[0].textContent, options[1].textContent, "same-name destinations must be distinguishable");
+  for (const [stopReason, message] of [["timeout", labels.partialTimeout], ["failure_limit", labels.partialFailureLimit], ["failure_ratio", labels.partialFailureRatio]]) {
+    await act(async () => root.render(null)); client.clear();
+    latest = { ...latest, id: `partial-${stopReason}`, status: "ready", data: { ...data, stopReason, completed: 1, items: [item, { ...item, docId: "unfinished", title: "未完成的文章", suggested: { ...item.suggested, docId: "unfinished" }, needsReview: true, notAnalyzed: true }] } };
+    await render();
+    await waitFor(() => document.body.textContent.includes(message.replace("{done}", "1").replace("{total}", "2")));
+    assert.ok(document.body.textContent.includes(labels.notAnalyzed));
+    assert.ok(!document.body.textContent.includes(labels.needsReview), "unfinished work must not be labeled as an invalid model suggestion");
+    assert.deepEqual([...document.querySelectorAll("article input[type=checkbox]")].map(input => input.checked), [true, false]);
+    assert.equal(button(labels.apply.replace("{count}", "1")).disabled, false, "completed suggestions must remain applicable");
+  }
+  for (const [status, message] of [[400, labels.providerRejected], [422, labels.providerRejected], [429, labels.providerRateLimited], [503, labels.providerUnavailable]]) {
+    await act(async () => root.render(null)); client.clear();
+    latest = { ...latest, id: `provider-${status}`, status: "ready", data: { ...data, unbilledBatches: 2, items: [item, { ...item, docId: "second", suggested: { ...item.suggested, docId: "second" } }].map(value => ({ ...value, needsReview: true, failureStatus: status })) } };
+    await render();
+    const diagnostic = message.replace("{status}", status);
+    await waitFor(() => document.body.textContent.includes(diagnostic));
+    assert.equal([...document.querySelectorAll('[role="status"]')].filter(node => node.textContent === diagnostic).length, 1, "provider errors should be explained once per status");
+    assert.ok(document.body.textContent.includes(labels.providerItem.replace("{status}", status)));
+    assert.ok(!document.body.textContent.includes(labels.needsReview), "a rejected request must not be labeled as an invalid suggestion");
+    assert.deepEqual([...document.querySelectorAll("article input[type=checkbox]")].map(input => input.checked), [false, false]);
+    assert.equal(button(labels.apply.replace("{count}", "0")).disabled, true);
+  }
   latest = { ...latest, status: "applied", data: { ...latest.data, items: [{ ...item, applySkipped: true }] } };
   await act(async () => { await client.invalidateQueries({ queryKey: ["document-organization", latest.id] }); });
   await waitFor(() => document.body.textContent.includes(labels.skippedTrash.replace("{titles}", item.title)));

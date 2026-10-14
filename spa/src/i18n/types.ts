@@ -1559,9 +1559,18 @@ export interface Messages {
     newDocumentHere: string;
     treeMenu: string;
     aiOrganizer: {
+      menuDescription: string;
       undoSkipped: string;
       folderSyncConflict: string;
       unbilledBatches: string;
+      partialTimeout: string;
+      partialFailureLimit: string;
+      partialFailureRatio: string;
+      providerRateLimited: string;
+      providerRejected: string;
+      providerUnavailable: string;
+      providerItem: string;
+      notAnalyzed: string;
       invalidBatchesByok: string;
       busyRetry: string;
       ambiguousFolder: string;
@@ -1608,7 +1617,6 @@ export interface Messages {
       selected: string;
       newRun: string;
       preparing: string;
-      legacy: string;
       discard: string;
       discardDetail: string;
       insufficient: string;

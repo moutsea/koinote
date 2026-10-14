@@ -305,7 +305,8 @@ func TestOrganizationEstimatePermissionAndExpiry(t *testing.T) {
 func TestOrganizationFailureReleasesCredits(t *testing.T) {
 	a, db, user, _ := newAgentReviewCreateTest(t, config.Config{SessionSecret: "organization-failure"})
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"items":[]}`}}}, "usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20}})
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"Invalid provider credential"}}`))
 	}))
 	defer provider.Close()
 	a.agentLLMHTTPClient = provider.Client()

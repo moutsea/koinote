@@ -223,6 +223,10 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [view, l.duplicateFolder]);
   const loading = latest.isLoading || (!selection && !dismissedLatest && !latest.isFetchedAfterMount) || (Boolean(selectedID) && query.isLoading);
+  const providerFailures = [...new Set(view?.data.items.filter(item => item.needsReview && item.failureStatus).map(item => item.failureStatus!) ?? [])];
+  function providerFailureMessage(status: number) {
+    return interpolate(status === 429 ? l.providerRateLimited : [400, 413, 422].includes(status) ? l.providerRejected : l.providerUnavailable, { status });
+  }
   const inputClass = "w-full rounded-lg border border-black/10 bg-white px-2.5 py-2 text-sm outline-none focus:border-cinnabar-400 dark:border-white/15 dark:bg-neutral-900";
   function update(docId: string, patch: Partial<OrganizationDraft>) { setDrafts(current => ({ ...current, [docId]: { ...current[docId], ...patch } })); setDirty(true); }
   async function newRun() {
@@ -257,6 +261,8 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
             {ready && view.data.items.length === 0 && <p className="py-8 text-center text-sm text-neutral-500">{l.empty}</p>}
             {ready && view.data.items.length > 0 && <>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500"><span>{interpolate(l.estimate, { count: view.data.items.length, skipped: view.data.skipped })}</span><span>{interpolate(l.charged, { count: view.creditsCharged })}</span></div>
+              {view.data.stopReason && <p role="status" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{interpolate(view.data.stopReason === "timeout" ? l.partialTimeout : view.data.stopReason === "failure_ratio" ? l.partialFailureRatio : l.partialFailureLimit, { done: view.data.completed, total: view.data.items.length })}</p>}
+              {providerFailures.map(status => <p key={status} role="status" className="mb-3 text-sm leading-relaxed text-amber-800 dark:text-amber-200">{providerFailureMessage(status)}</p>)}
               {(view.data.unbilledBatches ?? 0) > 0 && <p role="status" className="mb-3 text-sm text-neutral-500">{interpolate(view.data.providerMode === "builtin" ? l.unbilledBatches : l.invalidBatchesByok, { count: view.data.unbilledBatches! })}</p>}
               {parsed.invalid && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{l.invalid}</p>}
               <div className="grid items-start gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
@@ -265,7 +271,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
                   const draft = drafts[item.docId]; if (!draft) return null;
                   return <article key={item.docId} className={`rounded-xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-neutral-900 ${!draft.selected ? "opacity-60" : ""}`}>
                     <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={draft.selected} disabled={busy} onChange={e => update(item.docId, { selected: e.target.checked })} className="accent-cinnabar-500" /><span className="break-words">{item.title || t.editor.untitled}</span></label>
-                    <p className="mb-3 ml-6 mt-1 text-xs leading-relaxed text-neutral-500">{item.needsReview ? l.needsReview : item.reason}</p>
+                    <p className="mb-3 ml-6 mt-1 text-xs leading-relaxed text-neutral-500">{item.notAnalyzed ? l.notAnalyzed : item.needsReview ? (item.failureStatus ? interpolate(l.providerItem, { status: item.failureStatus }) : l.needsReview) : item.reason}</p>
                     <fieldset disabled={busy || !draft.selected} className="ml-6 space-y-3">
                       <div className="flex items-center gap-2 text-xs text-neutral-400"><span className="truncate">{organizationPath(view.data.folders, item.folderId).join(" / ") || l.root}</span><ArrowRight className="h-3.5 w-3.5 shrink-0" /><span>{l.folder}</span></div>
                       <select aria-label={`${item.title} — ${l.folder}`} className={inputClass} value={draft.folderId} onChange={e => update(item.docId, { folderId: e.target.value })}><option value="">{l.root}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>

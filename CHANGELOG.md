@@ -6,6 +6,19 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-14
+
+### Changed
+
+- AI organization now allows at most two requests per batch and increases the output allowance after truncation. Timeouts, three consecutive batches without valid suggestions, or a failure rate of at least half after six batches preserve a partial preview; unfinished items stay unchecked, and only valid suggestions are billed.
+- AI organization is now an option alongside the existing strategies in the Organize documents menu, restoring the single sidebar entry.
+
+### Fixed
+
+- AI organization previews distinguish rejected requests, rate limits, and provider unavailability, with troubleshooting guidance. Only status codes are displayed, never raw provider error contents.
+- AI organization preserves other results when a batch is rejected by content or request limits (400/413/422), without charging platform credits for that batch. New retries for empty OpenAI responses are limited to organization, preserving other AI features’ request counts.
+- Document organization now accepts a single complete JSON result wrapped in explanatory text, including citations and Markdown links, retries malformed batches and preserves other batches when a retry fails. Affected documents keep their original folders and tags and remain unchecked for review; failed attempts do not consume platform credits. Deletion checks also run before the provider's internal retries.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

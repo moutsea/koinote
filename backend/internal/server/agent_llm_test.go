@@ -355,6 +355,21 @@ func TestCallAnthropicAgentLLMConsumesSSEWithoutVendorExtensions(t *testing.T) {
 	}
 }
 
+func TestCallOpenAIAgentLLMDoesNotRetryEmptyResponse(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"content":""},"finish_reason":"stop"}]}`)
+	}))
+	defer server.Close()
+	_, err := callAgentLLM(context.Background(), server.Client(), agentLLMProvider{
+		Mode: "builtin", Protocol: "openai", BaseURL: server.URL, Model: "test",
+	}, transportTestPrompt(t))
+	if !errors.Is(err, errAgentLLMEmptyResponse) || requests != 1 {
+		t.Fatalf("shared OpenAI policy changed: requests=%d err=%v", requests, err)
+	}
+}
+
 func TestCallAnthropicAgentLLMRetriesEmptyStream(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

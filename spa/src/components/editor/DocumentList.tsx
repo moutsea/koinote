@@ -132,6 +132,7 @@ export function DocumentList({
   const { locale, t } = useI18n();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const organizerMenuRef = useRef<HTMLDivElement | null>(null);
+  const organizerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const selectionAreaRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<HTMLUListElement | null>(null);
   const selectionMoveMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1222,20 +1223,29 @@ export function DocumentList({
                   disabled={organizerPlans.activity.documentCount === 0}
                   onSelect={() => setPendingOrganizerStrategy("activity")}
                 />
+                <OrganizerMenuItem
+                  icon={<Logo className="h-4 w-4" />}
+                  title={t.editor.aiOrganizer.title}
+                  description={t.editor.aiOrganizer.menuDescription}
+                  disabled={loading || documents.length === 0 || Boolean(organizingStrategy)}
+                  onSelect={() => {
+                    closeOrganizerMenu();
+                    organizerTriggerRef.current?.focus();
+                    onOpenAIOrganizer();
+                  }}
+                />
               </>
             )}
           </div>
         )}
-        <button type="button" onClick={() => { closeOrganizerMenu(); onOpenAIOrganizer(); }} disabled={loading || documents.length === 0 || Boolean(organizingStrategy)} className="mb-1 flex w-full items-center justify-center gap-2 rounded-lg bg-cinnabar-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-cinnabar-700 disabled:opacity-50">
-          <Logo className="h-5 w-5" variant="reversed" />{t.editor.aiOrganizer.title}
-        </button>
         <button
+          ref={organizerTriggerRef}
           type="button"
           onClick={() => {
             if (organizerMenuOpen) closeOrganizerMenu();
             else setOrganizerMenuOpen(true);
           }}
-          disabled={loading || organizerPlans.smart.documentCount === 0 || Boolean(organizingStrategy)}
+          disabled={loading || documents.length === 0 || Boolean(organizingStrategy)}
           aria-haspopup="menu"
           aria-expanded={organizerMenuOpen}
           className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-neutral-500 transition hover:bg-black/5 hover:text-neutral-900 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white"
@@ -1247,7 +1257,7 @@ export function DocumentList({
           )}
           {organizingStrategy
             ? t.editor.organizer.organizing
-            : t.editor.aiOrganizer.legacy}
+            : t.editor.organizer.button}
         </button>
       </div>
 

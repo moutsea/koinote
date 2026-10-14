@@ -366,39 +366,38 @@ func (a *App) failOrganization(userID int, id, code, reservationID string) {
 func (a *App) runOrganization(userID int, id string, data organizationData, prompts []agentLLMPrompt, provider agentLLMProvider, reservationID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), organizationRunLimit)
 	defer cancel()
+	a.runOrganizationWithContext(ctx, userID, id, data, prompts, provider, reservationID)
+}
+
+func (a *App) runOrganizationWithContext(ctx context.Context, userID int, id string, data organizationData, prompts []agentLLMPrompt, provider agentLLMProvider, reservationID string) {
 	var total, billable agentLLMResult
+	consecutiveUnbilled := 0
 	for batch, prompt := range prompts {
-		var status string
-		err := a.db.QueryRow(ctx, `SELECT status FROM document_organizations WHERE user_id=$1 AND organization_id=$2::uuid`, userID, id).Scan(&status)
-		if err != nil || status != "running" {
-			a.failOrganization(userID, id, "server_error", reservationID)
-			return
-		}
 		prompt = organizationPromptWithPrior(prompt, data.Items[:batch*organizationBatchSize])
-		result, err := callAgentLLM(ctx, a.agentLLMHTTPClient, provider, prompt)
-		if err == nil {
-			err = requireAgentLLMUsage(provider, result)
-		}
 		start := batch * organizationBatchSize
 		end := min(start+organizationBatchSize, len(data.Items))
-		var suggestions []organizationSuggestion
+		result, err := a.generateOrganizationBatch(ctx, userID, id, prompt, data.Items[start:end], data.Folders, provider)
+		suggestions := result.Suggestions
 		if err == nil {
-			suggestions, err = decodeOrganizationOutput(result.JSON, data.Items[start:end], data.Folders)
-		}
-		if err == nil {
-			err = addAgentLLMUsage(&total, result)
+			err = addAgentLLMUsage(&total, result.Usage)
 		}
 		if err == nil {
 			if slices.ContainsFunc(suggestions, func(s organizationSuggestion) bool { return !s.NeedsReview }) {
-				err = addAgentLLMUsage(&billable, result)
+				err = addAgentLLMUsage(&billable, result.AcceptedUsage)
+				consecutiveUnbilled = 0
 			} else {
 				// A batch with no usable suggestions costs no platform credits.
 				// BYOK provider charges are outside Koinote's billing control.
 				data.UnbilledBatches++
+				consecutiveUnbilled++
 			}
 		}
 		if err != nil {
-			log.Printf("organization generate id=%s: %v", id, err)
+			log.Printf("organization generate id=%s reason=%s", id, organizationGenerationErrorKind(err))
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				data.StopReason = "timeout"
+				break
+			}
 			a.failOrganization(userID, id, "organization_generation_failed", reservationID)
 			return
 		}
@@ -409,15 +408,39 @@ func (a *App) runOrganization(userID int, id string, data organizationData, prom
 					data.Items[i].Suggested = &choice
 					data.Items[i].Reason = s.Reason
 					data.Items[i].NeedsReview = s.NeedsReview
+					data.Items[i].FailureStatus = result.FailureStatus
 				}
 			}
 		}
 		data.Completed = end
+		if consecutiveUnbilled >= organizationMaxConsecutiveUnbilledBatches && end < len(data.Items) {
+			data.StopReason = "failure_limit"
+			break
+		}
+		// A streak alone allows alternating successful and free failed batches
+		// indefinitely. Give small runs a grace window, then cap failures at 50%.
+		if batch+1 >= organizationFailureRatioMinBatches && data.UnbilledBatches*2 >= batch+1 && end < len(data.Items) {
+			data.StopReason = "failure_ratio"
+			break
+		}
 		raw, _ := json.Marshal(data)
 		resultUpdate, err := a.db.Exec(ctx, `UPDATE document_organizations SET data=$3::jsonb,updated_at=now() WHERE user_id=$1 AND organization_id=$2::uuid AND status='running'`, userID, id, string(raw))
 		if err != nil || resultUpdate.RowsAffected() != 1 {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				data.StopReason = "timeout"
+				break
+			}
 			a.failOrganization(userID, id, "server_error", reservationID)
 			return
+		}
+	}
+	if data.StopReason != "" {
+		log.Printf("organization partial id=%s completed=%d total=%d reason=%s", id, data.Completed, len(data.Items), data.StopReason)
+		for i := data.Completed; i < len(data.Items); i++ {
+			suggestion := organizationFallback(data.Items[i])
+			data.Items[i].Suggested = &suggestion.organizationChoice
+			data.Items[i].NeedsReview = true
+			data.Items[i].NotAnalyzed = true
 		}
 	}
 	// Charge and publish the usable preview in the same transaction.
@@ -446,7 +469,13 @@ func (a *App) runOrganization(userID int, id string, data organizationData, prom
 		}
 	}
 	if err == nil {
-		_, err = tx.Exec(finishCtx, `UPDATE document_organizations SET status='ready',credits_charged=$3,updated_at=now() WHERE user_id=$1 AND organization_id=$2::uuid`, userID, id, charged)
+		// The status lock above also prevents publishing retained in-memory
+		// results after permanent deletion has scrubbed this task's data.
+		raw, marshalErr := json.Marshal(data)
+		err = marshalErr
+		if err == nil {
+			_, err = tx.Exec(finishCtx, `UPDATE document_organizations SET status='ready',credits_charged=$3,data=$4::jsonb,updated_at=now() WHERE user_id=$1 AND organization_id=$2::uuid`, userID, id, charged, string(raw))
+		}
 	}
 	if err == nil {
 		err = tx.Commit(finishCtx)

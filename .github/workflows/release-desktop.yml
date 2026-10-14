@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds one-click AI document organization with editable folder and tag previews, automatic skipping of previously organized documents and undo that preserves later edits. Unusable batches cost no platform credits. AI title suggestions now use article evidence, AI optimization preserves covers, and Skills/Agent Hub discovery retries missed runs."
+          notes="Koinote Desktop $version improves AI organization reliability with bounded retries, partial previews on timeouts or repeated batch failures, and clearer provider error guidance. Unusable batches cost no platform credits. AI organization is now available in the existing Organize documents menu."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,13 +237,12 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 新增文档一键整理，并改进 AI 标题建议与文章封面保护。
+          Koinote $version 是 AI 整理稳定性补丁。
 
-          - 一键生成基于内容的目录与标签建议，先预览、手动调整后再应用；默认跳过已整理文档，可主动选择重新整理。
-          - 支持撤销并保留用户后续的手动修改，列出跳过的文档；保留文章正文、标题与封面，标签支持离线显示。
-          - 整理使用终身会员的内置模型或自有渠道。内置模型按用量结算，整个批次没有有效建议时不扣平台 credits；编辑预览、应用与撤销免费。
-          - AI 标题建议从正文提炼素材，展示有原文依据的候选和取舍；无效候选单独丢弃，不中断其他建议。
-          - 修复应用 AI 优化后封面被清空的问题；Skills/Agent Hub 每日收录新增多个重试时段，继续补足当天最多 20 个仓库。
+          - 改善模型返回格式和输出截断的处理，每批最多请求两次；超时或达到失败上限时保留已完成的预览。
+          - 单批内容审核或请求限制不再丢弃其他结果；未完成文档默认不应用，无有效建议的批次不扣平台 credits。
+          - 区分服务商拒绝、限流、服务不可用和格式错误，提供明确的排查提示，并限制连续或高比例失败带来的无效调用。
+          - AI 整理回到原「整理文档」弹出菜单，与其他整理方式并列。
 
           从 0.1.4 起，客户端会在启动后自动检查 Cloudflare R2 更新服务，也可以在账户菜单中手动检查、下载并重启安装更新。
 
@@ -255,13 +254,12 @@ jobs:
 
           ---
 
-          Koinote $version adds one-click document organization, improves AI title suggestions and preserves article covers during optimization.
+          Koinote $version is a reliability patch for AI document organization.
 
-          - Generate content-based folder and tag suggestions, preview and edit them before applying. Previously organized documents are skipped unless you explicitly include them.
-          - Undo preserves later manual changes and lists skipped documents. Body text, titles and covers stay intact, and tags are available offline.
-          - Organization uses lifetime members' built-in models or configured BYOK channels. Built-in usage is billed in credits, except batches with no valid suggestions; editing previews, applying and undoing are free.
-          - AI title suggestions use article evidence and explain their tradeoffs. Invalid candidates are discarded individually without interrupting other suggestions.
-          - Fixes covers being cleared after AI optimization. Skills/Agent Hub discovery now retries missed runs across several daily windows, filling the daily limit of up to 20 repositories.
+          - Handles wrapped model output and truncation with at most two requests per batch. Timeouts or batch failure limits preserve completed previews.
+          - Content moderation and request limits on one batch no longer discard other results. Unfinished items remain unchecked, and unusable batches cost no platform credits.
+          - Distinguishes provider rejection, rate limits, unavailable services and invalid formats, with clearer guidance and limits on consecutive or high-ratio failures.
+          - AI organization is now an option in the existing Organize documents menu alongside the other strategies.
 
           Starting with 0.1.4, the client checks the Cloudflare R2 update service automatically and can download, install, and restart from the account menu.
 

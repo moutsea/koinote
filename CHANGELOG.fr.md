@@ -4,6 +4,19 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-14
+
+### Changed
+
+- L’organisation IA est limitée à deux requêtes par lot, avec une limite de sortie augmentée en cas de troncature. Un délai dépassé, trois lots consécutifs sans suggestion valide ou au moins la moitié de lots en échec après six lots conservent un aperçu partiel ; les documents inachevés restent désélectionnés et seules les suggestions valides sont facturées.
+- L’organisation par IA rejoint les options existantes du menu d’organisation des documents, avec un seul bouton dans la barre latérale.
+
+### Fixed
+
+- Les aperçus d’organisation IA distinguent les requêtes refusées, les limites de fréquence et l’indisponibilité du fournisseur, avec des indications de dépannage. Seuls les codes d’état sont affichés, jamais le contenu brut des erreurs du fournisseur.
+- L’organisation IA conserve les autres résultats lorsqu’un lot est refusé par la modération ou une limite de requête (400/413/422), sans facturer de credits pour ce lot. Les nouvelles tentatives après une réponse OpenAI vide sont limitées à l’organisation, sans augmenter les appels des autres fonctions IA.
+- L’organisation des documents accepte désormais un résultat JSON complet entouré de texte explicatif, de références ou de liens Markdown, et réessaie les lots au format incorrect. Si la nouvelle tentative échoue, les autres aperçus sont conservés ; les documents concernés gardent leurs dossiers et tags d’origine et restent décochés pour vérification. Les appels échoués ne consomment aucun credit de la plateforme. L’état de suppression est aussi vérifié avant les tentatives automatiques internes.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

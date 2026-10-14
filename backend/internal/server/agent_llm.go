@@ -22,10 +22,11 @@ const (
 )
 
 var (
-	errAgentLLMInvalidResponse = errors.New("agent LLM returned an invalid response")
-	errAgentLLMEmptyResponse   = fmt.Errorf("%w: model response has no text", errAgentLLMInvalidResponse)
-	errAgentLLMUsageMissing    = errors.New("agent LLM response is missing token usage")
-	errAgentLLMUsageInvalid    = errors.New("agent LLM response has invalid token usage")
+	errAgentLLMInvalidResponse   = errors.New("agent LLM returned an invalid response")
+	errAgentLLMEmptyResponse     = fmt.Errorf("%w: model response has no text", errAgentLLMInvalidResponse)
+	errAgentLLMTruncatedResponse = fmt.Errorf("%w: model response was truncated", errAgentLLMInvalidResponse)
+	errAgentLLMUsageMissing      = errors.New("agent LLM response is missing token usage")
+	errAgentLLMUsageInvalid      = errors.New("agent LLM response has invalid token usage")
 )
 
 type agentLLMProvider struct {
@@ -79,15 +80,14 @@ func callAgentLLM(
 	provider agentLLMProvider,
 	prompt agentLLMPrompt,
 ) (agentLLMResult, error) {
-	if httpClient == nil {
-		if provider.SafeEndpoint {
-			httpClient = newSafeLLMHTTPClient()
-		} else {
-			httpClient = newTrustedLLMHTTPClient()
-		}
-	}
 	for attempt := 0; attempt < 2; attempt++ {
 		result, err := callAgentLLMOnce(ctx, httpClient, provider, prompt)
+		// Keep OpenAI's existing shared-layer retry policy. Organization owns
+		// its empty-response retry budget; other callers must not gain an
+		// extra provider request merely because the error is now classified.
+		if provider.Protocol == "openai" && errors.Is(err, errAgentLLMEmptyResponse) {
+			return result, err
+		}
 		if err == nil || !isRetryableAgentLLMError(err) || attempt == 1 {
 			return result, err
 		}
@@ -108,6 +108,13 @@ func callAgentLLMOnce(
 	provider agentLLMProvider,
 	prompt agentLLMPrompt,
 ) (agentLLMResult, error) {
+	if httpClient == nil {
+		if provider.SafeEndpoint {
+			httpClient = newSafeLLMHTTPClient()
+		} else {
+			httpClient = newTrustedLLMHTTPClient()
+		}
+	}
 	switch provider.Protocol {
 	case "openai":
 		return callOpenAIAgentLLM(ctx, httpClient, provider, prompt)
@@ -218,14 +225,14 @@ func callOpenAIAgentLLM(
 	if len(response.Choices) != 1 {
 		return agentLLMResult{}, fmt.Errorf("%w: OpenAI response has no single choice", errAgentLLMInvalidResponse)
 	}
+	if response.Choices[0].FinishReason == "length" {
+		return agentLLMResult{}, errAgentLLMTruncatedResponse
+	}
 	if strings.TrimSpace(response.Choices[0].Message.Content) == "" {
 		if refusal := strings.TrimSpace(response.Choices[0].Message.Refusal); refusal != "" {
 			return agentLLMResult{}, fmt.Errorf("%w: model refusal", errAgentLLMInvalidResponse)
 		}
-		return agentLLMResult{}, fmt.Errorf("%w: OpenAI response has no content", errAgentLLMInvalidResponse)
-	}
-	if response.Choices[0].FinishReason == "length" {
-		return agentLLMResult{}, fmt.Errorf("%w: OpenAI response was truncated", errAgentLLMInvalidResponse)
+		return agentLLMResult{}, errAgentLLMEmptyResponse
 	}
 	if response.Usage.TotalTokens == 0 {
 		response.Usage.TotalTokens = response.Usage.PromptTokens + response.Usage.CompletionTokens
@@ -287,7 +294,7 @@ func callAnthropicAgentLLM(
 	}
 	if streamed {
 		if stopReason == "max_tokens" {
-			return agentLLMResult{}, fmt.Errorf("%w: Anthropic response was truncated", errAgentLLMInvalidResponse)
+			return agentLLMResult{}, errAgentLLMTruncatedResponse
 		}
 		if strings.TrimSpace(string(responseBody)) == "" {
 			return agentLLMResult{}, errAgentLLMEmptyResponse
@@ -317,7 +324,7 @@ func callAnthropicAgentLLM(
 		stopReason = response.StopReason
 	}
 	if stopReason == "max_tokens" {
-		return agentLLMResult{}, fmt.Errorf("%w: Anthropic response was truncated", errAgentLLMInvalidResponse)
+		return agentLLMResult{}, errAgentLLMTruncatedResponse
 	}
 	var content strings.Builder
 	for _, block := range response.Content {
@@ -488,7 +495,9 @@ func parseAnthropicEventStream(reader io.Reader) (anthropicStreamResult, error) 
 	if err := flush(); err != nil {
 		return anthropicStreamResult{}, err
 	}
-	if strings.TrimSpace(result.Text) == "" {
+	// Preserve max_tokens even if all output was used before the first text
+	// block, so callers can increase the limit instead of retrying as empty.
+	if strings.TrimSpace(result.Text) == "" && result.StopReason != "max_tokens" {
 		return anthropicStreamResult{}, errAgentLLMEmptyResponse
 	}
 	return result, nil

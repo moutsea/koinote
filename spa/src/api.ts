@@ -2453,14 +2453,14 @@ export type OrganizationItem = {
   docId: string; title: string; revision: number; version: number;
   folderId: string; tags: string[]; organizedAt: string | null;
   suggested?: OrganizationChoice; reason: string; appliedVersion?: number;
-  needsReview?: boolean; applySkipped?: boolean; undoSkipped?: boolean;
+  needsReview?: boolean; notAnalyzed?: boolean; failureStatus?: number; applySkipped?: boolean; undoSkipped?: boolean;
 };
 export type DocumentOrganization = {
   id: string; status: "running" | "ready" | "applied" | "undone" | "failed";
   creditsCharged: number; errorCode: string;
   data: { items: OrganizationItem[]; folders: OrganizationFolder[];
     createdFolders: OrganizationFolder[]; completed: number; skipped: number;
-    includeOrganized: boolean; providerMode: string; reservedCredits: number; unbilledBatches?: number };
+    includeOrganized: boolean; providerMode: string; reservedCredits: number; unbilledBatches?: number; stopReason?: "timeout" | "failure_limit" | "failure_ratio" };
 };
 export function latestDocumentOrganization() {
   return apiJson<{ organization: DocumentOrganization | null; lastApplied: { id: string; appliedAt: string } | null }>("/api/document-organizations/latest");
