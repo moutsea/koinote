@@ -2,8 +2,10 @@ name: Discover Skills Repositories
 
 on:
   schedule:
-    # 05:37 Asia/Shanghai. Avoid the busiest top-of-hour scheduling window.
-    - cron: "37 21 * * *"
+    # 05:37, 09:37, 13:37, 17:37 and 21:37 Asia/Shanghai.
+    # Later slots catch missed/interrupted runs and fill the remaining daily
+    # allowance. Once 20 are added, the DB budget check exits without GitHub I/O.
+    - cron: "37 1,5,9,13,21 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

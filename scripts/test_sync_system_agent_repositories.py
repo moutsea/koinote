@@ -3,11 +3,35 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deploy/sync-system-agent-repositories.sh"
+DISCOVERY_WORKFLOW = SCRIPT.parents[1] / ".github/workflows/discover-system-agent-repositories.yml"
+
+
+class DiscoveryScheduleTests(unittest.TestCase):
+    def test_daily_catch_up_slots_stay_in_same_shanghai_day(self):
+        # Exercise the UTC cron conversion across midnight. Losing the morning
+        # invocation must leave later opportunities within the SAME quota day.
+        workflow = DISCOVERY_WORKFLOW.read_text(encoding="utf-8")
+        crons = re.findall(r'^\s+- cron: "([^"]+)"$', workflow, re.MULTILINE)
+        self.assertTrue(crons)
+        slots = []
+        shanghai = timezone(timedelta(hours=8))
+        for cron in crons:
+            minute, hours, day, month, weekday = cron.split()
+            self.assertEqual((day, month, weekday), ("*", "*", "*"))
+            for hour in hours.split(","):
+                for date in (12, 13):
+                    slots.append(datetime(2026, 10, date, int(hour), int(minute), tzinfo=timezone.utc).astimezone(shanghai))
+        today = sorted(slot for slot in slots if slot.date().isoformat() == "2026-10-13")
+        self.assertEqual([slot.strftime("%H:%M") for slot in today], ["05:37", "09:37", "13:37", "17:37", "21:37"])
+        for first, second in zip(today, today[1:]):
+            self.assertLessEqual(second - first, timedelta(hours=4))
 
 
 class SyncWrapperTests(unittest.TestCase):

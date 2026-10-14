@@ -137,14 +137,18 @@ type agentReviewSuggestionView struct {
 }
 
 type agentReviewDocument struct {
-	DatabaseID int
-	DocID      string
-	Title      string
-	Theme      string
-	Content    string
-	Revision   int64
-	CreatedAt  *time.Time
-	UpdatedAt  *time.Time
+	DatabaseID       int
+	DocID            string
+	Title            string
+	Theme            string
+	Content          string
+	CoverMode        string
+	CoverRatio       string
+	CoverImageSource string
+	CoverPrompt      string
+	Revision         int64
+	CreatedAt        *time.Time
+	UpdatedAt        *time.Time
 }
 
 type preparedAgentReviewSuggestion struct {
@@ -956,7 +960,8 @@ func decodeAgentReviewExpectedRevision(w http.ResponseWriter, r *http.Request) (
 func (a *App) loadAgentReviewDocument(ctx context.Context, userID int, docID string) (agentReviewDocument, error) {
 	var document agentReviewDocument
 	err := a.db.QueryRow(ctx, `
-		SELECT id, doc_id, title, theme, content, revision, created_at, updated_at
+		SELECT id, doc_id, title, theme, content, cover_mode, cover_ratio,
+		       cover_image_source, cover_prompt, revision, created_at, updated_at
 		FROM documents
 		WHERE doc_id = $1 AND user_id = $2 AND trashed_at IS NULL
 	`, strings.TrimSpace(docID), userID).Scan(
@@ -965,6 +970,10 @@ func (a *App) loadAgentReviewDocument(ctx context.Context, userID int, docID str
 		&document.Title,
 		&document.Theme,
 		&document.Content,
+		&document.CoverMode,
+		&document.CoverRatio,
+		&document.CoverImageSource,
+		&document.CoverPrompt,
 		&document.Revision,
 		&document.CreatedAt,
 		&document.UpdatedAt,
@@ -1829,7 +1838,9 @@ func lockAgentReview(ctx context.Context, tx pgx.Tx, userID int, reviewID string
 	err := tx.QueryRow(ctx, `
 		SELECT review.id, review.status, review.current_revision,
 		       document.id, document.doc_id, document.title, document.theme,
-		       document.content, document.revision, document.created_at, document.updated_at
+		       document.content, document.cover_mode, document.cover_ratio,
+		       document.cover_image_source, document.cover_prompt,
+		       document.revision, document.created_at, document.updated_at
 		FROM agent_reviews review
 		JOIN documents document ON document.id = review.document_id
 		WHERE review.review_id = $1 AND review.user_id = $2 AND document.trashed_at IS NULL
@@ -1843,6 +1854,10 @@ func lockAgentReview(ctx context.Context, tx pgx.Tx, userID int, reviewID string
 		&locked.Document.Title,
 		&locked.Document.Theme,
 		&locked.Document.Content,
+		&locked.Document.CoverMode,
+		&locked.Document.CoverRatio,
+		&locked.Document.CoverImageSource,
+		&locked.Document.CoverPrompt,
 		&locked.Document.Revision,
 		&locked.Document.CreatedAt,
 		&locked.Document.UpdatedAt,
@@ -2026,26 +2041,34 @@ func resolvedAgentReviewStatus(ctx context.Context, tx pgx.Tx, reviewDatabaseID 
 
 func agentReviewDocumentFromModel(databaseID int, document model.Document) agentReviewDocument {
 	return agentReviewDocument{
-		DatabaseID: databaseID,
-		DocID:      document.DocID,
-		Title:      document.Title,
-		Theme:      document.Theme,
-		Content:    document.Content,
-		Revision:   document.Revision,
-		CreatedAt:  document.CreatedAt,
-		UpdatedAt:  document.UpdatedAt,
+		DatabaseID:       databaseID,
+		DocID:            document.DocID,
+		Title:            document.Title,
+		Theme:            document.Theme,
+		Content:          document.Content,
+		CoverMode:        document.CoverMode,
+		CoverRatio:       document.CoverRatio,
+		CoverImageSource: document.CoverImageSource,
+		CoverPrompt:      document.CoverPrompt,
+		Revision:         document.Revision,
+		CreatedAt:        document.CreatedAt,
+		UpdatedAt:        document.UpdatedAt,
 	}
 }
 
 func modelDocumentFromAgentReview(document agentReviewDocument) model.Document {
 	return model.Document{
-		DocID:     document.DocID,
-		Title:     document.Title,
-		Theme:     document.Theme,
-		Content:   document.Content,
-		Revision:  document.Revision,
-		CreatedAt: document.CreatedAt,
-		UpdatedAt: document.UpdatedAt,
+		DocID:            document.DocID,
+		Title:            document.Title,
+		Theme:            document.Theme,
+		Content:          document.Content,
+		CoverMode:        document.CoverMode,
+		CoverRatio:       document.CoverRatio,
+		CoverImageSource: document.CoverImageSource,
+		CoverPrompt:      document.CoverPrompt,
+		Revision:         document.Revision,
+		CreatedAt:        document.CreatedAt,
+		UpdatedAt:        document.UpdatedAt,
 	}
 }
 

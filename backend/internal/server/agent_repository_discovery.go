@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	agentRepositoryDiscoveryLock       int64 = 0x4147454e54444953
-	agentRepositoryDiscoveryDailyLimit       = 20
-	agentRepositoryDiscoveryMinStars         = 100
-	agentRepositoryDiscoveryMaxChecks        = 100
+	agentRepositoryDiscoveryLock             int64 = 0x4147454e54444953
+	agentRepositoryDiscoveryDailyLimit             = 20
+	agentRepositoryDiscoveryMinStars               = 100
+	agentRepositoryDiscoveryPreviewMaxChecks       = 100
 )
 
 var errAgentRepositoryDiscoveryStopped = errors.New("daily discovery budget reached or calendar day changed")
@@ -93,7 +93,11 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 	}
 	summary.Candidates = len(candidates)
 	for _, candidate := range candidates {
-		if summary.Remaining == 0 || summary.Checked >= agentRepositoryDiscoveryMaxChecks {
+		// Preview stays bounded and read-only. Apply continues beyond the first
+		// 100 candidates until the daily target, candidate exhaustion or the CLI
+		// deadline. Accepted/rejected IDs are durable, so a later scheduled run
+		// resumes with unprocessed candidates after an interruption.
+		if summary.Remaining == 0 || (!options.Apply && summary.Checked >= agentRepositoryDiscoveryPreviewMaxChecks) {
 			break
 		}
 		if _, err = lock.Exec(ctx, `SELECT 1`); err != nil {
@@ -146,7 +150,7 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 	summary.Outcome = "insufficient_eligible_candidates"
 	if summary.Remaining == 0 {
 		summary.Outcome = "daily_target_reached"
-	} else if summary.Checked >= agentRepositoryDiscoveryMaxChecks {
+	} else if !options.Apply && summary.Checked >= agentRepositoryDiscoveryPreviewMaxChecks {
 		summary.Outcome = "candidate_check_budget_reached"
 	}
 	if summary.Failed > 0 {

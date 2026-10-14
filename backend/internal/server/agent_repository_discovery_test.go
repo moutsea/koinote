@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -77,10 +78,12 @@ func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixtur
 			if q.Get("sort") != "stars" || q.Get("order") != "desc" || !strings.Contains(q.Get("q"), "stars:>=100 fork:false archived:false is:public") {
 				t.Error("incorrect popularity/public search")
 			}
-			items := f.items
-			if q.Get("page") != "1" {
-				items = []githubRepositoryMetadata{}
+			page, err := strconv.Atoi(q.Get("page"))
+			if err != nil || page < 1 || q.Get("per_page") != "100" {
+				t.Fatal("invalid search pagination")
 			}
+			start := min((page-1)*100, len(f.items))
+			items := f.items[start:min(start+100, len(f.items))]
 			data, _ = json.Marshal(map[string]any{"items": items, "incomplete_results": f.incomplete})
 		} else {
 			found := false
@@ -173,6 +176,82 @@ func TestSystemRepositoryDiscoveryDailyLimitAndNextDay(t *testing.T) {
 	summary, _, err = runDiscovery(app, true)
 	if err != nil || summary.Added != 5 || summary.Skipped != 20 || summary.Remaining != 15 {
 		t.Fatalf("next-day dedup: %+v %v", summary, err)
+	}
+}
+
+func TestSystemRepositoryDiscoveryContinuesPastPreviewBudget(t *testing.T) {
+	app, objects, f := newDiscoveryFixture(t, 123)
+	// Higher-star results consume the first 100 checks without yielding a repo.
+	// Eligible results deliberately start on the other side of that boundary.
+	for i := 23; i < len(f.items); i++ {
+		f.items[i].License.SPDXID = "UNLICENSED"
+	}
+	summary, _, err := runDiscovery(app, false)
+	if err != nil || summary.Checked != 100 || summary.WouldAdd != 0 || summary.Outcome != "candidate_check_budget_reached" {
+		t.Fatalf("bounded preview: %+v %v", summary, err)
+	}
+	var ledgerRows int
+	if err = app.db.QueryRow(context.Background(), `SELECT count(*) FROM agent_repository_discoveries WHERE github_id BETWEEN $1 AND $2`, f.items[0].ID, f.items[122].ID).Scan(&ledgerRows); err != nil || ledgerRows != 0 {
+		t.Fatalf("preview persisted progress: %d %v", ledgerRows, err)
+	}
+	objects.mu.Lock()
+	puts := objects.puts
+	objects.mu.Unlock()
+	if puts != 0 {
+		t.Fatal("preview wrote R2")
+	}
+	summary, results, err := runDiscovery(app, true)
+	if err != nil || summary.Candidates != 123 || summary.Checked != 120 || summary.Skipped != 100 || summary.Added != 20 || summary.Remaining != 0 || summary.Outcome != "daily_target_reached" {
+		t.Fatalf("did not continue to daily target: %+v %v", summary, err)
+	}
+	if len(results) != 120 || f.archiveCalls != 20 {
+		t.Fatalf("checked %d results, downloaded %d archives", len(results), f.archiveCalls)
+	}
+	searches := f.searchCalls
+	summary, _, err = runDiscovery(app, true)
+	if err != nil || summary.AlreadyAdded != 20 || summary.Checked != 0 || f.searchCalls != searches {
+		t.Fatalf("later schedule should be a no-op: %+v %v", summary, err)
+	}
+}
+
+func TestSystemRepositoryDiscoveryCatchUpAfterInterruption(t *testing.T) {
+	app, _, f := newDiscoveryFixture(t, 125)
+	for i := 25; i < len(f.items); i++ {
+		f.items[i].License.SPDXID = "UNLICENSED"
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	summary, err := app.DiscoverSystemAgentRepositories(ctx, SystemRepositoryDiscoveryOptions{
+		Apply: true, GitHubToken: "discovery-test-token",
+		OnResult: func(result SystemRepositoryDiscoveryResult) {
+			if result.Status == "added" {
+				cancel()
+			}
+		},
+	})
+	if !errors.Is(err, context.Canceled) || summary.Checked != 101 || summary.Added != 1 {
+		t.Fatalf("interrupted continuation: %+v %v", summary, err)
+	}
+	summary, _, err = runDiscovery(app, true)
+	if err != nil || summary.AlreadyAdded != 1 || summary.Added != 19 || summary.Checked != 19 || summary.Skipped != 101 || summary.Remaining != 0 || summary.Outcome != "daily_target_reached" {
+		t.Fatalf("catch-up did not resume from persisted results: %+v %v", summary, err)
+	}
+	if f.archiveCalls != 20 {
+		t.Fatalf("catch-up downloaded accepted archives again: %d calls", f.archiveCalls)
+	}
+}
+
+func TestSystemRepositoryDiscoveryExhaustsIneligibleCandidates(t *testing.T) {
+	app, _, f := newDiscoveryFixture(t, 105)
+	for i := range f.items {
+		f.items[i].License.SPDXID = "UNLICENSED"
+	}
+	summary, _, err := runDiscovery(app, true)
+	if err != nil || summary.Checked != 105 || summary.Skipped != 105 || summary.Added != 0 || summary.Remaining != 20 || summary.Outcome != "insufficient_eligible_candidates" {
+		t.Fatalf("candidate exhaustion: %+v %v", summary, err)
+	}
+	if f.archiveCalls != 0 {
+		t.Fatal("downloaded ineligible archives")
 	}
 }
 

@@ -6,6 +6,11 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Applying AI optimization suggestions now preserves the article's current cover image, mode, ratio and prompt, including individual suggestions, Apply all and repeated requests, so subsequent edits no longer save a cleared cover.
+- Skills/Agent Hub discovery now has five daily execution windows to retry missed or interrupted runs. Actual imports continue past the first 100 candidates toward the daily limit of 20, resume from saved results and retain existing safety and license checks; previews remain limited to 100 candidates.
+
 ## [1.0.0] - 2026-10-12
 
 Koinote 1.0.0 is the first stable release for the web and macOS / Windows clients.

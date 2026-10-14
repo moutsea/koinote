@@ -4,6 +4,11 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Fixed
+
+- L'application des suggestions d'optimisation IA conserve désormais l'image de couverture actuelle, son mode, son ratio et sa consigne, y compris lors d'une application individuelle, globale ou répétée. Les modifications suivantes n'enregistrent plus une couverture effacée.
+- La découverte du Skills/Agent Hub dispose désormais de cinq créneaux quotidiens pour reprendre les exécutions manquées ou interrompues. Les imports continuent au-delà des 100 premiers candidats jusqu'à la limite de 20 ajouts par jour, à partir des résultats enregistrés et avec les mêmes contrôles de sécurité et de licence. L'aperçu reste limité à 100 candidats.
+
 ## [1.0.0] - 2026-10-12
 
 Koinote 1.0.0 est la première version stable du site et des clients macOS / Windows.
