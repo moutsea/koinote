@@ -19,6 +19,7 @@ export const ja: Messages = {
     login: "ログイン",
     logout: "ログアウト",
     userMenu: "アカウントメニュー",
+    more: "その他",
   },
   space: {
     subtitle: "ローカル設定を安全に保存・移行し、新しいデバイスでもすぐに環境を復元できます。",
@@ -2440,6 +2441,13 @@ function hello(name) {
   common: {
     theme: "テーマ切り替え",
     language: "言語",
+  },
+  notFound: {
+    title: "ページが見つかりません",
+    description:
+      "リンクが古いか、入力に誤りがある可能性があります。ホームに戻るか、ドキュメントで目的の内容を探してください。",
+    backHome: "ホームに戻る",
+    openDocs: "ドキュメントを見る",
   },
   changelog: {
     eyebrow: "継続的な改善",

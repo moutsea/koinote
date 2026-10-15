@@ -15,6 +15,8 @@ const main = readFileSync(new URL("../spa/src/main.tsx", import.meta.url), "utf8
 const page = readFileSync(new URL("../spa/src/pages/DocsPage.tsx", import.meta.url), "utf8");
 const aiGuide = readFileSync(new URL("../spa/src/pages/AIOptimizationGuidePage.tsx", import.meta.url), "utf8");
 const aiCase = readFileSync(new URL("../spa/src/pages/AIOptimizationCasePage.tsx", import.meta.url), "utf8");
+// 原文放在独立模块里，案例页和 Worker 边缘渲染共用
+const aiCaseArchive = readFileSync(new URL("../spa/src/aiOptimizationCase.ts", import.meta.url), "utf8");
 const mcpGuide = readFileSync(new URL("../spa/src/pages/MCPGuidePage.tsx", import.meta.url), "utf8");
 const versionGuide = readFileSync(new URL("../spa/src/pages/VersionHistoryGuidePage.tsx", import.meta.url), "utf8");
 const shell = readFileSync(new URL("../spa/src/components/AppShell.tsx", import.meta.url), "utf8");
@@ -57,9 +59,10 @@ ok(
     /import\(["'].\/pages\/AIOptimizationCasePage["']\)/.test(main) &&
     /to="\/docs\/ai-optimization\/case"/.test(aiGuide) &&
     /editable:\s*false/.test(aiCase) &&
-    /CASE_ORIGINAL_MARKDOWN/.test(aiCase) &&
-    /https:\/\/koinote\.app\/images\/cases\/ai-optimization\//.test(aiCase) &&
-    !/google_104742467398561921274/.test(aiCase),
+    /import \{ CASE_ORIGINAL_MARKDOWN \} from "\.\.\/aiOptimizationCase"/.test(aiCase) &&
+    /export const CASE_ORIGINAL_MARKDOWN/.test(aiCaseArchive) &&
+    /https:\/\/koinote\.app\/images\/cases\/ai-optimization\//.test(aiCaseArchive) &&
+    !/google_104742467398561921274/.test(aiCase + aiCaseArchive),
   "公开指南不能链接本地私有文档，应提供稳定且能显示原图的审阅前归档",
 );
 ok(

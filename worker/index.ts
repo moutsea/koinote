@@ -23,6 +23,7 @@ import {
   handleDatabaseBackupUpload,
 } from "./backups";
 import { applySecurityHeaders } from "./securityHeaders";
+import { handleSeoRequest } from "./seo";
 import {
   readWechatDraftResponse,
   WECHAT_DRAFT_STREAM_TYPE,
@@ -131,6 +132,17 @@ async function route(request: Request, env: Env): Promise<Response> {
     return handleSharePage(request, env);
   }
 
+  // 公开页注入 meta 与静态正文、应用页 noindex、未知路径 404、robots/sitemap。
+  // 返回 null 的是普通静态资源（JS/CSS/图片），照常走 ASSETS。
+  // 渲染出错就退回原来的静态资源：这些页面以前不经过任何动态逻辑，不能因为
+  // SEO 注入出问题而整页 500。
+  try {
+    const seoResponse = await handleSeoRequest(request, env);
+    if (seoResponse) return seoResponse;
+  } catch (error) {
+    console.error("seo render failed", { path: url.pathname, error: String(error) });
+  }
+
   // 静态资源（SPA），404 交给 not_found_handling: single-page-application
   return env.ASSETS.fetch(request);
 }
@@ -191,7 +203,7 @@ async function handleSharePage(request: Request, env: Env): Promise<Response> {
       ? imageBase
         ? `${imageBase}/${meta.imageKey}`
         : `${requestURL.origin}/images/${meta.imageKey}`
-      : `${requestURL.origin}/apple-touch-icon.png`;
+      : `${requestURL.origin}/og-image.png`;
   const title = escapeHTML(`${rawTitle} — Koinote`);
   const description = escapeHTML(rawDescription);
   const canonical = escapeHTML(canonicalURL);

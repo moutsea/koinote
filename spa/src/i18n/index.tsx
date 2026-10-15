@@ -13,6 +13,8 @@ import { fr } from "./fr";
 import { ja } from "./ja";
 import { LOCALES, type Locale, type Messages } from "./types";
 import { syncDesktopMenuLocale } from "../desktop/menu";
+// 与 Worker 首屏渲染的 <html lang> 一致（zh → zh-CN），JS 接管后不改写成另一个值
+import { HTML_LANG } from "../seoMeta";
 
 export { LOCALES, LOCALE_LABELS } from "./types";
 export type { Locale, Messages } from "./types";
@@ -23,6 +25,14 @@ const STORAGE_KEY = "koinote-locale";
 // 浏览器语言 → 支持的 Locale，默认 en。
 function detectLocale(): Locale {
   if (typeof window === "undefined") return "en";
+  // ?lang= 是各语言版本的固定地址（hreflang 与 Worker 边缘渲染都指向它），
+  // 优先级最高，但只决定这次打开的语言、不写进 localStorage：点一次搜索结果里
+  // 的外语链接，不该把用户自己选过的界面语言永久改掉。站内跳转期间语言保存在
+  // React 状态里，不会因为地址里没了 ?lang 而变。用户在语言菜单里主动切换才保存。
+  const requested = new URLSearchParams(window.location.search).get("lang");
+  if (requested && (LOCALES as readonly string[]).includes(requested)) {
+    return requested as Locale;
+  }
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored && (LOCALES as readonly string[]).includes(stored)) {
     return stored as Locale;
@@ -52,12 +62,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       // 忽略隐私模式写入失败
     }
-    document.documentElement.lang = l;
+    document.documentElement.lang = HTML_LANG[l];
   }, []);
 
   // 挂载时同步 <html lang>，与初始检测到的语言对齐（index.html 里的静态值可能不符）。
   useEffect(() => {
-    document.documentElement.lang = locale;
+    document.documentElement.lang = HTML_LANG[locale];
     void syncDesktopMenuLocale(locale).catch((error) =>
       console.warn("Desktop menu locale sync failed", error),
     );

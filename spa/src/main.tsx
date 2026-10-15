@@ -14,6 +14,7 @@ import "./globals.css";
 import { I18nProvider } from "./i18n";
 import { AppShell } from "./components/AppShell";
 import { HomePage } from "./pages/HomePage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { isDesktopRuntime } from "./desktop/runtime";
 import { installDesktopSyncQueryRefresh } from "./desktop/syncQueries";
 import { installDropNavigationGuard } from "./dropNavigation";
@@ -56,6 +57,8 @@ const IndexPage = desktopRuntime
 const rootRoute = createRootRoute({
   component: AppShell,
   pendingComponent: RoutePending,
+  // 路由表之外的地址。HTTP 404 状态码由 Worker 给（worker/seo.ts）
+  notFoundComponent: NotFoundPage,
 });
 
 const indexRoute = createRoute({
@@ -442,6 +445,10 @@ const routeTree = rootRoute.addChildren([
 const router = createRouter({
   routeTree,
   defaultPendingComponent: RoutePending,
+  // 匹配不上的地址一律由根路由显示 NotFoundPage，与 Worker 的 404 一致。
+  // 默认的 fuzzy 会把 /editor/a/b 这种地址挂到 /editor 上，而编辑器页没有
+  // <Outlet>，结果是服务端回 404、页面却照常打开编辑器
+  notFoundMode: "root",
 });
 
 declare module "@tanstack/react-router" {
@@ -458,12 +465,41 @@ function RoutePending() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <I18nProvider>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </I18nProvider>
-  </React.StrictMode>,
-);
+function renderApp() {
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <I18nProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </I18nProvider>
+    </React.StrictMode>,
+  );
+}
+
+// 公开页的 #root 里有 Worker 渲染的静态正文（worker/seo.ts）。React 首次提交会
+// 清空它；若此时懒加载的页面 chunk 还没到，用户会看到正文 → 「加载中…」→ 正文
+// 的闪烁。先把当前路由的 chunk 拉下来再挂载，静态正文一直留到真页面能直接接上。
+// 预加载失败也照常挂载，交给路由自己的错误处理。
+if (document.querySelector("#root > .seo-static")) {
+  // 只预加载组件代码，不动 router 状态：挂载后 RouterProvider 照常自己 load，
+  // 那时 lazyRouteComponent 已有缓存，会直接渲染而不是挂起。
+  const components = router
+    .matchRoutes(router.latestLocation.pathname, router.latestLocation.search)
+    .map(
+      (match) =>
+        router.looseRoutesById[match.routeId]?.options.component as
+          | { preload?: () => Promise<unknown> }
+          | undefined,
+    );
+  // 最多等 3 秒：chunk 请求卡住时宁可闪一下「加载中…」，也不能让页面一直停在
+  // 静态正文、点什么都没反应
+  void Promise.race([
+    Promise.all(components.map((component) => component?.preload?.())),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ])
+    .catch(() => undefined)
+    .finally(renderApp);
+} else {
+  renderApp();
+}

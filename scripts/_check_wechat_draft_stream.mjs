@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { build } from "esbuild";
 
 const bundle = await build({
-  entryPoints: ["worker/index.ts"], bundle: true, format: "esm", platform: "neutral", write: false,
+  entryPoints: ["worker/index.ts"], bundle: true, format: "esm", platform: "neutral", write: false, loader: { ".md": "text" },
 });
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 const originalFetch = globalThis.fetch;

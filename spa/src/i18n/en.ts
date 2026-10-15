@@ -19,6 +19,7 @@ export const en: Messages = {
     login: "Log in",
     logout: "Log out",
     userMenu: "Account menu",
+    more: "More",
   },
   space: {
     subtitle: "Securely save and migrate your local configurations so your workspace can move with you.",
@@ -2467,6 +2468,13 @@ function hello(name) {
   common: {
     theme: "Toggle theme",
     language: "Language",
+  },
+  notFound: {
+    title: "Page not found",
+    description:
+      "This link may be outdated or mistyped. Head back home, or look for what you need in the docs.",
+    backHome: "Back to home",
+    openDocs: "Browse the docs",
   },
   changelog: {
     eyebrow: "Always improving",

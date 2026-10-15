@@ -175,6 +175,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/agent/github-credential", a.agentGitHubCredentialDelete)
 	mux.HandleFunc("POST /api/agent/workspaces/import/github", a.agentGitHubImportPost)
 	mux.HandleFunc("GET /api/agent/repositories", a.publicAgentRepositoriesList)
+	// Literal segment outranks {workspaceId} in ServeMux, so this never reaches the ID handler
+	mux.HandleFunc("GET /api/agent/repositories/sitemap", a.publicAgentRepositorySitemap)
 	mux.HandleFunc("GET /api/agent/repositories/{workspaceId}", a.publicAgentRepositoryGet)
 	mux.HandleFunc("GET /api/agent/repositories/{workspaceId}/files/{fileId}", a.publicAgentRepositoryFileGet)
 	mux.HandleFunc("POST /api/agent/repositories/{workspaceId}/fork", a.publicAgentRepositoryFork)

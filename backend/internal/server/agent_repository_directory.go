@@ -159,3 +159,44 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 	metadata["repositories"], metadata["nextCursor"] = items, next
 	httpx.JSON(w, 200, metadata)
 }
+
+// One sitemap file holds at most 50,000 URLs; the Worker adds the fixed public
+// pages (and their language variants) on top of these.
+const publicRepositorySitemapLimit = 45000
+
+type agentRepositorySitemapEntry struct {
+	WorkspaceID int64     `json:"workspaceId"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// The Worker builds /sitemap.xml from this in a single request. Walking the
+// directory instead means 12 rows per cursor page, one round trip each, which
+// stopped well short of the full Hub. Same rows the directory lists: published
+// and not deleted.
+func (a *App) publicAgentRepositorySitemap(w http.ResponseWriter, r *http.Request) {
+	if !a.allowPublicRepositoryRead(w, r) {
+		return
+	}
+	rows, err := a.db.Query(r.Context(), `SELECT p.workspace_id,p.published_at FROM agent_repository_publications p
+      JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.deleted_at IS NULL
+      ORDER BY p.published_at DESC,p.workspace_id DESC LIMIT $1`, publicRepositorySitemapLimit)
+	if err != nil {
+		writeAgentWorkspaceError(w, err)
+		return
+	}
+	defer rows.Close()
+	entries := []agentRepositorySitemapEntry{}
+	for rows.Next() {
+		var entry agentRepositorySitemapEntry
+		if err = rows.Scan(&entry.WorkspaceID, &entry.UpdatedAt); err != nil {
+			writeAgentWorkspaceError(w, err)
+			return
+		}
+		entries = append(entries, entry)
+	}
+	if err = rows.Err(); err != nil {
+		writeAgentWorkspaceError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"repositories": entries})
+}

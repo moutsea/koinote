@@ -19,6 +19,7 @@ export const fr: Messages = {
     login: "Se connecter",
     logout: "Se déconnecter",
     userMenu: "Menu du compte",
+    more: "Plus",
   },
   space: {
     subtitle: "Enregistrez et migrez vos configurations locales en toute sécurité pour retrouver votre environnement sur chaque appareil.",
@@ -2505,6 +2506,13 @@ function hello(name) {
   common: {
     theme: "Changer de thème",
     language: "Langue",
+  },
+  notFound: {
+    title: "Page introuvable",
+    description:
+      "Ce lien est peut-être obsolète ou mal saisi. Revenez à l’accueil ou cherchez ce qu’il vous faut dans la documentation.",
+    backHome: "Retour à l’accueil",
+    openDocs: "Consulter la documentation",
   },
   changelog: {
     eyebrow: "En amélioration continue",

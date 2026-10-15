@@ -19,6 +19,7 @@ export const zh: Messages = {
     login: "登录",
     logout: "登出",
     userMenu: "账户菜单",
+    more: "更多",
   },
   space: {
     subtitle: "安全保存并迁移你的本机配置，换设备时也能快速恢复工作环境。",
@@ -2323,6 +2324,13 @@ function hello(name) {
   common: {
     theme: "切换主题",
     language: "语言",
+  },
+  notFound: {
+    title: "页面不存在",
+    description:
+      "这个地址可能已经失效，或者输入有误。可以回到首页，或在文档中心找找你要的内容。",
+    backHome: "返回首页",
+    openDocs: "查看文档中心",
   },
   changelog: {
     eyebrow: "持续更新",

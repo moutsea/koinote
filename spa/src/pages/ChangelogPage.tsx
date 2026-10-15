@@ -1,5 +1,5 @@
 import { ExternalLink, GitCommitHorizontal, History } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import changelogEnglish from "../../../CHANGELOG.md?raw";
 import changelogFrench from "../../../CHANGELOG.fr.md?raw";
 import changelogJapanese from "../../../CHANGELOG.ja.md?raw";
@@ -33,14 +33,6 @@ export function ChangelogPage() {
   const { t, locale } = useI18n();
   const releases = parseChangelog(CHANGELOGS[locale]);
   const sourceURL = `${SOURCE_BASE_URL}${SOURCE_FILES[locale]}`;
-
-  useEffect(() => {
-    const original = document.title;
-    document.title = `${t.changelog.title} — Koinote`;
-    return () => {
-      document.title = original;
-    };
-  }, [t.changelog.title]);
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -122,11 +114,14 @@ export function ChangelogPage() {
                       releaseIndex === 0 ? "shadow-sm" : ""
                     }`}
                   >
+                    {/* 显隐写在外层：InkSeal 自带的 inline-flex 会盖过这里的 hidden */}
                     {isUnreleased && (
-                      <InkSeal
-                        label={t.changelog.newLabel}
-                        className="absolute right-5 top-5 hidden h-10 px-1 text-xs sm:inline-flex"
-                      />
+                      <span className="absolute right-5 top-5 hidden sm:inline-flex">
+                        <InkSeal
+                          label={t.changelog.newLabel}
+                          className="h-10 px-1 text-xs"
+                        />
+                      </span>
                     )}
                     <header className="pr-12">
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

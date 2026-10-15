@@ -1,3 +1,5 @@
+import { SEO_GUARD_SCRIPT_HASH } from "./seoGuard";
+
 /**
  * 安全响应头。
  *
@@ -12,9 +14,10 @@
 /**
  * Content-Security-Policy。
  *
- * script-src 'self'：SPA 的 JS 全部来自同源打包产物，没有 CDN 脚本、没有内联
- * <script>。所以这里能收到最紧，不需要 'unsafe-inline' —— 这是 CSP 最要紧的一条，
- * 挡住的正是 XSS 的主要落地方式。
+ * script-src 'self'：SPA 的 JS 全部来自同源打包产物，没有 CDN 脚本。内联 <script>
+ * 只有一段：Worker 写进公开页的语言守卫（seoGuard.ts），按 SHA-256 单独放行，
+ * 文本一变哈希就对不上、浏览器拒绝执行。所以这里仍不需要 'unsafe-inline' ——
+ * 这是 CSP 最要紧的一条，挡住的正是 XSS 的主要落地方式。
  *
  * style-src 需要 'unsafe-inline'，两个真实原因，都不是偷懒：
  *   1. 主题 CSS 是运行时注入的 <style> 标签（MarkdownEditor 里的 {themeCSS}）——
@@ -46,7 +49,8 @@
  */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' https://static.cloudflareinsights.com",
+  // 内联脚本只放行 seoGuard.ts 那一段固定文本（按 SHA-256），不是 'unsafe-inline'
+  `script-src 'self' https://static.cloudflareinsights.com '${SEO_GUARD_SCRIPT_HASH}'`,
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",

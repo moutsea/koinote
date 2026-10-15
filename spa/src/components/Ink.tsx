@@ -12,6 +12,8 @@ import type { ReactNode } from "react";
  *
  * 竖排（writing-mode: vertical-rl）是印章的常规款式，横排看着像徽标而不像印。
  * aria-hidden：它是装饰，读屏念一个孤立的「書」字只会让人困惑。
+ * 要按断点隐藏时包一层再控制显隐：自带的 inline-flex 在样式表里排在 hidden
+ * 之后，className 里传 hidden 不起作用。
  */
 export function InkSeal({
   label = "書",

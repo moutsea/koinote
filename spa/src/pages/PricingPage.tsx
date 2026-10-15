@@ -14,6 +14,8 @@ import { useCurrentUser } from "../auth";
 import { InkClouds, PaperCard } from "../components/Ink";
 import {
   DEFAULT_CURRENCY_BY_LOCALE,
+  DEFAULT_FREE_STORAGE_QUOTA_BYTES,
+  DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES,
   formatBillingPrice,
 } from "../billingCore";
 import { PageContainer } from "../components/PageContainer";
@@ -76,8 +78,8 @@ export function PricingPage() {
   const selectedPrice =
     data?.prices.find((price) => price.currency.toLowerCase() === selectedCurrency) ??
     data?.prices[0];
-  const freeStorage = formatBytes(data?.freeStorageQuotaBytes ?? 500 * 1024 * 1024, locale);
-  const lifetimeStorage = formatBytes(data?.lifetimeStorageQuotaBytes ?? 10 * 1024 * 1024 * 1024, locale);
+  const freeStorage = formatBytes(data?.freeStorageQuotaBytes ?? DEFAULT_FREE_STORAGE_QUOTA_BYTES, locale);
+  const lifetimeStorage = formatBytes(data?.lifetimeStorageQuotaBytes ?? DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES, locale);
   const lifetimePrice = selectedPrice
     ? formatBillingPrice(selectedPrice.amount, selectedPrice.currency, locale)
     : "—";

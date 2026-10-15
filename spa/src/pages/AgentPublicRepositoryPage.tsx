@@ -20,6 +20,7 @@ import { PageContainer } from "../components/PageContainer";
 import { confirmAction } from "../confirmAction";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { useI18n } from "../i18n";
+import { clipDescription, notFoundTitle, publicPageMeta, repositoryPageTitle } from "../seoMeta";
 
 export function AgentPublicRepositoryPage() {
   const { repositoryId } = useParams({ from: "/repositories/$repositoryId" });
@@ -39,6 +40,23 @@ export function AgentPublicRepositoryPage() {
   const settings = useQuery({ queryKey: ["agent-workspace-settings"], queryFn: getAgentWorkspaceSettings, enabled: Boolean(member), retry: false });
   const detail = useQuery({ queryKey: ["public-agent-repository", id, user?.id], queryFn: () => getPublicAgentRepository(id), enabled: Number.isSafeInteger(id) && id > 0, retry: false });
   const repository = detail.data?.repository;
+  // AppShell 的统一同步不管本页的标题和描述（见 seoMeta.pageOwnsMeta），由这里按仓库
+  // 数据设置，与 Worker 首屏渲染的保持一致。
+  // 数据回来之前不改：首屏已由 Worker 按仓库写好，先改成通用标题会闪一下。
+  // 打不开时换掉，否则站内点进来的会一直挂着上一页的标题
+  const validID = Number.isSafeInteger(id) && id > 0;
+  const missing = !validID || (detail.error instanceof ApiError && detail.error.status === 404);
+  const unavailable = !repository && (missing || detail.isError);
+  useEffect(() => {
+    if (repository) {
+      document.title = repositoryPageTitle(repository.name, t);
+      document
+        .querySelector('meta[name="description"]')
+        ?.setAttribute("content", clipDescription(repository.description.trim() || t.agentWorkspace.hubNoDescription));
+    } else if (unavailable) {
+      document.title = missing ? notFoundTitle(t) : publicPageMeta("repositories", t, locale).title;
+    }
+  }, [repository, unavailable, missing, t, locale]);
   // Owners can withdraw here even when private workspace sync is disabled.
   // A 404 simply means the signed-in viewer does not own this repository.
   const ownership = useQuery({ queryKey: [REPOSITORY_SHARING_QUERY_KEY, id, user?.id, Boolean(repository?.systemManaged)], queryFn: () => getAgentRepositorySharing(id, Boolean(repository?.systemManaged)), enabled: Boolean(user && !user.isLocalMode && repository && (!repository.systemManaged || user.isAdmin)), retry: false });

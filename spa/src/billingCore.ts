@@ -10,6 +10,11 @@ export const DEFAULT_CURRENCY_BY_LOCALE: Record<string, string> = {
   en: "usd",
 };
 
+// /api/billing/pricing 读不到时的兜底容量。真值在后端（billingPricing），
+// 价格页与 Worker 边缘渲染共用这两个常量，免得两处各写一份数字。
+export const DEFAULT_FREE_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
+export const DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES = 10 * 1024 * 1024 * 1024;
+
 const ZERO_DECIMAL_CURRENCIES = new Set(["jpy"]);
 
 export function billingPriceFor(

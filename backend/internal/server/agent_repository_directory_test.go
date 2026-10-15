@@ -141,3 +141,57 @@ func TestAgentRepositoryPublicationCategory(t *testing.T) {
 		t.Fatal("rejected publication changed classification")
 	}
 }
+
+func TestAgentRepositorySitemapListsWholeDirectory(t *testing.T) {
+	pool := newGCTestPool(t)
+	ctx := context.Background()
+	app := New(config.Config{SessionSecret: "directory-sitemap"}, pool)
+	var ids []int64
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM agent_workspaces WHERE id=ANY($1::bigint[])`, ids)
+	})
+	add := func(published, deleted bool, minute int) int64 {
+		t.Helper()
+		var id int64
+		if err := pool.QueryRow(ctx, `INSERT INTO agent_workspaces(is_system,name,description,hub_category,deleted_at)
+          VALUES(true,'sitemap','','agents',CASE WHEN $1 THEN now() END) RETURNING id`, deleted).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+		if published {
+			if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at)
+              VALUES($1,0,'Sitemap','','MIT',timestamptz '2026-10-01T00:00:00Z' + make_interval(mins => $2))`, id, minute); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return id
+	}
+	// More than two directory pages: the old edge walk stopped after a fixed number of pages
+	want := map[int64]bool{}
+	for i := range 2*publicRepositoryPageSize + 1 {
+		want[add(true, false, i)] = true
+	}
+	withdrawn := add(true, true, 1000)
+	unpublished := add(false, false, 0)
+
+	var result struct {
+		Repositories []agentRepositorySitemapEntry `json:"repositories"`
+	}
+	decodeJSONResponse(t, callRepositoryAPI(t, app, nil, http.MethodGet, "/api/agent/repositories/sitemap", "", 200), &result)
+	var previous *agentRepositorySitemapEntry
+	for i, entry := range result.Repositories {
+		if entry.WorkspaceID == withdrawn || entry.WorkspaceID == unpublished {
+			t.Fatalf("sitemap lists a repository the directory hides: %d", entry.WorkspaceID)
+		}
+		if previous != nil && entry.UpdatedAt.After(previous.UpdatedAt) {
+			t.Fatalf("sitemap not ordered by publication time at %d", i)
+		}
+		previous = &result.Repositories[i]
+		delete(want, entry.WorkspaceID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("sitemap missing %d published repositories", len(want))
+	}
+	// The literal route must not shadow real repository IDs
+	callRepositoryAPI(t, app, nil, http.MethodGet, fmt.Sprintf("/api/agent/repositories/%d", ids[0]), "", 200)
+}

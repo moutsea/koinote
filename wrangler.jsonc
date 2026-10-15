@@ -4,6 +4,9 @@
   "main": "worker/index.ts",
   "compatibility_date": "2025-06-01",
   "compatibility_flags": ["nodejs_compat"],
+  // worker/seo.ts 直接 import 仓库根的 CHANGELOG*.md 作为文本渲染更新日志页。
+  // rules 属于可继承配置，env.production 不用再写一遍。
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
   "assets": {
     "directory": "spa/dist",
     "binding": "ASSETS",

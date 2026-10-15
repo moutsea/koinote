@@ -21,6 +21,7 @@ import { InkSeal } from "../components/Ink";
 import { useSession, type SessionSnapshot } from "../auth";
 import { copySharedDocument } from "../documentTransfer";
 import { normalizeLegacyImageAdjacentHeadings } from "../components/editor/markdownImage";
+import { notFoundTitle } from "../seoMeta";
 
 const DATE_LOCALE: Record<Locale, string> = {
   en: "en-US",
@@ -90,6 +91,13 @@ function ShareReader({ token, viewerKey, revocationVersion }: {
 
   const shared = currentUnlock ?? query.data?.document;
   const needsPassword = !currentUnlock && query.data?.requiresPassword === true;
+  const missing = !query.isLoading && (query.isError || (!shared && !needsPassword));
+
+  // AppShell 不管本页标题（见 seoMeta.pageOwnsMeta），打开成功时由 SharedView 设置。
+  // 链接失效时也要换掉，否则站内点进来的会一直挂着上一页的标题
+  useEffect(() => {
+    if (missing) document.title = notFoundTitle(t);
+  }, [missing, t]);
 
   if (query.isLoading) {
     return <Centered>{t.editor.loading}</Centered>;
@@ -241,12 +249,10 @@ function SharedView({ shared }: { shared: SharedDocument }) {
     ? new Date(shared.updatedAt).toLocaleDateString(DATE_LOCALE[locale])
     : "";
 
+  // 不在卸载时恢复旧标题：路由切换时 AppShell 先为下一页设好标题，本页才卸载，
+  // 恢复会把新标题覆盖回去。离开分享页后的标题由 AppShell 负责。
   useEffect(() => {
-    const original = document.title;
     document.title = `${shared.title.trim() || t.editor.untitled} — Koinote`;
-    return () => {
-      document.title = original;
-    };
   }, [shared.title, t.editor.untitled]);
 
   async function copyToMine() {
