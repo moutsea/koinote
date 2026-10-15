@@ -6,6 +6,19 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-10-15
+
+### Changed
+
+- Deleting a folder now deletes its subfolders too and moves the documents inside to trash. Restored documents return to the deleted folder's parent. The confirmation states how many documents are affected.
+- AI organization now removes folders it leaves empty, along with ancestors that become empty, and restores them on undo. Unrelated empty folders are kept.
+
+### Fixed
+
+- After applying or undoing AI organization, the dialog shows the result with Done and New run instead of returning to "Generate preview".
+- On desktop, deleting documents with changes not yet synced to the cloud first syncs them; if that is not possible (offline or sync failing), it explains what would be lost and asks for confirmation instead of silently dropping new documents or edits.
+- Desktop sync no longer gets stuck when a deleted document was edited on another device; the latest version moves to trash.
+
 ## [1.1.5] - 2026-10-14
 
 ### Added

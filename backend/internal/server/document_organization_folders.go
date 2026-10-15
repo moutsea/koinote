@@ -13,7 +13,9 @@ import (
 type organizationTimeFolder struct {
 	organizationFolder
 	// Empty in snapshots saved before activity buckets were also obsolete.
-	Kind          string    `json:"kind,omitempty"`
+	Kind string `json:"kind,omitempty"`
+	// Manual marks a user folder removed because this run emptied it.
+	Manual        bool      `json:"manual,omitempty"`
 	DocumentCount int       `json:"documentCount"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
@@ -125,32 +127,80 @@ func retargetOrganizationChoice(choice organizationChoice, folders []organizatio
 	return choice, len(choice.NewFolders) > 0
 }
 
-func pruneOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, data *organizationData) error {
-	folders, err := loadOrganizationTimeFolders(ctx, tx, userID, data.Folders)
+// pruneOrganizationFolders removes folders left empty by an applied run:
+// obsolete automatic buckets, every folder a moved document came from, and
+// ancestors of those folders that become empty as a consequence. Folders that
+// were already empty and unrelated to this run are left alone. Occupancy is
+// rechecked in the same transaction, including trash and other documents.
+func pruneOrganizationFolders(ctx context.Context, tx pgx.Tx, userID int, data *organizationData, sources []string) error {
+	timeFolders, err := loadOrganizationTimeFolders(ctx, tx, userID, data.Folders)
 	if err != nil {
 		return err
 	}
-	// Delete children before parents. Recheck actual occupancy in the same
-	// serializable transaction, including trash and documents outside this run.
-	depths := make(map[string]int, len(folders))
-	for _, folder := range folders {
-		path, _ := organizationFolderPath(data.Folders, folder.ID)
-		depths[folder.ID] = len(path)
+	current, err := loadOrganizationFolders(ctx, tx, userID)
+	if err != nil {
+		return err
 	}
+	validate := organizationFolderPathValidator(data.Folders, current)
+	rows, err := tx.Query(ctx, `SELECT f.folder_id,f.name,COALESCE(p.folder_id,''),COALESCE(f.organizer_kind,''),f.created_at,f.updated_at
+        FROM folders f LEFT JOIN folders p ON p.id=f.parent_id WHERE f.user_id=$1`, userID)
+	if err != nil {
+		return err
+	}
+	meta := map[string]organizationTimeFolder{}
+	for rows.Next() {
+		var folder organizationTimeFolder
+		if err := rows.Scan(&folder.ID, &folder.Name, &folder.ParentID, &folder.Kind, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
+			rows.Close()
+			return err
+		}
+		folder.Manual = folder.Kind == ""
+		meta[folder.ID] = folder
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	candidates := map[string]organizationTimeFolder{}
+	for _, folder := range timeFolders {
+		candidates[folder.ID] = folder
+	}
+	for _, id := range sources {
+		// Only folders whose path is unchanged since the preview are touched.
+		for depth := 0; id != "" && depth <= maxFolderDepth; depth++ {
+			folder, ok := meta[id]
+			if !ok || validate(id) != nil {
+				break
+			}
+			if _, seen := candidates[id]; !seen {
+				candidates[id] = folder
+			}
+			id = folder.ParentID
+		}
+	}
+	folders := make([]organizationTimeFolder, 0, len(candidates))
+	depths := make(map[string]int, len(candidates))
+	for _, folder := range candidates {
+		path, _ := organizationFolderPath(current, folder.ID)
+		depths[folder.ID] = len(path)
+		folders = append(folders, folder)
+	}
+	// Delete children before parents so emptied ancestors are seen as empty.
 	slices.SortStableFunc(folders, func(a, b organizationTimeFolder) int {
-		return depths[b.ID] - depths[a.ID]
+		if depths[a.ID] != depths[b.ID] {
+			return depths[b.ID] - depths[a.ID]
+		}
+		return strings.Compare(a.ID, b.ID)
 	})
 	for _, folder := range folders {
-		if folder.DocumentCount > 0 {
-			continue
-		}
-		result, err := tx.Exec(ctx, `DELETE FROM folders f WHERE f.user_id=$1 AND f.folder_id=$2 AND f.organizer_kind IS NOT NULL
+		result, err := tx.Exec(ctx, `DELETE FROM folders f WHERE f.user_id=$1 AND f.folder_id=$2
             AND NOT EXISTS(SELECT 1 FROM documents d WHERE d.folder_id=f.id)
             AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=f.id)`, userID, folder.ID)
 		if err != nil {
 			return err
 		}
 		if result.RowsAffected() == 1 {
+			folder.DocumentCount = 0
 			data.RemovedFolders = append(data.RemovedFolders, folder)
 		}
 	}
@@ -176,9 +226,13 @@ func restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, 
 		if present[folder.ID] || validate(folder.ID) != nil || (folder.ParentID != "" && !present[folder.ParentID]) {
 			continue
 		}
-		kind := folder.Kind
-		if kind == "" {
-			kind = "smart"
+		var kind *string
+		if !folder.Manual {
+			value := folder.Kind
+			if value == "" {
+				value = "smart" // Snapshots saved before kinds were recorded.
+			}
+			kind = &value
 		}
 		result, err := tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name,parent_id,organizer_kind,created_at,updated_at)
             VALUES($1,$2,$3,(SELECT id FROM folders WHERE user_id=$2 AND folder_id=$4),$7,$5,$6)
@@ -228,4 +282,23 @@ func retargetOrganizationSuggestions(suggestions []organizationSuggestion, items
 		result = append(result, s)
 	}
 	return result
+}
+
+func loadOrganizationFolderCounts(ctx context.Context, db organizationQuerier, userID int) (map[string]int, error) {
+	rows, err := db.Query(ctx, `SELECT f.folder_id,(SELECT count(*) FROM documents d WHERE d.user_id=$1 AND d.folder_id=f.id)
+        FROM folders f WHERE f.user_id=$1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var id string
+		var count int
+		if err := rows.Scan(&id, &count); err != nil {
+			return nil, err
+		}
+		counts[id] = count
+	}
+	return counts, rows.Err()
 }

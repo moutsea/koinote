@@ -28,6 +28,8 @@ type treeBatchMoveRequest struct {
 
 type treeBatchDeleteRequest struct {
 	Items []treeBatchItem `json:"items"`
+	// Cascade deletes nested folders and trashes their documents; see folderDelete.
+	Cascade bool `json:"cascade"`
 }
 
 func normalizeTreeBatchItems(items []treeBatchItem) ([]treeBatchItem, error) {
@@ -285,6 +287,9 @@ func (a *App) treeBatchDelete(w http.ResponseWriter, r *http.Request) {
 			`SELECT id, parent_id FROM folders WHERE folder_id = $1 AND user_id = $2`,
 			folderID, user.ID,
 		).Scan(&internalID, &parentID)
+		if errors.Is(err, pgx.ErrNoRows) && body.Cascade {
+			continue // Already removed with a selected ancestor.
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Folder not found")
 			return
@@ -293,6 +298,14 @@ func (a *App) treeBatchDelete(w http.ResponseWriter, r *http.Request) {
 			log.Printf("tree batch delete folder lookup: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return
+		}
+		if body.Cascade {
+			if _, err := deleteFolderTreeTx(ctx, tx, user.ID, internalID); err != nil {
+				log.Printf("tree batch cascade delete: %v", err)
+				httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+				return
+			}
+			continue
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE folders SET parent_id = $2, updated_at = now() WHERE parent_id = $1 AND user_id = $3`,

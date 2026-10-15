@@ -4,6 +4,19 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-10-15
+
+### Changed
+
+- Supprimer un dossier supprime aussi ses sous-dossiers et met les documents qu’ils contiennent à la corbeille ; une fois restaurés, ils reviennent dans le dossier parent. La confirmation indique le nombre de documents concernés.
+- Le classement IA supprime les dossiers qu’il vide, ainsi que les dossiers parents devenus vides, et les restaure à l’annulation. Les dossiers vides sans rapport sont conservés.
+
+### Fixed
+
+- Après l’application ou l’annulation du classement IA, la fenêtre affiche le résultat avec « Terminé » et « Nouveau classement » au lieu de revenir à « Générer l’aperçu ».
+- Sur le bureau, supprimer des documents dont des modifications ne sont pas encore synchronisées les synchronise d’abord ; si c’est impossible (hors ligne ou échec de synchronisation), l’application explique ce qui serait perdu et demande confirmation, au lieu de perdre silencieusement de nouveaux documents ou des modifications.
+- La synchronisation du bureau ne reste plus bloquée lorsqu’un document supprimé a été modifié sur un autre appareil ; la dernière version est mise à la corbeille.
+
 ## [1.1.5] - 2026-10-14
 
 ### Added

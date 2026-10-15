@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version lets you pick the documents to organize from a document tree, and AI organization now re-files documents out of automatic date and activity folders instead of keeping them."
+          notes="Koinote Desktop $version deletes folders together with their subfolders (documents move to trash), removes folders left empty by AI organization, protects unsynced desktop edits on delete, and fixes a desktop sync stall after deleting documents edited elsewhere."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,11 +237,11 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 让 AI 整理按内容重新归类，不再沿用旧的时间目录。
+          Koinote $version 改进文件夹删除和 AI 整理后的目录清理。
 
-          - 点击“AI 整理”先弹出文件树，可勾选要整理的文档或整个文件夹；默认勾选未整理的文档和自动时间 / 活跃度目录里的文档。
-          - 自动生成的“年月 → 周”和活跃度目录不再作为目标，AI 在其中新建的主题目录会改到外面创建；仅建议留在原时间目录的文档需手动确认。
-          - 清空的自动目录在应用时删除，撤销时恢复；手动建立或改过名的目录保留。
+          - 删除文件夹会连同子文件夹一起删除，里面的文档移入回收站，恢复后回到上一级目录。
+          - AI 整理会删除本次移空的文件夹，撤销时恢复；应用后弹窗显示结果和“完成”，不再回到“生成整理预览”。
+          - 桌面端删除未同步的文档时会先同步，无法同步时说明会丢失的内容并请你确认；修复删除别处改过的文档后同步一直失败的问题。
 
           可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
@@ -253,11 +253,11 @@ jobs:
 
           ---
 
-          Koinote $version makes AI organization re-file documents by content instead of keeping old date folders.
+          Koinote $version improves folder deletion and cleanup after AI organization.
 
-          - AI organization opens with a document tree to pick documents or whole folders. Unorganized documents and documents in automatic date or activity folders are picked by default.
-          - Automatic month/week and activity folders are no longer destinations. Topics the model nests inside them are created outside instead; suggestions that only keep a document there need manual review.
-          - Emptied automatic folders are removed on apply and restored on undo. Manual and renamed folders are preserved.
+          - Deleting a folder also deletes its subfolders and moves the documents inside to trash; restored documents return to the parent folder.
+          - AI organization removes folders it leaves empty and restores them on undo. After applying, the dialog shows the result with Done instead of returning to Generate preview.
+          - On desktop, deleting unsynced documents syncs them first and asks for confirmation if they cannot be synced. A sync stall after deleting documents edited elsewhere is fixed.
 
           Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 

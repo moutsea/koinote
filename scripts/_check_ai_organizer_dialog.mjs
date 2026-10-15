@@ -154,6 +154,10 @@ try {
   assert.deepEqual(tagInputs().map(input => input.value), ["商业、营销", "Go", "人工、保留"], "undoing the old run must retain edits in the new preview");
   await click(labels.apply.replace("{count}", "1"));
   await waitFor(() => button(labels.undo));
+  assert.ok(button(labels.finish), "an applied run offers Done");
+  assert.ok(button(labels.newRun), "an applied run offers a new run");
+  assert.equal(button(labels.generate), undefined, "an applied run must not fall back to generating another preview");
+  assert.equal(document.querySelector("#ai-organizer-picker-title"), null, "an applied run must not show the document picker");
   assert.deepEqual(calls.apply[0], { id: "preview", items: [{ docId: "doc", folderId: "", newFolders: [], tags: ["商业、营销", "Go", "人工、保留"] }] });
 
   await act(async () => root.render(null)); client.clear();

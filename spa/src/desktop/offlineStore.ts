@@ -16,7 +16,8 @@ import {
   MAX_IMPORT_UPLOAD_IMAGE_BYTES,
 } from "../documentTransferCore";
 import { imageFetchURL } from "../components/editor/imageLoading";
-import { MAX_FOLDER_DEPTH } from "../components/editor/tree";
+import { folderSubtree, MAX_FOLDER_DEPTH } from "../components/editor/tree";
+import type { TrashLoss } from "../api";
 import { getStoredDesktopSession } from "./auth";
 import { prepareDesktopSync } from "./logoutGuard";
 import { desktopFetch } from "./network";
@@ -1345,10 +1346,17 @@ export async function desktopAcceptRemoteDocumentMutation(
   });
 }
 
-export async function desktopTrashDocument(docId: string): Promise<{ success: boolean }> {
+export async function desktopTrashDocument(
+  docId: string,
+  options: { discardUnsynced?: boolean } = {},
+): Promise<{ success: boolean }> {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
+    if (!isLocalAccount(account) && !options.discardUnsynced) {
+      const loss = await selectedTrashLoss(account, [docId], []);
+      if (loss.modified || loss.created) throw trashLossError(loss);
+    }
     await db.execute(`
       UPDATE offline_documents
       SET sync_state = 'trash', change_seq = change_seq + 1,
@@ -1785,59 +1793,146 @@ async function mutateFolder(folderId: string, assignment: string, values: unknow
   });
 }
 
-export async function desktopDeleteFolder(folderId: string) {
+// 推送顺序是先回收站、后正文：尚未进入云端的修改会让云端回收站只留旧版本，
+// 从未上传的新建文档则在推送时直接消失。空白文档没有可丢的内容（例如关闭一个
+// 未改动的新建标签），不拦；冲突草稿另行处理。
+type TrashLossRow = Pick<DocumentRow, "doc_id" | "sync_state" | "folder_id" | "base_revision" | "title" | "content">;
+
+function losesUnsyncedContent(row: TrashLossRow): boolean {
+  if (row.sync_state === "trash" || row.sync_state === "conflict") return false;
+  if (row.sync_state === "clean" && row.base_revision > 0) return false;
+  return Boolean(row.title.trim() || row.content.trim());
+}
+
+function countTrashLoss(rows: TrashLossRow[]): TrashLoss {
+  const loss = { modified: 0, created: 0 };
+  for (const row of rows.filter(losesUnsyncedContent)) {
+    if (row.base_revision > 0) loss.modified += 1;
+    else loss.created += 1;
+  }
+  return loss;
+}
+
+// 选中的文档，加上选中文件夹整棵子树里的文档，会丢失多少未同步内容。
+async function selectedTrashLoss(account: string, docIds: string[], folderIds: string[]): Promise<TrashLoss> {
+  const db = await database();
+  const folders = await db.select<FolderRow[]>(`
+    SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state <> 'delete'
+  `, [account]);
+  const subtree = new Set(folderSubtree(folders.map(rowToFolder), [], folderIds).folderIds);
+  const rows = await db.select<TrashLossRow[]>(`
+    SELECT doc_id, sync_state, folder_id, base_revision, title, content FROM offline_documents
+    WHERE account_id = $1 AND sync_state <> 'trash'
+  `, [account]);
+  const selected = new Set(docIds);
+  return countTrashLoss(rows.filter((row) => selected.has(row.doc_id) || (row.folder_id !== null && subtree.has(row.folder_id))));
+}
+
+function trashLossError(loss: TrashLoss) {
+  return Object.assign(desktopOperationError("delete_sync_pending"), { unsynced: loss });
+}
+
+// 删除前调用：有未同步内容时先同步一次，返回同步后仍会丢失的数量。
+// 离线或同步持续失败时数量不为零，由界面说明后果并请用户确认是否仍删除，
+// 确认后以 discardUnsynced 重新调用删除。只在确有未同步内容时才同步，不拖慢普通删除。
+export async function desktopUnsyncedTrashLoss(items: TreeMutationItem[]): Promise<TrashLoss> {
+  if (isDesktopLocalModeSelected()) return { modified: 0, created: 0 };
+  const account = await accountID();
+  const docIds = items.filter((item) => item.kind === "doc").map((item) => item.id);
+  const folderIds = items.filter((item) => item.kind === "folder").map((item) => item.id);
+  const loss = await selectedTrashLoss(account, docIds, folderIds);
+  if (!loss.modified && !loss.created) return loss;
+  try {
+    await syncDesktopNow({ silent: true, force: true });
+  } catch {
+    // 离线或同步失败：按当前本地状态如实返回。
+  }
+  return selectedTrashLoss(account, docIds, folderIds);
+}
+
+export async function desktopDeleteFolder(
+  folderId: string,
+  options: { discardUnsynced?: boolean } = {},
+) {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
     const local = isLocalAccount(account);
     const rows = await db.select<FolderRow[]>(`
-      SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2
+      SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'delete'
     `, [account, folderId]);
-    const folder = rows[0];
-    if (!folder) return { ok: true };
-    const movedDocuments = await db.select<Array<{ doc_id: string }>>(`
-      SELECT doc_id FROM offline_documents
-      WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
-      ORDER BY sort_order ASC, doc_id ASC
-    `, [account, folderId]);
-    const parentOrder = await db.select<Array<{ max_order: number | null }>>(`
-      SELECT MAX(sort_order) AS max_order FROM offline_documents
-      WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
-    `, [account, folder.parent_folder_id]);
-    let nextOrder = Number(parentOrder[0]?.max_order ?? -1) + 1;
-    for (const document of movedDocuments) {
-      await db.execute(`
-        UPDATE offline_documents
-        SET folder_id = $3, sort_order = $4, folder_dirty = $5, order_dirty = $6,
-            change_seq = change_seq + 1, last_error = NULL
-        WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
-      `, [
-        account, document.doc_id, folder.parent_folder_id, nextOrder,
-        local ? 0 : 1, local ? 0 : 1,
-      ]);
-      nextOrder += 1;
-    }
-    await db.execute(`
-      UPDATE offline_folders SET parent_folder_id = $3,
-        sync_state = CASE
-          WHEN $4 = 1 THEN 'clean'
-          WHEN sync_state = 'create' THEN 'create'
-          ELSE 'update'
-        END,
-        change_seq = change_seq + 1
-      WHERE account_id = $1 AND parent_folder_id = $2 AND sync_state <> 'delete'
-    `, [account, folderId, folder.parent_folder_id, local ? 1 : 0]);
-    if (local || folder.sync_state === "create") {
-      await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, folderId]);
-    } else {
-      await db.execute(`
-        UPDATE offline_folders SET sync_state = 'delete', change_seq = change_seq + 1
-        WHERE account_id = $1 AND folder_id = $2
-      `, [account, folderId]);
-    }
+    if (!rows[0]) return { ok: true };
+    await deleteDesktopFolderTrees(account, [folderId], Boolean(options.discardUnsynced));
     if (!local) scheduleSync();
     return { ok: true };
   });
+}
+
+// 删除文件夹是级联的：子文件夹一并删除，其中文档移入回收站。
+//
+// 桌面端不使用服务端的 ?cascade=1。本机目录树可能领先于云端（尚未推送的移动），
+// 服务端按云端位置级联会误删移出子树的文档、漏掉移入子树的文档。这里按本机树
+// 把文档逐篇标成 trash（推送时带 revision 走普通回收站接口），子孙文件夹按普通
+// 删除推送；文档推送在文件夹删除之后，云端若还有本机未知的子项，会被提到上一层
+// 而不是被删，不会丢内容。
+async function deleteDesktopFolderTrees(account: string, rootIds: string[], discardUnsynced: boolean) {
+  const db = await database();
+  const local = isLocalAccount(account);
+  const folders = await db.select<FolderRow[]>(`
+    SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state <> 'delete'
+  `, [account]);
+  const ids = folderSubtree(folders.map(rowToFolder), [], rootIds).folderIds;
+  const subtree = new Set(ids);
+  const placeholders = ids.map((_, index) => `$${index + 2}`).join(", ");
+  const rows = await db.select<TrashLossRow[]>(`
+    SELECT doc_id, sync_state, folder_id, base_revision, title, content FROM offline_documents
+    WHERE account_id = $1 AND folder_id IN (${placeholders})
+  `, [account, ...ids]);
+  const documents = rows.filter((row) => row.sync_state !== "trash");
+  // 冲突草稿只能由用户选择保留哪一版，不能随文件夹一起丢进回收站。
+  if (documents.some((row) => row.sync_state === "conflict")) {
+    throw desktopOperationError("folder_delete_sync_conflict");
+  }
+  if (!local && !discardUnsynced) {
+    const loss = countTrashLoss(documents);
+    if (loss.modified || loss.created) throw trashLossError(loss);
+  }
+  // Like the server, keep trashed documents under the deleted top folder's parent.
+  const byId = new Map(folders.map((row) => [row.folder_id, row]));
+  const placement = (folderId: string | null): string | null => {
+    let current = folderId ? byId.get(folderId) : undefined;
+    for (let depth = 0; current && depth <= MAX_FOLDER_DEPTH; depth += 1) {
+      if (!current.parent_folder_id || !subtree.has(current.parent_folder_id)) return current.parent_folder_id;
+      current = byId.get(current.parent_folder_id);
+    }
+    return null;
+  };
+  const now = new Date().toISOString();
+  for (const document of documents) {
+    await db.execute(`
+      UPDATE offline_documents
+      SET sync_state = 'trash', folder_id = $4, folder_dirty = 0, order_dirty = 0,
+          change_seq = change_seq + 1, updated_at = $3, last_error = NULL
+      WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
+    `, [account, document.doc_id, now, placement(document.folder_id)]);
+  }
+  // 已在回收站的文档也改挂到上一级，恢复时不会落进已删除的文件夹。
+  for (const document of rows.filter((row) => row.sync_state === "trash")) {
+    await db.execute(`
+      UPDATE offline_documents SET folder_id = $3
+      WHERE account_id = $1 AND doc_id = $2 AND sync_state = 'trash'
+    `, [account, document.doc_id, placement(document.folder_id)]);
+  }
+  for (const folder of folders.filter((row) => subtree.has(row.folder_id))) {
+    if (local || folder.sync_state === "create") {
+      await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, folder.folder_id]);
+      continue;
+    }
+    await db.execute(`
+      UPDATE offline_folders SET sync_state = 'delete', change_seq = change_seq + 1, last_error = NULL
+      WHERE account_id = $1 AND folder_id = $2
+    `, [account, folder.folder_id]);
+  }
 }
 
 export async function desktopDeleteEmptyOrganizerFolder(folderId: string) {
@@ -2075,7 +2170,10 @@ export async function desktopMoveMany(
   });
 }
 
-export async function desktopDeleteMany(items: TreeMutationItem[]) {
+export async function desktopDeleteMany(
+  items: TreeMutationItem[],
+  options: { discardUnsynced?: boolean } = {},
+) {
   return serializeMutation(async () => {
     const account = await accountID();
     const db = await database();
@@ -2104,6 +2202,13 @@ export async function desktopDeleteMany(items: TreeMutationItem[]) {
     if (folderIDs.some((id) => !knownFolders.has(id))) {
       throw desktopOperationError("not_found");
     }
+    // 整批检查在任何改动之前：未同步检查覆盖选中文档与整棵子树；
+    // 文件夹的冲突检查也先于单独选中的文档执行，失败时不会删掉一部分。
+    if (!local && !options.discardUnsynced) {
+      const loss = await selectedTrashLoss(account, docIDs, folderIDs);
+      if (loss.modified || loss.created) throw trashLossError(loss);
+    }
+    if (folderIDs.length > 0) await deleteDesktopFolderTrees(account, folderIDs, true);
     for (const docId of docIDs) {
       await db.execute(`
         UPDATE offline_documents
@@ -2111,50 +2216,6 @@ export async function desktopDeleteMany(items: TreeMutationItem[]) {
             updated_at = $3, last_error = NULL
         WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
       `, [account, docId, new Date().toISOString()]);
-    }
-    for (const folderId of folderIDs) {
-      const rows = await db.select<FolderRow[]>(`
-        SELECT * FROM offline_folders WHERE account_id = $1 AND folder_id = $2
-      `, [account, folderId]);
-      const folder = rows[0];
-      if (!folder) throw desktopOperationError("not_found");
-      const movedDocuments = await db.select<Array<{ doc_id: string }>>(`
-        SELECT doc_id FROM offline_documents
-        WHERE account_id = $1 AND folder_id = $2 AND sync_state <> 'trash'
-        ORDER BY sort_order ASC, doc_id ASC
-      `, [account, folderId]);
-      const parentOrder = await db.select<Array<{ max_order: number | null }>>(`
-        SELECT MAX(sort_order) AS max_order FROM offline_documents
-        WHERE account_id = $1 AND folder_id IS $2 AND sync_state <> 'trash'
-      `, [account, folder.parent_folder_id]);
-      let nextOrder = Number(parentOrder[0]?.max_order ?? -1) + 1;
-      for (const document of movedDocuments) {
-        await db.execute(`
-          UPDATE offline_documents
-          SET folder_id = $3, sort_order = $4, folder_dirty = $5, order_dirty = $6,
-              change_seq = change_seq + 1, last_error = NULL
-          WHERE account_id = $1 AND doc_id = $2 AND sync_state <> 'trash'
-        `, [account, document.doc_id, folder.parent_folder_id, nextOrder, local ? 0 : 1, local ? 0 : 1]);
-        nextOrder += 1;
-      }
-      await db.execute(`
-        UPDATE offline_folders SET parent_folder_id = $3,
-          sync_state = CASE
-            WHEN $4 = 1 THEN 'clean'
-            WHEN sync_state = 'create' THEN 'create'
-            ELSE 'update'
-          END,
-          change_seq = change_seq + 1
-        WHERE account_id = $1 AND parent_folder_id = $2 AND sync_state <> 'delete'
-      `, [account, folderId, folder.parent_folder_id, local ? 1 : 0]);
-      if (local || folder.sync_state === "create") {
-        await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, folderId]);
-      } else {
-        await db.execute(`
-          UPDATE offline_folders SET sync_state = 'delete', change_seq = change_seq + 1
-          WHERE account_id = $1 AND folder_id = $2
-        `, [account, folderId]);
-      }
     }
     if (!local && (docIDs.length > 0 || folderIDs.length > 0)) scheduleSync();
     return { ok: true };
@@ -2679,7 +2740,10 @@ async function pushPendingDocumentTrash(account: string) {
       body: JSON.stringify({ items }),
     });
   } catch (error) {
-    if (!(error instanceof RemoteHTTPError) || error.status !== 404) throw error;
+    // 404：旧服务端没有批量接口。409：有文档在别处改过，revision 已过期。
+    // 两种都逐篇删除且不带 revision，服务端会把最新版本（含别处的修改）移入
+    // 回收站，仍可恢复；否则整批 409 会让每次同步都卡在推送、永远拉不到新版本。
+    if (!(error instanceof RemoteHTTPError) || (error.status !== 404 && error.status !== 409)) throw error;
     for (const item of items) {
       try {
         await remoteJSON(`/api/documents/${encodeURIComponent(item.id)}`, { method: "DELETE" });

@@ -1854,7 +1854,12 @@ export const fr: Messages = {
     selectedItems: "{count} éléments sélectionnés",
     moveSelected: "Déplacer les éléments sélectionnés",
     deleteSelected: "Supprimer les éléments sélectionnés",
-    deleteSelectedConfirm: "Supprimer les {count} éléments sélectionnés ? Les documents seront mis à la corbeille et le contenu des dossiers remontera d’un niveau.",
+    deleteSelectedConfirm: "Supprimer les {count} éléments sélectionnés ? Les dossiers sont supprimés avec leurs sous-dossiers et {documents} documents seront mis à la corbeille, d’où ils peuvent être restaurés.",
+    deleteSelectedEmptyConfirm: "Supprimer les {count} éléments sélectionnés ? Les dossiers sont supprimés avec leurs sous-dossiers ; ils ne contiennent aucun document.",
+    deleteSelectedDocumentsConfirm: "Supprimer les {count} documents sélectionnés ? Ils seront mis à la corbeille, d’où ils peuvent être restaurés.",
+    deleteUnsyncedConfirm: "Certains contenus ne sont pas encore synchronisés avec le cloud (vous êtes peut-être hors ligne, ou la synchronisation échoue) :\n{details}\n\nSupprimer quand même ?",
+    deleteUnsyncedModified: "{count} documents ont des modifications non synchronisées ; la suppression les perd, et la corbeille ne garde que la dernière version synchronisée",
+    deleteUnsyncedCreated: "{count} nouveaux documents n’ont jamais été envoyés ; la suppression les efface définitivement, sans passer par la corbeille",
     clearSelection: "Effacer la sélection",
     rootFolder: "Dossier racine",
     deleteConfirm:
@@ -2272,7 +2277,9 @@ export const fr: Messages = {
     renameDocumentFailed: "Impossible d’enregistrer le nouveau nom. Réessayez.",
     deleteFolder: "Supprimer le dossier",
     deleteFolderConfirm:
-      "Supprimer le dossier « {name} » ? Les documents et sous-dossiers seront remontés d'un niveau, pas supprimés.",
+      "Supprimer le dossier « {name} » et tous ses sous-dossiers ? Les {documents} documents qu’ils contiennent seront mis à la corbeille, d’où ils peuvent être restaurés dans le dossier parent.",
+    deleteEmptyFolderConfirm:
+      "Supprimer le dossier « {name} » et tous ses sous-dossiers ? Ils ne contiennent aucun document.",
     untitledFolder: "Dossier sans titre",
     folderNamePlaceholder: "Nom du dossier",
     dropToRoot: "Déposer ici pour sortir du dossier",
@@ -2282,7 +2289,8 @@ export const fr: Messages = {
     newDocumentHere: "Nouveau document ici",
     treeMenu: "Actions sur l'arborescence",
     aiOrganizer: {
-      cleanupTimeFolders: "L’application supprimera {count} dossiers de date automatiques vides. L’annulation les restaurera.",
+      cleanupTimeFolders: "L’application supprimera {count} dossiers vides ou vidés par ce classement. L’annulation les restaurera.",
+      finish: "Terminé",
       "treeHint": "Glissez un article sur un dossier pour le déplacer, ou au-dessus ou en dessous d’un autre pour modifier l’ordre. Les boutons haut/bas de chaque ligne permettent aussi de le réordonner. Cliquez sur un article pour modifier les tags, ou sur le bouton du dossier pour créer un sous-dossier. Les articles déplacés sont cochés automatiquement. Appliquez pour enregistrer.",
       "previewScope": "Seuls les articles de cette organisation sont affichés ; les autres restent inchangés. Les modifications prennent effet après application.",
       "searchTree": "Rechercher articles, dossiers ou tags",
@@ -3114,6 +3122,8 @@ function hello(name) {
     too_many_items: "Sélectionnez au maximum 1 000 éléments à la fois",
     name_too_long: "Nom de dossier trop long",
     invalid_move: "Impossible de déplacer ce dossier ici",
+    delete_sync_pending: "Certains documents à supprimer contiennent des modifications non synchronisées ; rien n’a été supprimé. Réessayez et confirmez, ou attendez la fin de la synchronisation.",
+    folder_delete_sync_conflict: "Ce dossier contient des documents en conflit de synchronisation. Résolvez les conflits avant de supprimer le dossier.",
     document_revision_conflict:
       "Ce document a été modifié ailleurs. Actualisez puis réessayez",
     not_found: "Cet élément n'existe pas ou a été supprimé",

@@ -35,7 +35,7 @@ export function AIOrganizerPreview({ data, drafts, busy, onChange }: {
   const treeViewport = useRef<HTMLElement>(null);
   const dragging = useRef<string | null>(null);
   const orderFocus = useRef<{ docId: string; direction: string } | null>(null);
-  const tree = useMemo(() => buildOrganizationPreview(data.items, data.folders, drafts, extras, data.timeFolders), [data.items, data.folders, data.timeFolders, drafts, extras]);
+  const tree = useMemo(() => buildOrganizationPreview(data.items, data.folders, drafts, extras, data.timeFolders, data.folderCounts), [data.items, data.folders, data.timeFolders, data.folderCounts, drafts, extras]);
   useEffect(() => {
     const pending = orderFocus.current;
     if (!pending) return;

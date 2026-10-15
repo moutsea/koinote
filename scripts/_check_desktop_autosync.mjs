@@ -41,6 +41,18 @@ const harness = {
     requests.push({ path, ...init });
     if (harness.fail) throw new Error("desktop_sync_failed");
     await harness.beforeFetch(path, init);
+    if (path === "/api/tree/delete" && init.method === "POST" && harness.staleTrash) {
+      const { items } = JSON.parse(init.body);
+      harness.trashRequests.push({ batch: items.map(item => [item.id, item.revision]) });
+      if (items.some(item => harness.staleTrash.has(item.id))) return Response.json({ code: "document_revision_conflict" }, { status: 409 });
+      return Response.json({ ok: true });
+    }
+    // Folder deletes queued by the cascade checks above.
+    if (harness.staleTrash && init.method === "DELETE" && path.startsWith("/api/folders/")) return Response.json({ ok: true });
+    if (harness.staleTrash && init.method === "DELETE" && path.startsWith("/api/documents/")) {
+      harness.trashRequests.push({ single: decodeURIComponent(path.slice("/api/documents/".length)) });
+      return Response.json({ success: true });
+    }
     if (path === "/api/folders") return Response.json({ folders: remoteFolders });
     if (path === "/api/documents") return Response.json({ documents: [{ ...remoteDocument }, ...additionalRemoteDocuments] });
     if (path === "/api/tree/move" && init.method === "POST") {
@@ -611,6 +623,90 @@ try {
   document.dispatchEvent(new window.Event("visibilitychange"));
   await settle();
   assert.equal(requests.length, beforeUnmounted, "unmounting stops remote check timers and listeners");
+
+  // Deleting a folder deletes its subtree locally: every nested folder becomes a
+  // plain delete (no server cascade) and documents become ordinary trash rows
+  // placed under the deleted folder's parent, so restore puts them there.
+  const folderRow = sqlite.prepare("INSERT INTO offline_folders(account_id,folder_id,name,parent_folder_id,sync_state) VALUES('account-1',?,?,?,'clean')");
+  const documentRow = sqlite.prepare("INSERT INTO offline_documents(account_id,doc_id,title,folder_id,local_revision,base_revision,sync_state) VALUES('account-1',?,?,?,2,2,?)");
+  folderRow.run("cascade-outer", "Outer", null);
+  folderRow.run("cascade-parent", "Parent", "cascade-outer");
+  folderRow.run("cascade-child", "Child", "cascade-parent");
+  folderRow.run("cascade-sibling", "Sibling", "cascade-outer");
+  documentRow.run("cascade-doc-1", "One", "cascade-parent", "clean");
+  documentRow.run("cascade-doc-2", "Two", "cascade-child", "update");
+  documentRow.run("cascade-kept", "Kept", "cascade-sibling", "clean");
+  documentRow.run("cascade-conflict", "Conflict", "cascade-sibling", "conflict");
+  documentRow.run("cascade-old-trash", "Old trash", "cascade-child", "trash");
+  // Offline: the pre-delete sync fails, so unsynced documents must block deletion.
+  harness.fail = true;
+  await assert.rejects(store.desktopDeleteFolder("cascade-outer"), /folder_delete_sync_conflict/, "a conflicted draft must not be trashed with its folder");
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_folders WHERE folder_id='cascade-outer'").get().sync_state, "clean", "a rejected delete changes nothing");
+  await assert.rejects(store.desktopDeleteFolder("cascade-parent"), /delete_sync_pending/, "an unsynced edit would be lost behind the trash push");
+  assert.deepEqual(await store.desktopUnsyncedTrashLoss([{ kind: "folder", id: "cascade-parent" }]), { modified: 1, created: 0 }, "offline, the pre-delete check reports what would be lost");
+  sqlite.prepare("UPDATE offline_documents SET sync_state='clean' WHERE doc_id='cascade-doc-2'").run();
+  sqlite.prepare("UPDATE offline_documents SET base_revision=0 WHERE doc_id='cascade-doc-1'").run();
+  await assert.rejects(store.desktopDeleteFolder("cascade-parent"), /delete_sync_pending/, "a never-uploaded document would vanish instead of reaching the trash");
+  assert.deepEqual(await store.desktopUnsyncedTrashLoss([{ kind: "folder", id: "cascade-parent" }]), { modified: 0, created: 1 });
+  sqlite.prepare("UPDATE offline_documents SET base_revision=2 WHERE doc_id='cascade-doc-1'").run();
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_documents WHERE doc_id='cascade-doc-1'").get().sync_state, "clean", "rejected deletes change no document");
+  await store.desktopDeleteFolder("cascade-parent");
+  harness.fail = false;
+  const folderStates = Object.fromEntries(sqlite.prepare("SELECT folder_id, sync_state, last_error FROM offline_folders WHERE folder_id LIKE 'cascade-%'").all().map(row => [row.folder_id, [row.sync_state, row.last_error]]));
+  assert.deepEqual(folderStates, {
+    "cascade-outer": ["clean", null], "cascade-parent": ["delete", null], "cascade-child": ["delete", null], "cascade-sibling": ["clean", null],
+  }, "the whole subtree is deleted with ordinary (non-cascade) folder deletes");
+  const documentStates = Object.fromEntries(sqlite.prepare("SELECT doc_id, sync_state, folder_id, folder_dirty FROM offline_documents WHERE doc_id LIKE 'cascade-%'").all().map(row => [row.doc_id, [row.sync_state, row.folder_id, row.folder_dirty]]));
+  assert.deepEqual(documentStates, {
+    "cascade-doc-1": ["trash", "cascade-outer", 0], "cascade-doc-2": ["trash", "cascade-outer", 0], "cascade-old-trash": ["trash", "cascade-outer", 0],
+    "cascade-kept": ["clean", "cascade-sibling", 0], "cascade-conflict": ["conflict", "cascade-sibling", 0],
+  }, "subtree documents are trashed under the deleted folder's parent; others are untouched");
+  assert.equal((await store.desktopListFolders()).folders.some(folder => folder.folderId === "cascade-child"), false, "deleted subfolders disappear from the tree immediately");
+  console.log("desktop cascading folder deletion, conflict and unsynced guards and restore placement passed");
+
+  // Single and batch deletes share the unsynced-content guard. Batch deletes
+  // check folders before touching any document, so a rejection is all-or-nothing.
+  folderRow.run("batch-folder", "Batch", null);
+  documentRow.run("batch-loose", "Loose", null, "clean");
+  documentRow.run("batch-pending", "Pending", "batch-folder", "update");
+  documentRow.run("batch-pending-root", "Pending root", null, "update");
+  sqlite.prepare("INSERT INTO offline_documents(account_id,doc_id,title,content,folder_id,local_revision,base_revision,sync_state) VALUES('account-1','batch-blank','','',NULL,1,0,'create')").run();
+  harness.fail = true;
+  await assert.rejects(store.desktopTrashDocument("batch-pending-root"), /delete_sync_pending/, "an unsynced edit must not be trashed without confirmation");
+  assert.deepEqual(await store.desktopUnsyncedTrashLoss([{ kind: "doc", id: "batch-loose" }]), { modified: 0, created: 0 }, "synced documents need no extra confirmation");
+  await store.desktopTrashDocument("batch-blank");
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_documents WHERE doc_id='batch-blank'").get().sync_state, "trash", "closing an untouched blank document still discards it");
+  await assert.rejects(store.desktopDeleteMany([{ kind: "doc", id: "batch-loose" }, { kind: "folder", id: "batch-folder" }]), /delete_sync_pending/);
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_documents WHERE doc_id='batch-loose'").get().sync_state, "clean", "a rejected batch must not trash the documents listed before the folder");
+  await assert.rejects(store.desktopDeleteMany([{ kind: "doc", id: "batch-pending" }, { kind: "folder", id: "batch-folder" }]), /delete_sync_pending/, "selecting an unsynced document inside the folder must not bypass the guard");
+  assert.deepEqual(await store.desktopUnsyncedTrashLoss([{ kind: "doc", id: "batch-pending" }, { kind: "folder", id: "batch-folder" }]), { modified: 1, created: 0 }, "a document selected both directly and through its folder is counted once");
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_documents WHERE doc_id='batch-pending'").get().sync_state, "update");
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_folders WHERE folder_id='batch-folder'").get().sync_state, "clean");
+  // Sync keeps failing: the user can still delete after an explicit confirmation.
+  await store.desktopTrashDocument("batch-pending-root", { discardUnsynced: true });
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_documents WHERE doc_id='batch-pending-root'").get().sync_state, "trash", "a confirmed delete is not blocked by a failing sync");
+  await store.desktopDeleteMany([{ kind: "doc", id: "batch-loose" }, { kind: "doc", id: "batch-pending" }, { kind: "folder", id: "batch-folder" }], { discardUnsynced: true });
+  harness.fail = false;
+  assert.deepEqual(sqlite.prepare("SELECT doc_id, sync_state FROM offline_documents WHERE doc_id IN ('batch-loose','batch-pending') ORDER BY doc_id").all().map(row => [row.doc_id, row.sync_state]),
+    [["batch-loose", "trash"], ["batch-pending", "trash"]], "once confirmed, the whole batch is deleted");
+  assert.equal(sqlite.prepare("SELECT sync_state FROM offline_folders WHERE folder_id='batch-folder'").get().sync_state, "delete");
+  console.log("desktop single and batch delete unsynced guards, confirmed discard and all-or-nothing batches passed");
+
+  // A trashed document edited on another device has a stale base revision. The
+  // batch trash push then returns 409; it must fall back to unversioned single
+  // deletes (the server trashes the latest version) instead of failing every sync.
+  sqlite.prepare("DELETE FROM offline_documents WHERE sync_state='trash' AND doc_id <> 'stale-a'").run();
+  documentRow.run("stale-a", "Stale A", null, "trash");
+  documentRow.run("stale-b", "Stale B", null, "trash");
+  harness.staleTrash = new Set(["stale-a"]);
+  harness.trashRequests = [];
+  const staleSummary = await store.syncDesktopNow({ force: true });
+  assert.equal(staleSummary.message, undefined, `stale trash must not fail the sync: ${staleSummary.message}`);
+  assert.deepEqual(harness.trashRequests[0], { batch: [["stale-a", 2], ["stale-b", 2]] }, "trash is first pushed as one revision-checked batch");
+  assert.deepEqual(harness.trashRequests.slice(1).map(request => request.single).sort(), ["stale-a", "stale-b"], "a stale revision falls back to unversioned single deletes");
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM offline_documents WHERE doc_id IN ('stale-a','stale-b')").get().n, 0, "pushed trash rows are acknowledged");
+  delete harness.staleTrash;
+  console.log("desktop trash push recovers from stale revisions passed");
   console.log("desktop autosync startup, read-only cloud checks, drafts, debounce, reconnect, manual and in-flight checks passed");
 } finally {
   await act(async () => root.unmount());

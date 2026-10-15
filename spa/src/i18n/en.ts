@@ -1828,7 +1828,12 @@ export const en: Messages = {
     selectedItems: "{count} items selected",
     moveSelected: "Move selected items",
     deleteSelected: "Delete selected items",
-    deleteSelectedConfirm: "Delete the selected {count} items? Documents will move to trash; folder contents will move up one level.",
+    deleteSelectedConfirm: "Delete the selected {count} items? Folders are deleted with their subfolders, and {documents} documents will move to trash, from which they can be restored.",
+    deleteSelectedEmptyConfirm: "Delete the selected {count} items? Folders are deleted with their subfolders; they contain no documents.",
+    deleteSelectedDocumentsConfirm: "Delete the selected {count} documents? They will move to trash, from which they can be restored.",
+    deleteUnsyncedConfirm: "Some content has not been synced to the cloud (you may be offline, or sync is failing):\n{details}\n\nDelete anyway?",
+    deleteUnsyncedModified: "{count} documents have unsynced changes; deleting loses those changes, and the trash keeps only the last synced version",
+    deleteUnsyncedCreated: "{count} new documents were never uploaded; deleting removes them permanently, without going to trash",
     clearSelection: "Clear selection",
     rootFolder: "Root folder",
     deleteConfirm:
@@ -2235,7 +2240,9 @@ export const en: Messages = {
     renameDocumentFailed: "Could not save the new name. Please retry.",
     deleteFolder: "Delete folder",
     deleteFolderConfirm:
-      "Delete folder “{name}”? Documents and subfolders inside will move up one level, not be deleted.",
+      "Delete folder “{name}” and all its subfolders? {documents} documents inside will move to trash, from which they can be restored to the parent folder.",
+    deleteEmptyFolderConfirm:
+      "Delete folder “{name}” and all its subfolders? They contain no documents.",
     untitledFolder: "Untitled folder",
     folderNamePlaceholder: "Folder name",
     dropToRoot: "Drop here to move out of any folder",
@@ -2244,7 +2251,8 @@ export const en: Messages = {
     newDocumentHere: "New document here",
     treeMenu: "File tree actions",
     aiOrganizer: {
-      cleanupTimeFolders: "Applying will remove {count} empty automatic date folders. Undo will restore them.",
+      cleanupTimeFolders: "Applying will remove {count} folders that are empty or left empty by this organization. Undo will restore them.",
+      finish: "Done",
       "treeHint": "Drag an article onto a folder to move it, or above or below another article to reorder it. You can also use the up/down buttons on each row. Click an article to edit tags; use the folder button to add a subfolder. Moved articles are checked automatically. Apply to save.",
       "previewScope": "Only articles in this run are shown; other articles stay unchanged. Edits take effect when you apply the preview.",
       "searchTree": "Search articles, folders or tags",
@@ -3053,6 +3061,8 @@ function hello(name) {
     too_many_items: "Select no more than 1,000 items at a time",
     name_too_long: "Folder name is too long",
     invalid_move: "Cannot move that folder here",
+    delete_sync_pending: "Some documents to delete have content not yet synced to the cloud, so nothing was deleted. Try again and confirm, or wait for sync to finish.",
+    folder_delete_sync_conflict: "This folder contains documents with sync conflicts. Resolve the conflicts before deleting the folder.",
     document_revision_conflict: "This document changed elsewhere. Refresh and try again",
     not_found: "This item doesn't exist or has been deleted",
     image_type_unsupported: "Only PNG, JPEG, GIF and WebP are supported",

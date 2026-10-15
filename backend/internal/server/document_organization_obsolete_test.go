@@ -164,3 +164,70 @@ func TestOrganizationDiscardsAutomaticBuckets(t *testing.T) {
 		t.Fatalf("undo must restore the bucket's own strategy: %q %v", activityKind, err)
 	}
 }
+
+// Folders emptied by this run are removed with their newly emptied ancestors;
+// unrelated empty folders and folders still holding trash are kept. Undo
+// restores removed manual folders without an automatic marker.
+func TestOrganizationRemovesFoldersEmptiedByRun(t *testing.T) {
+	a, db, user, doc := newAgentReviewCreateTest(t, config.Config{SessionSecret: "organization-emptied"})
+	ctx := context.Background()
+	projects := organizationTestFolder(t, db, user.ID, "Projects", "", "")
+	old := organizationTestFolder(t, db, user.ID, "Old topic", projects, "")
+	untouched := organizationTestFolder(t, db, user.ID, "Already empty", "", "")
+	trashKeeper := organizationTestFolder(t, db, user.ID, "Has trash", "", "")
+	target := organizationTestFolder(t, db, user.ID, "Research", "", "")
+	if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2) WHERE doc_id=$1`, doc.DocID, old); err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.createDocument(ctx, createDocumentParams{User: user, Title: "Second", Content: "Second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trashed, err := a.createDocument(ctx, createDocumentParams{User: user, Title: "Trashed", Content: "Trashed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2) WHERE doc_id=$1`, second.DocID, trashKeeper); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2),trashed_at=now() WHERE doc_id=$1`, trashed.DocID, trashKeeper); err != nil {
+		t.Fatal(err)
+	}
+	data, _, err := a.prepareOrganizationScope(ctx, user.ID, false, nil, []string{doc.DocID, second.DocID})
+	if err != nil || len(data.Items) != 2 {
+		t.Fatalf("prepare: %+v %v", data.Items, err)
+	}
+	choices := []organizationChoice{}
+	for i := range data.Items {
+		choice := organizationChoice{DocID: data.Items[i].DocID, FolderID: target, NewFolders: []string{}, Tags: []string{}}
+		data.Items[i].Suggested = &choice
+		choices = append(choices, choice)
+	}
+	id := organizationTestReady(t, a, user.ID, data)
+	view, err := a.loadOrganization(ctx, user.ID, id)
+	if err != nil || view.Data.FolderCounts[old] != 1 || view.Data.FolderCounts[trashKeeper] != 2 || view.Data.FolderCounts[untouched] != 0 {
+		t.Fatalf("preview folder counts: %+v %v", view.Data.FolderCounts, err)
+	}
+	if err := a.applyOrganization(ctx, user.ID, id, choices, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	var remaining []string
+	if err := db.QueryRow(ctx, `SELECT array_agg(name ORDER BY name) FROM folders WHERE user_id=$1`, user.ID).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(remaining, []string{"Already empty", "Has trash", "Research"}) {
+		t.Fatalf("emptied source and its emptied ancestor must be removed only: %v", remaining)
+	}
+	if err := a.applyOrganization(ctx, user.ID, id, nil, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	var location string
+	var kind *string
+	if err := db.QueryRow(ctx, `SELECT f.folder_id,f.organizer_kind FROM documents d JOIN folders f ON f.id=d.folder_id WHERE d.doc_id=$1`, doc.DocID).Scan(&location, &kind); err != nil || location != old || kind != nil {
+		t.Fatalf("undo must restore the manual folder unmarked: %s %v %v", location, kind, err)
+	}
+	var parent string
+	if err := db.QueryRow(ctx, `SELECT p.folder_id FROM folders f JOIN folders p ON p.id=f.parent_id WHERE f.folder_id=$1`, old).Scan(&parent); err != nil || parent != projects {
+		t.Fatalf("undo must restore the ancestor: %s %v", parent, err)
+	}
+}

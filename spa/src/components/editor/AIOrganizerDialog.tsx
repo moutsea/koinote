@@ -64,6 +64,9 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   const running = view?.status === "running";
   const ready = view?.status === "ready";
   const applied = view?.status === "applied";
+  // After apply/undo the run is finished: show its outcome with Done / New run
+  // instead of falling back to the document picker and "Generate preview".
+  const finished = applied || view?.status === "undone";
   const undoSkippedTitles = undoNotice ?? (view?.status === "undone"
     ? view.data.items.filter(item => item.undoSkipped).map(item => item.title || t.editor.untitled) : []);
   const undoTarget = latest.data?.lastApplied;
@@ -112,7 +115,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
       const [{ documents }, { folders }] = await Promise.all([listDocuments(), listFolders()]);
       return { documents, folders };
     },
-    enabled: enabled && prepared && !running && !ready, retry: false, staleTime: 0,
+    enabled: enabled && prepared && !running && !ready && !finished, retry: false, staleTime: 0,
   });
   useEffect(() => {
     if (library.data && !picked) setPicked(defaultOrganizerSelection(library.data.folders, library.data.documents));
@@ -128,7 +131,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
   const estimateSettled = JSON.stringify(estimateIds) === JSON.stringify(requestIds);
   const estimate = useQuery({
     queryKey: ["document-organization-estimate", estimateIds, prepareAttempt, excludedDocIDs], queryFn: () => estimateDocumentOrganization(estimateIds!, excludedDocIDs),
-    enabled: enabled && prepared && !running && !ready && Boolean(estimateIds?.length), retry: false, staleTime: 0,
+    enabled: enabled && prepared && !running && !ready && !finished && Boolean(estimateIds?.length), retry: false, staleTime: 0,
   });
   useEffect(() => {
     if (!view || view.status !== "ready") return;
@@ -253,7 +256,7 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
           {loading ? <p className="flex items-center gap-2 py-8 text-sm"><LoaderCircle className="h-4 w-4 animate-spin" />{l.preparing}</p> : running ? <div className="rounded-xl border border-black/5 bg-white p-8 dark:border-white/10 dark:bg-neutral-900"><p role="status" className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin text-cinnabar-500" />{interpolate(l.progress, { done: view.data.completed, total: view.data.items.length })}</p><progress aria-label={l.title} max={view.data.items.length || 1} value={view.data.completed} className="mt-5 h-2 w-full accent-cinnabar-500" /></div> : <>
             {view?.status === "failed" && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">{view.errorCode === "insufficient_credits" ? l.insufficient : l.failed}</p>}
             {undoSkippedTitles.length === 0 && (applied || view?.status === "undone" || undoNotice) && <div className="mb-4 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"><Check className="h-5 w-5 shrink-0" />{undoNotice || view?.status === "undone" ? l.undone : l.applied}</div>}
-            {!ready && <div className="rounded-xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+            {!ready && !finished && <div className="rounded-xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
               {!prepared || library.isLoading || !picked ? (library.isError ? <p role="alert" className="text-sm">{l.error}</p> : <p className="text-sm">{l.preparing}</p>) : library.data && <AIOrganizerDocumentPicker
                 folders={library.data.folders} documents={library.data.documents} selected={picked} unavailable={unavailable} disabled={busy}
                 onChange={next => { setPicked(next); requestID.current = null; }} />}
@@ -282,8 +285,8 @@ export function AIOrganizerDialog({ member, localMode, onPrepare, onClose }: {
         }}>{l.settings}</Link>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {undoTarget && <button type="button" disabled={busy || running} title={new Date(undoTarget.appliedAt).toLocaleString()} onClick={() => { setError(""); undo.mutate(undoTarget.id); }} className="flex items-center gap-1 rounded-lg border border-black/10 px-3 py-2 text-sm disabled:opacity-50 dark:border-white/15"><RotateCcw className="h-4 w-4" />{undoTarget.id === view?.id ? l.undo : l.undoPrevious}</button>}
-          {ready && <button type="button" disabled={busy} onClick={() => void newRun()} className="rounded-lg px-3 py-2 text-sm text-neutral-500">{l.newRun}</button>}
-          {enabled && !loading && !running && (ready ? <button type="button" disabled={busy || parsed.invalid || !parsed.choices.length} onClick={() => { setError(""); apply.mutate(); }} className="rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : interpolate(l.apply, { count: parsed.choices.length })}</button> : <button type="button" disabled={busy || !prepared || !requestIds?.length || !estimateSettled || !estimate.data?.count || estimate.isFetching || estimate.isError} onClick={() => { setError(""); generate.mutate(); }} className="flex items-center gap-2 rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{l.generate}</button>)}
+          {(ready || finished) && <button type="button" disabled={busy} onClick={() => void newRun()} className="rounded-lg px-3 py-2 text-sm text-neutral-500">{l.newRun}</button>}
+          {enabled && !loading && !running && (finished ? <button type="button" disabled={busy} onClick={() => void close()} className="rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{l.finish}</button> : ready ? <button type="button" disabled={busy || parsed.invalid || !parsed.choices.length} onClick={() => { setError(""); apply.mutate(); }} className="rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : interpolate(l.apply, { count: parsed.choices.length })}</button> : <button type="button" disabled={busy || !prepared || !requestIds?.length || !estimateSettled || !estimate.data?.count || estimate.isFetching || estimate.isError} onClick={() => { setError(""); generate.mutate(); }} className="flex items-center gap-2 rounded-lg bg-cinnabar-600 px-4 py-2 text-sm font-medium text-white hover:bg-cinnabar-700 disabled:opacity-50">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{l.generate}</button>)}
         </div>
       </footer>
     </div>

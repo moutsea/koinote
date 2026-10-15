@@ -198,3 +198,35 @@ export function countFolders(level: TreeLevel): number {
 export function countDocs(level: TreeLevel): number {
   return level.docs.length + level.folders.reduce((n, f) => n + countDocs(f), 0);
 }
+
+/**
+ * 删除这些文件夹会连带删掉的全部文件夹（含自身与所有子孙）与其中的文档。
+ *
+ * 删除文件夹是级联的：子文件夹一并删除，文档移入回收站。确认框要写清楚影响多少篇，
+ * 编辑器也要据此先保存、再关掉这些文档的标签页。
+ */
+export function folderSubtree(
+  folders: FolderNode[],
+  docs: DocNode[],
+  folderIds: string[],
+): { folderIds: string[]; docIds: string[] } {
+  const children = new Map<string, string[]>();
+  for (const f of folders) {
+    if (!f.parentFolderId) continue;
+    const list = children.get(f.parentFolderId) ?? [];
+    list.push(f.folderId);
+    children.set(f.parentFolderId, list);
+  }
+  const seen = new Set<string>();
+  const queue = [...folderIds];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    queue.push(...(children.get(id) ?? []));
+  }
+  return {
+    folderIds: [...seen],
+    docIds: docs.filter((d) => d.folderId !== null && seen.has(d.folderId)).map((d) => d.docId),
+  };
+}

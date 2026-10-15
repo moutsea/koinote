@@ -177,9 +177,18 @@ func TestOrganizationTimeFolderUndoPreservesChangedAncestor(t *testing.T) {
 	if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2) WHERE doc_id=$1`, doc.DocID, month); err != nil {
 		t.Fatal(err)
 	}
-	data, _, err := a.prepareOrganization(ctx, user.ID, false, nil)
+	// Keep the manual ancestor occupied so apply does not remove it; the user
+	// deletes it afterwards, which undo must respect.
+	keeper, err := a.createDocument(ctx, createDocumentParams{User: user, Title: "Keeper", Content: "Stays"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2),organized_at=now() WHERE doc_id=$1`, keeper.DocID, parent); err != nil {
+		t.Fatal(err)
+	}
+	data, _, err := a.prepareOrganization(ctx, user.ID, false, nil)
+	if err != nil || len(data.Items) != 1 {
+		t.Fatalf("prepare: %+v %v", data.Items, err)
 	}
 	choice := organizationChoice{DocID: doc.DocID, NewFolders: []string{"Topics"}, Tags: []string{}}
 	data.Items[0].Suggested = &choice

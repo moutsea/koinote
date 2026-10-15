@@ -142,8 +142,12 @@ export function useCreateDocument() {
 export function useTrashDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (docId: string) => trashDocument(docId),
-    onSuccess: (_result, docId) => {
+    mutationFn: (variables: string | { docId: string; discardUnsynced?: boolean }) =>
+      typeof variables === "string"
+        ? trashDocument(variables)
+        : trashDocument(variables.docId, { discardUnsynced: variables.discardUnsynced }),
+    onSuccess: (_result, variables) => {
+      const docId = typeof variables === "string" ? variables : variables.docId;
       queryClient.removeQueries({ queryKey: docKey(docId) });
       invalidateList(queryClient);
     },
@@ -279,15 +283,28 @@ export function useRenameFolder() {
   );
 }
 
+// 删除文件夹会把其中文档移入回收站，回收站列表也要刷新。
 export function useDeleteFolder() {
-  return useFolderMutation((folderId: string) => deleteFolder(folderId));
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { folderId: string; discardUnsynced?: boolean }) =>
+      deleteFolder(variables.folderId, { discardUnsynced: variables.discardUnsynced }),
+    onSuccess: () => {
+      invalidateFoldersAndList(queryClient);
+      void queryClient.invalidateQueries({ queryKey: TRASH_KEY });
+    },
+  });
 }
 
 export function useDeleteTreeItems() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (items: TreeMutationItem[]) => deleteTreeItems(items),
-    onSuccess: () => invalidateFoldersAndList(queryClient),
+    mutationFn: (variables: { items: TreeMutationItem[]; discardUnsynced?: boolean }) =>
+      deleteTreeItems(variables.items, { discardUnsynced: variables.discardUnsynced }),
+    onSuccess: () => {
+      invalidateFoldersAndList(queryClient);
+      void queryClient.invalidateQueries({ queryKey: TRASH_KEY });
+    },
   });
 }
 

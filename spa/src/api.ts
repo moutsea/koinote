@@ -1962,14 +1962,28 @@ export function renameFolder(folderId: string, name: string) {
   );
 }
 
-export function deleteFolder(folderId: string) {
+/** Unsynced desktop content a delete would lose; the web app has none. */
+export type TrashLoss = { modified: number; created: number };
+export type DeleteOptions = { discardUnsynced?: boolean };
+
+export function checkUnsyncedTrashLoss(items: TreeMutationItem[]): Promise<TrashLoss> {
   if (isDesktopRuntime()) {
-    return import("./desktop/offlineStore").then(({ desktopDeleteFolder }) =>
-      desktopDeleteFolder(folderId),
+    return import("./desktop/offlineStore").then(({ desktopUnsyncedTrashLoss }) =>
+      desktopUnsyncedTrashLoss(items),
     );
   }
+  return Promise.resolve({ modified: 0, created: 0 });
+}
+
+export function deleteFolder(folderId: string, options: DeleteOptions = {}) {
+  if (isDesktopRuntime()) {
+    return import("./desktop/offlineStore").then(({ desktopDeleteFolder }) =>
+      desktopDeleteFolder(folderId, options),
+    );
+  }
+  // 级联删除：子文件夹一并删除，其中文档移入回收站。
   return apiJson<{ ok: boolean }>(
-    `/api/folders/${encodeURIComponent(folderId)}`,
+    `/api/folders/${encodeURIComponent(folderId)}?cascade=1`,
     { method: "DELETE" },
   );
 }
@@ -2016,15 +2030,15 @@ export function moveTreeItems(items: TreeMutationItem[], folderId: string | null
   });
 }
 
-export function deleteTreeItems(items: TreeMutationItem[]) {
+export function deleteTreeItems(items: TreeMutationItem[], options: DeleteOptions = {}) {
   if (isDesktopRuntime()) {
     return import("./desktop/offlineStore").then(({ desktopDeleteMany }) =>
-      desktopDeleteMany(items),
+      desktopDeleteMany(items, options),
     );
   }
   return apiJson<{ ok: boolean }>("/api/tree/delete", {
     method: "POST",
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, cascade: true }),
   });
 }
 
@@ -2382,10 +2396,10 @@ export async function releaseUnusedImages(keys: string[]) {
   });
 }
 
-export function trashDocument(docId: string) {
+export function trashDocument(docId: string, options: DeleteOptions = {}) {
   if (isDesktopRuntime()) {
     return import("./desktop/offlineStore").then(({ desktopTrashDocument }) =>
-      desktopTrashDocument(docId),
+      desktopTrashDocument(docId, options),
     );
   }
   return apiJson<{ success: boolean }>(
@@ -2462,6 +2476,8 @@ export type DocumentOrganization = {
   creditsCharged: number; errorCode: string;
   data: { items: OrganizationItem[]; folders: OrganizationFolder[];
     timeFolders?: OrganizationTimeFolder[];
+    /** Current document counts (incl. trash) per folder, for emptied-folder cleanup. */
+    folderCounts?: Record<string, number>;
     createdFolders: OrganizationFolder[]; completed: number; skipped: number;
     includeOrganized: boolean; providerMode: string; reservedCredits: number; unbilledBatches?: number; stopReason?: "timeout" | "failure_limit" | "failure_ratio" };
 };

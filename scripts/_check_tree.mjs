@@ -8,6 +8,7 @@ import {
   canDropFolder,
   countDocs,
   countFolders,
+  folderSubtree,
   isDescendant,
   MAX_FOLDER_DEPTH,
 } from "./_tree_bundle.mjs";
@@ -536,6 +537,26 @@ for (const [name, value] of [
     if (canCreateSubfolder(d)) deepest = d;
   }
   eq("闸门允许的最深新建正好落在上限", deepest + 2, MAX_FOLDER_DEPTH);
+}
+
+{
+  const folders = [
+    { folderId: "p", name: "P", parentFolderId: null },
+    { folderId: "c", name: "C", parentFolderId: "p" },
+    { folderId: "g", name: "G", parentFolderId: "c" },
+    { folderId: "s", name: "S", parentFolderId: null },
+    { folderId: "loop", name: "Loop", parentFolderId: "loop" },
+  ];
+  const docs = [
+    { docId: "1", title: "", folderId: "p" },
+    { docId: "2", title: "", folderId: "g" },
+    { docId: "3", title: "", folderId: "s" },
+    { docId: "4", title: "", folderId: null },
+  ];
+  const tree = folderSubtree(folders, docs, ["p"]);
+  eq("删除父文件夹连带全部子孙", tree.folderIds.sort(), ["c", "g", "p"]);
+  eq("子孙里的文档都算进去", tree.docIds.sort(), ["1", "2"]);
+  eq("自环不会死循环", folderSubtree(folders, docs, ["loop"]).folderIds, ["loop"]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -433,10 +433,12 @@ func (a *App) folderRename(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, map[string]any{"folder": updated})
 }
 
-// folderDelete 删文件夹本身，子项提到父级。
+// folderDelete 删文件夹。
 //
-// 不做级联删：一个文件夹下可能有几十篇正文，点一次删除就全没了，而这个操作在 UI 上
-// 与「删一篇文档」长得一样。提升子项是可恢复的，级联删不可恢复。
+// 带 ?cascade=1 时连同全部子文件夹一起删，其中的文档移入回收站（可恢复）。
+// 不带时保持旧行为：只删文件夹本身，子项提到父级。旧版桌面端会先在本地把子项
+// 提到上一层、再推送删除，若服务端直接级联，它随后推送的移动会落在已进回收站的
+// 文档上并持续同步失败，所以级联必须由新客户端显式开启。
 func (a *App) folderDelete(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -474,6 +476,20 @@ func (a *App) folderDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("folder delete lookup: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
+
+	if r.URL.Query().Get("cascade") == "1" {
+		trashed, err := deleteFolderTreeTx(r.Context(), tx, user.ID, internalID)
+		if err == nil {
+			err = tx.Commit(r.Context())
+		}
+		if err != nil {
+			log.Printf("folder cascade delete: %v", err)
+			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "trashed": trashed})
 		return
 	}
 

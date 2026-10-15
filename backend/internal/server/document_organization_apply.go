@@ -432,7 +432,13 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 		}
 		status = "undone"
 	} else {
-		if err := pruneOrganizationTimeFolders(ctx, tx, userID, &data); err != nil {
+		sources := []string{}
+		for _, item := range data.Items {
+			if _, chosen := selected[item.DocID]; chosen && !item.ApplySkipped {
+				sources = append(sources, item.FolderID, currentDocuments[item.DocID].folderID)
+			}
+		}
+		if err := pruneOrganizationFolders(ctx, tx, userID, &data, sources); err != nil {
 			return err
 		}
 		status = "applied"

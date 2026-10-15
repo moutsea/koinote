@@ -69,7 +69,7 @@ import {
   type TabState,
 } from "../components/editor/tabPool";
 import { useSession } from "../auth";
-import { ApiError, getDocument } from "../api";
+import { ApiError, checkUnsyncedTrashLoss, getDocument, type TreeMutationItem } from "../api";
 import { interpolate, useI18n } from "../i18n";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { useDesktopMenuActions } from "../desktop/menu";
@@ -102,6 +102,7 @@ import {
   compactTreeSelection,
   type TreeSelectionItem,
 } from "../components/editor/treeSelection";
+import { folderSubtree } from "../components/editor/tree";
 
 // 早期版本把正文存在这个 key 下（单文档、无账号）。
 // 现在改为账号内多文档，首次进入且云端为空时把它导入为第一篇，不静默丢弃。
@@ -923,6 +924,30 @@ export function EditorPage() {
     void navigate({ to: "/editor", search: {}, replace: true });
   }, [create, navigate, templateRequest?.fromRoute]);
 
+  /**
+   * 桌面端删除前检查未同步内容：有则先同步；仍有（离线或同步持续失败）就说明
+   * 会丢失什么，由用户决定是否仍删除。返回 null 表示取消，true 表示用户已确认丢弃。
+   */
+  const confirmUnsyncedLoss = useCallback(
+    async (items: TreeMutationItem[]): Promise<boolean | null> => {
+      let loss: { modified: number; created: number };
+      try {
+        loss = await checkUnsyncedTrashLoss(items);
+      } catch (error) {
+        const code = errorCodeOf(error);
+        window.alert((code && t.errors[code]) || t.auth.requestFailed);
+        return null;
+      }
+      if (!loss.modified && !loss.created) return false;
+      const details = [
+        ...(loss.modified ? [interpolate(t.editor.deleteUnsyncedModified, { count: loss.modified })] : []),
+        ...(loss.created ? [interpolate(t.editor.deleteUnsyncedCreated, { count: loss.created })] : []),
+      ].map((line) => `· ${line}`).join("\n");
+      return (await confirmAction(interpolate(t.editor.deleteUnsyncedConfirm, { details }))) ? true : null;
+    },
+    [t],
+  );
+
   const handleDelete = useCallback(
     async (docId: string, title: string) => {
       if (!(await confirmDelete(title))) return;
@@ -942,7 +967,14 @@ export function EditorPage() {
         return;
       }
 
-      remove.mutate(docId, {
+      const discardUnsynced = await confirmUnsyncedLoss([{ kind: "doc", id: docId }]);
+      if (discardUnsynced === null) return;
+
+      remove.mutate({ docId, discardUnsynced }, {
+        onError: (error) => {
+          const code = errorCodeOf(error);
+          window.alert((code && t.errors[code]) || t.auth.requestFailed);
+        },
         onSuccess: () => {
           // 用 drop 而不是 forget：forget 会先 flush 一次，而文档此刻已经删了，
           // 那个 PUT 必然 404 —— 白发一次请求，还会把保存状态标成失败。
@@ -967,22 +999,36 @@ export function EditorPage() {
         },
       });
     },
-    [confirmDelete, remove, activeDocId, documents, navigate, saver, t],
+    [confirmDelete, confirmUnsyncedLoss, remove, activeDocId, documents, navigate, saver, t],
   );
 
   const handleDeleteMany = useCallback(
     async (items: TreeSelectionItem[]) => {
       if (items.length === 0) return false;
+      // 文件夹是级联删除的：子孙文件夹一并删除，其中文档移入回收站。
+      const subtree = folderSubtree(
+        folderList.data ?? [],
+        documents ?? [],
+        items.filter((item) => item.kind === "folder").map((item) => item.id),
+      );
+      const docIds = [...new Set([
+        ...items.filter((item) => item.kind === "doc").map((item) => item.id),
+        ...subtree.docIds,
+      ])];
       if (
         !(await confirmAction(
-          interpolate(t.editor.deleteSelectedConfirm, { count: items.length }),
+          interpolate(
+            !items.some((item) => item.kind === "folder")
+              ? t.editor.deleteSelectedDocumentsConfirm
+              : docIds.length ? t.editor.deleteSelectedConfirm : t.editor.deleteSelectedEmptyConfirm,
+            { count: items.length, documents: docIds.length },
+          ),
         ))
       )
         return false;
 
       const releaseMutationBatch = beginDocumentMutationBatch();
       try {
-      const docIds = items.filter((item) => item.kind === "doc").map((item) => item.id);
       for (const docId of docIds) {
         const saved = await saver.flush(docId);
         if (!saved) {
@@ -990,10 +1036,12 @@ export function EditorPage() {
           return false;
         }
       }
+      const discardUnsynced = await confirmUnsyncedLoss(items);
+      if (discardUnsynced === null) return false;
 
       let failedError: unknown = null;
       try {
-        await deleteTreeMut.mutateAsync(items);
+        await deleteTreeMut.mutateAsync({ items, discardUnsynced });
       } catch (error) {
         failedError = error;
       }
@@ -1034,8 +1082,10 @@ export function EditorPage() {
     [
       activeDocId,
       beginDocumentMutationBatch,
+      confirmUnsyncedLoss,
       deleteTreeMut,
       documents,
+      folderList.data,
       navigate,
       saver,
       t,
@@ -1083,16 +1133,51 @@ export function EditorPage() {
 
   const handleDeleteFolder = useCallback(
     async (folderId: string, name: string) => {
-      // 说清楚「里面的东西不会被删」—— 否则用户不敢删，或者删了以为丢了正文
+      // 删除是级联的：写清楚会连带多少个子文件夹、多少篇文档进入回收站
+      const subtree = folderSubtree(folderList.data ?? [], documents ?? [], [folderId]);
       if (
         !(await confirmAction(
-          interpolate(t.editor.deleteFolderConfirm, { name }),
+          interpolate(subtree.docIds.length ? t.editor.deleteFolderConfirm : t.editor.deleteEmptyFolderConfirm, {
+            name,
+            documents: subtree.docIds.length,
+          }),
         ))
       )
         return;
-      deleteFolderMut.mutate(folderId);
+      // 与删单篇文档同理：先把未保存的改动落库，失败则不删。
+      for (const docId of subtree.docIds) {
+        if (!(await saver.flush(docId))) {
+          window.alert(t.editor.deleteSaveFailed);
+          return;
+        }
+      }
+      const discardUnsynced = await confirmUnsyncedLoss([{ kind: "folder", id: folderId }]);
+      if (discardUnsynced === null) return;
+      deleteFolderMut.mutate({ folderId, discardUnsynced }, {
+        onSuccess: () => {
+          const deleted = new Set(subtree.docIds);
+          for (const docId of deleted) {
+            saver.drop(docId);
+            createdHere.current.delete(docId);
+            editorSelections.current.delete(docId);
+          }
+          setTabState((previous) => {
+            let next = previous;
+            for (const docId of deleted) next = removeDeleted(next, docId).next;
+            return next;
+          });
+          if (!activeDocId || !deleted.has(activeDocId)) return;
+          const rest = (documents ?? []).filter((document) => !deleted.has(document.docId));
+          bootstrapped.current = false;
+          if (rest.length > 0) {
+            void navigate({ to: "/editor/$docId", params: { docId: rest[0].docId } });
+          } else {
+            void navigate({ to: "/editor" });
+          }
+        },
+      });
     },
-    [deleteFolderMut, t.editor.deleteFolderConfirm],
+    [activeDocId, confirmUnsyncedLoss, deleteFolderMut, documents, folderList.data, navigate, saver, t],
   );
 
   const handleMoveDoc = useCallback(

@@ -277,3 +277,56 @@ func (a *App) StartDocumentTrashCleanup(ctx context.Context) {
 		}
 	}()
 }
+
+// deleteFolderTreeTx deletes a folder together with every nested folder and
+// moves all documents inside them to the trash. They are re-parented to the
+// deleted folder's parent first, so restoring one puts it there (the desktop
+// client, which lifts before trashing, behaves the same). It returns the count.
+func deleteFolderTreeTx(ctx context.Context, tx pgx.Tx, userID, folderID int) (int64, error) {
+	var ids []int
+	rows, err := tx.Query(ctx, `
+		WITH RECURSIVE tree AS (
+			SELECT id FROM folders WHERE id = $1 AND user_id = $2
+			UNION
+			SELECT f.id FROM folders f JOIN tree ON f.parent_id = tree.id WHERE f.user_id = $2
+		)
+		SELECT id FROM tree
+	`, folderID, userID)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	var trashed int64
+	if err := tx.QueryRow(ctx, `
+		WITH trashed AS (
+			UPDATE documents SET trashed_at = now(), revision = revision + 1, updated_at = now(),
+			    folder_id = (SELECT parent_id FROM folders WHERE id = $3 AND user_id = $1)
+			WHERE user_id = $1 AND folder_id = ANY($2::int[]) AND trashed_at IS NULL
+			RETURNING doc_id
+		), tabs AS (
+			DELETE FROM editor_tabs t USING trashed WHERE t.user_id = $1 AND t.doc_id = trashed.doc_id
+		)
+		SELECT count(*) FROM trashed
+	`, userID, ids, folderID).Scan(&trashed); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE documents SET folder_id = (SELECT parent_id FROM folders WHERE id = $3 AND user_id = $1)
+		WHERE user_id = $1 AND folder_id = ANY($2::int[])`, userID, ids, folderID); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE user_id = $1 AND id = ANY($2::int[])`, userID, ids); err != nil {
+		return 0, err
+	}
+	return trashed, nil
+}

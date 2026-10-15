@@ -83,13 +83,16 @@ type organizationData struct {
 	CreatedFolders   []organizationFolder     `json:"createdFolders"`
 	TimeFolders      []organizationTimeFolder `json:"timeFolders,omitempty"`
 	RemovedFolders   []organizationTimeFolder `json:"removedFolders,omitempty"`
-	IncludeOrganized bool                     `json:"includeOrganized"`
-	Completed        int                      `json:"completed"`
-	Skipped          int                      `json:"skipped"`
-	ProviderMode     string                   `json:"providerMode"`
-	ReservedCredits  int64                    `json:"reservedCredits"`
-	UnbilledBatches  int                      `json:"unbilledBatches,omitempty"`
-	StopReason       string                   `json:"stopReason,omitempty"`
+	// FolderCounts holds current document counts (including trash) for every
+	// folder, so a ready preview can show which folders apply will empty and remove.
+	FolderCounts     map[string]int `json:"folderCounts,omitempty"`
+	IncludeOrganized bool           `json:"includeOrganized"`
+	Completed        int            `json:"completed"`
+	Skipped          int            `json:"skipped"`
+	ProviderMode     string         `json:"providerMode"`
+	ReservedCredits  int64          `json:"reservedCredits"`
+	UnbilledBatches  int            `json:"unbilledBatches,omitempty"`
+	StopReason       string         `json:"stopReason,omitempty"`
 }
 type organizationView struct {
 	ID             string           `json:"id"`
@@ -487,6 +490,9 @@ func (a *App) loadOrganization(ctx context.Context, userID int, id string) (orga
 		// Also enrich previews generated before empty-folder cleanup existed.
 		// No new model call or credits are needed to correct the tree preview.
 		view.Data.TimeFolders, err = loadOrganizationTimeFolders(ctx, a.db, userID, view.Data.Folders)
+		if err == nil {
+			view.Data.FolderCounts, err = loadOrganizationFolderCounts(ctx, a.db, userID)
+		}
 	}
 	return view, err
 }

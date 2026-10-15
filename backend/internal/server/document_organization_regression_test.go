@@ -199,9 +199,18 @@ func TestOrganizationRelevantFolderChangesStillConflict(t *testing.T) {
 				if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2) WHERE doc_id=$1`, doc.DocID, source); err != nil {
 					t.Fatal(err)
 				}
-				data, _, err := a.prepareOrganization(ctx, user.ID, false, nil)
+				// An organized (thus skipped) sibling keeps Source occupied, so apply
+				// does not remove it as emptied and the later rename is observable.
+				keeper, err := a.createDocument(ctx, createDocumentParams{User: user, Title: "Keeper", Content: "Stays"})
 				if err != nil {
 					t.Fatal(err)
+				}
+				if _, err := db.Exec(ctx, `UPDATE documents SET folder_id=(SELECT id FROM folders WHERE folder_id=$2),organized_at=now() WHERE doc_id=$1`, keeper.DocID, source); err != nil {
+					t.Fatal(err)
+				}
+				data, _, err := a.prepareOrganization(ctx, user.ID, false, nil)
+				if err != nil || len(data.Items) != 1 {
+					t.Fatalf("prepare: %+v %v", data.Items, err)
 				}
 				choice := organizationChoice{doc.DocID, destination, []string{"Child", "New"}, []string{"Topic"}}
 				data.Items[0].Suggested = &choice

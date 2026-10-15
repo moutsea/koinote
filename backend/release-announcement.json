@@ -1,32 +1,36 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.5",
+      "title": "What's new in Koinote 1.1.6",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "AI organization opens with a document tree to pick exactly which documents to organize. Folders select everything inside them; unorganized documents and documents in automatic date or activity folders are picked by default, including previously organized ones."
+        "Deleting a folder now deletes its subfolders too and moves the documents inside to trash. Restored documents return to the deleted folder's parent. The confirmation states how many documents are affected.",
+        "AI organization now removes folders it leaves empty, along with ancestors that become empty, and restores them on undo. Unrelated empty folders are kept."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.5 新功能",
+      "title": "Koinote 1.1.6 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "AI 整理先弹出文件树，可勾选要整理的文档；勾选文件夹即选中其中全部文档。默认勾选未整理的文档和自动时间 / 活跃度目录里的文档（包括以前整理过的）。"
+        "删除文件夹时会连同子文件夹一起删除，里面的文档移入回收站，恢复后回到被删文件夹的上一级；确认框会写明影响的文档数量。",
+        "AI 整理会删除本次整理移空的文件夹及因此变空的上级目录，撤销时恢复；与本次整理无关的空文件夹会保留。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.5",
+      "title": "Nouveautés de Koinote 1.1.6",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Le classement IA s’ouvre sur une arborescence permettant de choisir précisément les documents à organiser. Cocher un dossier sélectionne tout son contenu ; les documents non organisés et ceux des dossiers automatiques de dates ou d’activité sont cochés par défaut, y compris ceux déjà organisés."
+        "Supprimer un dossier supprime aussi ses sous-dossiers et met les documents qu’ils contiennent à la corbeille ; une fois restaurés, ils reviennent dans le dossier parent. La confirmation indique le nombre de documents concernés.",
+        "Le classement IA supprime les dossiers qu’il vide, ainsi que les dossiers parents devenus vides, et les restaure à l’annulation. Les dossiers vides sans rapport sont conservés."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.5 の新機能",
+      "title": "Koinote 1.1.6 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "AI 整理の開始時にドキュメントツリーを表示し、整理するドキュメントを選べるようになりました。フォルダーを選ぶと中のドキュメントをすべて選択します。未整理のドキュメントと自動の日付・更新頻度フォルダー内のドキュメント（整理済みを含む）が既定で選択されます。"
+        "フォルダを削除すると、サブフォルダもまとめて削除され、中のドキュメントはゴミ箱へ移動します。復元すると削除したフォルダの一つ上に戻ります。確認ダイアログに影響するドキュメント数を表示します。",
+        "AI 整理で空になったフォルダと、それにより空になった上位フォルダを削除し、取り消すと復元します。今回の整理と関係のない空フォルダは残ります。"
       ]
     }
   }

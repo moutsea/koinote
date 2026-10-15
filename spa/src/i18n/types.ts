@@ -1235,6 +1235,11 @@ export interface Messages {
     moveSelected: string;
     deleteSelected: string;
     deleteSelectedConfirm: string;
+    deleteSelectedEmptyConfirm: string;
+    deleteSelectedDocumentsConfirm: string;
+    deleteUnsyncedConfirm: string;
+    deleteUnsyncedModified: string;
+    deleteUnsyncedCreated: string;
     clearSelection: string;
     rootFolder: string;
     deleteConfirm: string; // 用 {title} 占位
@@ -1552,6 +1557,7 @@ export interface Messages {
     renameDocumentFailed: string;
     deleteFolder: string;
     deleteFolderConfirm: string;
+    deleteEmptyFolderConfirm: string;
     untitledFolder: string;
     folderNamePlaceholder: string;
     dropToRoot: string;
@@ -1561,6 +1567,7 @@ export interface Messages {
     treeMenu: string;
     aiOrganizer: {
       cleanupTimeFolders: string;
+      finish: string;
       treeHint: string;
       previewScope: string;
       searchTree: string;

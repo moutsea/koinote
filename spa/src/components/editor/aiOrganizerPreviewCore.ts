@@ -8,7 +8,7 @@ export type PreviewDirectory = PreviewDestination & {
 };
 export const previewDirectoryKey = (target: PreviewDestination) => JSON.stringify([target.folderId, target.newFolders]);
 
-export function buildOrganizationPreview(items: OrganizationItem[], folders: OrganizationFolder[], drafts: Record<string, OrganizationDraft>, extras: PreviewDestination[] = [], timeFolders: OrganizationTimeFolder[] = []) {
+export function buildOrganizationPreview(items: OrganizationItem[], folders: OrganizationFolder[], drafts: Record<string, OrganizationDraft>, extras: PreviewDestination[] = [], timeFolders: OrganizationTimeFolder[] = [], folderCounts: Record<string, number> = {}) {
   const root: PreviewDirectory = { key: previewDirectoryKey({ folderId: "", newFolders: [] }), name: "", folderId: "", newFolders: [], path: [], children: [], documents: [], count: 0 };
   const directories = new Map<string, PreviewDirectory>([[root.key, root]]);
   const folderMap = new Map(folders.map(folder => [folder.id, folder]));
@@ -75,6 +75,16 @@ export function buildOrganizationPreview(items: OrganizationItem[], folders: Org
   }
   sort(root);
   const timeFolderCounts = new Map(timeFolders.map(folder => [folder.id, folder.documentCount]));
+  // Apply also removes folders this run empties: sources of checked articles
+  // and their ancestors. Unrelated empty folders are kept.
+  for (const item of items) {
+    if (!drafts[item.docId]?.selected) continue;
+    const seen = new Set<string>();
+    for (let id = item.folderId; id && !seen.has(id); id = folderMap.get(id)?.parentId ?? "") {
+      seen.add(id);
+      if (!timeFolderCounts.has(id) && folderCounts[id] !== undefined) timeFolderCounts.set(id, folderCounts[id]);
+    }
+  }
   const originalCounts = new Map<string, number>();
   for (const item of items) originalCounts.set(item.folderId, (originalCounts.get(item.folderId) ?? 0) + 1);
   let removedDirectoryCount = 0;

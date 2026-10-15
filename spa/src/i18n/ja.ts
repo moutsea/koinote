@@ -1804,7 +1804,12 @@ export const ja: Messages = {
     selectedItems: "{count} 件を選択中",
     moveSelected: "選択項目を移動",
     deleteSelected: "選択項目を削除",
-    deleteSelectedConfirm: "選択した {count} 件を削除しますか？ドキュメントはゴミ箱へ移動し、フォルダーの内容は一つ上の階層へ移動します。",
+    deleteSelectedConfirm: "選択した {count} 件を削除しますか？フォルダはサブフォルダごと削除され、ドキュメント {documents} 件はゴミ箱へ移動します（ゴミ箱から復元できます）。",
+    deleteSelectedEmptyConfirm: "選択した {count} 件を削除しますか？フォルダはサブフォルダごと削除されます。ドキュメントは含まれていません。",
+    deleteSelectedDocumentsConfirm: "選択した {count} 件のドキュメントを削除しますか？ゴミ箱へ移動し、ゴミ箱から復元できます。",
+    deleteUnsyncedConfirm: "まだクラウドに同期されていない内容があります（オフライン、または同期に失敗している可能性があります）：\n{details}\n\nそれでも削除しますか？",
+    deleteUnsyncedModified: "{count} 件のドキュメントに未同期の変更があります。削除するとその変更は失われ、ゴミ箱には最後に同期した版のみが残ります",
+    deleteUnsyncedCreated: "{count} 件の新規ドキュメントは一度もアップロードされていません。削除すると完全に削除され、ゴミ箱には入りません",
     clearSelection: "選択を解除",
     rootFolder: "ルートフォルダー",
     deleteConfirm:
@@ -2208,7 +2213,9 @@ export const ja: Messages = {
     renameDocumentFailed: "新しい名前を保存できませんでした。もう一度お試しください。",
     deleteFolder: "フォルダを削除",
     deleteFolderConfirm:
-      "フォルダ「{name}」を削除しますか？中のドキュメントとサブフォルダは一つ上の階層に移動し、削除されません。",
+      "フォルダ「{name}」とそのサブフォルダをすべて削除しますか？中のドキュメント {documents} 件はゴミ箱へ移動し、ゴミ箱から一つ上のフォルダに復元できます。",
+    deleteEmptyFolderConfirm:
+      "フォルダ「{name}」とそのサブフォルダをすべて削除しますか？ドキュメントは含まれていません。",
     untitledFolder: "無題のフォルダ",
     folderNamePlaceholder: "フォルダ名",
     dropToRoot: "ここにドロップしてフォルダから出す",
@@ -2217,7 +2224,8 @@ export const ja: Messages = {
     newDocumentHere: "ここに新規ドキュメント",
     treeMenu: "ファイルツリーの操作",
     aiOrganizer: {
-      cleanupTimeFolders: "適用すると空の自動日付フォルダー {count} 個を削除します。整理を元に戻すと復元されます。",
+      cleanupTimeFolders: "適用すると、空のフォルダーとこの整理で空になるフォルダー計 {count} 個を削除します。整理を元に戻すと復元されます。",
+      finish: "完了",
       "treeHint": "記事をフォルダーにドラッグして移動したり、他の記事の上・下にドラッグして並べ替えたりできます。各行の上下ボタンも使えます。記事をクリックするとタグを編集でき、フォルダー横のボタンでサブフォルダーを作成できます。移動した記事は自動選択され、適用時に保存されます。",
       "previewScope": "今回の整理対象の記事だけを表示します。他の記事は変更されません。「適用」を押すと変更が保存されます。",
       "searchTree": "記事・フォルダー・タグを検索",
@@ -3032,6 +3040,8 @@ function hello(name) {
     too_many_items: "一度に選択できる項目は 1,000 件までです",
     name_too_long: "フォルダ名が長すぎます",
     invalid_move: "このフォルダをここへは移動できません",
+    delete_sync_pending: "削除するドキュメントにクラウド未同期の内容があるため、何も削除していません。もう一度操作して確認するか、同期の完了を待ってください。",
+    folder_delete_sync_conflict: "このフォルダには同期の競合があるドキュメントが含まれています。競合を解決してからフォルダを削除してください。",
     document_revision_conflict: "この文書は別の場所で変更されました。更新して再試行してください",
     not_found: "この項目は存在しないか削除されています",
     image_type_unsupported: "PNG / JPEG / GIF / WebP のみ対応しています",

@@ -87,4 +87,20 @@ assert.ok(occupiedCalendar.directories.has('["week",[]]'), "excluded, organized 
 const manualChild = { id: "manual-child", name: "Reference", parentId: "week" };
 assert.ok(buildOrganizationPreview(calendarItems, [...calendarFolders, manualChild], calendarDrafts, [], timeFolders).directories.has('["week",[]]'), "a manual child folder keeps its time-folder ancestors");
 assert.ok(buildOrganizationPreview(calendarItems, calendarFolders, calendarDrafts, [{ folderId: "week", newFolders: ["New topic"] }], timeFolders).directories.has('["week",[]]'), "an explicitly created child remains visible");
-console.log("AI organization preview: empty time-folder pruning, deselection and occupied/manual folder protection passed");
+const manualFolders = [
+  { id: "projects", name: "Projects", parentId: "" },
+  { id: "old", name: "Old topic", parentId: "projects" },
+  { id: "idle", name: "Already empty", parentId: "" },
+  { id: "busy", name: "Busy", parentId: "" },
+];
+const manualItems = [{ docId: "m1", title: "M1", folderId: "old", tags: [] }, { docId: "m2", title: "M2", folderId: "busy", tags: [] }];
+const manualDrafts = Object.fromEntries(manualItems.map(item => [item.docId, { selected: true, folderId: "", newPath: "Topics", tags: [] }]));
+const counts = { projects: 0, old: 1, idle: 0, busy: 2 };
+const emptied = buildOrganizationPreview(manualItems, manualFolders, manualDrafts, [], [], counts);
+assert.equal(emptied.directories.has('["old",[]]'), false, "a source folder this run empties is removed");
+assert.equal(emptied.directories.has('["projects",[]]'), false, "its newly emptied ancestor is removed too");
+assert.ok(emptied.directories.has('["idle",[]]'), "unrelated empty folders are kept");
+assert.ok(emptied.directories.has('["busy",[]]'), "a source folder that still holds other documents is kept");
+assert.equal(emptied.removedDirectoryCount, 2);
+assert.ok(buildOrganizationPreview(manualItems, manualFolders, { ...manualDrafts, m1: { ...manualDrafts.m1, selected: false } }, [], [], counts).directories.has('["old",[]]'), "unchecking the move keeps its source folder");
+console.log("AI organization preview: empty time-folder pruning, emptied source folders, deselection and occupied/manual folder protection passed");
