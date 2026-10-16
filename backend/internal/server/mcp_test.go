@@ -1317,6 +1317,99 @@ func TestMCPPushWechatDraftEndToEnd(t *testing.T) {
 	if !ok || !strings.Contains(geoContent, `visibility:hidden`) || !strings.Contains(geoContent, `<hr`) || !strings.Contains(geoContent, "这是与当前文章匹配的 GEO 摘要") {
 		t.Fatalf("GEO 草稿正文未包含隐藏摘要: %s", geoContent)
 	}
+	// The same publishing endpoint must support an operator-authorized integration
+	// at zero balance, while rejecting a client-only request for free publishing.
+	beforeFreeCalls := len(requestPaths)
+	freeArgs := map[string]any{"docId": doc.DocID, "accountId": accountID, "requireNoCredits": true}
+	denied := callMCPTool(t, session, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) || len(requestPaths) != beforeFreeCalls {
+		t.Fatalf("ungranted free sync must stop before provider calls: %+v", denied)
+	}
+	ctx := context.Background()
+	folderPublicID, _ := randomUUID()
+	var folderID int
+	if err := pool.QueryRow(ctx, `INSERT INTO folders (folder_id,user_id,name) VALUES ($1,$2,'Integration') RETURNING id`, folderPublicID, user.ID).Scan(&folderID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE documents SET folder_id=$1 WHERE doc_id=$2`, folderID, doc.DocID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO mcp_wechat_sync_grants (token_id,account_id,folder_id) SELECT id,$2,$3 FROM mcp_tokens WHERE token_id=$1`, token.Token.TokenID, accountID, folderID); err != nil {
+		t.Fatal(err)
+	}
+	var accounts mcpWechatAccountsOutput
+	decodeMCPStructured(t, callMCPToolOK(t, session, "list_wechat_accounts", map[string]any{}), &accounts)
+	if len(accounts.Accounts) != 1 || !slices.Equal(accounts.Accounts[0].CreditFreeFolderIDs, []string{folderPublicID}) {
+		t.Fatalf("missing integration capability: %+v", accounts)
+	}
+	callMCPToolOK(t, session, "push_wechat_draft", freeArgs)
+	balance, err = app.loadCreditBalance(ctx, user.ID)
+	if err != nil || balance.Balance != 0 || balance.Reserved != 0 {
+		t.Fatalf("free sync changed balance: %+v %v", balance, err)
+	}
+	var charges, reservations int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_transactions WHERE user_id=$1 AND kind='agent_usage'`, user.ID).Scan(&charges); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_reservations WHERE user_id=$1`, user.ID).Scan(&reservations); err != nil {
+		t.Fatal(err)
+	}
+	if charges != 2 || reservations != 2 {
+		t.Fatalf("free sync touched credits: charges=%d reservations=%d", charges, reservations)
+	}
+
+	otherToken := createMCPTokenForTest(t, server, mcpSessionCookie(app, user.AuthUserID), "Other publisher", "publish")
+	otherSession, err := connectMCPClient(ctx, server.URL+"/mcp", otherToken.Secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer otherSession.Close()
+	otherAccountID, _ := randomUUID()
+	if _, err := app.createWechatOfficialAccount(ctx, user.ID, otherAccountID, wechatOfficialAccountInput{
+		AppID: "wx" + strings.ReplaceAll(otherAccountID, "-", ""), AppSecret: "wechat-secret",
+	}, ciphertext); err != nil {
+		t.Fatal(err)
+	}
+	beforeFreeCalls = len(requestPaths)
+	freeArgs["accountId"] = otherAccountID
+	denied = callMCPTool(t, session, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) {
+		t.Fatalf("grant leaked to another account: %+v", denied)
+	}
+	freeArgs["accountId"] = accountID
+	denied = callMCPTool(t, otherSession, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) {
+		t.Fatalf("grant leaked to another token: %+v", denied)
+	}
+	freeArgs["coverMode"] = "ai"
+	freeArgs["coverPrompt"] = "An AI cover"
+	denied = callMCPTool(t, session, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) {
+		t.Fatalf("free guard allowed paid cover: %+v", denied)
+	}
+	delete(freeArgs, "coverMode")
+	delete(freeArgs, "coverPrompt")
+	if _, err := pool.Exec(ctx, `UPDATE documents SET folder_id=NULL WHERE doc_id=$1`, doc.DocID); err != nil {
+		t.Fatal(err)
+	}
+	denied = callMCPTool(t, session, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) {
+		t.Fatalf("grant leaked to another folder: %+v", denied)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE documents SET folder_id=$1 WHERE doc_id=$2`, folderID, doc.DocID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM mcp_wechat_sync_grants WHERE folder_id=$1`, folderID); err != nil {
+		t.Fatal(err)
+	}
+	denied = callMCPTool(t, session, "push_wechat_draft", freeArgs)
+	if !denied.IsError || !strings.Contains(mcpResultText(denied), errMCPWechatFreeSyncRequired.Error()) {
+		t.Fatalf("revoked grant silently charged: %+v", denied)
+	}
+	if len(requestPaths) != beforeFreeCalls {
+		t.Fatalf("rejected sync still called provider")
+	}
+
 }
 
 func TestDocumentCASAndVersionRetention(t *testing.T) {

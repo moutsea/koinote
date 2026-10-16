@@ -909,3 +909,11 @@ GitHub Actions 在每次 push 与 PR 上额外构建前后端，并用真实 Pos
 ## 许可证
 
 [MIT](LICENSE)
+
+### 跨项目公众号同步的免积分授权
+
+普通网页和 MCP 发布继续按原规则收取 20 积分。运维可以通过 `mcp_wechat_sync_grants` 给专用 publish token 授予免积分草稿同步权限，严格绑定到同一用户的公众号及文档文件夹。公开 API 不允许创建授权；令牌撤销、过期立即失效，令牌、公众号或文件夹删除时授权级联删除。轮换令牌后需重新授权。
+
+集成端先读取 `list_wechat_accounts` 中的 `creditFreeFolderIds` 确认服务端能力，再向 `push_wechat_draft` 传 `requireNoCredits: true`。该参数只负责阻止意外扣费，不能授予权限；授权缺失或使用 AI 封面时会在上传、预扣积分之前拒绝。免积分路径不读写积分余额和预留记录。本站 AI 新闻同步使用此通道。
+
+数据库迁移 `0095_wechat_sync_grants.sql` 只创建空表，不预授权任何用户。运维授权时必须核对 token 的 `scope='publish'`、`revoked_at IS NULL`、有效期，以及 token、公众号、文件夹的 `user_id` 一致。撤销授权可删除对应行；已有草稿不受影响。

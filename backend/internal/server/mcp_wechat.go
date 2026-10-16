@@ -18,6 +18,7 @@ import (
 )
 
 type mcpPushWechatDraftInput struct {
+	RequireNoCredits bool   `json:"requireNoCredits,omitempty" jsonschema:"Reject before uploading or charging unless this token has an operator-managed free sync grant for the document folder and account. Disallows paid AI cover generation."`
 	DocID            string `json:"docId" jsonschema:"Koinote document ID."`
 	AccountID        string `json:"accountId,omitempty" jsonschema:"Optional bound Official Account ID. Omit to use the default account."`
 	Author           string `json:"author,omitempty" jsonschema:"Optional WeChat draft author, up to 16 characters."`
@@ -32,12 +33,13 @@ type mcpPushWechatDraftInput struct {
 var errMCPWechatDraftInsufficientCredits = errors.New("not enough credits for a WeChat draft")
 
 type mcpWechatAccountSummary struct {
-	AccountID  string `json:"accountId"`
-	Label      string `json:"label"`
-	AppID      string `json:"appId"`
-	IsDefault  bool   `json:"isDefault"`
-	VerifiedAt string `json:"verifiedAt"`
-	UpdatedAt  string `json:"updatedAt"`
+	AccountID           string   `json:"accountId"`
+	Label               string   `json:"label"`
+	AppID               string   `json:"appId"`
+	IsDefault           bool     `json:"isDefault"`
+	VerifiedAt          string   `json:"verifiedAt"`
+	UpdatedAt           string   `json:"updatedAt"`
+	CreditFreeFolderIDs []string `json:"creditFreeFolderIds,omitempty"`
 }
 
 type mcpWechatAccountsOutput struct {
@@ -59,11 +61,16 @@ func (a *App) mcpListWechatAccounts(ctx context.Context, _ *mcp.CallToolRequest,
 		MaxCount: wechatOfficialAccountMaxCount,
 	}
 	for _, account := range accounts {
+		freeFolders, err := a.mcpWechatFreeSyncFolders(ctx, principal, account.AccountID)
+		if err != nil {
+			return nil, mcpWechatAccountsOutput{}, mcpInternalError("load WeChat sync grants", err)
+		}
 		output.Accounts = append(output.Accounts, mcpWechatAccountSummary{
 			AccountID: account.AccountID, Label: account.Label, AppID: account.AppID,
-			IsDefault:  account.IsDefault,
-			VerifiedAt: account.VerifiedAt.UTC().Format(time.RFC3339),
-			UpdatedAt:  account.UpdatedAt.UTC().Format(time.RFC3339),
+			CreditFreeFolderIDs: freeFolders,
+			IsDefault:           account.IsDefault,
+			VerifiedAt:          account.VerifiedAt.UTC().Format(time.RFC3339),
+			UpdatedAt:           account.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	result = "success"
@@ -168,21 +175,26 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 	if !a.rateLimit().allow("wechat-draft:"+fmt.Sprint(principal.User.ID), wechatDraftCreateLimit, wechatDraftCreateWindow) {
 		return nil, mcpWechatDraftOutput{}, errors.New("too many WeChat draft requests; try again later")
 	}
-	draftReservation, err := a.reserveStandaloneCredits(
-		ctx,
-		principal.User.ID,
-		wechatDraftSyncCredits,
-		wechatDraftReservationTTL,
-	)
-	if errors.Is(err, errInsufficientCredits) {
-		return nil, mcpWechatDraftOutput{}, errMCPWechatDraftInsufficientCredits
+	creditFree, err := a.mcpWechatDraftCreditFree(ctx, principal, doc.DocID, account.AccountID, input.RequireNoCredits, coverMode)
+	if errors.Is(err, errMCPWechatFreeSyncRequired) {
+		return nil, mcpWechatDraftOutput{}, err
 	}
 	if err != nil {
-		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+		return nil, mcpWechatDraftOutput{}, mcpInternalError("check WeChat sync grant", err)
+	}
+	var draftReservation creditReservation
+	if !creditFree {
+		draftReservation, err = a.reserveStandaloneCredits(ctx, principal.User.ID, wechatDraftSyncCredits, wechatDraftReservationTTL)
+		if errors.Is(err, errInsufficientCredits) {
+			return nil, mcpWechatDraftOutput{}, errMCPWechatDraftInsufficientCredits
+		}
+		if err != nil {
+			return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+		}
 	}
 	draftCreditsCommitted := false
 	defer func() {
-		if draftCreditsCommitted {
+		if creditFree || draftCreditsCommitted {
 			return
 		}
 		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -223,15 +235,18 @@ func (a *App) mcpPushWechatDraft(ctx context.Context, _ *mcp.CallToolRequest, in
 		a.deleteWechatMaterialBestEffort(ctx, account, thumbMediaID)
 		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(errors.Join(errWechatDraftCreateFailed, err))
 	}
-	if _, _, err := a.commitCreditReservation(
-		ctx,
-		principal.User.ID,
-		draftReservation.ReservationID,
-		int(wechatDraftSyncCredits*creditTokensPerCredit),
-		map[string]any{"feature": "wechat_draft_sync", "source": "mcp"},
-	); err != nil {
-		return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+	if !creditFree {
+		if _, _, err := a.commitCreditReservation(
+			ctx,
+			principal.User.ID,
+			draftReservation.ReservationID,
+			int(wechatDraftSyncCredits*creditTokensPerCredit),
+			map[string]any{"feature": "wechat_draft_sync", "source": "mcp"},
+		); err != nil {
+			return nil, mcpWechatDraftOutput{}, mapMCPWechatPublishError(err)
+		}
 	}
+
 	draftCreditsCommitted = true
 	result = "success"
 	return nil, mcpWechatDraftOutput{
