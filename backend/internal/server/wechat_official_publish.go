@@ -46,7 +46,7 @@ const (
 	wechatThumbMaxBytes             = 64 << 10
 	wechatDraftRequestMaxBytes      = 12 << 20
 	wechatDraftHTMLMaxBytes         = 2 << 20
-	wechatDraftMaxImages            = 20
+	wechatDraftImageBatchSize       = 8
 	wechatDraftImagePrepareWorkers  = 2
 	wechatDraftImageUploadWorkers   = 2
 	wechatImageUploadTimeout        = 90 * time.Second
@@ -792,41 +792,46 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 		source := imageSourceFromMatch(content, match)
 		sources = append(sources, source)
 		if _, found := unique[source]; !found {
-			if len(unique) >= wechatDraftMaxImages {
-				return "", nil, errors.Join(errWechatContentImageFailed, errors.New("too many article images"))
-			}
 			unique[source] = ""
 			uniqueSources = append(uniqueSources, source)
 		}
 	}
-	preserveRaw := make([]bool, len(uniqueSources))
-	for index, source := range uniqueSources {
-		preserveRaw[index] = index == 0 || selectCover && source == coverSource
-	}
-	prepareStarted := time.Now()
-	preparations := a.prepareWechatDraftImages(ctx, uniqueSources, preserveRaw)
 	var firstImage []byte
 	var selectedImage []byte
-	for _, preparation := range preparations {
-		if preparation.Err != nil {
-			return "", nil, preparation.Err
+	// Bound retained image bytes without imposing an article image count limit.
+	// Only URLs and cover images survive between batches.
+	for start := 0; start < len(uniqueSources); start += wechatDraftImageBatchSize {
+		if err := ctx.Err(); err != nil {
+			return "", nil, errors.Join(errWechatContentImageFailed, err)
 		}
-		if firstImage == nil && preparation.Raw != nil {
-			firstImage = preparation.Raw
+		batchSources := uniqueSources[start:min(start+wechatDraftImageBatchSize, len(uniqueSources))]
+		preserveRaw := make([]bool, len(batchSources))
+		for index, source := range batchSources {
+			preserveRaw[index] = start+index == 0 || selectCover && source == coverSource
 		}
-		if selectCover && preparation.Source == coverSource {
-			selectedImage = preparation.Raw
+		prepareStarted := time.Now()
+		preparations := a.prepareWechatDraftImages(ctx, batchSources, preserveRaw)
+		for _, preparation := range preparations {
+			if preparation.Err != nil {
+				return "", nil, wechatDraftBatchError(preparation.Err, start)
+			}
+			if firstImage == nil && preparation.Raw != nil {
+				firstImage = preparation.Raw
+			}
+			if selectCover && preparation.Source == coverSource {
+				selectedImage = preparation.Raw
+			}
 		}
-	}
-	log.Printf("wechat draft images prepared: count=%d duration=%s", len(preparations), time.Since(prepareStarted).Round(time.Millisecond))
-	uploadStarted := time.Now()
-	uploadedURLs, err := a.uploadWechatDraftImages(ctx, account, preparations)
-	log.Printf("wechat draft images uploaded: count=%d duration=%s success=%t", len(preparations), time.Since(uploadStarted).Round(time.Millisecond), err == nil)
-	if err != nil {
-		return "", nil, err
-	}
-	for index, preparation := range preparations {
-		unique[preparation.Source] = uploadedURLs[index]
+		log.Printf("wechat draft images prepared: count=%d offset=%d duration=%s", len(preparations), start, time.Since(prepareStarted).Round(time.Millisecond))
+		uploadStarted := time.Now()
+		uploadedURLs, err := a.uploadWechatDraftImages(ctx, account, preparations)
+		log.Printf("wechat draft images uploaded: count=%d offset=%d duration=%s success=%t", len(preparations), start, time.Since(uploadStarted).Round(time.Millisecond), err == nil)
+		if err != nil {
+			return "", nil, wechatDraftBatchError(err, start)
+		}
+		for index, preparation := range preparations {
+			unique[preparation.Source] = uploadedURLs[index]
+		}
 	}
 
 	rewritten, err := rewriteWechatImageSources(content, matches, sources, unique)
@@ -837,6 +842,15 @@ func (a *App) transferWechatDraftImagesWithCoverImage(ctx context.Context, accou
 		return rewritten, selectedImage, nil
 	}
 	return rewritten, firstImage, nil
+}
+
+func wechatDraftBatchError(err error, offset int) error {
+	var imageError *wechatArticleImageError
+	if errors.As(err, &imageError) {
+		// Workers have finished; translate their batch index to the article index.
+		imageError.Index += offset
+	}
+	return err
 }
 
 func (a *App) uploadWechatDraftImages(ctx context.Context, account wechatOfficialAccountRef, preparations []wechatDraftImagePreparation) ([]string, error) {

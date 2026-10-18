@@ -898,11 +898,12 @@ Legacy single-account endpoints continue to resolve to the default account for r
 clients. The backend validates every AppID and AppSecret through `stable_token`, caches
 access tokens by account, and encrypts each AppSecret with the dedicated
 `WECHAT_CREDENTIAL_ENCRYPTION_KEY`. Publishing reuses the same HTML builder without
-duplicating the title in the body. The backend safely downloads and validates each
-article image with two preparation workers, then transfers deduplicated images with up to
+duplicating the title in the body. There is no fixed article image count limit. The backend
+processes eight unique source URLs at a time to bound retained image bytes, safely downloading
+and validating each article image with two preparation workers, then transferring deduplicated images with up to
 two concurrent `media/uploadimg` workers with a 90-second upload timeout to accommodate the relay bandwidth.
 Results retain the original image order. The first upload failure cancels the other uploads
-and preserves its error; only a successful batch proceeds to the permanent thumbnail and
+and preserves its error; only after all batches succeed does it proceed to the permanent thumbnail and
 `draft/add`. Phase logs contain counts, durations, and success status without image URLs or
 tokens. Cover settings offer a default cover, an article image, or an
 AI-generated image. The client renders the default cover with the Koinote logo and article

@@ -48,7 +48,7 @@ func TestWechatDraftImageUploadsUseBoundedConcurrencyAndKeepOrder(t *testing.T) 
 	app, account := newWechatImageUploadTest(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	preparations := make([]wechatDraftImagePreparation, wechatDraftMaxImages)
+	preparations := make([]wechatDraftImagePreparation, 32)
 	for index := range preparations {
 		preparations[index] = wechatDraftImagePreparation{
 			Source: fmt.Sprintf("https://images.example.test/%d.jpg", index), Prepared: []byte(strconv.Itoa(index)),
@@ -144,7 +144,7 @@ func TestWechatDraftImageUploadFailureCancelsOutstandingWork(t *testing.T) {
 			app, account := newWechatImageUploadTest(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			preparations := make([]wechatDraftImagePreparation, wechatDraftMaxImages)
+			preparations := make([]wechatDraftImagePreparation, 32)
 			for index := range preparations {
 				preparations[index] = wechatDraftImagePreparation{
 					Source: "https://images.example.test/article.jpg?signature=private", Prepared: []byte(strconv.Itoa(index)),
@@ -294,5 +294,99 @@ func TestWechatDraftImageTransferDeduplicatesAndPreservesCover(t *testing.T) {
 		if !bytes.Equal(cover, wantCover) || downloads.Load() != 2 || uploads.Load() != wantUploads {
 			t.Fatalf("selected cover preserved=%t downloads=%d uploads=%d", bytes.Equal(cover, wantCover), downloads.Load(), uploads.Load())
 		}
+	}
+}
+
+func TestWechatDraftImageTransferSupportsMoreThanTwentyImages(t *testing.T) {
+	for _, count := range []int{21, 65} {
+		t.Run(strconv.Itoa(count), func(t *testing.T) {
+			app, account := newWechatImageUploadTest(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			rawImages := make(map[string][]byte)
+			preparedURLs := make(map[string]string)
+			var content, expected strings.Builder
+			for index := 0; index < count; index++ {
+				path := fmt.Sprintf("/%d.jpg", index)
+				source := image.NewRGBA(image.Rect(0, 0, 1, 1))
+				source.Set(0, 0, color.RGBA{R: uint8(index%8) * 32, G: uint8(index/8) * 24, B: 64, A: 255})
+				var encoded bytes.Buffer
+				if err := jpeg.Encode(&encoded, source, nil); err != nil {
+					t.Fatal(err)
+				}
+				rawImages[path] = encoded.Bytes()
+				prepared, err := prepareWechatContentImage(encoded.Bytes())
+				if err != nil {
+					t.Fatal(err)
+				}
+				preparedURLs[string(prepared)] = "https://mmbiz.qpic.cn" + path
+				fmt.Fprintf(&content, `<p><img src="https://images.example.test%s"></p>`, path)
+				fmt.Fprintf(&expected, `<p><img src="https://mmbiz.qpic.cn%s"></p>`, path)
+			}
+			if len(preparedURLs) != count {
+				t.Fatal("test images must have distinct prepared contents")
+			}
+			// A repeated URL at the end must not be downloaded or uploaded again.
+			content.WriteString(`<img src="https://images.example.test/0.jpg">`)
+			expected.WriteString(`<img src="https://mmbiz.qpic.cn/0.jpg">`)
+			var downloads, uploads atomic.Int32
+			app.wechatImageHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				downloads.Add(1)
+				if downloads.Load()-uploads.Load() > wechatDraftImageBatchSize {
+					t.Error("image preparation ran ahead of the bounded upload batch")
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(rawImages[request.URL.Path]))}, nil
+			})}
+			app.wechatAPIHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				file, _, err := request.FormFile("media")
+				if err != nil {
+					return nil, err
+				}
+				defer file.Close()
+				data, err := io.ReadAll(file)
+				if err != nil {
+					return nil, err
+				}
+				uploads.Add(1)
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(fmt.Sprintf(`{"url":%q}`, preparedURLs[string(data)])))}, nil
+			})}
+			coverPath := fmt.Sprintf("/%d.jpg", count-1)
+			rewritten, cover, err := app.transferWechatDraftImagesWithCoverImage(ctx, account, content.String(), true, "https://images.example.test"+coverPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rewritten != expected.String() || !bytes.Equal(cover, rawImages[coverPath]) {
+				t.Fatal("image order or the cover selected from the final batch was lost")
+			}
+			if downloads.Load() != int32(count) || uploads.Load() != int32(count) {
+				t.Fatalf("downloads=%d uploads=%d, want %d", downloads.Load(), uploads.Load(), count)
+			}
+		})
+	}
+}
+
+func TestWechatDraftImageTransferReportsLaterBatchFailure(t *testing.T) {
+	app, account := newWechatImageUploadTest(t)
+	var content strings.Builder
+	for index := 0; index < 21; index++ {
+		fmt.Fprintf(&content, `<img src="https://images.example.test/%d.jpg">`, index)
+	}
+	raw := testWechatCoverJPEG(t)
+	var downloads, uploads atomic.Int32
+	app.wechatAPIHTTPClient = wechatCountingUploadClient(&uploads)
+	app.wechatImageHTTPClient = &http.Client{Transport: wechatRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		downloads.Add(1)
+		if request.URL.Path == "/20.jpg" {
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("missing"))}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(raw))}, nil
+	})}
+	rewritten, cover, err := app.transferWechatDraftImagesWithFirstImage(context.Background(), account, content.String())
+	var imageError *wechatArticleImageError
+	if !errors.Is(err, errWechatImageUnreachable) || !errors.As(err, &imageError) || imageError.Index != 20 || imageError.Stage != "download" {
+		t.Fatalf("expected article image 21 download failure, got %v", err)
+	}
+	if rewritten != "" || cover != nil || downloads.Load() != 21 || uploads.Load() != 1 {
+		t.Fatalf("failed transfer returned partial output or lost cross-batch deduplication: downloads=%d uploads=%d", downloads.Load(), uploads.Load())
 	}
 }

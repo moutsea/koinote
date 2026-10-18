@@ -4,6 +4,10 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+### Fixed
+
+- La synchronisation des brouillons WeChat ne limite plus le nombre d’images dans un article. Les images sont traitées par lots, sans rejet au-delà de l’ancienne limite de 20 images de Koinote.
+
 ## [1.1.6] - 2026-10-15
 
 ### Changed

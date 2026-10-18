@@ -6,6 +6,10 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- WeChat draft sync no longer caps the number of article images. Images are processed in batches, so articles with more than 20 images are no longer rejected by Koinote's previous limit.
+
 ## [1.1.6] - 2026-10-15
 
 ### Changed
