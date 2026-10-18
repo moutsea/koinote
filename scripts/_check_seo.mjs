@@ -161,11 +161,13 @@ try {
 
   // 更新日志：渲染真实版本条目，不再只有标题
   const changelogHTML = await (await get("/changelog?lang=zh")).text();
-  const latest = /^## \[(\d+\.\d+\.\d+)\]/m.exec(readFileSync(new URL("../CHANGELOG.zh.md", import.meta.url), "utf8"))[1];
+  const changelogMarkdown = readFileSync(new URL("../CHANGELOG.zh.md", import.meta.url), "utf8");
+  const latest = /^## \[(\d+\.\d+\.\d+)\]/m.exec(changelogMarkdown)[1];
   assert.ok(changelogHTML.includes(`<h2>v${latest}</h2>`), "缺少最新版本");
   assert.match(changelogHTML, /<h3>(修复|改进|新增)<\/h3><ul><li>/);
   assert.ok((changelogHTML.match(/<section><h2>v/g) ?? []).length <= 8, "最多渲染 8 个版本");
-  assert.doesNotMatch(changelogHTML, /<h2>即将发布<\/h2>/, "空的 Unreleased 不渲染");
+  const unreleased = changelogMarkdown.split(/^## /m).find((section) => section.startsWith("[Unreleased]")) ?? "";
+  assert.equal(/<h2>即将发布<\/h2>/.test(changelogHTML), /^- .+/m.test(unreleased), "Unreleased 有条目时渲染，为空时隐藏");
   assert.match(changelogHTML, /CHANGELOG\.zh\.md/);
   const enChangelog = await (await get("/changelog?lang=en")).text();
   assert.match(enChangelog, /<h3>(Fixed|Changed|Added)<\/h3>/);
