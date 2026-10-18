@@ -73,6 +73,7 @@ jobs:
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
+          AGENT_LLM_THINKING: ${{ vars.AGENT_LLM_THINKING }}
           WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
           WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
           WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
@@ -267,6 +268,7 @@ jobs:
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
+          AGENT_LLM_THINKING: ${{ vars.AGENT_LLM_THINKING }}
           WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
           WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
           WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
@@ -307,6 +309,7 @@ jobs:
             "$AGENT_LLM_BASE_URL" \
             "$AGENT_LLM_API_KEY" \
             "$AGENT_LLM_MODEL" \
+            "$AGENT_LLM_THINKING" \
             "$WECHAT_COVER_IMAGE_BASE_URL" \
             "$WECHAT_COVER_IMAGE_API_KEY" \
             "$WECHAT_COVER_IMAGE_MODEL" \
@@ -341,6 +344,7 @@ jobs:
                 IFS= read -r agent_llm_base_url
                 IFS= read -r agent_llm_api_key
                 IFS= read -r agent_llm_model
+                IFS= read -r agent_llm_thinking
                 IFS= read -r wechat_cover_image_base_url
                 IFS= read -r wechat_cover_image_api_key
                 IFS= read -r wechat_cover_image_model
@@ -428,7 +432,7 @@ jobs:
                 awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" -v replace_feishu="$replace_feishu" "
                   /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|X_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
-                  replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL)=/ { next }
+                  replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL|AGENT_LLM_THINKING)=/ { next }
                   replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
                   replace_wechat_proxy == 1 && /^WECHAT_API_PROXY_URL=/ { next }
                   replace_x_oauth2 == 1 && /^(X_OAUTH2_CLIENT_ID|X_OAUTH2_CLIENT_SECRET)=/ { next }
@@ -479,6 +483,7 @@ jobs:
                   printf "AGENT_LLM_BASE_URL=%s\n" "$agent_llm_base_url" >> "$temp_file"
                   printf "AGENT_LLM_API_KEY=%s\n" "$agent_llm_api_key" >> "$temp_file"
                   printf "AGENT_LLM_MODEL=%s\n" "$agent_llm_model" >> "$temp_file"
+                  printf "AGENT_LLM_THINKING=%s\n" "$agent_llm_thinking" >> "$temp_file"
                 fi
                 if [ "$replace_wechat_cover" -eq 1 ]; then
                   printf "WECHAT_COVER_IMAGE_BASE_URL=%s\n" "$wechat_cover_image_base_url" >> "$temp_file"

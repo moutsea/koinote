@@ -321,11 +321,13 @@ func TestLoadPopulatesAgentLLMConfiguration(t *testing.T) {
 	t.Setenv("AGENT_LLM_BASE_URL", " https://api.anthropic.com ")
 	t.Setenv("AGENT_LLM_API_KEY", " secret ")
 	t.Setenv("AGENT_LLM_MODEL", " claude-sonnet-5 ")
+	t.Setenv("AGENT_LLM_THINKING", " TRUE ")
 	cfg := Load()
 	if cfg.LLMCredentialEncryptionKey != "credential-key" ||
 		cfg.AgentLLMProtocol != "anthropic" ||
 		cfg.AgentLLMBaseURL != "https://api.anthropic.com" ||
-		cfg.AgentLLMAPIKey != "secret" || cfg.AgentLLMModel != "claude-sonnet-5" {
+		cfg.AgentLLMAPIKey != "secret" || cfg.AgentLLMModel != "claude-sonnet-5" ||
+		!cfg.AgentLLMThinking {
 		t.Fatalf("Agent LLM 配置未完整加载: %+v", cfg)
 	}
 }

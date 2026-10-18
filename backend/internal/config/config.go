@@ -86,6 +86,7 @@ type Config struct {
 	AgentLLMBaseURL  string
 	AgentLLMAPIKey   string
 	AgentLLMModel    string
+	AgentLLMThinking bool
 
 	// 微信公众号封面生成使用 OpenAI-compatible Images API。三项齐全时启用，
 	// API Key 只留在后端，绝不下发给桌面客户端。
@@ -210,6 +211,7 @@ func Load() Config {
 		AgentLLMBaseURL:  strings.TrimSpace(os.Getenv("AGENT_LLM_BASE_URL")),
 		AgentLLMAPIKey:   strings.TrimSpace(os.Getenv("AGENT_LLM_API_KEY")),
 		AgentLLMModel:    strings.TrimSpace(os.Getenv("AGENT_LLM_MODEL")),
+		AgentLLMThinking: strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_LLM_THINKING")), "true"),
 
 		WechatCoverImageBaseURL: strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_BASE_URL")),
 		WechatCoverImageAPIKey:  strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_API_KEY")),

@@ -490,6 +490,8 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 本地测试 AI 优化时，先为 `LLM_CREDENTIAL_ENCRYPTION_KEY` 生成独立随机值。内置模型
 需要同时填写 `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_API_KEY`、
 `AGENT_LLM_MODEL`；四项全空时只关闭内置 credits 模式，会员配置的 BYOK 仍可用。
+如需开启模型思考，再设置 `AGENT_LLM_THINKING=true`，OpenAI 兼容渠道会发送
+`enable_thinking: true`。
 
 本地测试微信公众号草稿箱前，也必须单独生成并长期保留
 `WECHAT_CREDENTIAL_ENCRYPTION_KEY`；它不会回退复用 `SESSION_SECRET`。未配置时后端仍可启动，
@@ -613,6 +615,8 @@ HTTPS。启用后仅终生会员可调用，每生成一张封面固定消耗 20
 
 **AI 优化内置模型是可选的完整配置组。** `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、
 `AGENT_LLM_API_KEY`、`AGENT_LLM_MODEL` 必须四项齐全或全部留空；生产只接受 HTTPS。
+`AGENT_LLM_THINKING=true` 会开启 OpenAI 兼容渠道的思考模式，思考 token 计入模型用量，
+因此会增加延迟和 credits 消耗。
 BYOK 端点还会拒绝本机、私网、带用户信息的 URL 和重定向，但模型服务商仍会收到待审文章。
 
 **手动提醒翻译是可选的后端能力。** `ANNOUNCEMENT_LLM_BASE_URL`、
@@ -675,7 +679,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 把中转地址和模型名分别放在 Actions Variable `ANNOUNCEMENT_LLM_BASE_URL` 与
 `ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。BYOK 需要独立的必填 Secret
 `LLM_CREDENTIAL_ENCRYPTION_KEY`；可选的 AI 优化内置模型同样把 API Key 放 Secret，把
-`AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_MODEL` 放 Actions Variables。
+`AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_MODEL` 和可选的
+`AGENT_LLM_THINKING` 放 Actions Variables。
 四项全空时部署保留 VPS 已有值。仓库里的
 `koinote.app`、`api.koinote.app`、`img.koinote.app` 和 `verify@koinote.app` 是当前官方
 部署值，自建时要同步替换 `wrangler.jsonc`、`deploy/Caddyfile` 与 OAuth 回调配置。
@@ -851,6 +856,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `STRIPE_LIFETIME_PRODUCT_ID`   | 终生会员 Product ID（`prod_...`），价格由后端白名单生成                                             |
 | `STRIPE_CREDITS_PRODUCT_ID`    | Credits 充值 Product ID（`prod_...`），三档 USD 价格由后端白名单生成                              |
 | `AGENT_LLM_API_KEY`            | 可选；平台 AI 优化内置模型密钥，须与三个 `AGENT_LLM_*` Actions Variables 同时配置                    |
+| `AGENT_LLM_THINKING`           | 可选 Actions Variable；设为 `true` 时通过 `enable_thinking` 开启内置模型思考                        |
 | `WECHAT_COVER_IMAGE_API_KEY`   | 可选；公众号 AI 封面模型密钥，须与 Base URL、模型两个 Actions Variables 同时配置                     |
 | `WECHAT_API_PROXY_URL`         | 可选 Actions Variable；生产微信 API 中转地址，配置后部署会写入 VPS `.env`，未配置时保留服务器已有值 |
 | `BOT_WEBHOOK`                  | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置                                                |

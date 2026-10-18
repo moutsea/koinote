@@ -37,6 +37,7 @@ type agentLLMProvider struct {
 	Model        string
 	StrictOutput bool
 	SafeEndpoint bool
+	Thinking     bool
 }
 
 type agentLLMPrompt struct {
@@ -173,6 +174,12 @@ func callOpenAIAgentLLM(
 			{"role": "user", "content": prompt.User},
 		},
 		"temperature": agentLLMTemperature(prompt),
+	}
+	if provider.Thinking {
+		// DashScope-compatible DeepSeek enables reasoning with this field. The
+		// final answer still arrives in message.content; reasoning_content is
+		// deliberately ignored so the review parser only sees JSON output.
+		payload["enable_thinking"] = true
 	}
 	if provider.StrictOutput {
 		payload["max_completion_tokens"] = maxOutputTokens

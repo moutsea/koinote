@@ -993,12 +993,16 @@ func (a *App) resolveAgentLLMProvider(
 			return agentLLMProvider{}, nil, errors.New("built-in agent LLM is not configured")
 		}
 		return agentLLMProvider{
-			Mode:         "builtin",
-			Protocol:     a.cfg.AgentLLMProtocol,
-			BaseURL:      a.cfg.AgentLLMBaseURL,
-			APIKey:       a.cfg.AgentLLMAPIKey,
-			Model:        a.cfg.AgentLLMModel,
-			StrictOutput: a.cfg.AgentLLMProtocol == "openai",
+			Mode:     "builtin",
+			Protocol: a.cfg.AgentLLMProtocol,
+			BaseURL:  a.cfg.AgentLLMBaseURL,
+			APIKey:   a.cfg.AgentLLMAPIKey,
+			Model:    a.cfg.AgentLLMModel,
+			Thinking: a.cfg.AgentLLMThinking,
+			// DashScope-compatible DeepSeek rejects response_format json_schema.
+			// The non-strict path still sends the schema in the system prompt and
+			// uses JSON mode, then validates the parsed result before publishing.
+			StrictOutput: false,
 			SafeEndpoint: false,
 		}, nil, nil
 	}

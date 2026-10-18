@@ -219,6 +219,76 @@ func TestCallOpenAICompatibleAgentLLMUsesJSONMode(t *testing.T) {
 	}
 }
 
+func TestCallOpenAIAgentLLMThinkingMode(t *testing.T) {
+	for _, thinking := range []bool{false, true} {
+		t.Run(map[bool]string{false: "disabled", true: "enabled"}[thinking], func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Errorf("decode OpenAI request: %v", err)
+				}
+				enabled, exists := payload["enable_thinking"]
+				if thinking {
+					if !exists || enabled != true {
+						t.Errorf("enable_thinking = %#v, want true", enabled)
+					}
+				} else if exists {
+					t.Errorf("enable_thinking unexpectedly present: %#v", enabled)
+				}
+				if payload["max_tokens"] == nil {
+					t.Errorf("thinking-compatible request must use max_tokens: %#v", payload)
+				}
+				if _, exists := payload["max_completion_tokens"]; exists {
+					t.Errorf("thinking-compatible request must not use max_completion_tokens")
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"choices": []map[string]any{{
+						"message": map[string]any{
+							"content":           validAgentReviewJSON,
+							"reasoning_content": "internal reasoning that must not be parsed as output",
+						},
+						"finish_reason": "stop",
+					}},
+					"usage": map[string]any{
+						"prompt_tokens":             100,
+						"completion_tokens":         50,
+						"total_tokens":              150,
+						"completion_tokens_details": map[string]any{"reasoning_tokens": 20},
+					},
+				})
+			}))
+			defer server.Close()
+
+			provider := agentLLMProvider{
+				Mode: "builtin", Protocol: "openai",
+				BaseURL: server.URL + "/v1", APIKey: "sk-test",
+				Model: "deepseek-v4.1-flash-1017", Thinking: thinking,
+			}
+			result, err := callAgentLLM(context.Background(), server.Client(), provider, transportTestPrompt(t))
+			if err != nil {
+				t.Fatalf("call thinking OpenAI-compatible model: %v", err)
+			}
+			if result.TotalTokens != 150 {
+				t.Fatalf("thinking usage = %+v", result)
+			}
+			if _, err := validateFullWritingReview(result.JSON, "原标题", "这是原始句子。"); err != nil {
+				t.Fatalf("thinking response was not parsed from content: %v", err)
+			}
+		})
+	}
+}
+
+func TestAgentLLMEndpointDashScopeCompatibleMode(t *testing.T) {
+	endpoint, err := agentLLMEndpoint("https://dashscope.aliyuncs.com/compatible-mode/v1", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+	if endpoint != want {
+		t.Fatalf("DashScope endpoint = %q, want %q", endpoint, want)
+	}
+}
+
 func TestCallAnthropicAgentLLM(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/messages" {
