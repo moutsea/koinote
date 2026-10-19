@@ -202,7 +202,6 @@ func TestTitleReviewDropsMalformedItemsButKeepsEnvelopeValidation(t *testing.T) 
 		`{"summary":"ok","titleScore":101,"titleAssessment":"ok","titleSuggestions":[]}`,
 		`{"summary":"ok","titleScore":90,"titleAssessment":"","titleSuggestions":[]}`,
 		`{"summary":"ok","titleScore":90,"titleAssessment":"ok","titleSuggestions":{}}`,
-		`{"summary":"ok","titleScore":90,"titleAssessment":"ok","titleSuggestions":[],"unknown":true}`,
 	} {
 		if _, _, err := parseWritingReviewTaskResult(plan.Tasks[0], []byte(invalid), title, content, nil); !errors.Is(err, errAgentLLMInvalidResponse) {
 			t.Fatalf("invalid task envelope accepted: %s: %v", invalid, err)

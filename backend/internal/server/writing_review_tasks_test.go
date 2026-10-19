@@ -119,11 +119,25 @@ func TestDecodeStrictWritingReviewTaskUsesLaterCorrectedJSON(t *testing.T) {
 	}
 }
 
-func TestDecodeStrictWritingReviewTaskKeepsUnknownFieldsRejected(t *testing.T) {
+func TestDecodeStrictWritingReviewTaskIgnoresUnknownFields(t *testing.T) {
 	raw := []byte(`{"summary":"摘要","titleScore":80,"titleAssessment":"清楚。","titleSuggestions":[],"unexpected":"field"}`)
 	var review generatedTitleReview
-	if err := decodeStrictWritingReviewTask(raw, &review); !errors.Is(err, errAgentLLMInvalidResponse) {
-		t.Fatalf("unknown field error=%v, want invalid response", err)
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("unknown field should be ignored: %v", err)
+	}
+	if review.Summary != "摘要" || review.TitleScore != 80 {
+		t.Fatalf("decoded review=%+v", review)
+	}
+}
+
+func TestDecodeWritingReviewTaskIgnoresEditorialNotes(t *testing.T) {
+	raw := []byte(`{"summary":"摘要","editorialContext":{"readerGoal":"读者目标","voice":"克制","priorities":[],"prioritiesNote":"模型补充说明"},"bodySuggestions":[]}`)
+	var review generatedDocumentReview
+	if err := decodeStrictWritingReviewTask(raw, &review); err != nil {
+		t.Fatalf("editorial note should be ignored: %v", err)
+	}
+	if review.EditorialContext == nil || review.EditorialContext.ReaderGoal != "读者目标" {
+		t.Fatalf("decoded review=%+v", review)
 	}
 }
 

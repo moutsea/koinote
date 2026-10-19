@@ -1299,7 +1299,7 @@ func runWritingReviewTaskWave(
 				outcome.Result.Task.Stage,
 				outcome.Err,
 			)
-			if writingReviewTaskFailureIsFatal(outcome.Result.Task, outcome.Err) {
+			if writingReviewTaskFailureIsFatal(outcome.Result.Task) {
 				if primaryErr == nil || (errors.Is(primaryErr, context.Canceled) && !errors.Is(taskErr, context.Canceled)) {
 					primaryErr = taskErr
 				}
@@ -1314,14 +1314,12 @@ func runWritingReviewTaskWave(
 	return primaryErr
 }
 
-func writingReviewTaskFailureIsFatal(task writingReviewTaskSpec, err error) bool {
+func writingReviewTaskFailureIsFatal(task writingReviewTaskSpec) bool {
 	switch task.Stage {
 	case agentReviewTaskTitle, agentReviewTaskLayout:
 		return true
 	}
-	return !errors.Is(err, errAgentLLMTruncatedResponse) &&
-		!errors.Is(err, errAgentLLMEmptyResponse) &&
-		!errors.Is(err, errAgentLLMInvalidResponse)
+	return false
 }
 
 func executeWritingReviewTask(
@@ -1472,7 +1470,7 @@ func parseWritingReviewTaskResult(
 }
 
 func decodeStrictWritingReviewTask(raw []byte, target any) error {
-	firstErr := decodeStrictWritingReviewTaskBytes(raw, target)
+	firstErr := decodeWritingReviewTaskBytes(raw, target, true)
 	if firstErr == nil {
 		return nil
 	}
@@ -1480,7 +1478,8 @@ func decodeStrictWritingReviewTask(raw []byte, target any) error {
 	if repaired, ok := repairAgentJSONQuotes(raw); ok {
 		inputs = append(inputs, repaired)
 	}
-	seen := make(map[string]struct{}, len(inputs)*2)
+	candidates := make([][]byte, 0, len(inputs)*4)
+	seen := make(map[string]struct{}, len(inputs)*4)
 	for _, input := range inputs {
 		for _, candidate := range append([][]byte{input}, extractAgentJSONObjects(input)...) {
 			key := string(candidate)
@@ -1488,13 +1487,24 @@ func decodeStrictWritingReviewTask(raw []byte, target any) error {
 				continue
 			}
 			seen[key] = struct{}{}
-			if err := decodeStrictWritingReviewTaskBytes(candidate, target); err == nil {
-				return nil
-			}
+			candidates = append(candidates, candidate)
 			if repaired, ok := repairAgentJSONQuotes(candidate); ok {
-				if err := decodeStrictWritingReviewTaskBytes(repaired, target); err == nil {
-					return nil
+				key := string(repaired)
+				if _, exists := seen[key]; !exists {
+					seen[key] = struct{}{}
+					candidates = append(candidates, repaired)
 				}
+			}
+		}
+	}
+	// Prefer strict decoding so a partial early object cannot hide a later
+	// corrected object. Only when every candidate has harmless extra fields do
+	// we accept a permissive decode; validators still enforce required fields,
+	// suggestion anchors and edit scopes.
+	for _, strict := range []bool{true, false} {
+		for _, candidate := range candidates {
+			if err := decodeWritingReviewTaskBytes(candidate, target, strict); err == nil {
+				return nil
 			}
 		}
 	}
@@ -1502,9 +1512,15 @@ func decodeStrictWritingReviewTask(raw []byte, target any) error {
 }
 
 func decodeStrictWritingReviewTaskBytes(raw []byte, target any) error {
+	return decodeWritingReviewTaskBytes(raw, target, true)
+}
+
+func decodeWritingReviewTaskBytes(raw []byte, target any, strict bool) error {
 	resetAgentJSONTarget(target)
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.DisallowUnknownFields()
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}
