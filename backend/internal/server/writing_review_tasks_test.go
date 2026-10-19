@@ -383,8 +383,13 @@ func TestWritingReviewDocumentRejectsUnsuppliedOversizedBlockSuffix(t *testing.T
 		t.Fatalf("parsed blocks=%d, want one oversized paragraph", len(blocks))
 	}
 	ranges := task.AllowedBodyBlockRanges[blocks[0].ID]
-	if len(ranges) != 1 || ranges[0].contains(strings.Index(content, unseenAnchor), len(content)) {
-		t.Fatalf("unexpected whole-document source ranges: %+v", ranges)
+	if len(ranges) == 0 {
+		t.Fatalf("document segment has no source ranges: %+v", task.AllowedBodyBlockRanges)
+	}
+	for _, sourceRange := range ranges {
+		if sourceRange.contains(strings.Index(content, unseenAnchor), len(content)) {
+			t.Fatalf("document segment includes unseen suffix: %+v", ranges)
+		}
 	}
 	raw, err := json.Marshal(map[string]any{
 		"bodySuggestions": []map[string]any{{
@@ -1414,10 +1419,12 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if countWritingReviewTasks(plan, agentReviewTaskDocument) != 1 {
-		t.Fatalf("plan must contain exactly one whole-document task: %+v", plan.Tasks)
+	documentTasks := countWritingReviewTasks(plan, agentReviewTaskDocument)
+	bodyTasks := countWritingReviewTasks(plan, agentReviewTaskBody)
+	if documentTasks != bodyTasks || documentTasks <= 1 {
+		t.Fatalf("long plan document tasks=%d body tasks=%d, want equal and >1", documentTasks, bodyTasks)
 	}
-	if countWritingReviewTasks(plan, agentReviewTaskBody) < agentReviewTaskConcurrency {
+	if bodyTasks < agentReviewTaskConcurrency {
 		t.Fatalf("test document did not split into enough body chunks: %+v", plan.Tasks)
 	}
 
@@ -1548,7 +1555,7 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 	if editWithoutFindings.Load() != 0 {
 		t.Fatalf("%d edit-wave prompts arrived without the first-pass diagnosis", editWithoutFindings.Load())
 	}
-	if titleRequests.Load() != 1 || layoutRequests.Load() != 1 || documentRequests.Load() != 1 {
+	if titleRequests.Load() != 1 || layoutRequests.Load() != 1 || documentRequests.Load() != int32(documentTasks) {
 		t.Fatalf("request counts title=%d layout=%d document=%d",
 			titleRequests.Load(), layoutRequests.Load(), documentRequests.Load())
 	}
@@ -1557,9 +1564,132 @@ func TestExecuteWritingReviewTaskPlanStagesWavesAndRetriesOnlyInvalidTask(t *tes
 		t.Fatalf("body requests=%d, want %d", bodyRequests.Load(), want)
 	}
 	if result.TotalTokens != int(totalRequests.Load())*120 ||
-		review.Summary != "The opening hides the reader's practical question." ||
+		review.Summary != "The article is already focused." ||
 		review.TitleScore != 80 || len(review.LayoutAssessment) != len(writingReviewDimensionIDs) {
 		t.Fatalf("merged review result=%+v review=%+v requests=%d", result, review, totalRequests.Load())
+	}
+}
+
+func TestWritingReviewDocumentTaskSegmentsLongArticles(t *testing.T) {
+	paragraphs := make([]string, 60)
+	for index := range paragraphs {
+		paragraphs[index] = fmt.Sprintf("第 %02d 段：", index) + strings.Repeat("这是一段用于长文分段诊断的正文。", 120)
+	}
+	content := strings.Join(paragraphs, "\n\n")
+	plan, err := buildWritingReviewTaskPlan("长文标题", content, "paragraph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var documents []writingReviewTaskSpec
+	for _, task := range plan.Tasks {
+		if task.Stage == agentReviewTaskDocument {
+			documents = append(documents, task)
+		}
+	}
+	if len(documents) <= 1 {
+		t.Fatalf("long article document tasks=%d, want multiple segments", len(documents))
+	}
+	if bodyTasks := countWritingReviewTasks(plan, agentReviewTaskBody); bodyTasks != len(documents) {
+		t.Fatalf("document segments=%d body chunks=%d, want one segment per chunk", len(documents), bodyTasks)
+	}
+	const prefix = "Review this JSON-encoded document segment and return only the requested document review JSON.\n\nDOCUMENT_SEGMENT:\n"
+	for index, task := range documents {
+		if task.ID != fmt.Sprintf("document-%d", index+1) || task.DocumentSegment != index+1 {
+			t.Fatalf("segment %d identity=%q/%d", index, task.ID, task.DocumentSegment)
+		}
+		if !strings.Contains(task.Prompt.System, "Segment scope:") || !strings.HasPrefix(task.Prompt.User, prefix) {
+			t.Fatalf("segment %d prompt is missing segment scope", index)
+		}
+		var input map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(task.Prompt.User, prefix)), &input); err != nil {
+			t.Fatalf("decode segment %d prompt: %v", index, err)
+		}
+		if input["analysisScope"] != "document-segment" ||
+			input["segmentIndex"] != float64(index+1) ||
+			input["segmentCount"] != float64(len(documents)) {
+			t.Fatalf("segment %d input scope=%+v", index, input)
+		}
+		if _, ok := input["outline"]; !ok || len(task.AllowedBodyBlockIDs) == 0 {
+			t.Fatalf("segment %d lost outline or editable scope", index)
+		}
+	}
+}
+
+func TestWritingReviewKeepsPartialResultsWhenDocumentSegmentTruncates(t *testing.T) {
+	paragraphs := make([]string, 60)
+	for index := range paragraphs {
+		paragraphs[index] = fmt.Sprintf("第 %02d 段：", index) + strings.Repeat("这是一段用于截断兜底的正文。", 120)
+	}
+	content := strings.Join(paragraphs, "\n\n")
+	plan, err := buildWritingReviewTaskPlan("A clear title", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var documentRequests, titleRequests, layoutRequests, bodyRequests atomic.Int32
+	providerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("decode task payload: %v", err)
+		}
+		system := ""
+		for _, message := range payload.Messages {
+			if message.Role == "system" {
+				system = message.Content
+			}
+		}
+		responseText, finishReason := "", "stop"
+		switch {
+		case strings.Contains(system, `"titleScore"`):
+			titleRequests.Add(1)
+			responseText = `{"summary":"Global title summary.","titleScore":80,"titleAssessment":"The title is clear and supported.","titleSuggestions":[]}`
+		case strings.Contains(system, "Segment scope:"):
+			if documentRequests.Add(1) == 1 {
+				finishReason = "length"
+			} else {
+				responseText = `{"summary":"Segment summary.","editorialContext":{"readerGoal":"Find the supported answer","voice":"Preserve specific observations","priorities":[]},"bodySuggestions":[]}`
+			}
+		case strings.Contains(system, `"layoutAssessment"`):
+			layoutRequests.Add(1)
+			encoded, _ := json.Marshal(map[string]any{
+				"layoutAssessment": writingReviewTaskDimensionsForTest(), "layoutSuggestions": []any{},
+			})
+			responseText = string(encoded)
+		case strings.Contains(system, `"bodySuggestions"`):
+			bodyRequests.Add(1)
+			responseText = `{"bodySuggestions":[]}`
+		default:
+			t.Errorf("unknown task schema: %s", system)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"message":       map[string]string{"content": responseText},
+				"finish_reason": finishReason,
+			}},
+			"usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+		})
+	}))
+	defer providerServer.Close()
+
+	_, review, err := executeWritingReviewTaskPlan(
+		context.Background(), providerServer.Client(), agentLLMProvider{
+			Mode: "byok", Protocol: "openai", BaseURL: providerServer.URL, APIKey: "test", Model: "test",
+		}, plan, "A clear title", content, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("one truncated document segment aborted the review: %v", err)
+	}
+	if review.Summary != "Global title summary." || len(review.LayoutAssessment) != len(writingReviewDimensionIDs) {
+		t.Fatalf("partial review lost global results: summary=%q layout=%d", review.Summary, len(review.LayoutAssessment))
+	}
+	if documentRequests.Load() < 2 || titleRequests.Load() != 1 || layoutRequests.Load() != 1 || bodyRequests.Load() == 0 {
+		t.Fatalf("requests document=%d title=%d layout=%d body=%d",
+			documentRequests.Load(), titleRequests.Load(), layoutRequests.Load(), bodyRequests.Load())
 	}
 }
 

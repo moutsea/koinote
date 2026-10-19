@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"reflect"
 	"sort"
@@ -15,14 +16,17 @@ import (
 )
 
 const (
-	agentReviewTaskConcurrency       = 3
-	agentReviewMaxBodyTasks          = 12
-	agentReviewBodyChunkTargetBytes  = 24 << 10
-	agentReviewTitleContextBytes     = 12 << 10
-	agentReviewLayoutSourceBytes     = 32 << 10
-	agentReviewLayoutBlockLimit      = 400
-	agentReviewDocumentSourceBytes   = 96 << 10
-	agentReviewDocumentBlockLimit    = 600
+	agentReviewTaskConcurrency      = 3
+	agentReviewMaxBodyTasks         = 12
+	agentReviewBodyChunkTargetBytes = 24 << 10
+	agentReviewTitleContextBytes    = 12 << 10
+	agentReviewLayoutSourceBytes    = 32 << 10
+	agentReviewLayoutBlockLimit     = 400
+	agentReviewDocumentSourceBytes  = 96 << 10
+	agentReviewDocumentBlockLimit   = 600
+	// 超过这个体量才主动拆分整篇任务；中等长度文章仍优先保留一次全局诊断，
+	// 避免无谓地增加调用次数和费用。真正的兜底由任务失败后保留其他结果承担。
+	agentReviewDocumentSegmentBytes  = 64 << 10
 	agentReviewDeepLayoutSourceBytes = 96 << 10
 	agentReviewDeepLayoutBlockLimit  = 600
 	agentReviewMaxBodySuggestions    = 12
@@ -97,6 +101,7 @@ type writingReviewTaskSpec struct {
 	Wave                   int
 	OrdinalBase            int
 	Prompt                 agentLLMPrompt
+	DocumentSegment        int
 	WantsPriorFindings     bool
 	BodyTasks              []string
 	AllowedBodyCategories  map[string]struct{}
@@ -337,7 +342,7 @@ func buildWritingReviewTaskPlan(title, content string, selectedTasks ...string) 
 	bodyChunks := splitWritingReviewBodyBlocks(blocks)
 	outline := writingReviewOutline(blocks, agentReviewTitleContextBytes/3)
 
-	tasks := make([]writingReviewTaskSpec, 0, len(bodyChunks)+3)
+	tasks := make([]writingReviewTaskSpec, 0, len(bodyChunks)*2+3)
 	if selected["title"] {
 		titlePrompt, err := buildWritingReviewTitlePrompt(title, blocks, outline)
 		if err != nil {
@@ -352,20 +357,41 @@ func buildWritingReviewTaskPlan(title, content string, selectedTasks ...string) 
 		}
 		tasks = append(tasks, writingReviewTaskSpec{ID: "layout", Stage: agentReviewTaskLayout, Wave: agentReviewWaveDiagnose, OrdinalBase: 10_000, Prompt: layoutPrompt, AllowedLayoutBlockIDs: allowedLayoutBlockIDs})
 	}
-	var documentPrompt agentLLMPrompt
-	var allowedDocumentBlockIDs map[string]struct{}
-	var allowedDocumentBlockRanges map[string][]writingReviewByteRange
-	if selected["paragraph"] {
-		var err error
-		documentPrompt, allowedDocumentBlockIDs, allowedDocumentBlockRanges, err = buildWritingReviewDocumentPrompt(title, blocks, outline)
-		if err != nil {
-			return writingReviewTaskPlan{}, err
-		}
-	}
 	// 唯一同时拥有全局视野和改字权限的任务。没有它，"第 3 节和第 6 节在论证同一件事"
 	// 这类建议在结构上就产生不出来：改字的只看得见自己那块，看得见全局的不许动字。
+	// 长文无法稳定装进一次思考/输出预算时，沿正文分块拆成多个全文分段任务；
+	// 每个分段仍能看到完整标题、outline 和相邻只读上下文，但只能改自己范围内的块。
 	if selected["paragraph"] {
-		tasks = append(tasks, writingReviewTaskSpec{ID: "document", Stage: agentReviewTaskDocument, Wave: agentReviewWaveDiagnose, OrdinalBase: 50, Prompt: documentPrompt, AllowedBodyBlockIDs: allowedDocumentBlockIDs, AllowedBodyBlockRanges: allowedDocumentBlockRanges})
+		if len(bodyChunks) > 1 && len(content) > agentReviewDocumentSegmentBytes {
+			for index, chunk := range bodyChunks {
+				prompt, allowedIDs, allowedRanges, err := buildWritingReviewDocumentSegmentPrompt(
+					title, content, blocks, outline, chunk, index, len(bodyChunks),
+				)
+				if err != nil {
+					return writingReviewTaskPlan{}, err
+				}
+				tasks = append(tasks, writingReviewTaskSpec{
+					ID:                     fmt.Sprintf("document-%d", index+1),
+					Stage:                  agentReviewTaskDocument,
+					DocumentSegment:        index + 1,
+					Wave:                   agentReviewWaveDiagnose,
+					OrdinalBase:            50 + index,
+					Prompt:                 prompt,
+					AllowedBodyBlockIDs:    allowedIDs,
+					AllowedBodyBlockRanges: allowedRanges,
+				})
+			}
+		} else {
+			prompt, allowedIDs, allowedRanges, err := buildWritingReviewDocumentPrompt(title, blocks, outline)
+			if err != nil {
+				return writingReviewTaskPlan{}, err
+			}
+			tasks = append(tasks, writingReviewTaskSpec{
+				ID: "document", Stage: agentReviewTaskDocument, Wave: agentReviewWaveDiagnose,
+				OrdinalBase: 50, Prompt: prompt,
+				AllowedBodyBlockIDs: allowedIDs, AllowedBodyBlockRanges: allowedRanges,
+			})
+		}
 	}
 	if selected["proofread"] || selected["paragraph"] {
 		bodyTasks := make([]string, 0, 2)
@@ -505,6 +531,42 @@ func buildWritingReviewDocumentPrompt(
 		agentReviewTemperatureDocument,
 	)
 	return prompt, writingReviewSourcedBlockIDs(documentBlocks), writingReviewSourcedBlockRanges(documentBlocks), err
+}
+
+const writingReviewDocumentSegmentInstruction = `Segment scope:
+This request covers one segment of a longer article. Review only the supplied segment blocks. Use outline, stats, readOnlyBefore and readOnlyAfter to understand continuity, but every suggestion must stay inside the supplied segment. Prefer changes that span multiple sections inside this segment; local line edits belong to the paragraph reviewer. Do not claim to have reviewed text outside this segment.`
+
+func buildWritingReviewDocumentSegmentPrompt(
+	title string,
+	content string,
+	blocks []markdownReviewBlock,
+	outline []string,
+	segment []markdownReviewBlock,
+	index int,
+	total int,
+) (agentLLMPrompt, map[string]struct{}, map[string][]writingReviewByteRange, error) {
+	input := map[string]any{
+		"analysisScope": "document-segment",
+		"segmentIndex":  index + 1,
+		"segmentCount":  total,
+		"title":         title,
+		"outline":       outline,
+		"stats":         writingReviewDocumentStats(blocks),
+		"blocks":        segment,
+	}
+	if scope := writingReviewChunkRange(segment); scope != nil {
+		input["readOnlyBefore"] = truncateWritingReviewContext(content[:scope.Start], 1024, true)
+		input["readOnlyAfter"] = truncateWritingReviewContext(content[scope.End:], 1024, false)
+	}
+	prompt, err := marshalWritingReviewTaskPrompt(
+		writingReviewDocumentSystemPrompt+"\n\n"+writingReviewDocumentSegmentInstruction,
+		"Review this JSON-encoded document segment and return only the requested document review JSON.\n\nDOCUMENT_SEGMENT:\n",
+		input,
+		writingReviewDocumentSchema(),
+		agentReviewDocumentMaxOutputTokens,
+		agentReviewTemperatureDocument,
+	)
+	return prompt, writingReviewChunkBlockIDs(segment), writingReviewChunkBlockRanges(segment), err
 }
 
 // 超长块会被切成 "<blockID>-part-N" 若干份，而作用域校验比对的是原始块 ID，
@@ -1123,7 +1185,9 @@ func writingReviewPriorFindingsJSON(results []writingReviewTaskResult) string {
 		case agentReviewTaskLayout:
 			findings.LayoutAssessment = result.Validated.LayoutAssessment
 		case agentReviewTaskDocument:
-			findings.EditorialContext = result.Generated.EditorialContext
+			if findings.EditorialContext == nil {
+				findings.EditorialContext = result.Generated.EditorialContext
+			}
 		}
 	}
 	if findings.Summary == "" && len(findings.LayoutAssessment) == 0 && findings.EditorialContext == nil {
@@ -1235,13 +1299,29 @@ func runWritingReviewTaskWave(
 				outcome.Result.Task.Stage,
 				outcome.Err,
 			)
-			if primaryErr == nil || (errors.Is(primaryErr, context.Canceled) && !errors.Is(taskErr, context.Canceled)) {
-				primaryErr = taskErr
+			if writingReviewTaskFailureIsFatal(outcome.Result.Task, outcome.Err) {
+				if primaryErr == nil || (errors.Is(primaryErr, context.Canceled) && !errors.Is(taskErr, context.Canceled)) {
+					primaryErr = taskErr
+				}
+				cancel()
+			} else {
+				// 正文/整篇分段任务失败时保留其他任务的结果。长文兜底不能因为
+				// 某一个分段的思考或输出预算耗尽而把整份审阅判死。
+				log.Printf("agent review task failed without aborting review: %v", taskErr)
 			}
-			cancel()
 		}
 	}
 	return primaryErr
+}
+
+func writingReviewTaskFailureIsFatal(task writingReviewTaskSpec, err error) bool {
+	switch task.Stage {
+	case agentReviewTaskTitle, agentReviewTaskLayout:
+		return true
+	}
+	return !errors.Is(err, errAgentLLMTruncatedResponse) &&
+		!errors.Is(err, errAgentLLMEmptyResponse) &&
+		!errors.Is(err, errAgentLLMInvalidResponse)
 }
 
 func executeWritingReviewTask(
@@ -1692,7 +1772,12 @@ func mergeWritingReviewTaskResults(
 			combined.TitleAssessment = result.Generated.TitleAssessment
 			combined.TitleSuggestions = result.Generated.TitleSuggestions
 		case agentReviewTaskDocument:
-			documentSummary = strings.TrimSpace(result.Validated.Summary)
+			if result.Task.DocumentSegment == 0 {
+				documentSummary = strings.TrimSpace(result.Validated.Summary)
+			} else if documentSummary == "" && !hasTitleResult {
+				// 分段任务只给局部摘要；有标题任务时保留标题的全局摘要。
+				documentSummary = strings.TrimSpace(result.Validated.Summary)
+			}
 			documentSuggestions = append(documentSuggestions, writingReviewAcceptedBodySuggestions(result)...)
 		case agentReviewTaskBody:
 			if accepted := writingReviewAcceptedBodySuggestions(result); len(accepted) > 0 {

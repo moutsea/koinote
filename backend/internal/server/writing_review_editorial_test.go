@@ -20,11 +20,14 @@ func TestEditorialParagraphPlanCoversBodyWithSharedBudget(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			chunks := splitWritingReviewBodyBlocks(parseMarkdownReviewBlocks(content))
 			wantDocument := 0
 			if containsWritingReviewTask(selected, "paragraph") {
 				wantDocument = 1
+				if len(chunks) > 1 && len(content) > agentReviewDocumentSegmentBytes {
+					wantDocument = len(chunks)
+				}
 			}
-			chunks := splitWritingReviewBodyBlocks(parseMarkdownReviewBlocks(content))
 			if len(plan.Tasks) != len(chunks)+wantDocument {
 				t.Fatalf("calls=%d, want %d chunks + %d document", len(plan.Tasks), len(chunks), wantDocument)
 			}
@@ -37,7 +40,7 @@ func TestEditorialParagraphPlanCoversBodyWithSharedBudget(t *testing.T) {
 				for _, block := range input.Blocks {
 					covered.WriteString(block.Source)
 				}
-				if strings.Contains(task.Prompt.System, "Koinote's line editor") != (wantDocument == 1) {
+				if strings.Contains(task.Prompt.System, "Koinote's line editor") != containsWritingReviewTask(selected, "paragraph") {
 					t.Fatal("paragraph selection did not select the line editor")
 				}
 				schema := task.Prompt.Schema["properties"].(map[string]any)["bodySuggestions"].(map[string]any)
