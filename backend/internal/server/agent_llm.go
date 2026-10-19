@@ -16,6 +16,7 @@ import (
 
 const (
 	agentLLMMaxOutputTokens          = 8_192
+	agentLLMThinkingMaxOutputTokens  = 16_384
 	agentLLMAnthropicMaxOutputTokens = 8_192
 	agentLLMMaxResponseBytes         = 2 << 20
 	maxAgentBodySuggestions          = 40
@@ -167,6 +168,12 @@ func callOpenAIAgentLLM(
 		systemPrompt += "\n\nThe response must conform to this exact JSON Schema:\n" + string(schemaJSON)
 	}
 	maxOutputTokens := agentLLMPromptOutputLimit(prompt, agentLLMMaxOutputTokens)
+	if provider.Thinking {
+		// Thinking tokens count against the same completion budget. The review
+		// tasks have small task-specific limits, which would otherwise truncate
+		// the final JSON before the model finishes reasoning.
+		maxOutputTokens = agentLLMThinkingMaxOutputTokens
+	}
 	payload := map[string]any{
 		"model": provider.Model,
 		"messages": []map[string]string{

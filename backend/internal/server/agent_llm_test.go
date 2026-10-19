@@ -238,6 +238,13 @@ func TestCallOpenAIAgentLLMThinkingMode(t *testing.T) {
 				if payload["max_tokens"] == nil {
 					t.Errorf("thinking-compatible request must use max_tokens: %#v", payload)
 				}
+				wantLimit := float64(agentReviewTitleMaxOutputTokens)
+				if thinking {
+					wantLimit = agentLLMThinkingMaxOutputTokens
+				}
+				if payload["max_tokens"] != wantLimit {
+					t.Errorf("max_tokens = %#v, want %.0f", payload["max_tokens"], wantLimit)
+				}
 				if _, exists := payload["max_completion_tokens"]; exists {
 					t.Errorf("thinking-compatible request must not use max_completion_tokens")
 				}
