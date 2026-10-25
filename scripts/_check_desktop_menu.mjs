@@ -136,7 +136,7 @@ const wiring = [
       "share-document",
     ],
   ],
-  ["spa/src/components/editor/DocumentFindBar.tsx", ["find-in-document"]],
+  ["spa/src/components/editor/DocumentFindBar.tsx", ["find-in-document", "replace-in-document"]],
   [
     "spa/src/components/editor/ExportMenu.tsx",
     [

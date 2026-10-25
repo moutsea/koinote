@@ -35,7 +35,7 @@ const DESKTOP_CLOSE_WINDOW_ACTION: &str = "close-window";
 const DESKTOP_EXPORT_SUBMENU_ID: &str = "koinote.export-document";
 
 #[cfg(desktop)]
-const DESKTOP_MENU_ACTIONS: [&str; 21] = [
+const DESKTOP_MENU_ACTIONS: [&str; 22] = [
     "new-document",
     "save-document",
     "close-document",
@@ -47,6 +47,7 @@ const DESKTOP_MENU_ACTIONS: [&str; 21] = [
     "share-document",
     "quick-open",
     "find-in-document",
+    "replace-in-document",
     "search-all-documents",
     "previous-document",
     "next-document",
@@ -130,6 +131,7 @@ struct DesktopMenuCopy {
     toggle_outline: &'static str,
     quick_open: &'static str,
     find_document: &'static str,
+    replace_document: &'static str,
     search_all: &'static str,
     previous_document: &'static str,
     next_document: &'static str,
@@ -166,6 +168,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             toggle_outline: "Toggle Outline",
             quick_open: "Quick Open Document…",
             find_document: "Find in Document…",
+            replace_document: "Replace in Document…",
             search_all: "Search All Documents…",
             previous_document: "Previous Document",
             next_document: "Next Document",
@@ -198,6 +201,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             toggle_outline: "显示或隐藏大纲",
             quick_open: "快速打开文档…",
             find_document: "在文档中查找…",
+            replace_document: "在文档中替换…",
             search_all: "搜索全部文档…",
             previous_document: "上一个文档",
             next_document: "下一个文档",
@@ -230,6 +234,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             toggle_outline: "Afficher ou masquer le plan",
             quick_open: "Ouvrir rapidement un document…",
             find_document: "Rechercher dans le document…",
+            replace_document: "Remplacer dans le document…",
             search_all: "Rechercher dans tous les documents…",
             previous_document: "Document précédent",
             next_document: "Document suivant",
@@ -262,6 +267,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             toggle_outline: "アウトラインを表示／非表示",
             quick_open: "ドキュメントをすばやく開く…",
             find_document: "ドキュメント内を検索…",
+            replace_document: "ドキュメント内を置換…",
             search_all: "すべてのドキュメントを検索…",
             previous_document: "前のドキュメント",
             next_document: "次のドキュメント",
@@ -424,6 +430,13 @@ fn build_desktop_menu<R: Runtime, M: Manager<R>>(
         Some("CmdOrCtrl+F"),
         enabled_actions,
     )?;
+    let replace_document = desktop_menu_item(
+        handle,
+        "replace-in-document",
+        copy.replace_document,
+        Some("CmdOrCtrl+R"),
+        enabled_actions,
+    )?;
     let search_all = desktop_menu_item(
         handle,
         "search-all-documents",
@@ -446,7 +459,7 @@ fn build_desktop_menu<R: Runtime, M: Manager<R>>(
         enabled_actions,
     )?;
     let navigate_menu = SubmenuBuilder::new(handle, copy.navigate)
-        .items(&[&quick_open, &find_document, &search_all])
+        .items(&[&quick_open, &find_document, &replace_document, &search_all])
         .separator()
         .items(&[&previous_document, &next_document])
         .build()?;

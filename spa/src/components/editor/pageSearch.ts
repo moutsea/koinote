@@ -1,7 +1,10 @@
 import { Extension, type Editor } from "@tiptap/core";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { Fragment, Slice, type Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { ReplaceStep } from "@tiptap/pm/transform";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { closeHistory } from "@tiptap/pm/history";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { BatchReplaceStep } from "./batchReplaceStep";
 import {
   findTextMatches,
   MAX_PAGE_SEARCH_MATCHES,
@@ -20,8 +23,9 @@ type PageSearchState = PageSearchSnapshot & {
 };
 
 type PageSearchAction =
-  | { type: "query"; query: string }
+  | { type: "query"; query: string; initialRange?: TextMatch }
   | { type: "activate"; activeIndex: number }
+  | { type: "replaced"; nextFrom: number }
   | { type: "clear" };
 
 const pageSearchKey = new PluginKey<PageSearchState>("koinotePageSearch");
@@ -33,7 +37,7 @@ function findDocumentMatches(
   const ranges: TextMatch[] = [];
 
   document.descendants((block, blockPosition) => {
-    if (!block.isTextblock || ranges.length >= MAX_PAGE_SEARCH_MATCHES) return true;
+    if (!block.isTextblock) return true;
 
     let text = "";
     const segments: Array<{
@@ -62,19 +66,17 @@ function findDocumentMatches(
       return true;
     });
 
-    const matches = findTextMatches(
-      text,
-      query,
-      MAX_PAGE_SEARCH_MATCHES - ranges.length,
-    );
+    // Single-match navigation must include overlaps so an explicit body
+    // selection is always addressable. Bulk replacement filters them later.
+    const matches = findTextMatches(text, query, Infinity, true);
+    let startSegmentIndex = 0;
+    let endSegmentIndex = 0;
     for (const match of matches) {
-      const startSegment = segments.find(
-        (segment) => match.from >= segment.textFrom && match.from < segment.textTo,
-      );
+      while (startSegmentIndex < segments.length && segments[startSegmentIndex].textTo <= match.from) startSegmentIndex++;
+      const startSegment = segments[startSegmentIndex];
       const endOffset = match.to - 1;
-      const endSegment = segments.find(
-        (segment) => endOffset >= segment.textFrom && endOffset < segment.textTo,
-      );
+      while (endSegmentIndex < segments.length && segments[endSegmentIndex].textTo <= endOffset) endSegmentIndex++;
+      const endSegment = segments[endSegmentIndex];
       if (!startSegment || !endSegment) continue;
 
       const from =
@@ -96,26 +98,41 @@ function decorationsFor(
   ranges: TextMatch[],
   activeIndex: number,
 ): DecorationSet {
-  return DecorationSet.create(
-    document,
-    ranges.map((range, index) =>
-      Decoration.inline(range.from, range.to, {
-        class:
-          index === activeIndex
-            ? "kn-page-search-match kn-page-search-current"
-            : "kn-page-search-match",
-        "data-page-search-index": String(index),
-      }),
-    ),
-  );
+  // Bound decoration work while keeping the active match visible. Indices
+  // remain relative to the full result list when moving between windows.
+  const start = activeIndex < 0
+    ? 0
+    : Math.floor(activeIndex / MAX_PAGE_SEARCH_MATCHES) * MAX_PAGE_SEARCH_MATCHES;
+  const current = ranges[activeIndex];
+  const decorations: Decoration[] = [];
+  let highlightedUntil = -1;
+  for (let index = start; index < Math.min(ranges.length, start + MAX_PAGE_SEARCH_MATCHES); index++) {
+    const range = ranges[index];
+    // Reserve the exact active range, then draw disjoint background matches.
+    // Overlapping decorations would split the current highlight into pieces.
+    if (index !== activeIndex && current && range.from < current.to && range.to > current.from) continue;
+    if (range.from < highlightedUntil) continue;
+    decorations.push(Decoration.inline(range.from, range.to, {
+      class: index === activeIndex
+        ? "kn-page-search-match kn-page-search-current"
+        : "kn-page-search-match",
+      "data-page-search-index": String(index),
+    }));
+    highlightedUntil = range.to;
+  }
+  return DecorationSet.create(document, decorations);
 }
 
 function stateFor(
   document: ProseMirrorNode,
   query: string,
   requestedActiveIndex = -1,
+  initialRange?: TextMatch,
 ): PageSearchState {
   const ranges = findDocumentMatches(document, query);
+  if (initialRange) {
+    requestedActiveIndex = ranges.findIndex((range) => range.from === initialRange.from && range.to === initialRange.to);
+  }
   const activeIndex =
     requestedActiveIndex >= 0 && requestedActiveIndex < ranges.length
       ? requestedActiveIndex
@@ -144,6 +161,14 @@ export const PageSearchExtension = Extension.create({
     return [
       new Plugin<PageSearchState>({
         key: pageSearchKey,
+        filterTransaction(transaction) {
+          // Undo/redo retains steps but not transaction metadata. These remain
+          // literal edits too, and must not trigger a quadratic autolink scan.
+          if (transaction.steps.some((step) => step instanceof BatchReplaceStep)) {
+            transaction.setMeta("preventAutolink", true);
+          }
+          return true;
+        },
         state: {
           init: (_, state) => emptySearchState(state.doc),
           apply(transaction, previous) {
@@ -152,7 +177,14 @@ export const PageSearchExtension = Extension.create({
               | undefined;
             if (action?.type === "clear") return emptySearchState(transaction.doc);
             if (action?.type === "query") {
-              return stateFor(transaction.doc, action.query);
+              return stateFor(transaction.doc, action.query, -1, action.initialRange);
+            }
+            if (action?.type === "replaced") {
+              const next = stateFor(transaction.doc, previous.query);
+              const index = next.ranges.findIndex((range) => range.from >= action.nextFrom);
+              next.activeIndex = next.total ? Math.max(index, 0) : -1;
+              next.decorations = decorationsFor(transaction.doc, next.ranges, next.activeIndex);
+              return next;
             }
             if (action?.type === "activate") {
               const activeIndex =
@@ -170,11 +202,23 @@ export const PageSearchExtension = Extension.create({
               };
             }
             if (transaction.docChanged && previous.query) {
-              return stateFor(
-                transaction.doc,
-                previous.query,
-                Math.min(previous.activeIndex, previous.total - 1),
-              );
+              const current = previous.ranges[previous.activeIndex];
+              if (!current) return stateFor(transaction.doc, previous.query);
+              // Follow the original text, not its index in a changing result
+              // list. Insertions at either edge stay outside the active match.
+              const mapped = {
+                from: transaction.mapping.map(current.from, 1),
+                to: transaction.mapping.map(current.to, -1),
+              };
+              const next = stateFor(transaction.doc, previous.query, -1, mapped);
+              if (next.activeIndex < 0 && next.total) {
+                // The active text no longer matches. Continue from its mapped
+                // position, wrapping only when no later match remains.
+                const index = next.ranges.findIndex((range) => range.from >= mapped.from);
+                next.activeIndex = Math.max(index, 0);
+                next.decorations = decorationsFor(transaction.doc, next.ranges, next.activeIndex);
+              }
+              return next;
             }
             return previous;
           },
@@ -190,9 +234,10 @@ export const PageSearchExtension = Extension.create({
 export function setDocumentSearchQuery(
   editor: Editor,
   query: string,
+  initialRange?: TextMatch,
 ): PageSearchSnapshot {
   editor.view.dispatch(
-    editor.state.tr.setMeta(pageSearchKey, { type: "query", query } satisfies PageSearchAction),
+    editor.state.tr.setMeta(pageSearchKey, { type: "query", query, initialRange } satisfies PageSearchAction),
   );
   return documentSearchSnapshot(editor);
 }
@@ -222,4 +267,60 @@ export function documentSearchSnapshot(editor: Editor): PageSearchSnapshot {
     total: state?.total ?? 0,
     activeIndex: state?.activeIndex ?? -1,
   };
+}
+
+export type PageReplaceResult = PageSearchSnapshot & { replaced: number };
+
+/** Replace literal text in the live document; all replacements form one undo step. */
+export function replaceDocumentSearch(
+  editor: Editor,
+  replacement: string,
+  all = false,
+): PageReplaceResult {
+  const search = pageSearchKey.getState(editor.state);
+  if (editor.isDestroyed || !editor.isEditable || !search?.query || !search.total) {
+    return { ...documentSearchSnapshot(editor), replaced: 0 };
+  }
+  // Replace all still consumes each original character at most once, from
+  // left to right, even though navigation includes overlapping matches.
+  let replacedUntil = -1;
+  const ranges = all
+    ? search.ranges.filter((range) => {
+        if (range.from < replacedUntil) return false;
+        replacedUntil = range.to;
+        return true;
+      })
+    : [search.ranges[Math.max(search.activeIndex, 0)]];
+  const transaction = editor.state.tr;
+  const replacements: ReplaceStep[] = [];
+  for (const range of ranges) {
+    if (editor.state.doc.textBetween(range.from, range.to) === replacement) continue;
+    const marks = editor.state.doc.resolve(range.from).marksAcross(editor.state.doc.resolve(range.to));
+    replacements.push(new ReplaceStep(
+      range.from,
+      range.to,
+      new Slice(replacement ? Fragment.from(editor.schema.text(replacement, marks ?? undefined)) : Fragment.empty, 0, 0),
+    ));
+  }
+  // Use the same recognizable step for single and bulk edits so undo/redo
+  // preserves literal replacement semantics even without transaction metadata.
+  // StepMap recovery encodes the range index in 16 bits. Bound each batch
+  // well below that limit, applying later batches first to keep coordinates.
+  const batchSize = 16384;
+  for (let end = replacements.length; end > 0; end -= batchSize) {
+    transaction.step(new BatchReplaceStep(replacements.slice(Math.max(0, end - batchSize), end)));
+  }
+  transaction.setMeta(pageSearchKey, {
+    type: "replaced",
+    nextFrom: all ? 0 : ranges[0].from + replacement.length,
+  } satisfies PageSearchAction);
+  // Explicit replacement preserves existing marks, like other programmatic
+  // edits. Autolink's changed-range scan is quadratic for many disjoint edits
+  // and must not add formatting to the user's literal replacement text.
+  transaction.setMeta("preventAutolink", true);
+  const changed = transaction.docChanged;
+  editor.view.dispatch(changed ? closeHistory(transaction) : transaction);
+  // Subsequent typing should not be grouped with an explicit replacement.
+  if (changed) editor.view.dispatch(closeHistory(editor.state.tr));
+  return { ...documentSearchSnapshot(editor), replaced: ranges.length };
 }

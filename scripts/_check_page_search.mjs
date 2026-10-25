@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import {
   findTextMatches,
   isPageSearchShortcut,
+  isPageReplaceShortcut,
   nextPageSearchIndex,
 } from "./_page_search_core_bundle.mjs";
 
@@ -37,12 +38,31 @@ equal("搜索结果尊重上限", findTextMatches("aaaa", "a", 2), [
   { from: 0, to: 1 },
   { from: 1, to: 2 },
 ]);
+equal("默认匹配保持非重叠", findTextMatches("abababa", "aba"), [
+  { from: 0, to: 3 }, { from: 4, to: 7 },
+]);
+equal("逐项导航包括重叠匹配", findTextMatches("abababa", "aba", Infinity, true), [
+  { from: 0, to: 3 }, { from: 2, to: 5 }, { from: 4, to: 7 },
+]);
+equal("重叠匹配仍尊重上限", findTextMatches("aaaaa", "aa", 2, true), [
+  { from: 0, to: 2 }, { from: 1, to: 3 },
+]);
+equal("重叠匹配按完整 Unicode 字符前进", findTextMatches("🐈🐈🐈", "🐈🐈", Infinity, true), [
+  { from: 0, to: 4 }, { from: 2, to: 6 },
+]);
 
 ok("Cmd+F 打开页内搜索", isPageSearchShortcut({ key: "f", metaKey: true, ctrlKey: false }));
 ok("Ctrl+F 打开页内搜索", isPageSearchShortcut({ key: "F", metaKey: false, ctrlKey: true }));
 ok("输入法组合期间不接管", !isPageSearchShortcut({ key: "f", metaKey: true, ctrlKey: false, isComposing: true }));
 ok("Alt+Ctrl+F 不接管", !isPageSearchShortcut({ key: "f", metaKey: false, ctrlKey: true, altKey: true }));
 ok("Cmd+Shift+F 不接管", !isPageSearchShortcut({ key: "f", metaKey: true, ctrlKey: false, shiftKey: true }));
+
+ok("Cmd+R 打开替换", isPageReplaceShortcut({ key: "r", metaKey: true, ctrlKey: false }));
+ok("Ctrl+R 打开替换", isPageReplaceShortcut({ key: "R", metaKey: false, ctrlKey: true }));
+for (const extra of [{ isComposing: true }, { altKey: true }, { shiftKey: true }, { ctrlKey: true }]) {
+  ok("替换不接管其他组合键", !isPageReplaceShortcut({ key: "r", metaKey: true, ctrlKey: false, ...extra }));
+}
+equal("前后空格按字面查找", findTextMatches("a b a", " a"), [{ from: 3, to: 5 }]);
 
 ok("下一个结果循环回开头", nextPageSearchIndex(2, 3, 1) === 0);
 ok("上一个结果循环到末尾", nextPageSearchIndex(0, 3, -1) === 2);

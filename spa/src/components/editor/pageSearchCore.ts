@@ -10,18 +10,25 @@ export function findTextMatches(
   text: string,
   rawQuery: string,
   limit = MAX_PAGE_SEARCH_MATCHES,
+  allowOverlaps = false,
 ): TextMatch[] {
-  const query = rawQuery.trim();
-  if (!query || limit <= 0) return [];
+  const query = rawQuery;
+  if (!query || query.includes("\u0000") || limit <= 0) return [];
 
   const matches: TextMatch[] = [];
   const pattern = new RegExp(escapedLiteral(query), "giu");
-  for (const match of text.matchAll(pattern)) {
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
     const from = match.index;
     const value = match[0];
     if (from === undefined || !value) continue;
     matches.push({ from, to: from + value.length });
     if (matches.length >= limit) break;
+    if (allowOverlaps) {
+      // Under the Unicode flag, starting inside a surrogate pair can match
+      // the same character again. Advance by one complete code point.
+      pattern.lastIndex = from + (text.codePointAt(from)! > 0xffff ? 2 : 1);
+    }
   }
   return matches;
 }
@@ -36,21 +43,31 @@ export function nextPageSearchIndex(
   return (current + direction + total) % total;
 }
 
-export function isPageSearchShortcut(event: {
+type PageSearchKeyEvent = {
   key: string;
   metaKey: boolean;
   ctrlKey: boolean;
   altKey?: boolean;
   shiftKey?: boolean;
   isComposing?: boolean;
-}): boolean {
+};
+
+function isDocumentShortcut(event: PageSearchKeyEvent, key: string): boolean {
   return (
     !event.isComposing &&
     !event.altKey &&
     !event.shiftKey &&
-    (event.metaKey || event.ctrlKey) &&
-    event.key.toLowerCase() === "f"
+    event.metaKey !== event.ctrlKey &&
+    event.key.toLowerCase() === key
   );
+}
+
+export function isPageSearchShortcut(event: PageSearchKeyEvent): boolean {
+  return isDocumentShortcut(event, "f");
+}
+
+export function isPageReplaceShortcut(event: PageSearchKeyEvent): boolean {
+  return isDocumentShortcut(event, "r");
 }
 
 export { MAX_PAGE_SEARCH_MATCHES };

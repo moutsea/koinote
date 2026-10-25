@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/react";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Replace, Search, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -15,11 +15,13 @@ import {
   activateDocumentSearchMatch,
   clearDocumentSearch,
   documentSearchSnapshot,
+  replaceDocumentSearch,
   setDocumentSearchQuery,
 } from "./pageSearch";
 import {
   findTextMatches,
   isPageSearchShortcut,
+  isPageReplaceShortcut,
   nextPageSearchIndex,
 } from "./pageSearchCore";
 
@@ -34,14 +36,19 @@ export function DocumentFindBar({
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const replacementRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [replaceMode, setReplaceMode] = useState(false);
   const [query, setQuery] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [replacedCount, setReplacedCount] = useState<number | null>(null);
   const [bodyCount, setBodyCount] = useState(0);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const searchSessionRef = useRef<{ editor: Editor; query: string } | null>(null);
+  const initialSelectionRef = useRef<{ editor: Editor; query: string; from: number; to: number } | null>(null);
 
-  const normalizedQuery = query.trim();
   const titleMatched =
-    normalizedQuery.length > 0 && findTextMatches(title, normalizedQuery, 1).length > 0;
+    !replaceMode && query.length > 0 && findTextMatches(title, query, 1).length > 0;
   const titleOffset = titleMatched ? 1 : 0;
   const total = bodyCount + titleOffset;
 
@@ -84,6 +91,7 @@ export function DocumentFindBar({
   );
 
   const close = useCallback(() => {
+    initialSelectionRef.current = null;
     setOpen(false);
     setActiveIndex(-1);
     setBodyCount(0);
@@ -91,32 +99,45 @@ export function DocumentFindBar({
     if (editor) clearDocumentSearch(editor);
   }, [editor, syncTitleHighlight]);
 
-  const openFind = useCallback(() => {
+  const openFind = useCallback((replace = false) => {
     if (!editorRootRef.current?.getClientRects().length) return;
+    if (!open) initialSelectionRef.current = null;
+    if (!open && editor && !editor.state.selection.empty) {
+      const { from, to } = editor.state.selection;
+      const selected = editor.state.doc.textBetween(from, to, "\n");
+      if (selected.length === to - from && selected.length <= 500 && !selected.includes("\n")) {
+        setQuery(selected);
+        initialSelectionRef.current = { editor, query: selected, from, to };
+      }
+    }
+    setReplaceMode(replace);
+    setReplacedCount(null);
     setOpen(true);
     window.setTimeout(() => inputRef.current?.select(), 0);
-  }, [editorRootRef]);
+  }, [editor, editorRootRef, open]);
 
   useDesktopMenuActions((action) => {
     if (action === "find-in-document") openFind();
+    if (action === "replace-in-document") openFind(true);
   });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Hidden tabs must never intercept refresh, search or Escape.
+      if (!editorRootRef.current?.getClientRects().length) return;
       const pageSearchShortcut = isPageSearchShortcut(event);
+      const pageReplaceShortcut = isPageReplaceShortcut(event);
       if (isModalOpen()) {
-        if (pageSearchShortcut) {
+        if (pageSearchShortcut || pageReplaceShortcut) {
           event.preventDefault();
           event.stopPropagation();
         }
         return;
       }
-      if (pageSearchShortcut) {
-        // 多标签编辑器会保留隐藏实例，只让当前真正可见的实例接管浏览器查找。
-        if (!editorRootRef.current?.getClientRects().length) return;
+      if (pageSearchShortcut || pageReplaceShortcut) {
         event.preventDefault();
         event.stopPropagation();
-        openFind();
+        openFind(pageReplaceShortcut);
         return;
       }
       if (open && event.key === "Escape") {
@@ -135,7 +156,10 @@ export function DocumentFindBar({
   }, [open]);
 
   useEffect(() => {
-    if (!editor || !open || !normalizedQuery) {
+    setReplacedCount(null);
+    if (!editor || !open || !query) {
+      searchSessionRef.current = null;
+      initialSelectionRef.current = null;
       if (editor) clearDocumentSearch(editor);
       setBodyCount(0);
       setActiveIndex(-1);
@@ -143,22 +167,43 @@ export function DocumentFindBar({
       return;
     }
 
-    const snapshot = setDocumentSearchQuery(editor, normalizedQuery);
-    const nextTitleMatched = findTextMatches(title, normalizedQuery, 1).length > 0;
+    // Switching modes only changes whether the title participates. Keep the
+    // plugin's current body match instead of restarting the search at index 0.
+    const sameSearch = searchSessionRef.current?.editor === editor &&
+      searchSessionRef.current.query === query;
+    // Only seed a newly opened search from the body selection. Mode switches
+    // and later query edits must not reuse this initial position.
+    const initialSelection = initialSelectionRef.current;
+    initialSelectionRef.current = null;
+    const initialRange = initialSelection?.editor === editor && initialSelection.query === query
+      ? { from: initialSelection.from, to: initialSelection.to }
+      : undefined;
+    const snapshot = sameSearch
+      ? documentSearchSnapshot(editor)
+      : setDocumentSearchQuery(editor, query, initialRange);
+    searchSessionRef.current = { editor, query };
+    const nextTitleMatched = !replaceMode && findTextMatches(title, query, 1).length > 0;
     const nextTotal = snapshot.total + (nextTitleMatched ? 1 : 0);
-    const nextIndex = nextTotal > 0 ? 0 : -1;
+    const nextIndex = snapshot.activeIndex >= 0
+      ? snapshot.activeIndex + (nextTitleMatched ? 1 : 0)
+      : nextTotal > 0 ? 0 : -1;
     setBodyCount(snapshot.total);
     setActiveIndex(nextIndex);
     activate(nextIndex, nextTitleMatched, snapshot.total, false);
-  }, [activate, editor, normalizedQuery, open, syncTitleHighlight, title]);
+  }, [activate, editor, query, open, replaceMode, syncTitleHighlight, title]);
 
   useEffect(() => {
-    if (!editor || !open || !normalizedQuery) return;
+    if (!editor || !open || !query) return;
     const onUpdate = () => {
       const snapshot = documentSearchSnapshot(editor);
-      const nextTitleMatched = findTextMatches(title, normalizedQuery, 1).length > 0;
+      const nextTitleMatched = !replaceMode && findTextMatches(title, query, 1).length > 0;
       const nextTotal = snapshot.total + (nextTitleMatched ? 1 : 0);
-      const nextIndex = nextTotal > 0 ? Math.min(Math.max(activeIndex, 0), nextTotal - 1) : -1;
+      // The plugin has already mapped the body target through this edit.
+      // Convert that index to the UI's title-inclusive list in either mode.
+      const nextIndex = snapshot.activeIndex >= 0
+        ? snapshot.activeIndex + (nextTitleMatched ? 1 : 0)
+        : nextTotal > 0 ? 0 : -1;
+      setReplacedCount(null);
       setBodyCount(snapshot.total);
       setActiveIndex(nextIndex);
       activate(nextIndex, nextTitleMatched, snapshot.total, false);
@@ -167,7 +212,7 @@ export function DocumentFindBar({
     return () => {
       editor.off("update", onUpdate);
     };
-  }, [activate, activeIndex, editor, normalizedQuery, open, title]);
+  }, [activate, editor, query, open, replaceMode, title]);
 
   useEffect(() => () => {
     syncTitleHighlight(false, false);
@@ -181,11 +226,21 @@ export function DocumentFindBar({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  function replace(all: boolean) {
+    if (!editor || !replaceMode) return;
+    const result = replaceDocumentSearch(editor, replacement, all);
+    setReplacedCount(result.replaced);
+    setBodyCount(result.total);
+    setActiveIndex(result.activeIndex);
+    activate(result.activeIndex, false, result.total, !all);
+    replacementRef.current?.focus();
+  }
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => openFind()}
         title={`${t.editor.find.button} · ⌘F / Ctrl+F`}
         aria-label={t.editor.find.button}
         aria-expanded={open}
@@ -198,52 +253,88 @@ export function DocumentFindBar({
       {open && (
         <div
           role="search"
-          className="absolute right-3 top-12 z-50 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-xl border border-black/10 bg-[var(--background)] p-1.5 shadow-lg dark:border-white/15"
+          aria-label={replaceMode ? t.editor.find.replaceToggle : t.editor.find.button}
+          className="absolute right-3 top-12 z-50 w-[28rem] max-w-[calc(100%-1.5rem)] rounded-xl border border-black/10 bg-[var(--background)] p-1.5 shadow-lg dark:border-white/15"
         >
-          <Search className="ml-1 h-4 w-4 shrink-0 text-neutral-400" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              move(event.shiftKey ? -1 : 1);
-            }}
-            placeholder={t.editor.find.placeholder}
-            aria-label={t.editor.find.placeholder}
-            className="w-48 min-w-0 bg-transparent px-1.5 py-1 text-sm outline-none sm:w-60"
-          />
-          <span
-            aria-live="polite"
-            className="min-w-12 shrink-0 text-center text-[11px] tabular-nums text-neutral-400"
-          >
-            {normalizedQuery
-              ? total > 0
-                ? interpolate(t.editor.find.resultCount, {
-                    current: activeIndex + 1,
-                    total,
-                  })
-                : t.editor.find.noResults
-              : ""}
-          </span>
-          <FindButton
-            label={t.editor.find.previous}
-            disabled={total === 0}
-            onClick={() => move(-1)}
-          >
-            <ChevronUp className="h-4 w-4" />
-          </FindButton>
-          <FindButton
-            label={t.editor.find.next}
-            disabled={total === 0}
-            onClick={() => move(1)}
-          >
-            <ChevronDown className="h-4 w-4" />
-          </FindButton>
-          <FindButton label={t.editor.find.close} onClick={close}>
-            <X className="h-4 w-4" />
-          </FindButton>
+          <div className="flex min-w-0 items-center gap-1">
+            <FindButton label={t.editor.find.replaceToggle} expanded={replaceMode} onClick={() => setReplaceMode(!replaceMode)}>
+              {replaceMode ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </FindButton>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                event.preventDefault();
+                move(event.shiftKey ? -1 : 1);
+              }}
+              placeholder={t.editor.find.placeholder}
+              aria-label={t.editor.find.placeholder}
+              className="min-w-0 flex-1 bg-transparent px-1.5 py-1 text-sm outline-none"
+            />
+            <span
+              aria-live="polite"
+              className="min-w-12 shrink-0 text-center text-[11px] tabular-nums text-neutral-400"
+            >
+              {query
+                ? total > 0
+                  ? interpolate(t.editor.find.resultCount, {
+                      current: activeIndex + 1,
+                      total,
+                    })
+                  : t.editor.find.noResults
+                : ""}
+            </span>
+            <FindButton
+              label={t.editor.find.previous}
+              disabled={total === 0}
+              onClick={() => move(-1)}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </FindButton>
+            <FindButton
+              label={t.editor.find.next}
+              disabled={total === 0}
+              onClick={() => move(1)}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </FindButton>
+            <FindButton label={t.editor.find.close} onClick={close}>
+              <X className="h-4 w-4" />
+            </FindButton>
+          </div>
+          {replaceMode && (
+            <div className="mt-1 border-t border-black/5 pt-1 dark:border-white/10">
+              <div className="flex min-w-0 items-center gap-1">
+                <Replace className="mx-1.5 h-4 w-4 shrink-0 text-neutral-400" />
+                <input
+                  ref={replacementRef}
+                  value={replacement}
+                  onChange={(event) => { setReplacement(event.target.value); setReplacedCount(null); }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    replace(event.metaKey || event.ctrlKey);
+                  }}
+                  placeholder={t.editor.find.replacePlaceholder}
+                  aria-label={t.editor.find.replacePlaceholder}
+                  className="min-w-0 flex-1 bg-transparent px-1.5 py-1 text-sm outline-none"
+                />
+                <button type="button" onClick={() => replace(false)} disabled={!bodyCount || !editor?.isEditable}
+                  className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10">
+                  {t.editor.find.replaceOne}
+                </button>
+                <button type="button" onClick={() => replace(true)} disabled={!bodyCount || !editor?.isEditable}
+                  className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10">
+                  {t.editor.find.replaceAll}
+                </button>
+              </div>
+              <p aria-live="polite" className="px-2 pb-0.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                {replacedCount === null ? t.editor.find.replaceScope : interpolate(t.editor.find.replacedCount, { count: replacedCount })}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </>
@@ -255,11 +346,13 @@ function FindButton({
   disabled = false,
   onClick,
   children,
+  expanded,
 }: {
   label: string;
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
+  expanded?: boolean;
 }) {
   return (
     <button
@@ -268,6 +361,7 @@ function FindButton({
       disabled={disabled}
       title={label}
       aria-label={label}
+      aria-expanded={expanded}
       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 disabled:opacity-30 dark:hover:bg-white/10 dark:hover:text-neutral-200"
     >
       {children}

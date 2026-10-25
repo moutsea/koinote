@@ -905,6 +905,7 @@ export interface Messages {
       quickOpen: string;
       searchAllDocuments: string;
       findInDocument: string;
+      replaceInDocument: string;
       previousDocument: string;
       nextDocument: string;
       selectTab: string;
@@ -1317,6 +1318,12 @@ export interface Messages {
       close: string;
       noResults: string;
       resultCount: string;
+      replaceToggle: string;
+      replacePlaceholder: string;
+      replaceOne: string;
+      replaceAll: string;
+      replaceScope: string;
+      replacedCount: string;
     };
     mediaExport: string;
     mediaExportHint: string;

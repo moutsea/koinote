@@ -56,6 +56,10 @@ export function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
             alternatives: [[primary, "F"]],
           },
           {
+            label: t.keyboardShortcuts.actions.replaceInDocument,
+            alternatives: [[primary, "R"]],
+          },
+          {
             label: t.keyboardShortcuts.actions.previousDocument,
             alternatives: [[control, shift, "Tab"]],
             desktopOnly: true,
