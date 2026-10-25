@@ -23,6 +23,44 @@ Copyright (c) Original Author
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.`
 
+const discoveryISC = `ISC License
+
+Copyright (c) 2025, Mapbox
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.`
+
+const discoveryISCAnd = `ISC License
+
+Copyright (c) 2013-2025 The btcsuite developers
+Copyright (c) 2015-2016 The Decred developers
+
+Permission to use, copy, modify, and distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.`
+
+const discovery0BSD = `BSD Zero Clause License
+Copyright (c) 2025, Original Author
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE.`
+
 var discoveryFixtureSequence atomic.Int64
 
 type discoveryFixture struct {
@@ -393,15 +431,25 @@ func TestSystemRepositoryDiscoveryAtomicDailyBudget(t *testing.T) {
 }
 
 func TestDiscoveredSkillsLicenseReview(t *testing.T) {
-	for _, tc := range []struct{ name, license, extraPath, extraText, expected string }{
-		{"mit", "MIT", "", "", ""},
-		{"missing matching root", "Apache-2.0", "", "", "license_review_required"},
-		{"nested unknown", "MIT", "sub/LICENSE.txt", "special terms", "license_review_required"},
-		{"nested permissive", "MIT", "sub/LICENSE.txt", discoveryMIT, ""},
-		{"notice exception", "MIT", "NOTICE", "Third party quotes are not covered by MIT", "license_review_required"},
+	for _, tc := range []struct{ name, license, root, extraPath, extraText, expected string }{
+		{"mit", "MIT", "", "", "", ""},
+		{"isc", "ISC", discoveryISC, "", "", ""},
+		{"isc and distribute", "ISC", discoveryISCAnd, "", "", ""},
+		{"missing matching root", "Apache-2.0", "", "", "", "license_review_required"},
+		{"nested unknown", "MIT", "", "sub/LICENSE.txt", "special terms", "license_review_required"},
+		{"nested permissive", "MIT", "", "sub/LICENSE.txt", discoveryMIT, ""},
+		{"nested isc", "MIT", "", "sub/LICENSE.txt", discoveryISC, ""},
+		{"nested isc and distribute", "MIT", "", "sub/LICENSE.txt", discoveryISCAnd, ""},
+		{"nested 0bsd", "MIT", "", "sub/LICENSE.txt", discovery0BSD, "license_review_required"},
+		{"nested isc wrapped restriction", "MIT", "", "sub/LICENSE.txt", discoveryISC + "\nNon-\nCommercial use only", "license_review_required"},
+		{"notice exception", "MIT", "", "NOTICE", "Third party quotes are not covered by MIT", "license_review_required"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			files := []agentWorkspaceFile{repositoryTestFile("SKILL.md", "# skill"), repositoryTestFile("LICENSE", discoveryMIT)}
+			root := tc.root
+			if root == "" {
+				root = discoveryMIT
+			}
+			files := []agentWorkspaceFile{repositoryTestFile("SKILL.md", "# skill"), repositoryTestFile("LICENSE", root)}
 			if tc.extraPath != "" {
 				files = append(files, repositoryTestFile(tc.extraPath, tc.extraText))
 			}
@@ -409,6 +457,19 @@ func TestDiscoveredSkillsLicenseReview(t *testing.T) {
 				t.Fatalf("got %q want %q", code, tc.expected)
 			}
 		})
+	}
+}
+
+func TestSystemRepositoryDiscoveryAcceptsISC(t *testing.T) {
+	app, _, f := newDiscoveryFixture(t, 1)
+	f.items[0].License.SPDXID = "ISC"
+	f.archives[f.items[0].ID] = githubArchive(t,
+		githubArchiveEntry{"root/LICENSE", discoveryISC, 0},
+		githubArchiveEntry{"root/SKILL.md", "---\nname: example\ndescription: Example skill\n---\n# Skill", 0},
+		githubArchiveEntry{"root/vendor/pixelmatch/LICENSE", discoveryISC, 0})
+	summary, results, err := runDiscovery(app, true)
+	if err != nil || summary.Added != 1 || len(results) != 1 || results[0].Status != "added" {
+		t.Fatalf("ISC repository rejected: %+v %+v %v", summary, results, err)
 	}
 }
 

@@ -127,7 +127,7 @@ func (a *App) agentRepositorySharingForScope(w http.ResponseWriter, r *http.Requ
 
 func agentRepositoryLicenseAllowed(value string) bool {
 	switch value {
-	case "UNLICENSED", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "CC0-1.0", "CC-BY-4.0":
+	case "UNLICENSED", "MIT", "Apache-2.0", "ISC", "BSD-3-Clause", "GPL-3.0-only", "CC0-1.0", "CC-BY-4.0":
 		return true
 	}
 	return false

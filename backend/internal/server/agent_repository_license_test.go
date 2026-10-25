@@ -56,6 +56,36 @@ func TestReviewedSystemRepositoryLicenseIsScopedAndContentPinned(t *testing.T) {
 	}
 }
 
+func TestSystemRepositoryLicenseAcceptsISC(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		root    string
+		license string
+		extra   agentWorkspaceFile
+		want    bool
+	}{
+		{"root and nested", discoveryISC, "ISC", repositoryTestFile("vendor/LICENSE", discoveryISC), true},
+		{"root and nested and distribute", discoveryISCAnd, "ISC", repositoryTestFile("vendor/LICENSE", discoveryISCAnd), true},
+		{"mit root with isc dependency", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discoveryISC), true},
+		{"mit root with isc and distribute dependency", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discoveryISCAnd), true},
+		{"isc text labelled mit", discoveryISC, "MIT", agentWorkspaceFile{}, false},
+		{"0bsd dependency", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discovery0BSD), false},
+		{"isc with restriction", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discoveryISC+"\nNon-commercial use only"), false},
+		{"isc with wrapped restriction", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discoveryISC+"\nNon-\nCommercial use only"), false},
+		{"isc with wrapped notice restriction", discoveryMIT, "MIT", repositoryTestFile("vendor/LICENSE", discoveryISC+"\nImages are not covered\nby this license"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			files := []agentWorkspaceFile{repositoryTestFile("SKILL.md", "# Skill"), repositoryTestFile("LICENSE", tc.root)}
+			if tc.extra.Path != "" {
+				files = append(files, tc.extra)
+			}
+			if allowed := systemRepositoryLicenseFilesAllowed(files, 12345, tc.license); allowed != tc.want {
+				t.Fatalf("license scan allowed=%t, want=%t", allowed, tc.want)
+			}
+		})
+	}
+}
+
 func TestSystemRepositorySyncReviewedTranslation(t *testing.T) {
 	for _, changed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "unchanged license", true: "changed license"}[changed], func(t *testing.T) {

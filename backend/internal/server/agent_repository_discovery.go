@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -233,14 +234,44 @@ func discoveryManualLicenseReview(fullName string) bool {
 }
 
 func discoveryLicenseText(content []byte) string {
-	text := strings.ToLower(string(content))
+	// License templates wrap sentences differently across repositories. Collapse
+	// whitespace so detection does not depend on where a line break landed.
+	text := strings.Join(strings.Fields(strings.ToLower(string(content))), " ")
 	if strings.Contains(text, "permission is hereby granted, free of charge") && strings.Contains(text, "the software is provided \"as is\"") {
 		return "MIT"
 	}
 	if strings.Contains(text, "apache license") && strings.Contains(text, "version 2.0, january 2004") && strings.Contains(text, "limitations under the license") {
 		return "Apache-2.0"
 	}
+	if discoveryISCLicenseText(text) {
+		return "ISC"
+	}
 	return ""
+}
+
+// ISC shares the "as is" warranty language with MIT but grants use under a
+// different sentence. Some publishers write "and distribute" instead of
+// "and/or distribute"; both are recognized by GitHub as ISC. Require the
+// notice-retention clause so the similar but notice-free 0BSD text is not
+// mistaken for ISC.
+func discoveryISCLicenseText(text string) bool {
+	grant := strings.Contains(text, "permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted") ||
+		strings.Contains(text, "permission to use, copy, modify, and distribute this software for any purpose with or without fee is hereby granted")
+	return grant &&
+		strings.Contains(text, "provided that the above copyright notice and this permission notice appear in all copies") &&
+		strings.Contains(text, "the software is provided \"as is\"")
+}
+
+// License restrictions are sometimes wrapped at a hyphen or between words.
+// Remove whitespace, dash punctuation and underscores before matching so those
+// line breaks cannot hide a restriction from the conservative keyword scan.
+func compactLicenseRestrictionText(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Pd, r) || r == '_' {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, value)
 }
 
 func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, license string) string {
@@ -263,20 +294,30 @@ func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, li
 	return ""
 }
 
+func systemRepositoryLicenseAllowed(license string) bool {
+	switch license {
+	case "MIT", "Apache-2.0", "ISC":
+		return true
+	default:
+		return false
+	}
+}
+
 // Both first-time discovery and later automatic updates use this conservative
-// license boundary. Other licenses/complex exceptions require a manual review.
-// Existing Agent repositories need not contain SKILL.md to be refreshed.
+// license boundary. Only permissive MIT, Apache-2.0 and ISC repositories pass;
+// other licenses/complex exceptions require a manual review. Existing Agent
+// repositories need not contain SKILL.md to be refreshed.
 func systemRepositoryLicenseFilesAllowed(files []agentWorkspaceFile, repositoryID int64, license string) bool {
-	if license != "MIT" && license != "Apache-2.0" {
+	if !systemRepositoryLicenseAllowed(license) {
 		return false
 	}
 	hasLicense := false
 	for _, file := range files {
 		base := strings.ToLower(path.Base(file.Path))
 		if strings.HasPrefix(base, "license") || strings.HasPrefix(base, "licence") || strings.HasPrefix(base, "copying") || strings.HasPrefix(base, "notice") {
-			text := strings.ToLower(string(file.Content))
+			text := compactLicenseRestrictionText(string(file.Content))
 			for _, restriction := range []string{"non-commercial", "noncommercial", "cc-by-nc", "not covered by", "not licensed under", "all rights reserved. no", "proprietary"} {
-				if strings.Contains(text, restriction) {
+				if strings.Contains(text, compactLicenseRestrictionText(restriction)) {
 					return false
 				}
 			}
@@ -333,7 +374,7 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 		return skip("ineligible_source")
 	}
 	result.Repository, result.Stars = source.RepositoryURL, metadata.Stars
-	if discoveryManualLicenseReview(metadata.FullName) || (source.License != "MIT" && source.License != "Apache-2.0") {
+	if discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License) {
 		return skip("license_review_required")
 	}
 	known, err := systemRepositoryDiscoveryKnown(ctx, a.db, metadata.ID, source.RepositoryURL)

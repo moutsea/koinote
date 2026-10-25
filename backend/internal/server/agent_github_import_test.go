@@ -203,6 +203,15 @@ func TestGitHubArchiveValidation(t *testing.T) {
 	for i := range many {
 		many[i] = githubArchiveEntry{fmt.Sprintf("root/%d", i), "", 0}
 	}
+	// Growing repositories can cross the old 2,000-file ceiling without
+	// approaching the byte limits. Accept them up to the new bounded ceiling.
+	for _, count := range []int{2002, githubImportMaxFiles} {
+		data := githubArchive(t, many[:count]...)
+		files, err := readGitHubArchive(context.Background(), bytes.NewReader(data), int64(len(data)))
+		if err != nil || len(files) != count {
+			t.Fatalf("archive with %d files: got %d, error %v", count, len(files), err)
+		}
+	}
 	data := githubArchive(t, many...)
 	if _, err = readGitHubArchive(context.Background(), bytes.NewReader(data), int64(len(data))); !errors.Is(err, errAgentGitHubArchiveInvalid) {
 		t.Fatalf("file count limit: %v", err)

@@ -78,5 +78,70 @@
     "name": "unicode escaped separator is a populated cookie",
     "content": "document.cookie = 'longcookiename\\u003d0123456789abcdef=';",
     "sensitive": true
+  },
+  {
+    "name": "environment lookup constant",
+    "content": "api_key = load_env_key(FALLBACK_ENV)",
+    "sensitive": false
+  },
+  {
+    "name": "environment lookup followed by code",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\nif not api_key:\n    raise ValueError(\"Missing API key\")",
+    "sensitive": false
+  },
+  {
+    "name": "qualified lookup constant",
+    "content": "api_key = settings.lookup_key(API_KEY_NAME);",
+    "sensitive": false
+  },
+  {
+    "name": "quoted lookup is still a literal",
+    "content": "api_key = \"load_env_key(FALLBACK_ENV)\"",
+    "sensitive": true
+  },
+  {
+    "name": "single quoted lookup is still a literal",
+    "content": "api_key = 'load_env_key(FALLBACK_ENV)'",
+    "sensitive": true
+  },
+  {
+    "name": "lookup with literal argument",
+    "content": "api_key = load_env_key(\"0123456789abcdef01234567\")",
+    "sensitive": true
+  },
+  {
+    "name": "lookup followed by hardcoded key",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\npassword = \"0123456789abcdef01234567\"",
+    "sensitive": true
+  },
+  {
+    "name": "lookup followed by provider token",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\nvalue = \"ghp_abcdefghijklmnopqrstuvwxyz123456\"",
+    "sensitive": true
+  },
+  {
+    "name": "lookup followed by private key",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\n-----BEGIN PRIVATE KEY-----",
+    "sensitive": true
+  },
+  {
+    "name": "lookup concatenated with literal",
+    "content": "api_key = load_env_key(FALLBACK_ENV) + \"0123456789abcdef01234567\"",
+    "sensitive": true
+  },
+  {
+    "name": "lookup continued on next line",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\n + \"0123456789abcdef01234567\"",
+    "sensitive": true
+  },
+  {
+    "name": "lookup continued after comment",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\n /* comment */ + \"0123456789abcdef01234567\"",
+    "sensitive": true
+  },
+  {
+    "name": "lookup literal on following line",
+    "content": "api_key = load_env_key(FALLBACK_ENV)\n \"0123456789abcdef01234567\"",
+    "sensitive": true
   }
 ]

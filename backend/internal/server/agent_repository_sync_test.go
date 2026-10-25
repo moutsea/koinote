@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -190,6 +191,43 @@ func TestSystemRepositorySyncUpdatesAtomicallyAndIsIdempotent(t *testing.T) {
 				t.Fatalf("unchanged repository was republished: %q %v", after, err)
 			}
 		})
+	}
+}
+
+func TestSystemRepositorySyncAllowsISCDependencyLicense(t *testing.T) {
+	app, w, _, _, upstream := seedSystemRepositorySync(t, false)
+	upstream.archive = githubArchive(t,
+		githubArchiveEntry{"root/README.md", "# Updated", 0},
+		githubArchiveEntry{"root/LICENSE", discoveryMIT, 0},
+		githubArchiveEntry{"root/vendor/pixelmatch/LICENSE", discoveryISC, 0})
+	summary, results, err := runSystemRepositorySync(t, app, w.WorkspaceID, true)
+	if err != nil || summary.Updated != 1 || len(results) != 1 || results[0].Status != "updated" {
+		t.Fatalf("nested ISC rejected: %+v %+v %v", summary, results, err)
+	}
+	view, err := app.loadPublicAgentRepository(context.Background(), w.WorkspaceID, nil)
+	if err != nil || view.GitHubSource.CommitSHA != githubSyncTestSHA {
+		t.Fatalf("ISC update not published: %+v %v", view, err)
+	}
+}
+
+func TestSystemRepositorySyncLargeArchiveWithCredentialLookup(t *testing.T) {
+	app, w, _, _, upstream := seedSystemRepositorySync(t, false)
+	entries := []githubArchiveEntry{
+		{"root/LICENSE", discoveryMIT, 0},
+		{"root/vendor/pixelmatch/LICENSE", discoveryISC, 0},
+		{"root/eval/judge.py", "api_key = load_env_key(FALLBACK_ENV)\nif not api_key:\n    raise ValueError(\"Missing API key\")", 0},
+	}
+	for len(entries) < 2002 {
+		entries = append(entries, githubArchiveEntry{fmt.Sprintf("root/skills/%d.md", len(entries)), "# Skill", 0})
+	}
+	upstream.archive = githubArchive(t, entries...)
+	summary, results, err := runSystemRepositorySync(t, app, w.WorkspaceID, true)
+	if err != nil || summary.Updated != 1 || len(results) != 1 || results[0].Status != "updated" {
+		t.Fatalf("large archive rejected: %+v %+v %v", summary, results, err)
+	}
+	view, err := app.loadPublicAgentRepository(context.Background(), w.WorkspaceID, nil)
+	if err != nil || len(view.Files) != len(entries) || view.GitHubSource.CommitSHA != githubSyncTestSHA {
+		t.Fatalf("large archive not fully published: files=%d, error=%v", len(view.Files), err)
 	}
 }
 

@@ -15,6 +15,16 @@ const AGENT_WORKSPACE_SENSITIVE_CONTENT_PATTERNS = [
 // Keep checking populated cookies and other credentials elsewhere in the file.
 // A newline alone does not end a JavaScript expression (+, .concat, etc.).
 const EMPTY_DOCUMENT_COOKIE_PATTERN = /^cookie\s*=\s*(?:'[^'\\=;\s]+=(?:;[^'\\\r\n]*)?'|"[^"\\=;\s]+=(?:;[^"\\\r\n]*)?")[\t ]*(?:;|[\t \r\n]*$)/i;
+const CREDENTIAL_LOOKUP_CALL_PATTERN = /^[\t ]*[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*[\t ]*\([\t ]*[A-Z_][A-Z0-9_]*[\t ]*\)[\t ]*(?:[;,]|\r?\n|$)/;
+
+// Match the server's narrow exception for calls with a constant argument.
+// Quoted calls, literal arguments and continued expressions are not exempt.
+function isCredentialLookup(value: string) {
+  const match = CREDENTIAL_LOOKUP_CALL_PATTERN.exec(value);
+  if (!match) return false;
+  const rest = value.slice(match[0].length).trimStart();
+  return !match[0].endsWith("\n") || !rest || !"+.\\/#\"'`-*/%&|^?:([".includes(rest[0]);
+}
 
 export type AgentWorkspaceFilteredFile = ConfigVaultFile & {
   reason: "sensitive_path" | "sensitive_content";
@@ -36,6 +46,7 @@ function containsAgentWorkspaceSensitiveContent(text: string) {
     for (const match of text.matchAll(globalPattern)) {
       if (text.slice(Math.max(0, match.index - 9), match.index) === "document." && EMPTY_DOCUMENT_COOKIE_PATTERN.test(text.slice(match.index))) continue;
       const valueStart = match[0].search(/[:=]/);
+      if (pattern === AGENT_WORKSPACE_SENSITIVE_CONTENT_PATTERNS[0] && valueStart >= 0 && isCredentialLookup(text.slice(match.index + valueStart + 1))) continue;
       if (valueStart >= 0 && isSensitiveExampleValue(match[0].slice(valueStart + 1))) continue;
       return true;
     }

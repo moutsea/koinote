@@ -42,6 +42,17 @@ func repositoryTestFile(path, content string) agentWorkspaceFile {
 	return agentWorkspaceFile{Path: path, Content: []byte(content), MimeType: "text/plain", SHA256: hex.EncodeToString(hash[:])}
 }
 
+func TestAgentRepositoryLicenseAllowedIncludesISC(t *testing.T) {
+	for _, license := range []string{"ISC", "MIT", "Apache-2.0"} {
+		if !agentRepositoryLicenseAllowed(license) {
+			t.Errorf("%s rejected", license)
+		}
+	}
+	if agentRepositoryLicenseAllowed("MPL-2.0") {
+		t.Error("MPL-2.0 unexpectedly allowed")
+	}
+}
+
 func TestAgentRepositoryPublicationSnapshotAndRevocation(t *testing.T) {
 	for _, storage := range []string{"database", "r2"} {
 		t.Run(storage, func(t *testing.T) { runTestAgentRepositoryPublicationSnapshotAndRevocation(t, storage) })

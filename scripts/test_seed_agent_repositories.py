@@ -59,6 +59,23 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(all(item["skillCount"] > 0 for item in catalog["repositories"]))
         self.assertTrue(all(item["githubStars"] >= 1000 for item in catalog["repositories"]))
 
+    def test_catalog_accepts_supported_permissive_licenses(self):
+        for license_name in ("MIT", "Apache-2.0", "ISC"):
+            with self.subTest(license=license_name), tempfile.TemporaryDirectory() as directory:
+                item = copy.deepcopy(self.item)
+                item["license"] = license_name
+                path = Path(directory) / "catalog.json"
+                path.write_text(json.dumps({"schemaVersion": 1, "repositories": [item]}))
+                self.assertEqual(load_catalog(path)["repositories"][0]["license"], license_name)
+
+        item = copy.deepcopy(self.item)
+        item["license"] = "MPL-2.0"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog.json"
+            path.write_text(json.dumps({"schemaVersion": 1, "repositories": [item]}))
+            with self.assertRaisesRegex(ValueError, "Review the license"):
+                load_catalog(path)
+
     def test_catalog_topics_are_classified(self):
         groups = json.loads((CATALOG.parent / "categories.json").read_text())
         raw_topics = {topic for topics in groups.values() for topic in topics}

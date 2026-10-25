@@ -44,7 +44,7 @@ def load_catalog(path):
             raise ValueError("Missing reviewed content digest")
         if item["authorUrl"] != "https://github.com/" + item["author"] or not url.startswith(item["authorUrl"] + "/"):
             raise ValueError("Inconsistent GitHub attribution")
-        if item["license"] not in ("MIT", "Apache-2.0") or not item["licenseFiles"]:
+        if item["license"] not in ("MIT", "Apache-2.0", "ISC") or not item["licenseFiles"]:
             raise ValueError("Review the license before extending the initial catalog")
     return catalog
 

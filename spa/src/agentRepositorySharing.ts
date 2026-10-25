@@ -8,7 +8,7 @@ export type PublicAgentRepository = AgentWorkspace & AgentRepositoryEngagement &
 export type AgentRepositorySource = { workspaceId: number | null; revision: number; name: string; license: string };
 export const REPOSITORY_SHARING_QUERY_KEY = "agent-repository-sharing";
 export const PUBLIC_REPOSITORIES_QUERY_KEY = "public-agent-repositories";
-export const REPOSITORY_LICENSES = ["UNLICENSED", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "CC0-1.0", "CC-BY-4.0"] as const;
+export const REPOSITORY_LICENSES = ["UNLICENSED", "MIT", "Apache-2.0", "ISC", "BSD-3-Clause", "GPL-3.0-only", "CC0-1.0", "CC-BY-4.0"] as const;
 export function getAgentRepositorySharing(id: number, system = false) {
   return apiJson<{ publication: PublicAgentRepository | null; source: AgentRepositorySource | null; currentRevision: number }>(`${system ? "/api/admin/agent-repositories" : "/api/agent/workspaces"}/${id}/sharing`);
 }

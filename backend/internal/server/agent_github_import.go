@@ -34,7 +34,7 @@ const (
 	githubRequestTimeout   = 45 * time.Second
 	githubResponseMaxBytes = 2 << 20
 	githubArchiveMaxBytes  = 128 << 20
-	githubImportMaxFiles   = 2000
+	githubImportMaxFiles   = 5000
 	githubImportMaxBytes   = 64 << 20
 )
 
