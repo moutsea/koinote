@@ -1,36 +1,36 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.6",
+      "title": "What's new in Koinote 1.1.7",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Deleting a folder now deletes its subfolders too and moves the documents inside to trash. Restored documents return to the deleted folder's parent. The confirmation states how many documents are affected.",
-        "AI organization now removes folders it leaves empty, along with ancestors that become empty, and restores them on undo. Unrelated empty folders are kept."
+        "Find and replace in the current document body with Cmd+R on macOS or Ctrl+R on Windows. Replace one match or all matches, including with empty text; the document title is kept unchanged.",
+        "Replacement preserves surrounding formatting and supports undo and redo. The current match stays on the same text when earlier matches are added or removed, including overlapping matches and large documents."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.6 新功能",
+      "title": "Koinote 1.1.7 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "删除文件夹时会连同子文件夹一起删除，里面的文档移入回收站，恢复后回到被删文件夹的上一级；确认框会写明影响的文档数量。",
-        "AI 整理会删除本次整理移空的文件夹及因此变空的上级目录，撤销时恢复；与本次整理无关的空文件夹会保留。"
+        "新增当前文档正文的查找替换：macOS 按 Cmd+R、Windows 按 Ctrl+R，可替换当前匹配或全部匹配，也可用空文本删除匹配内容；文档标题不参与替换。",
+        "替换保留周围格式并支持撤销、重做。在当前匹配前新增或删除其他匹配时，仍跟随原目标；支持重叠匹配的准确定位和大文档批量替换。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.6",
+      "title": "Nouveautés de Koinote 1.1.7",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Supprimer un dossier supprime aussi ses sous-dossiers et met les documents qu’ils contiennent à la corbeille ; une fois restaurés, ils reviennent dans le dossier parent. La confirmation indique le nombre de documents concernés.",
-        "Le classement IA supprime les dossiers qu’il vide, ainsi que les dossiers parents devenus vides, et les restaure à l’annulation. Les dossiers vides sans rapport sont conservés."
+        "Rechercher et remplacer dans le corps du document avec Cmd+R sur macOS ou Ctrl+R sur Windows. Remplacez une occurrence ou toutes les occurrences, y compris par un texte vide ; le titre du document reste inchangé.",
+        "Le remplacement préserve la mise en forme environnante et prend en charge l’annulation et le rétablissement. L’occurrence active suit le même texte lorsque des occurrences précédentes sont ajoutées ou supprimées, y compris avec des occurrences qui se chevauchent et dans les grands documents."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.6 の新機能",
+      "title": "Koinote 1.1.7 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "フォルダを削除すると、サブフォルダもまとめて削除され、中のドキュメントはゴミ箱へ移動します。復元すると削除したフォルダの一つ上に戻ります。確認ダイアログに影響するドキュメント数を表示します。",
-        "AI 整理で空になったフォルダと、それにより空になった上位フォルダを削除し、取り消すと復元します。今回の整理と関係のない空フォルダは残ります。"
+        "本文の検索と置換を追加しました。macOS は Cmd+R、Windows は Ctrl+R で開き、現在の一致箇所またはすべての一致箇所を置換できます。空の文字列での削除にも対応し、ドキュメントのタイトルは変更しません。",
+        "周囲の書式を保って置換し、取り消しとやり直しに対応します。現在の一致箇所より前で別の一致箇所を追加・削除しても元の対象を維持し、重なり合う一致箇所や大きなドキュメントも扱えます。"
       ]
     }
   }

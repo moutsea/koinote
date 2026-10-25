@@ -6,6 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-10-25
+
+### Added
+
+- Find and replace in the current document body with Cmd+R on macOS or Ctrl+R on Windows. Replace one match or all matches, including with empty text; the document title is kept unchanged.
+- Replacement preserves surrounding formatting and supports undo and redo. The current match stays on the same text when earlier matches are added or removed, including overlapping matches and large documents.
+
 ### Fixed
 
 - WeChat draft sync no longer caps the number of article images. Images are processed in batches, so articles with more than 20 images are no longer rejected by Koinote's previous limit.

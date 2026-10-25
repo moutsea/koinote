@@ -4,6 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-10-25
+
+### Added
+
+- Rechercher et remplacer dans le corps du document avec Cmd+R sur macOS ou Ctrl+R sur Windows. Remplacez une occurrence ou toutes les occurrences, y compris par un texte vide ; le titre du document reste inchangé.
+- Le remplacement préserve la mise en forme environnante et prend en charge l’annulation et le rétablissement. L’occurrence active suit le même texte lorsque des occurrences précédentes sont ajoutées ou supprimées, y compris avec des occurrences qui se chevauchent et dans les grands documents.
+
 ### Fixed
 
 - La synchronisation des brouillons WeChat ne limite plus le nombre d’images dans un article. Les images sont traitées par lots, sans rejet au-delà de l’ancienne limite de 20 images de Koinote.

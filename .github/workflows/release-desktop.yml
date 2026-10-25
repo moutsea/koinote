@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version deletes folders together with their subfolders (documents move to trash), removes folders left empty by AI organization, protects unsynced desktop edits on delete, and fixes a desktop sync stall after deleting documents edited elsewhere."
+          notes="Koinote Desktop $version adds document find and replace with Cmd+R / Ctrl+R, single and bulk replacement with undo and redo, and stable match tracking while editing. WeChat draft sync no longer limits article image counts."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,11 +237,11 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 改进文件夹删除和 AI 整理后的目录清理。
+          Koinote $version 新增文档正文的查找替换。
 
-          - 删除文件夹会连同子文件夹一起删除，里面的文档移入回收站，恢复后回到上一级目录。
-          - AI 整理会删除本次移空的文件夹，撤销时恢复；应用后弹窗显示结果和“完成”，不再回到“生成整理预览”。
-          - 桌面端删除未同步的文档时会先同步，无法同步时说明会丢失的内容并请你确认；修复删除别处改过的文档后同步一直失败的问题。
+          - macOS 按 Cmd+R、Windows 按 Ctrl+R，可替换当前匹配或全部匹配，也可用空文本删除；文档标题不参与替换。
+          - 替换保留周围格式，支持撤销和重做；编辑正文时保持当前目标，准确处理重叠匹配和大文档。
+          - 微信公众号草稿同步不再限制正文图片张数，图片分批处理。
 
           可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
@@ -253,11 +253,11 @@ jobs:
 
           ---
 
-          Koinote $version improves folder deletion and cleanup after AI organization.
+          Koinote $version adds find and replace in the document body.
 
-          - Deleting a folder also deletes its subfolders and moves the documents inside to trash; restored documents return to the parent folder.
-          - AI organization removes folders it leaves empty and restores them on undo. After applying, the dialog shows the result with Done instead of returning to Generate preview.
-          - On desktop, deleting unsynced documents syncs them first and asks for confirmation if they cannot be synced. A sync stall after deleting documents edited elsewhere is fixed.
+          - Press Cmd+R on macOS or Ctrl+R on Windows to replace one match or all matches, including with empty text. The document title stays unchanged.
+          - Replacement preserves surrounding formatting and supports undo and redo. The current target follows document edits, including overlapping matches and large documents.
+          - WeChat draft sync no longer limits article image counts; images are processed in batches.
 
           Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 
