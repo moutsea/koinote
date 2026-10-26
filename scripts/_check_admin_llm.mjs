@@ -121,6 +121,9 @@ try {
   server.settings[0] = { ...server.settings[0], version: 5, model: "concurrent-edit" };
   await act(async () => conflict.reject(new ApiError(409, "llm_settings_conflict")));
   await waitFor(() => form(0).textContent.includes(zh.adminLLM.conflict), "conflict is visible");
+  // onError renders the message before React Query necessarily notifies every
+  // useIsMutating observer. A real user can refresh only after the button enables.
+  await waitFor(() => !refresh().disabled, "refresh enabled after failed save");
   await act(async () => refresh().click());
   await waitFor(() => input(0, zh.adminLLM.model).value === "concurrent-edit", "reload after conflict");
   assert.equal(form(0).querySelector('[role="status"]'), null);
