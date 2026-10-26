@@ -254,21 +254,7 @@ func (a *App) agentReviewCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		input.Tasks = normalizedTasks
 	}
-	if input.ProviderMode == "" {
-		mode, err := a.loadAgentProviderMode(r.Context(), user.ID)
-		if err != nil {
-			log.Printf("agent review load provider preference: %v", err)
-			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
-			return
-		}
-		input.ProviderMode = mode
-	}
-	if input.ProviderMode != "builtin" && input.ProviderMode != "byok" {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_provider", "Provider mode must be builtin or byok")
-		return
-	}
-	if input.ProviderMode == "builtin" && input.ChannelID != "" {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_agent_provider", "Built-in provider cannot use a BYOK channel")
+	if !requireManagedLLMConfirmation(w, input.ProviderMode, input.ChannelID) {
 		return
 	}
 
@@ -988,37 +974,21 @@ func (a *App) resolveAgentLLMProvider(
 	mode string,
 	channelID string,
 ) (agentLLMProvider, *int64, error) {
-	if mode == "builtin" {
-		if !a.cfg.AgentLLMEnabled() {
-			return agentLLMProvider{}, nil, errors.New("built-in agent LLM is not configured")
-		}
-		return agentLLMProvider{
-			Mode:     "builtin",
-			Protocol: a.cfg.AgentLLMProtocol,
-			BaseURL:  a.cfg.AgentLLMBaseURL,
-			APIKey:   a.cfg.AgentLLMAPIKey,
-			Model:    a.cfg.AgentLLMModel,
-			Thinking: a.cfg.AgentLLMThinking,
-			// DashScope-compatible DeepSeek rejects response_format json_schema.
-			// The non-strict path still sends the schema in the system prompt and
-			// uses JSON mode, then validates the parsed result before publishing.
-			StrictOutput: false,
-			SafeEndpoint: false,
-		}, nil, nil
+	if mode != "builtin" || channelID != "" {
+		return agentLLMProvider{}, nil, errLLMChannelsDisabled
 	}
-	channel, err := a.loadLLMChannelCredential(ctx, user.ID, channelID)
+	setting, err := a.loadSystemLLMConfig(ctx, "text")
 	if err != nil {
 		return agentLLMProvider{}, nil, err
 	}
+	if !setting.Enabled {
+		return agentLLMProvider{}, nil, errors.New("built-in agent LLM is not configured")
+	}
 	return agentLLMProvider{
-		Mode:         "byok",
-		Protocol:     channel.Protocol,
-		BaseURL:      channel.BaseURL,
-		APIKey:       channel.APIKey,
-		Model:        channel.Model,
-		StrictOutput: false,
-		SafeEndpoint: true,
-	}, &channel.DatabaseID, nil
+		Mode: "builtin", Protocol: setting.Protocol, BaseURL: setting.BaseURL,
+		APIKey: setting.APIKey, Model: setting.Model, Thinking: setting.Thinking,
+		StrictOutput: false, SafeEndpoint: setting.Source == "admin",
+	}, nil, nil
 }
 
 func (a *App) insertRunningAgentReview(
@@ -2122,6 +2092,10 @@ func classifyAgentReviewFailure(err error) string {
 		return "usage_missing"
 	case errors.Is(err, errAgentLLMUsageInvalid):
 		return "usage_invalid"
+	case errors.Is(err, errAgentLLMTruncatedResponse):
+		return "response_truncated"
+	case errors.Is(err, errAgentLLMEmptyResponse):
+		return "response_empty"
 	case errors.Is(err, errAgentLLMInvalidResponse):
 		return "invalid_response"
 	case errors.As(err, &httpError):
@@ -2137,6 +2111,10 @@ func classifyAgentReviewFailure(err error) string {
 }
 
 func (a *App) writeAgentProviderResolveError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errLLMChannelsDisabled) {
+		httpx.ErrorCode(w, http.StatusGone, "llm_channels_disabled", "AI channels are managed by the administrator")
+		return
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "llm_channel_not_found", "LLM channel not found")
 		return

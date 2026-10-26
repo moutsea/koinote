@@ -972,6 +972,31 @@ export interface Messages {
     successDescription: string;
     done: string;
   };
+  adminLLM: {
+    title: string;
+    description: string;
+    text: string;
+    image: string;
+    textHint: string;
+    imageHint: string;
+    environment: string;
+    managed: string;
+    enabled: string;
+    protocol: string;
+    model: string;
+    keepKey: string;
+    keyHint: string;
+    keyRecovery: string;
+    thinking: string;
+    thinkingHint: string;
+    save: string;
+    saving: string;
+    saved: string;
+    loadFailed: string;
+    saveFailed: string;
+    conflict: string;
+    invalid: string;
+  };
   admin: {
     title: string;
     subtitle: string;

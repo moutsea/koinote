@@ -19,6 +19,11 @@ type mcpWechatGeoSummaryInput struct {
 	DocID string `json:"docId" jsonschema:"Koinote document ID."`
 }
 
+type mcpWechatGeoSummaryGenerateInput struct {
+	DocID        string `json:"docId" jsonschema:"Koinote document ID."`
+	ProviderMode string `json:"providerMode" jsonschema:"Must be builtin: confirms use of the platform model and credits. Personal BYOK channels are no longer available."`
+}
+
 type mcpWechatGeoSummaryUpdateInput struct {
 	DocID   string  `json:"docId" jsonschema:"Koinote document ID."`
 	Text    *string `json:"text,omitempty" jsonschema:"Optional replacement GEO summary text, up to 2400 characters."`
@@ -68,7 +73,7 @@ func (a *App) mcpGetWechatGeoSummary(
 func (a *App) mcpGenerateWechatGeoSummary(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
-	input mcpWechatGeoSummaryInput,
+	input mcpWechatGeoSummaryGenerateInput,
 ) (*mcp.CallToolResult, mcpWechatGeoSummaryOutput, error) {
 	principal := mcpPrincipalFromContext(ctx)
 	started := time.Now()
@@ -77,6 +82,9 @@ func (a *App) mcpGenerateWechatGeoSummary(
 
 	if principal.User.MembershipTier != membershipTierLifetime {
 		return nil, mcpWechatGeoSummaryOutput{}, errors.New("AI GEO summary requires lifetime membership")
+	}
+	if input.ProviderMode != "builtin" {
+		return nil, mcpWechatGeoSummaryOutput{}, errors.New("GEO generation now uses platform credits. Refresh the tool definition and confirm providerMode=builtin before retrying")
 	}
 	if !a.rateLimit().allow(
 		fmt.Sprintf("wechat-geo-summary:user:%d", principal.User.ID),

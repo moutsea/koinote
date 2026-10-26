@@ -28,7 +28,7 @@ assert.equal(agentReviewAccess(false, true), "local_mode_unavailable");
 
 assert.equal(canStartAgentReview("builtin", true, ""), true);
 assert.equal(canStartAgentReview("builtin", false, "channel-ignored"), false);
-assert.equal(canStartAgentReview("byok", false, "channel-1"), true);
+assert.equal(canStartAgentReview("byok", false, "channel-1"), false);
 assert.equal(canStartAgentReview("byok", true, "   "), false);
 assert.equal(
   hasRunningAgentReviewForCurrentRevision([
@@ -47,6 +47,8 @@ assert.equal(agentReviewFailureTranslationCode("provider_http_error", "byok"), "
 assert.equal(agentReviewFailureTranslationCode("provider_http_error", "builtin"), "agent_provider_unavailable");
 assert.equal(agentReviewFailureTranslationCode("provider_unavailable", "byok"), "agent_provider_unavailable");
 assert.equal(agentReviewFailureTranslationCode("invalid_response", "builtin"), "agent_invalid_response");
+assert.equal(agentReviewFailureTranslationCode("response_truncated", "byok"), "agent_response_truncated");
+assert.equal(agentReviewFailureTranslationCode("response_empty", "byok"), "agent_response_empty");
 
 assert.equal(titleScoreNeedsAlternatives(0), true);
 assert.equal(titleScoreNeedsAlternatives(59), true);
@@ -233,7 +235,7 @@ const panel = fs.readFileSync("spa/src/components/editor/AgentReviewPanel.tsx", 
 const core = fs.readFileSync("spa/src/components/editor/agentReviewCore.ts", "utf8");
 const notifications = fs.readFileSync("spa/src/components/AgentReviewNotifications.tsx", "utf8");
 const notificationEvents = fs.readFileSync("spa/src/agentReviewNotifications.ts", "utf8");
-const modelSettings = fs.readFileSync("spa/src/components/AgentModelSettingsCard.tsx", "utf8");
+const modelSettings = fs.readFileSync("spa/src/pages/SettingsPage.tsx", "utf8");
 const liveEditor = fs.readFileSync("spa/src/components/editor/LiveEditor.tsx", "utf8");
 const zh = fs.readFileSync("spa/src/i18n/zh.ts", "utf8");
 const api = fs.readFileSync("spa/src/api.ts", "utf8");
@@ -250,7 +252,7 @@ function includes(label, source, fragment) {
 
 includes("面板使用统一会员/本地模式门槛", panel, "agentReviewAccess(member, localMode)");
 includes("面板复用经过测试的启动条件", panel, "canStartAgentReview(");
-includes("BYOK 不等待无关 credits 查询", panel, 'enabled: remoteEnabled && configuredProviderMode === "builtin"');
+includes("所有用户统一使用平台模型", panel, 'const providerMode = "builtin" as const');
 includes("只有内置模型受 credits 状态阻塞", panel, 'providerMode === "builtin" && (credits.isLoading || credits.isError)');
 includes("AI 优化弹窗使用 Bot 图标", panel, "<Bot className=");
 includes("优化面板读取账号级模型设置", panel, "queryFn: getAgentSettings");
@@ -288,8 +290,8 @@ includes("后台任务跨标签页同步", notifications, 'window.addEventListen
 includes("会话内后台任务也限制数量", notifications, "].slice(0, MAX_STORED_REVIEW_TASKS)");
 includes("完成通知可以回到指定审阅", notifications, "requestAgentReviewOpen(task)");
 includes("超时审阅详情显示明确原因", panel, 'review.errorCode === "review_timeout"');
-includes("AI 设置可以选择内置模型", modelSettings, 'update.mutate("builtin")');
-includes("AI 设置可以选择自有 LLM", modelSettings, 'update.mutate("byok")');
+assert.ok(!modelSettings.includes("<AgentModelSettingsCard"));
+assert.ok(!modelSettings.includes("<LLMChannelsCard"));
 assert.ok(!panel.includes("ProviderButton"), "AI 优化不应展示模型来源选择");
 assert.ok(!panel.includes("setProviderMode"), "AI 优化不应保存临时模型来源");
 assert.ok(!panel.includes("listLLMChannels"), "AI 优化不应直接管理模型渠道");

@@ -212,8 +212,8 @@ PostgreSQL ──pg_dump / AES-256-GCM──▶ 私有备份 R2（每 6 小时�
 然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。站内的
 [MCP 接入指南](https://koinote.app/docs/mcp)汇总了 Codex、Claude Code、OpenCode、OpenClaw、
 WorkBuddy 与通用客户端的配置及版本控制说明。常规 MCP 文档工具只负责鉴权、文档读写、版本控制
-与审计，由客户端提供模型能力；微信公众号 GEO 摘要生成是例外，会按账号设置调用内置模型或 BYOK
-渠道。除使用 GEO 生成工具外，Koinote 不需要 OpenAI、Anthropic 或其他模型 API Key。
+与审计，由客户端提供模型能力；微信公众号 GEO 摘要生成和封面生成由平台统一配置的模型提供，
+并消耗 credits。用户无需在 Koinote 配置模型 API Key。
 
 PAT 支持只读、读写或仅发布 scope、1–365 天或永久有效、创建后修改有效期和单独撤销。数据库用 SHA-256 摘要鉴权，另用
 AES-GCM 加密保存可恢复副本；账号本人可按需再次查看，列表不会直接返回完整令牌。每次 MCP
@@ -297,7 +297,7 @@ OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a l
 封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面额外消耗 20 credits）。
 
 微信公众号 GEO 摘要也可通过 MCP 管理：`get_wechat_geo_summary` 用于读取已保存摘要和检查是否过期，读写或仅发布令牌可以调用
-`generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。使用内置模型生成会按实际用量消耗 credits，BYOK 渠道不扣费。
+`generate_wechat_geo_summary` 生成并保存摘要，也可以用 `update_wechat_geo_summary` 修改文本或开关。生成统一使用平台模型，并按实际用量消耗 credits。
 推送草稿时需显式传入 `includeGeo: true`，且摘要必须已启用并与当前文档匹配；默认不会把隐藏语料带入草稿。
 
 ## Skills/Agent 公开共享与 Clone / Fork
@@ -412,15 +412,17 @@ Skills/Agent 和开发配置的同步主入口均提供下拉选项：「通过 
 充值包为 3,000 / 10,000 / 30,000 credits 三档，
 金额、币种和 credits 都由后端白名单及 Stripe 回调复核。
 
-会员也可在「AI 设置」配置自己的渠道：
+所有用户统一使用平台渠道，个人 DIY/BYOK 配置入口与 API 已关闭。管理员可在「管理后台 → 模型渠道」分别配置文本与生图渠道：
 
 - `openai`：OpenAI-compatible Chat Completions，Base URL 通常以 `/v1` 结尾；
 - `anthropic`：Anthropic Messages，后端调用 `/v1/messages`。
+- 生图：OpenAI-compatible Images，后端调用 `/images/generations`，用于微信公众号封面生成（含 MCP）。
 
-BYOK 调用不消耗 credits。API Key 使用独立的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 通过 AES-GCM
-加密，列表只返回掩码提示，创建后不会把明文返给浏览器；Base URL 在保存与调用时均做 HTTPS、
-私网/回环地址和重定向限制。需要注意：执行优化时，所选模型服务商会收到当前文章的标题与正文，
-因此只能配置你信任的渠道。
+配置保存后对新请求生效；文本渠道用于 AI 优化、智能整理和 GEO 摘要。未保存后台配置时沿用
+`AGENT_LLM_*` / `WECHAT_COVER_IMAGE_*` 环境配置；后台显式停用后不会回退到环境配置。
+API Key 使用独立的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 通过 AES-GCM 加密，接口只返回掩码提示；
+更新时留空保留原密钥；密钥不可解密时仍可读取配置、停用渠道或直接填写新 API Key 恢复，余额查询不受影响。后台配置的 Base URL 在保存与调用时均限制为公网 HTTPS，拒绝私网、回环地址和重定向。
+部署需执行 `0096_system_llm_settings.sql`；历史个人配置不再参与调用，审阅与 GEO 生成请求必须显式携带 `providerMode: "builtin"` 以确认 credits 计费；未升级的客户端需刷新或更新后重试，不会静默扣费。MCP 的 `generate_wechat_geo_summary` 同样需要该参数。
 
 ## 快速开始
 
@@ -489,7 +491,7 @@ stripe listen --forward-to localhost:8080/api/billing/webhook
 
 本地测试 AI 优化时，先为 `LLM_CREDENTIAL_ENCRYPTION_KEY` 生成独立随机值。内置模型
 需要同时填写 `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_API_KEY`、
-`AGENT_LLM_MODEL`；四项全空时只关闭内置 credits 模式，会员配置的 BYOK 仍可用。
+`AGENT_LLM_MODEL`；也可以直接在管理后台保存文本渠道。环境变量四项全空且未启用后台渠道时，AI 优化不可用。
 如需开启模型思考，再设置 `AGENT_LLM_THINKING=true`，OpenAI 兼容渠道会发送
 `enable_thinking: true`。
 
@@ -592,7 +594,7 @@ body: 发布前请检查图片和链接。
 复用 `SESSION_SECRET`，这样轮换验证码密钥不会让所有会话失效，邮件链路泄露也不会
 扩大成会话伪造。
 
-**生产环境的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它只用于会员 BYOK
+**生产环境的 `LLM_CREDENTIAL_ENCRYPTION_KEY` 必须独立且持久。** 它用于后台文本、生图渠道及历史个人渠道
 API Key 的 AES-GCM 加密，不能复用会话、MCP 或模型服务密钥。直接轮换会让既有渠道无法解密，
 轮换前必须先做密文迁移。
 
@@ -617,7 +619,7 @@ HTTPS。启用后仅终生会员可调用，每生成一张封面固定消耗 20
 `AGENT_LLM_API_KEY`、`AGENT_LLM_MODEL` 必须四项齐全或全部留空；生产只接受 HTTPS。
 `AGENT_LLM_THINKING=true` 会开启 OpenAI 兼容渠道的思考模式，思考 token 计入模型用量，
 因此会增加延迟和 credits 消耗。
-BYOK 端点还会拒绝本机、私网、带用户信息的 URL 和重定向，但模型服务商仍会收到待审文章。
+后台配置的端点还会拒绝本机、私网、带用户信息的 URL 和重定向，但模型服务商仍会收到待审文章。
 
 **手动提醒翻译是可选的后端能力。** `ANNOUNCEMENT_LLM_BASE_URL`、
 `ANNOUNCEMENT_LLM_API_KEY`、`ANNOUNCEMENT_LLM_MODEL` 必须同时配置或同时留空；生产环境
@@ -677,7 +679,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 `WORKER_URL` 以及会话/OAuth 凭据；如需后台手动发布提醒，还要设置三项
 `ANNOUNCEMENT_LLM_*` 后端变量。官方部署 workflow 把 API Key 放在 Actions Secret，
 把中转地址和模型名分别放在 Actions Variable `ANNOUNCEMENT_LLM_BASE_URL` 与
-`ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。BYOK 需要独立的必填 Secret
+`ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。后台模型渠道需要独立的必填 Secret
 `LLM_CREDENTIAL_ENCRYPTION_KEY`；可选的 AI 优化内置模型同样把 API Key 放 Secret，把
 `AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_MODEL` 和可选的
 `AGENT_LLM_THINKING` 放 Actions Variables。
@@ -841,7 +843,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用                                 |
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 令牌及 GitHub 导入凭据的加密根密钥；轮换需迁移密文，否则旧 MCP 令牌无法查看、GitHub Token 需重新保存                                        |
-| `LLM_CREDENTIAL_ENCRYPTION_KEY` | BYOK API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
+| `LLM_CREDENTIAL_ENCRYPTION_KEY` | 后台模型渠道 API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | 自定义自媒体平台令牌独立加密密钥；生产必填，轮换前必须迁移既有密文                    |
 | `WECHAT_CREDENTIAL_ENCRYPTION_KEY` | 微信公众号 AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                              |
 | `ZHIHU_CREDENTIAL_ENCRYPTION_KEY` | 知乎 OpenAPI AppSecret 独立加密密钥；生产必填，轮换前必须迁移既有密文                         |

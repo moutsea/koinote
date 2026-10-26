@@ -514,8 +514,8 @@ same database tier without querying Stripe.
 
 MCP lets Codex, Claude Code, and other agent clients operate on Koinote documents. Model
 inference stays in the client for normal document tools; GEO summary generation is an
-exception and calls the configured built-in or BYOK model. The server therefore needs no
-model API key unless the GEO generation tool is used. The endpoint is Streamable
+exception and uses the platform model configured by the administrator. AI tools consume
+credits and do not accept personal provider credentials. The endpoint is Streamable
 HTTP `POST /mcp`, using the official Go MCP SDK in stateless JSON-response mode. The Worker
 only proxies the exact `/mcp` path and preserves the request body stream without parsing or
 re-encoding protocol messages.
@@ -610,7 +610,8 @@ user request, and publish tokens should have a short expiry and be revoked when 
 `get_wechat_geo_summary` is read-only. Write and publish tokens may call
 `generate_wechat_geo_summary` and `update_wechat_geo_summary` to manage a saved GEO summary. Generation
 reuses the member check, provider selection, rate limit, and credit reservation used by the web flow;
-built-in providers consume credits according to reported usage while BYOK providers do not. The draft tool
+the platform model consumes credits according to reported usage. Generation requires an explicit
+`providerMode: "builtin"` confirmation in both HTTP and MCP requests, preventing old BYOK clients from silently switching to credit billing. The draft tool
 embeds the hidden corpus only when `includeGeo: true` is explicitly supplied and the saved summary is enabled
 and matches the current document revision; stale summaries must be regenerated first.
 

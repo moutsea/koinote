@@ -313,7 +313,7 @@ func TestMCPWechatGeoSummaryRoundTrip(t *testing.T) {
 	}
 	principal := mcpPrincipal{User: user, Scope: "write", TokenID: tokenID}
 	ctx := context.WithValue(context.Background(), mcpPrincipalContextKey{}, principal)
-	_, generated, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryInput{DocID: document.DocID})
+	_, generated, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryGenerateInput{DocID: document.DocID, ProviderMode: "builtin"})
 	if err != nil {
 		t.Fatalf("generate MCP GEO summary: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestMCPGenerateWechatGeoSummaryReportsDocumentChanges(t *testing.T) {
 		err    error
 	}, 1)
 	go func() {
-		_, output, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryInput{DocID: document.DocID})
+		_, output, err := app.mcpGenerateWechatGeoSummary(ctx, nil, mcpWechatGeoSummaryGenerateInput{DocID: document.DocID, ProviderMode: "builtin"})
 		resultCh <- struct {
 			output mcpWechatGeoSummaryOutput
 			err    error

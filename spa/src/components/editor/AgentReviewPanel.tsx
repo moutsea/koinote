@@ -201,12 +201,11 @@ export function AgentReviewPanel({
     enabled: remoteEnabled,
     retry: false,
   });
-  const configuredProviderMode = settings.data?.settings.providerMode;
-  const providerMode = configuredProviderMode ?? "builtin";
+  const providerMode = "builtin" as const;
   const credits = useQuery({
     queryKey: AGENT_CREDITS_QUERY_KEY,
     queryFn: getAgentCredits,
-    enabled: remoteEnabled && configuredProviderMode === "builtin",
+    enabled: remoteEnabled,
     retry: false,
   });
   const reviews = useQuery({
@@ -576,7 +575,7 @@ export function AgentReviewPanel({
   const canStart = canStartAgentReview(
     providerMode,
     builtinEnabled,
-    settings.data?.settings.defaultChannel?.channelId ?? "",
+    "",
   );
   const builtinCreditsUnavailable =
     providerMode === "builtin" && (credits.isLoading || credits.isError);
@@ -930,8 +929,6 @@ export function AgentReviewPanel({
               credits={credits.data?.credits}
               creditsError={credits.isError}
               settingsError={settings.isError}
-              hasChannel={Boolean(settings.data?.settings.defaultChannel)}
-              settingsLoading={settings.isLoading}
               selectedTasks={selectedTasks}
               onToggleTask={(task) =>
                 setSelectedTasks((value) => toggleAgentReviewTask(value, task))
@@ -1027,8 +1024,6 @@ function LaunchGuideSection({
   credits,
   creditsError,
   settingsError,
-  hasChannel,
-  settingsLoading,
   selectedTasks,
   onToggleTask,
   onSelectAll,
@@ -1047,8 +1042,6 @@ function LaunchGuideSection({
   credits?: { available: number; reserved: number; builtinEnabled: boolean };
   creditsError: boolean;
   settingsError: boolean;
-  hasChannel: boolean;
-  settingsLoading: boolean;
   selectedTasks: AgentReviewTaskId[];
   onToggleTask: (task: AgentReviewTaskId) => void;
   onSelectAll: () => void;
@@ -1086,17 +1079,6 @@ function LaunchGuideSection({
             count: credits.available,
           })}
         </p>
-      )}
-      {providerMode === "byok" && !hasChannel && !settingsLoading && (
-        <Link
-          to="/settings"
-          search={{ section: "ai" }}
-          hash="llm-channels"
-          className="mb-3 inline-flex text-xs font-semibold hover:underline"
-          style={{ color: "var(--cinnabar)" }}
-        >
-          {t.agentReview.configureChannels}
-        </Link>
       )}
       {settingsError && (
         <p

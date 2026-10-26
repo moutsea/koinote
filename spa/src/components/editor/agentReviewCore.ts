@@ -4,6 +4,8 @@ const AGENT_REVIEW_FAILURE_TRANSLATIONS: Record<string, string> = {
   usage_missing: "agent_invalid_response",
   usage_invalid: "agent_invalid_response",
   invalid_response: "agent_invalid_response",
+  response_truncated: "agent_response_truncated",
+  response_empty: "agent_response_empty",
   provider_unavailable: "agent_provider_unavailable",
   finalize_failed: "server_error",
   credit_reservation_failed: "server_error",
@@ -42,9 +44,7 @@ export function canStartAgentReview(
   builtinEnabled: boolean,
   channelId: string,
 ): boolean {
-  return providerMode === "builtin"
-    ? builtinEnabled
-    : channelId.trim() !== "";
+  return providerMode === "builtin" && builtinEnabled;
 }
 
 export function hasRunningAgentReviewForCurrentRevision(

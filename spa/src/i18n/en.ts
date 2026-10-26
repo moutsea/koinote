@@ -220,7 +220,7 @@ export const en: Messages = {
       "{storage} cloud storage for documents and images",
       "MCP access for Codex, Claude Code, OpenCode, and other agents",
       "Configurable version history and safety-snapshot recovery",
-      "AI optimization with 1,000 credits, or use your own LLM",
+      "AI optimization with 1,000 credits",
       "Ten advanced management, writing, product, research, and technical templates",
       "Everything in Free",
     ],
@@ -232,7 +232,7 @@ export const en: Messages = {
     unavailable: "Online checkout is not configured for this deployment.",
     creditsTitle: "AI credits",
     creditsDescription:
-      "AI optimization with the built-in model uses credits. Using your own LLM channel uses no credits.",
+      "AI optimization uses the platform model and consumes credits based on actual usage.",
     creditsMembersOnly:
       "Credits are available to lifetime members. Upgrade above before purchasing a pack.",
     creditsNote:
@@ -269,7 +269,7 @@ export const en: Messages = {
       "Connect Codex, Claude Code, OpenCode, OpenClaw, or any compatible Streamable HTTP MCP client to Koinote.",
     overviewTitle: "How it works",
     overviewBody:
-      "Your agent provides the model capability for normal document tools. Koinote handles authorization, document tools, revision conflicts, and audit records; GEO summary generation can call the built-in model or your configured BYOK channel. After you bind Feishu, a write token can also call sync_document_to_feishu to create or update a Feishu document.",
+      "Your agent provides the model capability for normal document tools. Koinote handles authorization, document tools, revision conflicts, and audit records; GEO summary generation uses the platform model and consumes credits. After you bind Feishu, a write token can also call sync_document_to_feishu to create or update a Feishu document.",
     setupTitle: "Before you start",
     setupSteps: [
       { title: "Activate Lifetime", desc: "MCP is a Lifetime benefit." },
@@ -893,7 +893,7 @@ export const en: Messages = {
     currencyLabel: "Payment currency",
     currencyHint: "Stripe Checkout will charge you in the selected currency.",
     aiBenefit: "AI optimization",
-    aiComingSoon: "Includes 1,000 credits, or use your own LLM provider",
+    aiComingSoon: "Includes 1,000 credits with the platform model",
     purchase: "Get lifetime access",
     redirecting: "Opening secure checkout…",
     activeTitle: "Lifetime membership unlocked",
@@ -910,7 +910,7 @@ export const en: Messages = {
   agentCredits: {
     title: "AI credits",
     description:
-      "Built-in AI optimization uses credits. Using your own LLM channel uses no credits.",
+      "AI optimization uses the platform model and consumes credits based on actual usage.",
     membersOnly:
       "AI optimization is a lifetime-member benefit and includes 1,000 credits when you upgrade.",
     available: "{count} available",
@@ -1473,6 +1473,31 @@ export const en: Messages = {
     successTitle: "Feedback received",
     successDescription: "Thank you. We’ll review what you shared.",
     done: "Done",
+  },
+  adminLLM: {
+    title: "Model channels",
+    description: "Manage the AI channels shared by all users. Text models power writing reviews, smart organization and GEO summaries; image models power AI covers. Saved changes apply to new requests immediately.",
+    text: "Text model",
+    image: "Image model",
+    textHint: "Shared by all users, using the existing credit billing rules.",
+    imageHint: "For cover generation and reference image edits. Requires OpenAI Images API support.",
+    environment: "Using server configuration. Saving switches to admin-managed settings.",
+    managed: "Using admin-managed settings. Disabling stops AI requests of this kind.",
+    enabled: "Enable channel",
+    protocol: "API protocol",
+    model: "Model name",
+    keepKey: "Leave blank to keep the current key, or enter a replacement.",
+    keyRecovery: "The stored key cannot be decrypted. Enter a new API key and save.",
+    keyHint: "Keys are stored encrypted and never displayed.",
+    thinking: "Request deep thinking",
+    thinkingHint: "For OpenAI-compatible providers supporting enable_thinking. Also increases the output budget. When unchecked, the provider default applies.",
+    save: "Save settings",
+    saving: "Saving…",
+    saved: "Saved. New requests use these settings immediately.",
+    loadFailed: "Could not load model settings.",
+    saveFailed: "Could not save. Try again.",
+    conflict: "Settings have changed. Refresh before editing again.",
+    invalid: "Check the protocol, HTTPS endpoint, model name and API key.",
   },
   admin: {
     title: "Admin",
@@ -3109,10 +3134,15 @@ function hello(name) {
     share_password_invalid: "Incorrect password",
     too_many_requests: "Too many attempts — please try again later",
     insufficient_credits:
-      "Not enough credits. Purchase credits or use your own LLM channel",
+      "Not enough credits. Purchase credits and try again",
     agent_llm_not_configured: "The built-in AI model is not configured",
+    agent_provider_confirmation_required: "AI now uses the platform model and credits. Refresh the page or update the client before retrying.",
     agent_invalid_response:
       "The model returned an invalid review. Start a new review",
+    agent_response_truncated:
+      "The model reached its output limit before completing the review. Try a shorter article or a different model",
+    agent_response_empty:
+      "The model returned no usable answer. Try again or use a different model",
     agent_provider_error:
       "The model provider rejected the request. Check the model and API key",
     agent_provider_unavailable:

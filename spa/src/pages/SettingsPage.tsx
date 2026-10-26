@@ -28,13 +28,11 @@ import type { User } from "../api";
 import { useSession } from "../auth";
 import { AccountDeletionCard } from "../components/AccountDeletionCard";
 import { AgentCreditsCard } from "../components/AgentCreditsCard";
-import { AgentModelSettingsCard } from "../components/AgentModelSettingsCard";
 import { AgentWorkspaceCard } from "../components/AgentWorkspaceCard";
 import { Avatar } from "../components/Avatar";
 import { DocumentHistorySettingsCard } from "../components/DocumentHistorySettingsCard";
 import { InvitationCard } from "../components/InvitationCard";
 import { PaperCard } from "../components/Ink";
-import { LLMChannelsCard } from "../components/LLMChannelsCard";
 import { MCPAccessCard } from "../components/MCPAccessCard";
 import { MembershipCard } from "../components/MembershipCard";
 import { PageContainer } from "../components/PageContainer";
@@ -273,12 +271,6 @@ function SettingsSectionContent({
     }
     return (
       <div className="space-y-4">
-        <div id="agent-model" className="scroll-mt-20">
-          <AgentModelSettingsCard user={user} />
-        </div>
-        <div id="llm-channels" className="scroll-mt-20">
-          <LLMChannelsCard user={user} />
-        </div>
         <div id="mcp" className="scroll-mt-20">
           <MCPAccessCard user={user} />
         </div>

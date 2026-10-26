@@ -142,8 +142,9 @@ func (a *App) wechatGeoSummaryGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		ProviderMode string `json:"providerMode"`
+		Title        string `json:"title"`
+		Content      string `json:"content"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, wechatGeoSummaryRequestBytes)
 	decoder := json.NewDecoder(r.Body)
@@ -154,6 +155,9 @@ func (a *App) wechatGeoSummaryGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
+		return
+	}
+	if !requireManagedLLMConfirmation(w, input.ProviderMode, "") {
 		return
 	}
 	input.Title = strings.TrimSpace(input.Title)

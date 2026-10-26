@@ -96,14 +96,14 @@ func main() {
 		log.Printf("Stripe Credits 商品未配置，Credits 购买功能关闭")
 	}
 	if cfg.AgentLLMEnabled() {
-		log.Printf("AI 优化内置模型已启用（protocol=%s model=%s）", cfg.AgentLLMProtocol, cfg.AgentLLMModel)
+		log.Printf("AI 优化环境默认模型已配置（protocol=%s model=%s，后台配置优先）", cfg.AgentLLMProtocol, cfg.AgentLLMModel)
 	} else {
-		log.Printf("AI 优化内置模型未配置，BYOK 渠道仍可使用")
+		log.Printf("AI 优化环境默认模型未配置；可在管理后台配置统一渠道")
 	}
 	if cfg.WechatCoverImageEnabled() {
-		log.Printf("微信公众号封面生成已启用（model=%s）", cfg.WechatCoverImageModel)
+		log.Printf("微信公众号封面环境默认模型已配置（model=%s，后台配置优先）", cfg.WechatCoverImageModel)
 	} else {
-		log.Printf("微信公众号封面生成未配置")
+		log.Printf("微信公众号封面环境默认模型未配置；可在管理后台配置生图渠道")
 	}
 	if cfg.XOAuth2Enabled() {
 		log.Printf("X OAuth 2.0 已启用")

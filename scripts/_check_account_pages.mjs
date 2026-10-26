@@ -65,8 +65,8 @@ excludes("会员卡不再内嵌支付导航", membershipCard, "openMembershipChe
 includes("会员设置渲染云端用量", settings, "<StorageCard />");
 includes("会员设置渲染版本历史", settings, "<DocumentHistorySettingsCard user={user} />");
 includes("AI 设置渲染 credits", settings, "<AgentCreditsCard user={user} />");
-includes("AI 设置渲染模型来源", settings, "<AgentModelSettingsCard user={user} />");
-includes("AI 设置渲染模型渠道", settings, "<LLMChannelsCard user={user} />");
+excludes("AI 设置不再提供个人模型选择", settings, "<AgentModelSettingsCard");
+excludes("AI 设置不再提供个人渠道配置", settings, "<LLMChannelsCard");
 includes("AI 设置渲染 MCP 令牌", settings, "<MCPAccessCard user={user} />");
 includes("免费用户只显示 AI 升级门禁", settings, 'user.membershipTier !== "lifetime"');
 includes("设置页在基本信息提供升级入口", settings, "<AccountOverviewCard user={user} />");

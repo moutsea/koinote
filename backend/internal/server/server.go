@@ -71,7 +71,6 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		announcementTranslator:  newAnnouncementTranslator(cfg),
 		wechatAPIHTTPClient:     newWechatAPIHTTPClient(cfg.WechatAPIProxyURL),
 		wechatImageHTTPClient:   newSafeLLMHTTPClient(),
-		wechatCoverHTTPClient:   newTrustedLLMHTTPClient(),
 		zhihuAPIHTTPClient:      newZhihuAPIHTTPClient(),
 		zhihuAPIBaseURL:         zhihuOpenAPIBaseURL,
 		xAPIHTTPClient:          newXAPIHTTPClient(),
@@ -144,6 +143,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/billing/webhook", a.billingWebhook)
 	mux.HandleFunc("POST /api/feedback", a.feedbackCreate)
 	mux.HandleFunc("GET /api/admin/stats", a.adminStats)
+	mux.HandleFunc("GET /api/admin/llm/settings", a.adminLLMSettingsGet)
+	mux.HandleFunc("PUT /api/admin/llm/settings/{kind}", a.adminLLMSettingsPut)
 	mux.HandleFunc("GET /api/admin/server-status", a.adminServerStatus)
 	mux.HandleFunc("GET /api/admin/feedback", a.adminFeedbackList)
 	mux.HandleFunc("GET /api/admin/agent-repositories", a.agentSystemRepositoriesList)
@@ -164,10 +165,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/mcp/tokens/{tokenId}/reveal", a.mcpTokenReveal)
 	mux.HandleFunc("DELETE /api/mcp/tokens/{tokenId}", a.mcpTokenRevoke)
 	mux.HandleFunc("GET /api/mcp/activity", a.mcpActivityList)
-	mux.HandleFunc("GET /api/agent/channels", a.llmChannelsList)
-	mux.HandleFunc("POST /api/agent/channels", a.llmChannelCreate)
-	mux.HandleFunc("PUT /api/agent/channels/{channelId}", a.llmChannelUpdate)
-	mux.HandleFunc("DELETE /api/agent/channels/{channelId}", a.llmChannelDelete)
+	mux.HandleFunc("GET /api/agent/channels", a.personalLLMChannelsDisabled)
+	mux.HandleFunc("POST /api/agent/channels", a.personalLLMChannelsDisabled)
+	mux.HandleFunc("PUT /api/agent/channels/{channelId}", a.personalLLMChannelsDisabled)
+	mux.HandleFunc("DELETE /api/agent/channels/{channelId}", a.personalLLMChannelsDisabled)
 	mux.HandleFunc("GET /api/agent/settings", a.agentSettingsGet)
 	mux.HandleFunc("PUT /api/agent/settings", a.agentSettingsPut)
 	mux.HandleFunc("GET /api/agent/github-credential", a.agentGitHubCredentialGet)

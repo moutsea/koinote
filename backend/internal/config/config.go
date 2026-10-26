@@ -22,7 +22,7 @@ type Config struct {
 	// MCPTokenEncryptionKey 用于加密需要再次展示的 MCP 个人访问令牌。
 	// 生产环境必须独立配置；开发环境可回退到 SessionSecret，方便本地启动。
 	MCPTokenEncryptionKey string
-	// LLMCredentialEncryptionKey 只用于加密会员保存的 BYOK API Key，不能与
+	// LLMCredentialEncryptionKey 用于加密后台模型渠道及历史个人渠道 API Key，不能与
 	// 会话、MCP token 或第三方服务密钥复用。
 	LLMCredentialEncryptionKey         string
 	CustomMediaCredentialEncryptionKey string
@@ -80,8 +80,7 @@ type Config struct {
 	StripeLifetimeProductID string
 	StripeCreditsProductID  string
 
-	// AI 优化的内置模型。四项齐全时启用平台 credits 调用；会员的
-	// BYOK 渠道不依赖这组配置。
+	// AI 优化的环境默认模型。四项齐全时启用；后台保存的全局渠道优先于此配置。
 	AgentLLMProtocol string
 	AgentLLMBaseURL  string
 	AgentLLMAPIKey   string
@@ -378,8 +377,8 @@ func (c Config) ValidateWechatAPIProxyConfig() error {
 	return nil
 }
 
-// ValidateAgentLLMConfig 让平台 credits 模式保持显式开关：全空即关闭，部分
-// 配置则拒绝启动。BYOK 渠道另行在请求边界做更严格的 SSRF 校验。
+// ValidateAgentLLMConfig 验证环境默认模型：全空表示不提供环境回退，部分
+// 配置则拒绝启动。后台配置的渠道另行在请求边界做更严格的 SSRF 校验。
 func (c Config) ValidateAgentLLMConfig() error {
 	configured := 0
 	for _, value := range []string{c.AgentLLMProtocol, c.AgentLLMBaseURL, c.AgentLLMAPIKey, c.AgentLLMModel} {

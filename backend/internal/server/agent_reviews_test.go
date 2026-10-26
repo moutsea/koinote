@@ -51,6 +51,21 @@ func TestClassifyAgentReviewFailureDistinguishesPersistenceErrors(t *testing.T) 
 	}
 }
 
+func TestClassifyAgentReviewResponseFailures(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		code string
+	}{
+		{errAgentLLMTruncatedResponse, "response_truncated"},
+		{errAgentLLMEmptyResponse, "response_empty"},
+		{errAgentLLMInvalidResponse, "invalid_response"},
+	} {
+		if got := classifyAgentReviewFailure(fmt.Errorf("writing review task title: %w", test.err)); got != test.code {
+			t.Errorf("classify %v = %q, want %q", test.err, got, test.code)
+		}
+	}
+}
+
 func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 	t.Run("built-in provider charges reported token usage", func(t *testing.T) {
 		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,59 +134,21 @@ func TestAgentReviewCreateProviderAndCredits(t *testing.T) {
 		}
 	})
 
-	t.Run("BYOK Anthropic succeeds without credits", func(t *testing.T) {
-		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != "byok-test-key" {
-				t.Fatalf("unexpected BYOK provider request: path=%q api-key=%q", r.URL.Path, r.Header.Get("x-api-key"))
+	t.Run("legacy BYOK cannot bypass managed routing or billing", func(t *testing.T) {
+		app, pool, user, document := newAgentReviewCreateTest(t, config.Config{SessionSecret: "legacy-byok", LLMCredentialEncryptionKey: "legacy-key"})
+		channelID := insertAgentReviewChannelForTest(t, app, pool, user.ID, "openai", "https://legacy.example/v1", "legacy-model", "legacy-secret")
+		if _, err := pool.Exec(context.Background(), `UPDATE users SET agent_provider_mode='byok' WHERE id=$1`, user.ID); err != nil {
+			t.Fatal(err)
+		}
+		for _, input := range []string{`{"providerMode":"byok"}`, `{"channelId":"` + channelID + `"}`} {
+			response := requestAgentReviewCreate(t, app, user, document.DocID, input)
+			if response.Code != http.StatusGone {
+				t.Fatalf("legacy request status=%d body=%s", response.Code, response.Body.String())
 			}
-			writeAnthropicAgentReviewResponse(t, w, r, "Ordinary title", "The first paragraph is too long.", 1_500, 600)
-		}))
-		defer provider.Close()
-
-		app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
-			SessionSecret:              "agent-review-byok-test",
-			LLMCredentialEncryptionKey: "agent-review-byok-encryption-test",
-		})
-		app.agentLLMHTTPClient = provider.Client()
-		channelID := insertAgentReviewChannelForTest(t, app, pool, user.ID, "anthropic", provider.URL, "test-claude-model", "byok-test-key")
-		if _, err := pool.Exec(context.Background(), `
-			UPDATE users SET agent_provider_mode = 'byok' WHERE id = $1
-		`, user.ID); err != nil {
-			t.Fatal(err)
 		}
-
-		response := requestAgentReviewCreate(
-			t, app, user, document.DocID, `{}`,
-		)
-		if response.Code != http.StatusAccepted {
-			t.Fatalf("create BYOK review status=%d body=%s", response.Code, response.Body.String())
-		}
-		initial := decodeAgentReviewResponse(t, response)
-		review := waitForAgentReviewStatus(t, app, user.ID, initial.ReviewID, "ready")
-		if review.Status != "ready" || review.ProviderProtocol != "anthropic" ||
-			review.CreditsCharged != 0 || review.TotalTokens != 8_400 {
-			t.Fatalf("unexpected BYOK review: %+v", review)
-		}
-		if review.ChannelID == nil || *review.ChannelID != channelID {
-			t.Fatalf("review channel=%v, want %s", review.ChannelID, channelID)
-		}
-		balance, err := app.loadCreditBalance(context.Background(), user.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if balance != (creditAccountBalance{}) {
-			t.Fatalf("BYOK consumed credits: %+v", balance)
-		}
-		var reservations int
-		if err := pool.QueryRow(context.Background(), `
-			SELECT count(*) FROM credit_reservations reservation
-			JOIN agent_reviews review ON review.id = reservation.review_id
-			WHERE review.review_id = $1
-		`, review.ReviewID).Scan(&reservations); err != nil {
-			t.Fatal(err)
-		}
-		if reservations != 0 {
-			t.Fatalf("BYOK created %d credit reservations", reservations)
+		response := requestAgentReviewCreate(t, app, user, document.DocID, `{}`)
+		if response.Code != http.StatusConflict {
+			t.Fatalf("unconfirmed model request status=%d", response.Code)
 		}
 	})
 

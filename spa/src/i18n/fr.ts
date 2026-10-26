@@ -221,7 +221,7 @@ export const fr: Messages = {
       "{storage} de stockage cloud pour documents et images",
       "Accès MCP pour Codex, Claude Code, OpenCode et d'autres agents",
       "Historique configurable et restauration par instantané de sécurité",
-      "Optimisation IA avec 1 000 credits, ou utilisation de votre propre LLM",
+      "Optimisation IA avec 1 000 credits",
       "Dix modèles avancés pour le pilotage, l’écriture, le produit, la recherche et la technique",
       "Toutes les fonctions de l'offre gratuite",
     ],
@@ -233,7 +233,7 @@ export const fr: Messages = {
     unavailable: "Le paiement en ligne n'est pas configuré sur ce déploiement.",
     creditsTitle: "Credits IA",
     creditsDescription:
-      "Les analyses avec le modèle intégré consomment des credits. Votre propre canal LLM n’en consomme aucun.",
+      "L’optimisation IA utilise le modèle de la plateforme et consomme des credits selon l’utilisation réelle.",
     creditsMembersOnly:
       "Les credits sont réservés aux membres à vie. Activez d’abord l’offre ci-dessus avant d’acheter un pack.",
     creditsNote:
@@ -271,7 +271,7 @@ export const fr: Messages = {
       "Connectez Codex, Claude Code, OpenCode, OpenClaw ou tout client MCP Streamable HTTP compatible à Koinote.",
     overviewTitle: "Fonctionnement",
     overviewBody:
-      "Pour les outils documentaires habituels, le modèle est fourni par votre agent. Koinote gère l’autorisation, les outils, les conflits et l’audit ; la génération d’un résumé GEO peut appeler le modèle intégré ou votre canal BYOK configuré. Après avoir lié Feishu, un jeton d’écriture peut aussi appeler sync_document_to_feishu pour créer ou mettre à jour un document Feishu.",
+      "Pour les outils documentaires habituels, le modèle est fourni par votre agent. Koinote gère l’autorisation, les outils, les conflits et l’audit ; la génération d’un résumé GEO utilise le modèle de la plateforme et consomme des credits. Après avoir lié Feishu, un jeton d’écriture peut aussi appeler sync_document_to_feishu pour créer ou mettre à jour un document Feishu.",
     setupTitle: "Avant de commencer",
     setupSteps: [
       {
@@ -902,7 +902,7 @@ export const fr: Messages = {
     currencyHint: "Stripe Checkout vous facturera dans la devise sélectionnée.",
     aiBenefit: "Optimisation IA",
     aiComingSoon:
-      "Inclut 1 000 credits, ou utilisez votre propre fournisseur LLM",
+      "Inclut 1 000 credits avec le modèle de la plateforme",
     purchase: "Obtenir l'accès à vie",
     redirecting: "Ouverture du paiement sécurisé…",
     activeTitle: "Abonnement à vie débloqué",
@@ -919,7 +919,7 @@ export const fr: Messages = {
   agentCredits: {
     title: "Credits IA",
     description:
-      "Les analyses avec le modèle intégré consomment des credits. Votre propre canal LLM n’en consomme aucun.",
+      "L’optimisation IA utilise le modèle de la plateforme et consomme des credits selon l’utilisation réelle.",
     membersOnly:
       "L’optimisation IA est réservée aux membres à vie et inclut 1 000 credits lors de la mise à niveau.",
     available: "{count} disponibles",
@@ -1489,6 +1489,31 @@ export const fr: Messages = {
     successTitle: "Commentaire reçu",
     successDescription: "Merci. Nous allons examiner votre message.",
     done: "Terminer",
+  },
+  adminLLM: {
+    title: "Canaux de modèles",
+    description: "Gérez les canaux IA communs à tous les utilisateurs. Le modèle texte sert aux analyses, au classement intelligent et aux résumés GEO ; le modèle image génère les couvertures. Les modifications s’appliquent immédiatement aux nouvelles requêtes.",
+    text: "Modèle texte",
+    image: "Modèle image",
+    textHint: "Commun à tous les utilisateurs, selon les règles de facturation en credits existantes.",
+    imageHint: "Génération de couvertures et retouche avec image de référence. API OpenAI Images requise.",
+    environment: "Configuration du serveur active. Enregistrer active la configuration administrateur.",
+    managed: "Configuration administrateur active. La désactivation arrête ces requêtes IA.",
+    enabled: "Activer le canal",
+    protocol: "Protocole API",
+    model: "Nom du modèle",
+    keepKey: "Laissez vide pour conserver la clé, ou saisissez une nouvelle clé.",
+    keyRecovery: "La clé enregistrée est illisible. Saisissez une nouvelle clé API et enregistrez.",
+    keyHint: "La clé est chiffrée et n’est jamais affichée.",
+    thinking: "Demander une réflexion approfondie",
+    thinkingHint: "Pour les fournisseurs compatibles OpenAI acceptant enable_thinking. Augmente aussi le budget de sortie. Sinon, le réglage du fournisseur s’applique.",
+    save: "Enregistrer",
+    saving: "Enregistrement…",
+    saved: "Enregistré. Les nouvelles requêtes utilisent ces réglages.",
+    loadFailed: "Impossible de charger les réglages.",
+    saveFailed: "Échec de l’enregistrement. Réessayez.",
+    conflict: "La configuration a changé. Actualisez avant de la modifier.",
+    invalid: "Vérifiez le protocole, l’adresse HTTPS, le modèle et la clé API.",
   },
   admin: {
     title: "Administration",
@@ -3173,10 +3198,15 @@ function hello(name) {
     share_password_invalid: "Mot de passe incorrect",
     too_many_requests: "Trop de tentatives — veuillez réessayer plus tard",
     insufficient_credits:
-      "Credits insuffisants. Achetez-en ou utilisez votre propre canal LLM",
+      "Credits insuffisants. Achetez-en puis réessayez",
     agent_llm_not_configured: "Le modèle IA intégré n’est pas configuré",
+    agent_provider_confirmation_required: "L’IA utilise désormais le modèle de la plateforme et des credits. Actualisez la page ou mettez le client à jour avant de réessayer.",
     agent_invalid_response:
       "Le modèle a renvoyé une analyse invalide. Relancez-la",
+    agent_response_truncated:
+      "Le modèle a atteint sa limite de sortie avant de terminer l’analyse. Essayez un article plus court ou un autre modèle",
+    agent_response_empty:
+      "Le modèle n’a renvoyé aucune réponse exploitable. Réessayez ou utilisez un autre modèle",
     agent_provider_error:
       "Le fournisseur a refusé la requête. Vérifiez le modèle et la clé API",
     agent_provider_unavailable:

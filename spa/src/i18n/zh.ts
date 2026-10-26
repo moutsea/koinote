@@ -219,7 +219,7 @@ export const zh: Messages = {
       "{storage} 云端存储（文档与图片合计）",
       "MCP 连接 Codex、Claude Code、OpenCode 等 Agent",
       "可配置版本历史与安全快照恢复",
-      "AI 优化与 1,000 credits，也可使用自己的 LLM",
+      "AI 优化与 1,000 credits",
       "10 款管理、写作、产品、研究与技术高级模板",
       "包含免费版全部能力",
     ],
@@ -231,7 +231,7 @@ export const zh: Messages = {
     unavailable: "当前部署尚未配置在线支付。",
     creditsTitle: "AI Credits",
     creditsDescription:
-      "使用内置模型进行 AI 优化时消耗 credits；使用自己的 LLM 渠道不会消耗 credits。",
+      "AI 优化统一使用平台模型，并按实际用量消耗 credits。",
     creditsMembersOnly:
       "Credits 仅供终生会员购买和使用；可先在上方开通终生会员。",
     creditsNote:
@@ -267,7 +267,7 @@ export const zh: Messages = {
       "Koinote 提供标准 Streamable HTTP MCP 接口。配置一次后，你可以直接让 Codex、Claude Code、OpenCode、OpenClaw 或其他兼容客户端查找、创建和修改文档。",
     overviewTitle: "它如何工作",
     overviewBody:
-      "常规文档工具由你的 Agent 提供模型能力，Koinote 只负责令牌鉴权、文档工具、并发冲突检测和审计记录。若调用 GEO 摘要生成工具，Koinote 会按你的设置调用内置模型或 BYOK 渠道。绑定飞书账号后，读写令牌还可以调用 sync_document_to_feishu 一键创建或更新飞书文档。",
+      "常规文档工具由你的 Agent 提供模型能力，Koinote 只负责令牌鉴权、文档工具、并发冲突检测和审计记录。若调用 GEO 摘要生成工具，Koinote 会调用平台统一配置的模型，并消耗 credits。绑定飞书账号后，读写令牌还可以调用 sync_document_to_feishu 一键创建或更新飞书文档。",
     setupTitle: "开始之前",
     setupSteps: [
       { title: "开通终生会员", desc: "MCP 是终生会员权益。" },
@@ -870,7 +870,7 @@ export const zh: Messages = {
     currencyLabel: "支付币种",
     currencyHint: "选择后将在 Stripe 收银台以该币种结算。",
     aiBenefit: "AI 优化",
-    aiComingSoon: "含 1,000 credits，也可使用自己的 LLM 渠道",
+    aiComingSoon: "含 1,000 credits，统一使用平台模型",
     purchase: "开通终生会员",
     redirecting: "正在前往安全支付页面…",
     activeTitle: "终生会员已解锁",
@@ -886,7 +886,7 @@ export const zh: Messages = {
   agentCredits: {
     title: "AI Credits",
     description:
-      "使用内置模型优化文章时消耗 credits；使用自己的 LLM 渠道不消耗 credits。",
+      "AI 优化统一使用平台模型，并按实际用量消耗 credits。",
     membersOnly: "AI 优化是终生会员权益，升级时会赠送 1,000 credits。",
     available: "可用 {count}",
     estimatedCharge: "预计扣除 {count} credits",
@@ -1399,6 +1399,31 @@ export const zh: Messages = {
     successTitle: "反馈已收到",
     successDescription: "谢谢你的反馈，我们会认真查看。",
     done: "完成",
+  },
+  adminLLM: {
+    title: "模型渠道",
+    description: "统一管理所有用户使用的 AI 渠道。文本模型用于文章优化、智能整理和 GEO 摘要，生图模型用于 AI 封面。保存后对新请求立即生效。",
+    text: "文本模型",
+    image: "生图模型",
+    textHint: "所有用户共用此渠道，按现有 credits 规则计费。",
+    imageHint: "用于封面生成和参考图编辑，需支持 OpenAI Images API。",
+    environment: "当前使用服务器配置。保存后将使用后台配置。",
+    managed: "当前使用后台配置。关闭后将停止该类 AI 请求。",
+    enabled: "启用渠道",
+    protocol: "接口协议",
+    model: "模型名称",
+    keepKey: "留空保留现有密钥；填写新密钥可替换。",
+    keyRecovery: "存储的密钥无法解密，请重新填写 API Key 后保存。",
+    keyHint: "密钥加密保存，不会回显。",
+    thinking: "请求深度思考",
+    thinkingHint: "仅用于支持 enable_thinking 的 OpenAI 兼容渠道；勾选后同时提高输出额度。未勾选时沿用服务商默认设置。",
+    save: "保存配置",
+    saving: "保存中…",
+    saved: "已保存，新请求立即生效。",
+    loadFailed: "无法加载模型渠道配置。",
+    saveFailed: "保存失败，请重试。",
+    conflict: "配置已被更新，请刷新后重新编辑。",
+    invalid: "请检查协议、HTTPS 地址、模型名称和 API Key。",
   },
   admin: {
     title: "管理后台",
@@ -2898,9 +2923,12 @@ function hello(name) {
     share_password_invalid: "口令不正确",
     too_many_requests: "尝试过于频繁，请稍后再试",
     insufficient_credits:
-      "可用 credits 不足，请购买 credits 或改用自己的 LLM 渠道",
+      "可用 credits 不足，请购买 credits 后重试",
     agent_llm_not_configured: "内置 AI 模型尚未配置",
+    agent_provider_confirmation_required: "AI 已统一使用平台模型并消耗 credits，请刷新页面或更新客户端后重试。",
     agent_invalid_response: "模型返回的建议格式无效，请重新审阅",
+    agent_response_truncated: "模型达到输出长度上限，未能完成审阅，请尝试缩短文章或更换模型",
+    agent_response_empty: "模型未返回可用的回答，请重试或更换模型",
     agent_provider_error: "模型渠道拒绝了请求，请检查模型和密钥配置",
     agent_provider_unavailable: "模型渠道暂时不可用，请稍后重试",
     // 兼容滚动部署期间仍可能返回旧错误码的后端实例。

@@ -250,7 +250,7 @@ func (a *App) newMCPServer(principal mcpPrincipal) *mcp.Server {
 	addWechatGeoTools := func(annotations *mcp.ToolAnnotations) {
 		mcp.AddTool(server, &mcp.Tool{
 			Name: "generate_wechat_geo_summary", Title: "Generate WeChat GEO summary",
-			Description: "Generate and save a WeChat GEO summary from the current document using the member's configured AI provider. Built-in provider usage consumes credits; BYOK usage does not. Requires lifetime membership and may take up to 90 seconds.",
+			Description: "Generate and save a WeChat GEO summary from the current document using the platform's managed AI provider. Set providerMode=builtin to confirm credit usage. Requires lifetime membership and may take up to 90 seconds.",
 			Annotations: annotations,
 		}, a.mcpGenerateWechatGeoSummary)
 		mcp.AddTool(server, &mcp.Tool{

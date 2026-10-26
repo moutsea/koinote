@@ -322,7 +322,7 @@ func (a *App) generateWechatCoverForMCP(ctx context.Context, userID int, prompt,
 	if _, _, err := a.commitCreditReservation(ctx, userID, reservation.ReservationID, int(wechatCoverGenerationCredits*creditTokensPerCredit), map[string]any{
 		"feature": "wechat_cover_generation",
 		"ratio":   ratio,
-		"model":   a.cfg.WechatCoverImageModel,
+		"model":   cover.Model,
 		"source":  "mcp",
 	}); err != nil {
 		return nil, err

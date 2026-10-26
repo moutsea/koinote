@@ -38,6 +38,7 @@ import { useSession } from "../auth";
 import { PaperCard } from "../components/Ink";
 import { AnnouncementAdminPanel } from "../components/AnnouncementAdminPanel";
 import { SystemRepositoriesAdminPanel } from "../components/SystemRepositoriesAdminPanel";
+import { AdminLLMSettingsPanel } from "../components/AdminLLMSettingsPanel";
 import { FeedbackAdminPanel } from "../components/FeedbackAdminPanel";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n, interpolate, type Locale } from "../i18n";
@@ -51,6 +52,7 @@ const DATE_LOCALE: Record<Locale, string> = {
 };
 
 type AdminTab =
+  | "llm-settings"
   | "system-repositories"
   | "overview"
   | "growth"
@@ -151,7 +153,7 @@ export function AdminPage() {
             {t.admin.subtitle}
           </p>
         </div>
-        {activeTab !== "announcements" && activeTab !== "system-repositories" && (
+        {activeTab !== "llm-settings" && activeTab !== "announcements" && activeTab !== "system-repositories" && (
           <button
             type="button"
             disabled={refreshQuery.isFetching}
@@ -178,7 +180,9 @@ export function AdminPage() {
         aria-labelledby={`admin-tab-${activeTab}`}
         className="mt-6"
       >
-        {activeTab === "system-repositories" ? (
+        {activeTab === "llm-settings" ? (
+          <AdminLLMSettingsPanel />
+        ) : activeTab === "system-repositories" ? (
           <SystemRepositoriesAdminPanel />
         ) : activeTab === "announcements" ? (
           <AnnouncementAdminPanel />
@@ -232,6 +236,7 @@ function AdminTabs({
 }) {
   const { t } = useI18n();
   const tabs = [
+    { id: "llm-settings", label: t.adminLLM.title, icon: <Cpu /> },
     { id: "overview", label: t.admin.tabOverview, icon: <BarChart3 /> },
     { id: "growth", label: t.admin.tabGrowth, icon: <MousePointerClick /> },
     { id: "revenue", label: t.admin.tabRevenue, icon: <Coins /> },

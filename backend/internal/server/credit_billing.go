@@ -172,11 +172,24 @@ func (a *App) agentCreditsGet(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Could not load credit history")
 		return
 	}
+	modelSetting, err := a.loadSystemLLMRecord(r.Context(), "text")
+	if err != nil {
+		httpx.ErrorCode(w, 500, "server_error", "Could not load AI availability")
+		return
+	}
+
+	builtinEnabled := modelSetting.Enabled
+	if builtinEnabled {
+		// An unreadable model key must not hide balance/history or prevent top-ups.
+		_, credentialErr := a.resolveSystemLLMRecord(modelSetting)
+		builtinEnabled = credentialErr == nil
+	}
+
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"credits": map[string]any{
 			"balance": balance.Balance, "reserved": balance.Reserved, "available": balance.Available,
 			"tokensPerCredit": creditTokensPerCredit,
-			"builtinEnabled":  a.cfg.AgentLLMEnabled(),
+			"builtinEnabled":  builtinEnabled,
 			"purchaseEnabled": a.cfg.StripeCreditsEnabled(),
 			"packs":           creditPacksPayload(), "transactions": transactions,
 		},

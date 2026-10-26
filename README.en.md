@@ -84,8 +84,8 @@ notarization, so macOS will still show a security warning on first launch. Updat
 - Free includes 500 MB and five basic templates by default; one-time Lifetime access adds
   10 GB, ten advanced templates, MCP, version history, AI optimization, and 1,000 credits
 - The built-in model charges 1 credit per 2,000 actual input-plus-output tokens, rounded up,
-  with 3,000 / 10,000 / 30,000-credit packs. Members can also save OpenAI-compatible or
-  Anthropic Messages BYOK channels; BYOK reviews consume no credits
+  with 3,000 / 10,000 / 30,000-credit packs. All users share administrator-managed text
+  and image providers; personal BYOK channels are disabled
 
 **Account security**
 
@@ -386,7 +386,7 @@ Previously confirmed documents are skipped by default, even after content edits.
 
 Apply skips documents moved to trash and lists them in the result. Single-step undo checks each document, preserves later classification or related folder-path changes and lists skipped titles. The remaining documents regain their original folders, tags and organization markers while retaining trash status and subsequent ordering within an unchanged folder. Skipped outcomes are saved; retrying undo never overwrites those later changes. Documents returning to their original folder get space inserted for them to avoid duplicate sort positions. Undo remains available after a new or failed preview. Tags are edited individually, preserving punctuation within each tag. Same-named folders can be selected individually in the destination list. Repeated requests do not generate or charge twice.
 
-This uses the same lifetime membership and built-in credits / BYOK settings as AI optimization. Preview generation is billed by usage, except batches that produce no valid suggestions cost no platform credits and their unused reservations are released. Mixed batches are still billed by their usage. BYOK providers may charge even when no valid suggestions are produced. Editing, applying and undoing are free. Desktop clients save and synchronize first. Documents with sync conflicts are excluded from both classification and reference examples; unrelated documents can still be organized. Apply and undo only require the affected documents to be free of sync conflicts. Unsynced folder changes must still be resolved; unexpected folder conflict states get a specific explanation. Tags and modification times refresh from the cloud, and unchanged tag metadata is not rewritten to the local cache. Local mode retains date-based organization.
+This uses the same lifetime membership, platform model, and credits as AI optimization. Preview generation is billed by usage, except batches that produce no valid suggestions cost no platform credits and their unused reservations are released. Mixed batches are still billed by their usage. Editing, applying and undoing are free. Desktop clients save and synchronize first. Documents with sync conflicts are excluded from both classification and reference examples; unrelated documents can still be organized. Apply and undo only require the affected documents to be free of sync conflicts. Unsynced folder changes must still be resolved; unexpected folder conflict states get a specific explanation. Tags and modification times refresh from the cloud, and unchanged tag metadata is not rewritten to the local cache. Local mode retains date-based organization.
 
 Permanently deleting a document, including automatic trash expiry, also removes its information from saved organization records while preserving other documents' previews and undo information. Affected generation jobs stop and release reserved credits; late responses cannot write the deleted information back.
 
@@ -451,16 +451,25 @@ through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000,
 30,000 credits in the same USD, CNY, EUR, and JPY currencies as membership checkout; the amount,
 currency, and granted balance are checked against backend allowlists and the signed Stripe event.
 
-Members can instead configure their own provider under **AI settings**:
+Administrators configure global text and image providers under **Admin → LLM channels**:
 
 - `openai`: OpenAI-compatible Chat Completions; the Base URL usually ends in `/v1`
 - `anthropic`: Anthropic Messages; the backend calls `/v1/messages`
+- Images: OpenAI-compatible Images at `/images/generations`, used for WeChat cover generation, including MCP
 
-BYOK reviews consume no credits. API keys are encrypted with AES-GCM under the dedicated
-`LLM_CREDENTIAL_ENCRYPTION_KEY`; list responses expose only a masked hint and never return the
-plaintext after creation. Base URLs must use HTTPS in production and are checked again at call
-time against loopback/private networks, user-info URLs, and redirects. The selected provider
-receives the article title and body during a review, so only configure a provider you trust.
+Saved settings apply to new requests. The text provider powers AI optimization, smart organization,
+and GEO summaries. Until an administrator saves settings, the backend uses `AGENT_LLM_*` and
+`WECHAT_COVER_IMAGE_*` environment configuration. An explicitly disabled channel never falls back
+to the environment. API keys are encrypted with AES-GCM under `LLM_CREDENTIAL_ENCRYPTION_KEY`;
+responses expose only a masked hint, and leaving the key blank on update preserves it.
+If a stored key cannot be decrypted, administrators can still read or disable the channel and
+replace its API key; credit balances and history remain accessible.
+Admin-configured endpoints require public HTTPS and reject loopback/private networks, user-info URLs,
+and redirects. Deploy migration `0096_system_llm_settings.sql` before serving requests.
+Personal channel settings and APIs are disabled; historical credentials are no longer used, and
+review and GEO generation requests must explicitly send `providerMode: "builtin"` to confirm credit usage.
+Older clients must refresh or update before retrying; they are never silently charged. The MCP
+`generate_wechat_geo_summary` tool requires the same parameter.
 
 ## Quick start
 
@@ -533,8 +542,8 @@ Stripe's test card `4242 4242 4242 4242` with any future expiry and CVC.
 
 For local AI optimization, generate a dedicated `LLM_CREDENTIAL_ENCRYPTION_KEY`. The built-in
 credit-backed provider requires all four values—`AGENT_LLM_PROTOCOL`, `AGENT_LLM_BASE_URL`,
-`AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL`—or none of them. Leaving the group empty disables only
-the built-in provider; member-managed BYOK channels remain available.
+`AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL`—or none of them. Alternatively, save a text provider in
+Admin. AI optimization is unavailable when both environment configuration and an enabled admin provider are absent.
 
 For the full walkthrough, port conflicts, and all-in-Docker startup, see the
 [design notes](docs/DESIGN.en.md#local-development).
@@ -591,7 +600,7 @@ to reuse `SESSION_SECRET` in production, so rotating verification keys does not 
 everyone out and an email-path secret leak cannot become session forgery.
 
 **Production requires a separate, persistent `LLM_CREDENTIAL_ENCRYPTION_KEY`.** It encrypts
-member BYOK API keys and must not reuse session, MCP, or provider credentials. Rotating it
+admin-managed text/image API keys and historical personal keys, and must not reuse session, MCP, or provider credentials. Rotating it
 without migrating stored ciphertext makes existing channels undecryptable.
 
 **Production requires a separate, persistent `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY`.** It encrypts
@@ -600,7 +609,7 @@ existing tokens undecryptable and requires users to configure them again.
 
 **The built-in AI provider is an optional all-or-nothing configuration group.**
 `AGENT_LLM_PROTOCOL`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, and `AGENT_LLM_MODEL` must all
-be configured or all be empty; production accepts HTTPS only. BYOK endpoints also reject local,
+be configured or all be empty; production accepts HTTPS only. Admin-configured endpoints also reject local,
 private-network, user-info, and redirecting URLs, but the configured provider still receives the
 article being reviewed.
 
@@ -825,7 +834,7 @@ Required repository secrets:
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | Optional; Analytics Read limited to the target zone, used for Admin UV/PV                                                   |
 | `EMAIL_VERIFICATION_SECRET`    | Independent verification-code HMAC key, written safely to the VPS `.env`                                                    |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | Encryption root for recoverable MCP tokens and GitHub import credentials; migrate ciphertext before rotation or old MCP tokens cannot be revealed and GitHub tokens must be saved again                           |
-| `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated BYOK API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
+| `LLM_CREDENTIAL_ENCRYPTION_KEY` | Dedicated admin model API-key encryption key; keep it stable or migrate ciphertext before rotation                              |
 | `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | Dedicated custom publishing token encryption key; keep it stable or migrate ciphertext before rotation          |
 | `FEISHU_CLIENT_ID`             | Feishu Open Platform app ID; configure it together with the next two values to enable document sync                   |
 | `FEISHU_CLIENT_SECRET`         | Feishu Open Platform app secret; used only by the backend for OAuth code exchange                                    |

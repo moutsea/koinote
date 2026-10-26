@@ -217,13 +217,14 @@ func TestWechatGeoSummaryGenerateRequiresMembershipAndChargesBuiltinCredits(t *t
 	}
 }
 
-func TestWechatGeoSummaryGenerateWithBYOKDoesNotUseCredits(t *testing.T) {
+func TestWechatGeoSummaryIgnoresLegacyBYOKAndUsesManagedCredits(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer byok-geo-key" {
-			t.Fatalf("unexpected BYOK GEO provider request: path=%q authorization=%q", r.URL.Path, r.Header.Get("Authorization"))
+		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer managed-geo-key" {
+			t.Fatalf("unexpected managed GEO provider request: path=%q authorization=%q", r.URL.Path, r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
+			"usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
 			"choices": []map[string]any{{
 				"message": map[string]string{"content": `{
 					"summary":"文章介绍了如何整理长文结构并改善移动端阅读体验。",
@@ -239,8 +240,10 @@ func TestWechatGeoSummaryGenerateWithBYOKDoesNotUseCredits(t *testing.T) {
 	app, pool, user, document := newAgentReviewCreateTest(t, config.Config{
 		SessionSecret:              "wechat-geo-byok-test",
 		LLMCredentialEncryptionKey: "wechat-geo-byok-encryption-test",
+		AgentLLMProtocol:           "openai", AgentLLMBaseURL: provider.URL, AgentLLMModel: "managed-geo-model", AgentLLMAPIKey: "managed-geo-key",
 	})
 	app.agentLLMHTTPClient = provider.Client()
+	grantCreditsForTest(t, pool, user.ID, 20, "managed-geo-routing")
 	insertAgentReviewChannelForTest(t, app, pool, user.ID, "openai", provider.URL, "byok-geo-model", "byok-geo-key")
 	if _, err := pool.Exec(context.Background(), `
 		UPDATE users SET agent_provider_mode = 'byok' WHERE id = $1
@@ -252,25 +255,25 @@ func TestWechatGeoSummaryGenerateWithBYOKDoesNotUseCredits(t *testing.T) {
 		t, app, user.AuthUserID, user.SessionVersion, document.DocID, document.Title, document.Content,
 	)
 	if response.Code != http.StatusOK {
-		t.Fatalf("generate BYOK GEO status=%d body=%s", response.Code, response.Body.String())
+		t.Fatalf("generate managed GEO status=%d body=%s", response.Code, response.Body.String())
 	}
 	var payload struct {
 		Geo wechatGeoSummaryView `json:"geo"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode BYOK GEO response: %v", err)
+		t.Fatalf("decode managed GEO response: %v", err)
 	}
-	if payload.Geo.ProviderMode != "byok" || payload.Geo.Model != "byok-geo-model" || payload.Geo.CreditsCharged != 0 {
-		t.Fatalf("unexpected BYOK GEO response: %+v", payload.Geo)
+	if payload.Geo.ProviderMode != "builtin" || payload.Geo.Model != "managed-geo-model" || payload.Geo.CreditsCharged != 1 {
+		t.Fatalf("unexpected managed GEO response: %+v", payload.Geo)
 	}
 	var reservations int
 	if err := pool.QueryRow(context.Background(), `
 		SELECT count(*) FROM credit_reservations WHERE user_id = $1
 	`, user.ID).Scan(&reservations); err != nil {
-		t.Fatalf("count BYOK GEO reservations: %v", err)
+		t.Fatalf("count managed GEO reservations: %v", err)
 	}
-	if reservations != 0 {
-		t.Fatalf("BYOK GEO reservations=%d, want 0", reservations)
+	if reservations != 1 {
+		t.Fatalf("managed GEO reservations=%d, want 1", reservations)
 	}
 }
 
@@ -337,7 +340,7 @@ func requestWechatGeoSummary(
 	content string,
 ) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(map[string]string{"title": title, "content": content})
+	body, err := json.Marshal(map[string]string{"title": title, "content": content, "providerMode": "builtin"})
 	if err != nil {
 		t.Fatal(err)
 	}

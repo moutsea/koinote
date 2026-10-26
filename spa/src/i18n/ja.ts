@@ -220,7 +220,7 @@ export const ja: Messages = {
       "文書と画像に {storage} のクラウド容量",
       "Codex、Claude Code、OpenCode などの MCP アクセス",
       "設定可能なバージョン履歴と安全スナップショット復元",
-      "AI 最適化と 1,000 credits、または独自 LLM の利用",
+      "AI 最適化と 1,000 credits",
       "目標管理、執筆、製品、研究、技術向けの 10 種類の高度なテンプレート",
       "無料版のすべての機能",
     ],
@@ -232,7 +232,7 @@ export const ja: Messages = {
     unavailable: "この環境ではオンライン決済が設定されていません。",
     creditsTitle: "AI credits",
     creditsDescription:
-      "内蔵モデルでの AI 最適化は credits を消費します。独自 LLM チャネルでは消費しません。",
+      "AI 最適化は共通のプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     creditsMembersOnly:
       "Credits は終身会員のみ購入・利用できます。先に上の終身会員プランへアップグレードしてください。",
     creditsNote:
@@ -268,7 +268,7 @@ export const ja: Messages = {
       "Codex、Claude Code、OpenCode、OpenClaw、または Streamable HTTP MCP 対応クライアントを Koinote に接続できます。",
     overviewTitle: "仕組み",
     overviewBody:
-      "通常のドキュメントツールのモデル機能は Agent 側が提供します。Koinote は認証、ツール、競合検出、監査を担当し、GEO 要約の生成時だけ設定済みの内蔵モデルまたは BYOK チャネルを呼び出します。Feishu を連携すると、書き込みトークンで sync_document_to_feishu を呼び出し、Feishu ドキュメントを作成または更新できます。",
+      "通常のドキュメントツールのモデル機能は Agent 側が提供します。Koinote は認証、ツール、競合検出、監査を担当し、GEO 要約の生成時は共通のプラットフォームモデルを使用し、credits を消費します。Feishu を連携すると、書き込みトークンで sync_document_to_feishu を呼び出し、Feishu ドキュメントを作成または更新できます。",
     setupTitle: "準備",
     setupSteps: [
       { title: "永久会員を有効化", desc: "MCP は永久会員向け機能です。" },
@@ -883,7 +883,7 @@ export const ja: Messages = {
     currencyLabel: "支払い通貨",
     currencyHint: "選択した通貨で Stripe Checkout にて決済されます。",
     aiBenefit: "AI 最適化",
-    aiComingSoon: "1,000 credits 付き。自分の LLM も利用可能",
+    aiComingSoon: "共通のプラットフォームモデルで使える 1,000 credits 付き",
     purchase: "永久アクセスを購入",
     redirecting: "安全な決済ページを開いています…",
     activeTitle: "ライフタイム会員を有効化しました",
@@ -899,7 +899,7 @@ export const ja: Messages = {
   agentCredits: {
     title: "AI credits",
     description:
-      "内蔵モデルのレビューは credits を消費します。自分の LLM チャネルでは消費しません。",
+      "AI 最適化は共通のプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     membersOnly:
       "AI 最適化は永久会員向け機能で、アップグレード時に 1,000 credits が付与されます。",
     available: "利用可能 {count}",
@@ -1454,6 +1454,31 @@ export const ja: Messages = {
     successTitle: "フィードバックを受け付けました",
     successDescription: "ありがとうございます。内容を確認いたします。",
     done: "完了",
+  },
+  adminLLM: {
+    title: "モデルチャネル",
+    description: "全ユーザー共通の AI チャネルを管理します。テキストモデルは文章レビュー、整理、GEO 要約に、画像モデルは AI カバーに使用します。保存後のリクエストに即時反映されます。",
+    text: "テキストモデル",
+    image: "画像モデル",
+    textHint: "全ユーザー共通で、既存の credits 課金ルールを使用します。",
+    imageHint: "カバー生成と参照画像の編集に使用します。OpenAI Images API への対応が必要です。",
+    environment: "サーバー設定を使用中です。保存すると管理者設定に切り替わります。",
+    managed: "管理者設定を使用中です。無効にすると、この種類の AI リクエストを停止します。",
+    enabled: "チャネルを有効化",
+    protocol: "API プロトコル",
+    model: "モデル名",
+    keepKey: "空欄で現在のキーを保持します。変更する場合は新しいキーを入力してください。",
+    keyRecovery: "保存済みのキーを復号できません。新しい API Key を入力して保存してください。",
+    keyHint: "キーは暗号化して保存され、再表示されません。",
+    thinking: "深い思考をリクエスト",
+    thinkingHint: "enable_thinking に対応した OpenAI 互換チャネル用です。出力枠も増やします。未選択時はプロバイダーの既定設定を使用します。",
+    save: "設定を保存",
+    saving: "保存中…",
+    saved: "保存しました。新しいリクエストに即時反映されます。",
+    loadFailed: "モデル設定を読み込めませんでした。",
+    saveFailed: "保存に失敗しました。再試行してください。",
+    conflict: "設定が更新されています。再読み込み後に編集してください。",
+    invalid: "プロトコル、HTTPS URL、モデル名、API Key を確認してください。",
   },
   admin: {
     title: "管理画面",
@@ -3088,10 +3113,15 @@ function hello(name) {
       "共有はオンラインで有効になりましたが、ローカル状態を保存できませんでした。後でもう一度共有設定を適用してください",
     too_many_requests: "試行回数が多すぎます — しばらくしてからお試しください",
     insufficient_credits:
-      "Credits が不足しています。購入するか、自分の LLM チャネルを使用してください",
+      "Credits が不足しています。購入してから再度お試しください",
     agent_llm_not_configured: "内蔵 AI モデルが設定されていません",
+    agent_provider_confirmation_required: "AI は共通モデルを使用し credits を消費します。ページを更新するかクライアントをアップデートしてから再試行してください。",
     agent_invalid_response:
       "モデルが無効なレビューを返しました。再度レビューしてください",
+    agent_response_truncated:
+      "レビューの完了前にモデルが出力上限に達しました。記事を短くするか、別のモデルをお試しください",
+    agent_response_empty:
+      "モデルから有効な回答が返されませんでした。再試行するか、別のモデルをお試しください",
     agent_provider_error:
       "モデルプロバイダがリクエストを拒否しました。モデルと API Key を確認してください",
     agent_provider_unavailable:

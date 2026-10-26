@@ -286,8 +286,8 @@ ok(
 );
 ok(
   "MCP 文档披露 GEO 生成会调用模型",
-  /GEO 摘要生成[\s\S]{0,180}(内置模型|BYOK)/.test(readme) &&
-    /GEO summary generation[\s\S]{0,180}(built-in|BYOK)/i.test(
+  /GEO 摘要生成[\s\S]{0,180}(内置模型|平台统一配置的模型)/.test(readme) &&
+    /GEO summary generation[\s\S]{0,180}(built-in|platform model)/i.test(
       readFileSync(new URL("../docs/DESIGN.en.md", import.meta.url), "utf8"),
     ),
   "面向用户的 MCP 说明不能把 GEO 生成误写成完全不调用模型",

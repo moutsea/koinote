@@ -107,157 +107,23 @@ func TestLLMCredentialEncryptionUsesChannelAAD(t *testing.T) {
 	}
 }
 
-func TestLLMChannelCRUD(t *testing.T) {
+func TestPersonalLLMChannelsDisabled(t *testing.T) {
 	pool, userID := newCreditTestUser(t)
-	ctx := context.Background()
-	var authUserID string
-	if err := pool.QueryRow(ctx, `
-		UPDATE users
-		SET membership_tier = 'lifetime', membership_granted_at = now()
-		WHERE id = $1
-		RETURNING auth_user_id
-	`, userID).Scan(&authUserID); err != nil {
-		t.Fatalf("make channel test user a member: %v", err)
+	var authID string
+	if err := pool.QueryRow(context.Background(), `UPDATE users SET membership_tier='lifetime' WHERE id=$1 RETURNING auth_user_id`, userID).Scan(&authID); err != nil {
+		t.Fatal(err)
 	}
-	app := &App{
-		db: pool,
-		cfg: config.Config{
-			SessionSecret:              "channel-test-session-secret",
-			LLMCredentialEncryptionKey: "channel-test-encryption-key",
-		},
-	}
-	cookie := sessionCookieFor(t, app, authUserID, 1)
-
-	first := callLLMChannelAPI(t, app, cookie, http.MethodPost, "/api/agent/channels", `{
-		"name":"OpenAI primary",
-		"protocol":"openai",
-		"baseUrl":"https://api.openai.com/v1/",
-		"model":"gpt-test",
-		"apiKey":"sk-first-secret",
-		"isDefault":false
-	}`)
-	if first.Code != http.StatusCreated {
-		t.Fatalf("create first channel status=%d body=%s", first.Code, first.Body.String())
-	}
-	var firstBody struct {
-		Channel llmChannelView `json:"channel"`
-	}
-	decodeJSONResponse(t, first, &firstBody)
-	if !firstBody.Channel.IsDefault || firstBody.Channel.BaseURL != "https://api.openai.com/v1" {
-		t.Fatalf("first channel = %+v", firstBody.Channel)
-	}
-	if strings.Contains(first.Body.String(), "sk-first-secret") {
-		t.Fatal("create response leaked the plaintext API key")
-	}
-
-	updated := callLLMChannelAPI(
-		t,
-		app,
-		cookie,
-		http.MethodPut,
-		"/api/agent/channels/"+firstBody.Channel.ChannelID,
-		`{
-			"name":"OpenAI primary",
-			"protocol":"openai",
-			"baseUrl":"https://api.openai.com/v1",
-			"model":"gpt-test-updated",
-			"isDefault":true
-		}`,
-	)
-	if updated.Code != http.StatusOK {
-		t.Fatalf("update first channel status=%d body=%s", updated.Code, updated.Body.String())
-	}
-	credential, err := app.loadLLMChannelCredential(ctx, userID, firstBody.Channel.ChannelID)
-	if err != nil {
-		t.Fatalf("load updated credential: %v", err)
-	}
-	if credential.APIKey != "sk-first-secret" || credential.Model != "gpt-test-updated" {
-		t.Fatalf("updated credential = %+v", credential)
-	}
-	// A user must not be able to leave the account without a default channel.
-	// Unchecking the only default is kept as a no-op; selecting another channel
-	// remains possible by marking that channel as default.
-	keptDefault := callLLMChannelAPI(
-		t,
-		app,
-		cookie,
-		http.MethodPut,
-		"/api/agent/channels/"+firstBody.Channel.ChannelID,
-		`{
-			"name":"OpenAI primary",
-			"protocol":"openai",
-			"baseUrl":"https://api.openai.com/v1",
-			"model":"gpt-test-updated",
-			"isDefault":false
-		}`,
-	)
-	if keptDefault.Code != http.StatusOK {
-		t.Fatalf("unchecking only default status=%d body=%s", keptDefault.Code, keptDefault.Body.String())
-	}
-	defaultCredential, err := app.loadLLMChannelCredential(ctx, userID, "")
-	if err != nil {
-		t.Fatalf("load retained default channel: %v", err)
-	}
-	if defaultCredential.ChannelID != firstBody.Channel.ChannelID {
-		t.Fatalf("retained default channel = %s, want %s", defaultCredential.ChannelID, firstBody.Channel.ChannelID)
-	}
-
-	second := callLLMChannelAPI(t, app, cookie, http.MethodPost, "/api/agent/channels", `{
-		"name":"Anthropic backup",
-		"protocol":"anthropic",
-		"baseUrl":"https://api.anthropic.com",
-		"model":"claude-test",
-		"apiKey":"sk-ant-second-secret",
-		"isDefault":true
-	}`)
-	if second.Code != http.StatusCreated {
-		t.Fatalf("create second channel status=%d body=%s", second.Code, second.Body.String())
-	}
-	var secondBody struct {
-		Channel llmChannelView `json:"channel"`
-	}
-	decodeJSONResponse(t, second, &secondBody)
-
-	listed := callLLMChannelAPI(t, app, cookie, http.MethodGet, "/api/agent/channels", "")
-	if listed.Code != http.StatusOK {
-		t.Fatalf("list channels status=%d body=%s", listed.Code, listed.Body.String())
-	}
-	var listBody struct {
-		Channels []llmChannelView `json:"channels"`
-	}
-	decodeJSONResponse(t, listed, &listBody)
-	if len(listBody.Channels) != 2 || listBody.Channels[0].ChannelID != secondBody.Channel.ChannelID ||
-		!listBody.Channels[0].IsDefault || listBody.Channels[1].IsDefault {
-		t.Fatalf("channel list = %+v", listBody.Channels)
-	}
-
-	deleted := callLLMChannelAPI(
-		t,
-		app,
-		cookie,
-		http.MethodDelete,
-		"/api/agent/channels/"+secondBody.Channel.ChannelID,
-		"",
-	)
-	if deleted.Code != http.StatusOK {
-		t.Fatalf("delete channel status=%d body=%s", deleted.Code, deleted.Body.String())
-	}
-	defaultCredential, err = app.loadLLMChannelCredential(ctx, userID, "")
-	if err != nil {
-		t.Fatalf("load promoted default channel: %v", err)
-	}
-	if defaultCredential.ChannelID != firstBody.Channel.ChannelID {
-		t.Fatalf("promoted default channel = %s", defaultCredential.ChannelID)
-	}
-
-	var ciphertext []byte
-	if err := pool.QueryRow(ctx, `
-		SELECT api_key_ciphertext FROM llm_channels WHERE channel_id = $1
-	`, firstBody.Channel.ChannelID).Scan(&ciphertext); err != nil {
-		t.Fatalf("load stored credential: %v", err)
-	}
-	if bytes.Contains(ciphertext, []byte("sk-first-secret")) {
-		t.Fatal("database ciphertext contains the plaintext API key")
+	app := &App{db: pool, cfg: config.Config{SessionSecret: "disabled-personal-channel"}}
+	cookie := sessionCookieFor(t, app, authID, 1)
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+		path := "/api/agent/channels"
+		if method == http.MethodPut || method == http.MethodDelete {
+			path += "/legacy-channel"
+		}
+		response := callLLMChannelAPI(t, app, cookie, method, path, `{}`)
+		if response.Code != http.StatusGone || !strings.Contains(response.Body.String(), "llm_channels_disabled") {
+			t.Fatalf("%s status=%d body=%s", method, response.Code, response.Body.String())
+		}
 	}
 }
 

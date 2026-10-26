@@ -41,55 +41,19 @@ func TestAgentSettings(t *testing.T) {
 		t.Fatalf("initial settings = %+v", initialBody.Settings)
 	}
 
-	missingChannel := callLLMChannelAPI(
-		t, app, cookie, http.MethodPut, "/api/agent/settings", `{"providerMode":"byok"}`,
-	)
-	if missingChannel.Code != http.StatusBadRequest {
-		t.Fatalf("select BYOK without channel status=%d body=%s", missingChannel.Code, missingChannel.Body.String())
-	}
-
-	created := callLLMChannelAPI(t, app, cookie, http.MethodPost, "/api/agent/channels", `{
-		"name":"Settings channel",
-		"protocol":"anthropic",
-		"baseUrl":"https://api.anthropic.com",
-		"model":"claude-settings-test",
-		"apiKey":"sk-agent-settings",
-		"isDefault":true
-	}`)
-	if created.Code != http.StatusCreated {
-		t.Fatalf("create settings channel status=%d body=%s", created.Code, created.Body.String())
-	}
-	var createdBody struct {
-		Channel llmChannelView `json:"channel"`
-	}
-	decodeJSONResponse(t, created, &createdBody)
-
-	selected := callLLMChannelAPI(
-		t, app, cookie, http.MethodPut, "/api/agent/settings", `{"providerMode":"byok"}`,
-	)
-	if selected.Code != http.StatusOK {
-		t.Fatalf("select BYOK status=%d body=%s", selected.Code, selected.Body.String())
-	}
-	var selectedBody struct {
-		Settings agentSettingsView `json:"settings"`
-	}
-	decodeJSONResponse(t, selected, &selectedBody)
-	if selectedBody.Settings.ProviderMode != "byok" || selectedBody.Settings.DefaultChannel == nil ||
-		selectedBody.Settings.DefaultChannel.ChannelID != createdBody.Channel.ChannelID {
-		t.Fatalf("selected settings = %+v", selectedBody.Settings)
-	}
-
-	deleted := callLLMChannelAPI(
-		t, app, cookie, http.MethodDelete, "/api/agent/channels/"+createdBody.Channel.ChannelID, "",
-	)
-	if deleted.Code != http.StatusOK {
-		t.Fatalf("delete selected channel status=%d body=%s", deleted.Code, deleted.Body.String())
-	}
-	reset, err := app.loadAgentSettings(ctx, userID)
-	if err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE users SET agent_provider_mode='byok' WHERE id=$1`, userID); err != nil {
 		t.Fatal(err)
 	}
-	if reset.ProviderMode != "builtin" || reset.DefaultChannel != nil {
-		t.Fatalf("settings after deleting last channel = %+v", reset)
+	legacy, err := app.loadAgentSettings(ctx, userID)
+	if err != nil || legacy.ProviderMode != "builtin" || legacy.DefaultChannel != nil {
+		t.Fatal("legacy preferences still active", err)
+	}
+	rejected := callLLMChannelAPI(t, app, cookie, http.MethodPut, "/api/agent/settings", `{"providerMode":"byok"}`)
+	if rejected.Code != http.StatusGone {
+		t.Fatal("BYOK selection still accepted", rejected.Code)
+	}
+	accepted := callLLMChannelAPI(t, app, cookie, http.MethodPut, "/api/agent/settings", `{"providerMode":"builtin"}`)
+	if accepted.Code != http.StatusOK {
+		t.Fatal("legacy builtin selection failed", accepted.Code)
 	}
 }

@@ -826,7 +826,7 @@ export function generateWechatGeoSummary(
     `/api/documents/${encodeURIComponent(docId)}/wechat-geo-summary/generate`,
     {
       method: "POST",
-      body: JSON.stringify({ title, content }),
+      body: JSON.stringify({ title, content, providerMode: "builtin" }),
       signal,
     },
   );
@@ -1237,7 +1237,7 @@ export function createAgentReview(
 ) {
   return apiJson<{ review: AgentReview }>(
     `/api/documents/${encodeURIComponent(docId)}/agent-reviews`,
-    { method: "POST", body: JSON.stringify(input) },
+    { method: "POST", body: JSON.stringify({ ...input, providerMode: "builtin" }) },
   );
 }
 
@@ -2506,4 +2506,26 @@ export function applyDocumentOrganizationPreview(id: string, items: Organization
 }
 export function undoDocumentOrganization(id: string) {
   return apiJson<{ organization: DocumentOrganization }>(`/api/document-organizations/${encodeURIComponent(id)}/undo`, { method: "POST" });
+}
+
+export type AdminLLMSetting = {
+  kind: "text" | "image";
+  enabled: boolean;
+  protocol: "openai" | "anthropic";
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  apiKeyHint: string;
+  thinking: boolean;
+  version: number;
+  source: "environment" | "admin";
+  updatedAt: string | null;
+};
+export type AdminLLMSettingInput = Pick<AdminLLMSetting, "enabled" | "protocol" | "baseUrl" | "model" | "thinking" | "version"> & { apiKey?: string };
+export const ADMIN_LLM_SETTINGS_QUERY_KEY = ["admin-llm-settings"] as const;
+export function getAdminLLMSettings(signal?: AbortSignal) {
+  return apiJson<{ settings: AdminLLMSetting[] }>("/api/admin/llm/settings", { signal });
+}
+export function updateAdminLLMSetting(kind: AdminLLMSetting["kind"], input: AdminLLMSettingInput) {
+  return apiJson<{ setting: AdminLLMSetting }>(`/api/admin/llm/settings/${kind}`, { method: "PUT", body: JSON.stringify(input) });
 }

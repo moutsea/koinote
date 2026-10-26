@@ -199,6 +199,12 @@ func TestDesktopAuthorizationValidation(t *testing.T) {
 		{http.MethodGet, "/api/agent/reviews/review-id/suggestions/suggestion-id/apply", false},
 		{http.MethodGet, "/api/admin/stats", true},
 		{http.MethodPost, "/api/admin/stats", false},
+		{http.MethodGet, "/api/admin/llm/settings", true},
+		{http.MethodPut, "/api/admin/llm/settings/text", true},
+		{http.MethodPut, "/api/admin/llm/settings/image", true},
+		{http.MethodPost, "/api/admin/llm/settings", false},
+		{http.MethodDelete, "/api/admin/llm/settings/text", false},
+		{http.MethodPut, "/api/admin/llm/settings/other", false},
 		{http.MethodGet, "/api/admin/server-status", true},
 		{http.MethodPost, "/api/admin/server-status", false},
 		{http.MethodGet, "/api/admin/feedback", true},
@@ -373,15 +379,25 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 	for _, allowedPath := range []string{
 		"/api/admin/stats",
 		"/api/admin/server-status",
+		"/api/admin/llm/settings",
 		"/api/billing/pricing",
 		"/api/mcp/tokens",
 		"/api/agent/settings",
-		"/api/agent/channels",
 		"/api/agent/credits",
 	} {
 		rec := authenticatedJSON(pair1.AccessToken, http.MethodGet, allowedPath, "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("desktop scope %s status=%d body=%s", allowedPath, rec.Code, rec.Body.String())
+		}
+	}
+	retiredChannels := authenticatedJSON(pair1.AccessToken, http.MethodGet, "/api/agent/channels", "")
+	if retiredChannels.Code != http.StatusGone || !strings.Contains(retiredChannels.Body.String(), "llm_channels_disabled") {
+		t.Fatalf("desktop personal channels should be retired: status=%d body=%s", retiredChannels.Code, retiredChannels.Body.String())
+	}
+	for _, kind := range []string{"text", "image"} {
+		settingsUpdate := authenticatedJSON(pair1.AccessToken, http.MethodPut, "/api/admin/llm/settings/"+kind, `{}`)
+		if settingsUpdate.Code != http.StatusBadRequest || !strings.Contains(settingsUpdate.Body.String(), "invalid_llm_settings") {
+			t.Fatalf("desktop admin settings should reach input validation: status=%d body=%s", settingsUpdate.Code, settingsUpdate.Body.String())
 		}
 	}
 	checkout := authenticatedJSON(pair1.AccessToken, http.MethodPost, "/api/billing/checkout", `{ "currency": "usd" }`)

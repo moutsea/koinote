@@ -88,6 +88,7 @@ var (
 )
 
 type wechatCoverImage struct {
+	Model    string
 	Data     []byte
 	Ratio    string
 	Width    int
@@ -130,7 +131,12 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !a.cfg.WechatCoverImageEnabled() {
+	setting, err := a.loadSystemLLMConfig(r.Context(), "image")
+	if err != nil {
+		httpx.ErrorCode(w, 500, "server_error", "Could not load image model settings")
+		return
+	}
+	if !setting.Enabled {
 		writeWechatPublishError(w, errWechatCoverModelUnavailable)
 		return
 	}
@@ -189,7 +195,7 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 	}()
 	generationContext, cancelGeneration := context.WithTimeout(r.Context(), wechatCoverGenerationRunLimit)
 	defer cancelGeneration()
-	cover, err := a.generateWechatCoverWithReference(generationContext, input.Prompt, input.Ratio, reference)
+	cover, err := a.generateWechatCoverWithConfig(generationContext, input.Prompt, input.Ratio, reference, setting)
 	if err != nil {
 		log.Printf("wechat cover generate: %v", err)
 		writeWechatPublishError(w, err)
@@ -203,7 +209,7 @@ func (a *App) wechatCoverGenerate(w http.ResponseWriter, r *http.Request) {
 		map[string]any{
 			"feature": "wechat_cover_generation",
 			"ratio":   input.Ratio,
-			"model":   a.cfg.WechatCoverImageModel,
+			"model":   cover.Model,
 		},
 	); err != nil {
 		if errors.Is(err, errInsufficientCredits) {
@@ -253,7 +259,19 @@ func (a *App) generateWechatCover(ctx context.Context, prompt, ratio string) (we
 }
 
 func (a *App) generateWechatCoverWithReference(ctx context.Context, prompt, ratio string, reference []byte) (wechatCoverImage, error) {
-	endpoint, err := wechatCoverGenerationEndpoint(a.cfg.WechatCoverImageBaseURL)
+	setting, err := a.loadSystemLLMConfig(ctx, "image")
+	if err != nil {
+		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
+	}
+	return a.generateWechatCoverWithConfig(ctx, prompt, ratio, reference, setting)
+}
+
+func (a *App) generateWechatCoverWithConfig(ctx context.Context, prompt, ratio string, reference []byte, setting systemLLMConfig) (wechatCoverImage, error) {
+	if !setting.Enabled {
+		return wechatCoverImage{}, errWechatCoverModelUnavailable
+	}
+
+	endpoint, err := wechatCoverGenerationEndpoint(setting.BaseURL)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
@@ -272,7 +290,7 @@ func (a *App) generateWechatCoverWithReference(ctx context.Context, prompt, rati
 	if len(reference) > 0 {
 		endpoint = strings.TrimSuffix(endpoint, "/generations") + "/edits"
 		writer := multipart.NewWriter(&payload)
-		for key, value := range map[string]string{"model": a.cfg.WechatCoverImageModel, "prompt": providerPrompt + " Use the reference image for visual direction and create a new original cover. User brief: " + prompt, "n": "1", "size": size} {
+		for key, value := range map[string]string{"model": setting.Model, "prompt": providerPrompt + " Use the reference image for visual direction and create a new original cover. User brief: " + prompt, "n": "1", "size": size} {
 			if err := writer.WriteField(key, value); err != nil {
 				return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 			}
@@ -291,19 +309,23 @@ func (a *App) generateWechatCoverWithReference(ctx context.Context, prompt, rati
 			return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 		}
 		contentType = writer.FormDataContentType()
-	} else if err := json.NewEncoder(&payload).Encode(map[string]any{"model": a.cfg.WechatCoverImageModel, "prompt": providerPrompt + " User brief: " + prompt, "n": 1, "size": size}); err != nil {
+	} else if err := json.NewEncoder(&payload).Encode(map[string]any{"model": setting.Model, "prompt": providerPrompt + " User brief: " + prompt, "n": 1, "size": size}); err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &payload)
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
-	request.Header.Set("Authorization", "Bearer "+a.cfg.WechatCoverImageAPIKey)
+	request.Header.Set("Authorization", "Bearer "+setting.APIKey)
 	request.Header.Set("Content-Type", contentType)
 	request.Header.Set("Accept", "application/json")
 	client := a.wechatCoverHTTPClient
 	if client == nil {
-		client = newTrustedLLMHTTPClient()
+		if setting.Source == "admin" {
+			client = newSafeLLMHTTPClient()
+		} else {
+			client = newTrustedLLMHTTPClient()
+		}
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -334,7 +356,7 @@ func (a *App) generateWechatCoverWithReference(ctx context.Context, prompt, rati
 	if err != nil {
 		return wechatCoverImage{}, errors.Join(errWechatCoverGenerationFailed, err)
 	}
-	return wechatCoverImage{Data: data, Ratio: ratio, Width: width, Height: height, MimeType: "image/jpeg"}, nil
+	return wechatCoverImage{Model: setting.Model, Data: data, Ratio: ratio, Width: width, Height: height, MimeType: "image/jpeg"}, nil
 }
 
 func wechatCoverGenerationEndpoint(baseURL string) (string, error) {
