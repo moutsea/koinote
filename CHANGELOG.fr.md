@@ -4,6 +4,21 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-10-26
+
+### Changed
+
+- L’optimisation IA, le classement et les résumés GEO utilisent désormais les canaux de la plateforme gérés par les administrateurs, selon les règles de crédits existantes. Les réglages de canaux LLM personnels ont été retirés du client.
+- Les requêtes d’optimisation et de résumé GEO confirment explicitement l’utilisation des crédits de la plateforme, pour éviter une facturation après un basculement silencieux depuis un canal personnel. Mettez le client à jour pour continuer à utiliser ces fonctions.
+
+### Added
+
+- La console d’administration web permet de configurer les canaux de texte et d’image : modèles, adresses d’API et clés chiffrées. Les réglages enregistrés s’appliquent immédiatement aux nouvelles requêtes.
+
+### Fixed
+
+- Les réglages d’administration n’affichent plus de valeurs obsolètes lorsqu’un enregistrement coïncide avec une actualisation. Si une clé ne peut pas être déchiffrée, le canal peut toujours être désactivé ou rétabli en remplaçant la clé.
+
 ## [1.1.7] - 2026-10-25
 
 ### Added

@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds document find and replace with Cmd+R / Ctrl+R, single and bulk replacement with undo and redo, and stable match tracking while editing. WeChat draft sync no longer limits article image counts."
+          notes="Koinote Desktop $version uses administrator-managed AI channels, removes personal LLM channel settings, and explicitly confirms platform credits for article optimization and GEO summaries. Upgrade to continue using these AI features."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,11 +237,11 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 新增文档正文的查找替换。
+          Koinote $version 统一使用管理员配置的 AI 渠道。
 
-          - macOS 按 Cmd+R、Windows 按 Ctrl+R，可替换当前匹配或全部匹配，也可用空文本删除；文档标题不参与替换。
-          - 替换保留周围格式，支持撤销和重做；编辑正文时保持当前目标，准确处理重叠匹配和大文档。
-          - 微信公众号草稿同步不再限制正文图片张数，图片分批处理。
+          - 客户端移除个人 LLM 渠道设置，AI 优化、智能整理和 GEO 摘要按现有平台 credits 规则计费。
+          - 文章优化和 GEO 摘要请求明确使用平台 credits，避免旧客户端从个人渠道静默切换并扣费；请升级后继续使用这些功能。
+          - 网页管理后台支持文本和生图渠道配置，保存后立即生效，并修复并发保存、刷新和密钥恢复的问题。
 
           可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
@@ -253,11 +253,11 @@ jobs:
 
           ---
 
-          Koinote $version adds find and replace in the document body.
+          Koinote $version uses administrator-managed AI channels.
 
-          - Press Cmd+R on macOS or Ctrl+R on Windows to replace one match or all matches, including with empty text. The document title stays unchanged.
-          - Replacement preserves surrounding formatting and supports undo and redo. The current target follows document edits, including overlapping matches and large documents.
-          - WeChat draft sync no longer limits article image counts; images are processed in batches.
+          - Personal LLM channel settings have been removed. AI optimization, organization and GEO summaries use the existing platform credits rules.
+          - Article optimization and GEO summary requests explicitly confirm platform credit usage, preventing silent switching and charges in older clients. Upgrade to continue using these features.
+          - The web admin console manages text and image channels with immediate updates, reliable concurrent saves and refreshes, and credential recovery.
 
           Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 

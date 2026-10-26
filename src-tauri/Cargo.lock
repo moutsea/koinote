@@ -2457,7 +2457,7 @@ dependencies = [
 
 [[package]]
 name = "koinote-desktop"
-version = "1.1.7"
+version = "1.1.8"
 dependencies = [
  "fs2",
  "keyring",

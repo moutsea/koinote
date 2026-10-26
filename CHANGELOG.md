@@ -6,6 +6,21 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-10-26
+
+### Changed
+
+- AI optimization, organization and GEO summaries now use administrator-managed platform channels with the existing credits rules. Personal LLM channel settings have been removed from the client.
+- Article optimization and GEO summary requests explicitly confirm platform credit usage, preventing older clients from silently switching from personal channels and charging credits. Upgrade the client to continue using these features.
+
+### Added
+
+- The web admin console now manages text and image channels, including models, endpoints and encrypted API keys. Saved settings apply to new requests immediately.
+
+### Fixed
+
+- Admin settings no longer show stale values when saving overlaps with a refresh. Channels with unreadable credentials can still be disabled or recovered by replacing the key.
+
 ## [1.1.7] - 2026-10-25
 
 ### Added

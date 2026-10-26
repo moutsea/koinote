@@ -1,36 +1,40 @@
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.7",
+      "title": "What's new in Koinote 1.1.8",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Find and replace in the current document body with Cmd+R on macOS or Ctrl+R on Windows. Replace one match or all matches, including with empty text; the document title is kept unchanged.",
-        "Replacement preserves surrounding formatting and supports undo and redo. The current match stays on the same text when earlier matches are added or removed, including overlapping matches and large documents."
+        "The web admin console now manages text and image channels, including models, endpoints and encrypted API keys. Saved settings apply to new requests immediately.",
+        "AI optimization, organization and GEO summaries now use administrator-managed platform channels with the existing credits rules. Personal LLM channel settings have been removed from the client.",
+        "Article optimization and GEO summary requests explicitly confirm platform credit usage, preventing older clients from silently switching from personal channels and charging credits. Upgrade the client to continue using these features."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.7 新功能",
+      "title": "Koinote 1.1.8 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "新增当前文档正文的查找替换：macOS 按 Cmd+R、Windows 按 Ctrl+R，可替换当前匹配或全部匹配，也可用空文本删除匹配内容；文档标题不参与替换。",
-        "替换保留周围格式并支持撤销、重做。在当前匹配前新增或删除其他匹配时，仍跟随原目标；支持重叠匹配的准确定位和大文档批量替换。"
+        "网页管理后台新增文本与生图渠道配置，支持保存模型、接口和加密密钥，配置对新请求立即生效。",
+        "AI 优化、智能整理和 GEO 摘要统一使用管理员配置的平台渠道，按现有 credits 规则计费；客户端移除个人 LLM 渠道设置。",
+        "文章优化和 GEO 摘要请求明确使用平台 credits，避免旧客户端从个人渠道静默切换并扣费。请升级客户端后继续使用这些功能。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.7",
+      "title": "Nouveautés de Koinote 1.1.8",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Rechercher et remplacer dans le corps du document avec Cmd+R sur macOS ou Ctrl+R sur Windows. Remplacez une occurrence ou toutes les occurrences, y compris par un texte vide ; le titre du document reste inchangé.",
-        "Le remplacement préserve la mise en forme environnante et prend en charge l’annulation et le rétablissement. L’occurrence active suit le même texte lorsque des occurrences précédentes sont ajoutées ou supprimées, y compris avec des occurrences qui se chevauchent et dans les grands documents."
+        "La console d’administration web permet de configurer les canaux de texte et d’image : modèles, adresses d’API et clés chiffrées. Les réglages enregistrés s’appliquent immédiatement aux nouvelles requêtes.",
+        "L’optimisation IA, le classement et les résumés GEO utilisent désormais les canaux de la plateforme gérés par les administrateurs, selon les règles de crédits existantes. Les réglages de canaux LLM personnels ont été retirés du client.",
+        "Les requêtes d’optimisation et de résumé GEO confirment explicitement l’utilisation des crédits de la plateforme, pour éviter une facturation après un basculement silencieux depuis un canal personnel. Mettez le client à jour pour continuer à utiliser ces fonctions."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.7 の新機能",
+      "title": "Koinote 1.1.8 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "本文の検索と置換を追加しました。macOS は Cmd+R、Windows は Ctrl+R で開き、現在の一致箇所またはすべての一致箇所を置換できます。空の文字列での削除にも対応し、ドキュメントのタイトルは変更しません。",
-        "周囲の書式を保って置換し、取り消しとやり直しに対応します。現在の一致箇所より前で別の一致箇所を追加・削除しても元の対象を維持し、重なり合う一致箇所や大きなドキュメントも扱えます。"
+        "Web 管理画面でテキスト・画像チャネルのモデル、API 接続先、暗号化されたキーを設定できます。保存した設定は新しいリクエストにすぐ反映されます。",
+        "AI 最適化、整理、GEO 要約は管理者が設定したプラットフォームのチャネルを使用し、従来の credits ルールで課金します。クライアントから個人用 LLM チャネル設定を削除しました。",
+        "記事の最適化と GEO 要約のリクエストでプラットフォームの credits 利用を明示し、旧クライアントが個人チャネルから知らないうちに切り替わって課金されることを防ぎます。これらの機能を引き続き使うにはクライアントを更新してください。"
       ]
     }
   }
