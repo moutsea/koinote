@@ -21,7 +21,7 @@ func init() {
 	}
 }
 
-const agentLibraryScopeInstruction = "本次任务是按内容主题整理文档集合，只允许 folder 和 move 操作。用 search_documents 和 list_folders 分页盘点，按 nextCursor 继续。先按标题、摘要和现有目录判断，跳过已归类妥当的文档。对归属不清或准备移动的文档用 get_document 阅读足以判断主题的片段，携带其 revision 作为 expectedRevision 提交移动方案。保持标题和正文不变；当前打开的文档以及助手之前的改写建议都不能把任务变成正文编辑。"
+const agentLibraryScopeInstruction = "本次任务是按内容主题整理文档集合，只允许 folder 和 move 操作。用 search_documents 和 list_folders 分页盘点，按 nextCursor 继续。先按标题、摘要和现有目录判断，跳过已归类妥当的文档。直接复用盘点得到的路径，避免再次用关键词检索已列出的文档。对归属不清或准备移动的文档用 get_document 阅读足以判断主题的片段，携带其 revision 作为 expectedRevision 提交移动方案。保持标题和正文不变；当前打开的文档以及助手之前的改写建议都不能把任务变成正文编辑。"
 
 func agentScopeText(message string) string {
 	return strings.Map(func(r rune) rune {

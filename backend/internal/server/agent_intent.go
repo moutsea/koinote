@@ -226,6 +226,9 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 			// the model issues them sequentially instead of in parallel.
 			policy["maxSteps"] = 24
 			policy["maxToolCalls"] = 40
+			// The independent operation audit serializes the read evidence inside
+			// its own JSON request along with the user's instructions and effects.
+			policy["maxContextChars"] = 200000
 			input["systemPrompt"] = input["systemPrompt"].(string) + "\n\n" + agentLibraryScopeInstruction
 		}
 		if automaticAgentSkills(*t) {

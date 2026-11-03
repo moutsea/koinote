@@ -45,7 +45,7 @@ func (a *App) agentSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, 
 		return nil, nil, err
 	}
 	limit = min(limit, 25)
-	rows, err := a.db.Query(ctx, `SELECT d.doc_id,d.title,d.revision,COALESCE(f.folder_id,''),COALESCE(f.name,''),left(d.content,CASE WHEN $2='' THEN 96 ELSE 240 END),d.updated_at::text FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.trashed_at IS NULL AND (strpos(lower(d.title),lower($2))>0 OR strpos(lower(d.content),lower($2))>0) ORDER BY d.updated_at DESC,d.id DESC LIMIT $3 OFFSET $4`, t.UserID, strings.TrimSpace(in.Query), limit+1, offset)
+	rows, err := a.db.Query(ctx, `SELECT d.doc_id,d.title,d.revision,COALESCE(f.folder_id,''),COALESCE(f.name,''),left(d.content,96),d.updated_at::text FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.trashed_at IS NULL AND (strpos(lower(d.title),lower($2))>0 OR strpos(lower(d.content),lower($2))>0) ORDER BY d.updated_at DESC,d.id DESC LIMIT $3 OFFSET $4`, t.UserID, strings.TrimSpace(in.Query), limit+1, offset)
 	if err != nil {
 		return nil, nil, err
 	}

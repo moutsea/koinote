@@ -46,7 +46,7 @@ func TestAgentOrganizationFollowupRetainsUserScope(t *testing.T) {
 	if len(input["policy"].(map[string]any)["denyTools"].([]string)) != 1 {
 		t.Fatal("legacy scope safeguard removed")
 	}
-	if input["policy"].(map[string]any)["maxSteps"] != 24 || !strings.Contains(input["systemPrompt"].(string), agentLibraryScopeInstruction) {
+	if input["policy"].(map[string]any)["maxSteps"] != 24 || input["policy"].(map[string]any)["maxContextChars"] != 200000 || !strings.Contains(input["systemPrompt"].(string), agentLibraryScopeInstruction) {
 		t.Fatal("organization followup lost its pagination instructions or sequential read budget")
 	}
 
@@ -86,6 +86,7 @@ func TestAgentOrganizationLargeLibraryContext(t *testing.T) {
 	}
 	defer client.Close()
 	chars := 0
+	var evidence []map[string]string
 	call := func(name string, args map[string]any, result any) {
 		t.Helper()
 		wire, err := client.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
@@ -101,6 +102,7 @@ func TestAgentOrganizationLargeLibraryContext(t *testing.T) {
 			t.Fatal(err)
 		}
 		chars += len(utf16.Encode([]rune(string(msg))))
+		evidence = append(evidence, map[string]string{"tool": name, "output": string(raw)})
 		raw, err = json.Marshal(wire.StructuredContent)
 		if err != nil || json.Unmarshal(raw, result) != nil {
 			t.Fatalf("%s: invalid structured result", name)
@@ -140,6 +142,32 @@ func TestAgentOrganizationLargeLibraryContext(t *testing.T) {
 	if len(seen) != 100 || len(roots) != 12 {
 		t.Fatalf("lost inventory: %d documents, %d at root", len(seen), len(roots))
 	}
+	firstPassChars := chars
+	cursor = ""
+	// In production the planner followed its unfiltered listing with an
+	// overlapping title search before preparing the batch of twelve moves.
+	matches := 0
+	for {
+		var page struct {
+			Documents  []struct{ Snippet string }
+			NextCursor string
+		}
+		call("search_documents", map[string]any{"query": "项目验收", "limit": 100, "cursor": cursor}, &page)
+		for _, doc := range page.Documents {
+			if len([]rune(doc.Snippet)) > 96 {
+				t.Fatal("keyword searches returned an unbounded catalog excerpt")
+			}
+			matches++
+		}
+		cursor = page.NextCursor
+		if cursor == "" {
+			break
+		}
+	}
+	if matches != 99 {
+		t.Fatalf("incomplete second scan: %d", matches)
+	}
+	repeatedSearchChars := chars - firstPassChars
 	for _, path := range roots {
 		var preview struct {
 			Content              string
@@ -154,10 +182,30 @@ func TestAgentOrganizationLargeLibraryContext(t *testing.T) {
 	}
 	// Leave at least half the 120k-character run budget for instructions,
 	// planning, proposals and receipts after this realistic inventory.
-	if chars > 60000 {
-		t.Fatalf("tool messages used %d characters", chars)
+	if chars-repeatedSearchChars > 60000 {
+		t.Fatalf("single scan and targeted reads used %d characters", chars-repeatedSearchChars)
 	}
-	t.Logf("100 documents, 8 folders and 12 targeted reads: %d tool-message characters", chars)
+	// agent-gpt passes these wire strings in referenceData, then serializes
+	// that JSON again as one user-role message. Measuring only the execution
+	// transcript misses the failure at the authorization boundary.
+	referenceData, err := json.Marshal(map[string]any{"resourceEvidence": evidence})
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit, err := json.Marshal([]map[string]string{{"role": "user", "content": string(referenceData)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditChars := len(utf16.Encode([]rune(string(audit))))
+	input := map[string]any{"policy": map[string]any{}}
+	if err := a.prepareAgentConversationInput(ctx, &task, input, ""); err != nil {
+		t.Fatal(err)
+	}
+	contextBudget := input["policy"].(map[string]any)["maxContextChars"].(int)
+	if auditChars+40000 > contextBudget {
+		t.Fatalf("audit evidence %d leaves too little room for schema, instructions and twelve effects in %d", auditChars, contextBudget)
+	}
+	t.Logf("100 documents in two scans and 12 targeted reads: %d execution chars, %d audit evidence chars, budget %d", chars, auditChars, contextBudget)
 }
 
 func TestAgentOrganizationStarterAllowsMovesAndPreservesContent(t *testing.T) {
