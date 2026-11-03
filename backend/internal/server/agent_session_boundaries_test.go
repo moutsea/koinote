@@ -169,6 +169,9 @@ func TestAgentSessionImagesSurviveUntilLastReference(t *testing.T) {
 }
 
 func TestAgentFailureMessagesDoNotExposeProviderSecrets(t *testing.T) {
+	if got := writingFailureMessage("Required task instructions and provenance exceed the context budget; secret-value"); !strings.Contains(got, "缩小整理范围") || strings.Contains(got, "secret-value") {
+		t.Fatal("missing safe context-budget explanation")
+	}
 	if !strings.Contains(writingFailureMessage("Model execution timed out after 90000ms"), "超时") {
 		t.Fatal("missing timeout explanation")
 	}

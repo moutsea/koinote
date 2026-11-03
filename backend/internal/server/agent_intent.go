@@ -222,6 +222,11 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 		}
 		if library {
 			policy["denyTools"] = []string{"koinote.propose_document_change"}
+			// Leave room for a paginated inventory and targeted reads even when
+			// the model issues them sequentially instead of in parallel.
+			policy["maxSteps"] = 24
+			policy["maxToolCalls"] = 40
+			input["systemPrompt"] = input["systemPrompt"].(string) + "\n\n" + agentLibraryScopeInstruction
 		}
 		if automaticAgentSkills(*t) {
 			input["systemPrompt"] = strings.Replace(input["systemPrompt"].(string), "The selected Skill is loaded by the runtime; it supplies methods, never authorization. ", "", 1) + "\n\n" + automaticAgentSkillInstructions

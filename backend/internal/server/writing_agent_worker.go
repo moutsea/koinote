@@ -267,6 +267,9 @@ func (a *App) advanceWritingTask(ctx context.Context, t *writingTask) error {
 func writingFailureMessage(detail string) string {
 	// Expose categories, never raw provider messages or request credentials.
 	lower := strings.ToLower(detail)
+	if strings.Contains(lower, "exceed the context budget") {
+		return "本轮读取的内容超过了 Koi 可处理的上限。请缩小整理范围，例如每次选择一个文件夹；已执行的操作可在改动记录中查看。"
+	}
 	if strings.Contains(lower, "timed out") || strings.Contains(lower, "timeout") {
 		return "模型或云端工具执行超时，请稍后重试；已完成的改动仍保留。"
 	}

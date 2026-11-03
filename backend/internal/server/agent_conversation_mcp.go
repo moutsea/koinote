@@ -14,7 +14,7 @@ func (a *App) addAgentConversationTools(s *mcp.Server) {
 	a.addAgentSkillTools(s)
 	mcp.AddTool(s, &mcp.Tool{Name: "validate_operation", Description: "Host-only side-effect-free operation validation. Called by the Agent intent guard.", Meta: agentIntentMeta("read")}, a.agentValidateOperation)
 	mcp.AddTool(s, &mcp.Tool{Name: "save_artifact", Description: "Persist a generated text or binary file in this conversation so the user can download it. Max 1 MiB per file; counts toward cloud storage. Use a unique filename and save useful browser/sandbox outputs before finishing."}, a.agentSaveArtifact)
-	mcp.AddTool(s, &mcp.Tool{Name: "search_documents", Meta: agentIntentMeta("read"), Description: "Find the user's cloud documents by title or body. Empty query lists recent documents. Returns canonical paths; read needed originals with get_document.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, a.agentSearchDocuments)
+	mcp.AddTool(s, &mcp.Tool{Name: "search_documents", Meta: agentIntentMeta("read"), Description: "Find documents by title or body. Empty query lists recent documents with their paths, folders and short excerpts. Pages contain up to 25 documents. Follow nextCursor; use get_document for details.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, a.agentSearchDocuments)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_folders", Meta: agentIntentMeta("read"), Description: "List real owned folders, canonical paths, version and authoritative counts (including trashed documents). Follow nextCursor to inventory all folders. canDeleteEmpty means no documents, children or sync grants. Names and organizerKind never imply a protected virtual view.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, a.agentListFolders)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_document", Meta: agentIntentMeta("read"), Description: "Read a cloud document on demand using its canonical path. Omit path only when the user targets the current-focus document. For library organization, use explicit paths from search_documents. Offset 0 reads the latest version; later pages use that same snapshot. Read every page before proposing a replacement.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, a.agentReadDocument)
 	mcp.AddTool(s, &mcp.Tool{Name: "propose_operations", Meta: agentApprovalMeta(), Description: "Submit concrete document or folder changes. kind=folder creates a folder; kind=delete_folder removes an empty folder with undo support: copy path and version from list_folders into path and expectedFolderVersion. Never use trash/get_document for a folder. Submit ALL independent changes for the current phase in ONE call (including all folders). Every entry must be valid against current persisted state: batches do not simulate earlier entries. Submit dependent phases separately; for folder merges first apply document moves, then re-read list_folders and delete only the now-empty source folder. Never batch a prerequisite with a deletion that depends on it. A pending batch pauses the job until the user decides, then resumes automatically; do not ask the user to send another message. Every update, move, or trash requires path AND expectedRevision: copy revision from get_document into expectedRevision, including for moves that leave the content unchanged. Read existing documents first. Server applies the user's current review/assist/full permission. Never claim a pending operation is applied."}, a.agentProposeOperations)
@@ -29,6 +29,12 @@ type agentSearchInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"Page size 1 to 100; omit or use 0 for the default. Follow nextCursor."`
 }
 
+// The agent consumes the MCP envelope, including structuredContent. The SDK's
+// default text fallback would send the same JSON through the model a second time.
+func agentReadResult(data map[string]any) (*mcp.CallToolResult, map[string]any, error) {
+	return &mcp.CallToolResult{Content: []mcp.Content{}}, data, nil
+}
+
 func (a *App) agentSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, in agentSearchInput) (*mcp.CallToolResult, map[string]any, error) {
 	t := ctx.Value(writingMCPContext{}).(writingTask)
 	if len(in.Query) > 800 {
@@ -38,7 +44,8 @@ func (a *App) agentSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, 
 	if err != nil {
 		return nil, nil, err
 	}
-	rows, err := a.db.Query(ctx, `SELECT d.doc_id,d.title,d.revision,COALESCE(f.folder_id,''),COALESCE(f.name,''),left(d.content,240),d.updated_at::text FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.trashed_at IS NULL AND (strpos(lower(d.title),lower($2))>0 OR strpos(lower(d.content),lower($2))>0) ORDER BY d.updated_at DESC,d.id DESC LIMIT $3 OFFSET $4`, t.UserID, strings.TrimSpace(in.Query), limit+1, offset)
+	limit = min(limit, 25)
+	rows, err := a.db.Query(ctx, `SELECT d.doc_id,d.title,d.revision,COALESCE(f.folder_id,''),COALESCE(f.name,''),left(d.content,CASE WHEN $2='' THEN 96 ELSE 240 END),d.updated_at::text FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.trashed_at IS NULL AND (strpos(lower(d.title),lower($2))>0 OR strpos(lower(d.content),lower($2))>0) ORDER BY d.updated_at DESC,d.id DESC LIMIT $3 OFFSET $4`, t.UserID, strings.TrimSpace(in.Query), limit+1, offset)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,7 +67,7 @@ func (a *App) agentSearchDocuments(ctx context.Context, _ *mcp.CallToolRequest, 
 		docs = docs[:limit]
 		cursor = encodeMCPCursor(offset + limit)
 	}
-	return nil, map[string]any{"documents": docs, "nextCursor": cursor}, nil
+	return agentReadResult(map[string]any{"documents": docs, "nextCursor": cursor})
 }
 func (a *App) agentListFolders(ctx context.Context, _ *mcp.CallToolRequest, in agentSearchInput) (*mcp.CallToolResult, map[string]any, error) {
 	t := ctx.Value(writingMCPContext{}).(writingTask)
@@ -91,7 +98,7 @@ func (a *App) agentListFolders(ctx context.Context, _ *mcp.CallToolRequest, in a
 		folders = folders[:limit]
 		cursor = encodeMCPCursor(offset + limit)
 	}
-	return nil, map[string]any{"folders": folders, "nextCursor": cursor}, nil
+	return agentReadResult(map[string]any{"folders": folders, "nextCursor": cursor})
 }
 
 type agentReadInput struct {
@@ -111,7 +118,7 @@ func (a *App) agentReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in 
 		return nil, nil, err
 	}
 	defer tx.Rollback(ctx)
-	fresh, _, err := a.lockAgentTask(ctx, tx, t.UserID, t.ID, true)
+	fresh, session, err := a.lockAgentTask(ctx, tx, t.UserID, t.ID, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,6 +158,13 @@ func (a *App) agentReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if in.Offset < 0 || in.Offset > len(chars) || limit < 1 || limit > 40000 {
 		return nil, nil, errAgentInput
 	}
+	library, err := agentLibraryTask(ctx, tx, fresh, session)
+	if err != nil {
+		return nil, nil, err
+	}
+	if library {
+		limit = min(limit, 512)
+	}
 	end := min(len(chars), in.Offset+limit)
 	if in.Offset <= readChars && end > readChars {
 		if _, err = tx.Exec(ctx, `UPDATE agent_document_reads SET read_chars=$3 WHERE task_id=$1 AND doc_id=$2`, t.ID, id, end); err != nil {
@@ -163,7 +177,7 @@ func (a *App) agentReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err = tx.Commit(ctx); err != nil {
 		return nil, nil, err
 	}
-	return nil, map[string]any{"docId": id, "path": snapshot.Path, "title": snapshot.Document.Title, "revision": snapshot.Document.Revision, "folderId": snapshot.FolderID, "content": string(chars[in.Offset:end]), "nextOffset": end, "hasMore": end < len(chars)}, nil
+	return agentReadResult(map[string]any{"docId": id, "path": snapshot.Path, "title": snapshot.Document.Title, "revision": snapshot.Document.Revision, "folderId": snapshot.FolderID, "content": string(chars[in.Offset:end]), "nextOffset": end, "hasMore": end < len(chars)})
 }
 
 type agentProposeInput struct {

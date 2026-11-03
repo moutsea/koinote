@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"koinote/backend/internal/model"
@@ -45,6 +46,9 @@ func TestAgentOrganizationFollowupRetainsUserScope(t *testing.T) {
 	if len(input["policy"].(map[string]any)["denyTools"].([]string)) != 1 {
 		t.Fatal("legacy scope safeguard removed")
 	}
+	if input["policy"].(map[string]any)["maxSteps"] != 24 || !strings.Contains(input["systemPrompt"].(string), agentLibraryScopeInstruction) {
+		t.Fatal("organization followup lost its pagination instructions or sequential read budget")
+	}
 
 }
 
@@ -55,6 +59,105 @@ func TestAgentOrganizationMenuPromptsKeepLibraryScope(t *testing.T) {
 			t.Errorf("%s organizer prompt did not establish library scope", locale)
 		}
 	}
+}
+
+// Exercise the model-facing MCP envelopes, not just the structured Go values:
+// the SDK normally includes the JSON again as escaped text in each tool result.
+func TestAgentOrganizationLargeLibraryContext(t *testing.T) {
+	a, user, original := writingTestApp(t)
+	ctx := context.Background()
+	folderIDs := []string{}
+	for i := 0; i < 8; i++ {
+		folderIDs = append(folderIDs, seedAgentEmptyFolder(t, a, user.ID, "资料"+string(rune('A'+i)), "", ""))
+	}
+	_, err := a.db.Exec(ctx, `INSERT INTO documents(doc_id,user_id,title,content,folder_id)
+		SELECT gen_random_uuid()::text,$1,'项目验收：云端文档分类与工作记录 ' || n,repeat('引文 "旅行记录📷"。',255),
+		  CASE WHEN n > 11 THEN (SELECT id FROM folders WHERE folder_id=($2::text[])[1+n%8]) END
+		FROM generate_series(1,99) n`, user.ID, folderIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), model.Document{}, agentOrganizePrompts["zh"])
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+	client, err := connectMCPClient(ctx, srv.URL+"/api/writing-agent/mcp/"+task.ID, a.writingSecret(task.ID, "mcp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	chars := 0
+	call := func(name string, args map[string]any, result any) {
+		t.Helper()
+		wire, err := client.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil || wire.IsError || len(wire.Content) != 0 {
+			t.Fatalf("%s: unexpected MCP error or duplicated text: %v", name, err)
+		}
+		raw, err := json.Marshal(wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg, err := json.Marshal(map[string]string{"role": "tool", "name": name, "content": string(raw)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		chars += len(utf16.Encode([]rune(string(msg))))
+		raw, err = json.Marshal(wire.StructuredContent)
+		if err != nil || json.Unmarshal(raw, result) != nil {
+			t.Fatalf("%s: invalid structured result", name)
+		}
+	}
+	var folders struct{ Folders []map[string]any }
+	call("list_folders", map[string]any{"limit": 100}, &folders)
+	if len(folders.Folders) != 8 {
+		t.Fatal("incomplete folder inventory")
+	}
+	seen := map[string]bool{}
+	var roots []string
+	cursor := ""
+	for {
+		var page struct {
+			Documents  []struct{ Path, FolderID, Snippet string }
+			NextCursor string
+		}
+		call("search_documents", map[string]any{"limit": 100, "cursor": cursor}, &page)
+		if len(page.Documents) != 25 {
+			t.Fatalf("unexpected inventory page size %d", len(page.Documents))
+		}
+		for _, doc := range page.Documents {
+			if seen[doc.Path] || doc.Path == "" || len([]rune(doc.Snippet)) > 96 {
+				t.Fatal("duplicate, missing path or oversized inventory excerpt")
+			}
+			seen[doc.Path] = true
+			if doc.FolderID == "" {
+				roots = append(roots, doc.Path)
+			}
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	if len(seen) != 100 || len(roots) != 12 {
+		t.Fatalf("lost inventory: %d documents, %d at root", len(seen), len(roots))
+	}
+	for _, path := range roots {
+		var preview struct {
+			Content              string
+			Revision, NextOffset int
+			HasMore              bool
+		}
+		call("get_document", map[string]any{"path": path, "limit": 40000}, &preview)
+		if preview.Revision < 1 || (path != agentDocumentPath(original.DocID) &&
+			(!preview.HasMore || preview.NextOffset != 512 || len([]rune(preview.Content)) != 512)) {
+			t.Fatal("classification preview lost revision or continuation")
+		}
+	}
+	// Leave at least half the 120k-character run budget for instructions,
+	// planning, proposals and receipts after this realistic inventory.
+	if chars > 60000 {
+		t.Fatalf("tool messages used %d characters", chars)
+	}
+	t.Logf("100 documents, 8 folders and 12 targeted reads: %d tool-message characters", chars)
 }
 
 func TestAgentOrganizationStarterAllowsMovesAndPreservesContent(t *testing.T) {
