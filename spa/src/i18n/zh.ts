@@ -8,7 +8,7 @@ export const zh: Messages = {
     pricing: "升级/credits",
     docs: "文档",
     docsHome: "文档中心",
-    aiGuide: "AI 优化",
+    aiGuide: "Koi AI",
     mcpGuide: "MCP 接入",
     versionHistoryGuide: "版本控制",
     settings: "设置",
@@ -456,27 +456,13 @@ export const zh: Messages = {
       "如果绑定或推送失败，请先核对出口 IP、AppID/AppSecret 和公众号接口权限，再根据上面的排查建议重试。",
   },
   aiGuide: {
-    eyebrow: "AI 优化指南",
-    title: "AI 编辑帮你审稿，逐条列出修改建议",
-    subtitle:
-      "AI 自动审阅标题、正文表达和结构排版，像 code review 一样列出可核对的改动。",
+    eyebrow: "Koi AI 写作指南",
+    title: "用指令修改当前文章",
+    subtitle: "在文章编辑器打开 Koi AI，说明想怎么改。你可以请它参考其他文档，最终由你确认当前文章的改稿。",
     checks: [
-      {
-        title: "标题吸引力",
-        desc: "按清晰度、具体性、可信度与好奇缺口评分；低于 60 分时会要求模型给出 2–3 个候选标题。",
-      },
-      {
-        title: "正文表达",
-        desc: "检查冗长句、指代不清、语气跳变、排版细节与移动端阅读节奏，并说明修改理由。",
-      },
-      {
-        title: "结构排版",
-        desc: "评估层级、可读性、重点、节奏、模块化和移动端适配，建议标题、分隔线、列表或引用块。",
-      },
-      {
-        title: "安全落实",
-        desc: "每条建议都展示原文与建议；可逐条落实、全部落实或忽略，不会在后台静默改稿。",
-      },
+      { title: "写下你的要求", desc: "例如：“保留数字和引用，把开头缩成两段。”也可以只请助手分析问题，不生成改稿。" },
+      { title: "指定参考资料", desc: "用标题指出希望参考的文档。助手可以搜索和读取有权限访问的内容，但只可为当前文章提出修改。" },
+      { title: "核对改动", desc: "在侧边弹窗查看原文与提案的差异，批准后才写入。也可以拒绝提案或撤销已应用的修改。" },
     ],
     caseEyebrow: "真实审阅记录",
     caseTitle: "案例：《烧了一千刀的在线 markdown，开源了》",
@@ -575,41 +561,8 @@ export const zh: Messages = {
     caseOriginalBack: "返回 AI 优化指南",
     faqTitle: "常见问题",
     faqs: [
-      {
-        question: "AI 优化会直接修改整篇文章吗？",
-        answer:
-          "不会。系统会在后台分阶段审阅标题、正文与结构，返回审阅摘要、评分、修改理由和原文/建议对比；只有你确认的建议才会写入文档。",
-      },
-      {
-        question: "AI 会核验事实，并完全保留我的表达吗？",
-        answer:
-          "AI 负责发现写作问题，不负责核验文章中的事实、数据和引用来源。建议会尽量保留作者语气，但仍应逐条检查是否符合你的表达意图。",
-      },
-      {
-        question: "审阅期间文档发生变化，会覆盖新内容吗？",
-        answer:
-          "不会。系统会保留审阅结果并提示文章已发生改动，建议可能不代表最新情况。落实时仍会经过 revision、保存冲突和原文匹配检查；不再匹配的单条建议不会覆盖后来新增或修改的内容。",
-      },
-      {
-        question: "落实后可以撤销吗？审阅记录会保留什么？",
-        answer:
-          "可以。AI 修改会保存完整恢复点，可通过版本历史比较或恢复；历史审阅也会保留摘要、评分、建议状态和实际 credits 消耗。",
-      },
-      {
-        question: "谁可以使用 AI 优化？内置模型如何计费？",
-        answer:
-          "AI 优化是终生会员权益，升级时赠送 1,000 credits。使用内置模型会按本次审阅的实际用量扣除 credits。",
-      },
-      {
-        question: "可以使用自己的模型渠道吗？",
-        answer:
-          "可以。在“AI 设置”中接入 OpenAI 兼容或 Anthropic Messages 渠道后，可直接使用自己的模型服务，并且不会消耗 Koinote credits。待审阅内容会发送到你配置的模型服务，请自行确认服务商的数据政策。",
-      },
-      {
-        question: "本地模式和桌面客户端能使用吗？",
-        answer:
-          "本地模式严格禁止联网，因此不能运行 AI 优化；已登录账号的桌面客户端可以在联网时正常使用。",
-      },
+      { question: "切换文章会怎样？", answer: "每篇文章有独立会话。重新打开 Koi AI 可以接回这篇文章的任务和提案。" },
+      { question: "谁可以使用？", answer: "登录的终生会员可以在联网时使用。离线模式下不能运行云端助手。" },
     ],
     pricingCta: "查看会员与 credits",
   },
@@ -717,9 +670,8 @@ export const zh: Messages = {
       },
     ],
     deepDiveTitle: "专项指南",
-    aiTitle: "AI 优化：像审查代码一样改文章",
-    aiDescription:
-      "了解标题评分、正文与六维结构审阅、后台任务、逐条落实，以及一篇真实文章从诊断到完成修改的全过程。",
+    aiTitle: "Koi AI",
+    aiDescription: "在文章编辑器打开 Koi AI，说明想怎么改。你可以请它参考其他文档，最终由你确认当前文章的改稿。",
     mcpTitle: "让 Agent 操作 Koinote 文档",
     mcpDescription:
       "查看 Codex、Claude Code、OpenCode、OpenClaw 等客户端的 Streamable HTTP MCP 配置、权限边界与使用示例。",
@@ -2199,7 +2151,7 @@ export const zh: Messages = {
       "ambiguousFolder": "新建路径中存在多个同名目录。请在“目标目录”中直接选择具体目录，并移除新建路径中重复的名称。",
       "busyRetry": "服务器暂时忙，请直接重试当前预览，无需重新生成或再次付费。",
       "title": "AI 整理",
-      "menuDescription": "按内容推荐目录和标签，预览并调整后应用。",
+      "menuDescription": "在 Koi 中按主题归类项目文档，可先调整整理指令。",
       "description": "根据内容分类、归档，并添加少量有用的标签。先预览整理效果，调整满意后再应用。",
       "pickerTitle": "选择要整理的文档",
       "pickerHint": "勾选的文档都会由 AI 按内容重新归类，包括以前整理过的。默认勾选未整理的文档和自动时间目录里的文档；自动目录不会再作为目标，清空后会删除，撤销整理可恢复。",
@@ -2534,7 +2486,7 @@ function hello(name) {
     download: "下载客户端",
     pricing: "价格",
     docsCenter: "文档中心",
-    aiGuide: "AI 优化指南",
+    aiGuide: "Koi AI 写作指南",
     mcpGuide: "MCP 接入指南",
     versionHistoryGuide: "版本控制指南",
     home: "首页",

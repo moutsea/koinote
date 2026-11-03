@@ -81,11 +81,20 @@ type Config struct {
 	StripeCreditsProductID  string
 
 	// AI 优化的环境默认模型。四项齐全时启用；后台保存的全局渠道优先于此配置。
-	AgentLLMProtocol string
-	AgentLLMBaseURL  string
-	AgentLLMAPIKey   string
-	AgentLLMModel    string
-	AgentLLMThinking bool
+	AgentLLMProtocol       string
+	AgentLLMBaseURL        string
+	AgentLLMAPIKey         string
+	AgentLLMModel          string
+	AgentLLMThinking       bool
+	AgentGPTBaseURL        string
+	AgentGPTAPIKey         string
+	AgentGPTSigningSecret  string
+	AgentGPTSignRequests   bool
+	AgentGPTAppID          string
+	AgentGPTUserNamespace  string
+	AgentGPTPublicURL      string
+	AgentGPTModel          string
+	AgentGPTModelTimeoutMS int
 
 	// 微信公众号封面生成使用 OpenAI-compatible Images API。三项齐全时启用，
 	// API Key 只留在后端，绝不下发给桌面客户端。
@@ -206,11 +215,20 @@ func Load() Config {
 		StripeLifetimeProductID: strings.TrimSpace(os.Getenv("STRIPE_LIFETIME_PRODUCT_ID")),
 		StripeCreditsProductID:  strings.TrimSpace(os.Getenv("STRIPE_CREDITS_PRODUCT_ID")),
 
-		AgentLLMProtocol: strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_LLM_PROTOCOL"))),
-		AgentLLMBaseURL:  strings.TrimSpace(os.Getenv("AGENT_LLM_BASE_URL")),
-		AgentLLMAPIKey:   strings.TrimSpace(os.Getenv("AGENT_LLM_API_KEY")),
-		AgentLLMModel:    strings.TrimSpace(os.Getenv("AGENT_LLM_MODEL")),
-		AgentLLMThinking: strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_LLM_THINKING")), "true"),
+		AgentLLMProtocol:       strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_LLM_PROTOCOL"))),
+		AgentLLMBaseURL:        strings.TrimSpace(os.Getenv("AGENT_LLM_BASE_URL")),
+		AgentLLMAPIKey:         strings.TrimSpace(os.Getenv("AGENT_LLM_API_KEY")),
+		AgentLLMModel:          strings.TrimSpace(os.Getenv("AGENT_LLM_MODEL")),
+		AgentLLMThinking:       strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_LLM_THINKING")), "true"),
+		AgentGPTBaseURL:        strings.TrimRight(getenv("AGENT_GPT_BASE_URL", "https://agent.coderliang.com"), "/"),
+		AgentGPTAPIKey:         strings.TrimSpace(os.Getenv("AGENT_GPT_API_KEY")),
+		AgentGPTSigningSecret:  strings.TrimSpace(os.Getenv("AGENT_GPT_SIGNING_SECRET")),
+		AgentGPTSignRequests:   strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GPT_SIGN_REQUESTS")), "true"),
+		AgentGPTAppID:          strings.TrimSpace(os.Getenv("AGENT_GPT_APP_ID")),
+		AgentGPTUserNamespace:  strings.TrimSpace(getenv("AGENT_GPT_USER_NAMESPACE", "koinote")),
+		AgentGPTPublicURL:      strings.TrimRight(os.Getenv("AGENT_GPT_PUBLIC_URL"), "/"),
+		AgentGPTModel:          strings.TrimSpace(os.Getenv("AGENT_GPT_MODEL")),
+		AgentGPTModelTimeoutMS: agentGPTModelTimeoutMS(),
 
 		WechatCoverImageBaseURL: strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_BASE_URL")),
 		WechatCoverImageAPIKey:  strings.TrimSpace(os.Getenv("WECHAT_COVER_IMAGE_API_KEY")),
@@ -503,6 +521,30 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+const DefaultAgentGPTModelTimeoutMS = 180000
+
+// WritingAgentModelTimeoutMS also supplies a safe default for directly constructed
+// Config values. agent-gpt accepts 1–300 seconds per model call, not per job.
+func (c Config) WritingAgentModelTimeoutMS() int {
+	if c.AgentGPTModelTimeoutMS < 1000 || c.AgentGPTModelTimeoutMS > 300000 {
+		return DefaultAgentGPTModelTimeoutMS
+	}
+	return c.AgentGPTModelTimeoutMS
+}
+
+func agentGPTModelTimeoutMS() int {
+	raw := strings.TrimSpace(os.Getenv("AGENT_GPT_MODEL_TIMEOUT_MS"))
+	if raw == "" {
+		return DefaultAgentGPTModelTimeoutMS
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1000 || value > 300000 {
+		log.Printf("AGENT_GPT_MODEL_TIMEOUT_MS must be an integer from 1000 to 300000; using %d ms", DefaultAgentGPTModelTimeoutMS)
+		return DefaultAgentGPTModelTimeoutMS
+	}
+	return value
 }
 
 // DefaultImageQuotaMB 是没配 IMAGE_QUOTA_MB 时的默认值。

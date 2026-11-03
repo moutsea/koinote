@@ -549,6 +549,10 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/settings":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/session-settings":
+		return method == http.MethodGet || method == http.MethodPut
+	case "/api/agent/sessions":
+		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/workspace/settings":
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/agent/workspace/storage":
@@ -698,6 +702,35 @@ func desktopRequestAllowed(r *http.Request) bool {
 		}
 		return len(parts) == 2 && validUUID(parts[0]) && (parts[1] == "apply" || parts[1] == "undo") && method == http.MethodPost
 	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/sessions/"); found {
+		parts := strings.Split(rest, "/")
+		if len(parts) == 1 && validUUID(parts[0]) {
+			return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+		}
+		return len(parts) == 2 && validUUID(parts[0]) && parts[1] == "tasks" && method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/operations/"); found {
+		parts := strings.Split(rest, "/")
+		return len(parts) == 2 && validUUID(parts[0]) &&
+			(parts[1] == "approve" || parts[1] == "reject" || parts[1] == "undo") && method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/tasks/"); found {
+		parts := strings.Split(rest, "/")
+		return len(parts) == 3 && validUUID(parts[0]) && parts[1] == "operations" && (parts[2] == "approve" || parts[2] == "reject" || parts[2] == "undo") && method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/agent/artifacts/"); found {
+		return validUUID(rest) && method == http.MethodGet
+	}
+	if path == "/api/writing-agent/config" {
+		return method == http.MethodGet
+	}
+	if path == "/api/writing-agent/tasks" {
+		return method == http.MethodGet || method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/writing-agent/tasks/"); found {
+		parts := strings.Split(rest, "/")
+		return (len(parts) == 1 && validUUID(parts[0]) && method == http.MethodGet) || (len(parts) == 2 && validUUID(parts[0]) && (parts[1] == "cancel" || parts[1] == "apply") && method == http.MethodPost)
+	}
 	if rest, found := strings.CutPrefix(path, "/api/agent/reviews/"); found {
 		parts := strings.Split(rest, "/")
 		if len(parts) == 1 && parts[0] != "" {
@@ -725,6 +758,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		}
 		if len(parts) == 2 && parts[0] != "" {
 			switch parts[1] {
+			case "koi-session":
+				return method == http.MethodPost
 			case "agent-reviews":
 				return method == http.MethodGet || method == http.MethodPost
 			case "folder":

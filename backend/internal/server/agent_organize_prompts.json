@@ -1,0 +1,6 @@
+{
+  "zh": "请按内容主题整理当前项目的文档。先查看文档和现有文件夹，优先复用已有文件夹，必要时再新建。提交归类方案，列出需要移动的文档及其目标文件夹。归属不明确的文档留在原处。保留所有文档的标题和正文，不删除文档。",
+  "en": "Organize the documents in the current project by topic. Review the documents and existing folders first. Reuse suitable folders and create new ones only when needed. Propose the moves, naming each document and its destination folder. Leave documents in place if their category is unclear. Preserve every title and body and do not delete documents.",
+  "fr": "Classe les documents du projet actuel par thème. Examine d’abord les documents et les dossiers existants. Réutilise les dossiers adaptés et n’en crée que si nécessaire. Propose les déplacements en indiquant pour chaque document son dossier de destination. Laisse sur place les documents difficiles à classer. Conserve tous les titres et les textes, sans supprimer de documents.",
+  "ja": "現在のプロジェクトの文書を内容のテーマ別に整理してください。まず文書と既存のフォルダーを確認し、適切なフォルダーを優先して使い、必要な場合だけ新規作成してください。移動が必要な文書とそれぞれの移動先を示す整理案を提出してください。分類が曖昧な文書は元の場所に残し、すべての文書のタイトルと本文を維持し、文書は削除しないでください。"
+}

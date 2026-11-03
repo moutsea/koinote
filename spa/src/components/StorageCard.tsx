@@ -1,3 +1,4 @@
+import { agentPanelText } from "../i18n/agentPanel";
 import { useQuery } from "@tanstack/react-query";
 import { HardDrive, AlertTriangle } from "lucide-react";
 import { getStorageUsage } from "../api";
@@ -65,13 +66,13 @@ export function StorageCard() {
     );
   }
 
-  const { usedBytes, documentBytes, imageBytes, configBytes = 0, agentAllocatedBytes = 0, quotaBytes } = usage.data;
+  const { usedBytes, documentBytes, imageBytes, configBytes = 0, agentAllocatedBytes = 0, agentSessionBytes = 0, quotaBytes } = usage.data;
   const level = usageLevel(usedBytes, quotaBytes);
   const ratio = usageRatio(usedBytes, quotaBytes);
   const color = LEVEL_COLOR[level];
 
   // 文档、配置、图片和仓库分配分别展示；各段之和不超过 100%。
-  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes, agentAllocatedBytes);
+  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes, agentAllocatedBytes, agentSessionBytes);
 
   // 接近上限时各段都转朱砂：此时"哪部分占得多"已经不重要，
   // 重要的是"满了"。正常状态下才用多色区分
@@ -128,6 +129,7 @@ export function StorageCard() {
           className="h-full transition-[width] duration-500"
           style={{ width: `${segments.agent}%`, background: barColors.agent }}
         />
+        <div className="h-full" style={{ width: `${segments.sessions}%`, background: "var(--ink-strong)" }} />
       </div>
 
       {/* 分项：满了之后要知道该删什么。只报总数的话，一个存了 400 MB 图片的人
@@ -174,6 +176,7 @@ export function StorageCard() {
           <dt>{t.storage.agentAllocated}</dt>
           <dd style={{ color: "var(--ink-strong)" }}>{formatBytes(agentAllocatedBytes, locale)}</dd>
         </div>}
+        {agentSessionBytes > 0 && <div className="flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: "var(--ink-strong)" }} /><dt>Agent {agentPanelText[locale].storage}</dt><dd>{formatBytes(agentSessionBytes, locale)}</dd></div>}
       </dl>
 
       {/* 只在需要提醒时出文字。正常状态下多一行字是噪音 */}

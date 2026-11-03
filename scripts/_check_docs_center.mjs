@@ -57,7 +57,6 @@ ok(
   "AI 案例原文有独立只读归档",
   /path:\s*["']\/docs\/ai-optimization\/case["']/.test(main) &&
     /import\(["'].\/pages\/AIOptimizationCasePage["']\)/.test(main) &&
-    /to="\/docs\/ai-optimization\/case"/.test(aiGuide) &&
     /editable:\s*false/.test(aiCase) &&
     /import \{ CASE_ORIGINAL_MARKDOWN \} from "\.\.\/aiOptimizationCase"/.test(aiCase) &&
     /export const CASE_ORIGINAL_MARKDOWN/.test(aiCaseArchive) &&
@@ -66,44 +65,11 @@ ok(
   "公开指南不能链接本地私有文档，应提供稳定且能显示原图的审阅前归档",
 );
 ok(
-  "AI 指南覆盖实际审阅结果",
-  /const guide = t\.aiGuide/.test(aiGuide) &&
-    /guide\.caseFacts/.test(aiGuide) &&
-    /guide\.caseDimensions/.test(aiGuide) &&
-    /guide\.caseChanges\.map/.test(aiGuide) &&
-    !/guide\.caseChanges\.slice/.test(aiGuide) &&
-    /item\.before/.test(aiGuide) &&
-    /item\.after/.test(aiGuide) &&
-    /item\.reason/.test(aiGuide) &&
-    /guide\.faqs/.test(aiGuide) &&
-    /76 \/ 100/.test(readFileSync(new URL("../spa/src/i18n/zh.ts", import.meta.url), "utf8")) &&
-    /3 credits/.test(readFileSync(new URL("../spa/src/i18n/zh.ts", import.meta.url), "utf8")),
-  "文档不能只有概念介绍，应保留真实评分、建议与消耗",
-);
-ok(
-  "六条真实结构建议全部展示",
-  /guide\.caseChanges\.map/.test(aiGuide) &&
-    !/guide\.caseChanges\.slice/.test(aiGuide),
-  "案例指标写明 6 条结构建议，页面不能只截取其中 3 条",
-);
-ok(
-  "轮播悬停与焦点分别控制暂停",
-  /const paused = hovered \|\| focusWithin/.test(aiGuide) &&
-    /setHovered\(true\)/.test(aiGuide) &&
-    /setFocusWithin\(true\)/.test(aiGuide),
-  "鼠标离开时不能让仍持有键盘焦点的轮播重新自动切换",
-);
-ok(
-  "真实案例按四个维度轮播",
-  /role="tablist"/.test(aiGuide) &&
-    /role="tabpanel"/.test(aiGuide) &&
-    /CASE_TAB_COUNT\s*=\s*4/.test(aiGuide) &&
-    /window\.setInterval/.test(aiGuide) &&
-    /TitleReviewCase/.test(aiGuide) &&
-    /ContentReviewCase/.test(aiGuide) &&
-    /StructureReviewCase/.test(aiGuide) &&
-    /SafeApplyCase/.test(aiGuide),
-  "标题、正文、结构和安全落实应支持 Tab、方向键和自动轮播",
+  "Koi AI 指南展示文章操作步骤及常见问题",
+  /guide\.checks\.map/.test(aiGuide) &&
+    /guide\.faqs\.map/.test(aiGuide) &&
+    /<details/.test(aiGuide) && /<summary/.test(aiGuide),
+  "文章专属助手指南应包含操作步骤和可展开的问题",
 );
 ok(
   "边界与恢复说明统一收进 FAQ",
@@ -113,11 +79,11 @@ ok(
   "指南不应在真实案例后重复展示独立的边界与版本恢复模块",
 );
 ok(
-  "AI 指南只保留会员与 credits 按钮",
-  /to="\/docs\/ai-optimization\/case"[\s\S]*to="\/pricing"/.test(aiGuide) &&
+  "Koi AI 指南保留会员与 credits 入口",
+  /to="\/pricing"/.test(aiGuide) &&
     !/to="\/editor"/.test(aiGuide) &&
     !/to="\/ai-settings"/.test(aiGuide),
-  "会员与 credits 按钮应位于原文链接下方，且不再展示另外两个按钮",
+  "应链接会员方案，不展示旧版模型设置入口",
 );
 ok(
   "文档中心提供可执行下一步",

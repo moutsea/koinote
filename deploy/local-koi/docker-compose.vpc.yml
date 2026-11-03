@@ -1,0 +1,12 @@
+# Optional named-tunnel return path. The VPC service must use HTTPS port 18091
+# with verify_full and the hostname koi-local.koinote.app for SNI.
+services:
+  backend:
+    ports:
+      - "127.0.0.1:18091:8444"
+    environment:
+      KOINOTE_LOCAL_VPC_TLS: "1"
+      KOINOTE_VPC_CERT_VERSION: ${KOI_VPC_CERT_VERSION:?}
+    volumes:
+      - ${KOI_VPC_CERT_DIR:?}/origin.crt:/run/koinote-vpc/origin.crt:ro
+      - ${KOI_VPC_CERT_DIR:?}/origin.key:/run/koinote-vpc/origin.key:ro

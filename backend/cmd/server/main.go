@@ -155,6 +155,7 @@ func main() {
 	app.StartConfigSyncCleanup(backgroundCtx)
 	app.StartAgentRepositoryCleanup(backgroundCtx)
 	app.StartAgentRepositoryObjectMaintenance(backgroundCtx)
+	app.StartWritingAgent(backgroundCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr(),
@@ -169,6 +170,29 @@ func main() {
 		}
 	}()
 
+	var localTLS *http.Server
+	if os.Getenv("KOINOTE_LOCAL_TLS") == "1" {
+		localTLS = &http.Server{Addr: ":8443", Handler: httpServer.Handler, ReadHeaderTimeout: httpServer.ReadHeaderTimeout}
+		go func() {
+			if err := localTLS.ListenAndServeTLS("/run/koinote/backend.crt", "/run/koinote/backend.key"); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Local TLS listener: %v", err)
+			}
+		}()
+	}
+
+	var vpcTLS *http.Server
+	if os.Getenv("KOINOTE_LOCAL_VPC_TLS") == "1" {
+		routes := http.NewServeMux()
+		routes.Handle("/api/writing-agent/mcp/", httpServer.Handler)
+		routes.Handle("/api/writing-agent/callback/", httpServer.Handler)
+		vpcTLS = &http.Server{Addr: ":8444", Handler: routes, ReadHeaderTimeout: httpServer.ReadHeaderTimeout}
+		go func() {
+			if err := vpcTLS.ListenAndServeTLS("/run/koinote-vpc/origin.crt", "/run/koinote-vpc/origin.key"); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Local VPC TLS listener: %v", err)
+			}
+		}()
+	}
+
 	// 优雅关闭
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
@@ -178,5 +202,11 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if vpcTLS != nil {
+		_ = vpcTLS.Shutdown(shutdownCtx)
+	}
+	if localTLS != nil {
+		_ = localTLS.Shutdown(shutdownCtx)
+	}
 	_ = httpServer.Shutdown(shutdownCtx)
 }

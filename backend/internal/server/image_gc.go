@@ -154,6 +154,7 @@ func (a *App) enqueueOrphanedImageKeysChecked(ctx context.Context, user userRef,
 			FROM document_versions v
 			JOIN documents d ON d.id = v.document_id
 			WHERE d.user_id = $1
+			UNION ALL SELECT content FROM agent_session_image_contents WHERE user_id=$1
 		), referenced_keys AS (
 			SELECT DISTINCT 'u/' || matches[1] || '/' || matches[2] || '.' || matches[3] AS object_key
 			FROM owned_contents
@@ -424,6 +425,7 @@ func (a *App) referencedImageKeys(ctx context.Context, userIDs []int64, keys []s
 			FROM document_versions AS version
 			JOIN documents AS document ON document.id = version.document_id
 			WHERE document.user_id IN (SELECT DISTINCT user_id FROM candidates)
+			UNION ALL SELECT user_id,content FROM agent_session_image_contents WHERE user_id IN (SELECT DISTINCT user_id FROM candidates)
 		), extracted_keys AS (
 			SELECT DISTINCT content.user_id,
 				'u/' || matches[1] || '/' || matches[2] || '.' || matches[3] AS object_key

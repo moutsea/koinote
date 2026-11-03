@@ -6,6 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-11-03
+
+### Added
+
+- Use Koi AI to edit the current article with other documents as references. Preview changes and undo them when needed.
+- Open Koi from the document organization menu, edit the suggested instruction and send it. Review proposed moves, approve them and undo applied moves.
+
 ## [1.1.8] - 2026-10-26
 
 ### Changed

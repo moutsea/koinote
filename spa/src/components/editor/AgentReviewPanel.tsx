@@ -43,7 +43,7 @@ import {
 import { confirmAction } from "../../confirmAction";
 import { interpolate, useI18n } from "../../i18n";
 import { publishAgentReviewStarted } from "../../agentReviewNotifications";
-import { pushModal } from "../../modalStack";
+import { AgentReviewSheet } from "./AgentReviewSheet";
 import {
   AGENT_REVIEW_TASKS,
   agentReviewAccess,
@@ -165,20 +165,6 @@ export function AgentReviewPanel({
   const [deepAnalysisFocusDimension, setDeepAnalysisFocusDimension] =
     useState<AgentReviewLayoutAssessment["id"] | null>(null);
   const rerunRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const releaseModal = pushModal();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      releaseModal();
-    };
-  }, [onClose]);
 
   // 点下拉外部区域关闭
   useEffect(() => {
@@ -665,24 +651,7 @@ export function AgentReviewPanel({
   }
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label={t.agentReview.close}
-        onClick={onClose}
-        className="fixed inset-0 top-14 z-[55] bg-black/20 backdrop-blur-[1px]"
-      />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={t.agentReview.title}
-        className="fixed bottom-0 right-0 top-14 z-[60] flex w-full flex-col border-l shadow-2xl sm:max-w-[36rem]"
-        style={{
-          borderColor: "var(--ink-line)",
-          background: "var(--ink-paper)",
-          color: "var(--ink-black)",
-        }}
-      >
+    <AgentReviewSheet title={t.agentReview.title} closeLabel={t.agentReview.close} onClose={onClose}>
         {/* Header */}
         <header
           className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-5"
@@ -1013,8 +982,7 @@ export function AgentReviewPanel({
             </>
           )}
         </div>
-      </aside>
-    </>
+    </AgentReviewSheet>
   );
 }
 

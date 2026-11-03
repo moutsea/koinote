@@ -69,6 +69,9 @@ jobs:
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
           STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
+          AGENT_GPT_API_KEY: ${{ secrets.AGENT_GPT_API_KEY }}
+          AGENT_GPT_APP_ID: ${{ vars.AGENT_GPT_APP_ID }}
+          AGENT_GPT_SIGNING_SECRET: ${{ secrets.AGENT_GPT_SIGNING_SECRET }}
           AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
@@ -88,7 +91,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY X_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY X_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID AGENT_GPT_API_KEY AGENT_GPT_APP_ID AGENT_GPT_SIGNING_SECRET VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -264,6 +267,9 @@ jobs:
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
           STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
+          AGENT_GPT_API_KEY: ${{ secrets.AGENT_GPT_API_KEY }}
+          AGENT_GPT_APP_ID: ${{ vars.AGENT_GPT_APP_ID }}
+          AGENT_GPT_SIGNING_SECRET: ${{ secrets.AGENT_GPT_SIGNING_SECRET }}
           AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
           AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
@@ -313,7 +319,10 @@ jobs:
             "$WECHAT_COVER_IMAGE_BASE_URL" \
             "$WECHAT_COVER_IMAGE_API_KEY" \
             "$WECHAT_COVER_IMAGE_MODEL" \
-            "$WECHAT_API_PROXY_URL" | \
+            "$WECHAT_API_PROXY_URL" \
+            "$AGENT_GPT_API_KEY" \
+            "$AGENT_GPT_APP_ID" \
+            "$AGENT_GPT_SIGNING_SECRET" | \
             ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
               "root@$HOST" '
                 set -eu
@@ -349,6 +358,10 @@ jobs:
                 IFS= read -r wechat_cover_image_api_key
                 IFS= read -r wechat_cover_image_model
                 IFS= read -r wechat_api_proxy_url
+                IFS= read -r agent_gpt_api_key
+                IFS= read -r agent_gpt_app_id
+                IFS= read -r agent_gpt_signing_secret
+                test -n "$agent_gpt_api_key" && test -n "$agent_gpt_app_id" && test -n "$agent_gpt_signing_secret" || exit 1
                 test -n "$email_verification_secret"
                 test -n "$mcp_token_encryption_key"
                 test -n "$custom_media_credential_encryption_key"
@@ -432,6 +445,7 @@ jobs:
                 awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" -v replace_feishu="$replace_feishu" "
                   /^(EMAIL_VERIFICATION_SECRET|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|X_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
+                  /^AGENT_GPT_(API_KEY|APP_ID|SIGNING_SECRET|SIGN_REQUESTS|PUBLIC_URL|USER_NAMESPACE)=/ { next }
                   replace_agent_llm == 1 && /^(AGENT_LLM_PROTOCOL|AGENT_LLM_BASE_URL|AGENT_LLM_API_KEY|AGENT_LLM_MODEL|AGENT_LLM_THINKING)=/ { next }
                   replace_wechat_cover == 1 && /^(WECHAT_COVER_IMAGE_BASE_URL|WECHAT_COVER_IMAGE_API_KEY|WECHAT_COVER_IMAGE_MODEL)=/ { next }
                   replace_wechat_proxy == 1 && /^WECHAT_API_PROXY_URL=/ { next }
@@ -478,6 +492,10 @@ jobs:
                   printf "ANNOUNCEMENT_LLM_API_KEY=%s\n" "$announcement_llm_api_key" >> "$temp_file"
                   printf "ANNOUNCEMENT_LLM_MODEL=%s\n" "$announcement_llm_model" >> "$temp_file"
                 fi
+                printf "AGENT_GPT_API_KEY=%s\n" "$agent_gpt_api_key" >> "$temp_file"
+                printf "AGENT_GPT_APP_ID=%s\n" "$agent_gpt_app_id" >> "$temp_file"
+                printf "AGENT_GPT_SIGNING_SECRET=%s\n" "$agent_gpt_signing_secret" >> "$temp_file"
+                printf "AGENT_GPT_SIGN_REQUESTS=true\nAGENT_GPT_PUBLIC_URL=https://koinote.app\nAGENT_GPT_USER_NAMESPACE=koinote-prod\n" >> "$temp_file"
                 if [ "$replace_agent_llm" -eq 1 ]; then
                   printf "AGENT_LLM_PROTOCOL=%s\n" "$agent_llm_protocol" >> "$temp_file"
                   printf "AGENT_LLM_BASE_URL=%s\n" "$agent_llm_base_url" >> "$temp_file"

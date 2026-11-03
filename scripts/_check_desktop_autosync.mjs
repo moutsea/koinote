@@ -586,6 +586,25 @@ try {
   });
   assert.equal(remoteDocument.content, "Upload timer expires during read-only check", "cloud checks must not consume pending upload wakeups");
   assert.equal((await store.desktopSyncSummary()).pending, 0);
+  let releasePull, markReading;
+  const pullGate = new Promise(resolve => { releasePull = resolve; });
+  const reading = new Promise(resolve => { markReading = resolve; });
+  harness.beforeFetch = async path => {
+    if (path !== "/api/documents") return;
+    harness.beforeFetch = async () => {};
+    markReading();
+    await pullGate;
+  };
+  await act(async () => {
+    const first = store.syncDesktopNow({ force: true, pullOnly: true });
+    await reading;
+    await edit("Keep the queued upload when an Agent approval refreshes the tree");
+    const upload = store.syncDesktopNow({ force: true });
+    const agentPull = store.syncDesktopNow({ force: true, pullOnly: true, strictPull: true });
+    releasePull();
+    await Promise.all([first, upload, agentPull]);
+  });
+  assert.equal(remoteDocument.content, "Keep the queued upload when an Agent approval refreshes the tree");
   // Organization changes metadata without changing the content revision.
   const beforeMetadata = organizationMetadataWrites;
   await act(async () => {

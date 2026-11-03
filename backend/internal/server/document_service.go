@@ -119,7 +119,49 @@ func validDocumentCoverValues(mode, ratio, imageSource, prompt string) bool {
 		(mode != wechatCoverModeArticle || strings.TrimSpace(imageSource) != "")
 }
 
+func validateCreateDocumentCover(params createDocumentParams) (string, string, string, string, error) {
+	coverMode := strings.TrimSpace(params.CoverMode)
+	if coverMode == "" {
+		coverMode = wechatCoverModeDefault
+	}
+	coverRatio := strings.TrimSpace(params.CoverRatio)
+	if coverRatio == "" {
+		coverRatio = wechatCoverRatioWide
+	}
+	coverImageSource := strings.TrimSpace(params.CoverImageSource)
+	coverPrompt := strings.TrimSpace(params.CoverPrompt)
+	if !validDocumentCoverValues(coverMode, coverRatio, coverImageSource, coverPrompt) {
+		return "", "", "", "", errDocumentCoverInvalid
+	}
+	if coverMode != wechatCoverModeAI {
+		coverPrompt = ""
+	}
+
+	return coverMode, coverRatio, coverImageSource, coverPrompt, nil
+}
+
 func (a *App) createDocument(ctx context.Context, params createDocumentParams) (model.Document, error) {
+	if _, _, _, _, err := validateCreateDocumentCover(params); err != nil {
+		return model.Document{}, err
+	}
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return model.Document{}, err
+	}
+	defer tx.Rollback(ctx)
+	doc, err := a.createDocumentTx(ctx, tx, params)
+	if err != nil {
+		return model.Document{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return model.Document{}, err
+	}
+	a.recordProductMilestone(ctx, params.User.ID, milestoneFirstDocument)
+	a.cancelPendingImageDeletions(ctx, userRef{ID: params.User.ID, AuthUserID: params.User.AuthUserID}, params.Content)
+	return doc, nil
+}
+
+func (a *App) createDocumentTx(ctx context.Context, tx pgx.Tx, params createDocumentParams) (model.Document, error) {
 	docID := strings.TrimSpace(params.DocID)
 	if docID == "" {
 		var err error
@@ -132,35 +174,17 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 	if params.Theme != nil {
 		theme = normalizeDocumentTheme(*params.Theme)
 	}
-	coverMode := strings.TrimSpace(params.CoverMode)
-	if coverMode == "" {
-		coverMode = wechatCoverModeDefault
+	coverMode, coverRatio, coverImageSource, coverPrompt, coverErr := validateCreateDocumentCover(params)
+	if coverErr != nil {
+		return model.Document{}, coverErr
 	}
-	coverRatio := strings.TrimSpace(params.CoverRatio)
-	if coverRatio == "" {
-		coverRatio = wechatCoverRatioWide
-	}
-	coverImageSource := strings.TrimSpace(params.CoverImageSource)
-	coverPrompt := strings.TrimSpace(params.CoverPrompt)
-	if !validDocumentCoverValues(coverMode, coverRatio, coverImageSource, coverPrompt) {
-		return model.Document{}, errDocumentCoverInvalid
-	}
-	if coverMode != wechatCoverModeAI {
-		coverPrompt = ""
-	}
-
-	tx, err := a.db.Begin(ctx)
-	if err != nil {
-		return model.Document{}, err
-	}
-	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, params.User.ID); err != nil {
 		return model.Document{}, err
 	}
 
 	var doc model.Document
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		WITH target_folder AS (
 			SELECT CASE
 				WHEN $6 = '' THEN NULL::integer
@@ -191,7 +215,7 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 			WHERE user_id = $2 AND purpose = 'persistent'
 		), 0) + COALESCE((
 			SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2
-		), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
+		), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0) + agent_session_storage_bytes($2) + octet_length($5::text) + octet_length($3::text) + octet_length($9::text) + octet_length($10::text) <= $11
 		ON CONFLICT (doc_id) DO NOTHING
 		RETURNING doc_id, title, theme, content, cover_mode, cover_ratio, cover_image_source, cover_prompt, revision, created_at, updated_at
 	`, docID, params.User.ID, params.Title, theme, params.Content, derefOrEmpty(params.FolderID), coverMode, coverRatio, coverImageSource, coverPrompt, a.storageQuotaFor(params.User)).Scan(
@@ -229,12 +253,6 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 	if err != nil {
 		return model.Document{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return model.Document{}, err
-	}
-
-	a.recordProductMilestone(ctx, params.User.ID, milestoneFirstDocument)
-	a.cancelPendingImageDeletions(ctx, userRef{ID: params.User.ID, AuthUserID: params.User.AuthUserID}, params.Content)
 	return doc, nil
 }
 
@@ -308,7 +326,7 @@ func (a *App) updateDocumentTx(ctx context.Context, tx pgx.Tx, params updateDocu
 				WHERE user_id = $1 AND purpose = 'persistent'
 			), 0) + COALESCE((
 				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
-			), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0) + $3::bigint <= $4::bigint
+			), 0) + COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0) + agent_session_storage_bytes($1) + $3::bigint <= $4::bigint
 		`, params.User.ID, previous.ID, newBytes, a.storageQuotaFor(params.User)).Scan(&fits); err != nil {
 			return documentUpdateResult{}, err
 		}

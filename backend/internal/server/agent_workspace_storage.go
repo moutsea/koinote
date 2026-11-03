@@ -61,10 +61,11 @@ func (a *App) loadAgentWorkspaceStorage(ctx context.Context, q imageUsageQuerier
 		       COALESCE((
 		           SELECT SUM(bytes) FROM image_objects WHERE user_id = $1 AND purpose = 'persistent'
 		       ), 0),
-		       COALESCE((SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1), 0)
+		       COALESCE((SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1), 0),
+ agent_session_storage_bytes($1)
 	`, user.ID).Scan(
 		&view.UsedBytes, &view.QuotaBytes, &view.BonusBytes,
-		&usage.AgentAllocatedBytes, &usage.DocumentBytes, &usage.ImageBytes, &usage.ConfigBytes,
+		&usage.AgentAllocatedBytes, &usage.DocumentBytes, &usage.ImageBytes, &usage.ConfigBytes, &usage.AgentSessionBytes,
 	)
 	if err != nil {
 		return view, err

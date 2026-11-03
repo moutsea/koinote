@@ -8,7 +8,7 @@ export const fr: Messages = {
     pricing: "Mettre à niveau",
     docs: "Documentation",
     docsHome: "Centre de documentation",
-    aiGuide: "Optimisation IA",
+    aiGuide: "Koi AI",
     mcpGuide: "Intégration MCP",
     versionHistoryGuide: "Contrôle de version",
     settings: "Paramètres",
@@ -464,27 +464,13 @@ export const fr: Messages = {
       "En cas d’échec, vérifiez l’IP de sortie, l’AppID/AppSecret et les permissions API du compte avant de réessayer.",
   },
   aiGuide: {
-    eyebrow: "Guide de l’optimisation IA",
-    title: "Un éditeur IA relit votre texte et détaille chaque suggestion",
-    subtitle:
-      "L’IA relit automatiquement le titre, le texte, la structure et la mise en page, puis présente des modifications vérifiables comme une revue de code.",
+    eyebrow: "Guide Koi AI",
+    title: "Modifier l’article ouvert sur demande",
+    subtitle: "Ouvrez Koi AI dans l’éditeur, décrivez la modification et relisez la proposition. D’autres documents peuvent servir de références.",
     checks: [
-      {
-        title: "Force du titre",
-        desc: "Évalue clarté, précision, crédibilité et curiosité ; sous 60 points, le modèle est invité à proposer deux ou trois alternatives.",
-      },
-      {
-        title: "Qualité du texte",
-        desc: "Repère les longueurs, références ambiguës, ruptures de ton, détails typographiques et problèmes de rythme sur mobile, avec une raison pour chaque correction.",
-      },
-      {
-        title: "Structure et mise en page",
-        desc: "Évalue hiérarchie, lisibilité, emphase, rythme, modularité et lecture mobile, puis suggère titres, séparateurs, listes ou citations.",
-      },
-      {
-        title: "Application contrôlée",
-        desc: "Chaque proposition montre l’original et la version suggérée. Appliquez-la seule, en lot, ou ignorez-la : rien ne change en arrière-plan sans accord.",
-      },
+      { title: "Donner une consigne", desc: "Par exemple : « Conserve les chiffres et les citations, mais réduis l’introduction à deux paragraphes. » Vous pouvez aussi demander un simple avis." },
+      { title: "Choisir des références", desc: "Indiquez le titre du document à consulter. Koi peut lire les documents accessibles et proposer des modifications uniquement pour l’article ouvert." },
+      { title: "Relire les modifications", desc: "Comparez la proposition à l’original dans le panneau latéral. Validez-la, refusez-la ou annulez une modification déjà appliquée." },
     ],
     caseEyebrow: "Une revue réelle",
     caseTitle:
@@ -587,46 +573,8 @@ export const fr: Messages = {
     caseOriginalBack: "Retour au guide d’optimisation IA",
     faqTitle: "Questions fréquentes",
     faqs: [
-      {
-        question: "L’optimisation IA réécrit-elle directement tout l’article ?",
-        answer:
-          "Non. Le titre, le corps et la mise en page sont analysés par étapes en arrière-plan, puis Koinote fournit un résumé, des scores, les raisons et une comparaison avant/après. Seules les suggestions approuvées modifient le document.",
-      },
-      {
-        question:
-          "L’IA vérifie-t-elle les faits et préserve-t-elle totalement mon style ?",
-        answer:
-          "L’IA repère les problèmes d’écriture, mais ne vérifie pas les faits, chiffres ni sources citées. Les suggestions cherchent à préserver votre voix ; vérifiez néanmoins chacune d’elles par rapport à votre intention.",
-      },
-      {
-        question:
-          "Une ancienne revue peut-elle écraser des changements plus récents ?",
-        answer:
-          "Non. Koinote conserve l’analyse et signale que l’article a changé, donc que les suggestions peuvent ne plus refléter sa dernière version. Les contrôles de revision, de conflit d’enregistrement et de correspondance du texte empêchent une suggestion devenue incompatible d’écraser le contenu récent.",
-      },
-      {
-        question:
-          "Puis-je annuler les changements et que conserve l’historique ?",
-        answer:
-          "Oui. L’application des suggestions crée un point de récupération complet pour comparer ou restaurer la version précédente. L’historique conserve aussi les résumés, notes, états des suggestions et credits réellement consommés.",
-      },
-      {
-        question:
-          "Qui peut l’utiliser et comment le modèle intégré est-il facturé ?",
-        answer:
-          "L’optimisation IA est réservée aux membres à vie, qui reçoivent 1 000 credits lors du passage à cette offre. Le modèle intégré consomme des credits selon l’utilisation réelle de la revue.",
-      },
-      {
-        question: "Puis-je utiliser mon propre canal de modèle ?",
-        answer:
-          "Oui. Connectez un canal compatible OpenAI ou Anthropic Messages dans les paramètres IA pour utiliser votre propre service sans consommer de credits Koinote. Le contenu relu est envoyé à ce service ; vérifiez donc la politique de données du fournisseur.",
-      },
-      {
-        question:
-          "La fonction marche-t-elle en mode local ou dans l’application ?",
-        answer:
-          "Le mode local bloque tout accès réseau et ne peut donc pas l’utiliser. L’application de bureau connectée à un compte y accède normalement lorsqu’elle est en ligne.",
-      },
+      { question: "Que se passe-t-il si je change d’article ?", answer: "Chaque article possède sa propre conversation. Rouvrez Koi AI pour retrouver ses tâches et ses propositions." },
+      { question: "Qui peut utiliser Koi AI ?", answer: "Les membres à vie connectés peuvent utiliser l’assistant en ligne." },
     ],
     pricingCta: "Voir l’offre et les credits",
   },
@@ -735,9 +683,8 @@ export const fr: Messages = {
       },
     ],
     deepDiveTitle: "Guides détaillés",
-    aiTitle: "Relire un article avec l’optimisation IA",
-    aiDescription:
-      "Découvrez, à partir d’une revue réelle, la note du titre, les suggestions de texte, l’analyse structurelle en six dimensions, les tâches de fond, les credits et votre propre canal de modèle.",
+    aiTitle: "Koi AI",
+    aiDescription: "Ouvrez Koi AI dans l’éditeur, décrivez la modification et relisez la proposition. D’autres documents peuvent servir de références.",
     mcpTitle: "Autoriser les agents à utiliser les documents Koinote",
     mcpDescription:
       "Configurez MCP Streamable HTTP pour Codex, Claude Code, OpenCode, OpenClaw et d’autres clients, avec permissions et exemples d’utilisation.",
@@ -2378,7 +2325,7 @@ export const fr: Messages = {
       "ambiguousFolder": "Le nouveau chemin correspond à plusieurs dossiers de même nom. Choisissez le dossier existant précis et retirez son nom du nouveau chemin.",
       "busyRetry": "Le serveur est occupé. Réessayez cet aperçu, sans le régénérer ni payer à nouveau.",
       "title": "Organisation par IA",
-      "menuDescription": "Proposer des dossiers et tags selon le contenu, puis ajuster l’aperçu avant application.",
+      "menuDescription": "Ouvrir Koi pour classer les documents du projet par thème. La consigne est modifiable avant l’envoi.",
       "description": "Classez par contenu, rangez dans des dossiers et ajoutez quelques tags utiles. Ajustez l’aperçu avant de l’appliquer.",
       "pickerTitle": "Choisir les documents à organiser",
       "pickerHint": "L’IA reclasse chaque document coché selon son contenu, y compris ceux déjà organisés. Les documents non organisés et ceux des dossiers de dates automatiques sont cochés par défaut ; les dossiers automatiques ne servent plus de destination et sont supprimés une fois vides (l’annulation les restaure).",
@@ -2735,7 +2682,7 @@ function hello(name) {
     download: "Télécharger l’application",
     pricing: "Tarifs",
     docsCenter: "Documentation",
-    aiGuide: "Guide d’optimisation IA",
+    aiGuide: "Guide Koi AI",
     mcpGuide: "Guide MCP",
     versionHistoryGuide: "Guide du versionnage",
     home: "Accueil",

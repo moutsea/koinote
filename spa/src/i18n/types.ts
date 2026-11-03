@@ -271,12 +271,7 @@ export interface Messages {
     eyebrow: string;
     title: string;
     subtitle: string;
-    checks: [
-      { title: string; desc: string },
-      { title: string; desc: string },
-      { title: string; desc: string },
-      { title: string; desc: string },
-    ];
+    checks: { title: string; desc: string }[];
     caseEyebrow: string;
     caseTitle: string;
     caseIntro: string;

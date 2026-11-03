@@ -255,6 +255,9 @@ includes("面板复用经过测试的启动条件", panel, "canStartAgentReview(
 includes("所有用户统一使用平台模型", panel, 'const providerMode = "builtin" as const');
 includes("只有内置模型受 credits 状态阻塞", panel, 'providerMode === "builtin" && (credits.isLoading || credits.isError)');
 includes("AI 优化弹窗使用 Bot 图标", panel, "<Bot className=");
+includes("文章工具栏打开 Koi AI", liveEditor, 'aria-label="Koi AI"');
+assert.match(liveEditor, /if \(action === "ai-optimize"\)\s*\{\s*openAgentReview\(\);/, "桌面工具菜单打开文章助手");
+includes("文档弹窗使用限定范围的 Agent", liveEditor, "<ArticleAgentPanel");
 includes("优化面板读取账号级模型设置", panel, "queryFn: getAgentSettings");
 includes("创建审阅由账号级模型设置决定", panel, "createAgentReview(docId, input)");
 includes("创建成功后发布后台任务事件", panel, "publishAgentReviewStarted({");
@@ -344,7 +347,7 @@ assert.equal(
   3,
   "创建审阅、逐条落实和全部落实前都必须经过保存/同步屏障",
 );
-includes("优化面板底部与页面边缘齐平", panel, 'className="fixed bottom-0 right-0 top-14');
+includes("编辑器侧边弹窗底部与页面边缘齐平", fs.readFileSync("spa/src/components/editor/AgentReviewSheet.tsx", "utf8"), 'className="fixed bottom-0 right-0 top-14');
 includes("标题建议单独分组", panel, 'item.target === "title"');
 // 四类建议纵向铺开会让用户滚很久才找到想看的那一类，改成分类切页：一次只渲染一类。
 includes("建议按类别切页而不是全部铺开", panel, 'role="tablist"');
@@ -724,7 +727,7 @@ includes("面板关闭时清理锚点", panel, "clearAgentReviewAnchors(editor)"
 includes("点建议卡片滚到正文对应位置", panel, "scrollToAgentReviewAnchor(editor, suggestion.suggestionId)");
 includes("点正文锚点回到建议卡片", panel, "[data-suggestion-card=");
 includes("卡片带定位标识供反向查找", panel, "data-suggestion-card={suggestion.suggestionId}");
-includes("编辑器实例传入面板", liveEditor, "editor={editorInstance}");
+includes("弹窗绑定当前文章", liveEditor, "docId={docId}");
 includes("锚点样式使用波浪下划线", globals, ".kn-agent-anchor {");
 // 锚点是审阅期间的临时标记，不能出现在导出的 PDF / 图片里
 includes("导出前清理锚点标记", exportDocument, '".kn-agent-anchor, [data-agent-suggestion-id]"');

@@ -187,11 +187,14 @@ func TestAdminStatsAuthorizationAndAggregation(t *testing.T) {
 	if normalServerStatus.Code != http.StatusForbidden || !strings.Contains(normalServerStatus.Body.String(), "admin_required") {
 		t.Fatalf("普通用户访问服务器监控期望 403 admin_required，实际 %d %s", normalServerStatus.Code, normalServerStatus.Body.String())
 	}
+	// Activity writes use the application's clock. Using PostgreSQL now() here
+	// can precede an earlier request's timestamp when the test DB clock differs,
+	// allowing its asynchronous client update to overwrite this fixture.
 	if _, err := pool.Exec(ctx, `
 		UPDATE users
-		SET last_client = 'desktop', last_client_at = now()
+		SET last_client = 'desktop', last_client_at = $2
 		WHERE auth_user_id = $1
-	`, normalID); err != nil {
+	`, normalID, time.Now().UTC()); err != nil {
 		t.Fatalf("设置测试客户端: %v", err)
 	}
 

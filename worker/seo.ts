@@ -380,12 +380,6 @@ async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
         h1(g.title),
         p(g.subtitle),
         titled(g.checks),
-        section(
-          g.caseTitle,
-          p(g.caseIntro),
-          ul(g.caseFacts.map((fact) => `${fact.label}: ${fact.value}`)),
-          `<p>${link(localHref(ctx, PUBLIC_PAGE_PATHS.aiCase), g.caseSourceCta)}</p>`,
-        ),
         section(g.faqTitle, ...g.faqs.map((faq) => `<h3>${escapeHTML(faq.question)}</h3>${p(faq.answer)}`)),
       ].join("");
     }

@@ -8,7 +8,7 @@ export const en: Messages = {
     pricing: "Upgrade",
     docs: "Docs",
     docsHome: "Documentation home",
-    aiGuide: "AI optimization",
+    aiGuide: "Koi AI",
     mcpGuide: "MCP integration",
     versionHistoryGuide: "Version control",
     settings: "Settings",
@@ -460,27 +460,13 @@ export const en: Messages = {
       "If binding or delivery fails, check the egress IP, AppID/AppSecret, and account API permissions before trying again.",
   },
   aiGuide: {
-    eyebrow: "AI optimization guide",
-    title: "Let an AI editor review your draft, suggestion by suggestion",
-    subtitle:
-      "AI automatically reviews your title, prose, structure, and layout, then presents verifiable changes like a code review.",
+    eyebrow: "Koi AI guide",
+    title: "Edit the current article with instructions",
+    subtitle: "Open Koi AI in the editor, describe the change and review the proposed revision. Other documents can serve as references.",
     checks: [
-      {
-        title: "Title appeal",
-        desc: "Scores clarity, specificity, credibility, and curiosity. Below 60, the model is asked for two or three alternatives.",
-      },
-      {
-        title: "Body copy",
-        desc: "Flags wordy sentences, unclear references, tone shifts, typography details, and mobile reading rhythm, with a reason for each change.",
-      },
-      {
-        title: "Structure and layout",
-        desc: "Evaluates hierarchy, readability, emphasis, rhythm, modularity, and mobile fit, then suggests headings, dividers, lists, or callouts.",
-      },
-      {
-        title: "Safe application",
-        desc: "Every suggestion shows the original and proposed text. Apply one, apply all, or ignore it—nothing changes silently in the background.",
-      },
+      { title: "Give an instruction", desc: "For example: “Keep the figures and quotations, but shorten the introduction to two paragraphs.” You can also ask for feedback alone." },
+      { title: "Choose reference material", desc: "Name the document you want to consult. Koi can search and read accessible documents, and can propose edits only to the current article." },
+      { title: "Review the changes", desc: "Compare the revision with the original in the side panel. Approve to apply it, reject it, or undo a change you have applied." },
     ],
     caseEyebrow: "A real review record",
     caseTitle:
@@ -582,44 +568,8 @@ export const en: Messages = {
     caseOriginalBack: "Back to the AI optimization guide",
     faqTitle: "Frequently asked questions",
     faqs: [
-      {
-        question: "Does AI optimization rewrite the entire article?",
-        answer:
-          "No. It reviews the title, body, and layout in background stages, then returns a summary, scores, reasons, and before-and-after comparisons. Only suggestions you approve are written back to the document.",
-      },
-      {
-        question: "Does AI verify facts and fully preserve my voice?",
-        answer:
-          "AI identifies writing issues but does not verify factual claims, figures, or cited sources. Suggestions aim to preserve your voice, but you should still confirm that each one matches your intent.",
-      },
-      {
-        question:
-          "Can an old review overwrite changes made while it was running?",
-        answer:
-          "No. Koinote keeps the review and warns that the article changed, so its suggestions may not reflect the latest version. Revision, save-conflict, and source-text checks still protect every application; a suggestion that no longer matches cannot overwrite newer content.",
-      },
-      {
-        question:
-          "Can I undo applied changes, and what does review history retain?",
-        answer:
-          "Yes. Applying AI suggestions creates a complete recovery point for comparison or restoration in version history. Review history also retains summaries, scores, suggestion states, and actual credit usage.",
-      },
-      {
-        question:
-          "Who can use AI optimization, and how is the built-in model charged?",
-        answer:
-          "AI optimization is a Lifetime benefit, with 1,000 credits included when you upgrade. The built-in model uses credits based on the review's actual usage.",
-      },
-      {
-        question: "Can I use my own model endpoint?",
-        answer:
-          "Yes. Connect an OpenAI-compatible or Anthropic Messages endpoint in AI settings to use your own model service without consuming Koinote credits. Reviewed content is sent to that service, so check the provider's data policy.",
-      },
-      {
-        question: "Does it work in local mode or the desktop app?",
-        answer:
-          "Local mode blocks all network access, so AI optimization is unavailable there. A signed-in desktop client can use it normally while online.",
-      },
+      { question: "What happens when I switch articles?", answer: "Each article has its own conversation. Reopen Koi AI to resume that article’s tasks and proposals." },
+      { question: "Who can use Koi AI?", answer: "Signed-in lifetime members can use the cloud assistant while online." },
     ],
     pricingCta: "View membership and credits",
   },
@@ -728,9 +678,8 @@ export const en: Messages = {
       },
     ],
     deepDiveTitle: "Deep-dive guides",
-    aiTitle: "Review an article with AI optimization",
-    aiDescription:
-      "See how title scoring, body suggestions, six-part layout analysis, background tasks, credits, and your own model channel work through a real review.",
+    aiTitle: "Koi AI",
+    aiDescription: "Open Koi AI in the editor, describe the change and review the proposed revision. Other documents can serve as references.",
     mcpTitle: "Let agents work with Koinote documents",
     mcpDescription:
       "Configure Streamable HTTP MCP for Codex, Claude Code, OpenCode, OpenClaw, and other clients, with clear permissions and usage examples.",
@@ -2340,7 +2289,7 @@ export const en: Messages = {
       "ambiguousFolder": "The new path matches multiple folders with the same name. Choose the specific existing destination and remove its name from the new path.",
       "busyRetry": "The server is busy. Retry this preview; no regeneration or additional payment is needed.",
       "title": "AI organization",
-      "menuDescription": "Suggest folders and tags by content, then preview and adjust before applying.",
+      "menuDescription": "Open Koi to group project documents by topic. Edit the instruction before sending.",
       "description": "Classify by content, file into folders, and add a few useful tags. Review and edit the result before applying.",
       "pickerTitle": "Choose documents to organize",
       "pickerHint": "AI re-files every checked document by content, including ones organized before. Unorganized documents and documents in automatic date folders are checked by default; automatic folders are never used as destinations and are removed once empty (undo restores them).",
@@ -2694,7 +2643,7 @@ function hello(name) {
     download: "Download app",
     pricing: "Pricing",
     docsCenter: "Documentation",
-    aiGuide: "AI optimization guide",
+    aiGuide: "Koi AI guide",
     mcpGuide: "MCP integration guide",
     versionHistoryGuide: "Version control guide",
     home: "Home",

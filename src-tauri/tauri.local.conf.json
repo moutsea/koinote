@@ -4,7 +4,7 @@
   "identifier": "app.koinote.desktop.local",
   "build": {
     "frontendDist": "../spa/dist",
-    "devUrl": "http://localhost:5273",
+    "devUrl": "http://127.0.0.1:0",
     "beforeDevCommand": "node scripts/desktop_frontend_runner.mjs dev local",
     "beforeBuildCommand": "node scripts/desktop_frontend_runner.mjs build local"
   },

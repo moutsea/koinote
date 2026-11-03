@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "koinote-local-koi-callback",
+  "main": "callback.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "routes": [{ "pattern": "koi-local.koinote.app", "custom_domain": true }],
+  "vpc_services": [{ "binding": "LOCAL_KOI", "service_id": "01a1a058-cb98-7f93-8fc6-27f25612004c" }]
+}

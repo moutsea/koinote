@@ -1,39 +1,6 @@
-// markdown-it 的内部 state 类型没有随包发布声明，
-// 这里只声明本插件实际用到的字段，避免为此多引一个 @types 依赖。
-type MathToken = {
-  content: string;
-  markup: string;
-  block?: boolean;
-  map?: [number, number];
-};
-
-type StateInline = {
-  src: string;
-  pos: number;
-  posMax: number;
-  push(type: string, tag: string, nesting: number): MathToken;
-};
-
-type StateBlock = {
-  src: string;
-  bMarks: number[];
-  eMarks: number[];
-  tShift: number[];
-  line: number;
-  push(type: string, tag: string, nesting: number): MathToken;
-};
-
-type MarkdownItLike = {
-  inline: { ruler: { before(before: string, name: string, fn: unknown): void } };
-  block: {
-    ruler: {
-      before(before: string, name: string, fn: unknown, opts?: unknown): void;
-    };
-  };
-  renderer: {
-    rules: Record<string, (tokens: MathToken[], idx: number) => string>;
-  };
-};
+import type MarkdownIt from "markdown-it";
+import type StateInline from "markdown-it/lib/rules_inline/state_inline";
+import type StateBlock from "markdown-it/lib/rules_block/state_block";
 
 /**
  * markdown-it 插件：把 `$…$` 与 `$$…$$` 解析成数学节点的 HTML。
@@ -182,7 +149,7 @@ function blockMath(
   return true;
 }
 
-export function markdownMathPlugin(md: MarkdownItLike): void {
+export function markdownMathPlugin(md: MarkdownIt): void {
   md.inline.ruler.before("escape", "inline_math", inlineMath);
   md.block.ruler.before("fence", "block_math", blockMath, {
     alt: ["paragraph", "reference", "blockquote", "list"],

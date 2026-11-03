@@ -14,7 +14,7 @@ import type { EditorEvents } from "@tiptap/core";
 import { FolderTree, ListTree, Plus, Share2, X } from "lucide-react";
 import { LiveEditor } from "../components/editor/LiveEditor";
 import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
-import { AIOrganizerDialog } from "../components/editor/AIOrganizerDialog";
+import { openAgentOrganizer } from "../agentContext";
 import { DocumentList } from "../components/editor/DocumentList";
 import { DocumentImportDropZone } from "../components/editor/DocumentImportDropZone";
 import { useDeleteConfirm } from "../components/editor/useDeleteConfirm";
@@ -156,7 +156,6 @@ export function EditorPage() {
     activeEditor && activeEditor.docId === activeDocId
       ? activeEditor.editor
       : null;
-  const [aiOrganizerOpen, setAIOrganizerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [mobileOutlineOpen, setMobileOutlineOpen] = useState(false);
@@ -307,7 +306,6 @@ export function EditorPage() {
   }, [activeDocId, activeEditor]);
 
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
     return registerDesktopSyncPreparation(() => saver.flushAll());
   }, [saver]);
 
@@ -1265,6 +1263,15 @@ export function EditorPage() {
     [queryClient, t.transfer],
   );
 
+  const handleOpenAIOrganizer = () => {
+    if (localMode || session.data?.user?.membershipTier !== "lifetime") {
+      setOrganizationNotice({ error: true, message: t.editor.aiOrganizer.member });
+      return;
+    }
+    setMobileDocsOpen(false);
+    openAgentOrganizer();
+  };
+
   const handleOrganize = useCallback(
     async (
       plan: DocumentOrganizationPlan,
@@ -1438,7 +1445,7 @@ export function EditorPage() {
                   : folderError
             }
             onOrganize={handleOrganize}
-              onOpenAIOrganizer={() => { setMobileDocsOpen(false); setAIOrganizerOpen(true); }}
+              onOpenAIOrganizer={handleOpenAIOrganizer}
             autoEditFolderId={autoEditFolderId}
             onAutoEditDone={() => setAutoEditFolderId(null)}
           />
@@ -1637,13 +1644,6 @@ export function EditorPage() {
         )}
       </DocumentImportDropZone>
 
-      {aiOrganizerOpen && <AIOrganizerDialog
-        member={session.data?.user?.membershipTier === "lifetime"}
-        localMode={localMode}
-        onPrepare={() => saver.flushAll()}
-        onClose={() => setAIOrganizerOpen(false)}
-      />}
-
       {!localMode && shareOpen && doc.data && (
         <ShareDialog
           docId={doc.data.docId}
@@ -1720,7 +1720,7 @@ export function EditorPage() {
                     : folderError
               }
               onOrganize={handleOrganize}
-              onOpenAIOrganizer={() => { setMobileDocsOpen(false); setAIOrganizerOpen(true); }}
+              onOpenAIOrganizer={handleOpenAIOrganizer}
               autoEditFolderId={autoEditFolderId}
               onAutoEditDone={() => setAutoEditFolderId(null)}
             />

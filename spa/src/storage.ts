@@ -59,7 +59,8 @@ export function barSegments(
   quotaBytes: number,
   configBytes = 0,
   agentAllocatedBytes = 0,
-): { documents: number; config: number; images: number; agent: number } {
+  agentSessionBytes = 0,
+): { documents: number; config: number; images: number; agent: number; sessions: number } {
   const documents = usageRatio(documentBytes, quotaBytes) * 100;
   const config = Math.min(
     Math.max(0, 100 - documents),
@@ -74,7 +75,8 @@ export function barSegments(
     Math.max(0, 100 - documents - config - images),
     usageRatio(agentAllocatedBytes, quotaBytes) * 100,
   );
-  return { documents, config, images, agent };
+  const sessions = Math.min(Math.max(0, 100 - documents - config - images - agent), usageRatio(agentSessionBytes, quotaBytes) * 100);
+  return { documents, config, images, agent, sessions };
 }
 
 const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;

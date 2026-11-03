@@ -15,6 +15,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { InkClouds, PaperCard } from "../components/Ink";
+import { Logo } from "../components/Logo";
 import { PageContainer } from "../components/PageContainer";
 import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useI18n } from "../i18n";
@@ -192,7 +193,7 @@ export function DocsPage() {
           </h2>
           <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <GuideCard
-              icon={<Sparkles className="h-5 w-5" />}
+              icon={<Logo className="h-5 w-5" />}
               title={t.docsCenter.aiTitle}
               description={t.docsCenter.aiDescription}
               to="/docs/ai-optimization"

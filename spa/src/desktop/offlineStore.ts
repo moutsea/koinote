@@ -215,6 +215,7 @@ const serializeMutation = createAsyncSerialQueue();
 const serializeImageCacheMutation = createAsyncSerialQueue();
 let syncPromise: Promise<DesktopSyncSummary> | null = null;
 let queuedForcedSyncOptions: DesktopSyncOptions | null = null;
+let queuedForcedPull: DesktopSyncOptions | null = null;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncQueuedAfterCurrent = false;
 let lastDocumentMutationAt = 0;
@@ -1313,6 +1314,9 @@ export async function desktopAcceptDocumentShare(
 export async function desktopAcceptRemoteDocumentMutation(
   document: Document,
 ): Promise<{ document: Document }> {
+  if (document.remoteRevision !== undefined) {
+    throw new Error("remote_document_required");
+  }
   return serializeMutation(async () => {
     const account = await accountID();
     if (isLocalAccount(account)) throw new Error("local_mode_network_disabled");
@@ -1320,6 +1324,10 @@ export async function desktopAcceptRemoteDocumentMutation(
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const local = await selectDocument(account, document.docId);
       if (!local) throw new Error("Document not found");
+      // A slower response must not rewind a newer sync/Agent result.
+      if (document.revision < local.base_revision) {
+        return { document: rowToDocument(local) };
+      }
       const matchesRemote =
         local.base_revision === document.revision &&
         local.title === document.title &&
@@ -2299,7 +2307,13 @@ export function syncDesktopNow(options: DesktopSyncOptions = {}): Promise<Deskto
     });
   }
   if (syncPromise) {
-    if (options.force) queuedForcedSyncOptions = { ...options };
+    // An Agent tree pull must run after the server change, even if an earlier
+    // pull is already reading. It must also preserve a queued user upload.
+    if (options.force && options.pullOnly) {
+      queuedForcedPull = { ...options, strictPull: options.strictPull || queuedForcedPull?.strictPull };
+    } else if (options.force) {
+      queuedForcedSyncOptions = { ...options };
+    }
     return syncPromise;
   }
   if (!options.force && !options.pullOnly) {
@@ -2310,16 +2324,26 @@ export function syncDesktopNow(options: DesktopSyncOptions = {}): Promise<Deskto
     }
   }
   syncPromise = (async () => {
-    let summary = await performPreparedSync(options);
-    while (queuedForcedSyncOptions) {
-      const requestedOptions = queuedForcedSyncOptions;
-      queuedForcedSyncOptions = null;
-      summary = await performPreparedSync(requestedOptions);
+    let next: DesktopSyncOptions | null = options;
+    let summary: DesktopSyncSummary | undefined;
+    let failure: unknown;
+    while (next) {
+      try {
+        summary = await performPreparedSync(next);
+      } catch (err) {
+        // A failed strict pull still has to drain an already requested upload.
+        failure ??= err;
+      }
+      next = queuedForcedSyncOptions ?? queuedForcedPull;
+      if (queuedForcedSyncOptions) queuedForcedSyncOptions = null;
+      else queuedForcedPull = null;
     }
+    if (failure || !summary) throw failure ?? new Error("desktop_sync_failed");
     return summary;
   })().finally(() => {
     syncPromise = null;
     queuedForcedSyncOptions = null;
+    queuedForcedPull = null;
     if (syncQueuedAfterCurrent) {
       syncQueuedAfterCurrent = false;
       scheduleSync(0);
@@ -2424,6 +2448,7 @@ export async function clearDesktopOfflineAccount(account: string): Promise<void>
   }
   syncQueuedAfterCurrent = false;
   queuedForcedSyncOptions = null;
+  queuedForcedPull = null;
   const activeSync = syncPromise;
   if (activeSync) await activeSync.catch(() => undefined);
   if (syncTimer) {

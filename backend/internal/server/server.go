@@ -19,6 +19,7 @@ import (
 )
 
 type App struct {
+	agentGPTTestExternalID  string // Set only by live integration fixtures.
 	agentObjectStore        agentRepositoryObjectStore
 	githubHTTPClient        *http.Client
 	githubImportOnce        sync.Once
@@ -242,9 +243,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/feishu/account", a.feishuAccountGet)
 	mux.HandleFunc("DELETE /api/feishu/account", a.feishuAccountDelete)
 	mux.HandleFunc("POST /api/documents/{docId}/feishu-sync", a.feishuDocumentSync)
-	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.agentReviewCreate)
+	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews", a.retiredAgentReview)
 	mux.HandleFunc("GET /api/documents/{docId}/agent-reviews", a.agentReviewsList)
-	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews/estimate", a.agentReviewEstimate)
+	mux.HandleFunc("POST /api/documents/{docId}/agent-reviews/estimate", a.retiredAgentReview)
 	mux.HandleFunc("GET /api/agent/reviews/{reviewId}", a.agentReviewGet)
 	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/apply", a.agentReviewSuggestionApply)
 	mux.HandleFunc("POST /api/agent/reviews/{reviewId}/suggestions/{suggestionId}/dismiss", a.agentReviewSuggestionDismiss)
@@ -253,6 +254,27 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/settings/document-history", a.documentHistorySettingsGet)
 	mux.HandleFunc("PUT /api/settings/document-history", a.documentHistorySettingsPut)
 	mux.Handle("/mcp", a.mcpHandler())
+
+	mux.HandleFunc("GET /api/agent/artifacts/{artifactId}", a.agentArtifactDownload)
+	mux.HandleFunc("GET /api/agent/session-settings", a.agentSettings)
+	mux.HandleFunc("PUT /api/agent/session-settings", a.agentSettings)
+	mux.HandleFunc("POST /api/documents/{docId}/koi-session", a.articleAgentSession)
+	mux.HandleFunc("GET /api/agent/sessions", a.agentSessions)
+	mux.HandleFunc("POST /api/agent/sessions", a.agentSessions)
+	mux.HandleFunc("GET /api/agent/sessions/{sessionId}", a.agentSessionGet)
+	mux.HandleFunc("PUT /api/agent/sessions/{sessionId}", a.agentSessionUpdate)
+	mux.HandleFunc("DELETE /api/agent/sessions/{sessionId}", a.agentSessionDelete)
+	mux.HandleFunc("POST /api/agent/sessions/{sessionId}/tasks", a.agentTaskCreate)
+	mux.HandleFunc("POST /api/agent/operations/{operationId}/{action}", a.agentOperationAction)
+	mux.HandleFunc("POST /api/agent/tasks/{taskId}/operations/{action}", a.agentOperationBatchAction)
+	mux.HandleFunc("GET /api/writing-agent/config", a.writingConfig)
+	mux.HandleFunc("GET /api/writing-agent/tasks", a.writingTasksList)
+	mux.HandleFunc("POST /api/writing-agent/tasks", a.writingTaskCreate)
+	mux.HandleFunc("GET /api/writing-agent/tasks/{taskId}", a.writingTaskGet)
+	mux.HandleFunc("POST /api/writing-agent/tasks/{taskId}/cancel", a.writingTaskCancel)
+	mux.HandleFunc("POST /api/writing-agent/tasks/{taskId}/apply", a.writingTaskApply)
+	mux.Handle("/api/writing-agent/mcp/{taskId}", a.writingMCP())
+	mux.HandleFunc("POST /api/writing-agent/callback/{taskId}", a.writingWebhook)
 
 	mux.HandleFunc("GET /api/document-organizations/latest", a.documentOrganizationLatest)
 	mux.HandleFunc("GET /api/document-organizations/{organizationId}", a.documentOrganizationGet)

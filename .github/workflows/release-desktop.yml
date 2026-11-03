@@ -209,7 +209,7 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version uses administrator-managed AI channels, removes personal LLM channel settings, and explicitly confirms platform credits for article optimization and GEO summaries. Upgrade to continue using these AI features."
+          notes="Koinote Desktop $version adds Koi AI for article editing and document organization with previews, approvals and undo."
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,11 +237,10 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 统一使用管理员配置的 AI 渠道。
+          Koinote $version 新增 Koi AI 文章助手和文档整理。
 
-          - 客户端移除个人 LLM 渠道设置，AI 优化、智能整理和 GEO 摘要按现有平台 credits 规则计费。
-          - 文章优化和 GEO 摘要请求明确使用平台 credits，避免旧客户端从个人渠道静默切换并扣费；请升级后继续使用这些功能。
-          - 网页管理后台支持文本和生图渠道配置，保存后立即生效，并修复并发保存、刷新和密钥恢复的问题。
+          - Koi AI 可按你的指令编辑当前文章，参考其他文档，预览改动并按需撤销。
+          - 从「整理文档 → AI 整理」打开 Koi 面板，先编辑归类指令，再发送。可以查看移动方案、审批操作和撤销已执行的移动。
 
           可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
@@ -253,11 +252,10 @@ jobs:
 
           ---
 
-          Koinote $version uses administrator-managed AI channels.
+          Koinote $version adds Koi AI for article editing and document organization.
 
-          - Personal LLM channel settings have been removed. AI optimization, organization and GEO summaries use the existing platform credits rules.
-          - Article optimization and GEO summary requests explicitly confirm platform credit usage, preventing silent switching and charges in older clients. Upgrade to continue using these features.
-          - The web admin console manages text and image channels with immediate updates, reliable concurrent saves and refreshes, and credential recovery.
+          - Use Koi AI to edit the current article with other documents as references. Preview changes and undo them when needed.
+          - Open Koi from the document organization menu, edit the suggested instruction and send it. Review proposed moves, approve them and undo applied moves.
 
           Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 

@@ -157,7 +157,7 @@ try {
   assert.match(caseHTML, /<h1>烧了一千刀的在线 markdown，开源了<\/h1>/);
   assert.match(caseHTML, /<img src="https:\/\/koinote\.app\/images\/cases\/ai-optimization\/reader-response\.png" alt="" loading="lazy">/);
   assert.match(caseHTML, /<code>claude<\/code>/);
-  assert.match(caseHTML, /"name":"AI 优化指南","item":"https:\/\/koinote\.app\/docs\/ai-optimization"/);
+  assert.match(caseHTML, /"name":"Koi AI 写作指南","item":"https:\/\/koinote\.app\/docs\/ai-optimization"/);
 
   // 更新日志：渲染真实版本条目，不再只有标题
   const changelogHTML = await (await get("/changelog?lang=zh")).text();

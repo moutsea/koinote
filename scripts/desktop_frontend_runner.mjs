@@ -6,6 +6,11 @@ if (!["dev", "build"].includes(command) || !["production", "local"].includes(fla
   process.exit(2);
 }
 
+if (command === "dev" && flavor === "local") {
+  console.error("请用 npm run desktop:dev 启动 Koinote Local，以便验证开发窗口的来源。");
+  process.exit(2);
+}
+
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const child = spawn(npm, ["run", command], {
   env: {

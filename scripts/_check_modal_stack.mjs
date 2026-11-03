@@ -39,11 +39,13 @@ for (const path of modalFiles) {
   assert.match(source, /pushModal\(\)/, `${path} must register modal state`);
 }
 
-const agentReviewPanel = read(
-  "spa/src/components/editor/AgentReviewPanel.tsx",
-);
-assert.match(agentReviewPanel, /role="dialog"/);
-assert.match(agentReviewPanel, /event\.key !== "Escape"/);
+const sheet = read("spa/src/components/editor/AgentReviewSheet.tsx");
+assert.match(sheet, /role="dialog"/);
+assert.match(sheet, /event\.key === "Escape"/);
+assert.match(sheet, /isOnlyModalOpen\(\)/);
+for (const name of ["ArticleAgentPanel", "AgentReviewPanel"]) {
+  assert.match(read(`spa/src/components/editor/${name}.tsx`), /<AgentReviewSheet\b/);
+}
 
 for (const path of [
   "spa/src/components/AppShell.tsx",

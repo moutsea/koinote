@@ -6,7 +6,7 @@ import {
   desktopAuthClientID,
   desktopCallbackScheme,
 } from "./runtime";
-import { desktopRawFetch } from "./transport";
+import { desktopRawFetch, localDesktopProxy } from "./transport";
 import {
   DESKTOP_BILLING_EVENT,
   isTerminalBillingHTTPStatus,
@@ -90,6 +90,10 @@ export async function beginDesktopAuthorization(): Promise<void> {
   authorizeURL.searchParams.set("state", state);
   try {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
+    if (CLIENT_ID === "koinote-desktop-local") {
+      // Keep localhost cookies while sending the browser through the verified listener.
+      authorizeURL.port = new URL(await localDesktopProxy()).port;
+    }
     await openUrl(authorizeURL);
   } catch (error) {
     await clearPendingAuthorization();

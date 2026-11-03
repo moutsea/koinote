@@ -1,8 +1,10 @@
+import { AGENT_DOCUMENT_CHANGED, setAgentFocus } from "../../agentContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bot, History, RefreshCw } from "lucide-react";
-import { getDocument } from "../../api";
+import { History, RefreshCw } from "lucide-react";
+import { Logo } from "../Logo";
+import { getDocument, getRemoteDocument } from "../../api";
 import { DESKTOP_SYNC_EVENT, isDesktopRuntime } from "../../desktop/runtime";
 import type { DesktopSyncSummary } from "../../desktop/offlineStore";
 import MarkdownEditor from "./MarkdownEditor";
@@ -12,11 +14,7 @@ import { ConflictDialog } from "./ConflictDialog";
 import { VersionHistoryDialog } from "./VersionHistoryDialog";
 import { useI18n } from "../../i18n";
 import { decideRemoteDocumentUpdate } from "../../remoteUpdates";
-import { AgentReviewPanel } from "./AgentReviewPanel";
-import {
-  AGENT_REVIEW_OPEN_EVENT,
-  consumeAgentReviewOpen,
-} from "../../agentReviewNotifications";
+import { ArticleAgentPanel } from "./ArticleAgentPanel";
 import { useDesktopMenuActions } from "../../desktop/menu";
 import { isDesktopLocalImageURL, replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { normalizeLegacyImageAdjacentHeadings } from "./markdownImage";
@@ -69,7 +67,7 @@ export function LiveEditor({
 }) {
   const doc = useDocument(docId);
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const editorContentRef = useRef<string | null>(null);
   const editorViewportRestorePoint =
@@ -82,17 +80,19 @@ export function LiveEditor({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [agentReviewOpen, setAgentReviewOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
-  const [requestedReviewId, setRequestedReviewId] = useState("");
   const [seededDocId, setSeededDocId] = useState<string | null>(null);
   const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState(false);
   const [remoteUpdated, setRemoteUpdated] = useState(false);
   const remoteUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function openAgentReview() {
+    setAgentReviewOpen(true);
+  }
+
   useDesktopMenuActions((action) => {
     if (!visible) return;
     if (action === "ai-optimize") {
-      setRequestedReviewId("");
-      setAgentReviewOpen(true);
+      openAgentReview();
     }
     if (action === "version-history" && historyAvailable) {
       void openHistory();
@@ -223,22 +223,6 @@ export function LiveEditor({
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
-    const openRequestedReview = () => {
-      const reviewId = consumeAgentReviewOpen(docId);
-      if (!reviewId) return;
-      setRequestedReviewId(reviewId);
-      setAgentReviewOpen(true);
-    };
-    openRequestedReview();
-    window.addEventListener(AGENT_REVIEW_OPEN_EVENT, openRequestedReview);
-    return () =>
-      window.removeEventListener(AGENT_REVIEW_OPEN_EVENT, openRequestedReview);
-  }, [docId, visible]);
-
-  // 文档到手后铺一份基线。seed 内部对已有待存内容不覆盖 ——
-  // 被淘汰又点回来时，本地未落库的改动比服务端那份新
-  useEffect(() => {
     if (!doc.data) return;
     saver.seed(docId, {
       title: doc.data.title,
@@ -351,17 +335,63 @@ export function LiveEditor({
       setConflictOpen(true);
     }
     if (!saved || !isDesktopRuntime()) return saved;
+    const beforeSync = JSON.stringify(saver.peek(docId));
     const { desktopPrepareDocumentForRemoteMutation } = await import("../../desktop/offlineStore");
     const prepared = await desktopPrepareDocumentForRemoteMutation(docId);
-    if (!prepared) return false;
+    if (!prepared || saver.isDirty(docId) || saver.isSaving(docId) || JSON.stringify(saver.peek(docId)) !== beforeSync) return false;
     try {
       const { document } = await getDocument(docId);
+      if (saver.isDirty(docId) || saver.isSaving(docId) || JSON.stringify(saver.peek(docId)) !== beforeSync || document.revision < (saver.peek(docId)?.revision ?? 0)) return false;
       acceptLatestDocument(document);
       return true;
     } catch {
       return false;
     }
   }, [acceptLatestDocument, docId, saver]);
+
+  useEffect(() => {
+    if (!visible || localMode || !member || !merged) return;
+    return setAgentFocus({ docId, title: merged.title, path: `/documents/${docId}`, prepare: prepareAgentReview });
+  }, [visible, localMode, member, docId, merged?.title, prepareAgentReview]);
+
+  useEffect(() => {
+    let disposed = false;
+    const onAgentChange = (event: Event) => {
+      const target = (event as CustomEvent<{ docId?: string }>).detail?.docId;
+      if (target && target !== docId) return;
+      const fingerprint = JSON.stringify(saver.peek(docId));
+      const draftChanged = () => saver.isDirty(docId) || saver.isSaving(docId) ||
+        JSON.stringify(saver.peek(docId)) !== fingerprint;
+      const checkNewerRevision = async (remote: number) => {
+        // SQLite and the cloud have independent revision counters.
+        const base = isDesktopRuntime() ? (await getDocument(docId)).document.remoteRevision :
+          saver.peek(docId)?.revision;
+        if (!disposed && base !== undefined && remote > base) setRemoteUpdateAvailable(true);
+      };
+      void getRemoteDocument(docId).then(async ({ document: remote }) => {
+        if (disposed) return;
+        if (draftChanged()) return checkNewerRevision(remote.revision);
+        let next = remote;
+        if (isDesktopRuntime()) {
+          const { desktopAcceptRemoteDocumentMutation } = await import("../../desktop/offlineStore");
+          if (disposed) return;
+          if (draftChanged()) return checkNewerRevision(remote.revision);
+          try {
+            next = (await desktopAcceptRemoteDocumentMutation(remote)).document;
+          } catch (err) {
+            if (err instanceof Error && err.message === "document_revision_conflict")
+              await checkNewerRevision(remote.revision);
+            return;
+          }
+        }
+        if (disposed) return;
+        if (draftChanged()) return checkNewerRevision(remote.revision);
+        if (next.revision > (saver.peek(docId)?.revision ?? 0)) acceptLatestDocument(next);
+      }).catch(() => undefined);
+    };
+    window.addEventListener(AGENT_DOCUMENT_CHANGED, onAgentChange);
+    return () => { disposed = true; window.removeEventListener(AGENT_DOCUMENT_CHANGED, onAgentChange); };
+  }, [docId, saver, acceptLatestDocument]);
 
   if (!merged) return null;
 
@@ -468,16 +498,13 @@ export function LiveEditor({
             )}
             <button
               type="button"
-              onClick={() => {
-                setRequestedReviewId("");
-                setAgentReviewOpen(true);
-              }}
-              title={t.agentReview.button}
-              aria-label={t.agentReview.button}
+              onClick={openAgentReview}
+              title="Koi AI"
+              aria-label="Koi AI"
               className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
             >
-              <Bot className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t.agentReview.button}</span>
+              <Logo className="h-4 w-4" />
+              <span className="hidden sm:inline">Koi AI</span>
             </button>
             {trailingControls}
           </>
@@ -533,15 +560,13 @@ export function LiveEditor({
         />
       )}
       {visible && agentReviewOpen && !conflictOpen && (
-        <AgentReviewPanel
+        <ArticleAgentPanel
+          key={docId}
           docId={docId}
-          documentRevision={merged.remoteRevision ?? merged.revision}
+          title={merged.title}
           member={member}
           localMode={localMode}
-          initialReviewId={requestedReviewId}
-          editor={editorInstance}
           onPrepareReview={prepareAgentReview}
-          onAcceptDocument={acceptDocument}
           onClose={() => setAgentReviewOpen(false)}
         />
       )}

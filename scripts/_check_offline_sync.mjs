@@ -816,7 +816,7 @@ assert.match(
 );
 assert.match(
   offlineStore,
-  /syncPromise = [\s\S]*?performPreparedSync\(options\)[\s\S]*?\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
+  /syncPromise = [\s\S]*?performPreparedSync\(next\)[\s\S]*?\.finally\(\(\) => \{[\s\S]*?syncPromise = null;[\s\S]*?if \(syncQueuedAfterCurrent\) \{[\s\S]*?scheduleSync\(0\)/,
   "当前同步结束后必须立即补跑期间积累的新改动",
 );
 assert.match(

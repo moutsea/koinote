@@ -1,0 +1,18 @@
+.agent-progress {
+  padding: 14px 16px;
+  border: 1px solid var(--ink-line);
+  border-radius: 12px;
+  color: var(--ink-mid);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.agent-progress-eyebrow { margin: 0 0 6px; font-size: 11px; }
+.agent-progress-current { display: flex; align-items: center; gap: 8px; color: var(--ink-strong); font-size: 13px; font-weight: 500; }
+.agent-progress-current svg { flex-shrink: 0; color: var(--cinnabar); }
+.agent-progress-hint { margin: 8px 0 0; }
+.agent-progress-steps { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; }
+.agent-progress-steps li { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.agent-progress-dot { width: 4px; height: 4px; flex-shrink: 0; align-self: center; border-radius: 50%; background: currentColor; opacity: .5; }
+.agent-progress-spinner { animation: agent-progress-spin 1.8s linear infinite; }
+@keyframes agent-progress-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .agent-progress-spinner { animation: none; } }

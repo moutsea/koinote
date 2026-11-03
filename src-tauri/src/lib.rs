@@ -17,7 +17,17 @@ use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
 mod config_restore;
 mod file_export;
+#[cfg(koinote_local)]
+mod local_preview;
 mod pdf_export;
+
+#[tauri::command]
+async fn desktop_local_proxy_port() -> Result<u16, String> {
+    #[cfg(koinote_local)]
+    return local_preview::port().await;
+    #[cfg(not(koinote_local))]
+    Err("Local service unavailable".into())
+}
 
 #[cfg(koinote_local)]
 const KEYRING_SERVICE: &str = "app.koinote.desktop.local";
@@ -172,7 +182,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             search_all: "Search All Documents…",
             previous_document: "Previous Document",
             next_document: "Next Document",
-            ai_optimize: "AI Optimization…",
+            ai_optimize: "Koi AI…",
             version_history: "Version History…",
             check_updates: "Check for Updates…",
             documentation: "Koinote Documentation",
@@ -205,7 +215,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             search_all: "搜索全部文档…",
             previous_document: "上一个文档",
             next_document: "下一个文档",
-            ai_optimize: "AI 优化…",
+            ai_optimize: "Koi AI…",
             version_history: "版本历史…",
             check_updates: "检查更新…",
             documentation: "Koinote 文档中心",
@@ -238,7 +248,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             search_all: "Rechercher dans tous les documents…",
             previous_document: "Document précédent",
             next_document: "Document suivant",
-            ai_optimize: "Optimisation par IA…",
+            ai_optimize: "Koi AI…",
             version_history: "Historique des versions…",
             check_updates: "Rechercher des mises à jour…",
             documentation: "Documentation Koinote",
@@ -271,7 +281,7 @@ fn desktop_menu_copy(locale: DesktopMenuLocale) -> DesktopMenuCopy {
             search_all: "すべてのドキュメントを検索…",
             previous_document: "前のドキュメント",
             next_document: "次のドキュメント",
-            ai_optimize: "AI 最適化…",
+            ai_optimize: "Koi AI…",
             version_history: "バージョン履歴…",
             check_updates: "アップデートを確認…",
             documentation: "Koinote ドキュメント",
@@ -1131,7 +1141,9 @@ async fn desktop_save_export(
         .map_err(|_| "export_extension_invalid".to_string())?
         .to_string();
     let extension = match extension.as_str() {
-        "md" | "html" | "docx" | "zip" => extension,
+        "md" | "html" | "docx" | "zip" | "txt" | "csv" | "json" | "pdf" | "png" | "jpg"
+        | "jpeg" | "webp" | "svg" | "xlsx" | "py" | "js" | "ts" | "css" | "xml" | "yaml"
+        | "yml" | "toml" | "sql" => extension,
         _ => return Err("export_extension_unsupported".to_string()),
     };
     let bytes = match request.body() {
@@ -2330,6 +2342,14 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // On the developer's Mac the optional launch agent starts Docker
+            // and the existing Local services. A normal offline launch still works.
+            #[cfg(all(koinote_local, target_os = "macos"))]
+            std::thread::spawn(|| {
+                let _ = std::process::Command::new("/bin/launchctl")
+                    .args(["start", "app.koinote.local-backend"])
+                    .output();
+            });
             let _ = clear_entry(LEGACY_X_BROWSER_CREDENTIALS_ENTRY);
             #[cfg(desktop)]
             {
@@ -2361,6 +2381,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            desktop_local_proxy_port,
             desktop_session_store,
             desktop_session_get,
             desktop_session_clear,

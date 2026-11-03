@@ -1,40 +1,36 @@
 {
-  "version": "1.1.8",
+  "version": "1.1.9",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.8",
+      "title": "What's new in Koinote 1.1.9",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "The web admin console now manages text and image channels, including models, endpoints and encrypted API keys. Saved settings apply to new requests immediately.",
-        "AI optimization, organization and GEO summaries now use administrator-managed platform channels with the existing credits rules. Personal LLM channel settings have been removed from the client.",
-        "Article optimization and GEO summary requests explicitly confirm platform credit usage, preventing older clients from silently switching from personal channels and charging credits. Upgrade the client to continue using these features."
+        "Use Koi AI to edit the current article with other documents as references. Preview changes and undo them when needed.",
+        "Open Koi from the document organization menu, edit the suggested instruction and send it. Review proposed moves, approve them and undo applied moves."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.8 新功能",
+      "title": "Koinote 1.1.9 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "网页管理后台新增文本与生图渠道配置，支持保存模型、接口和加密密钥，配置对新请求立即生效。",
-        "AI 优化、智能整理和 GEO 摘要统一使用管理员配置的平台渠道，按现有 credits 规则计费；客户端移除个人 LLM 渠道设置。",
-        "文章优化和 GEO 摘要请求明确使用平台 credits，避免旧客户端从个人渠道静默切换并扣费。请升级客户端后继续使用这些功能。"
+        "Koi AI 可按你的指令编辑当前文章，参考其他文档，预览改动并按需撤销。",
+        "从「整理文档 → AI 整理」打开 Koi 面板，先编辑归类指令，再发送。可以查看移动方案、审批操作和撤销已执行的移动。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.8",
+      "title": "Nouveautés de Koinote 1.1.9",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "La console d’administration web permet de configurer les canaux de texte et d’image : modèles, adresses d’API et clés chiffrées. Les réglages enregistrés s’appliquent immédiatement aux nouvelles requêtes.",
-        "L’optimisation IA, le classement et les résumés GEO utilisent désormais les canaux de la plateforme gérés par les administrateurs, selon les règles de crédits existantes. Les réglages de canaux LLM personnels ont été retirés du client.",
-        "Les requêtes d’optimisation et de résumé GEO confirment explicitement l’utilisation des crédits de la plateforme, pour éviter une facturation après un basculement silencieux depuis un canal personnel. Mettez le client à jour pour continuer à utiliser ces fonctions."
+        "Koi AI permet de modifier l’article ouvert en consultant d’autres documents. Prévisualisez les modifications et annulez-les si nécessaire.",
+        "Ouvrez Koi depuis le menu de classement, adaptez la consigne puis envoyez-la. Consultez les déplacements proposés, approuvez-les et annulez-les si nécessaire."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.8 の新機能",
+      "title": "Koinote 1.1.9 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Web 管理画面でテキスト・画像チャネルのモデル、API 接続先、暗号化されたキーを設定できます。保存した設定は新しいリクエストにすぐ反映されます。",
-        "AI 最適化、整理、GEO 要約は管理者が設定したプラットフォームのチャネルを使用し、従来の credits ルールで課金します。クライアントから個人用 LLM チャネル設定を削除しました。",
-        "記事の最適化と GEO 要約のリクエストでプラットフォームの credits 利用を明示し、旧クライアントが個人チャネルから知らないうちに切り替わって課金されることを防ぎます。これらの機能を引き続き使うにはクライアントを更新してください。"
+        "Koi AI で他の文書を参考にしながら、開いている記事を編集できます。変更内容を確認し、必要に応じて取り消せます。",
+        "文書整理メニューから Koi を開き、分類の指示を編集して送信できます。移動案の確認、承認、適用した移動の取り消しに対応しました。"
       ]
     }
   }

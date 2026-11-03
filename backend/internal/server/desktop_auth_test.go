@@ -383,6 +383,8 @@ func TestDesktopAuthorizationEndToEnd(t *testing.T) {
 		"/api/billing/pricing",
 		"/api/mcp/tokens",
 		"/api/agent/settings",
+		"/api/agent/session-settings",
+		"/api/agent/sessions",
 		"/api/agent/credits",
 	} {
 		rec := authenticatedJSON(pair1.AccessToken, http.MethodGet, allowedPath, "")

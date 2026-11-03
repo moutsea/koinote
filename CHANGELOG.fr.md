@@ -4,6 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-11-03
+
+### Added
+
+- Koi AI permet de modifier l’article ouvert en consultant d’autres documents. Prévisualisez les modifications et annulez-les si nécessaire.
+- Ouvrez Koi depuis le menu de classement, adaptez la consigne puis envoyez-la. Consultez les déplacements proposés, approuvez-les et annulez-les si nécessaire.
+
 ## [1.1.8] - 2026-10-26
 
 ### Changed

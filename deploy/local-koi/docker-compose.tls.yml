@@ -1,0 +1,14 @@
+# Authenticated local Go and Worker endpoints for both Web and desktop development.
+services:
+  backend:
+    ports:
+      - "127.0.0.1:18090:8443"
+    environment:
+      KOINOTE_LOCAL_TLS: "1"
+      KOINOTE_LOCAL_CERT_VERSION: ${KOI_LOCAL_CERT_VERSION:?}
+      WORKER_URL: "https://host.docker.internal:8788"
+      SSL_CERT_DIR: "/etc/ssl/certs:/run/koinote-trust"
+    volumes:
+      - ${KOI_LOCAL_TLS_DIR:?}/backend.crt:/run/koinote/backend.crt:ro
+      - ${KOI_LOCAL_TLS_DIR:?}/backend.key:/run/koinote/backend.key:ro
+      - ${KOI_LOCAL_TLS_DIR:?}/images.ca.crt:/run/koinote-trust/images.ca.crt:ro

@@ -567,7 +567,9 @@ func requestAgentReviewCreate(
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(sessionCookieFor(t, app, user.AuthUserID, user.SessionVersion))
 	response := httptest.NewRecorder()
-	app.Routes().ServeHTTP(response, request)
+	// Exercise the legacy review engine for historical data; its public creation route is retired.
+	request.SetPathValue("docId", docID)
+	app.agentReviewCreate(response, request)
 	return response
 }
 

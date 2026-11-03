@@ -380,76 +380,13 @@ usage, and cannot allocate personal storage. Membership, feature enablement and 
 
 ## One-click document organization
 
-**Organize documents** at the bottom of the document sidebar proposes content-based folders and a few subject tags, reusing existing taxonomy and confirmed choices. It shows a cost estimate before generating an editable result preview. Change destinations, add subfolders, edit tags or exclude individual documents, then apply the selection together. The original date-based organizer remains available.
+Choose **Organize documents → AI organization** to open the bottom Koi panel. Edit the suggested instruction and press Enter to send. The default instruction groups documents by topic and preserves their titles and bodies. In review mode, approve proposed moves before they run. Applied moves can be undone.
 
-Previously confirmed documents are skipped by default, even after content edits. Select **Include previously organized documents** to process them again. Background refreshes keep the current preview selected, and discarding edits requires confirmation. Apply and undo protect later classification changes and involved folder paths; apply also checks content revisions. Unrelated folder changes are allowed. Temporary database conflicts retry automatically; if the database remains busy, retry the same preview without regenerating it. Body text, titles and covers are preserved.
+## Koi AI
 
-Apply skips documents moved to trash and lists them in the result. Single-step undo checks each document, preserves later classification or related folder-path changes and lists skipped titles. The remaining documents regain their original folders, tags and organization markers while retaining trash status and subsequent ordering within an unchanged folder. Skipped outcomes are saved; retrying undo never overwrites those later changes. Documents returning to their original folder get space inserted for them to avoid duplicate sort positions. Undo remains available after a new or failed preview. Tags are edited individually, preserving punctuation within each tag. Same-named folders can be selected individually in the destination list. Repeated requests do not generate or charge twice.
+Signed-in lifetime members can open Koi AI in the editor toolbar and ask for changes to the current article. Koi can consult other documents. Review the proposed changes in the article panel, approve or reject them, and undo applied changes.
 
-This uses the same lifetime membership, platform model, and credits as AI optimization. Preview generation is billed by usage, except batches that produce no valid suggestions cost no platform credits and their unused reservations are released. Mixed batches are still billed by their usage. Editing, applying and undoing are free. Desktop clients save and synchronize first. Documents with sync conflicts are excluded from both classification and reference examples; unrelated documents can still be organized. Apply and undo only require the affected documents to be free of sync conflicts. Unsynced folder changes must still be resolved; unexpected folder conflict states get a specific explanation. Tags and modification times refresh from the cloud, and unchanged tag metadata is not rewritten to the local cache. Local mode retains date-based organization.
-
-Permanently deleting a document, including automatic trash expiry, also removes its information from saved organization records while preserving other documents' previews and undo information. Affected generation jobs stop and release reserved credits; late responses cannot write the deleted information back.
-
-Documents are analyzed in batches of eight, using bounded beginning/end excerpts for long documents. Invalid folder or tag suggestions fall back to that document's original classification, are marked for review and start unchecked; other valid suggestions remain usable. Responses with unidentifiable documents still fail. Runs have a 15-minute deadline; failed generation releases reserved credits, and expired jobs change status and release reservations together. Review the model's classification before applying it. Stored organization records contain metadata and undo information, not extra copies of document bodies.
-
-## AI optimization
-
-Lifetime members can open **AI optimization** from the editor toolbar. The editor saves
-the current draft first, then asks the selected model for a reviewable change set instead
-of allowing it to overwrite the article. Every suggestion includes its rationale, removed
-text, and replacement text, and can be applied or dismissed on its own or together with the
-rest. Titles receive a 0–100 editorial score, not a click-through forecast; the score no longer gates alternatives.
-The title pass extracts distinctive facts, reader situations and reading rewards, compares different angles
-against the original, and keeps up to three worthwhile alternatives with explicit tradeoffs. Each suggestion
-includes its reader benefit, comparison with the original and exact source quotes verified against the text
-actually sent to the model. Invalid or duplicate candidates are discarded individually, preserving valid alternatives;
-even if every candidate is rejected, body and structure reviews still complete. Articles within 64 KiB of source and 256 Markdown blocks are supplied in full;
-longer articles use distributed samples, including the beginning, middle and end of oversized blocks, with
-omissions marked. The title pass still uses one model call; estimates and billing include the larger context and output.
-Body edits must anchor to source text that appears exactly once in the document,
-so overlapping, stale, or ambiguous changes are rejected. Applying a suggestion still checks
-the latest revision and leaves a restorable history version.
-
-Results are split into three tabs: **title suggestions**, **body expression**, and
-**structure & layout**. The layout pass scores hierarchy, readability, emphasis, rhythm,
-modularity, and mobile presentation. It uses the Markdown AST to propose verifiable heading-level
-fixes, paragraph splits, list conversion, callout emphasis, and dividers. The server builds these
-structural patches deterministically: layout operations cannot rewrite the original wording, and
-layout suggestions that overlap a text edit are excluded from the review queue. Users can also
-select any structure dimension for a second, deeper analysis of paragraph, article, or argument-level
-changes using more context from the article.
-
-The review considers why readers would click, whether the actual opening holds their attention,
-how the body delivers its promise, and where reading becomes difficult. These findings inform the
-existing title assessment, body edits and six structure dimensions. Repairable problems become
-reviewable edits with specific reader benefits and relevant tradeoffs; the overview stays brief.
-Specialist articles keep their intended audience, and the model must not invent figures, experiences
-or promised results. These methods adapt `dbs-content-value`, `dbs-title-cover-intro`, `dbs-resonate`,
-`dbs-script-flow` and `dbs-ai-check` from [dontbesilent2025/dbskill](https://github.com/dontbesilent2025/dbskill),
-with the author's permission, referencing commit
-[`f24ea08`](https://github.com/dontbesilent2025/dbskill/tree/f24ea08ae4b50660a1575554eb58903fa6d60f01).
-Resonance, continuity and voice checks feed the existing review. Video-specific advice is adapted
-to the article's genre; sentence patterns are not treated as proof of AI authorship.
-
-After submission, the first wave runs the selected title, structure and whole-article diagnoses in
-parallel. The second wave gives source-validated findings to body-chunk tasks, while at most three
-model calls run at once. Paragraph optimization covers both local expression and cross-section
-reasoning. When proofreading is also selected, both share the chunk calls and candidate budget;
-proofreading alone remains limited to concrete errors. Progress and completed partial
-suggestions are durable across navigation and reloads. If validation rejects one response, only that
-subtask is retried; partial suggestions remain read-only until every track finishes so later results
-cannot target an already-edited draft. To bound cost on very long documents, standard structure
-diagnosis receives at most 32 KiB of actual block text and 400 block metadata entries. Document-level
-editing and deep analysis receive at most 96 KiB and 600 entries, sampled across the article with
-additional coverage for long paragraphs; sectioned body review still covers the full document.
-
-The built-in model is billed from the provider-reported actual input and output tokens at
-1 credit per 2,000 tokens, rounded up. Reviews that ultimately fail are not charged. If validation
-rejects a response and a retry later succeeds, billing includes the cumulative tokens from every
-actual model call made for that successful review. Lifetime membership grants 1,000 credits exactly once, whether fulfillment arrives
-through the webhook, success page, or a retry. Fixed Stripe packs provide 3,000, 10,000, or
-30,000 credits in the same USD, CNY, EUR, and JPY currencies as membership checkout; the amount,
-currency, and granted balance are checked against backend allowlists and the signed Stripe event.
+The production deploy uses GitHub Actions secrets `AGENT_GPT_API_KEY` and `AGENT_GPT_SIGNING_SECRET`, plus the variable `AGENT_GPT_APP_ID`. It enables signed requests, sets the callback origin to `https://koinote.app` and isolates production user IDs with the `koinote-prod` prefix.
 
 Administrators configure global text and image providers under **Admin → LLM channels**:
 
@@ -457,8 +394,7 @@ Administrators configure global text and image providers under **Admin → LLM c
 - `anthropic`: Anthropic Messages; the backend calls `/v1/messages`
 - Images: OpenAI-compatible Images at `/images/generations`, used for WeChat cover generation, including MCP
 
-Saved settings apply to new requests. The text provider powers AI optimization, smart organization,
-and GEO summaries. Until an administrator saves settings, the backend uses `AGENT_LLM_*` and
+Saved settings apply to new requests. The text provider powers GEO summaries and legacy review services. Koi uses its agent-gpt application model. Until an administrator saves settings, the backend uses `AGENT_LLM_*` and
 `WECHAT_COVER_IMAGE_*` environment configuration. An explicitly disabled channel never falls back
 to the environment. API keys are encrypted with AES-GCM under `LLM_CREDENTIAL_ENCRYPTION_KEY`;
 responses expose only a masked hint, and leaving the key blank on update preserves it.
@@ -499,31 +435,12 @@ Then:
 
 ```bash
 npm ci
-docker compose up -d postgres         # database
-npm run backend:dev                   # backend (runs migrations automatically)
-npm run dev                           # frontend → http://localhost:5273
+npm run local:services                # TLS backend, PostgreSQL and the local image Worker
+# In another terminal
+npm run dev
 ```
 
-For local development without a Worker, explicitly set `AGENT_REPOSITORY_STORAGE=database` in `.env`. To test repository R2 storage, use `r2` with a local `WORKER_URL` and matching internal tokens. Production always uses R2.
-
-Image upload needs wrangler as well — the R2 binding only exists on the Worker
-side, and wrangler ships a local emulation:
-
-First create an ignored `.dev.vars` file at the repository root:
-
-```dotenv
-BACKEND_INTERNAL_TOKEN=<the same value used in .env>
-```
-
-Then start the Worker:
-
-```bash
-npx wrangler dev --port 8788
-```
-
-The local Worker proxies to `http://localhost:8080` by default. If the backend uses
-another port, override it with `--var BACKEND_URL:http://localhost:<port>`; changing
-`.env` alone does not pass the value to Wrangler.
+Local services require Docker Compose, Python 3 and OpenSSL. Put the same BACKEND_INTERNAL_TOKEN as the backend in an untracked .dev.vars file. Web and desktop development both authenticate the HTTPS backend on port 18090 and the image service on 8788. A tunnel account is optional.
 
 To test membership locally, put a Stripe test-mode `STRIPE_SECRET_KEY` and
 `STRIPE_LIFETIME_PRODUCT_ID` in `.env`. To test credit purchases, create a second test-mode

@@ -1,0 +1,5 @@
+# The host-side TLS relay listens only on this Docker bridge address.
+services:
+  backend:
+    extra_hosts:
+      host.docker.internal: ${KOI_IMAGE_GATEWAY:?}

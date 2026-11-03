@@ -1763,6 +1763,12 @@ export function getDocument(docId: string) {
       desktopGetDocument(docId),
     );
   }
+  return getRemoteDocument(docId);
+}
+
+// Remote mutations must reconcile the server revision, never a desktop cache's
+// local revision (which can advance independently while offline).
+export function getRemoteDocument(docId: string) {
   return apiJson<{ document: Document }>(
     `/api/documents/${encodeURIComponent(docId)}`,
   );
@@ -2294,6 +2300,7 @@ export type StorageUsage = {
   /** 客户端加密配置快照 */
   configBytes?: number;
   agentAllocatedBytes?: number;
+  agentSessionBytes?: number;
   quotaBytes: number;
 };
 

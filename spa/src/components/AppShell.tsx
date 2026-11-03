@@ -1,3 +1,4 @@
+import { AgentBottomPanel } from "./AgentBottomPanel";
 import {
   Link,
   Outlet,
@@ -29,7 +30,6 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -60,7 +60,6 @@ import { Logo } from "./Logo";
 import { Avatar } from "./Avatar";
 import { QuotaDialog } from "./QuotaDialog";
 import { AnnouncementDialog } from "./AnnouncementDialog";
-import { AgentReviewNotifications } from "./AgentReviewNotifications";
 import { confirmAction } from "../confirmAction";
 import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
 import { useStorageUsage } from "./StorageCard";
@@ -661,6 +660,14 @@ export function AppShell() {
         )}
       </main>
 
+      {user?.membershipTier === "lifetime" && !localMode && (
+        <AgentBottomPanel
+          key={user.authUserId}
+          accountKey={user.authUserId}
+          onOpenDocument={(docId) => void navigate({ to: "/editor/$docId", params: { docId } })}
+        />
+      )}
+
       {!desktopRuntime && hasFooter(pathname) && <AppFooter />}
 
       {/* 图床超额弹窗。挂在外壳上而不是编辑器里：转存外链图片的失败也会走它，
@@ -676,12 +683,6 @@ export function AppShell() {
         />
       )}
       {user && !localMode && <AnnouncementDialog />}
-      {user?.membershipTier === "lifetime" && !localMode && (
-        <AgentReviewNotifications
-          key={user.authUserId}
-          accountKey={user.authUserId}
-        />
-      )}
       {desktopRuntime && !localMode && desktopBillingNotice && (
         <div
           className="fixed bottom-5 left-1/2 z-[70] flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg"
@@ -1418,7 +1419,7 @@ function HeaderDocsMenu({
           <HeaderDocsMenuItem
             to="/docs/ai-optimization"
             onSelect={() => setOpen(false)}
-            icon={<Sparkles className="h-4 w-4" />}
+            icon={<Logo className="h-4 w-4" />}
           >
             {aiLabel}
           </HeaderDocsMenuItem>
@@ -1542,7 +1543,7 @@ function HeaderMoreMenu({
                 <HeaderDocsMenuItem to="/docs" onSelect={close} icon={<FileText className="h-4 w-4" />}>
                   {docsLabels.homeLabel}
                 </HeaderDocsMenuItem>
-                <HeaderDocsMenuItem to="/docs/ai-optimization" onSelect={close} icon={<Sparkles className="h-4 w-4" />}>
+                <HeaderDocsMenuItem to="/docs/ai-optimization" onSelect={close} icon={<Logo className="h-4 w-4" />}>
                   {docsLabels.aiLabel}
                 </HeaderDocsMenuItem>
                 <HeaderDocsMenuItem to="/docs/mcp" onSelect={close} icon={<Bot className="h-4 w-4" />}>

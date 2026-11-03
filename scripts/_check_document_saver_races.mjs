@@ -18,7 +18,8 @@ const bundle = await build({
     contents: `export { createElement, act } from "react";
       export { createRoot } from "react-dom/client";
       export { useDocumentSaver } from "./spa/src/components/editor/useDocumentSaver";
-      export { LiveEditor } from "./spa/src/components/editor/LiveEditor";`,
+      export { LiveEditor } from "./spa/src/components/editor/LiveEditor";
+      export { getAgentFocus } from "./spa/src/agentContext";`,
     resolveDir: process.cwd(),
   },
   bundle: true, format: "esm", platform: "node", write: false, jsx: "automatic",
@@ -26,15 +27,16 @@ const bundle = await build({
     const adapters = {
       "@tanstack/react-query": "const client = { setQueryData() {}, invalidateQueries() {} }; export const useQueryClient = () => client;",
       "lucide-react": "export const Bot = () => null; export const History = Bot; export const RefreshCw = Bot;",
-      "../../i18n": "const strings = new Proxy({}, { get: (_, key) => key }); export const useI18n = () => ({ t: { editor: strings, agentReview: strings } });",
+      "../../i18n": "const strings = new Proxy({}, { get: (_, key) => key }); export const useI18n = () => ({ locale: 'zh', t: { editor: strings, agentReview: strings } });",
       "../../desktop/runtime": 'export const isDesktopRuntime = () => true; export const DESKTOP_SYNC_EVENT = "koinote:desktop-sync";',
       "../../desktop/menu": "export const useDesktopMenuActions = () => {};",
-      "../../desktop/offlineStore": "export const desktopPrepareDocumentForRemoteMutation = async () => true;",
+      "../../desktop/offlineStore": `export const desktopPrepareDocumentForRemoteMutation = async () => true;
+        export const desktopAcceptRemoteDocumentMutation = document => globalThis.__saverRaceAcceptRemote(document);`,
       "../../agentReviewNotifications": 'export const AGENT_REVIEW_OPEN_EVENT = "review"; export const consumeAgentReviewOpen = () => null;',
       "./MarkdownEditor": "export default () => null;",
       "./ConflictDialog": "export const ConflictDialog = () => null;",
       "./VersionHistoryDialog": "export const VersionHistoryDialog = () => null;",
-      "./AgentReviewPanel": "export const AgentReviewPanel = () => null;",
+      "./ArticleAgentPanel": "export const ArticleAgentPanel = () => null;",
       "./DocumentCoverDialog": "export const DocumentCoverDialog = () => null;",
     };
     builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(adapters, path) ? { path, namespace: "saver-ui" } : undefined);
@@ -47,17 +49,18 @@ const bundle = await build({
         export const useDocument = () => ({ data: globalThis.__saverRaceQuery });`
       : `export class ApiError extends Error {}
         export const getDocument = () => globalThis.__saverRaceGet();
+        export const getRemoteDocument = () => globalThis.__saverRaceGetRemote();
         export const uploadImage = async () => { throw new Error("Unexpected upload"); };
         export const releaseUnusedImages = async () => { throw new Error("Unexpected cleanup"); };`,
     }));
   } }],
 });
-const { createElement, act, createRoot, useDocumentSaver, LiveEditor } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, useDocumentSaver, LiveEditor, getAgentFocus } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 const root = createRoot(document.getElementById("root"));
 let saver;
 function Harness({ liveDocId }) {
   saver = useDocumentSaver();
-  return liveDocId ? createElement(LiveEditor, { docId: liveDocId, saver, visible: true }) : null;
+  return liveDocId ? createElement(LiveEditor, { docId: liveDocId, saver, visible: true, member: true, localMode: false }) : null;
 }
 const original = { title: "Article", content: "Body", theme: "minimal", revision: 1 };
 const documents = new Map();
@@ -166,10 +169,66 @@ try {
   globalThis.__saverRaceGet = async () => ({ document: latestRemote });
   await act(async () => window.dispatchEvent(new window.CustomEvent("koinote:desktop-sync", { detail: { state: "idle" } })));
   assert.equal(saver.peek(refreshDocId).content, latestRemote.content, "clean editors must still accept newer remote changes");
+  let signalAgentRead;
+  const agentReadStarted = new Promise(resolve => { signalAgentRead = resolve; });
+  globalThis.__saverRaceGet = () => new Promise(resolve => { resolveRefresh = resolve; signalAgentRead(); });
+  await act(async () => {
+    const preparing = getAgentFocus().prepare();
+    await agentReadStarted;
+    saver.queue(refreshDocId, { content: "New typing during Agent preparation" });
+    assert.equal(await saver.flush(refreshDocId), true);
+    resolveRefresh({ document: latestRemote });
+    assert.equal(await preparing, false, "changed document cannot be declared ready with a stale remote snapshot");
+  });
+  assert.equal(saver.peek(refreshDocId).content, "New typing during Agent preparation", "Agent preparation must preserve concurrent edits even after their save completes");
+
+  const agentRemote = { ...refreshOriginal, revision: 6, content: "Applied by Agent on the server" };
+  let remoteReads = 0;
+  let acceptedRemote = 0;
+  globalThis.__saverRaceGet = async () => { throw new Error("Agent refresh must not read the desktop cache as a remote result"); };
+  globalThis.__saverRaceGetRemote = async () => { remoteReads++; return { document: agentRemote }; };
+  globalThis.__saverRaceAcceptRemote = async document => {
+    assert.equal(document, agentRemote, "SQLite must receive the actual server snapshot");
+    acceptedRemote++;
+    const stored = { ...document, revision: 9, remoteRevision: 6 };
+    documents.set(refreshDocId, stored);
+    return { document: stored };
+  };
+  await act(async () => window.dispatchEvent(new window.CustomEvent("koinote:agent-document-changed", { detail: { docId: refreshDocId } })));
+  assert.equal(remoteReads, 1);
+  assert.equal(acceptedRemote, 1);
+  assert.equal(saver.peek(refreshDocId).content, agentRemote.content);
+  assert.equal(saver.peek(refreshDocId).revision, 9, "editor receives the reconciled local revision");
+
+  // Session activity (including rename and folder operations) can broadcast
+  // without a document ID while this editor has a draft.
+  globalThis.__saverRaceGet = async () => ({ document: { ...agentRemote, revision: 9, remoteRevision: 6 } });
+  await act(async () => {
+    saver.queue(refreshDocId, { content: "Keep this local draft" });
+    window.dispatchEvent(new window.CustomEvent("koinote:agent-document-changed", { detail: {} }));
+  });
+  assert.equal(document.querySelector('[role=alert]'), null, "unrelated activity cannot report a remote conflict");
+  globalThis.__saverRaceGetRemote = async () => ({ document: { ...agentRemote, revision: 7 } });
+  await act(async () => window.dispatchEvent(new window.CustomEvent("koinote:agent-document-changed", { detail: {} })));
+  assert.ok(document.querySelector('[role=alert]'), "a newer cloud revision is visible even when the SQLite revision is higher");
+  assert.equal(saver.peek(refreshDocId).content, "Keep this local draft");
+  await act(async () => saver.flush(refreshDocId));
+  let resolveAgentRefresh;
+  globalThis.__saverRaceGetRemote = () => new Promise(resolve => { resolveAgentRefresh = resolve; });
+  await act(async () => {
+    window.dispatchEvent(new window.CustomEvent("koinote:agent-document-changed", { detail: { docId: refreshDocId } }));
+    saver.queue(refreshDocId, { content: "New draft while Agent refresh is pending" });
+    assert.equal(await saver.flush(refreshDocId), true);
+    resolveAgentRefresh({ document: { ...agentRemote, revision: 7 } });
+  });
+  assert.equal(acceptedRemote, 1, "late Agent response must not be persisted over a newer local save");
+  assert.equal(saver.peek(refreshDocId).content, "New draft while Agent refresh is pending");
   console.log("document saver cache and image race checks passed");
 } finally {
   await act(async () => root.unmount());
   delete globalThis.__saverRaceSave;
   delete globalThis.__saverRaceGet;
+  delete globalThis.__saverRaceGetRemote;
+  delete globalThis.__saverRaceAcceptRemote;
   delete globalThis.__saverRaceQuery;
 }

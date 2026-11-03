@@ -142,6 +142,28 @@ try {
   const accepted = await store.desktopAcceptRemoteDocumentMutation({ ...remote, coverPrompt: "Updated prompt" });
   assert.equal(accepted.document.coverPrompt, "Updated prompt");
 
+  // Local and cloud revisions deliberately diverge after offline edits. Agent
+  // notifications must never promote a local cache snapshot to a cloud baseline.
+  const agentRemote = { ...remote, docId: "agent-refresh", content: "Cloud version 2", coverImageSource: "", revision: 2 };
+  await store.insertRemoteDocument("account-1", agentRemote, null, 0);
+  sqlite.prepare("UPDATE offline_documents SET local_revision = 9 WHERE doc_id = ?").run(agentRemote.docId);
+  const cachedAgent = (await store.desktopGetDocument(agentRemote.docId)).document;
+  await assert.rejects(store.desktopAcceptRemoteDocumentMutation(cachedAgent), /remote_document_required/);
+  assert.equal(rowFor("account-1", agentRemote.docId).base_revision, 2, "rejecting cached input preserves the cloud baseline");
+  const latestAgent = { ...agentRemote, revision: 3, content: "Agent changed cloud content" };
+  const refreshedAgent = await store.desktopAcceptRemoteDocumentMutation(latestAgent);
+  assert.equal(refreshedAgent.document.content, latestAgent.content);
+  assert.equal(refreshedAgent.document.revision, 10);
+  assert.equal(refreshedAgent.document.remoteRevision, 3);
+  await store.desktopAcceptRemoteDocumentMutation(latestAgent);
+  await store.desktopAcceptRemoteDocumentMutation(agentRemote);
+  assert.equal(rowFor("account-1", agentRemote.docId).local_revision, 10, "duplicate/stale notifications cannot advance local revisions");
+  assert.equal(rowFor("account-1", agentRemote.docId).base_revision, 3, "a late response cannot rewind the cloud baseline");
+  await store.desktopUpdateDocument(agentRemote.docId, { ...latestAgent, content: "Unsynced local draft", expectedRevision: 10 });
+  await assert.rejects(store.desktopAcceptRemoteDocumentMutation({ ...latestAgent, revision: 4 }), /document_revision_conflict/);
+  assert.equal(rowFor("account-1", agentRemote.docId).content, "Unsynced local draft");
+  assert.equal(rowFor("account-1", agentRemote.docId).base_revision, 3);
+
   sqlite.prepare(`INSERT INTO offline_images
     (account_id, image_id, content_type, base64_data, byte_size, created_at, is_local_origin, object_key)
     VALUES ('account-1', ?, 'image/png', 'Y292ZXI=', 5, '2000-01-01T00:00:00Z', 0, ?)`)

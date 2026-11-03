@@ -15,10 +15,18 @@ const tauriBinary = resolve(
 );
 const args = [command];
 if (local) args.push("--config", resolve("src-tauri", "tauri.local.conf.json"));
+let localDev;
+if (local && command === "dev") {
+  process.env.VITE_DESKTOP_FLAVOR = "local";
+  const { startLocalDesktopDev } = await import("./local_desktop_dev.mjs");
+  localDev = await startLocalDesktopDev();
+  args.push("--config", localDev.config);
+}
 args.push(...extraArgs);
 const child = spawn(tauriBinary, args, {
   env: {
     ...process.env,
+    ...(localDev && { KOINOTE_LOCAL_DEV_IPC: localDev.directory }),
     KOINOTE_DESKTOP_FLAVOR: flavor,
     VITE_DESKTOP_FLAVOR: flavor,
   },
@@ -26,7 +34,8 @@ const child = spawn(tauriBinary, args, {
   stdio: "inherit",
 });
 
-child.on("exit", (code, signal) => {
+child.on("exit", async (code, signal) => {
+  await localDev?.close();
   if (signal) process.kill(process.pid, signal);
   else process.exit(code ?? 1);
 });
