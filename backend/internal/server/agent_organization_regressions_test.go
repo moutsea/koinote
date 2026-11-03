@@ -61,6 +61,113 @@ func TestAgentOrganizationMenuPromptsKeepLibraryScope(t *testing.T) {
 	}
 }
 
+func TestAgentWholeLibraryRequest(t *testing.T) {
+	for _, request := range []string{"整理我所有的文章", "请帮我整理一下当前项目的全部文档", "整理所有文章"} {
+		if !agentLibraryRequest(request) {
+			t.Errorf("lost collection scope for %q", request)
+		}
+	}
+	for _, request := range []string{"整理这篇文章", "不要整理我的所有文档", "整理所有文章的正文并润色", "整理所有文章，再删除空文件夹"} {
+		if agentLibraryRequest(request) {
+			t.Errorf("misclassified %q as organization only", request)
+		}
+	}
+}
+
+func TestAgentWireOrganizationRecoversDocumentRevisions(t *testing.T) {
+	a, user, first := writingTestApp(t)
+	ctx := context.Background()
+	secondID := mustAgentUUID(t)
+	destination := seedAgentEmptyFolder(t, a, user.ID, "归档", "", "")
+	if _, err := a.db.Exec(ctx, `INSERT INTO documents(doc_id,user_id,title,content,revision) VALUES($1,$2,'第二篇','原文',29)`, secondID, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	task := bindIntentTaskForTest(t, a, agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), model.Document{}, "整理我所有的文章"))
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+	client, err := connectMCPClient(ctx, srv.URL+"/api/writing-agent/mcp/"+task.ID, a.writingSecret(task.ID, "mcp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	call := func(name string, args any, out any) {
+		t.Helper()
+		wire, err := client.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil || wire.IsError {
+			t.Fatalf("%s: %v %+v", name, err, wire)
+		}
+		raw, err := json.Marshal(wire.StructuredContent)
+		if err != nil || json.Unmarshal(raw, out) != nil {
+			t.Fatalf("invalid %s response: %s (%v)", name, raw, err)
+		}
+	}
+	moves := []agentOperationInput{
+		{Key: "first", Kind: "move", Path: agentDocumentPath(first.DocID), FolderID: destination},
+		{Key: "second", Kind: "move", Path: agentDocumentPath(secondID), FolderID: destination},
+	}
+	read := func(path string) int64 {
+		t.Helper()
+		var page struct{ Revision int64 }
+		call("get_document", agentReadInput{Path: path}, &page)
+		return page.Revision
+	}
+	validate := func() agentIntentProof {
+		t.Helper()
+		var proof agentIntentProof
+		call("validate_operation", agentIntentValidateInput{ToolName: "propose_operations", Task: intentBindingForTest(task), Arguments: map[string]any{"operations": moves}}, &proof)
+		return proof
+	}
+	moves[0].ExpectedRevision = read(moves[0].Path)
+	moves[1].ExpectedRevision = read(moves[1].Path)
+	oldProof := validate()
+	if oldProof.Token == "" {
+		t.Fatal("missing initial proof")
+	}
+	// One document changed after the read. The model also copied the first
+	// document's revision to a different row in the same batch.
+	if _, err = a.db.Exec(ctx, `UPDATE documents SET content='用户的新正文', revision=revision+1 WHERE doc_id=$1`, first.DocID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.proposeAgentOperations(ctx, task, moves, agentIntentAuthorization{ToolName: "propose_operations", Proof: &oldProof}); !errors.Is(err, errDocumentRevisionConflict) {
+		t.Fatalf("stale proof allowed to execute: %v", err)
+	}
+	moves[1].ExpectedRevision = moves[0].ExpectedRevision
+	diagnostic := validate()
+	if d := diagnostic.ValidationError; d == nil || !d.Retryable || d.Code != "precondition_not_met" || diagnostic.Token != "" || len(diagnostic.Effects) != 0 ||
+		!strings.Contains(d.Message, moves[0].Path+" 需重新读取") || !strings.Contains(d.Message, moves[1].Path+" expectedRevision=29") {
+		t.Fatalf("incomplete batch diagnostic: %+v", diagnostic)
+	}
+	if ops, err := a.loadAgentOperations(ctx, user.ID, []string{task.ID}); err != nil || len(ops) != 0 {
+		t.Fatalf("invalid batch left proposals: %+v %v", ops, err)
+	}
+	moves[0].ExpectedRevision++ // guessing the newest revision must not replace a fresh read
+	moves[1].ExpectedRevision = 29
+	if guessed := validate(); guessed.Token != "" || guessed.ValidationError == nil {
+		t.Fatal("granted a proof without re-reading")
+	}
+	moves[0].ExpectedRevision = read(moves[0].Path)
+	proof := validate()
+	if proof.Token == "" || len(proof.Effects) != 2 {
+		t.Fatal("corrected batch did not pass validation")
+	}
+	if _, err = a.proposeAgentOperations(ctx, task, moves, agentIntentAuthorization{ToolName: "propose_operations", Proof: &diagnostic}); err == nil {
+		t.Fatal("a repair diagnostic authorized a write")
+	}
+	ops, err := a.proposeAgentOperations(ctx, task, moves, agentIntentAuthorization{ToolName: "propose_operations", Proof: &proof})
+	if err != nil || len(ops) != 2 || ops[0].Status != "pending" || ops[1].Status != "pending" {
+		t.Fatalf("expected one reviewable batch: %+v %v", ops, err)
+	}
+	if w := writingTestRequest(t, a, user, "POST", "/api/agent/tasks/"+task.ID+"/operations/approve", approvalBatchBody(ops)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	for id, expectedContent := range map[string]string{first.DocID: "用户的新正文", secondID: "原文"} {
+		doc, err := a.loadAgentSnapshot(ctx, a.db, user.ID, id)
+		if err != nil || doc.FolderID != destination || doc.Document.Content != expectedContent {
+			t.Fatalf("move lost data on document %s: %v", id, err)
+		}
+	}
+}
+
 // Exercise the model-facing MCP envelopes, not just the structured Go values:
 // the SDK normally includes the JSON again as escaped text in each tool result.
 func TestAgentOrganizationLargeLibraryContext(t *testing.T) {

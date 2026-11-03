@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -32,11 +33,16 @@ func agentScopeText(message string) string {
 	}, message)
 }
 
+var agentWholeLibraryRequest = regexp.MustCompile(`^(请帮我|请|帮我)?整理(一下)?(我|我的|当前项目的?|本项目的?)?(所有|全部)的?(文档|文章)$`)
+
 // Recognize the explicit library starters conservatively. This is an extra
 // operation constraint, not a general language classifier: unfamiliar requests
 // keep the normal agent behavior, and a new user goal ends inherited scope.
 func agentLibraryRequest(message string) bool {
 	s := agentScopeText(message)
+	if agentWholeLibraryRequest.MatchString(s) {
+		return true
+	}
 	for _, prompt := range agentOrganizePrompts {
 		if s == agentScopeText(prompt) {
 			return true

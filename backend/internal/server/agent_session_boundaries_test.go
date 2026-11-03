@@ -169,6 +169,9 @@ func TestAgentSessionImagesSurviveUntilLastReference(t *testing.T) {
 }
 
 func TestAgentFailureMessagesDoNotExposeProviderSecrets(t *testing.T) {
+	if got := writingFailureMessage("[intent_check_failed] Task authorization check failed: document revision conflict secret-value"); !strings.Contains(got, "提案的版本") || strings.Contains(got, "secret-value") {
+		t.Fatal("document conflicts should name the stale proposal without exposing provider diagnostics", got)
+	}
 	if got := writingFailureMessage("Required task instructions and provenance exceed the context budget; secret-value"); !strings.Contains(got, "缩小整理范围") || strings.Contains(got, "secret-value") {
 		t.Fatal("missing safe context-budget explanation")
 	}

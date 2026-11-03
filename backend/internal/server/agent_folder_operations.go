@@ -46,10 +46,13 @@ func agentBadArguments(message string) error { return &agentArgumentError{messag
 // A fresh proposal can be replanned when a resource prerequisite is unmet.
 // Execution/approval still treats the same condition as a conflict, and the
 // intent guard never accepts this diagnostic as an authorization proof.
-type agentPreconditionError struct{ message string }
+type agentPreconditionError struct {
+	message string
+	cause   error
+}
 
 func (e *agentPreconditionError) Error() string { return e.message }
-func (e *agentPreconditionError) Unwrap() error { return errAgentSessionConflict }
+func (e *agentPreconditionError) Unwrap() error { return e.cause }
 
 type agentValidationError struct {
 	Code      string `json:"code"`
@@ -74,7 +77,7 @@ func (a *App) loadEmptyAgentFolder(ctx context.Context, tx pgx.Tx, userID int, i
 		return nil, err
 	}
 	if !empty {
-		return nil, &agentPreconditionError{message: "文件夹 " + in.Path + " 当前包含文档、子文件夹或同步授权，尚不满足 delete_folder 的前置条件。本批操作未执行。请先用 list_folders 核对；若任务需要移动文档，先单独提交用户已授权的移动，等待宿主确认 applied 后重新读取文件夹，再提交空文件夹删除。不能把删除与尚未生效的前置操作放在同一批，也不能为满足前置条件擅自扩大删除或授权范围。"}
+		return nil, &agentPreconditionError{cause: errAgentSessionConflict, message: "文件夹 " + in.Path + " 当前包含文档、子文件夹或同步授权，尚不满足 delete_folder 的前置条件。本批操作未执行。请先用 list_folders 核对；若任务需要移动文档，先单独提交用户已授权的移动，等待宿主确认 applied 后重新读取文件夹，再提交空文件夹删除。不能把删除与尚未生效的前置操作放在同一批，也不能为满足前置条件擅自扩大删除或授权范围。"}
 	}
 	return &agentSnapshot{Path: in.Path, Folder: &f}, nil
 }

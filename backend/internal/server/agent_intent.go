@@ -393,6 +393,7 @@ func (a *App) agentIntentEffects(ctx context.Context, tx pgx.Tx, t writingTask, 
 	keys := map[string]bool{}
 	projected := map[string]agentOperation{}
 	deletedFolders := map[string]bool{}
+	var revisionCorrections []string
 	for _, in := range inputs {
 		if len(in.Key) < 1 || len(in.Key) > 100 || keys[in.Key] || in.TargetID != "" || len(in.Content) > 512<<10 || len(in.Explanation) > 8000 {
 			return nil, agentBadArguments("Use a unique key of 1 to 100 bytes per operation; omit server-generated targetId; content must be at most 512 KiB and explanation at most 8000 bytes")
@@ -436,8 +437,13 @@ func (a *App) agentIntentEffects(ctx context.Context, tx pgx.Tx, t writingTask, 
 				if err = tx.QueryRow(ctx, `SELECT snapshot,read_chars FROM agent_document_reads WHERE task_id=$1 AND doc_id=$2`, t.ID, id).Scan(&read, &covered); err != nil {
 					return nil, errors.New("read_document_before_operation")
 				}
-				if fresh.Document.Revision != in.ExpectedRevision || read.Document.Revision != in.ExpectedRevision || read.FolderID != fresh.FolderID || (read.SortOrder != nil && fresh.SortOrder != nil && *read.SortOrder != *fresh.SortOrder) {
-					return nil, errDocumentRevisionConflict
+				if read.Document.Revision != fresh.Document.Revision || read.FolderID != fresh.FolderID || (read.SortOrder != nil && fresh.SortOrder != nil && *read.SortOrder != *fresh.SortOrder) {
+					revisionCorrections = append(revisionCorrections, in.Path+" 需重新读取")
+					continue
+				}
+				if in.ExpectedRevision != read.Document.Revision {
+					revisionCorrections = append(revisionCorrections, fmt.Sprintf("%s expectedRevision=%d", in.Path, read.Document.Revision))
+					continue
 				}
 				if in.Kind == "update" && covered < utf8.RuneCountInString(read.Document.Content) {
 					return nil, fmt.Errorf("正文未读取完整，请从 offset %d 继续 get_document", covered)
@@ -492,6 +498,11 @@ func (a *App) agentIntentEffects(ctx context.Context, tx pgx.Tx, t writingTask, 
 		if before != nil && before.Folder == nil {
 			projected[in.Path] = agentOperation{Input: in, Before: before}
 		}
+	}
+	if len(revisionCorrections) > 0 {
+		// No proof, even for valid siblings. Report the whole batch in one repair
+		// turn; a version from an outdated read must never authorize a write.
+		return nil, &agentPreconditionError{cause: errDocumentRevisionConflict, message: "本批提案未提交。对标为「需重新读取」的文档，用 get_document 从 offset=0 重新核对内容和位置，再决定是否改动。列出的 expectedRevision 来自该文档仍有效的读取记录。修正后重新校验整批操作。\n" + strings.Join(revisionCorrections, "\n")}
 	}
 	result := make([]agentIntentEffect, 0, len(effects))
 	for _, effect := range effects {

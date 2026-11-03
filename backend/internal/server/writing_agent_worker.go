@@ -279,7 +279,10 @@ func writingFailureMessage(detail string) string {
 	if strings.Contains(lower, "tool_precondition_repair_exhausted") {
 		return "操作的前置条件仍未满足，任务已停止；请检查改动记录，已完成的改动仍保留。"
 	}
-	if strings.Contains(lower, "intent_check_failed") || strings.Contains(lower, "task_version_conflict") || strings.Contains(lower, "operation_version_conflict") {
+	if strings.Contains(lower, "document revision conflict") || strings.Contains(lower, "operation_version_conflict") {
+		return "提案的版本或位置与当前资源不一致，未通过校验的操作没有执行。请核对最新状态后重新提交。"
+	}
+	if strings.Contains(lower, "intent_check_failed") || strings.Contains(lower, "task_version_conflict") {
 		return "操作范围或资源状态校验未通过，请刷新后重试；已完成的改动仍保留。"
 	}
 	if strings.Contains(lower, "response_contract_failed") {
