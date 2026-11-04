@@ -46,7 +46,7 @@ func TestAgentOrganizationFollowupRetainsUserScope(t *testing.T) {
 	if len(input["policy"].(map[string]any)["denyTools"].([]string)) != 1 {
 		t.Fatal("legacy scope safeguard removed")
 	}
-	if input["policy"].(map[string]any)["maxSteps"] != 24 || input["policy"].(map[string]any)["maxContextChars"] != 200000 || !strings.Contains(input["systemPrompt"].(string), agentLibraryScopeInstruction) {
+	if input["policy"].(map[string]any)["maxSteps"] != nil || input["policy"].(map[string]any)["maxContextChars"] != 200000 || !strings.Contains(input["systemPrompt"].(string), agentLibraryScopeInstruction) {
 		t.Fatal("organization followup lost its pagination instructions or sequential read budget")
 	}
 
@@ -71,6 +71,23 @@ func TestAgentWholeLibraryRequest(t *testing.T) {
 		if agentLibraryRequest(request) {
 			t.Errorf("misclassified %q as organization only", request)
 		}
+	}
+}
+
+func TestAgentWireTaskExecutionBudgetIndependentOfWording(t *testing.T) {
+	for _, request := range []string{"帮我整理一下工作区的所有文档", "整理我所有的文章", "核对这篇文章的引用"} {
+		t.Run(request, func(t *testing.T) {
+			a, user, doc := writingTestApp(t)
+			task := agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), doc, request)
+			policy := map[string]any{"maxSteps": 12, "maxToolCalls": 24, "maxContextChars": 120000}
+			input := map[string]any{"policy": policy}
+			if err := a.prepareAgentConversationInput(context.Background(), &task, input, ""); err != nil {
+				t.Fatal(err)
+			}
+			if input["taskContext"] == nil || policy["maxSteps"] != nil || policy["maxToolCalls"] != nil || policy["maxContextChars"] != 200000 {
+				t.Fatal("native task still received a wording-dependent execution budget")
+			}
+		})
 	}
 }
 

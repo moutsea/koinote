@@ -326,6 +326,7 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 		{"legacy-chinese", "model_output", longAnswer, longAnswer, false},
 		{"legacy-redacted", "model_output", longAnswer + " token: [redacted]", longAnswer + " token: private-test-value", false},
 		{"distinct-draft", "operations_reported", "宿主操作已完成", "模型草稿", false},
+		{"budget-receipts", "partial", "已移动文档，其余工作尚未核实。", "", false},
 		{"invalid-state", "model_output", "reply", "reply", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -340,6 +341,10 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 			source := map[string]string{"messageId": agentUserMessageID(first.ID), "quote": "draft"}
 			state := map[string]any{"goal": map[string]any{"text": goal, "sources": []any{source}}, "targets": []any{}, "constraints": []any{}, "questions": []any{}, "suggestions": []any{}}
 			outcome := map[string]any{"taskId": session.ID, "sessionId": session.ID, "inputVersion": first.IntentVersion, "currentMessageId": agentUserMessageID(first.ID), "jobId": first.JobID, "state": state, "stateOrigin": "model_inference", "outcome": tc.outcome, "modelOutput": tc.modelOutput}
+			if tc.name == "budget-receipts" {
+				outcome["reason"] = "step_limit"
+				delete(outcome, "modelOutput")
+			}
 			path := "/api/agent/" + first.WorkspaceID + "/jobs/" + first.JobID
 			summaryQueries := make(chan string, 8)
 			host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -380,6 +385,9 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 			if !tc.invalid && (saved.TaskIntent == nil || saved.TaskIntent.Outcome != tc.outcome) {
 				t.Fatal("public result omitted the outcome")
 			}
+			if tc.name == "budget-receipts" && (saved.TaskIntent.Reason != "step_limit" || saved.BillingStatus != "settled" || saved.Error != "") {
+				t.Fatal("receipt-only result did not reach the host as a settled partial result")
+			}
 			if strings.Contains(tc.name, "chinese") || tc.name == "legacy-redacted" {
 				if saved.Result != writingDisplayResult(tc.reply) || saved.Result == tc.reply {
 					t.Fatal("display unexpectedly lost its limit")
@@ -408,7 +416,8 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 				}
 				found = true
 				answer := message["content"].(string)
-				if (tc.outcome == "model_output" && answer != tc.reply) || (tc.outcome != "model_output" && (strings.Count(answer, tc.modelOutput) != 1 || !strings.Contains(answer, tc.reply))) {
+				if (tc.outcome == "model_output" || tc.modelOutput == "") && answer != tc.reply ||
+					tc.outcome != "model_output" && tc.modelOutput != "" && (strings.Count(answer, tc.modelOutput) != 1 || !strings.Contains(answer, tc.reply)) {
 					t.Fatal("incorrect historical answer", len(answer))
 				}
 			}

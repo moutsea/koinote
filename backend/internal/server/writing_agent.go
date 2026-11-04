@@ -42,6 +42,7 @@ type writingIntentSummary struct {
 	Outcome      string `json:"outcome"`
 	InputVersion int64  `json:"inputVersion"`
 	Question     string `json:"question,omitempty"`
+	Reason       string `json:"reason,omitempty"`
 }
 
 type writingTask struct {
@@ -96,6 +97,11 @@ func scanWritingTask(row pgx.Row) (writingTask, error) {
 	if err == nil && len(t.IntentResult) != 0 {
 		var summary writingIntentSummary
 		if json.Unmarshal(t.IntentResult, &summary) == nil && summary.Outcome != "" {
+			switch summary.Reason {
+			case "step_limit", "tool_limit", "no_progress":
+			default:
+				summary.Reason = ""
+			}
 			if summary.Question != "" {
 				// Clarification results carry the user-visible (redacted) question.
 				summary.Question = t.Result

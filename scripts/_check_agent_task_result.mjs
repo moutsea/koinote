@@ -22,6 +22,11 @@ try {
   const partial = { ...task, taskIntent: { ...task.taskIntent, outcome: "partial", question: "剩余文档要移到哪个目录？" } };
   assert.equal(agentTaskResult(partial, deletions, "zh"), "已删除 2 个空文件夹，可在下方撤销。\n\n剩余文档要移到哪个目录？");
   assert.equal(agentTaskResult(partial, [], "zh"), partial.taskIntent.question);
+  for (const reason of ["step_limit", "tool_limit", "no_progress"]) {
+    const stopped = { ...task, taskIntent: { outcome: "partial", reason, inputVersion: 1 } };
+    assert.equal(agentTaskResult(stopped, deletions, "zh"), "已删除 2 个空文件夹，可在下方撤销。\n\n本轮已停止，其余工作尚未核实。");
+    assert.equal(agentTaskResult(stopped, deletions.map(op => ({...op,status:"undone"})), "zh"), "已撤销 2 项改动。\n\n本轮已停止，其余工作尚未核实。");
+  }
   assert.equal(agentTaskResult(task, [], "zh"), "改动结果暂不可用，请重试加载。", "missing host records must not claim success or expose the audit trace");
   for (const outcome of [undefined, "model_output", "clarification_required"]) {
     const prose = { ...task, result: "请解释 `koinote.propose_operations` 如何使用。", taskIntent: outcome ? { outcome, inputVersion: 1 } : undefined };

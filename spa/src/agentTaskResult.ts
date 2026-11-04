@@ -33,5 +33,9 @@ export function agentTaskResult(
   }
   // A partially completed task may still have a genuine scope question.
   if (task.taskIntent?.question) lines.push(task.taskIntent.question);
+  if (outcome === "partial" && task.taskIntent?.reason) {
+    if (!lines.length) lines.push(t.resultUnavailable);
+    lines.push(t.resultUnverified);
+  }
   return lines.join("\n\n") || t.resultUnavailable;
 }

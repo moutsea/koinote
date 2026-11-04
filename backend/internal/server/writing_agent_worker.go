@@ -267,6 +267,12 @@ func (a *App) advanceWritingTask(ctx context.Context, t *writingTask) error {
 func writingFailureMessage(detail string) string {
 	// Expose categories, never raw provider messages or request credentials.
 	lower := strings.ToLower(detail)
+	if strings.Contains(lower, "without new results") {
+		return "多次查询都没有得到新结果，Koi 已停止。请查看执行记录了解进度。"
+	}
+	if strings.Contains(lower, "step limit exceeded") || strings.Contains(lower, "tool call limit exceeded") {
+		return "本轮已达到执行额度，Koi 已停止。请查看改动记录了解已完成的工作。"
+	}
 	if strings.Contains(lower, "exceed the context budget") {
 		return "本轮读取的内容超过了 Koi 可处理的上限。请缩小整理范围，例如每次选择一个文件夹；已执行的操作可在改动记录中查看。"
 	}

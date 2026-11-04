@@ -205,6 +205,11 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 		policy = map[string]any{}
 		input["policy"] = policy
 	}
+	// Native tasks use agent-gpt's progress-aware loop. Legacy writing budgets
+	// must not change how far a task runs based on the wording of a request.
+	delete(policy, "maxSteps")
+	delete(policy, "maxToolCalls")
+	policy["maxContextChars"] = 200000
 	tools := []string{"koinote.get_document", "koinote.search_documents", "koinote.list_folders", "koinote.propose_document_change", "koinote.get_conversation", "koinote.get_operation_results"}
 	if s.WriteDocumentID != "" {
 		if t.Source.DocID != s.WriteDocumentID {
@@ -222,13 +227,6 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 		}
 		if library {
 			policy["denyTools"] = []string{"koinote.propose_document_change"}
-			// Leave room for a paginated inventory and targeted reads even when
-			// the model issues them sequentially instead of in parallel.
-			policy["maxSteps"] = 24
-			policy["maxToolCalls"] = 40
-			// The independent operation audit serializes the read evidence inside
-			// its own JSON request along with the user's instructions and effects.
-			policy["maxContextChars"] = 200000
 			input["systemPrompt"] = input["systemPrompt"].(string) + "\n\n" + agentLibraryScopeInstruction
 		}
 		if automaticAgentSkills(*t) {

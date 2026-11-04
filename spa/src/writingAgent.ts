@@ -2,7 +2,7 @@ import { apiJson, type Document } from "./api";
 
 export type WritingTask = {
   intentVersion?: number;
-  taskIntent?: { outcome: "model_output" | "clarification_required" | "operations_reported" | "partial"; question?: string; inputVersion: number };
+  taskIntent?: { outcome: "model_output" | "clarification_required" | "operations_reported" | "partial"; question?: string; reason?: "step_limit" | "tool_limit" | "no_progress"; inputVersion: number };
   id: string;
   message: string;
   source: { path?: string; docId: string; title: string; content: string; revision: number };
