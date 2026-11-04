@@ -504,6 +504,7 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	}
 	in := o.Input
 	expectedRevision := in.ExpectedRevision
+	var updateTheme string
 	result := agentOperationResult{}
 	var update *documentUpdateResult
 	var folder *int
@@ -534,16 +535,19 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 		}
 		// Article proposals replace only title and Markdown. A metadata save
 		// can advance the revision without invalidating the diff the user saw.
-		if article && o.Before.DependsOn == "" && fresh.Document.Title == o.Before.Document.Title && fresh.Document.Content == o.Before.Document.Content {
+		updateTheme = o.Before.Document.Theme
+		if article && o.Before.DependsOn == "" && o.Before.Document.Revision == in.ExpectedRevision && fresh.Document.Title == o.Before.Document.Title && fresh.Document.Content == o.Before.Document.Content {
 			expectedRevision = fresh.Document.Revision
-			o.Before.Document.Theme = fresh.Document.Theme
+			updateTheme = fresh.Document.Theme
 		}
 		if fresh.Document.Revision != expectedRevision || fresh.FolderID != o.Before.FolderID {
 			return nil, errDocumentRevisionConflict
 		}
 		// Capture the actual order immediately before each write. Projected batch
 		// snapshots cannot know the destination order chosen by a preceding move.
-		o.Before.SortOrder = fresh.SortOrder
+		if !article || o.Before.DependsOn != "" {
+			o.Before.SortOrder = fresh.SortOrder
+		}
 		result = agentOperationResult{DocID: fresh.Document.DocID, Revision: fresh.Document.Revision, Path: fresh.Path, FolderID: fresh.FolderID}
 	}
 	switch in.Kind {
@@ -554,7 +558,7 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 			return nil, err
 		}
 	case "update":
-		r, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{User: user, DocID: result.DocID, Title: in.Title, Content: in.Content, Theme: o.Before.Document.Theme, ExpectedRevision: expectedRevision, Source: documentSourceAgent, ForceVersion: true})
+		r, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{User: user, DocID: result.DocID, Title: in.Title, Content: in.Content, Theme: updateTheme, ExpectedRevision: expectedRevision, Source: documentSourceAgent, ForceVersion: true})
 		if err != nil {
 			return nil, err
 		}

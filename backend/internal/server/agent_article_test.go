@@ -168,7 +168,13 @@ func TestArticleKoiApproveAndUndoAcrossMetadataSaves(t *testing.T) {
 	}
 	agentTestRead(t, a, task, doc)
 	edit := agentOperationInput{Key: "final-revision", Kind: "update", Path: agentDocumentPath(doc.DocID), ExpectedRevision: doc.Revision, Title: doc.Title, Content: "修订后的完整正文。", Explanation: "修正错别字和表达。"}
-	ops, err := proposeAgentOperationsForTest(a, ctx, task, []agentOperationInput{edit})
+	inputs := []agentOperationInput{edit}
+	proof, err := agentProofForTest(a, ctx, task, "propose_document_change", inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := agentIntentAuthorization{ToolName: "propose_document_change", Proof: proof}
+	ops, err := a.proposeAgentOperations(ctx, task, inputs, auth)
 	if err != nil || len(ops) != 1 || ops[0].Status != "pending" {
 		t.Fatal("expected single pending proposal", err)
 	}
@@ -199,6 +205,11 @@ func TestArticleKoiApproveAndUndoAcrossMetadataSaves(t *testing.T) {
 		t.Fatal("metadata-only change blocked approval")
 	}
 	check(edit.Content, "ink")
+	replayed, err := a.proposeAgentOperations(ctx, task, inputs, auth)
+	if err != nil || len(replayed) != 1 || replayed[0].ID != op.ID || replayed[0].Status != "applied" {
+		t.Fatal("metadata-only save changed the signed snapshot or repeated the write", err)
+	}
+
 	save("用户后续的编辑", "paper")
 	if action("undo") != 409 {
 		t.Fatal("undo overwrote a new edit")
