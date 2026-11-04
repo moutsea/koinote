@@ -209,7 +209,10 @@ jobs:
           done
           release_base="https://downloads.koinote.app/desktop-updates"
           pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          notes="Koinote Desktop $version adds Koi AI for article editing and document organization with previews, approvals and undo."
+          announcement=backend/release-announcement.json
+          notes=$(jq -er --arg version "$version" 'select(.version==$version) | .translations.en.highlights | join(" ") | select(length>0)' "$announcement")
+          highlights_en=$(jq -r '.translations.en.highlights[] | "- " + .' "$announcement")
+          highlights_zh=$(jq -r '.translations.zh.highlights[] | "- " + .' "$announcement")
           jq -n \
             --arg version "$version" \
             --arg notes "$notes" \
@@ -237,10 +240,7 @@ jobs:
           cat > release-notes.md <<EOF
           # Koinote Desktop $version — 正式版 / Stable
 
-          Koinote $version 新增 Koi AI 文章助手和文档整理。
-
-          - Koi AI 可按你的指令编辑当前文章，参考其他文档，预览改动并按需撤销。
-          - 从「整理文档 → AI 整理」打开 Koi 面板，先编辑归类指令，再发送。可以查看移动方案、审批操作和撤销已执行的移动。
+          $highlights_zh
 
           可在版本提醒中点击“立即升级”，也可通过启动后的自动检查或账户菜单升级。
 
@@ -252,10 +252,7 @@ jobs:
 
           ---
 
-          Koinote $version adds Koi AI for article editing and document organization.
-
-          - Use Koi AI to edit the current article with other documents as references. Preview changes and undo them when needed.
-          - Open Koi from the document organization menu, edit the suggested instruction and send it. Review proposed moves, approve them and undo applied moves.
+          $highlights_en
 
           Use Upgrade now in release announcements, the automatic startup check or the account menu to upgrade.
 

@@ -6,6 +6,14 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-11-04
+
+### Changed
+
+- The article sidebar groups each revision with its preview and undo action. Start with a shortcut to polish wording, check spelling or tighten the opening.
+- Koi submits one complete revision for each editing request and finishes when you approve it. A theme change no longer blocks approval or undo. If the title or body has changed, Koi protects the newer edits.
+- Longer tasks can keep paging through documents. When a run reaches its limit, Koi reports the changes already applied and flags the remaining work as unverified.
+
 ## [1.1.9] - 2026-11-03
 
 ### Added

@@ -4,6 +4,14 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-11-04
+
+### Changed
+
+- Le panneau de l’article regroupe chaque révision, son aperçu et son annulation. Des raccourcis permettent d’affiner le style, de corriger les fautes ou de raccourcir l’introduction.
+- Koi propose une seule révision par demande et termine dès son approbation. Un changement de thème ne bloque plus l’application ou l’annulation. Les modifications ultérieures du titre et du texte sont préservées.
+- Les tâches longues peuvent poursuivre la lecture des documents. Si une limite est atteinte, Koi indique les changements appliqués et signale le travail restant à vérifier.
+
 ## [1.1.9] - 2026-11-03
 
 ### Added

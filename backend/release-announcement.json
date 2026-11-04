@@ -1,36 +1,40 @@
 {
-  "version": "1.1.9",
+  "version": "1.1.10",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.9",
+      "title": "What's new in Koinote 1.1.10",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Use Koi AI to edit the current article with other documents as references. Preview changes and undo them when needed.",
-        "Open Koi from the document organization menu, edit the suggested instruction and send it. Review proposed moves, approve them and undo applied moves."
+        "The article sidebar groups each revision with its preview and undo action. Start with a shortcut to polish wording, check spelling or tighten the opening.",
+        "Koi submits one complete revision for each editing request and finishes when you approve it. A theme change no longer blocks approval or undo. If the title or body has changed, Koi protects the newer edits.",
+        "Longer tasks can keep paging through documents. When a run reaches its limit, Koi reports the changes already applied and flags the remaining work as unverified."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.9 新功能",
+      "title": "Koinote 1.1.10 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi AI 可按你的指令编辑当前文章，参考其他文档，预览改动并按需撤销。",
-        "从「整理文档 → AI 整理」打开 Koi 面板，先编辑归类指令，再发送。可以查看移动方案、审批操作和撤销已执行的移动。"
+        "文章侧栏现在把修订稿、查看差异和撤销放在一起。可以从润色表达、检查错别字或精简开头开始。",
+        "Koi 会把一次润色合并为一份完整修订，批准后即结束。仅主题等信息变化时仍可应用或撤销；标题或正文已有新编辑时会保留这些编辑。",
+        "长任务可以继续翻页和核对文档。触及执行上限时，Koi 会列出已完成的改动，并提示其余工作尚未核实。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.9",
+      "title": "Nouveautés de Koinote 1.1.10",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Koi AI permet de modifier l’article ouvert en consultant d’autres documents. Prévisualisez les modifications et annulez-les si nécessaire.",
-        "Ouvrez Koi depuis le menu de classement, adaptez la consigne puis envoyez-la. Consultez les déplacements proposés, approuvez-les et annulez-les si nécessaire."
+        "Le panneau de l’article regroupe chaque révision, son aperçu et son annulation. Des raccourcis permettent d’affiner le style, de corriger les fautes ou de raccourcir l’introduction.",
+        "Koi propose une seule révision par demande et termine dès son approbation. Un changement de thème ne bloque plus l’application ou l’annulation. Les modifications ultérieures du titre et du texte sont préservées.",
+        "Les tâches longues peuvent poursuivre la lecture des documents. Si une limite est atteinte, Koi indique les changements appliqués et signale le travail restant à vérifier."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.9 の新機能",
+      "title": "Koinote 1.1.10 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Koi AI で他の文書を参考にしながら、開いている記事を編集できます。変更内容を確認し、必要に応じて取り消せます。",
-        "文書整理メニューから Koi を開き、分類の指示を編集して送信できます。移動案の確認、承認、適用した移動の取り消しに対応しました。"
+        "記事のサイドバーで、修正案ごとに差分の確認と取り消しができます。表現の調整、誤字の確認、冒頭の短縮をすぐに依頼できます。",
+        "Koi は一度の依頼を一つの修正案にまとめ、承認後に処理を終了します。テーマだけが変わった場合は適用や取り消しを続けられ、タイトルや本文に加えた編集は保持されます。",
+        "長いタスクでも文書のページを順に確認できます。実行上限に達した場合、適用した変更を示し、残りの作業が未確認であることをお知らせします。"
       ]
     }
   }
