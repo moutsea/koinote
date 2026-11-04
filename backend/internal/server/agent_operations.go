@@ -495,7 +495,8 @@ func (a *App) proposeAgentOperations(ctx context.Context, t writingTask, inputs 
 }
 
 func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.User, o *agentOperation, approval, reason string) (*documentUpdateResult, error) {
-	if err := checkStoredArticleOperation(ctx, tx, user.ID, o); err != nil {
+	article, err := checkStoredArticleOperation(ctx, tx, user.ID, o)
+	if err != nil {
 		return nil, err
 	}
 	if o.Status != "pending" {
@@ -530,6 +531,12 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 		fresh, err := a.loadAgentSnapshot(ctx, tx, user.ID, o.Before.Document.DocID)
 		if err != nil {
 			return nil, err
+		}
+		// Article proposals replace only title and Markdown. A metadata save
+		// can advance the revision without invalidating the diff the user saw.
+		if article && o.Before.DependsOn == "" && fresh.Document.Title == o.Before.Document.Title && fresh.Document.Content == o.Before.Document.Content {
+			expectedRevision = fresh.Document.Revision
+			o.Before.Document.Theme = fresh.Document.Theme
 		}
 		if fresh.Document.Revision != expectedRevision || fresh.FolderID != o.Before.FolderID {
 			return nil, errDocumentRevisionConflict
@@ -611,7 +618,7 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	if o.Before != nil {
 		beforeJSON, _ = json.Marshal(o.Before)
 	}
-	_, err := tx.Exec(ctx, `UPDATE agent_operations SET status='applied',approval=$2,reason=$3,result=$4,before_state=$5,updated_at=now() WHERE id=$1`, o.ID, approval, reason, data, beforeJSON)
+	_, err = tx.Exec(ctx, `UPDATE agent_operations SET status='applied',approval=$2,reason=$3,result=$4,before_state=$5,updated_at=now() WHERE id=$1`, o.ID, approval, reason, data, beforeJSON)
 	return update, err
 }
 
@@ -707,7 +714,8 @@ func (a *App) agentOperationAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) undoAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.User, o *agentOperation) (*documentUpdateResult, error) {
-	if err := checkStoredArticleOperation(ctx, tx, user.ID, o); err != nil {
+	article, err := checkStoredArticleOperation(ctx, tx, user.ID, o)
+	if err != nil {
 		return nil, err
 	}
 	if o.Status != "applied" || o.Result == nil {
@@ -744,13 +752,26 @@ func (a *App) undoAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.Us
 		}
 		// Undo children first, including no-op edits. Only an undo in this exact
 		// dependency chain can explain a newer revision; unrelated edits still conflict.
-		if appliedChild || (revision != result.Revision && !restoredByChild) {
+		updateTheme := ""
+		if o.Input.Kind == "update" {
+			updateTheme = o.Before.Document.Theme
+		}
+		articleTextMatches := false
+		if article && !trashed && o.Before.DependsOn == "" {
+			current, err := a.loadAgentSnapshot(ctx, tx, user.ID, result.DocID)
+			if err != nil {
+				return nil, err
+			}
+			articleTextMatches = current.Document.Title == o.Input.Title && current.Document.Content == o.Input.Content
+			updateTheme = current.Document.Theme
+		}
+		if appliedChild || (revision != result.Revision && !restoredByChild && !articleTextMatches) {
 			return nil, errDocumentRevisionConflict
 		}
 		switch o.Input.Kind {
 		case "update":
 			before := o.Before.Document
-			r, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{User: user, DocID: result.DocID, Title: before.Title, Content: before.Content, Theme: before.Theme, ExpectedRevision: revision, Source: documentSourceRestore, ForceVersion: true})
+			r, err := a.updateDocumentTx(ctx, tx, updateDocumentParams{User: user, DocID: result.DocID, Title: before.Title, Content: before.Content, Theme: updateTheme, ExpectedRevision: revision, Source: documentSourceRestore, ForceVersion: true})
 			if err != nil {
 				return nil, err
 			}
@@ -791,6 +812,6 @@ func (a *App) undoAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.Us
 	o.Status = "undone"
 	o.Result = &result
 	data, _ := json.Marshal(result)
-	_, err := tx.Exec(ctx, `UPDATE agent_operations SET status='undone',result=$2,updated_at=now() WHERE id=$1`, o.ID, data)
+	_, err = tx.Exec(ctx, `UPDATE agent_operations SET status='undone',result=$2,updated_at=now() WHERE id=$1`, o.ID, data)
 	return update, err
 }

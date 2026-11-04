@@ -148,3 +148,65 @@ func TestArticleKoiRetiresOldGeneration(t *testing.T) {
 		}
 	}
 }
+
+func TestArticleKoiApproveAndUndoAcrossMetadataSaves(t *testing.T) {
+	a, user, doc := writingTestApp(t)
+	ctx := context.Background()
+	w := writingTestRequest(t, a, user, "POST", "/api/documents/"+doc.DocID+"/koi-session", nil)
+	var page struct{ Session agentSession }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil {
+		t.Fatal("opening article session", w.Code)
+	}
+	task := bindIntentTaskForTest(t, a, agentTestTask(t, a, user, page.Session, doc, "请修正错别字并润色"))
+	wire := map[string]any{}
+	if err := a.prepareAgentConversationInput(ctx, &task, wire, ""); err != nil {
+		t.Fatal(err)
+	}
+	condition := wire["taskContext"].(map[string]any)["finishAfterApplied"].(map[string]string)
+	if condition["tool"] != "koinote.propose_document_change" || condition["resourceId"] != agentDocumentPath(doc.DocID) {
+		t.Fatal("unbound completion condition", condition)
+	}
+	agentTestRead(t, a, task, doc)
+	edit := agentOperationInput{Key: "final-revision", Kind: "update", Path: agentDocumentPath(doc.DocID), ExpectedRevision: doc.Revision, Title: doc.Title, Content: "修订后的完整正文。", Explanation: "修正错别字和表达。"}
+	ops, err := proposeAgentOperationsForTest(a, ctx, task, []agentOperationInput{edit})
+	if err != nil || len(ops) != 1 || ops[0].Status != "pending" {
+		t.Fatal("expected single pending proposal", err)
+	}
+	op := ops[0]
+	action := func(name string) int {
+		return writingTestRequest(t, a, user, "POST", "/api/agent/operations/"+op.ID+"/"+name, map[string]string{"hash": op.Hash}).Code
+	}
+	save := func(body, theme string) {
+		t.Helper()
+		if _, e := a.db.Exec(ctx, `UPDATE documents SET content=$3,theme=$4,revision=revision+1 WHERE user_id=$1 AND doc_id=$2`, user.ID, doc.DocID, body, theme); e != nil {
+			t.Fatal(e)
+		}
+	}
+	check := func(body, theme string) {
+		t.Helper()
+		fresh, e := a.loadAgentReviewDocument(ctx, user.ID, doc.DocID)
+		if e != nil || fresh.Content != body || fresh.Theme != theme {
+			t.Fatal("article text or theme did not match", e)
+		}
+	}
+	save("用户另外写的正文", "ink")
+	if action("approve") != 409 {
+		t.Fatal("approval overwrote a new edit")
+	}
+	check("用户另外写的正文", "ink")
+	save(doc.Content, "ink")
+	if action("approve") != 200 {
+		t.Fatal("metadata-only change blocked approval")
+	}
+	check(edit.Content, "ink")
+	save("用户后续的编辑", "paper")
+	if action("undo") != 409 {
+		t.Fatal("undo overwrote a new edit")
+	}
+	check("用户后续的编辑", "paper")
+	save(edit.Content, "paper")
+	if action("undo") != 200 {
+		t.Fatal("metadata-only change blocked undo")
+	}
+	check(doc.Content, "paper")
+}

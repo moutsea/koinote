@@ -74,21 +74,21 @@ func checkArticleOperations(docID string, inputs []agentOperationInput) error {
 
 // Recheck the stored operation at both execution boundaries (single or batch,
 // including undo). Its actual target comes from the snapshot/receipt.
-func checkStoredArticleOperation(ctx context.Context, tx pgx.Tx, userID int, o *agentOperation) error {
+func checkStoredArticleOperation(ctx context.Context, tx pgx.Tx, userID int, o *agentOperation) (bool, error) {
 	var docID string
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(s.write_document_id,'') FROM writing_agent_tasks t JOIN agent_sessions s ON s.id=t.session_id AND s.user_id=t.user_id WHERE t.id=$1 AND t.user_id=$2`, o.TaskID, userID).Scan(&docID); err != nil {
-		return err
+		return false, err
 	}
 	if docID == "" {
-		return nil
+		return false, nil
 	}
 	if err := checkArticleOperations(docID, []agentOperationInput{o.Input}); err != nil {
-		return err
+		return false, err
 	}
 	if o.Before == nil || o.Before.Folder != nil || o.Before.Document.DocID != docID || (o.Result != nil && o.Result.DocID != docID) {
-		return errArticleWriteScope
+		return false, errArticleWriteScope
 	}
-	return nil
+	return true, nil
 }
 
 // Historical review records can still be read. Older clients cannot start

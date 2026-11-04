@@ -1,6 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send, X } from "lucide-react";
+import {
+  ArrowUp,
+  Check,
+  ChevronRight,
+  FilePenLine,
+  FileText,
+  ListFilter,
+  Plus,
+  RotateCcw,
+  ScanText,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { ApiError } from "../../api";
+import "./ArticleAgentPanel.css";
 import { Logo } from "../Logo";
 import { confirmAction } from "../../confirmAction";
 import { useI18n } from "../../i18n";
@@ -28,26 +42,80 @@ import { AgentReviewSheet } from "./AgentReviewSheet";
 const hints = {
   zh: [
     "只可修改这篇文章。其他文档可以作为只读参考。",
-    "例如：参考《产品说明》的语气，精简这篇文章的开头。",
     "离线模式无法连接 Koi AI，请联网并登录后再试。",
   ],
   en: [
     "Only this article can be edited. Other documents can be read as references.",
-    "For example: shorten this introduction using the product guide as a reference.",
     "Koi AI requires an online, signed-in account.",
   ],
   fr: [
     "Seul cet article peut être modifié. Les autres documents peuvent servir de références.",
-    "Par exemple : raccourcis l’introduction en t’inspirant du guide produit.",
     "Koi AI nécessite un compte connecté et un accès au réseau.",
   ],
   ja: [
     "編集できるのはこの記事だけです。他の文書は参考として閲覧できます。",
-    "例：製品ガイドの文体を参考に、この記事の導入を短くしてください。",
     "Koi AI を利用するにはオンラインでログインしてください。",
   ],
 };
-const button = "rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50";
+const articleText = {
+  zh: {
+    scope: "当前文章",
+    intro: "想怎么改这篇文章？",
+    revision: "文章修订",
+    you: "你",
+    stopped: "后续处理已停止，已应用的改动已保留。",
+    stale: "这份修订基于旧正文。请先拒绝旧稿，再按最新文章重新发起修改。",
+    staleUndo: "文章已有新的文字修改。为保留这些内容，无法直接撤销这份修订。",
+    placeholder: "告诉 Koi 想改哪里…",
+    starters: ["润色表达", "检查错别字", "精简开头"],
+  },
+  en: {
+    scope: "Current article",
+    intro: "What would you like to change?",
+    revision: "Article revision",
+    you: "You",
+    stopped: "The task stopped. Applied changes are still in the article.",
+    stale:
+      "The text has changed. Reject this draft and request a revision of the latest article.",
+    staleUndo:
+      "The text has changed again. This revision cannot be undone without overwriting those edits.",
+    placeholder: "Tell Koi what to revise…",
+    starters: ["Polish the wording", "Check spelling", "Tighten the opening"],
+  },
+  fr: {
+    scope: "Article actuel",
+    intro: "Que souhaitez-vous modifier ?",
+    revision: "Révision de l’article",
+    you: "Vous",
+    stopped:
+      "Le traitement s’est arrêté. Les modifications appliquées sont conservées.",
+    stale:
+      "Le texte a changé. Refusez cette proposition et demandez une révision du texte actuel.",
+    staleUndo:
+      "Le texte a de nouveau changé. Une annulation écraserait ces modifications.",
+    placeholder: "Que doit revoir Koi ?",
+    starters: [
+      "Affiner le style",
+      "Corriger les fautes",
+      "Raccourcir l’introduction",
+    ],
+  },
+  ja: {
+    scope: "現在の記事",
+    intro: "記事のどこを直しますか？",
+    revision: "記事の修正案",
+    you: "あなた",
+    stopped: "処理は停止しました。適用済みの変更は保持されています。",
+    stale:
+      "本文が更新されました。この案を却下し、最新の記事で改めて修正を依頼してください。",
+    staleUndo:
+      "本文が再び更新されました。その変更を保つため、この修正を取り消せません。",
+    placeholder: "Koi に修正したい箇所を伝える…",
+    starters: ["表現を整える", "誤字を確認する", "冒頭を短くする"],
+  },
+};
+const starterIcons = [Sparkles, ScanText, ListFilter];
+const button = "koi-article-action";
 
 export function ArticleAgentPanel({
   docId,
@@ -67,11 +135,15 @@ export function ArticleAgentPanel({
   const { locale, t } = useI18n();
   const labels = agentPanelText[locale],
     writing = writingAgentText[locale];
+  const copy = articleText[locale];
   const client = useQueryClient();
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const thread = useRef<HTMLDivElement>(null);
+  const followLatest = useRef(true);
+  const prependFrom = useRef<{ top: number; height: number } | null>(null);
   const [previewId, setPreviewId] = useState("");
   const [olderCursor, setOlderCursor] = useState("");
   const [olderTasks, setOlderTasks] = useState<
@@ -168,6 +240,17 @@ export function ArticleAgentPanel({
     ...ops,
     ...olderOps.filter((old) => !ops.some((op) => op.id === old.id)),
   ];
+  useLayoutEffect(() => {
+    const el = thread.current;
+    if (!el || !page) return;
+    if (prependFrom.current) {
+      const { top, height } = prependFrom.current;
+      el.scrollTop = top + el.scrollHeight - height;
+      prependFrom.current = null;
+    } else if (followLatest.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [page, olderTasks, events.data]);
   const preview = allOps.find((op) => op.id === previewId);
   const changes = ops
     .filter((op) => op.status === "applied" || op.status === "undone")
@@ -212,6 +295,7 @@ export function ArticleAgentPanel({
         skillRepositoryId: 0,
         skillPath: "",
       });
+      followLatest.current = true;
       attempt.current = undefined;
       storeDraft("");
       await refresh();
@@ -225,7 +309,11 @@ export function ArticleAgentPanel({
       if (action !== "reject" && !(await onPrepareReview()))
         throw new Error(labels.draftChanged);
       if (!mounted.current) return;
-      const result = await actOnAgentOperation(op, action);
+      const result = await actOnAgentOperation(op, action).catch((e) => {
+        if (e instanceof ApiError && e.code === "revision_conflict")
+          throw new Error(action === "undo" ? copy.staleUndo : copy.stale);
+        throw e;
+      });
       setOlderOps((old) =>
         old.map((item) => (item.id === op.id ? result.operation : item)),
       );
@@ -235,11 +323,11 @@ export function ArticleAgentPanel({
     });
   }
   const actions = (op: AgentOperation) => (
-    <div className="flex flex-wrap gap-2">
+    <>
       {op.status === "pending" && (
         <>
           <button
-            className={button}
+            className={button + " koi-article-primary"}
             disabled={busy}
             onClick={() => void decide(op, "approve")}
           >
@@ -260,13 +348,14 @@ export function ArticleAgentPanel({
           disabled={busy}
           onClick={() => void decide(op, "undo")}
         >
+          <RotateCcw size={13} aria-hidden="true" />
           {labels.undo}
         </button>
       )}
-    </div>
+    </>
   );
   const access = localMode
-    ? hints[locale][2]
+    ? hints[locale][1]
     : !member
       ? t.agentReview.membersOnly
       : "";
@@ -280,18 +369,21 @@ export function ArticleAgentPanel({
       closeLabel={t.agentReview.close}
       onClose={onClose}
     >
-      <header
-        className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-5"
-        style={{ borderColor: "var(--ink-line)" }}
-      >
-        <Logo className="h-5 w-5" />
-        <h2 className="font-semibold">Koi AI</h2>
-        <span className="min-w-0 flex-1 truncate text-sm opacity-70">
-          {title || t.editor.untitled}
+      <header className="koi-article-header">
+        <span className="koi-article-logo">
+          <Logo className="h-7 w-7" />
         </span>
+        <div className="koi-article-heading">
+          <h2>Koi AI</h2>
+          <span title={title || t.editor.untitled}>
+            <FileText size={12} /> {title || t.editor.untitled}
+          </span>
+        </div>
         {page && tasks.length > 0 && !active && (
           <button
-            className={button}
+            className="koi-article-icon"
+            aria-label={labels.newSession}
+            title={labels.newSession}
             disabled={busy}
             onClick={() =>
               void run(async () => {
@@ -307,15 +399,56 @@ export function ArticleAgentPanel({
               })
             }
           >
-            {labels.newSession}
+            <Plus size={18} />
           </button>
         )}
-        <button aria-label={t.agentReview.close} onClick={onClose}>
+        <button
+          className="koi-article-icon"
+          aria-label={t.agentReview.close}
+          title={t.agentReview.close}
+          onClick={onClose}
+        >
           <X size={18} />
         </button>
       </header>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-        <p className="text-sm opacity-70">{access || hints[locale][0]}</p>
+      <div
+        className="koi-article-thread"
+        ref={thread}
+        onScroll={(event) => {
+          const el = event.currentTarget;
+          followLatest.current =
+            el.scrollHeight - el.clientHeight - el.scrollTop < 32;
+        }}
+      >
+        {access && <p className="koi-article-access">{access}</p>}
+        {page && history.length === 0 && (
+          <div className="koi-article-empty">
+            <span className="koi-article-emblem">
+              <FilePenLine size={25} strokeWidth={1.4} />
+            </span>
+            <h3>{copy.intro}</h3>
+            <p>{hints[locale][0]}</p>
+            <div className="koi-article-starters">
+              {copy.starters.map((label, i) => {
+                const Icon = starterIcons[i];
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    onClick={() => {
+                      storeDraft(label);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <Icon size={14} />
+                    {label}
+                    <ChevronRight size={13} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {!access && (opened.isLoading || (!page && session.isLoading)) && (
           <p role="status">{writing.loading}</p>
         )}
@@ -337,6 +470,11 @@ export function ArticleAgentPanel({
                   id!,
                   olderCursor || page.nextCursor,
                 );
+                if (thread.current)
+                  prependFrom.current = {
+                    top: thread.current.scrollTop,
+                    height: thread.current.scrollHeight,
+                  };
                 setOlderTasks((rows) => [...rows, ...older.tasks]);
                 setOlderOps((rows) => [...rows, ...older.operations]);
                 setOlderCursor(older.nextCursor || "end");
@@ -346,128 +484,197 @@ export function ArticleAgentPanel({
             {labels.older}
           </button>
         )}
-        {history.map((task) => (
-          <section
-            key={task.id}
-            className="space-y-3 rounded-xl border p-3"
-            style={{ borderColor: "var(--ink-line)" }}
-          >
-            <p className="whitespace-pre-wrap font-medium">{task.message}</p>
-            <AgentProgress
-              task={task}
-              events={active?.id === task.id ? events.data?.events : undefined}
-              approvalHint={labels.waitingApproval}
-            />
-            <AgentTaskReply task={task} operations={allOps} />
-            {task.error && (
-              <p role="alert" className="text-sm text-red-600">
-                {task.error}
-              </p>
-            )}
-            {allOps
-              .filter((op) => op.taskId === task.id)
-              .map((op) => (
-                <div key={op.id} className="space-y-2 border-t pt-2">
-                  <p className="text-sm">{op.input.explanation}</p>
-                  <p className="text-xs opacity-70">{labels[op.status]}</p>
-                  <button
-                    className={button}
-                    onClick={() => setPreviewId(op.id)}
-                  >
-                    {labels.diff}
-                  </button>
-                  {actions(op)}
-                </div>
-              ))}
-            {!writingFinished(task) && (
-              <button
-                className={button}
-                disabled={busy || task.cancelRequested}
-                onClick={() =>
-                  void run(async () => {
-                    await cancelWritingTask(task.id);
-                    await refresh();
-                  })
+        {history.map((task) => {
+          const changes = allOps.filter((op) => op.taskId === task.id);
+          const applied = changes.some((op) => op.status === "applied");
+          return (
+            <section className="koi-article-turn" key={task.id}>
+              <div className="koi-article-user">
+                <span className="koi-article-byline">{copy.you}</span>
+                <p>{task.message}</p>
+              </div>
+              <div className="koi-article-author">
+                <Logo className="h-5 w-5" />
+                Koi
+              </div>
+              {!writingFinished(task) && (
+                <AgentProgress
+                  task={task}
+                  events={
+                    active?.id === task.id ? events.data?.events : undefined
+                  }
+                  approvalHint={labels.waitingApproval}
+                />
+              )}
+              {(!changes.length ||
+                task.taskIntent?.outcome !== "operations_reported") && (
+                <AgentTaskReply task={task} operations={allOps} />
+              )}
+              {task.status === "cancelled" && (
+                <p className="koi-article-note">
+                  {applied ? copy.stopped : writing.cancelled}
+                </p>
+              )}
+              {task.error && (
+                <p role="alert" className="koi-article-error">
+                  {task.error}
+                </p>
+              )}
+              {changes.map((op) => {
+                const details = (
+                  <>
+                    {op.input.explanation && (
+                      <p className="koi-article-explanation">
+                        {op.input.explanation}
+                      </p>
+                    )}
+                    <div className="koi-article-actions">
+                      <button
+                        type="button"
+                        className={button + " koi-article-diff"}
+                        onClick={() => setPreviewId(op.id)}
+                      >
+                        <FileText size={14} />
+                        {labels.diff}
+                      </button>
+                      {actions(op)}
+                    </div>
+                  </>
+                );
+                if (
+                  op.status === "cancelled" ||
+                  op.status === "rejected" ||
+                  op.status === "superseded"
+                ) {
+                  return (
+                    <details key={op.id} className="koi-article-archived">
+                      <summary>
+                        <ChevronRight size={14} />
+                        {copy.revision}
+                        <span>{labels[op.status]}</span>
+                      </summary>
+                      {details}
+                    </details>
+                  );
                 }
-              >
-                {writing.cancel}
-              </button>
-            )}
-          </section>
-        ))}
+                return (
+                  <article
+                    className="koi-article-change"
+                    key={op.id}
+                    data-status={op.status}
+                  >
+                    <div className="koi-article-change-title">
+                      <FilePenLine size={17} />
+                      <strong>{copy.revision}</strong>
+                      <span className="koi-article-badge">
+                        {op.status === "applied" && <Check size={12} />}
+                        {labels[op.status]}
+                      </span>
+                    </div>
+                    {details}
+                  </article>
+                );
+              })}
+              {!writingFinished(task) && (
+                <button
+                  className="koi-article-stop"
+                  disabled={busy || task.cancelRequested}
+                  onClick={() =>
+                    void run(async () => {
+                      await cancelWritingTask(task.id);
+                      await refresh();
+                    })
+                  }
+                >
+                  {writing.cancel}
+                </button>
+              )}
+            </section>
+          );
+        })}
       </div>
       {!access && (
         <form
-          className="space-y-2 border-t p-4"
+          className="koi-article-compose"
           onSubmit={(event) => {
             event.preventDefault();
             void send();
           }}
         >
           {error && (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="koi-article-error">
               {error}
             </p>
           )}
-          <textarea
-            aria-label={labels.input}
-            placeholder={hints[locale][1]}
-            rows={3}
-            maxLength={16000}
-            value={draft}
-            className="w-full resize-y rounded-xl border bg-transparent p-3 text-sm"
-            ref={inputRef}
-            disabled={busy || !page}
-            onChange={(event) => storeDraft(event.target.value)}
-            onCompositionStart={() => {
-              composing.current = true;
-            }}
-            onCompositionEnd={() => {
-              composing.current = false;
-            }}
-            onBlur={() => {
-              composing.current = false;
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key !== "Enter" ||
-                composing.current ||
-                event.nativeEvent.isComposing ||
-                event.nativeEvent.keyCode === 229
-              )
-                return;
-              if (event.ctrlKey) {
-                event.preventDefault();
-                const el = event.currentTarget;
+          <div className="koi-article-inputbox">
+            <textarea
+              aria-label={labels.input}
+              placeholder={copy.placeholder}
+              rows={2}
+              maxLength={16000}
+              value={draft}
+              className="koi-article-input"
+              ref={inputRef}
+              disabled={busy || !page}
+              onChange={(event) => storeDraft(event.target.value)}
+              onCompositionStart={() => {
+                composing.current = true;
+              }}
+              onCompositionEnd={() => {
+                composing.current = false;
+              }}
+              onBlur={() => {
+                composing.current = false;
+              }}
+              onKeyDown={(event) => {
                 if (
-                  el.value.length - (el.selectionEnd - el.selectionStart) <
-                  el.maxLength
-                ) {
-                  el.setRangeText(
-                    "\n",
-                    el.selectionStart,
-                    el.selectionEnd,
-                    "end",
-                  );
-                  storeDraft(el.value);
+                  event.key !== "Enter" ||
+                  composing.current ||
+                  event.nativeEvent.isComposing ||
+                  event.nativeEvent.keyCode === 229
+                )
+                  return;
+                if (event.ctrlKey) {
+                  event.preventDefault();
+                  const el = event.currentTarget;
+                  if (
+                    el.value.length - (el.selectionEnd - el.selectionStart) <
+                    el.maxLength
+                  ) {
+                    el.setRangeText(
+                      "\n",
+                      el.selectionStart,
+                      el.selectionEnd,
+                      "end",
+                    );
+                    storeDraft(el.value);
+                  }
+                  return;
                 }
-                return;
-              }
-              if (event.shiftKey) return;
-              event.preventDefault();
-              if (!event.repeat) void send();
-            }}
-          />
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs opacity-60">{labels.sendShortcut}</span>
-            <button
-              type="submit"
-              className={button + " flex items-center gap-2"}
-              disabled={!page || !!active || busy || !draft.trim()}
-            >
-              <Send size={14} />
-              {labels.send}
-            </button>
+                if (event.shiftKey) return;
+                event.preventDefault();
+                if (!event.repeat) void send();
+              }}
+            />
+            <div className="koi-article-toolbar">
+              <span className="koi-article-scope" title={hints[locale][0]}>
+                <FileText size={13} />
+                {copy.scope}
+              </span>
+              <span className="koi-article-shortcut">
+                {labels.sendShortcut}
+              </span>
+              <button
+                type="submit"
+                className="koi-article-send"
+                aria-label={labels.send}
+                title={labels.send}
+                disabled={!page || !!active || busy || !draft.trim()}
+              >
+                <ArrowUp size={17} />
+                <span className="sr-only">{labels.send}</span>
+              </button>
+            </div>
           </div>
         </form>
       )}
