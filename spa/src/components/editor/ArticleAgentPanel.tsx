@@ -27,6 +27,7 @@ import {
   openArticleAgentSession,
   sendAgentMessage,
   type AgentOperation,
+  type AgentSessionPage,
 } from "../../agentSessions";
 import { notifyAgentDocumentChange } from "../../agentContext";
 import {
@@ -38,6 +39,9 @@ import { AgentTaskReply } from "../AgentTaskReply";
 import { AgentProgress } from "../AgentProgress";
 import { AgentDiffDialog } from "../AgentDiffDialog";
 import { AgentReviewSheet } from "./AgentReviewSheet";
+
+// Local stand-in until the server returns the task; it never reaches the API.
+const sendingProgress = { id: "sending", status: "preparing", cancelRequested: false } as const;
 
 const hints = {
   zh: [
@@ -141,6 +145,14 @@ export function ArticleAgentPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Visible from the click until the accepted task is in the thread.
+  // `before` holds the tasks already shown, so a refresh that delivers this
+  // task before the POST returns cannot show the message twice.
+  const [sending, setSending] = useState<{
+    message: string;
+    before: ReadonlySet<string>;
+    taskId?: string;
+  } | null>(null);
   const thread = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const prependFrom = useRef<{ top: number; height: number } | null>(null);
@@ -250,7 +262,7 @@ export function ArticleAgentPanel({
     } else if (followLatest.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [page, olderTasks, events.data]);
+  }, [page, olderTasks, events.data, sending]);
   const preview = allOps.find((op) => op.id === previewId);
   const changes = ops
     .filter((op) => op.status === "applied" || op.status === "undone")
@@ -284,21 +296,33 @@ export function ArticleAgentPanel({
     const message = draft.trim();
     if (!message || !id || !page || active) return;
     await run(async () => {
-      if (!(await onPrepareReview())) throw new Error(labels.draftChanged);
-      if (!mounted.current) return;
-      if (attempt.current?.message !== message)
-        attempt.current = { message, id: crypto.randomUUID() };
-      storeDraft(draft);
-      await sendAgentMessage(id, {
-        message,
-        requestId: attempt.current.id,
-        skillRepositoryId: 0,
-        skillPath: "",
-      });
       followLatest.current = true;
-      attempt.current = undefined;
-      storeDraft("");
-      await refresh();
+      setSending({ message, before: new Set(history.map((task) => task.id)) });
+      try {
+        if (!(await onPrepareReview())) throw new Error(labels.draftChanged);
+        if (!mounted.current) return;
+        if (attempt.current?.message !== message)
+          attempt.current = { message, id: crypto.randomUUID() };
+        storeDraft(draft);
+        const { task } = await sendAgentMessage(id, {
+          message,
+          requestId: attempt.current.id,
+          skillRepositoryId: 0,
+          skillPath: "",
+        });
+        // Show the accepted task now; the refresh below only adds server detail.
+        setSending((s) => s && { ...s, taskId: task.id });
+        client.setQueryData<AgentSessionPage>(key, (data) =>
+          data && !data.tasks.some((item) => item.id === task.id)
+            ? { ...data, tasks: [task, ...data.tasks] }
+            : data,
+        );
+        attempt.current = undefined;
+        storeDraft("");
+        await refresh();
+      } finally {
+        if (mounted.current) setSending(null);
+      }
     });
   }
   async function decide(
@@ -592,6 +616,20 @@ export function ArticleAgentPanel({
             </section>
           );
         })}
+        {sending && !history.some((task) =>
+          task.id === sending.taskId || (!sending.before.has(task.id) && task.message === sending.message)) && (
+          <section className="koi-article-turn" data-agent-sending>
+            <div className="koi-article-user">
+              <span className="koi-article-byline">{copy.you}</span>
+              <p>{sending.message}</p>
+            </div>
+            <div className="koi-article-author">
+              <Logo className="h-5 w-5" />
+              Koi
+            </div>
+            <AgentProgress task={sendingProgress} />
+          </section>
+        )}
       </div>
       {!access && (
         <form

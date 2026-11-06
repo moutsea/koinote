@@ -90,6 +90,13 @@ const state = {
   failNextOperation: false,
   loseNextResponse: false,
   holdNextResponse: false,
+  // Blocks session page reads, so tests can see what renders before refresh().
+  holdPages: false,
+  heldPages: [] as (() => void)[],
+  releasePages() {
+    this.holdPages = false;
+    for (const release of this.heldPages.splice(0)) release();
+  },
   loseHeldResponse: false,
   responseHeld: false,
   releaseResponse: async () => {},
@@ -362,6 +369,8 @@ window.fetch = async (request, init) => {
       session.revision++;
       persist();
     }
+    if (method === "GET" && state.holdPages)
+      await new Promise<void>((resolve) => state.heldPages.push(resolve));
     return page(id);
   }
   const taskMatch = path.match(/^\/api\/writing-agent\/tasks\/([^/]+)$/);

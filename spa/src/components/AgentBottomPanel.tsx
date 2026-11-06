@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  type InfiniteData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -68,6 +69,7 @@ import {
   type AgentOperation,
   type AgentPermission,
   type AgentSession,
+  type AgentSessionPage,
 } from "../agentSessions";
 import { AgentRequestCache } from "../agentRequestCache";
 import { AgentTaskReply } from "./AgentTaskReply";
@@ -79,6 +81,8 @@ const errorMessage = (error: unknown) =>
 const permissions: AgentPermission[] = ["review", "assist", "full"];
 // A project-wide draft should stay detached even if the user switches articles.
 const projectContext = "*";
+// Local stand-in until the server returns the task; it never reaches the API.
+const sendingProgress = { id: "sending", status: "preparing", cancelRequested: false } as const;
 
 function AgentAvatar({ className = "" }: { className?: string }) {
   return (
@@ -173,6 +177,17 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
   const [sort, setSort] = useState("recent");
   const [error, setError] = useState(initialLayout.error);
   const [busy, setBusy] = useState(false);
+  // Shown from the click until the accepted task is in the transcript, so the
+  // document sync and request round trip are visible instead of a silent wait.
+  const [sending, setSending] = useState<{
+    sessionId: string;
+    message: string;
+    context?: { title: string; path: string };
+    // Tasks shown before this send. A new task with the same message is this
+    // one, even if a background refresh delivers it before the POST returns.
+    before: ReadonlySet<string>;
+    taskId?: string;
+  } | null>(null);
   const [deleting, setDeleting] = useState<AgentSession | null>(null);
   const [renaming, setRenaming] = useState<AgentSession | null>(null);
   useEffect(() => {
@@ -396,6 +411,12 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
     if (nearBottom.current && scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [transcriptKey]);
+  useEffect(() => {
+    if (sending && scrollRef.current) {
+      nearBottom.current = true;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [sending]);
 
   const refresh = async () => {
     await Promise.all([
@@ -501,71 +522,92 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
       const capturedFocus = currentFocus;
       const supersedeTaskId = adjusting[id];
       if (!id || !message || running) return;
-      const previousSubmission = readDraftSubmission(layout.draftSubmissions[id]);
-      const submitted: DraftSubmission = previousSubmission && previousSubmission.draftId === draftId &&
-        previousSubmission.message === message ? previousSubmission : {
-          draftId, message, nextDraftId: crypto.randomUUID(),
-        };
-      setLayout((s) => ({ ...s, draftSubmissions: {
-        ...s.draftSubmissions, [id]: JSON.stringify(submitted),
-      } }));
-      if (capturedFocus && !(await capturedFocus.prepare()))
-        throw new Error(t.draftChanged);
-      if ((ignored[id] === projectContext && !tasks.length) || message === t.starterOrganizePrompt) {
-        const l = strings.editor.aiOrganizer;
-        if (isDesktopRuntime()) {
-          const { desktopPrepareLibraryForOrganization } = await import("../desktop/offlineStore");
-          const conflicts = await desktopPrepareLibraryForOrganization().catch((cause) => {
-            throw new Error(errorMessage(cause) === "organization_folder_sync_conflict" ? l.folderSyncConflict : l.saveFailed);
-          });
-          if (conflicts.length) throw new Error(l.syncConflict);
-        } else if (!(await prepareDesktopSync())) throw new Error(l.saveFailed);
-      }
-      if (currentAccount.current !== accountKey) return;
-      const payload = {
+      setSending({
+        sessionId: id,
         message,
-        ...(capturedFocus
-          ? {
-              context: { title: capturedFocus.title, path: capturedFocus.path },
-            }
-          : {}),
-        skillRepositoryId: 0,
-        skillPath: "",
-        ...(supersedeTaskId ? { supersedeTaskId } : {}),
-      };
-      const pending = await requests.prepare(id, payload, draftId, { automaticSkills: true });
-      if (currentAccount.current !== accountKey) return;
-      await sendAgentMessage(id, pending.input);
-      // An unmounted account still has its submitted draft in browser storage.
-      // Keep its request ID so a remount can retry without creating another task;
-      // a late response must also never overwrite the new instance's requests.
-      if (currentAccount.current !== accountKey) return;
-      await requests.complete(pending);
-      if (currentAccount.current !== accountKey) return;
-      setLayout((s) => {
-        const draftSubmissions = { ...s.draftSubmissions };
-        if (readDraftSubmission(draftSubmissions[id])?.nextDraftId === submitted.nextDraftId)
-          delete draftSubmissions[id];
-        // Acknowledgement ends this edit lineage, but keeps any queued text.
-        if (s.draftIds[id] !== draftId || s.drafts[id]?.trim() !== message)
-          return { ...s, draftSubmissions };
-        const nextAdjusting = { ...s.adjusting };
-        const nextDraftIds = { ...s.draftIds };
-        delete nextDraftIds[id];
-        if (nextAdjusting[id] === supersedeTaskId) delete nextAdjusting[id];
-        return {
-          ...s,
-          drafts: {
-            ...s.drafts,
-            [id]: "",
-          },
-          adjusting: nextAdjusting,
-          draftIds: nextDraftIds,
-          draftSubmissions,
-        };
+        before: new Set(tasks.map((task) => task.id)),
+        ...(capturedFocus ? { context: { title: capturedFocus.title, path: capturedFocus.path } } : {}),
       });
-      nearBottom.current = true;
-      await refresh();
+      try {
+        const previousSubmission = readDraftSubmission(layout.draftSubmissions[id]);
+        const submitted: DraftSubmission = previousSubmission && previousSubmission.draftId === draftId &&
+          previousSubmission.message === message ? previousSubmission : {
+            draftId, message, nextDraftId: crypto.randomUUID(),
+          };
+        setLayout((s) => ({ ...s, draftSubmissions: {
+          ...s.draftSubmissions, [id]: JSON.stringify(submitted),
+        } }));
+        if (capturedFocus && !(await capturedFocus.prepare()))
+          throw new Error(t.draftChanged);
+        if ((ignored[id] === projectContext && !tasks.length) || message === t.starterOrganizePrompt) {
+          const l = strings.editor.aiOrganizer;
+          if (isDesktopRuntime()) {
+            const { desktopPrepareLibraryForOrganization } = await import("../desktop/offlineStore");
+            const conflicts = await desktopPrepareLibraryForOrganization().catch((cause) => {
+              throw new Error(errorMessage(cause) === "organization_folder_sync_conflict" ? l.folderSyncConflict : l.saveFailed);
+            });
+            if (conflicts.length) throw new Error(l.syncConflict);
+          } else if (!(await prepareDesktopSync())) throw new Error(l.saveFailed);
+        }
+        if (currentAccount.current !== accountKey) return;
+        const payload = {
+          message,
+          ...(capturedFocus
+            ? {
+                context: { title: capturedFocus.title, path: capturedFocus.path },
+              }
+            : {}),
+          skillRepositoryId: 0,
+          skillPath: "",
+          ...(supersedeTaskId ? { supersedeTaskId } : {}),
+        };
+        const pending = await requests.prepare(id, payload, draftId, { automaticSkills: true });
+        if (currentAccount.current !== accountKey) return;
+        const { task: accepted } = await sendAgentMessage(id, pending.input);
+        // An unmounted account still has its submitted draft in browser storage.
+        // Keep its request ID so a remount can retry without creating another task;
+        // a late response must also never overwrite the new instance's requests.
+        if (currentAccount.current !== accountKey) return;
+        // Show the accepted task now; the refresh below only adds server detail.
+        setSending((s) => s && { ...s, taskId: accepted.id });
+        qc.setQueryData<InfiniteData<AgentSessionPage>>(
+          ["agent-session", accountKey, id],
+          (data) => {
+            const first = data?.pages[0];
+            if (!first || data.pages.some((page) => page.tasks.some((task) => task.id === accepted.id)))
+              return data;
+            return { ...data, pages: [{ ...first, tasks: [accepted, ...first.tasks] }, ...data.pages.slice(1)] };
+          },
+        );
+        await requests.complete(pending);
+        if (currentAccount.current !== accountKey) return;
+        setLayout((s) => {
+          const draftSubmissions = { ...s.draftSubmissions };
+          if (readDraftSubmission(draftSubmissions[id])?.nextDraftId === submitted.nextDraftId)
+            delete draftSubmissions[id];
+          // Acknowledgement ends this edit lineage, but keeps any queued text.
+          if (s.draftIds[id] !== draftId || s.drafts[id]?.trim() !== message)
+            return { ...s, draftSubmissions };
+          const nextAdjusting = { ...s.adjusting };
+          const nextDraftIds = { ...s.draftIds };
+          delete nextDraftIds[id];
+          if (nextAdjusting[id] === supersedeTaskId) delete nextAdjusting[id];
+          return {
+            ...s,
+            drafts: {
+              ...s.drafts,
+              [id]: "",
+            },
+            adjusting: nextAdjusting,
+            draftIds: nextDraftIds,
+            draftSubmissions,
+          };
+        });
+        nearBottom.current = true;
+        await refresh();
+      } finally {
+        if (currentAccount.current === accountKey) setSending(null);
+      }
     });
   const act = (op: AgentOperation, action: "approve" | "reject" | "undo") =>
     perform(async () => {
@@ -1152,6 +1194,26 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                     </div>
                   </article>
                 ))}
+                {sending?.sessionId === active && !tasks.some((task) =>
+                  task.id === sending.taskId || (!sending.before.has(task.id) && task.message === sending.message)) && (
+                  <article className="agent-turn mx-auto text-sm" data-agent-sending>
+                    <div className="agent-user-message ml-auto w-fit">
+                      <p className="whitespace-pre-wrap break-words">{sending.message}</p>
+                      {sending.context && (
+                        <p
+                          className="agent-message-context"
+                          title={sending.context.path}
+                          style={{ color: "var(--ink-faint)" }}
+                        >
+                          {t.taskContext}: {sending.context.title}
+                        </p>
+                      )}
+                    </div>
+                    <div className="agent-content-column mt-3">
+                      <AgentProgress task={sendingProgress} />
+                    </div>
+                  </article>
+                )}
                 {running && (
                   <div className="agent-content-column">
                     <AgentProgress

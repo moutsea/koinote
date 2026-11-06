@@ -22,9 +22,19 @@ export async function checkArticleKoi(createClient,url) {
     assert.equal(await evaluate("document.querySelector('textarea').value"),"润色表达");
     assert.equal(await evaluate("window.agentUITest.submissions.length"),0);
     await evaluate("document.querySelector('textarea').select()");
-    await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
+    await evaluate("window.agentUITest.failFirst=false;window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;document.querySelector('textarea').focus()");
     await send("Input.insertText",{text:"参考乙文，润色甲文开头"});
     await click("发送");
+    await wait("window.agentUITest.responseHeld");
+    // The turn is visible while the request is in flight, then the accepted
+    // task replaces it straight from the POST response, before any reload.
+    const sending = "document.querySelector('[role=dialog] [data-agent-sending]')";
+    await wait(`${sending}?.textContent.includes('参考乙文，润色甲文开头') && ${sending}.textContent.includes('正在准备任务')`);
+    await evaluate("window.agentUITest.holdPages=true");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait(`${sending}===null && document.querySelector('[role=dialog] [data-task-result]')`);
+    await evaluate("window.agentUITest.releasePages()");
+    assert.equal(await evaluate("Array.from(document.querySelectorAll('.koi-article-user')).filter(e=>e.textContent.includes('参考乙文，润色甲文开头')).length"), 1, "the message is shown once");
     await wait("document.querySelector('[role=dialog]').textContent.includes('参考乙文，润色甲文开头') && window.agentUITest.prepared===1");
     const reply = '[role=dialog] [data-task-result]';
     await wait(`document.querySelector('${reply} h2')?.textContent === '修改建议'`);

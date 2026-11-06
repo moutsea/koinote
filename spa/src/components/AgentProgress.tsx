@@ -6,7 +6,7 @@ import type { WritingEvent, WritingTask } from "../writingAgent";
 import "./AgentProgress.css";
 
 export function AgentProgress({ task, events, approvalHint }: {
-  task: WritingTask;
+  task: Pick<WritingTask, "id" | "status" | "cancelRequested" | "taskIntent">;
   events?: readonly WritingEvent[];
   approvalHint?: string;
 }) {
