@@ -70,6 +70,21 @@ export async function checkArticleKoi(createClient,url) {
     assert.equal(await evaluate("document.querySelector('.koi-article-archived').open"),false);
     assert.equal(await evaluate("document.querySelectorAll('.koi-article-change[data-status=applied]').length"),1);
     await capture("article-revision");
+    // Regaining window focus refetches the thread while the POST is still held.
+    // The refetched task replaces the pending turn instead of doubling the message.
+    const again = "再检查一遍标点";
+    const turns = `Array.from(document.querySelectorAll('[role=dialog] .koi-article-user')).filter(e=>e.textContent.includes(${JSON.stringify(again)}))`;
+    await evaluate("window.agentUITest.failFirst=false;window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;document.querySelector('[role=dialog] textarea').focus()");
+    await send("Input.insertText",{text:again});
+    await click("发送");
+    await wait("window.agentUITest.responseHeld");
+    await wait(`${sending}?.textContent.includes(${JSON.stringify(again)})`);
+    await evaluate("window.dispatchEvent(new Event('visibilitychange'))");
+    await wait(`${turns}.some(e=>!e.closest('[data-agent-sending]'))`);
+    assert.equal(await evaluate(`${turns}.length`), 1, "a refresh during the request shows the message once");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait(`${sending}===null && document.querySelector('[role=dialog] textarea').value===''`);
+    assert.equal(await evaluate(`${turns}.length`), 1, "the accepted task is shown once");
     await send("Emulation.setDeviceMetricsOverride",{width:360,height:740,deviceScaleFactor:1,mobile:false});
     await evaluate("document.documentElement.classList.add('dark')");
     await wait("document.querySelector('.koi-article-thread').clientWidth<=360");
