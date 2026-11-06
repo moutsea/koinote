@@ -94,18 +94,27 @@ type githubRepositoryMetadata struct {
 
 type plainGitHubRepositoryMetadata githubRepositoryMetadata
 
-// UnmarshalJSON reads a missing or null "private" as private. Only an explicit
-// false lets system import, sync and discovery publish a repository.
+// UnmarshalJSON reads a repository as public only when "private" is explicitly
+// false and "visibility", if present, is exactly "public". A missing or null
+// "private", or any other visibility (internal, private, null or unknown),
+// reads as private, so system import, sync and discovery never publish it.
+// When "visibility" is absent, "private" alone decides.
 func (m *githubRepositoryMetadata) UnmarshalJSON(data []byte) error {
 	var decoded struct {
 		plainGitHubRepositoryMetadata
-		Private *bool `json:"private"`
+		Private    *bool           `json:"private"`
+		Visibility json.RawMessage `json:"visibility"`
 	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
 	*m = githubRepositoryMetadata(decoded.plainGitHubRepositoryMetadata)
-	m.Private = decoded.Private == nil || *decoded.Private
+	public := decoded.Private != nil && !*decoded.Private
+	if public && decoded.Visibility != nil {
+		var visibility *string
+		public = json.Unmarshal(decoded.Visibility, &visibility) == nil && visibility != nil && *visibility == "public"
+	}
+	m.Private = !public
 	return nil
 }
 

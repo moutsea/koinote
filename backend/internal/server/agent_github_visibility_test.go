@@ -11,7 +11,8 @@ import (
 )
 
 // Automatic publication relies on GitHub stating that a repository is public.
-// A response that omits "private" must never be read as public.
+// A response that omits "private", or whose "visibility" is anything but
+// "public", must never be read as public.
 func TestGitHubUnstatedVisibilityIsPrivate(t *testing.T) {
 	base := `"id":123,"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo"},"default_branch":"main"`
 	for _, tc := range []struct {
@@ -23,14 +24,22 @@ func TestGitHubUnstatedVisibilityIsPrivate(t *testing.T) {
 		{"null", `,"private":null`, true},
 		{"public", `,"private":false`, false},
 		{"private", `,"private":true`, true},
+		{"public visibility", `,"private":false,"visibility":"public"`, false},
+		{"internal visibility", `,"private":false,"visibility":"internal"`, true},
+		{"private visibility", `,"private":false,"visibility":"private"`, true},
+		{"null visibility", `,"private":false,"visibility":null`, true},
+		{"unknown visibility", `,"private":false,"visibility":"Public"`, true},
+		{"private with public visibility", `,"private":true,"visibility":"public"`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := "{" + base + tc.field + "}"
 			// Search results decode through the same type before discovery
 			// filters candidates, so the default must hold there too.
-			var item githubRepositoryMetadata
-			if err := json.Unmarshal([]byte(body), &item); err != nil || item.Private != tc.private || item.ID != 123 || item.Owner.Login != "Octo" {
-				t.Fatalf("decoded %+v err=%v", item, err)
+			var page struct {
+				Items []githubRepositoryMetadata `json:"items"`
+			}
+			if err := json.Unmarshal([]byte(`{"items":[`+body+`]}`), &page); err != nil || len(page.Items) != 1 || page.Items[0].Private != tc.private || page.Items[0].ID != 123 || page.Items[0].Owner.Login != "Octo" {
+				t.Fatalf("decoded %+v err=%v", page.Items, err)
 			}
 			for _, publicOnly := range []bool{true, false} {
 				calls := 0
