@@ -138,7 +138,7 @@ func (a *App) agentReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in 
 			return nil, nil, err
 		}
 		if len(snapshot.Document.Content) > 512<<10 {
-			return nil, nil, errors.New("文档内容超过 512 KB；请用 offset 和 limit 参数分页读取，或指定要处理的段落/章节")
+			return nil, nil, errors.New("文档超过本轮 512 KB 读取上限")
 		}
 		raw, _ := json.Marshal(snapshot)
 		_, err = tx.Exec(ctx, `INSERT INTO agent_document_reads(task_id,doc_id,snapshot) VALUES($1,$2,$3) ON CONFLICT(task_id,doc_id) DO UPDATE SET snapshot=EXCLUDED.snapshot,read_chars=0`, t.ID, id, raw)
