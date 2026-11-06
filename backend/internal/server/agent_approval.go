@@ -191,6 +191,8 @@ func (a *App) agentOperationBatchAction(w http.ResponseWriter, r *http.Request) 
 		agentError(w, err)
 		return
 	}
+	// The decision unblocks the task's next poll; claim it without the 2s tick.
+	a.notifyWritingAgent()
 	for _, update := range updates {
 		a.finishDocumentUpdate(r.Context(), user, update)
 	}

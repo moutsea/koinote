@@ -221,7 +221,12 @@ func (a *App) cancelAgentTask(ctx context.Context, userID int, id string) error 
 	if _, err = tx.Exec(ctx, `UPDATE agent_operations SET status='cancelled',updated_at=now() WHERE task_id=$1 AND user_id=$2 AND status='pending'`, id, userID); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	// Let a worker cancel the remote job and release the hold right away.
+	a.notifyWritingAgent()
+	return nil
 }
 
 // Conservative independent check: ordinary text corrections only. Markdown/code,
@@ -707,6 +712,8 @@ func (a *App) agentOperationAction(w http.ResponseWriter, r *http.Request) {
 		agentError(w, err)
 		return
 	}
+	// The decision unblocks the task's next poll; claim it without the 2s tick.
+	a.notifyWritingAgent()
 	if update != nil {
 		a.finishDocumentUpdate(r.Context(), user, *update)
 	}

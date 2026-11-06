@@ -58,13 +58,11 @@ func verifyWritingCallback(secret, timestamp, signature string, raw []byte, now 
 // Each claim is committed before network I/O. A crashed process is recovered after
 // its lease expires; the remote job's durable idempotency key never changes.
 //
-// Workers wake on three signals: a task-creation notify, the periodic ticker, or
-// context cancellation. The ticker alone would add up to ~2s of latency between a
-// POST returning 202 and the first dispatch attempt, which the user sees as a
-// "sent, but nothing is happening" pause before the "processing" indicator appears.
-// The notify channel collapses that pause without burning a tight polling loop
-// when the system is idle: the ticker is still the backstop for tasks recovered
-// after a crash, lease expiry, or a missed notify.
+// Workers wake on a notify, the periodic ticker, or context cancellation. A request
+// that sets next_poll_at=now() (a new task, approval, cancellation or callback)
+// notifies after commit, so the task is claimed without waiting up to 2s for a
+// tick. The ticker remains the backstop for crash recovery, lease expiry, the
+// scheduled polls of running jobs and any missed notify.
 func (a *App) StartWritingAgent(ctx context.Context) {
 	if !a.writingEnabled() {
 		return
@@ -90,9 +88,11 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 	}
 }
 
-// notifyWritingAgent wakes a worker without blocking. New creates the buffered
-// channel, so a notify sent before the workers start is kept for the first one.
-// App literals in unit tests have a nil channel; their ticker still claims tasks.
+// notifyWritingAgent wakes a worker without blocking. Call it after the commit
+// that set next_poll_at=now(), never before: a worker woken earlier cannot see
+// the row. New creates the buffered channel, so a notify sent before the workers
+// start is kept for the first one. App literals in unit tests have a nil channel;
+// their ticker still claims tasks.
 func (a *App) notifyWritingAgent() {
 	if a.writingWake == nil {
 		return

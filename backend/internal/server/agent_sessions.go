@@ -362,6 +362,8 @@ func (a *App) agentSessionDelete(w http.ResponseWriter, r *http.Request) {
 		agentError(w, err)
 		return
 	}
+	// Deleting a session cancels its unfinished task; let a worker settle it now.
+	a.notifyWritingAgent()
 	a.enqueueOrphanedImageKeys(r.Context(), userRef{ID: u.ID, AuthUserID: u.AuthUserID}, imageKeys)
 	httpx.JSON(w, 200, map[string]bool{"deleted": true})
 }

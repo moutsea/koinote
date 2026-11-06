@@ -208,5 +208,6 @@ func (a *App) writingWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Reconcile from the authoritative Job endpoint; callbacks never write articles or charge.
+	a.notifyWritingAgent()
 	w.WriteHeader(204)
 }

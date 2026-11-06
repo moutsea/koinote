@@ -345,6 +345,7 @@ func (a *App) writingTaskCreate(w http.ResponseWriter, r *http.Request) {
 		writingError(w, err)
 		return
 	}
+	a.notifyWritingAgent()
 	t, err := a.loadWritingTask(r.Context(), taskID, user.ID)
 	if err != nil {
 		writingError(w, err)
@@ -432,6 +433,7 @@ func (a *App) writingTaskCancel(w http.ResponseWriter, r *http.Request) {
 		writingError(w, err)
 		return
 	}
+	a.notifyWritingAgent()
 	httpx.JSON(w, 202, map[string]bool{"accepted": true})
 }
 
