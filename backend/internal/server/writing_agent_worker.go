@@ -57,10 +57,23 @@ func verifyWritingCallback(secret, timestamp, signature string, raw []byte, now 
 
 // Each claim is committed before network I/O. A crashed process is recovered after
 // its lease expires; the remote job's durable idempotency key never changes.
+//
+// Workers wake on three signals: a task-creation notify, the periodic ticker, or
+// context cancellation. The ticker alone would add up to ~2s of latency between a
+// POST returning 202 and the first dispatch attempt, which the user sees as a
+// "sent, but nothing is happening" pause before the "processing" indicator appears.
+// The notify channel collapses that pause without burning a tight polling loop
+// when the system is idle: the ticker is still the backstop for tasks recovered
+// after a crash, lease expiry, or a missed notify.
 func (a *App) StartWritingAgent(ctx context.Context) {
 	if !a.writingEnabled() {
 		return
 	}
+	a.writingWakeOnce.Do(func() {
+		// Buffered so a notify sent after commit never blocks the HTTP handler, even
+		// if every worker is busy with a long tick. The next tick picks the task up.
+		a.writingWake = make(chan struct{}, 1)
+	})
 	for i := 0; i < 2; i++ {
 		go func() {
 			timer := time.NewTicker(2 * time.Second)
@@ -70,12 +83,33 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				case <-timer.C:
+				case <-a.writingWake:
+					// Drain coalesces a burst of notifies into one tick; a second task
+					// arriving during processing is claimed on the next iteration
+					// regardless, since FOR UPDATE SKIP LOCKED skips the busy row.
+					select {
+					case <-a.writingWake:
+					default:
+					}
 				}
 				if err := a.writingTick(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("writing agent worker: %v", err)
 				}
 			}
 		}()
+	}
+}
+
+// notifyWritingAgent wakes a worker without blocking. Safe to call before
+// StartWritingAgent has initialized the channel (tests, single-process setups
+// that never start the worker) and when the channel is already full.
+func (a *App) notifyWritingAgent() {
+	if a.writingWake == nil {
+		return
+	}
+	select {
+	case a.writingWake <- struct{}{}:
+	default:
 	}
 }
 

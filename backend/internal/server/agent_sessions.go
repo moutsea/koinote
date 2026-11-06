@@ -521,6 +521,9 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 		agentError(w, err)
 		return
 	}
+	// Wake a worker now that the task is durably queued and visible to FOR UPDATE
+	// SKIP LOCKED. The 2s ticker is only the crash-recovery backstop.
+	a.notifyWritingAgent()
 	t, err := a.loadWritingTask(r.Context(), taskID, u.ID)
 	if err != nil {
 		agentError(w, err)

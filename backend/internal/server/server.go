@@ -59,6 +59,8 @@ type App struct {
 	xOAuth2Refreshes        map[int]*xOAuth2Refresh
 	serverStatus            *serverStatusMonitor
 	serverStatusOnce        sync.Once
+	writingWake             chan struct{}
+	writingWakeOnce         sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
