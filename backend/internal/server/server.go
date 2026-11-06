@@ -60,7 +60,6 @@ type App struct {
 	serverStatus            *serverStatusMonitor
 	serverStatusOnce        sync.Once
 	writingWake             chan struct{}
-	writingWakeOnce         sync.Once
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) *App {
@@ -83,6 +82,7 @@ func New(cfg config.Config, db *pgxpool.Pool) *App {
 		mediaHTTPClient:         newSafeLLMHTTPClient(),
 		feishuDocsHTTPClient:    newFeishuDocsHTTPClient(),
 		feishuAccountSlots:      make(chan struct{}, feishuAccountConcurrency),
+		writingWake:             make(chan struct{}, 1), // before any task POST can notify
 		wechatTokens:            make(map[string]wechatAccessToken),
 		wechatTokenRefreshes:    make(map[wechatTokenRefreshKey]*wechatTokenRefresh),
 		xOAuth2Refreshes:        make(map[int]*xOAuth2Refresh),

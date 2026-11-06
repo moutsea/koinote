@@ -69,11 +69,6 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 	if !a.writingEnabled() {
 		return
 	}
-	a.writingWakeOnce.Do(func() {
-		// Buffered so a notify sent after commit never blocks the HTTP handler, even
-		// if every worker is busy with a long tick. The next tick picks the task up.
-		a.writingWake = make(chan struct{}, 1)
-	})
 	for i := 0; i < 2; i++ {
 		go func() {
 			timer := time.NewTicker(2 * time.Second)
@@ -84,13 +79,8 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 					return
 				case <-timer.C:
 				case <-a.writingWake:
-					// Drain coalesces a burst of notifies into one tick; a second task
-					// arriving during processing is claimed on the next iteration
-					// regardless, since FOR UPDATE SKIP LOCKED skips the busy row.
-					select {
-					case <-a.writingWake:
-					default:
-					}
+					// No drain: a tick claims one task, so a second queued notify must
+					// stay available to wake the other worker.
 				}
 				if err := a.writingTick(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("writing agent worker: %v", err)
@@ -100,9 +90,9 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 	}
 }
 
-// notifyWritingAgent wakes a worker without blocking. Safe to call before
-// StartWritingAgent has initialized the channel (tests, single-process setups
-// that never start the worker) and when the channel is already full.
+// notifyWritingAgent wakes a worker without blocking. New creates the buffered
+// channel, so a notify sent before the workers start is kept for the first one.
+// App literals in unit tests have a nil channel; their ticker still claims tasks.
 func (a *App) notifyWritingAgent() {
 	if a.writingWake == nil {
 		return
