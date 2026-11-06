@@ -92,6 +92,23 @@ type githubRepositoryMetadata struct {
 	} `json:"license"`
 }
 
+type plainGitHubRepositoryMetadata githubRepositoryMetadata
+
+// UnmarshalJSON reads a missing or null "private" as private. Only an explicit
+// false lets system import, sync and discovery publish a repository.
+func (m *githubRepositoryMetadata) UnmarshalJSON(data []byte) error {
+	var decoded struct {
+		plainGitHubRepositoryMetadata
+		Private *bool `json:"private"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*m = githubRepositoryMetadata(decoded.plainGitHubRepositoryMetadata)
+	m.Private = decoded.Private == nil || *decoded.Private
+	return nil
+}
+
 func (a *App) githubCredentialCipher() (cipher.AEAD, error) {
 	// Domain-separated key derivation reuses the deployed encryption root,
 	// never the MCP ciphertext format or token identifier.
