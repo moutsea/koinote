@@ -411,12 +411,15 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
     if (nearBottom.current && scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [transcriptKey]);
+  // Follow a send only in its own tab. The transcript element is shared, so a
+  // reply for a tab the user left must not move the tab they are reading.
+  const sendingHere = sending?.sessionId === active;
   useEffect(() => {
-    if (sending && scrollRef.current) {
+    if (sendingHere && scrollRef.current) {
       nearBottom.current = true;
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [sending]);
+  }, [sendingHere]);
 
   const refresh = async () => {
     await Promise.all([
@@ -603,7 +606,6 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
             draftSubmissions,
           };
         });
-        nearBottom.current = true;
         await refresh();
       } finally {
         if (currentAccount.current === accountKey) setSending(null);

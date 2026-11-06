@@ -123,6 +123,56 @@ export async function checkComposerKeyboard(createClient, url) {
     await wait("!document.querySelector('[data-agent-sending]') && Array.from(document.querySelectorAll('.agent-turn')).some(e=>e.textContent.includes('第二行'))");
     await evaluate("window.agentUITest.releasePages()");
     assert.equal(await evaluate("window.agentUITest.submissions.at(-1).message"),"下一条草稿\n第二行");
-    console.log("Koi composer keyboard passed: Enter send, Ctrl+Enter caret/selection/newline persistence, IME/native/WebKit guards, repeat, length limit and busy drafts.");
+
+    // A reply for a tab the user left must not scroll the tab they are reading.
+    // Earlier checks can fill the 50 stored tabs. Close them (history keeps the
+    // sessions) so both sessions below get a tab in this window.
+    const tabs = "Array.from(document.querySelectorAll('[data-agent-panel] [role=tab]'))";
+    const selectedTab = `${tabs}.findIndex(e=>e.getAttribute('aria-selected')==='true')`;
+    const transcript = "document.querySelector('.agent-transcript')";
+    const idle = `document.querySelector('select[aria-label="改动权限"]')?.disabled === false`;
+    await evaluate("for (const button of Array.from(document.querySelectorAll('[data-agent-panel] .agent-tab-close'))) button.click()");
+    const openTab = async () => {
+      const before = await evaluate("window.agentUITest.layoutStorage.read('agent-ui-test').active");
+      await clickAria("新建会话");
+      await wait(`window.agentUITest.layoutStorage.read('agent-ui-test').active !== ${JSON.stringify(before)}
+        && ${idle} && document.querySelector('textarea') && ${selectedTab} >= 0`);
+      return [await evaluate("window.agentUITest.layoutStorage.read('agent-ui-test').active"), await evaluate(selectedTab)];
+    };
+    const [reading, readingTab] = await openTab();
+    await fill("可以滚动的会话");
+    await enter();
+    await wait(`${idle} && !document.querySelector('[data-agent-sending]')
+      && Array.from(document.querySelectorAll('.agent-user-message')).some(e=>e.textContent.includes('可以滚动的会话'))`);
+    const [, backgroundTab] = await openTab();
+    await fill("后台会话的回复");
+    await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false");
+    await enter();
+    await wait("window.agentUITest.responseHeld && document.querySelector('[data-agent-sending]')");
+    await evaluate(`${tabs}[${readingTab}].click()`);
+    await wait(`${tabs}[${readingTab}].getAttribute('aria-selected')==='true' && !document.querySelector('[data-agent-sending]')
+      && Array.from(document.querySelectorAll('.agent-user-message')).some(e=>e.textContent.includes('可以滚动的会话'))`);
+    // Make the transcript scrollable, then read it from the top. Wait for the
+    // browser's own scroll event, so the panel has seen the user leave the end.
+    await evaluate(`new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=${transcript};el.style.maxHeight='120px';
+      const top=()=>{if(el.scrollTop===0){el.removeEventListener('scroll',top);r();}};el.addEventListener('scroll',top);
+      el.scrollTop=el.scrollHeight;requestAnimationFrame(()=>requestAnimationFrame(()=>{el.scrollTop=0;}));})))`);
+    assert.ok(await evaluate(`${transcript}.scrollHeight-${transcript}.clientHeight>80`), "the visible tab can scroll");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait(`!document.querySelector('select[aria-label="改动权限"]').disabled
+      && window.agentUITest.submissions.at(-1).message==='后台会话的回复'`);
+    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))");
+    assert.equal(await evaluate(`${transcript}.scrollTop`), 0, "a background reply moved the visible transcript");
+    // Nor may that reply make the next update in the visible tab scroll it.
+    await evaluate(`window.agentUITest.startBackgroundTask(${JSON.stringify(reading)})`);
+    await wait("Array.from(document.querySelectorAll('.agent-user-message')).some(e=>e.textContent.includes('创建文件夹'))");
+    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))");
+    assert.equal(await evaluate(`${transcript}.scrollTop`), 0, "a background reply re-armed following in the visible tab");
+    await evaluate(`window.agentUITest.completeBackgroundTask(${JSON.stringify(reading)})`);
+    await wait("Array.from(document.querySelectorAll('.agent-turn')).some(e=>e.textContent.includes('后台创建完成'))");
+    await evaluate(`${transcript}.style.maxHeight=''`);
+    await evaluate(`${tabs}[${backgroundTab}].click()`);
+    await wait("Array.from(document.querySelectorAll('.agent-user-message')).some(e=>e.textContent.includes('后台会话的回复')) && !document.querySelector('[data-agent-sending]')");
+    console.log("Koi composer keyboard passed: Enter send, Ctrl+Enter caret/selection/newline persistence, IME/native/WebKit guards, repeat, length limit, busy drafts and background-tab replies.");
   } finally { await client.close(); }
 }
