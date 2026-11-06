@@ -78,8 +78,6 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 		go func() {
 			timer := time.NewTicker(2 * time.Second)
 			defer timer.Stop()
-			cleanupTimer := time.NewTicker(5 * time.Minute)
-			defer cleanupTimer.Stop()
 			for {
 				select {
 				case <-ctx.Done():
@@ -93,14 +91,6 @@ func (a *App) StartWritingAgent(ctx context.Context) {
 					case <-a.writingWake:
 					default:
 					}
-				case <-cleanupTimer.C:
-					// Periodic scan for tasks that expired without ever being leased.
-					// Most tasks finish normally via advanceWritingTask, but a backed-up
-					// queue or a long deployment could leave tasks stranded past deadline.
-					if err := a.cleanupExpiredWritingTasks(ctx); err != nil && !errors.Is(err, context.Canceled) {
-						log.Printf("cleanup expired writing tasks: %v", err)
-					}
-					continue // Skip the regular tick after cleanup
 				}
 				if err := a.writingTick(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("writing agent worker: %v", err)
@@ -121,57 +111,6 @@ func (a *App) notifyWritingAgent() {
 	case a.writingWake <- struct{}{}:
 	default:
 	}
-}
-
-// cleanupExpiredWritingTasks marks tasks whose deadline+grace-period passed
-// as failed and releases their credit reservations. This prevents the situation
-// where a task gets stuck in "queued" forever because workers never claimed its
-// lease (e.g., during a long deployment or when the queue is backed up).
-//
-// The grace period (10 minutes past the deadline) allows time for remote job
-// lookups and final event collection before giving up. Tasks that successfully
-// submitted to agent-gpt (job_id != '') keep polling even after expiry to
-// collect their definitive terminal state and usage.
-//
-// Called periodically by StartWritingAgent. Expired tasks that were never leased
-// are safe to finish without holding a lease: the UPDATE's WHERE filters already
-// guarantee no worker is concurrently processing the same row.
-func (a *App) cleanupExpiredWritingTasks(ctx context.Context) error {
-	// Find tasks whose deadline+grace expired, no remote job was ever created,
-	// and no worker currently holds a lease. Those can be safely ended.
-	rows, err := a.db.Query(ctx, `
-		SELECT `+writingTaskColumns+`
-		FROM writing_agent_tasks
-		WHERE status NOT IN ('completed','failed','cancelled')
-		  AND deadline + interval '10 minutes' < now()
-		  AND job_id = ''
-		  AND lease_until < now()
-		LIMIT 50
-	`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	var tasks []writingTask
-	for rows.Next() {
-		t, e := scanWritingTask(rows)
-		if e != nil {
-			return e
-		}
-		tasks = append(tasks, t)
-	}
-	if err = rows.Err(); err != nil {
-		return err
-	}
-	for _, t := range tasks {
-		// Each task gets its own context so one failure doesn't block cleanup of others.
-		taskCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := a.finishWritingTask(taskCtx, t, "failed", "任务超时未能提交到 Agent 服务，已释放预留积分。请重试；若持续失败请联系管理员。", nil, ""); err != nil {
-			log.Printf("cleanup expired task %s: %v", t.ID, err)
-		}
-		cancel()
-	}
-	return nil
 }
 
 func (a *App) writingTick(parent context.Context) error {
