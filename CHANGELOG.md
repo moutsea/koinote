@@ -6,6 +6,18 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.11] - 2026-11-07
+
+### Changed
+
+- Koi starts and resumes tasks more promptly. Messages stay visible while they are being sent, including when the article panel refreshes.
+- Replies arriving in a background tab preserve the scroll position of the conversation you are reading.
+- GitHub imports distinguish temporary outages from unavailable repositories and show when to retry. Automatic repository discovery retries brief search failures, and completed updates remain successful if cleanup times out.
+
+### Security
+
+- Shared system repositories require explicit public visibility from GitHub before their contents can be imported or refreshed.
+
 ## [1.1.10] - 2026-11-04
 
 ### Changed

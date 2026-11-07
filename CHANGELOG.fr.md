@@ -4,6 +4,18 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.11] - 2026-11-07
+
+### Changed
+
+- Koi démarre et reprend les tâches plus rapidement. Les messages restent visibles pendant leur envoi, même si le panneau de l’article s’actualise.
+- Une réponse reçue dans un onglet en arrière-plan préserve la position de défilement de la conversation que vous consultez.
+- L’import GitHub distingue les pannes temporaires des dépôts indisponibles et indique quand réessayer. La découverte automatique réessaie après une brève panne de recherche, et une mise à jour terminée reste réussie si le nettoyage dépasse son délai.
+
+### Security
+
+- Les dépôts partagés du système doivent être explicitement déclarés publics par GitHub avant l’importation ou l’actualisation de leur contenu.
+
 ## [1.1.10] - 2026-11-04
 
 ### Changed

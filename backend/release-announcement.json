@@ -1,40 +1,40 @@
 {
-  "version": "1.1.10",
+  "version": "1.1.11",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.10",
+      "title": "What's new in Koinote 1.1.11",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "The article sidebar groups each revision with its preview and undo action. Start with a shortcut to polish wording, check spelling or tighten the opening.",
-        "Koi submits one complete revision for each editing request and finishes when you approve it. A theme change no longer blocks approval or undo. If the title or body has changed, Koi protects the newer edits.",
-        "Longer tasks can keep paging through documents. When a run reaches its limit, Koi reports the changes already applied and flags the remaining work as unverified."
+        "Koi starts and resumes tasks more promptly. Messages stay visible while they are being sent, including when the article panel refreshes.",
+        "Replies arriving in a background tab preserve the scroll position of the conversation you are reading.",
+        "GitHub imports distinguish temporary outages from unavailable repositories and show when to retry. Automatic repository discovery retries brief search failures, and completed updates remain successful if cleanup times out."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.10 新功能",
+      "title": "Koinote 1.1.11 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "文章侧栏现在把修订稿、查看差异和撤销放在一起。可以从润色表达、检查错别字或精简开头开始。",
-        "Koi 会把一次润色合并为一份完整修订，批准后即结束。仅主题等信息变化时仍可应用或撤销；标题或正文已有新编辑时会保留这些编辑。",
-        "长任务可以继续翻页和核对文档。触及执行上限时，Koi 会列出已完成的改动，并提示其余工作尚未核实。"
+        "Koi 启动和继续任务更及时。消息发送期间会持续显示，文章面板刷新时也能保留发送状态。",
+        "后台标签页收到回复时，会保留当前正在阅读的对话的滚动位置。",
+        "GitHub 导入会区分临时故障和仓库不可用，并提示何时重试。自动收录会重试短暂的搜索故障；已完成的仓库更新不会因后续清理超时而误报失败。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.10",
+      "title": "Nouveautés de Koinote 1.1.11",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Le panneau de l’article regroupe chaque révision, son aperçu et son annulation. Des raccourcis permettent d’affiner le style, de corriger les fautes ou de raccourcir l’introduction.",
-        "Koi propose une seule révision par demande et termine dès son approbation. Un changement de thème ne bloque plus l’application ou l’annulation. Les modifications ultérieures du titre et du texte sont préservées.",
-        "Les tâches longues peuvent poursuivre la lecture des documents. Si une limite est atteinte, Koi indique les changements appliqués et signale le travail restant à vérifier."
+        "Koi démarre et reprend les tâches plus rapidement. Les messages restent visibles pendant leur envoi, même si le panneau de l’article s’actualise.",
+        "Une réponse reçue dans un onglet en arrière-plan préserve la position de défilement de la conversation que vous consultez.",
+        "L’import GitHub distingue les pannes temporaires des dépôts indisponibles et indique quand réessayer. La découverte automatique réessaie après une brève panne de recherche, et une mise à jour terminée reste réussie si le nettoyage dépasse son délai."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.10 の新機能",
+      "title": "Koinote 1.1.11 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "記事のサイドバーで、修正案ごとに差分の確認と取り消しができます。表現の調整、誤字の確認、冒頭の短縮をすぐに依頼できます。",
-        "Koi は一度の依頼を一つの修正案にまとめ、承認後に処理を終了します。テーマだけが変わった場合は適用や取り消しを続けられ、タイトルや本文に加えた編集は保持されます。",
-        "長いタスクでも文書のページを順に確認できます。実行上限に達した場合、適用した変更を示し、残りの作業が未確認であることをお知らせします。"
+        "Koi のタスク開始と再開がより迅速になりました。送信中のメッセージは、記事パネルが更新されても表示と送信状態を維持します。",
+        "バックグラウンドのタブに返信が届いても、閲覧中の会話のスクロール位置を維持します。",
+        "GitHub のインポートで一時的な障害とリポジトリの利用不可を区別し、再試行の案内を表示します。自動収集では一時的な検索障害を再試行し、更新完了後のクリーンアップがタイムアウトしても成功として扱います。"
       ]
     }
   }
