@@ -135,12 +135,18 @@ func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "github_token_invalid", err.Error())
 	case errors.Is(err, errAgentGitHubCredentialCrypto):
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_credential_unavailable", "GitHub credential storage is unavailable")
-	case errors.Is(err, errAgentGitHubRepositoryInvalid), errors.Is(err, errAgentGitHubLicense):
+	case errors.Is(err, errAgentGitHubRepositoryInvalid), errors.Is(err, errAgentGitHubRequestInvalid), errors.Is(err, errAgentGitHubLicense):
 		httpx.ErrorCode(w, http.StatusBadRequest, "github_repository_invalid", err.Error())
 	case errors.Is(err, errAgentGitHubRepositoryMissing):
 		httpx.ErrorCode(w, http.StatusNotFound, "github_repository_unavailable", err.Error())
+	// A transport fault, invalid upstream response or GitHub 5xx is not the
+	// caller's repository going away, so ask the client to retry instead.
+	case errors.Is(err, errAgentGitHubTransient), errors.Is(err, errAgentGitHubResponseInvalid):
+		w.Header().Set("Retry-After", "30")
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_temporarily_unavailable", "GitHub is temporarily unavailable; try again later")
 	case errors.Is(err, errAgentGitHubDownloadFailed):
-		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_repository_unavailable", err.Error())
+		w.Header().Set("Retry-After", "30")
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_temporarily_unavailable", "GitHub repository download failed; try again later")
 	case errors.Is(err, errAgentGitHubArchiveInvalid):
 		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "github_archive_invalid", err.Error())
 	case errors.Is(err, errAgentGitHubRateLimited), errors.Is(err, errAgentGitHubImportBusy):

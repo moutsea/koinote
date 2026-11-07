@@ -19,7 +19,7 @@ export function githubImportErrorMessage(error: unknown, labels: Record<string, 
     github_token_required: "githubTokenRequired", github_token_invalid: "githubTokenInvalid",
     github_credential_unavailable: "githubCredentialUnavailable", github_repository_invalid: "githubRepositoryInvalid",
     github_repository_unavailable: "githubRepositoryUnavailable", github_archive_invalid: "githubArchiveInvalid",
-    github_rate_limited: "githubRateLimited", rate_limited: "githubRateLimited", sensitive_data_detected: "githubSensitive",
+    github_temporarily_unavailable: "githubTemporarilyUnavailable", github_rate_limited: "githubRateLimited", rate_limited: "githubRateLimited", sensitive_data_detected: "githubSensitive",
     agent_workspace_quota_exceeded: "githubQuota", revision_conflict: "sharingConflict",
   };
   return error instanceof ApiError && error.code && keys[error.code] ? labels[keys[error.code]] : labels.githubImportFailed;

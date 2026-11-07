@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"koinote/backend/internal/config"
 )
@@ -140,7 +141,7 @@ func githubImportClient(t *testing.T, archive []byte, token string, private bool
 		}
 		switch r.URL.Path {
 		case "/repos/octo/demo":
-			response.Body = io.NopCloser(strings.NewReader(fmt.Sprintf(`{"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo","html_url":"https://evil.example/ignored"},"html_url":"https://evil.example/ignored","description":"Imported skills","default_branch":"main","private":%t,"license":{"spdx_id":"MPL-2.0"}}`, private)))
+			response.Body = io.NopCloser(strings.NewReader(fmt.Sprintf(`{"id":123,"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo","html_url":"https://evil.example/ignored"},"html_url":"https://evil.example/ignored","description":"Imported skills","default_branch":"main","private":%t,"license":{"spdx_id":"MPL-2.0"}}`, private)))
 		case "/repos/Octo/demo/commits/main", "/repos/Octo/demo/commits/feature/import":
 			if r.Header.Get("Accept") != "application/vnd.github.sha" {
 				t.Error("commit should request bounded SHA response")
@@ -224,6 +225,13 @@ func TestGitHubArchiveValidation(t *testing.T) {
 	if _, err = readGitHubArchive(context.Background(), bytes.NewReader(data), int64(len(data))); !errors.Is(err, errAgentGitHubArchiveInvalid) {
 		t.Fatalf("decompressed size limit: %v", err)
 	}
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	<-deadlineCtx.Done()
+	data = githubArchive(t, githubArchiveEntry{"root/SKILL.md", "# Skill", 0})
+	if _, err = readGitHubArchive(deadlineCtx, bytes.NewReader(data), int64(len(data))); !errors.Is(err, errAgentGitHubTransient) {
+		t.Fatalf("expired import deadline was not retryable: %v", err)
+	}
 }
 
 func TestGitHubRequestsAndCredentialsAreBounded(t *testing.T) {
@@ -267,14 +275,139 @@ func TestGitHubRequestsAndCredentialsAreBounded(t *testing.T) {
 		t.Fatal("valid token/hint failed")
 	}
 	limited := &http.Response{StatusCode: 403, Header: http.Header{"X-Ratelimit-Remaining": []string{"0"}}}
-	if !errors.Is(githubResponseError(limited), errAgentGitHubRateLimited) {
+	if !errors.Is(githubResponseError(limited, githubRequestMetadata), errAgentGitHubRateLimited) {
 		t.Fatal("rate limit mistaken for credential failure")
 	}
 	app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}` + strings.Repeat(" ", githubResponseMaxBytes))), Request: r}, nil
 	})}
-	if _, err = app.githubRead(context.Background(), "https://api.github.com/repos/o/r", "", "application/vnd.github+json"); err == nil {
-		t.Fatal("oversized metadata accepted")
+	if _, err = app.githubRead(context.Background(), "https://api.github.com/repos/o/r", "", "application/vnd.github+json", githubRequestMetadata); !errors.Is(err, errAgentGitHubResponseInvalid) {
+		t.Fatalf("oversized metadata lost protocol-error classification: %v", err)
+	}
+}
+
+func TestGitHubResponseErrorsDistinguishPermanentAndRetryableFailures(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		status int
+		stage  githubRequestStage
+		want   error
+	}{
+		{name: "metadata not found", status: http.StatusNotFound, stage: githubRequestMetadata, want: errAgentGitHubRepositoryMissing},
+		{name: "metadata gone", status: http.StatusGone, stage: githubRequestMetadata, want: errAgentGitHubRepositoryMissing},
+		{name: "metadata legally blocked", status: http.StatusUnavailableForLegalReasons, stage: githubRequestMetadata, want: errAgentGitHubRepositoryMissing},
+		{name: "commit legally blocked", status: http.StatusUnavailableForLegalReasons, stage: githubRequestCommit, want: errAgentGitHubRequestInvalid},
+		{name: "archive legally blocked", status: http.StatusUnavailableForLegalReasons, stage: githubRequestArchive, want: errAgentGitHubDownloadFailed},
+		{name: "commit ref not found", status: http.StatusNotFound, stage: githubRequestCommit, want: errAgentGitHubRequestInvalid},
+		{name: "commit ref gone", status: http.StatusGone, stage: githubRequestCommit, want: errAgentGitHubRequestInvalid},
+		{name: "archive not found", status: http.StatusNotFound, stage: githubRequestArchive, want: errAgentGitHubDownloadFailed},
+		{name: "archive gone", status: http.StatusGone, stage: githubRequestArchive, want: errAgentGitHubDownloadFailed},
+		{name: "search not found", status: http.StatusNotFound, stage: githubRequestSearch, want: errAgentGitHubTransient},
+		{name: "search gone", status: http.StatusGone, stage: githubRequestSearch, want: errAgentGitHubTransient},
+		{name: "request timeout", status: http.StatusRequestTimeout, stage: githubRequestMetadata, want: errAgentGitHubTransient},
+		{name: "server error", status: http.StatusBadGateway, stage: githubRequestMetadata, want: errAgentGitHubTransient},
+		{name: "invalid request", status: http.StatusUnprocessableEntity, stage: githubRequestMetadata, want: errAgentGitHubRequestInvalid},
+		{name: "unexpected success status", status: http.StatusNoContent, stage: githubRequestMetadata, want: errAgentGitHubResponseInvalid},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := &http.Response{StatusCode: test.status, Header: make(http.Header)}
+			if got := githubResponseError(response, test.stage); !errors.Is(got, test.want) {
+				t.Fatalf("status %d classified as %v, want %v", test.status, got, test.want)
+			}
+		})
+	}
+}
+
+func TestGitHubMalformedSuccessResponsesAreRetryable(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		metadata   string
+		commit     string
+		wantDetail string
+	}{
+		{name: "invalid metadata", metadata: `{`, commit: githubTestSHA, wantDetail: "metadata"},
+		{name: "missing repository id", metadata: `{"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo"},"default_branch":"main"}`, commit: githubTestSHA, wantDetail: "metadata"},
+		{name: "missing default branch", metadata: `{"id":123,"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo"}}`, commit: githubTestSHA, wantDetail: "metadata"},
+		{name: "invalid commit sha", metadata: `{"id":123,"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo"},"default_branch":"main"}`, commit: "not-a-sha", wantDetail: "commit"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				body := test.metadata
+				if strings.Contains(r.URL.Path, "/commits/") {
+					body = test.commit
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}}
+			_, _, err := app.resolveGitHubRepository(context.Background(), "octo", "demo", "", "", false)
+			if !errors.Is(err, errAgentGitHubResponseInvalid) || systemRepositorySyncErrorCode(err) != "github_response_invalid" {
+				t.Fatalf("malformed %s response was not retryable: %v", test.wantDetail, err)
+			}
+		})
+	}
+}
+
+func TestGitHubRequestDeadlineIsRetryable(t *testing.T) {
+	app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	})}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	<-ctx.Done()
+	if _, err := app.githubRead(ctx, "https://api.github.com/repos/o/r", "", "application/vnd.github+json", githubRequestMetadata); !errors.Is(err, errAgentGitHubTransient) {
+		t.Fatalf("metadata deadline was not retryable: %v", err)
+	}
+}
+
+// The 90-second import deadline also bounds token loading and the final
+// database transaction, so a slow advisory lock or commit must surface as the
+// same retryable 503 as an upstream timeout, never a bare 500.
+func TestGitHubImportErrorWriterMapsDeadlineAndCancel(t *testing.T) {
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	<-deadlineCtx.Done()
+	res := httptest.NewRecorder()
+	writeAgentGitHubImportError(res, context.DeadlineExceeded)
+	if res.Code != http.StatusServiceUnavailable {
+		t.Fatalf("import deadline: status %d", res.Code)
+	}
+	if res.Header().Get("Retry-After") == "" {
+		t.Fatal("import deadline: missing Retry-After")
+	}
+	if !strings.Contains(res.Body.String(), "github_temporarily_unavailable") {
+		t.Fatalf("import deadline: body %q", res.Body.String())
+	}
+
+	// A wrapped database error (for example pgx) still carries the sentinel.
+	res = httptest.NewRecorder()
+	writeAgentGitHubImportError(res, fmt.Errorf("lock wait: %w", context.DeadlineExceeded))
+	if res.Code != http.StatusServiceUnavailable || !strings.Contains(res.Body.String(), "github_temporarily_unavailable") {
+		t.Fatalf("wrapped deadline: status %d body %q", res.Code, res.Body.String())
+	}
+
+	// A client disconnect must not write a misleading error response.
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res = httptest.NewRecorder()
+	writeAgentGitHubImportError(res, cancelCtx.Err())
+	if res.Code != http.StatusOK || res.Body.Len() != 0 {
+		t.Fatalf("client cancel: status %d body %q", res.Code, res.Body.String())
+	}
+
+	// Everything else keeps the shared agent workspace mapping.
+	res = httptest.NewRecorder()
+	writeAgentGitHubImportError(res, errAgentGitHubRateLimited)
+	if res.Code != http.StatusTooManyRequests || !strings.Contains(res.Body.String(), "github_rate_limited") {
+		t.Fatalf("passthrough: status %d body %q", res.Code, res.Body.String())
+	}
+
+	// A business error (quota) must survive even though the request context
+	// expired while deferred staging cleanup was still running: rewriting it
+	// into a retryable 503 would hide the quota guidance from the client.
+	res = httptest.NewRecorder()
+	writeAgentGitHubImportError(res, errAgentWorkspaceQuota)
+	if res.Code != http.StatusRequestEntityTooLarge || !strings.Contains(res.Body.String(), "agent_workspace_quota_exceeded") {
+		t.Fatalf("business error survives deadline: status %d body %q", res.Code, res.Body.String())
 	}
 }
 
@@ -497,7 +630,7 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 				} else {
 					switch r.URL.Path {
 					case base:
-						body = fmt.Sprintf(`{"name":%q,"full_name":%q,"owner":{"login":%q},"default_branch":"main"}`, repo, owner+"/"+repo, owner)
+						body = fmt.Sprintf(`{"id":123,"name":%q,"full_name":%q,"owner":{"login":%q},"default_branch":"main"}`, repo, owner+"/"+repo, owner)
 					case base + "/commits/main":
 						body = githubTestSHA
 						accept = "application/vnd.github.sha"

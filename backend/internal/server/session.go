@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -172,6 +174,9 @@ func (a *App) sessionUser(r *http.Request) (model.User, userClient, error) {
 		if authID := strings.TrimSpace(r.Header.Get("X-Auth-User-Id")); authID != "" {
 			user, err := a.getUserByAuthUserID(r.Context(), authID)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+					return model.User{}, "", err
+				}
 				return model.User{}, "", expired
 			}
 			return user, "", nil
@@ -195,6 +200,11 @@ func (a *App) sessionUser(r *http.Request) (model.User, userClient, error) {
 		return model.User{}, "", &sessionAuthError{status: http.StatusUnauthorized, code: "unauthorized", message: "Not logged in"}
 	}
 	user, err := a.getUserByAuthUserID(r.Context(), payload.AuthUserID)
+	// A temporary database wait must not invalidate a signed session or clear
+	// its cookie. Callers with a request budget need the cancellation cause.
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return model.User{}, "", err
+	}
 	// Cookies issued before session versioning represent the initial version.
 	version := payload.SessionVersion
 	if version == 0 {
@@ -210,6 +220,15 @@ func (a *App) sessionUser(r *http.Request) (model.User, userClient, error) {
 // requireUser writes an authentication error; optional public views can instead
 // remain anonymous while sharing exactly the same session validity rules.
 func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, bool) {
+	return a.requireUserWithErrorHandler(w, r, func(w http.ResponseWriter, err error) {
+		log.Printf("session authentication: %v", err)
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
+	})
+}
+
+// Request-budgeted handlers can map database cancellation without turning a
+// valid login into session_expired or clearing its cookie.
+func (a *App) requireUserWithErrorHandler(w http.ResponseWriter, r *http.Request, onError func(http.ResponseWriter, error)) (model.User, bool) {
 	user, client, err := a.sessionUser(r)
 	if err != nil {
 		if authErr, ok := err.(*sessionAuthError); ok {
@@ -218,8 +237,7 @@ func (a *App) requireUser(w http.ResponseWriter, r *http.Request) (model.User, b
 			}
 			httpx.ErrorCode(w, authErr.status, authErr.code, authErr.message)
 		} else {
-			log.Printf("session authentication: %v", err)
-			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error")
+			onError(w, err)
 		}
 		return model.User{}, false
 	}

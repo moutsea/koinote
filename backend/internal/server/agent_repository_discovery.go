@@ -20,9 +20,16 @@ const (
 	agentRepositoryDiscoveryDailyLimit             = 20
 	agentRepositoryDiscoveryMinStars               = 100
 	agentRepositoryDiscoveryPreviewMaxChecks       = 100
+	// Three attempts keep a brief GitHub fault from wasting a whole slot while
+	// still leaving the run short enough to fit inside the job deadline.
+	agentRepositorySearchAttempts   = 3
+	agentRepositorySearchRetryDelay = 500 * time.Millisecond
 )
 
-var errAgentRepositoryDiscoveryStopped = errors.New("daily discovery budget reached or calendar day changed")
+var (
+	errAgentRepositoryDiscoveryStopped = errors.New("daily discovery budget reached or calendar day changed")
+	errAgentGitHubSearchIncomplete     = errors.New("GitHub search returned incomplete results; retry later")
+)
 
 type SystemRepositoryDiscoveryOptions struct {
 	Apply       bool
@@ -115,28 +122,9 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 		summary.Checked++
 		jobCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		result, discoverErr := a.discoverSystemRepository(jobCtx, candidate, summary.Day, options)
+		jobErr := jobCtx.Err()
 		cancel()
-		if discoverErr != nil {
-			result.Status, result.Code = "failed", systemRepositorySyncErrorCode(discoverErr)
-			if errors.Is(discoverErr, errAgentWorkspaceLimit) {
-				result.Code = "catalog_capacity_reached"
-			}
-			if errors.Is(discoverErr, errAgentRepositoryDiscoveryStopped) {
-				result.Code = "daily_budget_or_day_changed"
-			}
-			summary.Failed++
-		} else {
-			switch result.Status {
-			case "added":
-				summary.Added++
-				summary.Remaining--
-			case "would_add":
-				summary.WouldAdd++
-				summary.Remaining--
-			case "skipped":
-				summary.Skipped++
-			}
-		}
+		result, discoverErr = summary.recordResult(result, discoverErr, jobErr)
 		if options.OnResult != nil {
 			options.OnResult(result)
 		}
@@ -158,6 +146,39 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 		return summary, errors.New("some candidates could not be processed; see results")
 	}
 	return summary, nil
+}
+
+// recordResult reconciles the job deadline with the publication result before
+// counting it. A valid added result with no publish error confirms a committed
+// transaction; deferred staging cleanup may cross the deadline after that commit.
+// Uncommitted results must still fail on timeout and leave the allowance intact.
+func (summary *SystemRepositoryDiscoverySummary) recordResult(result SystemRepositoryDiscoveryResult, discoverErr, jobErr error) (SystemRepositoryDiscoveryResult, error) {
+	committed := result.Status == "added" && result.WorkspaceID > 0
+	if discoverErr == nil && jobErr != nil && !committed {
+		discoverErr = jobErr
+	}
+	if discoverErr != nil {
+		result.Status, result.Code = "failed", systemRepositorySyncErrorCode(discoverErr)
+		if errors.Is(discoverErr, errAgentWorkspaceLimit) {
+			result.Code = "catalog_capacity_reached"
+		}
+		if errors.Is(discoverErr, errAgentRepositoryDiscoveryStopped) {
+			result.Code = "daily_budget_or_day_changed"
+		}
+		summary.Failed++
+	} else {
+		switch result.Status {
+		case "added":
+			summary.Added++
+			summary.Remaining--
+		case "would_add":
+			summary.WouldAdd++
+			summary.Remaining--
+		case "skipped":
+			summary.Skipped++
+		}
+	}
+	return result, discoverErr
 }
 
 func systemRepositoryDiscoveryBudget(ctx context.Context, q imageUsageQuerier) (string, int, error) {
@@ -187,23 +208,16 @@ func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string
 	for _, query := range queries {
 		for page := 1; page <= 3; page++ {
 			values := url.Values{"q": {fmt.Sprintf("%s stars:>=%d fork:false archived:false is:public", query, agentRepositoryDiscoveryMinStars)}, "sort": {"stars"}, "order": {"desc"}, "per_page": {"100"}, "page": {strconv.Itoa(page)}}
-			data, err := a.githubRead(ctx, githubAPIBaseURL+"/search/repositories?"+values.Encode(), token, "application/vnd.github+json")
+			items, err := a.readSystemRepositorySearchPage(ctx, githubAPIBaseURL+"/search/repositories?"+values.Encode(), token)
 			if err != nil {
 				return nil, err
 			}
-			var response struct {
-				Items      []githubRepositoryMetadata `json:"items"`
-				Incomplete bool                       `json:"incomplete_results"`
-			}
-			if json.Unmarshal(data, &response) != nil || response.Incomplete || response.Items == nil {
-				return nil, errors.New("GitHub search returned incomplete results; retry later")
-			}
-			for _, item := range response.Items {
+			for _, item := range items {
 				if item.ID > 0 && item.Stars >= agentRepositoryDiscoveryMinStars && !item.Private && !item.Fork && !item.Archived && !item.Disabled {
 					byID[item.ID] = item
 				}
 			}
-			if len(response.Items) < 100 {
+			if len(items) < 100 {
 				break
 			}
 		}
@@ -219,6 +233,46 @@ func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string
 		return items[i].ID < items[j].ID
 	})
 	return items, nil
+}
+
+// Search is the first and most fragile step of the nightly sweep: a single
+// transient GitHub hiccup used to abort the whole run, so the slot silently
+// added nothing and the workflow mailed a failure nobody could act on. Retry
+// only faults that can clear on their own — rate limits and credential
+// problems still stop the run so the next scheduled slot takes over.
+func (a *App) readSystemRepositorySearchPage(ctx context.Context, endpoint, token string) ([]githubRepositoryMetadata, error) {
+	for attempt := 1; ; attempt++ {
+		items, err := a.readGitHubSearchPage(ctx, endpoint, token)
+		if err == nil {
+			return items, nil
+		}
+		retryable := errors.Is(err, errAgentGitHubTransient) || errors.Is(err, errAgentGitHubSearchIncomplete)
+		if !retryable || attempt >= agentRepositorySearchAttempts {
+			return nil, err
+		}
+		timer := time.NewTimer(time.Duration(attempt) * agentRepositorySearchRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (a *App) readGitHubSearchPage(ctx context.Context, endpoint, token string) ([]githubRepositoryMetadata, error) {
+	data, err := a.githubRead(ctx, endpoint, token, "application/vnd.github+json", githubRequestSearch)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Items      []githubRepositoryMetadata `json:"items"`
+		Incomplete bool                       `json:"incomplete_results"`
+	}
+	if json.Unmarshal(data, &response) != nil || response.Incomplete || response.Items == nil {
+		return nil, errAgentGitHubSearchIncomplete
+	}
+	return response.Items, nil
 }
 
 // Prior manual reviews found restrictions not represented by GitHub's root
@@ -365,6 +419,12 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	metadata, source, err := a.resolveGitHubRepository(ctx, owner, repo, "", options.GitHubToken, true)
 	if errors.Is(err, errAgentGitHubRepositoryInvalid) {
 		return skip("invalid_or_private_source")
+	}
+	if errors.Is(err, errAgentGitHubRepositoryMissing) {
+		// The candidate existed when the search returned it; a 404/410 here is
+		// a permanent state (deleted, transferred or made private). Cache it
+		// like other policy rejects instead of re-failing every morning.
+		return skip("unavailable_source")
 	}
 	if err != nil {
 		return result, err

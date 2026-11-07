@@ -12,21 +12,43 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"koinote/backend/internal/config"
 )
 
 const githubSyncTestSHA = "abcdef1234567890abcdef1234567890abcdef12"
 
+func TestSystemRepositorySyncNeedsAttentionOnlyForPermanentUpstreamStates(t *testing.T) {
+	for _, test := range []struct {
+		code string
+		want bool
+	}{
+		{code: "github_unavailable", want: true},
+		{code: "license_changed", want: true},
+		{code: "repository_identity_mismatch", want: true},
+		{code: "github_transient_error", want: false},
+		{code: "github_response_invalid", want: false},
+		{code: "github_request_invalid", want: false},
+		{code: "github_download_failed", want: false},
+	} {
+		t.Run(test.code, func(t *testing.T) {
+			if got := systemRepositorySyncNeedsAttention(test.code); got != test.want {
+				t.Fatalf("systemRepositorySyncNeedsAttention(%q) = %t, want %t", test.code, got, test.want)
+			}
+		})
+	}
+}
+
 type githubSyncFixture struct {
-	sha, license      string
-	repositoryID      int64
-	fullName          string
-	private           bool
-	status            int
-	archive           []byte
-	archives, commits int
-	onArchive         func()
+	sha, license                        string
+	repositoryID                        int64
+	fullName                            string
+	private                             bool
+	status, commitStatus, archiveStatus int
+	archive                             []byte
+	archives, commits                   int
+	onArchive                           func()
 }
 
 func (f *githubSyncFixture) client(t *testing.T) *http.Client {
@@ -43,6 +65,9 @@ func (f *githubSyncFixture) client(t *testing.T) *http.Client {
 			if !strings.HasSuffix(r.URL.Path, "/"+f.sha) {
 				t.Error("archive is not pinned to resolved SHA")
 			}
+			if f.archiveStatus != 0 {
+				res.StatusCode = f.archiveStatus
+			}
 			if f.onArchive != nil {
 				f.onArchive()
 			}
@@ -51,6 +76,9 @@ func (f *githubSyncFixture) client(t *testing.T) *http.Client {
 			f.commits++
 			if !strings.HasSuffix(r.URL.Path, "/commits/main") {
 				t.Error("sync must follow default branch, not initial import SHA")
+			}
+			if f.commitStatus != 0 {
+				res.StatusCode = f.commitStatus
 			}
 			body = []byte(f.sha)
 		default:
@@ -232,7 +260,7 @@ func TestSystemRepositorySyncLargeArchiveWithCredentialLookup(t *testing.T) {
 }
 
 func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
-	for _, scenario := range []string{"preview", "license", "unlicensed", "nested-license", "notice-exception", "missing-license", "unknown-license", "root-license-mismatch", "identity-changed", "identity-changed-same-sha", "missing-upstream-identity", "missing-saved-identity", "private", "missing", "sensitive-content", "sensitive-path", "invalid-archive", "r2-failure", "withdraw-during-download", "republish-during-download", "revision-race"} {
+	for _, scenario := range []string{"preview", "license", "unlicensed", "nested-license", "notice-exception", "missing-license", "unknown-license", "root-license-mismatch", "identity-changed", "identity-changed-same-sha", "missing-upstream-identity", "missing-saved-identity", "private", "missing", "legally-blocked", "commit-missing", "commit-gone", "commit-rejected", "archive-missing", "transient", "sensitive-content", "sensitive-path", "invalid-archive", "r2-failure", "withdraw-during-download", "republish-during-download", "revision-race"} {
 		t.Run(scenario, func(t *testing.T) {
 			app, w, admin, objects, upstream := seedSystemRepositorySync(t, true)
 			ctx := context.Background()
@@ -260,15 +288,15 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 				}
 				upstream.archive = githubArchive(t, entries...)
 				wantCode = "license_review_required"
-			case "identity-changed", "identity-changed-same-sha", "missing-upstream-identity":
+			case "identity-changed", "identity-changed-same-sha":
 				upstream.repositoryID++
 				if scenario == "identity-changed-same-sha" {
 					upstream.sha = githubTestSHA
 				}
-				if scenario == "missing-upstream-identity" {
-					upstream.repositoryID = 0
-				}
 				wantCode = "repository_identity_mismatch"
+			case "missing-upstream-identity":
+				upstream.repositoryID = 0
+				wantCode = "github_response_invalid"
 			case "missing-saved-identity":
 				if _, err := app.db.Exec(ctx, `UPDATE agent_workspaces SET github_source=github_source-'repositoryId' WHERE id=$1`, w.WorkspaceID); err != nil {
 					t.Fatal(err)
@@ -280,6 +308,21 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 			case "missing":
 				upstream.status = 404
 				wantCode = "github_unavailable"
+			case "legally-blocked":
+				// A DMCA takedown (451) is as permanent as a deleted repository.
+				upstream.status = http.StatusUnavailableForLegalReasons
+				wantCode = "github_unavailable"
+			case "commit-missing", "commit-gone", "commit-rejected":
+				upstream.commitStatus = map[string]int{"commit-missing": 404, "commit-gone": 410, "commit-rejected": 422}[scenario]
+				// Even an implicit default ref may change between API requests.
+				// Commit failures never prove that the repository disappeared.
+				wantCode = "github_request_invalid"
+			case "archive-missing":
+				upstream.archiveStatus = 404
+				wantCode = "github_download_failed"
+			case "transient":
+				upstream.status = 503
+				wantCode = "github_transient_error"
 			case "sensitive-content":
 				upstream.archive = githubArchive(t, githubArchiveEntry{"root/README.md", "ghp_abcdefghijklmnopqrstuvwxyz123456", 0})
 				wantCode = "sensitive_data_detected"
@@ -329,6 +372,21 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 				}
 			} else if err == nil || summary.Failed != 1 || len(results) != 1 || results[0].Code != wantCode {
 				t.Fatalf("reject: %+v %+v %v", summary, results, err)
+			}
+			// A rejected upstream state must not block the run when no retry can
+			// clear it, and must block the run when it is a transient fault.
+			// The expectation is listed here instead of calling the classifier so
+			// the test fails if the classification silently changes.
+			switch wantCode {
+			case "license_changed", "license_review_required", "github_unavailable",
+				"invalid_or_private_source", "repository_identity_mismatch":
+				if !errors.Is(err, ErrSystemRepositoriesNeedAttention) || summary.NeedsAttention != 1 {
+					t.Fatalf("permanent rejection must only need attention: %+v %v", summary, err)
+				}
+			default:
+				if errors.Is(err, ErrSystemRepositoriesNeedAttention) || summary.NeedsAttention != 0 {
+					t.Fatalf("retryable fault must fail the run: %+v %v", summary, err)
+				}
 			}
 			if scenario == "private" && (upstream.commits != 0 || upstream.archives != 0) {
 				t.Fatal("read private contents")
@@ -559,6 +617,58 @@ func TestSystemRepositorySyncResumesAfterCancellation(t *testing.T) {
 	summary, results, err := runSystemRepositorySync(t, app, 0, true)
 	if err != nil || summary.Total != 1 || summary.Unchanged != 1 || results[0].WorkspaceID != second.WorkspaceID || summary.ResumeAfter != 0 {
 		t.Fatalf("resume: %+v %+v %v", summary, results, err)
+	}
+}
+
+func TestSystemRepositorySyncTimeoutDoesNotBlockLaterRepositories(t *testing.T) {
+	app, w, _, _, upstream := seedSystemRepositorySync(t, false)
+	ctx := context.Background()
+	if _, err := app.db.Exec(ctx, `INSERT INTO agent_workspaces(user_id,is_system,name,github_source)
+ SELECT NULL,true,'sync-timeout-fixture',w.github_source FROM agent_workspaces w CROSS JOIN generate_series(1,2) WHERE w.id=$1`, w.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, err := app.db.Exec(context.Background(), `DELETE FROM agent_workspaces WHERE name='sync-timeout-fixture'`)
+		if err != nil {
+			t.Error(err)
+		}
+		_, err = app.db.Exec(context.Background(), `UPDATE agent_repository_sync_progress SET last_workspace_id=0 WHERE singleton`)
+		if err != nil {
+			t.Error(err)
+		}
+	})
+	upstream.sha = githubTestSHA
+	base := upstream.client(t).Transport
+	calls := 0
+	// Each unchanged repository makes two requests. The second repository's
+	// metadata request hangs until its per-item deadline, as a slow repo would.
+	app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 3 {
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		}
+		return base.RoundTrip(r)
+	})}
+	var results []SystemRepositorySyncResult
+	options := SystemRepositorySyncOptions{Apply: true, GitHubToken: "sync-test-token", OnResult: func(r SystemRepositorySyncResult) { results = append(results, r) }}
+	summary, err := app.syncSystemAgentRepositories(ctx, options, 500*time.Millisecond)
+	if err == nil || errors.Is(err, ErrSystemRepositoriesNeedAttention) || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a timed-out repository must be an ordinary failure: %v", err)
+	}
+	if summary.Total != 3 || summary.Processed != 3 || summary.Unchanged != 2 || summary.Failed != 1 || summary.ResumeAfter != 0 || len(results) != 3 || results[1].Status != "failed" {
+		t.Fatalf("timeout stopped the sweep: summary=%+v results=%+v", summary, results)
+	}
+	var cursor int64
+	if err = app.db.QueryRow(ctx, `SELECT last_workspace_id FROM agent_repository_sync_progress WHERE singleton`).Scan(&cursor); err != nil || cursor != 0 {
+		t.Fatalf("completed sweep left cursor=%d err=%v", cursor, err)
+	}
+	// The next sweep starts from the beginning and retries the slow repository.
+	app.githubHTTPClient = &http.Client{Transport: base}
+	results = nil
+	summary, err = app.syncSystemAgentRepositories(ctx, options, 500*time.Millisecond)
+	if err != nil || summary.Total != 3 || summary.Unchanged != 3 || summary.Failed != 0 {
+		t.Fatalf("timed-out repository was not retried: summary=%+v err=%v", summary, err)
 	}
 }
 

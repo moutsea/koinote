@@ -28,7 +28,7 @@ func TestGitHubArchiveReadErrorsRemainRetryable(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 			writeAgentWorkspaceError(response, err)
-			if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"code":"github_repository_unavailable"`) || strings.Contains(response.Body.String(), "fixture-secret") {
+			if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"code":"github_temporarily_unavailable"`) || strings.Contains(response.Body.String(), "fixture-secret") {
 				t.Fatalf("unexpected user-facing download error: %d %s", response.Code, response.Body.String())
 			}
 		})

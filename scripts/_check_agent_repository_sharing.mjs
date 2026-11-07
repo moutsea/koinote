@@ -1,3 +1,4 @@
+import "./_check_agent_github_import.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
@@ -99,6 +100,7 @@ const bundle = await build({
     export { createRoot } from "react-dom/client";
     export { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
     export { ApiError } from "./api";
+    export { githubImportErrorMessage } from "./spa/src/agentGitHubImport";
     export { AgentGitHubImportForm } from "./spa/src/components/AgentGitHubImportForm";
     export { AgentGitHubCredentialCard } from "./spa/src/components/AgentGitHubCredentialCard";
     export { SystemRepositoriesAdminPanel } from "./spa/src/components/SystemRepositoriesAdminPanel";
@@ -142,9 +144,13 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
+assert.equal(githubImportErrorMessage(new ApiError(503, "GitHub unavailable", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "transient GitHub failures use the dedicated retry message");
+assert.equal(githubImportErrorMessage(new ApiError(404, "missing", "github_repository_unavailable"), labels), labels.githubRepositoryUnavailable, "repository failures keep their specific message");
+assert.equal(githubImportErrorMessage(new ApiError(503, "archive download failed", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "archive download failures use the retry message");
+assert.equal(githubImportErrorMessage(new Error("unknown"), labels), labels.githubImportFailed, "unknown failures keep the generic fallback");
 const emptyFilters={q:undefined,source:undefined,category:undefined};
 const root = createRoot(document.getElementById("root"));
 let client;

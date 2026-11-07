@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,13 +30,14 @@ import (
 )
 
 const (
-	githubAPIBaseURL       = "https://api.github.com"
-	githubCodeLoadHost     = "codeload.github.com"
-	githubRequestTimeout   = 45 * time.Second
-	githubResponseMaxBytes = 2 << 20
-	githubArchiveMaxBytes  = 128 << 20
-	githubImportMaxFiles   = 5000
-	githubImportMaxBytes   = 64 << 20
+	githubAPIBaseURL            = "https://api.github.com"
+	githubCodeLoadHost          = "codeload.github.com"
+	githubRequestTimeout        = 45 * time.Second
+	githubImportBodyReadTimeout = 30 * time.Second
+	githubResponseMaxBytes      = 2 << 20
+	githubArchiveMaxBytes       = 128 << 20
+	githubImportMaxFiles        = 5000
+	githubImportMaxBytes        = 64 << 20
 )
 
 var (
@@ -364,16 +366,28 @@ func (a *App) githubRequest(ctx context.Context, endpoint, token string, accept 
 }
 
 var (
-	errAgentGitHubRateLimited    = errors.New("GitHub rate limit reached; try again later")
-	errAgentGitHubAccessDenied   = errors.New("the GitHub token cannot access this repository; check its repository permissions")
-	errAgentGitHubDownloadFailed = errors.New("GitHub repository download failed; try again later")
-	errAgentGitHubImportBusy     = errors.New("GitHub imports are busy; try again later")
-	errAgentGitHubLicense        = errors.New("choose a supported license or retain the original GitHub license")
-	githubCommitPattern          = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
-	githubLicensePattern         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.+-]{0,99}$`)
+	errAgentGitHubRateLimited     = errors.New("GitHub rate limit reached; try again later")
+	errAgentGitHubTransient       = errors.New("GitHub API is temporarily unavailable; try again later")
+	errAgentGitHubRequestInvalid  = errors.New("GitHub rejected the repository request")
+	errAgentGitHubResponseInvalid = errors.New("GitHub returned an invalid response")
+	errAgentGitHubAccessDenied    = errors.New("the GitHub token cannot access this repository; check its repository permissions")
+	errAgentGitHubDownloadFailed  = errors.New("GitHub repository download failed; try again")
+	errAgentGitHubImportBusy      = errors.New("GitHub imports are busy; try again later")
+	errAgentGitHubLicense         = errors.New("choose a supported license or retain the original GitHub license")
+	githubCommitPattern           = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
+	githubLicensePattern          = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.+-]{0,99}$`)
 )
 
-func githubResponseError(response *http.Response) error {
+type githubRequestStage uint8
+
+const (
+	githubRequestMetadata githubRequestStage = iota
+	githubRequestCommit
+	githubRequestArchive
+	githubRequestSearch
+)
+
+func githubResponseError(response *http.Response, stage githubRequestStage) error {
 	if response.StatusCode == http.StatusTooManyRequests || (response.StatusCode == http.StatusForbidden && (response.Header.Get("X-RateLimit-Remaining") == "0" || response.Header.Get("Retry-After") != "")) {
 		return errAgentGitHubRateLimited
 	}
@@ -385,21 +399,73 @@ func githubResponseError(response *http.Response) error {
 		// continue past that repository rather than treating the token as expired.
 		return errAgentGitHubAccessDenied
 	}
-	return errAgentGitHubRepositoryMissing
+	// Request timeouts and upstream gateway/server faults say nothing about this
+	// repository, so keep them retryable rather than treating them as deleted.
+	if response.StatusCode == http.StatusRequestTimeout || response.StatusCode >= http.StatusInternalServerError {
+		return errAgentGitHubTransient
+	}
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone || response.StatusCode == http.StatusUnavailableForLegalReasons {
+		switch stage {
+		case githubRequestMetadata:
+			// A missing repository metadata endpoint is the only 404/410 that
+			// proves the recorded repository is no longer available. A 451 (for
+			// example a DMCA takedown) is the same permanent state.
+			return errAgentGitHubRepositoryMissing
+		case githubRequestArchive:
+			// The repository was already resolved successfully; a missing archive
+			// endpoint is an upstream download failure, not a deleted repository.
+			return errAgentGitHubDownloadFailed
+		case githubRequestSearch:
+			// A search endpoint failure describes GitHub's search service, not a
+			// candidate repository. Keep it on the retryable upstream path.
+			return errAgentGitHubTransient
+		default:
+			// A branch/tag/commit can disappear while the repository remains.
+			return errAgentGitHubRequestInvalid
+		}
+	}
+	// Any non-4xx status left over here is an invalid upstream protocol response
+	// (for example 204, 206, 304 or an unexpected redirect), not a caller error.
+	if response.StatusCode < http.StatusBadRequest {
+		return errAgentGitHubResponseInvalid
+	}
+	// Other 4xx responses are rejected requests (for example an invalid ref),
+	// not evidence that the repository disappeared.
+	return errAgentGitHubRequestInvalid
 }
 
-func (a *App) githubRead(ctx context.Context, endpoint, token string, accept string) ([]byte, error) {
+func (a *App) githubRead(ctx context.Context, endpoint, token string, accept string, stage githubRequestStage) ([]byte, error) {
 	response, err := a.githubRequest(ctx, endpoint, token, accept)
 	if err != nil {
-		return nil, errAgentGitHubRepositoryMissing
+		if errors.Is(err, errAgentGitHubRepositoryInvalid) {
+			return nil, err
+		}
+		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, errAgentGitHubTransient
+			}
+			return nil, ctx.Err()
+		}
+		// Never surface the transport error itself: a redirected URL can carry a
+		// signed token. A dropped connection is retryable, unlike a 404.
+		return nil, errAgentGitHubTransient
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, githubResponseError(response)
+		return nil, githubResponseError(response, stage)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, githubResponseMaxBytes+1))
-	if err != nil || len(data) > githubResponseMaxBytes {
-		return nil, errAgentGitHubRepositoryMissing
+	if err != nil {
+		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, errAgentGitHubTransient
+			}
+			return nil, ctx.Err()
+		}
+		return nil, errAgentGitHubTransient
+	}
+	if len(data) > githubResponseMaxBytes {
+		return nil, errAgentGitHubResponseInvalid
 	}
 	return data, nil
 }
@@ -431,12 +497,12 @@ func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, r
 // Resolve separately so daily checks can skip downloading an unchanged archive.
 func (a *App) resolveGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, *agentGitHubSource, error) {
 	var metadata githubRepositoryMetadata
-	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json")
+	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json", githubRequestMetadata)
 	if err != nil {
 		return metadata, nil, err
 	}
-	if json.Unmarshal(data, &metadata) != nil || !githubRepositorySegmentPattern.MatchString(metadata.Owner.Login) || !githubRepositorySegmentPattern.MatchString(metadata.Name) || metadata.Owner.Login == "." || metadata.Owner.Login == ".." || metadata.Name == "." || metadata.Name == ".." || !strings.EqualFold(metadata.FullName, metadata.Owner.Login+"/"+metadata.Name) {
-		return metadata, nil, errAgentGitHubRepositoryMissing
+	if json.Unmarshal(data, &metadata) != nil || metadata.ID <= 0 || !githubRepositorySegmentPattern.MatchString(metadata.Owner.Login) || !githubRepositorySegmentPattern.MatchString(metadata.Name) || metadata.Owner.Login == "." || metadata.Owner.Login == ".." || metadata.Name == "." || metadata.Name == ".." || !strings.EqualFold(metadata.FullName, metadata.Owner.Login+"/"+metadata.Name) {
+		return metadata, nil, errAgentGitHubResponseInvalid
 	}
 	// System entries must be public. Reject before resolving a commit or reading
 	// archive contents, even when the administrator's token can access them.
@@ -449,18 +515,23 @@ func (a *App) resolveGitHubRepository(ctx context.Context, owner, repo, requeste
 	ref := requestedRef
 	if ref == "" {
 		ref = metadata.DefaultBranch
-	}
-	if ref == "" || validateGitHubRef(ref) != nil {
+		if ref == "" || validateGitHubRef(ref) != nil {
+			return metadata, nil, errAgentGitHubResponseInvalid
+		}
+	} else if validateGitHubRef(ref) != nil {
 		return metadata, nil, errAgentGitHubRepositoryInvalid
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
-	data, err = a.githubRead(ctx, apiURL+"/commits/"+url.PathEscape(ref), token, "application/vnd.github.sha")
+	data, err = a.githubRead(ctx, apiURL+"/commits/"+url.PathEscape(ref), token, "application/vnd.github.sha", githubRequestCommit)
 	if err != nil {
+		// Preserve the commit-stage classification for implicit and explicit
+		// refs alike. A rejected commit request (including 400/422), or a ref
+		// changing after metadata was fetched, does not prove the repo is gone.
 		return metadata, nil, err
 	}
 	commit := strings.TrimSpace(string(data))
 	if !githubCommitPattern.MatchString(commit) {
-		return metadata, nil, errAgentGitHubRepositoryMissing
+		return metadata, nil, errAgentGitHubResponseInvalid
 	}
 	license := "UNLICENSED"
 	if metadata.License != nil && metadata.License.SPDXID != "NOASSERTION" && githubLicensePattern.MatchString(metadata.License.SPDXID) {
@@ -475,11 +546,18 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 	// Download by resolved commit, so a moving branch cannot falsify provenance.
 	response, err := a.githubRequest(ctx, apiURL+"/zipball/"+commit, token, "application/vnd.github+json")
 	if err != nil {
-		return nil, errAgentGitHubRepositoryMissing
+		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, errAgentGitHubTransient
+			}
+			return nil, ctx.Err()
+		}
+		// A dropped connection is retryable and says nothing about the repository.
+		return nil, errAgentGitHubTransient
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, githubResponseError(response)
+		return nil, githubResponseError(response, githubRequestArchive)
 	}
 	if response.ContentLength > githubArchiveMaxBytes {
 		return nil, errAgentGitHubArchiveInvalid
@@ -496,6 +574,9 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 	}
 	if err != nil {
 		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, errAgentGitHubTransient
+			}
 			return nil, ctx.Err()
 		}
 		// Transport/local I/O failures are retryable. Treating them as malformed
@@ -510,9 +591,31 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 	return files, nil
 }
 
+func githubArchiveContextError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return errAgentGitHubTransient
+		}
+		return err
+	}
+	return nil
+}
+
 func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]agentWorkspaceFile, error) {
+	if err := githubArchiveContextError(ctx); err != nil {
+		return nil, err
+	}
 	archive, err := zip.NewReader(reader, size)
-	if err != nil || len(archive.File) > githubImportMaxFiles*2 {
+	if err != nil {
+		if contextErr := githubArchiveContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	if err := githubArchiveContextError(ctx); err != nil {
+		return nil, err
+	}
+	if len(archive.File) > githubImportMaxFiles*2 {
 		return nil, errAgentGitHubArchiveInvalid
 	}
 	files := make([]agentWorkspaceFile, 0, min(len(archive.File), githubImportMaxFiles))
@@ -521,6 +624,11 @@ func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]a
 	totalBytes := 0
 	for _, entry := range archive.File {
 		if err := ctx.Err(); err != nil {
+			// The import deadline expiring mid-scan is retryable upstream load,
+			// not a caller error; only user cancellation keeps its raw sentinel.
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, errAgentGitHubTransient
+			}
 			return nil, err
 		}
 		isDir := entry.FileInfo().IsDir()
@@ -595,6 +703,11 @@ func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]a
 	if len(files) == 0 {
 		return nil, errAgentGitHubArchiveInvalid
 	}
+	// A deadline expiring while the last entry was being read must not yield a
+	// successful-looking file list that discovery would treat as a valid result.
+	if err := githubArchiveContextError(ctx); err != nil {
+		return nil, err
+	}
 	return files, nil
 }
 
@@ -630,23 +743,104 @@ func (a *App) agentSystemGitHubImportPost(w http.ResponseWriter, r *http.Request
 	a.agentGitHubImport(w, r, true)
 }
 
-func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system bool) {
-	w.Header().Set("Cache-Control", "no-store")
-	authorize := a.requireLifetimeMember
-	if system {
-		authorize = a.requireAdmin
-	}
-	user, ok := authorize(w, r)
-	if !ok || (!system && !a.requireAgentWorkspaceEnabled(w, r, user.ID)) {
+// The import deadline covers both GitHub I/O and the final database transaction.
+// Keep database/lock timeouts on the same retryable 503 path as upstream timeouts.
+// Classify the returned error itself: deferred staging cleanup runs on a
+// WithoutCancel context and can cross the deadline after a business error
+// (quota/conflict/limit) has already been determined, and that error must not
+// be rewritten into a retryable 503. pgx propagates context cancellation causes
+// into the returned query/transaction error.
+func writeAgentGitHubImportError(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.Canceled) {
+		// The client disconnected; writing a response is no longer useful.
 		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		w.Header().Set("Retry-After", "30")
+		httpx.ErrorCode(w, http.StatusServiceUnavailable, "github_temporarily_unavailable", "GitHub import timed out; try again later")
+		return
+	}
+	writeAgentWorkspaceError(w, err)
+}
+
+func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system bool) {
+	a.agentGitHubImportWithTimeouts(w, r, system, 2*githubRequestTimeout, githubImportBodyReadTimeout)
+}
+
+func (a *App) agentGitHubImportWithTimeouts(w http.ResponseWriter, r *http.Request, system bool, timeout, bodyReadTimeout time.Duration) {
+	w.Header().Set("Cache-Control", "no-store")
+	// Authentication, settings, body reads and idempotency queries share the
+	// same budget as the subsequent GitHub calls and database transaction.
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	r = r.WithContext(ctx)
+	controller := http.NewResponseController(w)
+	readDeadline := time.Now().Add(bodyReadTimeout)
+	if deadline, ok := ctx.Deadline(); ok && deadline.Before(readDeadline) {
+		readDeadline = deadline
+	}
+	_ = controller.SetReadDeadline(readDeadline)
+	user, ok := a.requireUserWithErrorHandler(w, r, writeAgentGitHubImportError)
+	if !ok {
+		return
+	}
+	if system {
+		if !user.IsAdmin {
+			httpx.ErrorCode(w, http.StatusForbidden, "admin_required", "Administrator access required")
+			return
+		}
+	} else {
+		if user.MembershipTier != membershipTierLifetime {
+			httpx.ErrorCode(w, http.StatusForbidden, "membership_required", "Lifetime membership is required")
+			return
+		}
+		enabled, err := a.agentWorkspaceEnabled(ctx, user.ID)
+		if err != nil {
+			writeAgentGitHubImportError(w, err)
+			return
+		}
+		if !enabled {
+			writeAgentWorkspaceError(w, errAgentWorkspaceDisabled)
+			return
+		}
 	}
 	var ownerID *int
 	if !system {
 		ownerID = &user.ID
 	}
+	// Context cancellation alone does not interrupt a blocked socket Read.
+	// The deadline is already active across auth/settings early returns; clear it
+	// only after the full body has been consumed below.
 	var input agentGitHubImportInput
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
-	if json.NewDecoder(r.Body).Decode(&input) != nil || !validUUID(input.RequestID) {
+	decoder := json.NewDecoder(r.Body)
+	decodeErr := decoder.Decode(&input)
+	if decodeErr == nil {
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			decodeErr = err
+			if decodeErr == nil {
+				decodeErr = errors.New("request body must contain one JSON object")
+			}
+		}
+	}
+	if decodeErr != nil {
+		// A socket read deadline returns a net.Error, and HTTP/1 may cancel the
+		// request context as a side effect. Check the read error first so this
+		// server-imposed timeout is not mistaken for a client disconnect.
+		var networkErr net.Error
+		if errors.Is(decodeErr, os.ErrDeadlineExceeded) || (errors.As(decodeErr, &networkErr) && networkErr.Timeout()) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			writeAgentGitHubImportError(w, context.DeadlineExceeded)
+			return
+		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
+		httpx.ErrorCode(w, 400, "bad_request", "repositoryUrl and a UUID v4 requestId are required")
+		return
+	}
+	_ = controller.SetReadDeadline(time.Time{})
+	if !validUUID(input.RequestID) {
 		httpx.ErrorCode(w, 400, "bad_request", "repositoryUrl and a UUID v4 requestId are required")
 		return
 	}
@@ -668,9 +862,9 @@ func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system b
 		return
 	}
 	fingerprint := githubImportFingerprint(input)
-	existing, err := completedGitHubImportForOwner(r.Context(), a.db, ownerID, input.RequestID, fingerprint)
+	existing, err := completedGitHubImportForOwner(ctx, a.db, ownerID, input.RequestID, fingerprint)
 	if err != nil {
-		writeAgentWorkspaceError(w, err)
+		writeAgentGitHubImportError(w, err)
 		return
 	}
 	if existing != nil {
@@ -690,16 +884,14 @@ func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system b
 		writeAgentWorkspaceError(w, errAgentGitHubImportBusy)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 2*githubRequestTimeout)
-	defer cancel()
 	token, err := a.loadGitHubToken(ctx, user.ID)
 	if err != nil {
-		writeAgentWorkspaceError(w, err)
+		writeAgentGitHubImportError(w, err)
 		return
 	}
 	metadata, files, source, err := a.fetchGitHubRepository(ctx, owner, repo, ref, token, system)
 	if err != nil {
-		writeAgentWorkspaceError(w, err)
+		writeAgentGitHubImportError(w, err)
 		return
 	}
 	name, description := input.Name, input.Description
@@ -711,7 +903,7 @@ func (a *App) agentGitHubImport(w http.ResponseWriter, r *http.Request, system b
 	}
 	view, err := a.importGitHubRepositoryForOwner(ctx, ownerID, user.ID, input.RequestID, fingerprint, name, description, files, source)
 	if err != nil {
-		writeAgentWorkspaceError(w, err)
+		writeAgentGitHubImportError(w, err)
 		return
 	}
 	httpx.JSON(w, 201, map[string]any{"workspace": view})

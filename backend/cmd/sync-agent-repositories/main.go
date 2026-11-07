@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -76,8 +77,17 @@ func run() int {
 		return 1
 	}
 	if err != nil {
-		// Raw database/network errors can contain connection details or credentials.
-		fmt.Fprintln(os.Stderr, "System repository maintenance did not complete successfully; see the results and summary")
+		if errors.Is(err, server.ErrSystemRepositoriesNeedAttention) {
+			// Every failure is a permanent upstream state that no retry can clear.
+			// The sweep itself succeeded, so stay quiet instead of mailing the
+			// operator once per night until the entries are retired by hand.
+			fmt.Fprintln(os.Stderr, "System repository maintenance completed; entries listed with status=failed need attention and were left unchanged")
+			return 0
+		}
+		// Classify instead of printing the raw error: database/network errors can
+		// contain connection details or credentials. The code keeps the log
+		// actionable, which a bare "did not complete" does not.
+		fmt.Fprintf(os.Stderr, "System repository maintenance did not complete successfully (code=%s); see the results and summary\n", server.SystemRepositoryErrorCode(err))
 		return 1
 	}
 	return 0

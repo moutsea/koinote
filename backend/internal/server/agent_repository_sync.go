@@ -20,6 +20,14 @@ var (
 	errAgentRepositorySyncIdentity      = errors.New("upstream repository identity changed or is unknown")
 )
 
+// ErrSystemRepositoriesNeedAttention reports a sweep that ran correctly but found
+// entries whose upstream state can never be refreshed automatically: the
+// repository was deleted, turned private, changed license, or no longer matches
+// the recorded identity. Those recur on every sweep until a person retires or
+// re-reviews the entry, so the scheduled workflow logs them instead of paging
+// someone every night. Transient faults are reported as ordinary failures.
+var ErrSystemRepositoriesNeedAttention = errors.New("some system repositories need attention")
+
 type SystemRepositorySyncOptions struct {
 	Apply       bool
 	GitHubToken string
@@ -46,6 +54,9 @@ type SystemRepositorySyncSummary struct {
 	WouldUpdate  int   `json:"wouldUpdate"`
 	Skipped      int   `json:"skipped"`
 	Failed       int   `json:"failed"`
+	// NeedsAttention counts the subset of Failed whose upstream state is
+	// permanent, so operators can tell "retry later" from "retire this entry".
+	NeedsAttention int `json:"needsAttention"`
 }
 
 type systemRepositorySyncSnapshot struct {
@@ -60,6 +71,30 @@ type systemRepositorySyncSnapshot struct {
 // This is a maintenance command, not an HTTP/Agent-token write path. The lock
 // only serializes sync commands; downloads do not hold the catalog's write lock.
 func (a *App) SyncSystemAgentRepositories(ctx context.Context, options SystemRepositorySyncOptions) (SystemRepositorySyncSummary, error) {
+	return a.syncSystemAgentRepositories(ctx, options, 5*time.Minute)
+}
+
+// reconcileSystemRepositorySyncResult preserves a completed result when the
+// per-item context expires just after syncSystemAgentRepository returns. The
+// deferred staging cleanup can cross that deadline after an update transaction
+// commits, but the same boundary also applies to unchanged, skipped and preview
+// results. Only an unfinished result may inherit the job error.
+func reconcileSystemRepositorySyncResult(result SystemRepositorySyncResult, syncErr, jobErr error) (SystemRepositorySyncResult, error, bool) {
+	completed := syncErr == nil
+	if completed {
+		switch result.Status {
+		case "updated", "unchanged", "would_update", "skipped":
+		default:
+			completed = false
+		}
+	}
+	if jobErr != nil && syncErr == nil && !completed {
+		syncErr = jobErr
+	}
+	return result, syncErr, completed
+}
+
+func (a *App) syncSystemAgentRepositories(ctx context.Context, options SystemRepositorySyncOptions, itemTimeout time.Duration) (SystemRepositorySyncSummary, error) {
 	var summary SystemRepositorySyncSummary
 	if options.WorkspaceID < 0 || strings.TrimSpace(options.GitHubToken) == "" {
 		return summary, errors.New("a GitHub token and nonnegative workspace ID are required")
@@ -119,16 +154,20 @@ func (a *App) SyncSystemAgentRepositories(ctx context.Context, options SystemRep
 		if _, err = lock.Exec(ctx, `SELECT 1`); err != nil {
 			return summary, err
 		}
-		jobCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		jobCtx, cancel := context.WithTimeout(ctx, itemTimeout)
 		result, syncErr := a.syncSystemAgentRepository(jobCtx, item, options)
-		if jobCtx.Err() != nil {
-			syncErr = jobCtx.Err()
-		}
+		// Capture the deadline before cancel(): a healthy item would otherwise
+		// read Canceled after the explicit cancel and look interrupted.
+		jobErr := jobCtx.Err()
+		result, syncErr, _ = reconcileSystemRepositorySyncResult(result, syncErr, jobErr)
 		cancel()
 		summary.Processed++
 		if syncErr != nil {
 			result.Status, result.Code = "failed", systemRepositorySyncErrorCode(syncErr)
 			summary.Failed++
+			if systemRepositorySyncNeedsAttention(result.Code) {
+				summary.NeedsAttention++
+			}
 		} else {
 			switch result.Status {
 			case "updated":
@@ -143,7 +182,10 @@ func (a *App) SyncSystemAgentRepositories(ctx context.Context, options SystemRep
 		}
 		// Retry the interrupted/rate-limited item on the next run. Ordinary
 		// per-repository failures still allow later repositories to make progress;
-		// they will be checked again in the next complete sweep.
+		// they will be checked again in the next complete sweep. A per-item
+		// timeout is one of them: stopping there would restart every later run at
+		// the same slow repository and never reach the ones after it. The sweep's
+		// end resets the checkpoint, so the timed-out item is retried next time.
 		stopped := ctx.Err() != nil || errors.Is(syncErr, errAgentGitHubRateLimited) || errors.Is(syncErr, errAgentGitHubCredentialRequired)
 		if checkpoint && !stopped {
 			if _, err = a.db.Exec(ctx, `UPDATE agent_repository_sync_progress SET last_workspace_id=$1 WHERE singleton`, item.id); err != nil {
@@ -169,10 +211,33 @@ func (a *App) SyncSystemAgentRepositories(ctx context.Context, options SystemRep
 		summary.ResumeAfter = 0
 	}
 	if summary.Failed > 0 {
+		if summary.NeedsAttention == summary.Failed {
+			// Nothing retryable happened: the sweep did its job and the remaining
+			// entries are waiting on a person, so do not report a broken job.
+			return summary, ErrSystemRepositoriesNeedAttention
+		}
 		return summary, errors.New("some system repositories could not be updated; see per-repository results")
 	}
 	return summary, nil
 }
+
+// systemRepositorySyncNeedsAttention lists the permanent upstream states that no
+// number of retries can clear. Everything else (rate limits, credentials,
+// transport faults, storage faults, interruptions) stays a real failure so it
+// still alerts.
+func systemRepositorySyncNeedsAttention(code string) bool {
+	switch code {
+	case "license_changed", "license_review_required", "github_unavailable",
+		"invalid_or_private_source", "repository_identity_mismatch":
+		return true
+	default:
+		return false
+	}
+}
+
+// SystemRepositoryErrorCode classifies a maintenance command error for logs
+// without exposing the raw error, which can contain connection details.
+func SystemRepositoryErrorCode(err error) string { return systemRepositorySyncErrorCode(err) }
 
 func systemRepositorySyncErrorCode(err error) string {
 	var sensitive *agentWorkspaceSensitiveError
@@ -191,6 +256,14 @@ func systemRepositorySyncErrorCode(err error) string {
 		return "github_credentials_invalid"
 	case errors.Is(err, errAgentGitHubAccessDenied):
 		return "github_access_denied"
+	case errors.Is(err, errAgentGitHubTransient):
+		return "github_transient_error"
+	case errors.Is(err, errAgentGitHubResponseInvalid):
+		return "github_response_invalid"
+	case errors.Is(err, errAgentGitHubRequestInvalid):
+		return "github_request_invalid"
+	case errors.Is(err, errAgentGitHubSearchIncomplete):
+		return "github_search_incomplete"
 	case errors.Is(err, errAgentGitHubRepositoryMissing):
 		return "github_unavailable"
 	case errors.Is(err, errAgentGitHubDownloadFailed):

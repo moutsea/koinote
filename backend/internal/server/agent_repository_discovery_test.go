@@ -69,6 +69,9 @@ type discoveryFixture struct {
 	statuses                  map[int64]int
 	archiveCalls, searchCalls int
 	incomplete                bool
+	// searchFailures makes the next N search requests return a transient 503, so
+	// tests can prove a brief GitHub fault does not waste the whole slot.
+	searchFailures int
 }
 
 func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixture, *discoveryFixture) {
@@ -112,17 +115,23 @@ func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixtur
 		var data []byte
 		if r.URL.Path == "/search/repositories" {
 			f.searchCalls++
-			q := r.URL.Query()
-			if q.Get("sort") != "stars" || q.Get("order") != "desc" || !strings.Contains(q.Get("q"), "stars:>=100 fork:false archived:false is:public") {
-				t.Error("incorrect popularity/public search")
+			if f.searchFailures > 0 {
+				f.searchFailures--
+				res.StatusCode = 503
+				data = []byte(`{"message":"Server Error"}`)
+			} else {
+				q := r.URL.Query()
+				if q.Get("sort") != "stars" || q.Get("order") != "desc" || !strings.Contains(q.Get("q"), "stars:>=100 fork:false archived:false is:public") {
+					t.Error("incorrect popularity/public search")
+				}
+				page, err := strconv.Atoi(q.Get("page"))
+				if err != nil || page < 1 || q.Get("per_page") != "100" {
+					t.Fatal("invalid search pagination")
+				}
+				start := min((page-1)*100, len(f.items))
+				items := f.items[start:min(start+100, len(f.items))]
+				data, _ = json.Marshal(map[string]any{"items": items, "incomplete_results": f.incomplete})
 			}
-			page, err := strconv.Atoi(q.Get("page"))
-			if err != nil || page < 1 || q.Get("per_page") != "100" {
-				t.Fatal("invalid search pagination")
-			}
-			start := min((page-1)*100, len(f.items))
-			items := f.items[start:min(start+100, len(f.items))]
-			data, _ = json.Marshal(map[string]any{"items": items, "incomplete_results": f.incomplete})
 		} else {
 			found := false
 			for _, item := range f.items {
@@ -378,6 +387,36 @@ func TestSystemRepositoryDiscoveryJobLockAndRateLimit(t *testing.T) {
 	summary, _, err := runDiscovery(app, true)
 	if !errors.Is(err, errAgentGitHubRateLimited) || summary.Checked != 1 || summary.Added != 0 {
 		t.Fatalf("rate limit: %+v %v", summary, err)
+	}
+}
+
+// A brief GitHub fault on the very first search used to abort the run, so the
+// slot added nothing and mailed a failure nobody could act on.
+func TestSystemRepositoryDiscoveryRetriesTransientSearchFault(t *testing.T) {
+	app, _, f := newDiscoveryFixture(t, 3)
+	f.searchFailures = 2
+	summary, results, err := runDiscovery(app, true)
+	if err != nil || summary.Candidates != 3 || summary.Added != 3 || len(results) != 3 {
+		t.Fatalf("transient search fault discarded the slot: %+v %v", summary, err)
+	}
+	if f.searchCalls < 3 {
+		t.Fatalf("search was not retried: %d calls", f.searchCalls)
+	}
+}
+
+// Retries are bounded: a real outage must still fail so the next slot takes over.
+func TestSystemRepositoryDiscoveryGivesUpOnPersistentSearchFaults(t *testing.T) {
+	app, _, f := newDiscoveryFixture(t, 3)
+	f.searchFailures = agentRepositorySearchAttempts + 5
+	summary, _, err := runDiscovery(app, true)
+	if err == nil || summary.Candidates != 0 || f.archiveCalls != 0 {
+		t.Fatalf("persistent fault was accepted: %+v %v", summary, err)
+	}
+	if !errors.Is(err, errAgentGitHubTransient) {
+		t.Fatalf("persistent fault lost its cause: %v", err)
+	}
+	if f.searchCalls != agentRepositorySearchAttempts {
+		t.Fatalf("attempts were not bounded: %d calls", f.searchCalls)
 	}
 }
 
