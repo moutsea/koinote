@@ -268,6 +268,7 @@ func TestValidateAgentWorkspaceFilesRejectsCommonSecretFormats(t *testing.T) {
 		`Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456`,
 		`token: "sk-abcdefghijklmnopqrstuvwxyz123456"`,
 		`cookie: "my-consent-secret-123456"`,
+		`API_KEY: 'offline-test-secret-123456'`,
 		`password: "prefixconsentsuffix123456"`,
 	} {
 		_, err := validateAgentWorkspaceFiles([]agentWorkspaceFileInput{{
@@ -284,6 +285,7 @@ func TestValidateAgentWorkspaceFilesAllowsDocumentationExamples(t *testing.T) {
 		`apiKey: process.env.OPENAI_API_KEY`,
 		`STRIPE_API_KEY: SecretsStoreSecret`,
 		`API_KEY=your_global_api_key`,
+		`API_KEY: 'offline-test-key'`,
 		`document.cookie = 'cookie_consent'`,
 	} {
 		if _, err := validateAgentWorkspaceFiles([]agentWorkspaceFileInput{{

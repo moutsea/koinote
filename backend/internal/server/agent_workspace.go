@@ -42,7 +42,7 @@ var (
 	agentWorkspaceEmptyCookiePattern   = regexp.MustCompile(`(?i)^cookie\s*=\s*(?:'[^'\\=;\s]+=(?:;[^'\\\r\n]*)?'|"[^"\\=;\s]+=(?:;[^"\\\r\n]*)?")[\t ]*(?:;|[\t \r\n]*$)`)
 	agentWorkspaceLookupCallPattern    = regexp.MustCompile(`^[\t ]*[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*[\t ]*\([\t ]*[A-Z_][A-Z0-9_]*[\t ]*\)[\t ]*(?:[;,]|\r?\n|$)`)
 	agentWorkspaceProviderTokenPattern = regexp.MustCompile(`\b(?:sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[A-Za-z0-9_-]{30,})\b`)
-	agentWorkspaceExampleValuePattern  = regexp.MustCompile(`(?i)^(?:process\.env(?:\.[\w.]+)?|env\.[\w.]+|os\.environ(?:\.get)?|this\.env\.[\w.]+|config(?:\.[\w.]+)+|var\.[\w.]+|vapidKeys\.[\w.]+|request\.[\w.]+|req\.[\w.]+|secretsstoresecret|(?:your|example|sample|replace|test|dummy|fake|redacted|change[-_ ]?me|xxxxx)(?:[-_ ].*)?|local[-_ ]dev(?:[-_ ].*)?|sk[-_](?:live|test)[-_]abc123(?:\.\.\.)?|<[^>]+>|cookie[-_ ]consent|consent[-_ ]cookie|(?:zaraz[-_ ]?)?consent[-_ ]cookie)$`)
+	agentWorkspaceExampleValuePattern  = regexp.MustCompile(`(?i)^(?:process\.env(?:\.[\w.]+)?|env\.[\w.]+|os\.environ(?:\.get)?|this\.env\.[\w.]+|config(?:\.[\w.]+)+|var\.[\w.]+|vapidKeys\.[\w.]+|request\.[\w.]+|req\.[\w.]+|secretsstoresecret|(?:your|example|sample|replace|test|dummy|fake|redacted|change[-_ ]?me|xxxxx)(?:[-_ ].*)?|offline[-_ ]test[-_ ]key|local[-_ ]dev(?:[-_ ].*)?|sk[-_](?:live|test)[-_]abc123(?:\.\.\.)?|<[^>]+>|cookie[-_ ]consent|consent[-_ ]cookie|(?:zaraz[-_ ]?)?consent[-_ ]cookie)$`)
 )
 
 type agentWorkspaceFileInput struct {
