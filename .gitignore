@@ -42,6 +42,28 @@ __pycache__/
 # local Go build output
 /backend/server
 
+# local agent research notes
+/docs/AGENT_BOTTOM_PANEL_PLAN.zh.md
+/docs/AGENT_FOLDER_CLEANUP_FIX.zh.md
+/docs/AGENT_GPT_CHANGES_REQUIRED.zh.md
+/docs/AGENT_GPT_CHANGES_REQUIRED.zh_副本.md
+/docs/AGENT_GPT_DEPLOY_PLAN.zh.md
+/docs/AGENT_GPT_GAP_ANALYSIS.zh.md
+/docs/AGENT_GPT_INTENT_ACCEPTANCE.zh.md
+/docs/AGENT_GPT_INTENT_PRESERVATION_REQUIREMENTS.zh.md
+/docs/AGENT_GPT_TASK_ACCURACY_HANDOFF.zh.md
+/docs/WRITING_AGENT.md
+/docs/agent-auto-skills-acceptance-2026-11-02.json
+/docs/agent-context-root-cause-2026-11-01.json
+/docs/agent-folder-cleanup-acceptance-2026-11-02.json
+/docs/agent-folder-merge-recovery-2026-11-02.json
+/docs/agent-gpt-eval-fixed-test-user.patch
+/docs/agent-gpt-mcp-tool-names-fix.patch
+/docs/agent-gpt-writing-integration-fixes.patch
+/docs/agent-intent-diagnosis-2026-11-01.json
+/docs/agent-rkshadow-channel-trial-2026-11-01.json
+/docs/agent-system-context-isolation-2026-11-01.json
+
 # env files
 .env*
 # 模板必须入库：README 的第一步就是 cp .env.example .env，
