@@ -1,9 +1,10 @@
-import { Archive, Cloud, Files, FolderOpen, FolderSync, ShieldCheck } from "lucide-react";
+import { Archive, Cloud, Files, FolderOpen, FolderSync, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useSession } from "../auth";
 import { AgentWorkspaceRepositoriesPage } from "./AgentWorkspaceRepositoriesPage";
 import { ConfigSnapshotsCard } from "../components/ConfigSnapshotsCard";
+import { KoiPage } from "../components/KoiPage";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n } from "../i18n";
 
@@ -11,8 +12,9 @@ export function SpacePage() {
   const session = useSession();
   const { t } = useI18n();
   const [syncOpen, setSyncOpen] = useState(false);
-  const search = useSearch({ strict: false }) as { tab?: "config" | "agent" };
-  const activeTab = search.tab === "config" || (!search.tab && session.data?.user?.isLocalMode) ? "config" : "agent";
+  const search = useSearch({ strict: false }) as { tab?: "config" | "agent" | "koi" };
+  const activeTab = search.tab === "config" || (!search.tab && session.data?.user?.isLocalMode)
+    ? "config" : search.tab === "koi" ? "koi" : "agent";
 
   if (session.isLoading) {
     return (
@@ -86,7 +88,20 @@ export function SpacePage() {
             <FolderSync className="h-4 w-4" />
             {t.space.cloneTitle}
           </Link>
+          <Link
+            to="/space"
+            search={{ tab: "koi" }}
+            role="tab"
+            aria-selected={activeTab === "koi"}
+            className="inline-flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold"
+            style={{ borderColor: activeTab === "koi" ? "var(--cinnabar)" : "transparent", color: activeTab === "koi" ? "var(--cinnabar)" : "var(--ink-mid)" }}
+          >
+            <Sparkles className="h-4 w-4" />
+            {t.space.koiTab}
+          </Link>
         </div>
+
+        {activeTab === "koi" && <KoiPage key={user.authUserId} user={user} />}
 
         {activeTab === "config" && <>
         <section className="border-b pb-7" style={{ borderColor: "var(--ink-line)" }}>

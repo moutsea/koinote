@@ -200,9 +200,9 @@ function parseAgentWorkspaceSearch(search: Record<string, unknown>): { from?: "h
   };
 }
 
-function parseSpaceSearch(search: Record<string, unknown>): { tab?: "config" | "agent" } {
+function parseSpaceSearch(search: Record<string, unknown>): { tab?: "config" | "agent" | "koi" } {
   return {
-    tab: search.tab === "agent" || search.tab === "config" ? search.tab : undefined,
+    tab: search.tab === "agent" || search.tab === "config" || search.tab === "koi" ? search.tab : undefined,
   };
 }
 

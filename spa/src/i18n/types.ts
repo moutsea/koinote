@@ -36,6 +36,7 @@ export interface Messages {
     subtitle: string;
     configTitle: string;
     repositoryTab: string;
+    koiTab: string;
     cloneTitle: string;
     cloneTagline: string;
     cloneDescription: string;
@@ -512,6 +513,29 @@ export interface Messages {
       adjustment: string;
       refund: string;
     };
+  };
+  koi: {
+    title: string;
+    subtitle: string;
+    localMode: string;
+    loading: string;
+    loadFailed: string;
+    retry: string;
+    upgrade: string;
+    saved: string;
+    saveFailed: string;
+    serviceTitle: string;
+    serviceDescription: string;
+    serviceConfigured: string;
+    serviceNotConfigured: string;
+    membershipLabel: string;
+    membershipLifetime: string;
+    membershipNone: string;
+    modelLabel: string;
+    modelManaged: string;
+    creditsLink: string;
+    defaultsDescription: string;
+    defaultsScope: string;
   };
   agentModelSettings: {
     title: string;
