@@ -490,8 +490,11 @@ try {
 
   await mount(AgentGitHubCredentialCard);
   const secret='github-test-token-9876';
+  await click(labels.githubTokenAdd);
   await input('input[type="password"]',secret);await submit();
-  assert.equal(document.querySelector('input[type="password"]').value,'',"save clears the credential input");
+  assert.equal(document.querySelector('input[type="password"]'),null,"save closes the credential editor");
+  await click(labels.githubTokenEdit);
+  assert.equal(document.querySelector('input[type="password"]').value,'',"reopening the editor never reveals the saved credential");
   assert.ok(document.body.textContent.includes('••••9876'));
   assert.ok(!document.body.textContent.includes(secret));
   const credentialDeletes=()=>calls.filter(call=>call.path==='/api/agent/github-credential'&&call.method==='DELETE').length;

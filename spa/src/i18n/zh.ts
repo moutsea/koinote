@@ -867,7 +867,7 @@ export const zh: Messages = {
   },
   koi: {
     title: "Koi AI",
-    subtitle: "查看 Koi 服务配置，管理新会话默认权限与 GitHub 授权。",
+    subtitle: "管理 Koi 的协作方式与外部授权。",
     localMode: "完全本地模式不连接 Koi 云端。请切换到账号模式后管理设置。",
     loading: "正在读取 Koi AI 设置…",
     loadFailed: "Koi AI 设置暂时无法读取，请重试。",
@@ -887,6 +887,9 @@ export const zh: Messages = {
     creditsLink: "查看余额与用量",
     defaultsDescription: "只影响之后新建的底部会话；已有会话保留自己的设置。",
     defaultsScope: "文章侧栏始终需要人工审阅；默认权限不会扩大 Koi 对文档的写入范围。",
+    autoSave: "自动保存",
+    saving: "正在保存…",
+    membersOnly: "终生会员可设置新会话的默认权限，并使用 Koi 云端服务。",
   },
   agentModelSettings: {
     title: "AI 模型",

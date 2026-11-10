@@ -59,45 +59,45 @@ export function SpacePage() {
             {t.nav.space}
           </h1>
           <p className="mt-1.5 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
-            {t.space.subtitle}
+            {activeTab === "koi" ? t.koi.subtitle : t.space.subtitle}
           </p>
         </div>
       </header>
 
       <div className="mt-8 space-y-6">
-        <div role="tablist" aria-label={t.nav.space} className="flex gap-6 overflow-x-auto border-b" style={{ borderColor: "var(--ink-line)" }}>
+        <div role="tablist" aria-label={t.nav.space} className="grid grid-cols-3 gap-2 border-b sm:flex sm:gap-6 sm:overflow-x-auto" style={{ borderColor: "var(--ink-line)" }}>
           <Link
             to="/space"
             search={{ tab: "agent" }}
             role="tab"
             aria-selected={activeTab === "agent"}
-            className="inline-flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold"
+            className="inline-flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-1 pb-3 text-center text-sm font-semibold sm:shrink-0 sm:justify-start sm:gap-2"
             style={{ borderColor: activeTab === "agent" ? "var(--cinnabar)" : "transparent", color: activeTab === "agent" ? "var(--cinnabar)" : "var(--ink-mid)" }}
           >
-            <Cloud className="h-4 w-4" />
-            {t.space.repositoryTab}
+            <Cloud className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="min-w-0 break-words">{t.space.repositoryTab}</span>
           </Link>
           <Link
             to="/space"
             search={{ tab: "config" }}
             role="tab"
             aria-selected={activeTab === "config"}
-            className="inline-flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold"
+            className="inline-flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-1 pb-3 text-center text-sm font-semibold sm:shrink-0 sm:justify-start sm:gap-2"
             style={{ borderColor: activeTab === "config" ? "var(--cinnabar)" : "transparent", color: activeTab === "config" ? "var(--cinnabar)" : "var(--ink-mid)" }}
           >
-            <FolderSync className="h-4 w-4" />
-            {t.space.cloneTitle}
+            <FolderSync className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="min-w-0 break-words sm:hidden">{t.space.configTitle}</span><span className="hidden sm:inline">{t.space.cloneTitle}</span>
           </Link>
           <Link
             to="/space"
             search={{ tab: "koi" }}
             role="tab"
             aria-selected={activeTab === "koi"}
-            className="inline-flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold"
+            className="inline-flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-1 pb-3 text-center text-sm font-semibold sm:shrink-0 sm:justify-start sm:gap-2"
             style={{ borderColor: activeTab === "koi" ? "var(--cinnabar)" : "transparent", color: activeTab === "koi" ? "var(--cinnabar)" : "var(--ink-mid)" }}
           >
-            <Sparkles className="h-4 w-4" />
-            {t.space.koiTab}
+            <Sparkles className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span>{t.space.koiTab}</span>
           </Link>
         </div>
 

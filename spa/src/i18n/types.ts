@@ -536,6 +536,9 @@ export interface Messages {
     creditsLink: string;
     defaultsDescription: string;
     defaultsScope: string;
+    autoSave: string;
+    saving: string;
+    membersOnly: string;
   };
   agentModelSettings: {
     title: string;

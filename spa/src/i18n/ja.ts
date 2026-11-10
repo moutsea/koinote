@@ -881,7 +881,7 @@ export const ja: Messages = {
   },
   koi: {
     title: "Koi AI",
-    subtitle: "Koi のサービス設定を確認し、新規チャットの既定の権限と GitHub 認証を管理します。",
+    subtitle: "Koi との共同作業の方法と外部サービスの認証を管理します。",
     localMode: "完全ローカルモードは Koi クラウドに接続しません。設定を管理するにはアカウントモードに切り替えてください。",
     loading: "Koi AI 設定を読み込み中…",
     loadFailed: "Koi AI の設定を読み込めませんでした。再試行してください。",
@@ -901,6 +901,9 @@ export const ja: Messages = {
     creditsLink: "残高と使用量",
     defaultsDescription: "以後に作成される下部パネルのセッションのみに適用されます。既存セッションは独自の設定を保ちます。",
     defaultsScope: "記事サイドバーでは常に人による確認が必要です。既定の権限が Koi の書き込み範囲を広げることはありません。",
+    autoSave: "自動保存",
+    saving: "保存中…",
+    membersOnly: "永久会員は新しい会話の既定の権限を設定し、Koi クラウドを利用できます。",
   },
   agentModelSettings: {
     title: "AI モデル",

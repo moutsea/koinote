@@ -42,13 +42,14 @@ try {
   const { SpacePage, zh, ApiError } = require(outfile);
   state.i18n = { t: zh, locale: "zh" };
   const calls = [];
-  let permission = "assist", failRead = false, failSave = false;
+  let permission = "assist", failRead = false, failSave = false, writeDelay;
   let credential = { configured: false }, credentialReadError, credentialSaveError, credentialRemoveError;
   state.api = async (path, init = {}) => {
     const method = init.method ?? "GET";
     calls.push({ path, method });
     if (path === "/api/agent/session-settings") {
       if (method === "PUT") {
+        if (writeDelay) await writeDelay;
         if (failSave) throw new Error("offline");
         permission = JSON.parse(init.body).permission;
       } else if (failRead) throw new Error("offline");
@@ -82,15 +83,14 @@ try {
     await settle();
   }
   async function changePermission(value) {
-    const select = document.getElementById("koi-default-permission");
-    // Linkedom does not provide a writable select.value; selected options drive
-    // its getter, just as the browser's native selection does.
-    for (const option of select.querySelectorAll("option")) option.selected = option.value === value;
-    await act(async () => select.dispatchEvent(new window.Event("change", { bubbles: true })));
+    const input = document.querySelector(`input[name="koi-default-permission"][value="${value}"]`);
+    const props = input[Object.keys(input).find((key) => key.startsWith("__reactProps$"))];
+    await act(async () => props.onChange());
     await settle();
   }
   const tokenLabels = zh.agentWorkspace;
-  const tokenCard = () => [...document.querySelectorAll("h2")].find((heading) => heading.textContent === tokenLabels.githubTokenTitle).parentElement;
+  const selectedPermission = () => [...document.querySelectorAll('input[name="koi-default-permission"]')].find((input) => input.checked)?.value;
+  const tokenCard = () => document.querySelector(".koi-github-card");
   async function clickTokenButton(text) {
     const button = [...tokenCard().querySelectorAll("button")].find((item) => item.textContent === text);
     assert.ok(button, `Missing credential action: ${text}`);
@@ -98,6 +98,10 @@ try {
     await settle();
   }
   async function enterToken(value) {
+    if (!tokenCard().querySelector("form")) {
+      const action = tokenCard().textContent.includes(tokenLabels.githubTokenConfigured) ? tokenLabels.githubTokenEdit : tokenLabels.githubTokenAdd;
+      await clickTokenButton(action);
+    }
     const input = tokenCard().querySelector('input[type="password"]');
     const props = input[Object.keys(input).find((key) => key.startsWith("__reactProps$"))];
     await act(async () => props.onChange({ target: { value } }));
@@ -109,34 +113,46 @@ try {
 
   await mount();
   assert.equal(document.querySelector('[role="tab"][aria-selected="true"]').textContent, "Koi AI");
-  assert.equal(document.getElementById("koi-default-permission").value, "assist");
+  assert.equal(selectedPermission(), "assist");
   assert.ok(document.body.textContent.includes(zh.koi.serviceConfigured));
   assert.ok(document.querySelector('a[href="/settings?section=ai#agent-credits"]'));
   const observer = new QueryObserver(client, { queryKey: ["agent-session-settings", member.authUserId] });
   let observed;
   unsubscribe = observer.subscribe((result) => { observed = result.data?.permission; });
+  let finishWrite;
+  writeDelay = new Promise((resolve) => { finishWrite = resolve; });
   await changePermission("full");
+  assert.equal(selectedPermission(), "full", "the pending choice is visible immediately");
+  assert.equal(document.getElementById("koi-default-permission").hasAttribute("disabled"), true, "saving prevents conflicting choices");
+  assert.ok(document.body.textContent.includes(zh.koi.saving));
+  finishWrite(); writeDelay = undefined;
+  await settle();
   assert.equal(permission, "full");
   assert.equal(observed, "full", "the existing bottom-panel cache receives the saved default");
   assert.ok(document.body.textContent.includes(zh.koi.saved));
   failSave = true;
   await changePermission("review");
   assert.equal(permission, "full");
-  assert.equal(document.getElementById("koi-default-permission").value, "full");
+  assert.equal(selectedPermission(), "full");
   assert.ok(document.body.textContent.includes(zh.koi.saveFailed));
   assert.ok(!document.body.textContent.includes(zh.koi.saved));
   unsubscribe(); unsubscribe = null;
 
-  failSave = false; failRead = true;
+  failSave = false;
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === zh.koi.retry).click());
+  await settle();
+  assert.equal(permission, "review", "retry submits the failed choice without selecting another option");
+  assert.equal(selectedPermission(), "review");
+  failRead = true;
   await mount();
   assert.equal(document.getElementById("koi-default-permission"), null, "failed reads do not expose a guessed default");
   failRead = false;
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === zh.koi.retry).click());
   await settle();
-  assert.equal(document.getElementById("koi-default-permission").value, "full");
+  assert.equal(selectedPermission(), "review");
   state.user = { ...member, id: 2, authUserId: "account-two" }; permission = "review";
   await render();
-  assert.equal(document.getElementById("koi-default-permission").value, "review", "switching accounts reads that account's defaults");
+  assert.equal(selectedPermission(), "review", "switching accounts reads that account's defaults");
 
   credentialReadError = new Error("offline");
   await mount();
@@ -148,6 +164,12 @@ try {
   assert.ok(tokenCard().textContent.includes(tokenLabels.githubTokenNotConfigured), "retry recovers without leaving the page");
   assert.ok(!tokenCard().querySelector('[role="alert"]'));
 
+  assert.equal(tokenCard().querySelector("form"), null, "token input stays collapsed until requested");
+  await enterToken("discard-this-draft");
+  await clickTokenButton(zh.llmChannels.cancel);
+  assert.equal(tokenCard().querySelector("form"), null);
+  await clickTokenButton(tokenLabels.githubTokenAdd);
+  assert.equal(tokenCard().querySelector("input").value, "", "cancel clears the sensitive draft");
   const token = "github-test-token-9876";
   credentialSaveError = new Error("offline");
   await enterToken(token); await submitToken();
@@ -159,7 +181,7 @@ try {
   credentialSaveError = undefined;
   await submitToken();
   assert.ok(tokenCard().textContent.includes("••••9876"));
-  assert.equal(tokenCard().querySelector("input").value, "");
+  assert.equal(tokenCard().querySelector("form"), null, "successful saves return to the credential summary");
   assert.ok(tokenCard().textContent.includes(tokenLabels.githubTokenSaved));
   credentialSaveError = new Error("offline");
   await enterToken("replacement-token"); await submitToken();

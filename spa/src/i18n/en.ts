@@ -890,7 +890,7 @@ export const en: Messages = {
   },
   koi: {
     title: "Koi AI",
-    subtitle: "View Koi service configuration and manage defaults for new chats and GitHub access.",
+    subtitle: "Manage how Koi works with you and connects to external services.",
     localMode: "Fully local mode does not connect to Koi cloud. Switch to account mode to manage settings.",
     loading: "Reading Koi AI settings…",
     loadFailed: "Koi AI settings could not be loaded. Please retry.",
@@ -910,6 +910,9 @@ export const en: Messages = {
     creditsLink: "Balance and usage",
     defaultsDescription: "Applies only to bottom-panel sessions created afterwards; existing sessions keep their own setting.",
     defaultsScope: "The article sidebar always requires human review. Default permissions do not widen what Koi may write.",
+    autoSave: "Saves automatically",
+    saving: "Saving…",
+    membersOnly: "Lifetime members can set default permissions for new chats and use Koi cloud services.",
   },
   agentModelSettings: {
     title: "AI model",

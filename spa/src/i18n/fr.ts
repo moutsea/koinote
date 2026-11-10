@@ -898,7 +898,7 @@ export const fr: Messages = {
   },
   koi: {
     title: "Koi AI",
-    subtitle: "Consultez la configuration de Koi et gérez les autorisations par défaut des nouvelles conversations et l’accès GitHub.",
+    subtitle: "Gérez la façon de collaborer avec Koi et ses accès externes.",
     localMode: "Le mode entièrement local ne se connecte pas au cloud Koi. Passez en mode compte pour gérer les réglages.",
     loading: "Lecture des réglages Koi AI…",
     loadFailed: "Les réglages Koi AI n’ont pas pu être chargés. Réessayez.",
@@ -918,6 +918,9 @@ export const fr: Messages = {
     creditsLink: "Solde et consommation",
     defaultsDescription: "S'applique uniquement aux sessions du panneau inférieur créées ensuite ; les sessions existantes gardent leur réglage.",
     defaultsScope: "Le panneau d’article exige toujours une validation humaine. Les autorisations par défaut n’élargissent pas ce que Koi peut modifier.",
+    autoSave: "Enregistrement automatique",
+    saving: "Enregistrement…",
+    membersOnly: "L’abonnement à vie permet de définir les autorisations des nouvelles conversations et d’utiliser Koi dans le cloud.",
   },
   agentModelSettings: {
     title: "Modèle IA",
