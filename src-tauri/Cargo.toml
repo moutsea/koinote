@@ -1,6 +1,6 @@
 [package]
 name = "koinote-desktop"
-version = "1.1.11"
+version = "1.1.12"
 description = "Koinote offline desktop client"
 authors = ["Koinote contributors"]
 license = "MIT"

@@ -1,40 +1,36 @@
 {
-  "version": "1.1.11",
+  "version": "1.1.12",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.11",
+      "title": "What's new in Koinote 1.1.12",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Koi starts and resumes tasks more promptly. Messages stay visible while they are being sent, including when the article panel refreshes.",
-        "Replies arriving in a background tab preserve the scroll position of the conversation you are reading.",
-        "GitHub imports distinguish temporary outages from unavailable repositories and show when to retry. Automatic repository discovery retries brief search failures, and completed updates remain successful if cleanup times out."
+        "GitHub-backed Skills/Agent Hub repositories can refresh in one click and before Fork/Clone. Archived, disabled or unavailable upstreams are marked while their last usable snapshot stays accessible; personal forks and edits are preserved.",
+        "Koi AI clears the composer immediately when Enter or Send submits a message. Failed sends restore the original text, while later responses preserve any new draft typed during sending."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.11 新功能",
+      "title": "Koinote 1.1.12 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi 启动和继续任务更及时。消息发送期间会持续显示，文章面板刷新时也能保留发送状态。",
-        "后台标签页收到回复时，会保留当前正在阅读的对话的滚动位置。",
-        "GitHub 导入会区分临时故障和仓库不可用，并提示何时重试。自动收录会重试短暂的搜索故障；已完成的仓库更新不会因后续清理超时而误报失败。"
+        "Skills/Agent Hub 的 GitHub 来源仓库支持一键同步，Fork/Clone 前自动检查最新内容；上游已归档、禁用或不可访问时标记状态，继续使用最后可用快照，不覆盖个人 Fork 或已有编辑。",
+        "Koi AI 按回车或点击发送后立即清空输入框；发送失败时恢复原文，发送期间输入的新草稿不会被后续响应清除。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.11",
+      "title": "Nouveautés de Koinote 1.1.12",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Koi démarre et reprend les tâches plus rapidement. Les messages restent visibles pendant leur envoi, même si le panneau de l’article s’actualise.",
-        "Une réponse reçue dans un onglet en arrière-plan préserve la position de défilement de la conversation que vous consultez.",
-        "L’import GitHub distingue les pannes temporaires des dépôts indisponibles et indique quand réessayer. La découverte automatique réessaie après une brève panne de recherche, et une mise à jour terminée reste réussie si le nettoyage dépasse son délai."
+        "Les dépôts GitHub du Skills/Agent Hub peuvent être actualisés en un clic et avant Fork/Clone. Les sources archivées, désactivées ou indisponibles sont signalées tout en conservant le dernier instantané utilisable, sans écraser les forks personnels ni les modifications.",
+        "Koi AI vide immédiatement le champ après Entrée ou Envoyer. Un échec restaure le texte d’origine ; une réponse tardive conserve le nouveau brouillon saisi pendant l’envoi."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.11 の新機能",
+      "title": "Koinote 1.1.12 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Koi のタスク開始と再開がより迅速になりました。送信中のメッセージは、記事パネルが更新されても表示と送信状態を維持します。",
-        "バックグラウンドのタブに返信が届いても、閲覧中の会話のスクロール位置を維持します。",
-        "GitHub のインポートで一時的な障害とリポジトリの利用不可を区別し、再試行の案内を表示します。自動収集では一時的な検索障害を再試行し、更新完了後のクリーンアップがタイムアウトしても成功として扱います。"
+        "Skills/Agent Hub の GitHub 由来リポジトリをワンクリックで同期し、Fork/Clone 前にも最新内容を確認します。アーカイブ済み・無効・利用不可の上流は状態を表示し、最後の利用可能なスナップショットを維持します。個人の Fork や編集内容は上書きしません。",
+        "Koi AI で Enter または送信ボタンを押すと、入力欄がすぐに空になります。送信失敗時は元の文章を復元し、送信中に入力した新しい下書きは応答後も保持します。"
       ]
     }
   }

@@ -4,9 +4,15 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-11-10
+
 ### Added
 
 - Les dépôts GitHub du Skills/Agent Hub peuvent être actualisés en un clic et avant Fork/Clone. Les sources archivées, désactivées ou indisponibles sont signalées tout en conservant le dernier instantané utilisable, sans écraser les forks personnels ni les modifications.
+
+### Changed
+
+- Koi AI vide immédiatement le champ après Entrée ou Envoyer. Un échec restaure le texte d’origine ; une réponse tardive conserve le nouveau brouillon saisi pendant l’envoi.
 
 ### Fixed
 
@@ -16,7 +22,6 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 - Fork/Clone restent possibles sur la version publique enregistrée si une mise à jour est refusée pour sa licence ou son identité. Les opérations et téléchargements détectent une republication à révision identique pour éviter des licences incohérentes. Les indications de source privée conviennent aussi aux copies personnelles non publiées.
 - Fork/Clone prépare les instantanés selon l’état actuel de la source sur le serveur, évitant les mises à jour manquées et les copies enregistrées bloquées par un ancien état de page. Les copies indépendantes expliquent pourquoi la synchronisation est indisponible ; les erreurs de licence et d’identité, les confirmations de Fork et les sources privées sont mieux décrites.
 - Fork/Clone réutilisent l’instantané préparé sans vérifier GitHub deux fois ; la synchronisation manuelle conserve les identifiants des demandes sans réponse confirmée. Une source introuvable avec authentification est vérifiée anonymement avant d’être marquée indisponible. Les indications de mise à jour et de fork personnel ont été corrigées.
-- Koi AI vide immédiatement le champ après Entrée ou Envoyer. Un échec restaure le texte d’origine ; une réponse tardive conserve le nouveau brouillon saisi pendant l’envoi.
 - Les réponses tardives de synchronisation, Fork et Clone n’affectent plus un autre dépôt ou compte après navigation, n’ouvrent plus un ancien dialogue de téléchargement et ne redirigent plus vers le résultat d’une opération précédente.
 - Les actualisations GitHub limitent les traitements simultanés et regroupent les demandes concurrentes d’un même dépôt. Un token enregistré refusé peut être remplacé par un accès anonyme aux dépôts publics, sans bloquer la synchronisation, Fork ou Clone.
 - Les copies personnelles sans mise à jour nécessaire ignorent la synchronisation avant les contrôles d’identifiants et d’anciens ID GitHub. Les reprises de Clone refusent un instantané remplacé sans augmenter le compteur.

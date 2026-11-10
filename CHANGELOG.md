@@ -6,9 +6,15 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-11-10
+
 ### Added
 
 - GitHub-backed Skills/Agent Hub repositories can refresh in one click and before Fork/Clone. Archived, disabled or unavailable upstreams are marked while their last usable snapshot stays accessible; personal forks and edits are preserved.
+
+### Changed
+
+- Koi AI clears the composer immediately when Enter or Send submits a message. Failed sends restore the original text, while later responses preserve any new draft typed during sending.
 
 ### Fixed
 
@@ -18,7 +24,6 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 - Fork/Clone can use the saved public version when upstream license or identity checks reject an update. Operations and downloads detect republication at the same file revision to prevent license mismatches. Private-source notices also apply correctly to unpublished personal copies.
 - Fork/Clone now prepares snapshots from the server’s current upstream state, so stale page status cannot skip updates or block saved copies. Independent copies explain why sync is unavailable; license and source identity errors, Fork confirmations and private upstream notices are clearer.
 - Fork/Clone reuse prepared snapshots instead of checking GitHub twice, and manual sync preserves uncertain request IDs. Authenticated missing-source responses are confirmed anonymously before marking an upstream unavailable; public update and personal-fork notices now match the behavior.
-- Koi AI clears the composer immediately when Enter or Send submits a message. Failed sends restore the original text, while later responses preserve any new draft typed during sending.
 - Late repository sync, Fork and Clone responses no longer affect a different repository or account after navigation, open an old download dialog, or redirect to an earlier operation's result.
 - GitHub refreshes now share bounded concurrency and coalesce overlapping requests for the same repository. Rejected saved tokens can fall back to anonymous access for public repositories instead of blocking sync, Fork or Clone.
 - Personal copies that do not need upstream updates skip refresh before credential or legacy GitHub identity checks. Clone retries reject replaced snapshots without increasing the clone count.
