@@ -1,36 +1,36 @@
 {
-  "version": "1.1.14",
+  "version": "1.1.15",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.14",
+      "title": "What's new in Koinote 1.1.15",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Koi AI settings now use a compact service overview and clearly explained permission cards, with improved mobile and dark-mode layouts.",
-        "Default permissions show saving progress and allow retrying failed changes. GitHub token editing opens on demand, and canceling clears the draft."
+        "Koi AI in My Space now uses the app logo, with light and dark theme support.",
+        "View balance and usage expands total balance, reserved credits, available credits, recent activity and top-ups on the same page."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.14 新功能",
+      "title": "Koinote 1.1.15 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi AI 设置采用更紧凑的服务概览和带说明的权限选项卡片，并优化手机布局与深色模式。",
-        "默认权限展示保存进度，失败后可直接重试；GitHub Token 按需展开编辑，取消时清空草稿。"
+        "我的空间中的 Koi AI 使用应用 Logo，支持深浅主题。",
+        "查看余额与用量可在当前页展开总余额、预计扣除、可用额度和近期记录，并直接充值。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.14",
+      "title": "Nouveautés de Koinote 1.1.15",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Les réglages Koi AI proposent un aperçu compact du service et des cartes d’autorisation expliquées, avec une présentation améliorée sur mobile et en mode sombre.",
-        "Les autorisations par défaut affichent la progression de l’enregistrement et permettent de réessayer en cas d’échec. L’éditeur de jeton GitHub s’ouvre à la demande et l’annulation efface le brouillon."
+        "Koi AI dans Mon espace utilise désormais le logo de l’application, adapté aux thèmes clair et sombre.",
+        "Le solde total, les crédits réservés et disponibles, l’activité récente et les recharges s’affichent directement sur la même page."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.14 の新機能",
+      "title": "Koinote 1.1.15 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Koi AI 設定をコンパクトなサービス概要と説明付きの権限カードに整理し、モバイル表示とダークモードを改善しました。",
-        "既定の権限の保存状況を表示し、失敗時に再試行できるようにしました。GitHub Token の編集欄は必要なときに開き、キャンセルすると下書きを消去します。"
+        "マイスペースの Koi AI にアプリのロゴを使用し、ライト・ダークテーマに対応しました。",
+        "残高と使用量を開くと、総残高、差し引き予定、利用可能クレジット、最近の履歴を同じページで確認でき、そのままチャージできます。"
       ]
     }
   }

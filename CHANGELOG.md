@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.15] - 2026-11-11
+
+### Changed
+
+- Koi AI in My Space now uses the app logo, with light and dark theme support.
+- View balance and usage expands total balance, reserved credits, available credits, recent activity and top-ups on the same page.
+
+### Fixed
+
+- Switching accounts no longer briefly shows the previous account's Credits balance in the balance card.
+
 ## [1.1.14] - 2026-11-11
 
 ### Changed

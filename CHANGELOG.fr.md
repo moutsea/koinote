@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.15] - 2026-11-11
+
+### Changed
+
+- Koi AI dans Mon espace utilise désormais le logo de l’application, adapté aux thèmes clair et sombre.
+- Le solde total, les crédits réservés et disponibles, l’activité récente et les recharges s’affichent directement sur la même page.
+
+### Fixed
+
+- Lors d’un changement de compte, la carte de solde n’affiche plus brièvement les crédits du compte précédent.
+
 ## [1.1.14] - 2026-11-11
 
 ### Changed
