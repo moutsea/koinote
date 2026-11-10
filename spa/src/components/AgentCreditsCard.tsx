@@ -61,7 +61,7 @@ export function AgentCreditsCard({ user }: { user: User }) {
   );
   const member = user.membershipTier === "lifetime";
   const credits = useQuery({
-    queryKey: AGENT_CREDITS_QUERY_KEY,
+    queryKey: [...AGENT_CREDITS_QUERY_KEY, user.authUserId],
     queryFn: getAgentCredits,
     enabled: member && !user.isLocalMode,
     retry: false,
@@ -150,7 +150,7 @@ export function AgentCreditsCard({ user }: { user: User }) {
     };
   }, [notice, queryClient]);
 
-  const data = credits.data?.credits;
+  const data = member && !user.isLocalMode ? credits.data?.credits : undefined;
   const currencyOptions = data?.packs[0]?.prices?.length
     ? data.packs[0].prices
     : data?.packs[0]

@@ -1,10 +1,11 @@
-import { Archive, Cloud, Files, FolderOpen, FolderSync, ShieldCheck, Sparkles } from "lucide-react";
+import { Archive, Cloud, Files, FolderOpen, FolderSync, ShieldCheck } from "lucide-react";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useSession } from "../auth";
 import { AgentWorkspaceRepositoriesPage } from "./AgentWorkspaceRepositoriesPage";
 import { ConfigSnapshotsCard } from "../components/ConfigSnapshotsCard";
 import { KoiPage } from "../components/KoiPage";
+import { Logo } from "../components/Logo";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n } from "../i18n";
 
@@ -96,7 +97,7 @@ export function SpacePage() {
             className="inline-flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-1 pb-3 text-center text-sm font-semibold sm:shrink-0 sm:justify-start sm:gap-2"
             style={{ borderColor: activeTab === "koi" ? "var(--cinnabar)" : "transparent", color: activeTab === "koi" ? "var(--cinnabar)" : "var(--ink-mid)" }}
           >
-            <Sparkles className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="hidden sm:inline-flex"><Logo className="h-4 w-4" /></span>
             <span>{t.space.koiTab}</span>
           </Link>
         </div>

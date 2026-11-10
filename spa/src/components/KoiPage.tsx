@@ -1,19 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Check, CircleCheck, CloudOff, Crown, LoaderCircle, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, Coins, Crown, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import type { User } from "../api";
 import { getAgentSessionSettings, updateAgentSessionSettings } from "../agentSessions";
 import { getWritingConfig } from "../writingAgent";
 import { useI18n } from "../i18n";
 import { agentPanelText } from "../i18n/agentPanel";
 import { AgentGitHubCredentialCard } from "./AgentGitHubCredentialCard";
+import { AgentCreditsCard } from "./AgentCreditsCard";
 import { PaperCard } from "./Ink";
+import { Logo } from "./Logo";
 
 export function KoiPage({ user }: { user: User }) {
   const { t } = useI18n();
   if (user.isLocalMode) {
     return <PaperCard className="flex items-start gap-4 p-6">
-      <CloudOff aria-hidden className="mt-1 h-5 w-5 shrink-0" style={{ color: "var(--ink-mid)" }} />
+      <Logo className="h-10 w-10" />
       <div><h2 className="text-base font-semibold">{t.koi.title}</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.koi.localMode}</p></div>
     </PaperCard>;
   }
@@ -26,6 +29,7 @@ function AccountKoiSettings({ user }: { user: User }) {
   const panel = agentPanelText[locale];
   const client = useQueryClient();
   const member = user.membershipTier === "lifetime";
+  const [creditsOpen, setCreditsOpen] = useState(false);
   // Share the bottom panel's account-scoped cache and existing settings API.
   const settingsKey = ["agent-session-settings", user.authUserId];
   const settings = useQuery({ queryKey: settingsKey, queryFn: getAgentSessionSettings, enabled: member, retry: false });
@@ -43,15 +47,15 @@ function AccountKoiSettings({ user }: { user: User }) {
       <PaperCard className="overflow-hidden">
         <header className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}><Sparkles aria-hidden className="h-5 w-5" /></span>
+            <Logo className="h-10 w-10" />
             <div>
               <h2 id="koi-settings-title" className="kn-heading-cn text-lg font-semibold">{labels.title}</h2>
               <p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{labels.serviceDescription}</p>
             </div>
           </div>
-          <Link to="/settings" search={{ section: "ai" }} hash="agent-credits" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)" }}>
-            {labels.creditsLink}<ArrowUpRight aria-hidden className="h-3.5 w-3.5" />
-          </Link>
+          <button type="button" aria-expanded={creditsOpen} aria-controls="koi-credits" onClick={() => setCreditsOpen((open) => !open)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)" }}>
+            <Coins aria-hidden className="h-3.5 w-3.5" />{labels.creditsLink}<ChevronDown aria-hidden className={`h-3.5 w-3.5 transition-transform ${creditsOpen ? "rotate-180" : ""}`} />
+          </button>
         </header>
         <dl className="grid gap-3 border-t px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}>
           <div className="flex items-center justify-between gap-3 sm:block"><dt className="text-xs" style={{ color: "var(--ink-mid)" }}>{labels.membershipLabel}</dt><dd className="flex items-center gap-1.5 text-sm font-medium sm:mt-1.5">{member && <Crown aria-hidden className="h-3.5 w-3.5" style={{ color: "var(--cinnabar)" }} />}{member ? labels.membershipLifetime : labels.membershipNone}</dd></div>
@@ -65,6 +69,9 @@ function AccountKoiSettings({ user }: { user: User }) {
           <p>{labels.loadFailed}</p><button type="button" disabled={config.isFetching} onClick={() => void config.refetch()} className="inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 font-semibold disabled:opacity-50"><RefreshCw aria-hidden className={`h-3.5 w-3.5 ${config.isFetching ? "animate-spin" : ""}`} />{labels.retry}</button>
         </div>}
       </PaperCard>
+      <section id="koi-credits" aria-label={labels.creditsLink} hidden={!creditsOpen}>
+        {creditsOpen && <AgentCreditsCard user={user} />}
+      </section>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <PaperCard className="p-5 sm:p-6">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
