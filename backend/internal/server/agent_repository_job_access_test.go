@@ -19,9 +19,9 @@ func TestSystemRepositoryJobsGitHubAccessFailures(t *testing.T) {
 	}{
 		{"repository forbidden", "metadata", "", "", "github_access_denied", 403, nil},
 		{"commit forbidden", "commits", "", "", "github_access_denied", 403, nil},
-		{"archive forbidden", "zipball", "", "", "github_access_denied", 403, nil},
+		{"archive forbidden", "zipball", "", "", "github_download_failed", 403, nil},
 		{"invalid credential", "metadata", "", "", "github_credentials_invalid", 401, errAgentGitHubCredentialRequired},
-		{"archive invalid credential", "zipball", "", "", "github_credentials_invalid", 401, errAgentGitHubCredentialRequired},
+		{"archive unauthorized", "zipball", "", "", "github_download_failed", 401, nil},
 		{"rate limit", "metadata", "", "", "github_rate_limited", 429, errAgentGitHubRateLimited},
 		{"primary rate limit", "metadata", "X-RateLimit-Remaining", "0", "github_rate_limited", 403, errAgentGitHubRateLimited},
 		{"secondary rate limit", "zipball", "Retry-After", "60", "github_rate_limited", 403, errAgentGitHubRateLimited},
@@ -29,7 +29,9 @@ func TestSystemRepositoryJobsGitHubAccessFailures(t *testing.T) {
 		block := func(client *http.Client, prefix string) *http.Client {
 			return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				match := r.URL.Path == prefix && tc.endpoint == "metadata"
-				if tc.endpoint != "metadata" {
+				if tc.endpoint == "zipball" {
+					match = r.URL.Host == githubCodeLoadHost && strings.HasPrefix(r.URL.Path, strings.TrimPrefix(prefix, "/repos")+"/zip/")
+				} else if tc.endpoint != "metadata" {
 					match = strings.HasPrefix(r.URL.Path, prefix+"/"+tc.endpoint+"/")
 				}
 				if !match {
@@ -55,7 +57,7 @@ func TestSystemRepositoryJobsGitHubAccessFailures(t *testing.T) {
 			next.repositoryID, next.fullName = source.RepositoryID, "Other/demo"
 			firstClient, nextClient := app.githubHTTPClient, next.client(t)
 			routes := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-				if strings.HasPrefix(r.URL.Path, "/repos/Other/") {
+				if strings.HasPrefix(r.URL.Path, "/repos/Other/") || r.URL.Host == githubCodeLoadHost && strings.HasPrefix(r.URL.Path, "/Other/") {
 					return nextClient.Transport.RoundTrip(r)
 				}
 				return firstClient.Transport.RoundTrip(r)

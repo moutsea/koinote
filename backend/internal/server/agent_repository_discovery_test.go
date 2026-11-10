@@ -108,7 +108,13 @@ func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixtur
 		}
 	})
 	app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Host != "api.github.com" || r.Header.Get("Authorization") != "Bearer discovery-test-token" {
+		credential := "Bearer discovery-test-token"
+		host := "api.github.com"
+		if r.URL.Host == githubCodeLoadHost {
+			host = githubCodeLoadHost
+			credential = ""
+		}
+		if r.URL.Host != host || r.Header.Get("Authorization") != credential {
 			t.Error("unexpected upstream request")
 		}
 		res := &http.Response{StatusCode: 200, Header: make(http.Header), Request: r}
@@ -136,6 +142,9 @@ func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixtur
 			found := false
 			for _, item := range f.items {
 				prefix := "/repos/" + item.FullName
+				if r.URL.Host == githubCodeLoadHost {
+					prefix = "/" + item.FullName
+				}
 				if r.URL.Path != prefix && !strings.HasPrefix(r.URL.Path, prefix+"/") {
 					continue
 				}
@@ -146,7 +155,7 @@ func newDiscoveryFixture(t *testing.T, count int) (*App, *repositoryObjectFixtur
 						t.Error("wrong branch")
 					}
 					data = []byte(githubSyncTestSHA)
-				case strings.Contains(r.URL.Path, "/zipball/"):
+				case githubArchiveTestRequest(r):
 					if !strings.HasSuffix(r.URL.Path, "/"+githubSyncTestSHA) {
 						t.Error("unversioned archive")
 					}

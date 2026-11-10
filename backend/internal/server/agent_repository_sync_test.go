@@ -24,8 +24,9 @@ func TestSystemRepositorySyncNeedsAttentionOnlyForPermanentUpstreamStates(t *tes
 		code string
 		want bool
 	}{
-		{code: "github_unavailable", want: true},
 		{code: "license_changed", want: true},
+		{code: "publication_license_mismatch", want: true},
+		{code: "github_unavailable", want: false},
 		{code: "repository_identity_mismatch", want: true},
 		{code: "github_transient_error", want: false},
 		{code: "github_response_invalid", want: false},
@@ -45,6 +46,7 @@ type githubSyncFixture struct {
 	repositoryID                        int64
 	fullName                            string
 	private                             bool
+	archived, disabled                  bool
 	status, commitStatus, archiveStatus int
 	archive                             []byte
 	archives, commits                   int
@@ -54,13 +56,22 @@ type githubSyncFixture struct {
 func (f *githubSyncFixture) client(t *testing.T) *http.Client {
 	t.Helper()
 	return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Host != "api.github.com" || r.Header.Get("Authorization") != "Bearer sync-test-token" {
+		// A missing metadata response is confirmed anonymously before retiring
+		// the saved public source. Public archive downloads are always anonymous.
+		anonymousConfirmation := r.Header.Get("Authorization") == "" && !strings.Contains(r.URL.Path, "/commits/") && !githubArchiveTestRequest(r) &&
+			(f.status == http.StatusNotFound || f.status == http.StatusGone || f.status == http.StatusUnavailableForLegalReasons)
+		publicArchive := r.URL.Host == githubCodeLoadHost
+		if publicArchive {
+			if r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" || r.URL.RawQuery != "" {
+				t.Error("public archive must use an unsigned anonymous URL")
+			}
+		} else if r.URL.Host != "api.github.com" || (r.Header.Get("Authorization") != "Bearer sync-test-token" && !anonymousConfirmation) {
 			t.Error("unexpected upstream host or credential")
 		}
 		res := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Request: r}
 		var body []byte
 		switch {
-		case strings.Contains(r.URL.Path, "/zipball/"):
+		case githubArchiveTestRequest(r):
 			f.archives++
 			if !strings.HasSuffix(r.URL.Path, "/"+f.sha) {
 				t.Error("archive is not pinned to resolved SHA")
@@ -93,7 +104,7 @@ func (f *githubSyncFixture) client(t *testing.T) *http.Client {
 				fullName = "Octo/demo"
 			}
 			parts := strings.SplitN(fullName, "/", 2)
-			body, _ = json.Marshal(map[string]any{"id": f.repositoryID, "name": parts[1], "full_name": fullName, "owner": map[string]string{"login": parts[0]}, "default_branch": "main", "private": f.private, "license": map[string]string{"spdx_id": f.license}})
+			body, _ = json.Marshal(map[string]any{"id": f.repositoryID, "name": parts[1], "full_name": fullName, "owner": map[string]string{"login": parts[0]}, "default_branch": "main", "private": f.private, "archived": f.archived, "disabled": f.disabled, "license": map[string]string{"spdx_id": f.license}})
 		}
 		res.Body = io.NopCloser(bytes.NewReader(body))
 		return res, nil
@@ -260,7 +271,7 @@ func TestSystemRepositorySyncLargeArchiveWithCredentialLookup(t *testing.T) {
 }
 
 func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
-	for _, scenario := range []string{"preview", "license", "unlicensed", "nested-license", "notice-exception", "missing-license", "unknown-license", "root-license-mismatch", "identity-changed", "identity-changed-same-sha", "missing-upstream-identity", "missing-saved-identity", "private", "missing", "legally-blocked", "commit-missing", "commit-gone", "commit-rejected", "archive-missing", "transient", "sensitive-content", "sensitive-path", "invalid-archive", "r2-failure", "withdraw-during-download", "republish-during-download", "revision-race"} {
+	for _, scenario := range []string{"preview", "license", "unlicensed", "nested-license", "notice-exception", "missing-license", "unknown-license", "root-license-mismatch", "identity-changed", "identity-changed-same-sha", "missing-upstream-identity", "missing-saved-identity", "commit-missing", "commit-gone", "commit-rejected", "archive-missing", "transient", "sensitive-content", "sensitive-path", "invalid-archive", "r2-failure", "withdraw-during-download", "republish-during-download", "revision-race"} {
 		t.Run(scenario, func(t *testing.T) {
 			app, w, admin, objects, upstream := seedSystemRepositorySync(t, true)
 			ctx := context.Background()
@@ -302,16 +313,6 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 					t.Fatal(err)
 				}
 				wantCode = "repository_identity_mismatch"
-			case "private":
-				upstream.private = true
-				wantCode = "invalid_or_private_source"
-			case "missing":
-				upstream.status = 404
-				wantCode = "github_unavailable"
-			case "legally-blocked":
-				// A DMCA takedown (451) is as permanent as a deleted repository.
-				upstream.status = http.StatusUnavailableForLegalReasons
-				wantCode = "github_unavailable"
 			case "commit-missing", "commit-gone", "commit-rejected":
 				upstream.commitStatus = map[string]int{"commit-missing": 404, "commit-gone": 410, "commit-rejected": 422}[scenario]
 				// Even an implicit default ref may change between API requests.
@@ -378,8 +379,7 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 			// The expectation is listed here instead of calling the classifier so
 			// the test fails if the classification silently changes.
 			switch wantCode {
-			case "license_changed", "license_review_required", "github_unavailable",
-				"invalid_or_private_source", "repository_identity_mismatch":
+			case "license_changed", "license_review_required", "repository_identity_mismatch":
 				if !errors.Is(err, ErrSystemRepositoriesNeedAttention) || summary.NeedsAttention != 1 {
 					t.Fatalf("permanent rejection must only need attention: %+v %v", summary, err)
 				}
@@ -387,9 +387,6 @@ func TestSystemRepositorySyncPreviewAndRejectionsKeepOldSnapshot(t *testing.T) {
 				if errors.Is(err, ErrSystemRepositoriesNeedAttention) || summary.NeedsAttention != 0 {
 					t.Fatalf("retryable fault must fail the run: %+v %v", summary, err)
 				}
-			}
-			if scenario == "private" && (upstream.commits != 0 || upstream.archives != 0) {
-				t.Fatal("read private contents")
 			}
 			if (scenario == "license" || scenario == "unlicensed") && upstream.archives != 0 {
 				t.Fatal("downloaded license-rejected archive")

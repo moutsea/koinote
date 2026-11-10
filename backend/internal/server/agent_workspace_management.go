@@ -91,15 +91,30 @@ func (a *App) agentWorkspaceSettingsPut(w http.ResponseWriter, r *http.Request) 
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "enabled is required")
 		return
 	}
-	_, err := a.db.Exec(r.Context(), `
-		INSERT INTO agent_workspace_settings (user_id, enabled) VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
-	`, user.ID, *input.Enabled)
+	err := a.setAgentWorkspaceEnabled(r.Context(), user.ID, *input.Enabled)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]bool{"enabled": *input.Enabled})
+}
+
+func (a *App) setAgentWorkspaceEnabled(ctx context.Context, userID int, enabled bool) error {
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Refresh commits and new Forks take this owner lock before checking the
+	// setting. A completed disable therefore precedes their subsequent writes.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(&userID)); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO agent_workspace_settings (user_id, enabled) VALUES ($1, $2)
+ ON CONFLICT (user_id) DO UPDATE SET enabled=EXCLUDED.enabled,updated_at=now()`, userID, enabled); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func agentWorkspaceIDFromRequest(w http.ResponseWriter, r *http.Request) (int64, bool) {

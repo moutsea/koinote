@@ -650,7 +650,7 @@ export function ArticleAgentPanel({
               placeholder={copy.placeholder}
               rows={2}
               maxLength={16000}
-              value={draft}
+              value={sending ? "" : draft}
               className="koi-article-input"
               ref={inputRef}
               disabled={busy || !page}

@@ -26,6 +26,7 @@ export async function checkArticleKoi(createClient,url) {
     await send("Input.insertText",{text:"参考乙文，润色甲文开头"});
     await click("发送");
     await wait("window.agentUITest.responseHeld");
+    assert.equal(await evaluate("document.querySelector('[role=dialog] textarea').value"), "", "article input clears before the send responds");
     // The turn is visible while the request is in flight, then the accepted
     // task replaces it straight from the POST response, before any reload.
     const sending = "document.querySelector('[role=dialog] [data-agent-sending]')";
@@ -85,6 +86,21 @@ export async function checkArticleKoi(createClient,url) {
     await evaluate("window.agentUITest.releaseResponse()");
     await wait(`${sending}===null && document.querySelector('[role=dialog] textarea').value===''`);
     assert.equal(await evaluate(`${turns}.length`), 1, "the accepted task is shown once");
+    const failedDraft = "  失败后恢复文章指令  ";
+    await wait("document.querySelector('[role=dialog] textarea:not(:disabled)')");
+    await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;window.agentUITest.loseHeldResponse=true;document.querySelector('[role=dialog] textarea').focus()");
+    await send("Input.insertText", {text: failedDraft});
+    await send("Input.dispatchKeyEvent", {type:"keyDown",key:"Enter",code:"Enter",text:"\r",windowsVirtualKeyCode:13});
+    await send("Input.dispatchKeyEvent", {type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
+    await wait("window.agentUITest.responseHeld");
+    assert.equal(await evaluate("document.querySelector('[role=dialog] textarea').value"), "", "article Enter clears the input before acknowledgement");
+    const failedRequest = await evaluate("window.agentUITest.submissions.at(-1)");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait("document.querySelector('[role=dialog] [role=alert]')?.textContent.includes('Accepted held response was lost')");
+    assert.equal(await evaluate("document.querySelector('[role=dialog] textarea').value"), failedDraft, "article failure restores the untouched draft");
+    await click("发送");
+    await wait("!document.querySelector('[role=dialog] [data-agent-sending]') && document.querySelector('[role=dialog] textarea:not(:disabled)')");
+    assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), failedRequest, "article retry preserves the request ID");
     await send("Emulation.setDeviceMetricsOverride",{width:360,height:740,deviceScaleFactor:1,mobile:false});
     await evaluate("document.documentElement.classList.add('dark')");
     await wait("document.querySelector('.koi-article-thread').clientWidth<=360");

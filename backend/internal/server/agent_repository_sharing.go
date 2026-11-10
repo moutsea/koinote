@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -24,6 +25,10 @@ type agentRepositoryPublication struct {
 	License     string `json:"license"`
 	URL         string `json:"url"`
 	ManifestURL string `json:"manifestUrl"`
+	// Identifies a publication, including republications at the same revision.
+	PublicationID string `json:"publicationId"`
+	// Explains why this saved copy cannot follow GitHub, even on a manual recheck.
+	SyncDisabledReason string `json:"syncDisabledReason,omitempty"`
 }
 
 type agentRepositorySource struct {
@@ -259,13 +264,22 @@ func (a *App) loadPublicAgentRepositoryForViewer(ctx context.Context, id int64, 
 	if err != nil {
 		return nil, err
 	}
+	before, err := a.loadAgentRepositorySyncSnapshot(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	result.SyncDisabledReason, err = agentRepositoryRefreshSkipReason(ctx, tx, before, false)
+	if err != nil {
+		return nil, err
+	}
 	result.agentRepositoryEngagement, err = loadAgentRepositoryEngagement(ctx, tx, id, viewer)
 	if err != nil {
 		return nil, err
 	}
 	result.UpdatedAt = published.UTC().Format(time.RFC3339)
+	result.PublicationID = published.UTC().Format(time.RFC3339Nano)
 	result.URL = strings.TrimRight(a.cfg.AppURL, "/") + "/repositories/" + strconv.FormatInt(id, 10)
-	result.ManifestURL = strings.TrimRight(a.cfg.AppURL, "/") + "/api/agent/repositories/" + strconv.FormatInt(id, 10) + "?revision=" + strconv.FormatInt(result.Revision, 10)
+	result.ManifestURL = strings.TrimRight(a.cfg.AppURL, "/") + "/api/agent/repositories/" + strconv.FormatInt(id, 10) + "?revision=" + strconv.FormatInt(result.Revision, 10) + "&publication=" + url.QueryEscape(result.PublicationID)
 	result.Files = []agentWorkspaceFileView{}
 	rows, err := tx.Query(ctx, `SELECT file_id,path,mime_type,size_bytes,sha256 FROM agent_repository_publication_files WHERE workspace_id=$1 ORDER BY path`, id)
 	if err != nil {
@@ -325,6 +339,10 @@ func (a *App) publicAgentRepositoryGet(w http.ResponseWriter, r *http.Request) {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
+	if expected := r.URL.Query().Get("publication"); expected != "" && expected != repository.PublicationID {
+		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+		return
+	}
 	httpx.JSON(w, 200, map[string]any{"repository": repository})
 }
 
@@ -348,16 +366,21 @@ func (a *App) publicAgentRepositoryFileGet(w http.ResponseWriter, r *http.Reques
 	var file agentWorkspaceFileContentView
 	var content []byte
 	var objectKey *string
-	err = a.db.QueryRow(r.Context(), `SELECT f.file_id,f.path,f.mime_type,f.size_bytes,f.sha256,b.content,b.r2_object_key
+	var published time.Time
+	err = a.db.QueryRow(r.Context(), `SELECT f.file_id,f.path,f.mime_type,f.size_bytes,f.sha256,b.content,b.r2_object_key,p.published_at
  FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
  JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
- WHERE p.workspace_id=$1 AND p.revision=$2 AND f.file_id=$3 AND w.deleted_at IS NULL`, id, revision, fileID).Scan(&file.FileID, &file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content, &objectKey)
+ WHERE p.workspace_id=$1 AND p.revision=$2 AND f.file_id=$3 AND w.deleted_at IS NULL`, id, revision, fileID).Scan(&file.FileID, &file.Path, &file.MimeType, &file.SizeBytes, &file.SHA256, &content, &objectKey, &published)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeAgentWorkspaceError(w, errAgentWorkspaceNotFound)
 		return
 	}
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
+		return
+	}
+	if expected := r.URL.Query().Get("publication"); expected != "" && expected != published.UTC().Format(time.RFC3339Nano) {
+		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
 		return
 	}
 	content, err = a.readAgentRepositoryContent(r.Context(), content, objectKey, file.SHA256, file.SizeBytes, 0, agentWorkspaceMaxFileBytes)
@@ -384,8 +407,10 @@ func (a *App) publicAgentRepositoryFork(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var input struct {
-		ExpectedRevision *int64 `json:"expectedRevision"`
-		RequestID        string `json:"requestId"`
+		ExpectedRevision    *int64 `json:"expectedRevision"`
+		ExpectedPublication string `json:"expectedPublication"`
+		RequestID           string `json:"requestId"`
+		Refresh             *bool  `json:"refresh"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if json.NewDecoder(r.Body).Decode(&input) != nil || input.ExpectedRevision == nil || *input.ExpectedRevision < 0 {
@@ -396,15 +421,73 @@ func (a *App) publicAgentRepositoryFork(w http.ResponseWriter, r *http.Request) 
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid requestId")
 		return
 	}
-	workspace, err := a.forkAgentRepository(r.Context(), user.ID, id, *input.ExpectedRevision, strings.TrimSpace(input.RequestID))
+	ctx, cancel := context.WithTimeout(r.Context(), 2*githubRequestTimeout)
+	defer cancel()
+	// Resolve an acknowledged or uncertain retry before contacting GitHub. The
+	// request ID identifies the original snapshot even after upstream advances.
+	if a.writeCompletedAgentRepositoryFork(w, ctx, user.ID, id, *input.ExpectedRevision, input.RequestID) {
+		return
+	}
+	repository, err := a.preparePublicAgentRepositoryAction(ctx, id, &user.ID, input.Refresh)
+	// Another request with this ID can finish while the upstream request waits.
+	// Its committed result wins over a newer publication or upstream failure.
+	if a.writeCompletedAgentRepositoryFork(w, ctx, user.ID, id, *input.ExpectedRevision, input.RequestID) {
+		return
+	}
 	if err != nil {
+		writePublicAgentRepositorySyncError(w, err)
+		return
+	}
+	if repository.Revision != *input.ExpectedRevision || (input.ExpectedPublication != "" && repository.PublicationID != input.ExpectedPublication) {
+		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+		return
+	}
+	workspace, err := a.forkAgentRepositorySnapshot(ctx, user.ID, id, *input.ExpectedRevision, strings.TrimSpace(input.RequestID), repository.PublicationID)
+	if err != nil {
+		if a.writeCompletedAgentRepositoryFork(w, ctx, user.ID, id, *input.ExpectedRevision, input.RequestID) {
+			return
+		}
 		writeAgentWorkspaceError(w, err)
 		return
 	}
 	httpx.JSON(w, 201, map[string]any{"workspace": workspace})
 }
 
+func completedAgentRepositoryFork(ctx context.Context, queries agentWorkspaceQuerier, userID int, id, revision int64, requestID string) (*agentWorkspaceView, error) {
+	var existingID, existingRevision int64
+	var sourceID *int64
+	err := queries.QueryRow(ctx, `SELECT workspace_id,source_workspace_id,source_revision FROM agent_repository_forks WHERE user_id=$1 AND request_id=$2::uuid`, userID, requestID).Scan(&existingID, &sourceID, &existingRevision)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if sourceID == nil || *sourceID != id || existingRevision != revision {
+		return nil, errAgentWorkspaceConflict
+	}
+	workspace, err := loadAgentWorkspaceForOwner(ctx, queries, &userID, existingID)
+	return &workspace, err
+}
+
+func (a *App) writeCompletedAgentRepositoryFork(w http.ResponseWriter, ctx context.Context, userID int, id, revision int64, requestID string) bool {
+	workspace, err := completedAgentRepositoryFork(ctx, a.db, userID, id, revision, requestID)
+	if err != nil {
+		writeAgentWorkspaceError(w, err)
+		return true
+	}
+	if workspace == nil {
+		return false
+	}
+	httpx.JSON(w, http.StatusCreated, map[string]any{"workspace": workspace})
+	return true
+}
+
 func (a *App) forkAgentRepository(ctx context.Context, userID int, id, revision int64, requestID string) (agentWorkspaceView, error) {
+	return a.forkAgentRepositorySnapshot(ctx, userID, id, revision, requestID, "")
+}
+
+func (a *App) forkAgentRepositorySnapshot(ctx context.Context, userID int, id, revision int64, requestID, publicationID string) (agentWorkspaceView, error) {
 	var empty agentWorkspaceView
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
@@ -414,16 +497,21 @@ func (a *App) forkAgentRepository(ctx context.Context, userID int, id, revision 
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
 		return empty, err
 	}
-	var existingID, existingRevision int64
-	var sourceID *int64
-	err = tx.QueryRow(ctx, `SELECT workspace_id,source_workspace_id,source_revision FROM agent_repository_forks WHERE user_id=$1 AND request_id=$2::uuid`, userID, requestID).Scan(&existingID, &sourceID, &existingRevision)
-	if err == nil {
-		if sourceID == nil || *sourceID != id || existingRevision != revision {
-			return empty, errAgentWorkspaceConflict
-		}
-		return loadAgentWorkspaceFrom(ctx, tx, userID, existingID)
+	existing, err := completedAgentRepositoryFork(ctx, tx, userID, id, revision, requestID)
+	if err != nil {
+		return empty, err
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if existing != nil {
+		return *existing, nil
+	}
+	// Settings changes hold the same owner lock. Only a new Fork needs this
+	// check: an attempt completed before the disable still replays its copy.
+	var enabled bool
+	err = tx.QueryRow(ctx, `SELECT enabled FROM agent_workspace_settings WHERE user_id=$1 FOR SHARE`, userID).Scan(&enabled)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !enabled {
+		return empty, errAgentWorkspaceDisabled
+	}
+	if err != nil {
 		return empty, err
 	}
 	// Lock the source workspace before its publication, matching publish/delete order.
@@ -438,14 +526,15 @@ func (a *App) forkAgentRepository(ctx context.Context, userID int, id, revision 
 	var name, description, license string
 	var githubSource *agentGitHubSource
 	var publishedRevision int64
-	err = tx.QueryRow(ctx, `SELECT p.name,p.description,p.license,p.revision,p.github_source FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE p.workspace_id=$1 AND w.deleted_at IS NULL FOR SHARE OF p`, id).Scan(&name, &description, &license, &publishedRevision, &githubSource)
+	var published time.Time
+	err = tx.QueryRow(ctx, `SELECT p.name,p.description,p.license,p.revision,p.github_source,p.published_at FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE p.workspace_id=$1 AND w.deleted_at IS NULL FOR SHARE OF p`, id).Scan(&name, &description, &license, &publishedRevision, &githubSource, &published)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return empty, errAgentWorkspaceNotFound
 	}
 	if err != nil {
 		return empty, err
 	}
-	if publishedRevision != revision {
+	if publishedRevision != revision || (publicationID != "" && publicationID != published.UTC().Format(time.RFC3339Nano)) {
 		return empty, errAgentWorkspaceConflict
 	}
 	var previousBytes int64

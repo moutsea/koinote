@@ -3,29 +3,25 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
-	"reflect"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const agentRepositorySyncLock int64 = 0x4147454e5453594e
 
 var (
-	errAgentRepositorySyncBusy          = errors.New("a system repository sync is already running")
-	errAgentRepositorySyncLicense       = errors.New("upstream license changed or is unspecified")
-	errAgentRepositorySyncLicenseReview = errors.New("upstream license files require review")
-	errAgentRepositorySyncIdentity      = errors.New("upstream repository identity changed or is unknown")
+	errAgentRepositorySyncBusy               = errors.New("a system repository sync is already running")
+	errAgentRepositorySyncLicense            = errors.New("upstream license changed or is unspecified")
+	errAgentRepositorySyncLicenseReview      = errors.New("upstream license files require review")
+	errAgentRepositorySyncPublicationLicense = errors.New("publication license differs from the upstream license")
+	errAgentRepositorySyncIdentity           = errors.New("upstream repository identity changed or is unknown")
 )
 
 // ErrSystemRepositoriesNeedAttention reports a sweep that ran correctly but found
-// entries whose upstream state can never be refreshed automatically: the
-// repository was deleted, turned private, changed license, or no longer matches
-// the recorded identity. Those recur on every sweep until a person retires or
-// re-reviews the entry, so the scheduled workflow logs them instead of paging
-// someone every night. Transient faults are reported as ordinary failures.
+// entries whose license or recorded identity needs human review. Archived,
+// disabled, unavailable or private upstreams are marked and skipped instead.
+// The scheduled workflow logs review-only failures without paging someone every
+// night. Transient faults are reported as ordinary failures.
 var ErrSystemRepositoriesNeedAttention = errors.New("some system repositories need attention")
 
 type SystemRepositorySyncOptions struct {
@@ -40,6 +36,7 @@ type SystemRepositorySyncResult struct {
 	Repository  string `json:"repository"`
 	Status      string `json:"status"`
 	Code        string `json:"code,omitempty"`
+	WarningCode string `json:"warningCode,omitempty"`
 	PreviousSHA string `json:"previousSHA,omitempty"`
 	CurrentSHA  string `json:"currentSHA,omitempty"`
 }
@@ -57,15 +54,6 @@ type SystemRepositorySyncSummary struct {
 	// NeedsAttention counts the subset of Failed whose upstream state is
 	// permanent, so operators can tell "retry later" from "retire this entry".
 	NeedsAttention int `json:"needsAttention"`
-}
-
-type systemRepositorySyncSnapshot struct {
-	id, revision      int64
-	name, description string
-	source            *agentGitHubSource
-	publishedRevision *int64
-	publishedAt       *time.Time
-	license           *string
 }
 
 // This is a maintenance command, not an HTTP/Agent-token write path. The lock
@@ -124,16 +112,16 @@ func (a *App) syncSystemAgentRepositories(ctx context.Context, options SystemRep
 		}
 		summary.ResumeAfter = summary.ResumedAfter
 	}
-	rows, err := a.db.Query(ctx, `SELECT w.id,w.revision,w.name,w.description,w.github_source,p.revision,p.published_at,p.license
+	rows, err := a.db.Query(ctx, `SELECT `+agentRepositorySyncSnapshotColumns+`
  FROM agent_workspaces w LEFT JOIN agent_repository_publications p ON p.workspace_id=w.id
  WHERE w.is_system AND w.deleted_at IS NULL AND ($1::bigint=0 OR w.id=$1) AND w.id>$2 ORDER BY w.id`, options.WorkspaceID, summary.ResumedAfter)
 	if err != nil {
 		return summary, err
 	}
-	var items []systemRepositorySyncSnapshot
+	var items []agentRepositorySyncSnapshot
 	for rows.Next() {
-		var item systemRepositorySyncSnapshot
-		if err = rows.Scan(&item.id, &item.revision, &item.name, &item.description, &item.source, &item.publishedRevision, &item.publishedAt, &item.license); err != nil {
+		var item agentRepositorySyncSnapshot
+		if item, err = scanAgentRepositorySyncSnapshot(rows); err != nil {
 			rows.Close()
 			return summary, err
 		}
@@ -221,14 +209,15 @@ func (a *App) syncSystemAgentRepositories(ctx context.Context, options SystemRep
 	return summary, nil
 }
 
-// systemRepositorySyncNeedsAttention lists the permanent upstream states that no
-// number of retries can clear. Everything else (rate limits, credentials,
-// transport faults, storage faults, interruptions) stays a real failure so it
-// still alerts.
+// systemRepositorySyncNeedsAttention lists the permanent states that no number
+// of retries can clear and that the sweep does not already settle as a skip.
+// Archived, disabled, unavailable and private upstreams are recorded as terminal
+// skips with retained bytes, so they no longer page an operator. Everything else
+// (rate limits, credentials, transport faults, storage faults, interruptions)
+// stays a real failure so it still alerts.
 func systemRepositorySyncNeedsAttention(code string) bool {
 	switch code {
-	case "license_changed", "license_review_required", "github_unavailable",
-		"invalid_or_private_source", "repository_identity_mismatch":
+	case "license_changed", "license_review_required", "publication_license_mismatch", "repository_identity_mismatch":
 		return true
 	default:
 		return false
@@ -248,6 +237,8 @@ func systemRepositorySyncErrorCode(err error) string {
 		return "license_changed"
 	case errors.Is(err, errAgentRepositorySyncLicenseReview):
 		return "license_review_required"
+	case errors.Is(err, errAgentRepositorySyncPublicationLicense):
+		return "publication_license_mismatch"
 	case errors.Is(err, errAgentRepositorySyncIdentity):
 		return "repository_identity_mismatch"
 	case errors.Is(err, errAgentGitHubRateLimited):
@@ -283,215 +274,10 @@ func systemRepositorySyncErrorCode(err error) string {
 	}
 }
 
-func (a *App) syncSystemAgentRepository(ctx context.Context, item systemRepositorySyncSnapshot, options SystemRepositorySyncOptions) (SystemRepositorySyncResult, error) {
+func (a *App) syncSystemAgentRepository(ctx context.Context, item agentRepositorySyncSnapshot, options SystemRepositorySyncOptions) (SystemRepositorySyncResult, error) {
 	result := SystemRepositorySyncResult{WorkspaceID: item.id}
-	if item.source == nil {
-		result.Status, result.Code = "skipped", "no_github_source"
-		return result, nil
-	}
-	result.Repository, result.PreviousSHA = item.source.RepositoryURL, item.source.CommitSHA
-	owner, repo, _, err := parseGitHubRepositoryURL(item.source.RepositoryURL)
-	if err != nil || item.source.Private {
-		return result, errAgentGitHubRepositoryInvalid
-	}
-	// Legacy launch entries are backfilled from their original saved GitHub
-	// metadata by the safety migration. Never trust the current URL to establish
-	// a missing identity: deleted/renamed repository names can be reused.
-	if item.source.RepositoryID <= 0 {
-		return result, errAgentRepositorySyncIdentity
-	}
-	// Seed imports pin a commit. Daily refreshes deliberately follow the current
-	// default branch instead of resolving that permanently pinned initial ref.
-	metadata, source, err := a.resolveGitHubRepository(ctx, owner, repo, "", options.GitHubToken, true)
-	if err != nil {
-		return result, err
-	}
-	result.CurrentSHA = source.CommitSHA
-	if source.RepositoryID != item.source.RepositoryID {
-		return result, errAgentRepositorySyncIdentity
-	}
-	if source.License == "UNLICENSED" || source.License != item.source.License || (item.license != nil && *item.license != source.License) {
-		return result, errAgentRepositorySyncLicense
-	}
-	if source.CommitSHA == item.source.CommitSHA {
-		if source.RepositoryURL != item.source.RepositoryURL || source.Author != item.source.Author || source.AuthorURL != item.source.AuthorURL {
-			result.Repository, result.Code = source.RepositoryURL, "source_updated"
-			if !options.Apply {
-				result.Status = "would_update"
-				return result, nil
-			}
-			if err = a.updateSystemRepositorySource(ctx, item, source); err != nil {
-				return result, err
-			}
-			result.Status = "updated"
-			return result, nil
-		}
-		result.Status = "unchanged"
-		return result, nil
-	}
-	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, options.GitHubToken)
-	if err != nil {
-		return result, err
-	}
-	// Apply the same path/metadata publication boundary even for withdrawn rows;
-	// bytes have already passed readGitHubArchive's content and size checks.
-	if agentWorkspaceSensitiveContent([]byte(item.name + "\n" + item.description)) {
-		return result, &agentWorkspaceSensitiveError{Path: "repository metadata"}
-	}
-	for _, file := range files {
-		if agentRepositorySensitivePath(file.Path) || agentWorkspaceSensitiveContent([]byte(file.Path)) {
-			return result, &agentWorkspaceSensitiveError{Path: file.Path}
-		}
-	}
-	if discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseFilesAllowed(files, source.RepositoryID, source.License) {
-		return result, errAgentRepositorySyncLicenseReview
-	}
-	if !options.Apply {
-		result.Status = "would_update"
-		return result, nil
-	}
-	if err = a.applySystemRepositorySync(ctx, item, source, files); err != nil {
-		return result, err
-	}
-	result.Status = "updated"
-	return result, nil
-}
-
-// A rename/transfer can happen without a new commit. Refresh canonical location
-// and attribution without touching files, revisions, pinned refs or publication
-// timestamps. Personal Forks retain their own provenance.
-func (a *App) updateSystemRepositorySource(ctx context.Context, before systemRepositorySyncSnapshot, source *agentGitHubSource) error {
-	tx, err := a.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err = lockSystemRepositorySyncSnapshot(ctx, tx, before); err != nil {
-		return err
-	}
-	location := map[string]string{"repositoryUrl": source.RepositoryURL, "author": source.Author, "authorUrl": source.AuthorURL}
-	if _, err = tx.Exec(ctx, `UPDATE agent_workspaces SET github_source=github_source || $2::jsonb,updated_at=now() WHERE id=$1`, before.id, location); err != nil {
-		return err
-	}
-	if before.publishedRevision != nil {
-		if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET github_source=github_source || $2::jsonb WHERE workspace_id=$1`, before.id, location); err != nil {
-			return err
-		}
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO agent_repository_system_events(workspace_id,actor_user_id,action,revision) VALUES($1,NULL,'sync',$2)`, before.id, before.revision); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-// Both content and source-only updates must preserve concurrent administrator
-// edits, withdrawals and republications, even when the revision is unchanged.
-func lockSystemRepositorySyncSnapshot(ctx context.Context, tx pgx.Tx, before systemRepositorySyncSnapshot) error {
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(nil)); err != nil {
-		return err
-	}
-	var current systemRepositorySyncSnapshot
-	err := tx.QueryRow(ctx, `SELECT w.id,w.revision,w.name,w.description,w.github_source,p.revision,p.published_at,p.license
- FROM agent_workspaces w LEFT JOIN agent_repository_publications p ON p.workspace_id=w.id
- WHERE w.id=$1 AND w.is_system AND w.deleted_at IS NULL FOR UPDATE OF w`, before.id).Scan(&current.id, &current.revision, &current.name, &current.description, &current.source, &current.publishedRevision, &current.publishedAt, &current.license)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return errAgentWorkspaceNotFound
-	}
-	if err != nil {
-		return err
-	}
-	if !reflect.DeepEqual(current, before) {
-		return errAgentWorkspaceConflict
-	}
-	return nil
-}
-
-func (a *App) applySystemRepositorySync(ctx context.Context, before systemRepositorySyncSnapshot, source *agentGitHubSource, files []agentWorkspaceFile) error {
-	// Reuse immutable R2 blobs; a one-file upstream edit should not upload every
-	// other file again. Missing/new blobs are staged before taking write locks.
-	keys := map[string]string{}
-	missing := files
-	if a.agentObjectStore != nil {
-		rows, err := a.db.Query(ctx, `SELECT sha256,r2_object_key FROM agent_workspace_blobs WHERE workspace_id=$1 AND r2_object_key IS NOT NULL`, before.id)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var hash, key string
-			if err = rows.Scan(&hash, &key); err != nil {
-				rows.Close()
-				return err
-			}
-			keys[hash] = key
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		missing = make([]agentWorkspaceFile, 0, len(files))
-		for _, file := range files {
-			if keys[file.SHA256] == "" {
-				missing = append(missing, file)
-			}
-		}
-	}
-	uploaded, err := a.stageAgentRepositoryFilesForOwner(ctx, nil, missing)
-	if err != nil {
-		return err
-	}
-	defer a.expireAgentRepositoryStaging(ctx, uploaded)
-	for hash, key := range uploaded {
-		keys[hash] = key
-	}
-	tx, err := a.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err = lockSystemRepositorySyncSnapshot(ctx, tx, before); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `SELECT record_agent_workspace_commit($1,'baseline')`, before.id); err != nil {
-		return err
-	}
-	paths := make([]string, 0, len(files))
-	scans := agentRepositoryContentScans{policy: agentWorkspaceSensitivePolicyID()}
-	for _, file := range files {
-		if err = insertAgentRepositoryFile(ctx, tx, before.id, file, keys); err != nil {
-			return err
-		}
-		paths = append(paths, file.Path)
-		scans.hashes = append(scans.hashes, file.SHA256)
-		scans.sensitive = append(scans.sensitive, false)
-	}
-	if _, err = tx.Exec(ctx, `DELETE FROM agent_workspace_files WHERE workspace_id=$1 AND NOT (path=ANY($2::text[]))`, before.id, paths); err != nil {
-		return err
-	}
-	var revision int64
-	if err = tx.QueryRow(ctx, `UPDATE agent_workspaces SET revision=revision+1,updated_at=now(),github_source=$2 WHERE id=$1 RETURNING revision`, before.id, source).Scan(&revision); err != nil {
-		return err
-	}
-	comment := fmt.Sprintf("Daily GitHub sync: %s -> %s", before.source.CommitSHA, source.CommitSHA)
-	if _, err = tx.Exec(ctx, `SELECT record_agent_workspace_commit($1,'update',NULL,$2)`, before.id, comment); err != nil {
-		return err
-	}
-	if err = scans.save(ctx, tx, before.id); err != nil {
-		return err
-	}
-	if before.publishedRevision != nil {
-		if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET revision=$2,github_source=(SELECT github_source-'private' FROM agent_workspaces WHERE id=$1),published_at=now() WHERE workspace_id=$1`, before.id, revision); err != nil {
-			return err
-		}
-		if err = replaceAgentRepositoryPublicationFiles(ctx, tx, before.id); err != nil {
-			return err
-		}
-	}
-	if _, err = tx.Exec(ctx, `SELECT prune_agent_workspace_history($1,100000000)`, before.id); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO agent_repository_system_events(workspace_id,actor_user_id,action,revision) VALUES($1,NULL,'sync',$2)`, before.id, revision); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	refresh, err := a.refreshAgentRepository(ctx, item, agentRepositoryRefreshOptions{Apply: options.Apply, GitHubToken: options.GitHubToken})
+	result.Repository, result.Status, result.Code = refresh.Repository, refresh.Status, refresh.Code
+	result.PreviousSHA, result.CurrentSHA = refresh.PreviousSHA, refresh.CurrentSHA
+	return result, err
 }

@@ -73,6 +73,10 @@ type agentGitHubSource struct {
 	CommitSHA     string `json:"commitSha"`
 	License       string `json:"license"`
 	Private       bool   `json:"private,omitempty"`
+	// UpstreamStatus records a permanent upstream state discovered by a refresh
+	// (archived, disabled, unavailable, private). It never changes the snapshot
+	// bytes; a later successful refresh clears it.
+	UpstreamStatus string `json:"upstreamStatus,omitempty"`
 }
 
 type githubRepositoryMetadata struct {
@@ -328,8 +332,20 @@ func validateGitHubRef(ref string) error {
 
 func (a *App) githubRequest(ctx context.Context, endpoint, token string, accept string) (*http.Response, error) {
 	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "https" || parsed.Host != "api.github.com" || parsed.User != nil || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Fragment != "" {
 		return nil, errAgentGitHubRepositoryInvalid
+	}
+	if parsed.Host != "api.github.com" {
+		// Public archives bypass the REST API's shared anonymous quota. Only an
+		// unsigned URL pinned to a full SHA is allowed, and it never receives a
+		// credential or follows a redirect to a signed/private download URL.
+		parts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
+		if parsed.Host != githubCodeLoadHost || token != "" || parsed.RawQuery != "" || parsed.ForceQuery || len(parts) != 4 ||
+			!githubRepositorySegmentPattern.MatchString(parts[0]) || parts[0] == "." || parts[0] == ".." ||
+			!githubRepositorySegmentPattern.MatchString(parts[1]) || parts[1] == "." || parts[1] == ".." ||
+			parts[2] != "zip" || !githubCommitPattern.MatchString(parts[3]) {
+			return nil, errAgentGitHubRepositoryInvalid
+		}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -490,61 +506,90 @@ func (a *App) fetchGitHubRepositoryWithToken(ctx context.Context, owner, repo, r
 	if err != nil {
 		return metadata, nil, nil, err
 	}
-	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, token)
+	archiveToken := token
+	if publicOnly {
+		// A catalog import must prove the pinned contents remain public even if
+		// visibility changed after the authenticated metadata request.
+		archiveToken = ""
+	}
+	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, archiveToken)
 	return metadata, files, source, err
 }
 
-// Resolve separately so daily checks can skip downloading an unchanged archive.
+// Resolve separately so refreshes can inspect archived/disabled state and skip
+// downloading an unchanged archive.
 func (a *App) resolveGitHubRepository(ctx context.Context, owner, repo, requestedRef, token string, publicOnly bool) (githubRepositoryMetadata, *agentGitHubSource, error) {
-	var metadata githubRepositoryMetadata
-	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json", githubRequestMetadata)
+	metadata, err := a.resolveGitHubRepositoryMetadata(ctx, owner, repo, token, publicOnly)
 	if err != nil {
 		return metadata, nil, err
 	}
+	source, err := a.resolveGitHubRepositoryCommit(ctx, metadata, requestedRef, token)
+	return metadata, source, err
+}
+
+// Only the repository metadata request. Callers that must classify archived,
+// disabled or private state before spending a commit or archive request use
+// this, then resolve the commit themselves.
+func (a *App) resolveGitHubRepositoryMetadata(ctx context.Context, owner, repo, token string, publicOnly bool) (githubRepositoryMetadata, error) {
+	var metadata githubRepositoryMetadata
+	data, err := a.githubRead(ctx, fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo)), token, "application/vnd.github+json", githubRequestMetadata)
+	if err != nil {
+		return metadata, err
+	}
 	if json.Unmarshal(data, &metadata) != nil || metadata.ID <= 0 || !githubRepositorySegmentPattern.MatchString(metadata.Owner.Login) || !githubRepositorySegmentPattern.MatchString(metadata.Name) || metadata.Owner.Login == "." || metadata.Owner.Login == ".." || metadata.Name == "." || metadata.Name == ".." || !strings.EqualFold(metadata.FullName, metadata.Owner.Login+"/"+metadata.Name) {
-		return metadata, nil, errAgentGitHubResponseInvalid
+		return metadata, errAgentGitHubResponseInvalid
 	}
-	// System entries must be public. Reject before resolving a commit or reading
-	// archive contents, even when the administrator's token can access them.
+	// Catalog entries must be public. Reject before resolving a commit or reading
+	// archive contents, even when the caller's token can access them.
 	if publicOnly && metadata.Private {
-		return metadata, nil, errAgentGitHubRepositoryInvalid
+		return metadata, errAgentGitHubRepositoryInvalid
 	}
-	// Attribution comes from the canonical API owner, never caller-supplied fields
-	// or the author of the most recent commit (who may only be a contributor).
-	owner, repo = metadata.Owner.Login, metadata.Name
+	return metadata, nil
+}
+
+// Resolve the commit for the requested ref, defaulting to the current default
+// branch. Attribution comes from the canonical API owner, never caller-supplied
+// fields or the author of the most recent commit (who may only be a contributor).
+func (a *App) resolveGitHubRepositoryCommit(ctx context.Context, metadata githubRepositoryMetadata, requestedRef, token string) (*agentGitHubSource, error) {
+	owner, repo := metadata.Owner.Login, metadata.Name
 	ref := requestedRef
 	if ref == "" {
 		ref = metadata.DefaultBranch
 		if ref == "" || validateGitHubRef(ref) != nil {
-			return metadata, nil, errAgentGitHubResponseInvalid
+			return nil, errAgentGitHubResponseInvalid
 		}
 	} else if validateGitHubRef(ref) != nil {
-		return metadata, nil, errAgentGitHubRepositoryInvalid
+		return nil, errAgentGitHubRepositoryInvalid
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
-	data, err = a.githubRead(ctx, apiURL+"/commits/"+url.PathEscape(ref), token, "application/vnd.github.sha", githubRequestCommit)
+	data, err := a.githubRead(ctx, apiURL+"/commits/"+url.PathEscape(ref), token, "application/vnd.github.sha", githubRequestCommit)
 	if err != nil {
 		// Preserve the commit-stage classification for implicit and explicit
 		// refs alike. A rejected commit request (including 400/422), or a ref
 		// changing after metadata was fetched, does not prove the repo is gone.
-		return metadata, nil, err
+		return nil, err
 	}
 	commit := strings.TrimSpace(string(data))
 	if !githubCommitPattern.MatchString(commit) {
-		return metadata, nil, errAgentGitHubResponseInvalid
+		return nil, errAgentGitHubResponseInvalid
 	}
 	license := "UNLICENSED"
 	if metadata.License != nil && metadata.License.SPDXID != "NOASSERTION" && githubLicensePattern.MatchString(metadata.License.SPDXID) {
 		license = metadata.License.SPDXID
 	}
-	source := &agentGitHubSource{RepositoryID: metadata.ID, RepositoryURL: "https://github.com/" + owner + "/" + repo, Author: owner, AuthorURL: "https://github.com/" + owner, Ref: ref, CommitSHA: commit, License: license, Private: metadata.Private}
-	return metadata, source, nil
+	return &agentGitHubSource{RepositoryID: metadata.ID, RepositoryURL: "https://github.com/" + owner + "/" + repo, Author: owner, AuthorURL: "https://github.com/" + owner, Ref: ref, CommitSHA: commit, License: license, Private: metadata.Private}, nil
 }
 
 func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit, token string) ([]agentWorkspaceFile, error) {
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
 	// Download by resolved commit, so a moving branch cannot falsify provenance.
-	response, err := a.githubRequest(ctx, apiURL+"/zipball/"+commit, token, "application/vnd.github+json")
+	endpoint := apiURL + "/zipball/" + commit
+	accept := "application/vnd.github+json"
+	if token == "" {
+		endpoint = fmt.Sprintf("https://%s/%s/%s/zip/%s", githubCodeLoadHost, url.PathEscape(owner), url.PathEscape(repo), commit)
+		accept = "application/zip"
+	}
+	response, err := a.githubRequest(ctx, endpoint, token, accept)
 	if err != nil {
 		if ctx.Err() != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -557,7 +602,14 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, githubResponseError(response, githubRequestArchive)
+		err = githubResponseError(response, githubRequestArchive)
+		if agentGitHubTokenRejected(err) && (token == "" || response.Request != nil && response.Request.URL.Host == githubCodeLoadHost) {
+			// The archive host receives no Authorization header, including after
+			// a private API download redirect. Its rejection cannot establish that
+			// a saved token is invalid, nor trigger another anonymous resolution.
+			err = errAgentGitHubDownloadFailed
+		}
+		return nil, err
 	}
 	if response.ContentLength > githubArchiveMaxBytes {
 		return nil, errAgentGitHubArchiveInvalid
@@ -876,14 +928,11 @@ func (a *App) agentGitHubImportWithTimeouts(w http.ResponseWriter, r *http.Reque
 		tooManyAttempts(w)
 		return
 	}
-	a.githubImportOnce.Do(func() { a.githubImportSlots = make(chan struct{}, 2) })
-	select {
-	case a.githubImportSlots <- struct{}{}:
-		defer func() { <-a.githubImportSlots }()
-	default:
+	if !a.acquireGitHubImportSlot() {
 		writeAgentWorkspaceError(w, errAgentGitHubImportBusy)
 		return
 	}
+	defer a.releaseGitHubImportSlot()
 	token, err := a.loadGitHubToken(ctx, user.ID)
 	if err != nil {
 		writeAgentGitHubImportError(w, err)

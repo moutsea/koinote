@@ -451,7 +451,9 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	if err != nil || agentWorkspaceSensitiveContent([]byte(name+"\n"+description)) {
 		return skip("invalid_metadata")
 	}
-	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, options.GitHubToken)
+	// Prove the exact contents are public, even if visibility changed after the
+	// authenticated metadata and commit checks.
+	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, "")
 	var sensitive *agentWorkspaceSensitiveError
 	if errors.As(err, &sensitive) || errors.Is(err, errAgentGitHubArchiveInvalid) {
 		return skip(systemRepositorySyncErrorCode(err))

@@ -29,7 +29,6 @@ export async function checkComposerKeyboard(createClient, url) {
     await wait(`window.agentUITest.layoutStorage.read('agent-ui-test').active !== ${JSON.stringify(previous)}
       && document.querySelector('select[aria-label="改动权限"]')?.disabled === false && document.querySelector('textarea')`);
     await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
-    assert.equal(await evaluate("document.querySelector('.agent-send').title"), "Enter 发送 · Ctrl + Enter 换行");
     await enter();
     assert.equal(await count(),0,"empty Enter never sends");
     assert.equal(await value(),"","plain Enter is not a newline");
@@ -72,7 +71,7 @@ export async function checkComposerKeyboard(createClient, url) {
     assert.equal(await count(),0,"holding Enter cannot submit repeatedly");
 
     await enter();
-    await wait("window.agentUITest.submissions.length===1 && document.querySelector('textarea').value===''");
+    await wait("window.agentUITest.submissions.length===1 && document.querySelector('textarea').value==='' && document.querySelector('select[aria-label=\"改动权限\"]').disabled===false");
     assert.equal(await evaluate("window.agentUITest.submissions[0].message"),"中文候选词","a subsequent ordinary Enter sends the committed text");
 
     // Manual insertion must honor maxLength, including replacing a selection.
@@ -91,6 +90,7 @@ export async function checkComposerKeyboard(createClient, url) {
     await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false");
     await enter();
     await wait("window.agentUITest.responseHeld");
+    assert.equal(await value(), "", "Enter clears the composer before the request responds");
     // The pending turn is visible while the request is still in flight.
     const sending = "document.querySelector('[data-agent-sending]')";
     await wait(`${sending}?.textContent.includes('等待响应') && ${sending}.textContent.includes('正在准备任务')`);
@@ -123,6 +123,32 @@ export async function checkComposerKeyboard(createClient, url) {
     await wait("!document.querySelector('[data-agent-sending]') && Array.from(document.querySelectorAll('.agent-turn')).some(e=>e.textContent.includes('第二行'))");
     await evaluate("window.agentUITest.releasePages()");
     assert.equal(await evaluate("window.agentUITest.submissions.at(-1).message"),"下一条草稿\n第二行");
+
+    // An uncertain failure restores the untouched input and its retry identity.
+    const failedDraft = "  发送失败后保留原文  ";
+    await fill(failedDraft);
+    await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;window.agentUITest.loseHeldResponse=true");
+    await enter();
+    await wait("window.agentUITest.responseHeld");
+    assert.equal(await value(), "");
+    const failedRequest = await evaluate("window.agentUITest.submissions.at(-1)");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait("document.body.textContent.includes('Accepted held response was lost')");
+    assert.equal(await value(), failedDraft, "failure restores the exact original draft");
+    await enter();
+    await wait("!document.querySelector('select[aria-label=\"改动权限\"]').disabled && !document.querySelector('[data-agent-sending]')");
+    assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), failedRequest, "retry does not submit or bill another turn");
+
+    // Retyping identical text into the cleared input is a new draft, not a retry.
+    await fill("发送后重新输入同一句");
+    await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false");
+    await enter();
+    await wait("window.agentUITest.responseHeld");
+    assert.equal(await value(), "");
+    await fill("发送后重新输入同一句");
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait("!document.querySelector('select[aria-label=\"改动权限\"]').disabled && !document.querySelector('[data-agent-sending]')");
+    assert.equal(await value(), "发送后重新输入同一句", "the response cannot clear a newer identical draft");
 
     // A reply for a tab the user left must not scroll the tab they are reading.
     // Earlier checks can fill the 50 stored tabs. Close them (history keeps the

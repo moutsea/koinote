@@ -17,19 +17,34 @@ Object.defineProperty(globalThis, "navigator", { value: { userAgent: "Node.js" }
 window.location = { origin: "https://koinote.example" };
 const bytes = Buffer.from("# Shared skill\nReview before use.");
 const workspace = { workspaceId: 7, revision: 3, name: "Shared skills", description: "Portable instructions", updatedAt: "2026-10-09T00:00:00Z", files: [{ fileId: 21, path: ".codex/skills/demo/SKILL.md", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "text/markdown" }] };
-const publicRepository = { ...workspace, starCount:0, starred:false, cloneCount:0, license: "MIT", url: "https://koinote.example/repositories/7", manifestUrl: "https://koinote.example/api/agent/repositories/7?revision=3" };
+const publicRepository = { ...workspace, starCount:0, starred:false, cloneCount:0, license: "MIT", publicationId: "2026-10-09T00:00:00.123456Z", url: "https://koinote.example/repositories/7", manifestUrl: "https://koinote.example/api/agent/repositories/7?revision=3&publication=2026-10-09T00%3A00%3A00.123456Z" };
+const secondBytes = Buffer.from("# Second repository\nA different snapshot.");
+const secondRepository = { workspaceId: 8, revision: 2, name: "Second skills", description: "Another published snapshot", updatedAt: "2026-10-10T00:00:00Z", publicationId: "2026-10-10T00:00:00Z", starCount: 0, starred: false, cloneCount: 0, license: "MIT", url: "https://koinote.example/repositories/8", manifestUrl: "https://koinote.example/api/agent/repositories/8?revision=2&publication=2026-10-10T00%3A00%3A00Z", files: [{ fileId: 81, path: "README.md", sizeBytes: secondBytes.length, sha256: createHash("sha256").update(secondBytes).digest("hex"), mimeType: "text/markdown" }] };
 const calls = [], navigations = [], confirmations = [];
+function notifyRoute() { for (const listener of h.routeListeners) listener(); }
 const h = globalThis.__sharingTest = {
-  workspace, publicRepository, publication: null, source: null, labels: null,
-  search: {}, directorySearch: {}, routeListeners: new Set(),
+  workspace, publicRepository, secondRepository, publication: null, source: null, labels: null,
+  search: {}, directorySearch: {}, routeListeners: new Set(), repositoryId: "7", gates: new Map(),
+  // React Router keeps the page mounted when only the id changes; these helpers
+  // reproduce that by pushing a new snapshot through the subscribed params.
+  setRepository(repositoryId) {
+    const next = String(repositoryId);
+    if (h.repositoryId === next) return;
+    h.repositoryId = next; notifyRoute();
+  },
+  setUser(user) { h.user = user; notifyRoute(); },
   user: { id: 1, membershipTier: "lifetime" }, enabled: true, confirmResult: true, failPublish: false, failFork: false, withdrawn: false, privateCalls: 0,
   navigate: async (target) => {
     const key = target.to === "/repositories" ? "directorySearch" : "search";
     const search = typeof target.search === "function" ? target.search(h[key]) : target.search;
     navigations.push({ ...target, search });
+    if (target.to === "/agent/workspaces/$workspaceId" && h.openForkDestination) {
+      h.forkDestination = { userId: h.user.id, workspaceId: Number(target.params.workspaceId) };
+      renderForkDestination(h.forkDestination);
+    }
     if (target.to === "/repositories" || target.to === "/repositories/$repositoryId") {
       h[key] = search ?? {}; h.hash = target.hash;
-      for (const listener of h.routeListeners) listener();
+      notifyRoute();
     }
   },
   confirm: async (message) => { confirmations.push(message); return h.confirmResult; },
@@ -37,6 +52,8 @@ const h = globalThis.__sharingTest = {
     const method = init.method ?? "GET";
     const body = init.body ? JSON.parse(init.body) : undefined;
     calls.push({ path, method, body });
+    const gate = h.gates.get(`${method} ${path}`);
+    if (gate) { h.gates.delete(`${method} ${path}`); await gate.promise; }
     if (path === "/api/agent/github-credential") {
       if (method === "PUT") h.credential = { configured: true, tokenHint: body.token.slice(-4) };
       if (method === "DELETE") h.credential = { configured: false };
@@ -62,21 +79,63 @@ const h = globalThis.__sharingTest = {
       publicRepository.starCount = publicRepository.starred ? 1 : 0;
       return {starred:publicRepository.starred,starCount:publicRepository.starCount,cloneCount:publicRepository.cloneCount};
     }
+    if (path.endsWith("/sync") || path.endsWith("/sync?recheck=false")) {
+      const target = path.includes("/repositories/8/") ? secondRepository : publicRepository;
+      const preparing = path.endsWith("?recheck=false");
+      const skip = target.syncDisabledReason || (!target.githubSource ? "no_github_source" : preparing ? target.githubSource.upstreamStatus : undefined);
+      if (skip) return { repository: structuredClone(target), sync: { status: "skipped", code: skip } };
+      if (h.syncErrorCode) {
+        if (preparing && ['license_changed', 'license_review_required', 'publication_license_mismatch', 'repository_identity_mismatch'].includes(h.syncErrorCode)) return { repository: structuredClone(target), sync: { status: 'skipped', code: h.syncErrorCode } };
+        throw new ApiError(422, "Upstream needs review", h.syncErrorCode);
+      }
+      if (h.failSync) throw new ApiError(503, "GitHub unavailable", "github_temporarily_unavailable");
+      const changed = h.nextUpstream;
+      if (changed) {
+        Object.assign(target, changed);
+        delete h.nextUpstream;
+      }
+      const payload = h.syncPayload?.workspaceId === target.workspaceId ? structuredClone(h.syncPayload) : structuredClone(target);
+      return { repository: payload, sync: h.syncResult ?? { status: changed ? "updated" : "unchanged" } };
+    }
     if(path.endsWith("/clone")) {
+      const target = path.includes("/repositories/8/") ? secondRepository : publicRepository;
+      if (body.expectedRevision !== target.revision || (body.expectedPublication && body.expectedPublication !== target.publicationId)) throw new ApiError(409, "stale clone snapshot", "revision_conflict");
       if(h.failClone) throw new ApiError(503,"Clone failed");
       if(!h.cloneIDs)h.cloneIDs=new Set();
-      h.cloneIDs.add(body.requestId);publicRepository.cloneCount=h.cloneIDs.size;
+      h.cloneIDs.add(body.requestId);target.cloneCount=h.cloneIDs.size;
       if(h.loseCloneResponse) throw new ApiError(503,"Clone response lost after recording");
-      return {starred:publicRepository.starred,starCount:publicRepository.starCount,cloneCount:publicRepository.cloneCount};
+      return {starred:target.starred,starCount:target.starCount,cloneCount:target.cloneCount};
     }
     if (path.endsWith("/fork")) {
+      const key = `${h.user?.id}:${body.requestId}`;
+      h.forkResults ??= new Map();
+      const completed = h.forkResults.get(key);
+      if (completed) {
+        if (completed.revision !== body.expectedRevision) throw new ApiError(409, "fork intent changed", "revision_conflict");
+        return structuredClone(completed.result);
+      }
+      if (!h.enabled) throw new ApiError(403, "Cloud sync is disabled", "agent_workspace_disabled");
+      if (body.expectedRevision !== publicRepository.revision || (body.expectedPublication && body.expectedPublication !== publicRepository.publicationId)) throw new ApiError(409, "stale fork snapshot", "revision_conflict");
       if (h.failFork) throw new ApiError(503, "network failure");
-      return { workspace: { ...workspace, workspaceId: 8 } };
+      const result = { workspace: { ...workspace, workspaceId: 8 } };
+      h.forkResults.set(key, { revision: body.expectedRevision, result });
+      if (h.loseForkResponse) throw new ApiError(503, "Fork response lost after committing");
+      return result;
     }
     if (h.withdrawn) throw new ApiError(404, "withdrawn");
-    if (h.extraFiles?.[path]) return { file: h.extraFiles[path] };
-    if (path.includes("/files/21?revision=3")) return { file: { ...workspace.files[0], contentBase64: bytes.toString("base64") } };
-    if (path.startsWith("/api/agent/repositories/7")) return { repository: publicRepository };
+    const requestURL = new URL(path, 'https://koinote.example');
+    const requestRepository = path.includes('/repositories/8') ? secondRepository : publicRepository;
+    const expectedPublication = requestURL.searchParams.get('publication');
+    if (expectedPublication && expectedPublication !== requestRepository.publicationId) throw new ApiError(409, 'publication replaced', 'revision_conflict');
+    requestURL.searchParams.delete('publication');
+    const unpinnedPath = requestURL.pathname + (requestURL.search ? requestURL.search : '');
+    if (h.extraFiles?.[unpinnedPath]) return { file: h.extraFiles[unpinnedPath] };
+    if (path.startsWith("/api/agent/repositories/7/files/21?") && Number(new URL(path, "https://koinote.example").searchParams.get("revision")) === publicRepository.revision) return { file: { ...workspace.files[0], contentBase64: bytes.toString("base64") } };
+    if (path.includes("/files/81?revision=2")) return { file: { ...secondRepository.files[0], contentBase64: secondBytes.toString("base64") } };
+    if (path.includes("/files/")) throw new ApiError(404, "snapshot file unavailable", "not_found");
+    if (path.startsWith("/api/agent/repositories/7?revision=") && Number(new URL(path, "https://koinote.example").searchParams.get("revision")) !== publicRepository.revision) throw new ApiError(404, "snapshot replaced", "not_found");
+    if (path.startsWith("/api/agent/repositories/7")) return { repository: structuredClone(publicRepository) };
+    if (path.startsWith("/api/agent/repositories/8")) return { repository: structuredClone(secondRepository) };
     if (path.startsWith("/api/agent/repositories?")) {
       const params=new URL(path,'https://koinote.example').searchParams;
       if (h.failDirectoryPage === (params.get('cursor') ?? 'first')) throw new ApiError(503,'Temporary directory failure');
@@ -106,6 +165,8 @@ const bundle = await build({
     export { SystemRepositoriesAdminPanel } from "./spa/src/components/SystemRepositoriesAdminPanel";
     export { AgentRepositorySharingCard } from "./spa/src/components/AgentRepositorySharingCard";
     export { AgentPublicRepositoryPage } from "./spa/src/pages/AgentPublicRepositoryPage";
+    export { AgentRepositoryForkNotice } from "./spa/src/components/AgentRepositoryForkNotice";
+    export { AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY } from "./spa/src/agentRepositorySyncFeedback";
     export { AgentPublicRepositoriesPage } from "./spa/src/pages/AgentPublicRepositoriesPage";
     export { parseRepositoryDirectorySearch } from "./spa/src/agentRepositoryDirectory";
     export { RepositoryMarkdown } from "./spa/src/components/RepositoryMarkdown";
@@ -123,7 +184,13 @@ const bundle = await build({
       export const getAgentWorkspaceFile=getAgentWorkspace;`;
     const adapters = {
       "../api": api, "./api": api,
-      "../auth": "export const useSession=()=>({data:{user:globalThis.__sharingTest.user}});",
+      "../auth": `import {useSyncExternalStore} from 'react';
+        const subscribe=(listener)=>{globalThis.__sharingTest.routeListeners.add(listener);return ()=>globalThis.__sharingTest.routeListeners.delete(listener);};
+        // The session can change while the same repository route stays mounted.
+        // useSyncExternalStore needs a stable snapshot per user.
+        let seen, snapshot;
+        const read=()=>{const user=globalThis.__sharingTest.user;if(user!==seen){seen=user;snapshot={data:{user}};}return snapshot;};
+        export const useSession=()=>useSyncExternalStore(subscribe,read);`,
       "../i18n": "export const useI18n=()=>({t:globalThis.__sharingTest.labels,locale:'zh'});",
       "../confirmAction": "export const confirmAction=(...args)=>globalThis.__sharingTest.confirm(...args);",
       "../desktop/runtime": "export const isDesktopRuntime=()=>false;",
@@ -133,7 +200,12 @@ const bundle = await build({
         import {defaultStringifySearch} from '@tanstack/router-core';
         export {defaultStringifySearch};
         const subscribe=(listener)=>{globalThis.__sharingTest.routeListeners.add(listener);return ()=>globalThis.__sharingTest.routeListeners.delete(listener);};
-        export const useParams=()=>({repositoryId:'7'});
+        // The real router keeps the page mounted while only the id changes, so the
+        // fixture must publish a new subscribed snapshot rather than a constant.
+        // useSyncExternalStore also requires a stable object per id.
+        let seenId, paramsSnapshot;
+        const readParams=()=>{const repositoryId=globalThis.__sharingTest.repositoryId;if(repositoryId!==seenId){seenId=repositoryId;paramsSnapshot={repositoryId};}return paramsSnapshot;};
+        export const useParams=()=>useSyncExternalStore(subscribe,readParams);
         export const useSearch=({from}={})=>useSyncExternalStore(subscribe,()=>globalThis.__sharingTest[from==='/repositories'?'directorySearch':'search']);
         export const useNavigate=()=>globalThis.__sharingTest.navigate;
         export const useRouterState=({select})=>select({location:{pathname:'/repositories/7',hash:globalThis.__sharingTest.hash??''}});
@@ -144,7 +216,7 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentRepositoryForkNotice, AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
 assert.equal(githubImportErrorMessage(new ApiError(503, "GitHub unavailable", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "transient GitHub failures use the dedicated retry message");
@@ -157,8 +229,12 @@ let client;
 async function settle() { for (let i=0;i<3;i++) await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));}); }
 async function mount(component,props={}) {
   await act(async()=>root.render(null));client?.clear();
+  h.repositoryId = "7";
   client = new QueryClient({defaultOptions:{queries:{retry:false,gcTime:Infinity},mutations:{retry:false,gcTime:Infinity}}});
   await act(async()=>root.render(createElement(QueryClientProvider,{client},createElement(component,props))));await settle();
+}
+function renderForkDestination(props) {
+  root.render(createElement(QueryClientProvider, { client }, createElement(AgentRepositoryForkNotice, props)));
 }
 function button(label) { const result=[...document.querySelectorAll('button')].find(item=>item.textContent===label);assert.ok(Boolean(result),`Missing button: ${label}`);return result; }
 async function click(label) { await act(async()=>button(label).click());await settle(); }
@@ -170,13 +246,16 @@ async function consent(value) {
   const props=checkbox[Object.keys(checkbox).find(key=>key.startsWith('__reactProps'))];
   await act(async()=>props.onChange({target:{checked:value}}));await settle();
 }
+// Hold one matching request open so a response can resolve after the viewer has
+// moved on; the returned release resolves it without replaying the request.
+function hold(method, path) {
+  let release;
+  const promise = new Promise(resolve => { release = resolve; });
+  const key = `${method} ${path}`;
+  h.gates.set(key, { promise });
+  return () => { h.gates.delete(key); release(); };
+}
 try {
-  assert.equal(labels.publicRepositories, "Skills/Agent Hub");
-  assert.equal(labels.githubImport, "从 GitHub 导入");
-  assert.equal(labels.starRepository, "收藏");
-  assert.equal(labels.changeComment, "变更说明（可选）");
-  assert.ok(labels.publishConsent.includes("我已检查"));
-  assert.ok(labels.publishConfirm.startsWith("将 r"));
   await mount(AgentRepositorySharingCard,{workspace});
   assert.equal(button(labels.publishSnapshot).disabled,true,"publishing needs explicit consent");
   await consent(true);h.confirmResult=false;await click(labels.publishSnapshot);
@@ -262,6 +341,25 @@ try {
   const first=calls.findLast(call=>call.path.endsWith('/fork')).body;
   h.failFork=false;await click(labels.forkRepository);
   assert.deepEqual(calls.findLast(call=>call.path.endsWith('/fork')).body,first,"retry reuses the Fork request ID");
+  assert.equal(navigations.at(-1).params.workspaceId,'8');
+
+  // Settings may change in another window while the Fork request is pending.
+  h.enabled=true;
+  await mount(AgentPublicRepositoryPage);
+  const beforeDisabledFork=navigations.length;
+  const releaseDisabledFork=hold('POST','/api/agent/repositories/7/fork');
+  await click(labels.forkRepository);
+  h.enabled=false;
+  await act(async()=>releaseDisabledFork());await settle();
+  assert.equal(document.querySelector('[role="alert"]')?.textContent,labels.forkEnable,'disabled sync explains how to enable Fork again');
+  assert.ok(!document.body.textContent.includes(labels.forkFailed),'disabled sync must not blame repository capacity');
+  assert.equal(button(labels.forkRepository).disabled,true,'the refreshed setting disables new Fork attempts');
+  assert.equal(navigations.length,beforeDisabledFork,'a rejected Fork never navigates');
+  const disabledFork=calls.findLast(call=>call.path.endsWith('/fork')).body;
+  h.enabled=true;
+  await act(async()=>client.invalidateQueries({queryKey:['agent-workspace-settings']}));await settle();
+  await click(labels.forkRepository);
+  assert.deepEqual(calls.findLast(call=>call.path.endsWith('/fork')).body,disabledFork,'reenabling can safely retry the rejected request');
   assert.equal(navigations.at(-1).params.workspaceId,'8');
 
   h.enabled=false;
@@ -423,6 +521,143 @@ try {
     for(const required of [fragment,'SHA-256','64 MiB','10,000','404/409','429','Retry-After','LICENSE','NOTICE',githubSource.repositoryUrl]) assert.ok(prompt.includes(required),`${locale} prompt missing ${required}`);
     assert.ok(!prompt.includes('Authorization: Bearer'));
   }
+
+  // Refresh may replace every file ID. Clone must install the returned snapshot,
+  // and uncertain action responses must retry that snapshot rather than resync.
+  const beforeRefresh = structuredClone(publicRepository);
+  const freshBytes = Buffer.from('# Latest upstream\nVersion four.');
+  const freshFile = { fileId: 41, path: 'README.md', mimeType: 'text/markdown', sizeBytes: freshBytes.length, sha256: createHash('sha256').update(freshBytes).digest('hex') };
+  h.extraFiles = { '/api/agent/repositories/7/files/41?revision=4': { ...freshFile, contentBase64: freshBytes.toString('base64') } };
+  h.user = { id: 1, membershipTier: 'lifetime' }; h.enabled = true; h.publication = null;
+  await mount(AgentPublicRepositoryPage);
+  h.nextUpstream = { revision: 4, files: [freshFile], manifestUrl: publicRepository.manifestUrl.replace('revision=3', 'revision=4'), githubSource: { ...githubSource, commitSha: 'b'.repeat(40) } };
+  h.failClone = true;
+  const cloneRefreshes = calls.filter(call => call.path.endsWith('/sync?recheck=false')).length;
+  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  const refreshedClone = calls.findLast(call => call.path.endsWith('/clone')).body;
+  assert.equal(refreshedClone.expectedRevision, 4, 'Clone uses the refreshed revision, not the opened page revision');
+  assert.equal(refreshedClone.refresh, false, 'Clone consumes its prepared snapshot without a second backend refresh');
+  assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, cloneRefreshes + 1, 'a fresh Clone prepares upstream once');
+  h.failClone = false;
+  h.nextUpstream = { revision: 5, manifestUrl: publicRepository.manifestUrl.replace('revision=4', 'revision=5') };
+  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  assert.deepEqual(calls.findLast(call => call.path.endsWith('/clone')).body, refreshedClone, 'uncertain Clone retries preserve both revision and request ID');
+  assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, cloneRefreshes + 1, 'uncertain Clone retries do not refresh upstream');
+  assert.ok(document.querySelector('textarea')?.value.includes('revision=4'), 'retry opens the originally prepared snapshot');
+  await click(zh.space.syncCancel);
+  const transferred = await loadAgentWorkspaceFiles(publicRepository, new Set([41]), () => {}, undefined, publicAgentRepositoryTransferSource(publicRepository));
+  assert.equal(Buffer.from(transferred[0].bytes).toString(), freshBytes.toString(), 'refreshed file IDs resolve to the latest upstream bytes');
+
+  // A new operation can refresh again; a failed Fork must not be retargeted by
+  // another upstream commit before the user retries it.
+  h.extraFiles['/api/agent/repositories/7/files/41?revision=5'] = { ...freshFile, contentBase64: freshBytes.toString('base64') };
+  h.failFork = true;
+  const forkRefreshes = calls.filter(call => call.path.endsWith('/sync?recheck=false')).length;
+  await click(labels.forkRepository);
+  const refreshedFork = calls.findLast(call => call.path.endsWith('/fork')).body;
+  assert.equal(refreshedFork.expectedRevision, 5);
+  assert.equal(refreshedFork.refresh, false, 'Fork consumes its prepared snapshot without a second backend refresh');
+  assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, forkRefreshes + 1);
+  h.failFork = false;
+  h.nextUpstream = { revision: 6, manifestUrl: publicRepository.manifestUrl.replace('revision=5', 'revision=6') };
+  await click(labels.forkRepository);
+  assert.deepEqual(calls.findLast(call => call.path.endsWith('/fork')).body, refreshedFork, 'uncertain Fork retries stay on the prepared snapshot');
+  assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, forkRefreshes + 1);
+  assert.equal(publicRepository.revision, 5, 'a pending action is not resynchronized during retry');
+  delete h.nextUpstream;
+
+  h.failSync = true;
+  await mount(AgentPublicRepositoryPage);
+  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(document.querySelector('textarea'), null, 'upstream refresh failure never offers a stale install prompt');
+  assert.ok(document.querySelector('[role="alert"]'), 'upstream refresh failure is visible');
+  h.failSync = false;
+  h.nextUpstream = { githubSource: { ...publicRepository.githubSource, upstreamStatus: 'archived' } };
+  h.syncResult = { status: 'skipped', code: 'archived' };
+  await click(labels.syncGitHub);
+  assert.ok(document.body.textContent.includes(labels.githubUpstreamArchived), 'manual refresh displays the saved upstream mark');
+  h.failSync = true;
+  const beforeRetiredClone = calls.filter(call => call.path.endsWith('/sync?recheck=false')).length;
+  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  assert.ok(document.querySelector('textarea')?.value.includes('revision=5'), 'known-retired upstream keeps the last saved snapshot usable');
+  assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, beforeRetiredClone + 1, 'server preparation skips the retired upstream even during an outage');
+  await click(zh.space.syncCancel);
+
+  // A lost Clone response can be retried after the publication was replaced.
+  // Conflict recovery must stop pinning retired and non-GitHub views to r5.
+  const retiredSnapshot = structuredClone(publicRepository);
+  for (const origin of ['retired', 'ordinary']) {
+    Object.assign(publicRepository, structuredClone(retiredSnapshot));
+    if (origin === 'ordinary') delete publicRepository.githubSource;
+    await mount(AgentPublicRepositoryPage);
+    h.loseCloneResponse = true;
+    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    const uncertain = calls.findLast(call => call.path.endsWith('/clone')).body;
+    h.loseCloneResponse = false;
+    const updatedBytes = Buffer.from('# Recovered snapshot\n' + origin);
+    const updatedFile = { fileId: 91, path: 'README.md', mimeType: 'text/markdown', sizeBytes: updatedBytes.length, sha256: createHash('sha256').update(updatedBytes).digest('hex') };
+    Object.assign(publicRepository, { revision: 6, files: [updatedFile], manifestUrl: publicRepository.manifestUrl.replace('revision=5', 'revision=6') });
+    h.extraFiles['/api/agent/repositories/7/files/91?revision=6'] = { ...updatedFile, contentBase64: updatedBytes.toString('base64') };
+    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    assert.ok(document.querySelector('[role="alert"]'), 'the expired initiation reports a conflict');
+    assert.equal(client.getQueryData(['public-agent-repository', 7, h.user.id]).repository.revision, 6, 'conflict reloads the current publication');
+    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    const recovered = calls.findLast(call => call.path.endsWith('/clone')).body;
+    assert.equal(recovered.expectedRevision, 6, 'retry uses the replacement publication');
+    assert.notEqual(recovered.requestId, uncertain.requestId, 'replacement publication gets a new initiation');
+    assert.ok(document.querySelector('textarea')?.value.includes('revision=6'), 'installation instructions pin the replacement revision');
+    const content = await loadAgentWorkspaceFiles(publicRepository, new Set([91]), () => {}, undefined, publicAgentRepositoryTransferSource(publicRepository));
+    assert.equal(Buffer.from(content[0].bytes).toString(), updatedBytes.toString(), 'replacement file bytes can actually be downloaded');
+    await click(zh.space.syncCancel);
+  }
+  Object.assign(publicRepository, retiredSnapshot);
+  await mount(AgentPublicRepositoryPage);
+  h.failSync = false;
+  h.nextUpstream = { githubSource: { ...githubSource, commitSha: 'b'.repeat(40) } };
+  h.syncResult = { status: 'unchanged' };
+  await click(labels.syncRecheckGitHub);
+  assert.ok(!document.body.textContent.includes(labels.githubUpstreamArchived), 'manual recovery clears the upstream mark');
+  delete h.syncResult;
+  Object.assign(publicRepository, beforeRefresh); delete h.extraFiles;
+
+  // Manual Sync cannot turn an uncertain action into a new request. Even an
+  // updated source must replay a committed Fork; Clone lets the server reject
+  // a replaced snapshot before issuing a new initiation.
+  for (const action of ['fork', 'clone']) {
+    for (const status of ['unchanged', 'skipped', 'updated']) {
+      Object.assign(publicRepository, structuredClone(beforeRefresh));
+      await mount(AgentPublicRepositoryPage);
+      const startClone = async () => { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); };
+      const start = action === 'fork' ? () => click(labels.forkRepository) : startClone;
+      const count = () => action === 'fork' ? h.forkResults.size : h.cloneIDs.size;
+      const beforeCount = count();
+      h.loseForkResponse = action === 'fork';
+      h.loseCloneResponse = action === 'clone';
+      await start();
+      const uncertain = calls.findLast(call => call.path.endsWith(`/${action}`)).body;
+      assert.equal(count(), beforeCount + 1, 'the initial action committed before its response was lost');
+      h.loseForkResponse = false; h.loseCloneResponse = false;
+      h.syncResult = { status, ...(status === 'skipped' ? { code: 'personal_fork' } : {}) };
+      if (status === 'updated') h.nextUpstream = { revision: beforeRefresh.revision + 1, manifestUrl: beforeRefresh.manifestUrl.replace(`revision=${beforeRefresh.revision}`, `revision=${beforeRefresh.revision + 1}`) };
+      await click(labels.syncGitHub);
+      if (status === 'skipped') {
+        assert.ok(document.body.textContent.includes(labels.syncSkippedPersonalFork));
+        assert.ok(!labels.syncSkippedPersonalFork.includes('你的'), 'public fork feedback does not claim the viewer owns the repository');
+      }
+      delete h.syncResult;
+      await start();
+      assert.deepEqual(calls.findLast(call => call.path.endsWith(`/${action}`)).body, uncertain, `${action} keeps its uncertain request through ${status} Sync`);
+      assert.equal(count(), beforeCount + 1, 'retry never duplicates the committed action');
+      if (action === 'clone' && status === 'updated') {
+        assert.ok(document.querySelector('[role="alert"]'), 'a replaced Clone snapshot conflicts instead of silently retargeting the retry');
+        assert.equal(document.querySelector('textarea'), null);
+      } else if (action === 'clone') {
+        await click(zh.space.syncCancel);
+      }
+    }
+  }
+  Object.assign(publicRepository, structuredClone(beforeRefresh));
+
   // A native confirmation can stay open while another device updates the repository.
   h.user={id:1,membershipTier:'lifetime'}; h.publication=null;h.source=null;h.privateRevision=3;
   const approvedSnapshot={...workspace,revision:3,githubSource:undefined};
@@ -614,7 +849,280 @@ try {
   assert.deepEqual(cards(),['Updated Retry 0','Retry 1','Updated Retry 2','Retry 3','Retry 4']);
   assert.equal(document.querySelector('[role="alert"]'),null);
   delete h.directory;delete h.directoryPageSize;
-  console.log('Repository sharing/category retention, system ownership, Hub filters/navigation/pagination, real-router URL validation, refetch/page retries, confirmed revisions, Star, Clone and attribution checks passed');
+
+  // A manual sync can outlive the view that started it: the viewer navigates to
+  // another repository, switches accounts, or leaves and returns. The response
+  // belongs to the initiating viewer/repository only, so it must neither render
+  // its snapshot at the new URL nor write it into the new repository's cache.
+  publicRepository.systemManaged = false; h.publication = null; h.withdrawn = false;
+  h.user = { id: 1, membershipTier: 'lifetime' }; h.enabled = true; h.failSync = false;
+  h.search = {}; h.hash = ''; h.cloneIDs = undefined;
+  const staleSeven = { ...structuredClone(publicRepository), revision: 9, name: 'Stale seven', starCount: 5, cloneCount: 5, starred: true };
+  const repositoryTitle = () => document.querySelector('h1')?.textContent;
+  const cached = (repositoryId, viewerId) => client.getQueryData(['public-agent-repository', repositoryId, viewerId])?.repository;
+
+  const workspaceNavigations = () => navigations.filter(target => target.to === '/agent/workspaces/$workspaceId').length;
+  h.syncPayload = staleSeven; h.syncResult = { status: 'updated' };
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(repositoryTitle(), 'Shared skills');
+  const navigationsBeforeStale = workspaceNavigations();
+  const releaseSevenSync = hold('POST', '/api/agent/repositories/7/sync');
+  await click(labels.syncGitHub);
+  assert.ok(button(labels.syncingGitHub), 'the sync stays pending while its response is held');
+  await act(async () => h.setRepository('8')); await settle();
+  assert.equal(repositoryTitle(), 'Second skills', 'navigating to repository 8 renders B while A is still in flight');
+  assert.equal(button(labels.cloneRepository).disabled, false, 'the new view does not inherit the previous view’s busy state');
+  assert.equal(cached(8, 1)?.workspaceId, 8);
+  await act(async () => { releaseSevenSync(); }); await settle();
+  assert.equal(repositoryTitle(), 'Second skills', 'B keeps its heading after A’s late response');
+  assert.equal(cached(8, 1)?.workspaceId, 8, 'A’s snapshot is never written under B’s cache key');
+  assert.equal(cached(8, 1)?.name, 'Second skills');
+  assert.equal(cached(8, 1)?.revision, 2, 'B’s cache keeps its own revision');
+  assert.ok(!document.body.textContent.includes('Stale seven'), 'A’s late snapshot never renders at B');
+  assert.ok(!document.body.textContent.includes(labels.syncUpdated), 'A’s late result does not post status into B');
+  assert.notEqual(cached(7, 1)?.name, 'Stale seven', 'the initiating repository’s cache never receives the late payload either');
+  assert.equal(cached(7, 1)?.name, 'Shared skills');
+  assert.equal(workspaceNavigations(), navigationsBeforeStale, 'A’s late response cannot navigate');
+
+  // The same held response after a viewer switch must not leak the initiating
+  // viewer’s engagement snapshot into the new viewer’s cache.
+  h.search = {}; h.hash = ''; h.syncPayload = { ...structuredClone(publicRepository), revision: 9, name: 'Viewer one stale', starCount: 6, starred: true, cloneCount: 6 };
+  await mount(AgentPublicRepositoryPage);
+  const releaseViewerSync = hold('POST', '/api/agent/repositories/7/sync');
+  await click(labels.syncGitHub);
+  await act(async () => h.setUser({ id: 2, membershipTier: 'free' })); await settle();
+  await act(async () => { releaseViewerSync(); }); await settle();
+  assert.equal(cached(7, 2)?.name, 'Shared skills', 'the second viewer keeps its own fresh snapshot');
+  assert.equal(cached(7, 2)?.starred, false);
+  assert.notEqual(cached(7, 1)?.name, 'Viewer one stale', 'the initiating viewer’s cache is not pinned with the late response either');
+  assert.ok(!document.body.textContent.includes(labels.syncUpdated), 'the second viewer never sees the first viewer’s result');
+
+  // Leave and return: the old visit is unmounted, its late response must not
+  // clear or retarget the newer visit’s request state; a fresh sync still works.
+  h.user = { id: 1, membershipTier: 'lifetime' };
+  h.syncPayload = { ...structuredClone(publicRepository), revision: 9, name: 'Stale after return' };
+  await mount(AgentPublicRepositoryPage);
+  const releaseOldVisit = hold('POST', '/api/agent/repositories/7/sync');
+  await click(labels.syncGitHub);
+  await act(async () => h.setRepository('8')); await settle();
+  await act(async () => h.setRepository('7')); await settle();
+  assert.equal(repositoryTitle(), 'Shared skills', 'returning to repository 7 starts a new visit');
+  await act(async () => { releaseOldVisit(); }); await settle();
+  assert.equal(repositoryTitle(), 'Shared skills', 'the earlier visit’s response cannot overwrite the newer visit');
+  assert.notEqual(cached(7, 1)?.name, 'Stale after return');
+  delete h.syncPayload; delete h.syncResult;
+  h.nextUpstream = { revision: 10, name: 'Fresh seven', manifestUrl: publicRepository.manifestUrl.replace('revision=3', 'revision=10') };
+  const releaseNewVisit = hold('POST', '/api/agent/repositories/7/sync');
+  await click(labels.syncGitHub);
+  await act(async () => { releaseNewVisit(); }); await settle();
+  assert.equal(repositoryTitle(), 'Fresh seven', 'the newer visit applies its own response');
+  assert.ok(document.body.textContent.includes(labels.syncUpdated));
+  assert.equal(cached(7, 1)?.name, 'Fresh seven');
+  delete h.nextUpstream;
+
+  // Fork/Clone preparation also awaits a refresh. Leaving the view mid-refresh
+  // must cancel the prepared action instead of posting it for the old snapshot.
+  const clonePosts = () => calls.filter(call => call.path.endsWith('/clone')).length;
+  await mount(AgentPublicRepositoryPage);
+  const clonesBeforeLeave = clonePosts();
+  const releaseClonePrep = hold('POST', '/api/agent/repositories/7/sync?recheck=false');
+  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await act(async () => h.setRepository('8')); await settle();
+  await act(async () => { releaseClonePrep(); }); await settle();
+  assert.equal(clonePosts(), clonesBeforeLeave, 'a Clone whose view left before preparation never posts');
+  assert.equal(document.querySelector('textarea'), null, 'the new repository never opens the old install prompt');
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  const forksBeforeLeave = calls.filter(call => call.path.endsWith('/fork')).length;
+  const navigationsBeforeFork = workspaceNavigations();
+  await act(async () => h.setRepository('7')); await settle();
+  const releaseForkPrep = hold('POST', '/api/agent/repositories/7/sync?recheck=false');
+  await click(labels.forkRepository);
+  await act(async () => h.setUser({ id: 2, membershipTier: 'lifetime' })); await settle();
+  await act(async () => { releaseForkPrep(); }); await settle();
+  assert.equal(calls.filter(call => call.path.endsWith('/fork')).length, forksBeforeLeave, 'a Fork prepared by the previous account never posts');
+  assert.equal(workspaceNavigations(), navigationsBeforeFork, 'the stale Fork cannot navigate to its workspace');
+  assert.equal(repositoryTitle(), 'Fresh seven', 'the new account keeps the repository it is viewing');
+
+  // A page's cached upstream status must not choose the preparation policy.
+  h.user = { id: 1, membershipTier: 'lifetime' }; h.enabled = true;
+  h.failSync = false; h.failClone = false; h.failFork = false;
+  publicRepository.githubSource = { ...githubSource, upstreamStatus: 'archived' };
+  for (const action of ['clone', 'fork']) {
+    publicRepository.githubSource.upstreamStatus = 'archived';
+    await mount(AgentPublicRepositoryPage);
+    const oldRevision = publicRepository.revision;
+    // Another visitor cleared the mark without changing the revision; a later
+    // upstream commit must still be checked before consuming the snapshot.
+    delete publicRepository.githubSource.upstreamStatus;
+    h.nextUpstream = { revision: oldRevision + 1, manifestUrl: publicRepository.manifestUrl.replace(`revision=${oldRevision}`, `revision=${oldRevision + 1}`) };
+    if (action === 'fork') await click(labels.forkRepository);
+    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedRevision, oldRevision + 1, `${action} checks the recovered source instead of trusting a cached archived mark`);
+    if (action === 'clone') await click(zh.space.syncCancel);
+  }
+  for (const action of ['clone', 'fork']) {
+    delete publicRepository.githubSource.upstreamStatus;
+    await mount(AgentPublicRepositoryPage);
+    // The server has since retired the source. Preparation must preserve the
+    // last good snapshot without turning this action into a manual recheck.
+    publicRepository.githubSource.upstreamStatus = 'archived';
+    h.failSync = true;
+    if (action === 'fork') await click(labels.forkRepository);
+    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedRevision, publicRepository.revision);
+    assert.equal(document.querySelector('[role="alert"]'), null, `${action} can consume a server-known retired source while GitHub is unavailable`);
+    if (action === 'clone') await click(zh.space.syncCancel);
+    h.failSync = false;
+  }
+
+  // Independent/edited/disabled copies explain why a GitHub recheck cannot run.
+  for (const [reason, key] of [['personal_fork', 'syncSkippedPersonalFork'], ['local_changes', 'syncSkippedLocalChanges'], ['agent_workspace_disabled', 'syncSkippedDisabled']]) {
+    publicRepository.syncDisabledReason = reason;
+    await mount(AgentPublicRepositoryPage);
+    assert.equal(button(labels.syncGitHub).disabled, true);
+    assert.ok(![...document.querySelectorAll('button')].some(el => el.textContent === labels.syncRecheckGitHub), 'saved copies never advertise a working recheck');
+    assert.ok(document.body.textContent.includes(labels[key]));
+    assert.equal(button(labels.cloneRepository).disabled, false, 'the saved copy remains clonable');
+  }
+  delete publicRepository.syncDisabledReason;
+  delete publicRepository.githubSource.upstreamStatus;
+  for (const [code, key] of [['license_changed', 'githubLicenseChanged'], ['license_review_required', 'githubLicenseReviewRequired'], ['publication_license_mismatch', 'githubPublicationLicenseMismatch'], ['repository_identity_mismatch', 'githubRepositoryIdentityMismatch']]) {
+    h.syncErrorCode = code;
+    await mount(AgentPublicRepositoryPage);
+    await click(labels.syncGitHub);
+    assert.equal(document.querySelector('[role="alert"]')?.textContent, labels[key]);
+    // A manual update failure must not prevent consuming its valid publication.
+    for (const action of ['clone', 'fork']) {
+      await mount(AgentPublicRepositoryPage);
+      const previous = calls.filter(call => call.path.endsWith(`/${action}`)).length;
+      if (action === 'fork') await click(labels.forkRepository);
+      else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+      assert.equal(calls.filter(call => call.path.endsWith(`/${action}`)).length, previous + 1, `${action} keeps the saved snapshot after ${code}`);
+      assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedPublication, publicRepository.publicationId);
+      assert.ok(document.body.textContent.includes(labels[key]), 'preparation preserves the reason the update was skipped');
+      assert.equal(document.querySelector('[role="alert"]'), null);
+      if (action === 'clone') {
+        assert.ok(document.querySelector('textarea')?.value.includes(publicRepository.manifestUrl));
+        await click(zh.space.syncCancel);
+      }
+    }
+  }
+  delete h.syncErrorCode;
+  for (const [code, key] of [['license_changed', 'githubLicenseChanged'], ['license_review_required', 'githubLicenseReviewRequired'], ['publication_license_mismatch', 'githubPublicationLicenseMismatch'], ['repository_identity_mismatch', 'githubRepositoryIdentityMismatch'], ['agent_workspace_disabled', 'syncSkippedDisabled'], ['github_token_required', 'githubTokenRequired']]) {
+    h.syncResult = { status: 'skipped', code };
+    await mount(AgentPublicRepositoryPage);
+    await click(labels.syncGitHub);
+    assert.equal(document.querySelector('[role="status"]')?.textContent, labels[key]);
+  }
+  delete h.syncResult;
+  // Navigation must unmount the public page and mount the destination notice,
+  // rather than merely record a route change while leaving the source visible.
+  h.openForkDestination = true;
+  for (const result of [
+    { status: 'unchanged', warningCode: 'github_credential_unavailable' },
+    { status: 'skipped', code: 'publication_license_mismatch' },
+    { status: 'skipped', code: 'license_changed', warningCode: 'github_credential_unavailable' },
+  ]) {
+    h.syncResult = result;
+    await mount(AgentPublicRepositoryPage);
+    await click(labels.forkRepository);
+    assert.equal(document.querySelector('h1'), null, 'successful Fork leaves the source page');
+    const expected = (result.status === 'unchanged' ? labels.syncUnchanged : result.code === 'license_changed' ? labels.githubLicenseChanged : labels.githubPublicationLicenseMismatch)
+      + (result.warningCode ? ' ' + labels.githubCredentialPublicFallback : '');
+    assert.ok(document.querySelector('[role="status"]')?.textContent.includes(expected), 'the destination preserves the preparation notice');
+    const target = h.forkDestination;
+    assert.deepEqual(client.getQueryData([AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, target.userId, target.workspaceId]), result);
+    await act(async () => renderForkDestination({ ...target, userId: target.userId + 1 })); await settle();
+    assert.equal(document.querySelector('[role="status"]'), null, 'another account cannot see this notice');
+    await act(async () => renderForkDestination({ ...target, workspaceId: target.workspaceId + 1 })); await settle();
+    assert.equal(document.querySelector('[role="status"]'), null, 'another repository cannot see this notice');
+    await act(async () => renderForkDestination(target)); await settle();
+    assert.ok(document.querySelector('[role="status"]')?.textContent.includes(expected));
+    await click(zh.announcements.close);
+    assert.equal(document.querySelector('[role="status"]'), null, 'the destination notice is dismissible');
+    await act(async () => renderForkDestination(target)); await settle();
+    assert.equal(document.querySelector('[role="status"]'), null, 'dismissed notices do not reappear on remount');
+  }
+  delete h.openForkDestination;
+  delete h.forkDestination;
+  delete h.syncResult;
+  // Successful public access must keep both its real result and the credential
+  // warning visible, including during preparation before Fork and Clone.
+  for (const status of ['updated', 'unchanged', 'skipped']) {
+    h.syncResult = { status, warningCode: 'github_credential_unavailable', ...(status === 'skipped' ? { code: 'publication_license_mismatch' } : {}) };
+    const key = status === 'updated' ? 'syncUpdated' : status === 'unchanged' ? 'syncUnchanged' : 'githubPublicationLicenseMismatch';
+    await mount(AgentPublicRepositoryPage);
+    await click(labels.syncGitHub);
+    assert.equal(document.querySelector('[role="status"]')?.textContent, labels[key] + ' ' + labels.githubCredentialPublicFallback);
+    for (const action of ['clone', 'fork']) {
+      await mount(AgentPublicRepositoryPage);
+      const previous = calls.filter(call => call.path.endsWith(`/${action}`)).length;
+      if (action === 'fork') await click(labels.forkRepository);
+      else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+      assert.equal(calls.filter(call => call.path.endsWith(`/${action}`)).length, previous + 1);
+      assert.ok(document.body.textContent.includes(labels[key] + ' ' + labels.githubCredentialPublicFallback));
+      assert.equal(document.querySelector('[role="alert"]'), null);
+      if (action === 'clone') await click(zh.space.syncCancel);
+    }
+  }
+  delete h.syncResult;
+  for (const [state, key] of [['archived', 'githubUpstreamArchivedNotice'], ['disabled', 'githubUpstreamDisabledNotice'], ['unavailable', 'githubUpstreamUnavailableNotice'], ['private', 'githubUpstreamPrivateNotice']]) {
+    publicRepository.githubSource.upstreamStatus = state;
+    await mount(AgentPublicRepositoryPage);
+    assert.ok(document.body.textContent.includes(labels[key]), `${state} has its own attribution explanation`);
+    h.syncResult = { status: 'skipped', code: state };
+    await click(labels.syncRecheckGitHub);
+    delete h.syncResult;
+    assert.equal(document.querySelector('[role="status"]')?.textContent, labels[key]);
+    await mount(AgentPublicRepositoriesPage);
+    assert.equal(document.querySelector('.hub-repository-card span[title]')?.getAttribute('title'), labels[key]);
+  }
+  delete publicRepository.githubSource.upstreamStatus;
+
+  // Same-revision republication during an action must conflict and recover the
+  // new publication before the next request creates a Fork or Clone prompt.
+  for (const action of ['clone', 'fork']) {
+    publicRepository.license = 'MIT';
+    await mount(AgentPublicRepositoryPage);
+    const original = structuredClone(publicRepository);
+    const release = hold('POST', `/api/agent/repositories/7/${action}`);
+    if (action === 'fork') await click(labels.forkRepository);
+    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    const stale = calls.findLast(call => call.path.endsWith(`/${action}`)).body;
+    assert.equal(stale.expectedPublication, original.publicationId);
+    publicRepository.license = 'Apache-2.0';
+    publicRepository.publicationId = original.publicationId + '-republished';
+    const manifest = new URL(publicRepository.manifestUrl);
+    manifest.searchParams.set('publication', publicRepository.publicationId);
+    publicRepository.manifestUrl = manifest.toString();
+    await act(async () => release()); await settle();
+    assert.equal(publicRepository.revision, original.revision, 'the race changes no file revision');
+    assert.ok(document.querySelector('[role="alert"]'), 'republication is reported as a conflict');
+    assert.equal(document.querySelector('textarea'), null, 'a conflicting Clone must not generate stale license instructions');
+    await assert.rejects(() => loadAgentWorkspaceFiles(original, new Set(original.files.map(file => file.fileId)), () => {}, undefined, publicAgentRepositoryTransferSource(original)), error => error.code === 'transferChanged');
+    if (action === 'fork') await click(labels.forkRepository);
+    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    const retried = calls.findLast(call => call.path.endsWith(`/${action}`)).body;
+    assert.equal(retried.expectedPublication, publicRepository.publicationId);
+    assert.notEqual(retried.requestId, stale.requestId, 'a conflict starts a new operation');
+    if (action === 'clone') {
+      const prompt = document.querySelector('textarea')?.value;
+      assert.ok(prompt.includes('"license": "Apache-2.0"'));
+      assert.ok(prompt.includes('"publicationId": "' + publicRepository.publicationId + '"'));
+      assert.ok(prompt.includes('&publication='), 'installation pins file requests as well as the manifest');
+      await click(zh.space.syncCancel);
+    }
+  }
+
+  // Private workspaces and unpublished Forks share this attribution component.
+  h.publication = null;
+  workspace.githubSource = { ...githubSource, upstreamStatus: 'private' };
+  await mount(AgentRepositorySharingCard, {workspace});
+  assert.ok(document.body.textContent.includes(labels.notPublished));
+  assert.ok(document.body.textContent.includes(labels.githubUpstreamPrivateNotice));
+  assert.ok(!document.body.textContent.includes('已保存的公开版本'), 'the private notice must not claim this workspace is published');
+
+  console.log('Repository sharing/category retention, system ownership, Hub filters/navigation/pagination, real-router URL validation, refetch/page retries, confirmed revisions, Star, Clone, attribution, and late route/account sync races passed');
 } finally {
   await act(async()=>root.unmount());client?.clear();stop();delete globalThis.__sharingTest;
 }

@@ -43,7 +43,7 @@ function SnapshotImage({ repository, file, alt, width, height }: { repository: P
     return () => observer.disconnect();
   }, [supported]);
   const image = useQuery({
-    queryKey: ["public-agent-file", repository.workspaceId, repository.revision, file.fileId, file.sha256],
+    queryKey: ["public-agent-file", repository.workspaceId, repository.revision, file.fileId, file.sha256, repository.publicationId],
     queryFn: ({ signal }) => getPublicAgentRepositoryFile(repository, file.fileId, signal), retry: false,
     enabled: supported && visible, staleTime: 60_000, gcTime: 60_000,
   });

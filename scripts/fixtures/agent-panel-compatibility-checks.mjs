@@ -61,13 +61,13 @@ export async function checkMixedVersionRequests(createClient, url) {
         await current.wait("window.archiveReadHeld");
         await old.evaluate("window.agentUITest.releaseResponse()");
       }
-      await old.wait("document.querySelector('textarea')?.value===''");
+      await old.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const accepted = await old.evaluate("window.agentUITest.submissions.at(-1)");
       const key = `koinote:agent-request-v2:agent-ui-test:${sessionId}:${accepted.requestId}`;
       assert.equal(await old.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).completed`), true);
       if (timing === "during-archive-read") await current.evaluate("window.releaseArchiveRead()");
       else await current.click("发送");
-      await current.wait("document.querySelector('textarea')?.value===''");
+      await current.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await current.evaluate("window.agentUITest.submissions.at(-1)"), accepted,
         `reuse the entire old-window request ${timing}`);
       assert.equal(await current.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionId)}].length`), 1);
@@ -77,7 +77,7 @@ export async function checkMixedVersionRequests(createClient, url) {
       // A later intentional turn with identical text is still a new request.
       await typeMessage(current, message);
       await current.click("发送");
-      await current.wait("document.querySelector('textarea')?.value===''");
+      await current.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.notEqual(await current.evaluate("window.agentUITest.submissions.at(-1).requestId"), accepted.requestId);
       assert.equal(await current.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionId)}].length`), 2);
       assert.equal(await current.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionId)}).chargedCredits`), 4);

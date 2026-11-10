@@ -43,7 +43,7 @@ func TestSystemRepositoryDiscoveryRetriesInterruptedDownloads(t *testing.T) {
 			original := app.githubHTTPClient
 			app.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				res, err := original.Transport.RoundTrip(r)
-				if err == nil && strings.HasPrefix(r.URL.Path, "/repos/"+first.FullName+"/zipball/") {
+				if err == nil && r.URL.Host == githubCodeLoadHost && strings.HasPrefix(r.URL.Path, "/"+first.FullName+"/zip/") {
 					res.Body.Close()
 					failure := errors.New("connection reset by peer")
 					if scenario == "short response" {

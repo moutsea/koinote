@@ -6,6 +6,24 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- GitHub-backed Skills/Agent Hub repositories can refresh in one click and before Fork/Clone. Archived, disabled or unavailable upstreams are marked while their last usable snapshot stays accessible; personal forks and edits are preserved.
+
+### Fixed
+
+- Forks recheck cloud sync before creating a copy. Disabling sync during preparation prevents a new copy and shows how to enable sync again.
+- Public archives are read anonymously at a fixed SHA without consuming the shared anonymous REST API quota. Archive rejections no longer blame saved tokens or repeat GitHub checks. Fork credential and license notices remain visible after navigation and can be dismissed.
+- Public repositories download new archives anonymously at a fixed SHA, preventing contents made private during refresh from reaching public snapshots. Unreadable credentials fall back to public access for sync, Fork and Clone with a reminder to save credentials again. Publication license mismatches are distinguished from upstream license changes.
+- Fork/Clone can use the saved public version when upstream license or identity checks reject an update. Operations and downloads detect republication at the same file revision to prevent license mismatches. Private-source notices also apply correctly to unpublished personal copies.
+- Fork/Clone now prepares snapshots from the server’s current upstream state, so stale page status cannot skip updates or block saved copies. Independent copies explain why sync is unavailable; license and source identity errors, Fork confirmations and private upstream notices are clearer.
+- Fork/Clone reuse prepared snapshots instead of checking GitHub twice, and manual sync preserves uncertain request IDs. Authenticated missing-source responses are confirmed anonymously before marking an upstream unavailable; public update and personal-fork notices now match the behavior.
+- Koi AI clears the composer immediately when Enter or Send submits a message. Failed sends restore the original text, while later responses preserve any new draft typed during sending.
+- Late repository sync, Fork and Clone responses no longer affect a different repository or account after navigation, open an old download dialog, or redirect to an earlier operation's result.
+- GitHub refreshes now share bounded concurrency and coalesce overlapping requests for the same repository. Rejected saved tokens can fall back to anonymous access for public repositories instead of blocking sync, Fork or Clone.
+- Personal copies that do not need upstream updates skip refresh before credential or legacy GitHub identity checks. Clone retries reject replaced snapshots without increasing the clone count.
+- Clone conflicts reload the current snapshot for a successful retry, including archived sources and ordinary shared repositories. Personal refreshes recheck cloud sync before committing, and concurrent Fork retries return the original completed copy despite upstream changes or failures.
+
 ## [1.1.11] - 2026-11-07
 
 ### Changed

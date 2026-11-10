@@ -625,6 +625,7 @@ export type AgentWorkspaceFileContent = AgentWorkspaceFile & {
 };
 
 export type AgentGitHubSource = {
+  repositoryId?: number;
   repositoryUrl: string;
   author: string;
   authorUrl: string;
@@ -632,6 +633,8 @@ export type AgentGitHubSource = {
   commitSha: string;
   license: string;
   private?: boolean;
+  /** Terminal state GitHub reported for the source; the saved snapshot stays usable. */
+  upstreamStatus?: "archived" | "disabled" | "unavailable" | "private";
 };
 
 export type AgentWorkspace = {

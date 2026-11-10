@@ -182,6 +182,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
   const [sending, setSending] = useState<{
     sessionId: string;
     message: string;
+    draftId?: string;
     context?: { title: string; path: string };
     // Tasks shown before this send. A new task with the same message is this
     // one, even if a background refresh delivers it before the POST returns.
@@ -468,9 +469,16 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
       const submitted = readDraftSubmission(s.draftSubmissions[id]);
       let draftIds = s.draftIds;
       let draftSubmissions = s.draftSubmissions;
-      // Clearing explicitly ends the retry/edit relationship. Nonempty edits
-      // retain it until acknowledgement, including across errors and reloads.
-      if (!value.trim()) {
+      // The submitted text is hidden while sending. Typing into that empty
+      // composer starts a new turn, even if the text matches the sent message.
+      if (sending?.sessionId === id && s.draftIds[id] === sending.draftId &&
+        s.drafts[id]?.trim() === sending.message) {
+        draftIds = { ...draftIds, [id]: crypto.randomUUID() };
+        draftSubmissions = { ...draftSubmissions };
+        delete draftSubmissions[id];
+      } else if (!value.trim()) {
+        // Clearing explicitly ends the retry/edit relationship. Nonempty edits
+        // retain it until acknowledgement, including across errors and reloads.
         draftSubmissions = { ...draftSubmissions };
         delete draftSubmissions[id];
       } else if (!s.drafts[id]?.trim()) {
@@ -528,6 +536,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
       setSending({
         sessionId: id,
         message,
+        draftId,
         before: new Set(tasks.map((task) => task.id)),
         ...(capturedFocus ? { context: { title: capturedFocus.title, path: capturedFocus.path } } : {}),
       });
@@ -1343,7 +1352,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                       placeholder={running ? t.busy : t.input}
                       rows={2}
                       maxLength={16000}
-                      value={draft}
+                      value={sendingHere && layout.draftIds[active] === sending?.draftId && draft.trim() === sending?.message ? "" : draft}
                       onChange={(e) => setDraft(active, e.target.value)}
                       onCompositionStart={() => { composingInput.current = true; }}
                       onCompositionEnd={() => { composingInput.current = false; }}

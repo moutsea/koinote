@@ -40,6 +40,9 @@ try {
     ["github_rate_limited", "githubRateLimited"], ["rate_limited", "githubRateLimited"],
     ["sensitive_data_detected", "githubSensitive"], ["agent_workspace_quota_exceeded", "githubQuota"],
     ["revision_conflict", "sharingConflict"],
+    ["license_changed", "githubLicenseChanged"], ["license_review_required", "githubLicenseReviewRequired"],
+    ["publication_license_mismatch", "githubPublicationLicenseMismatch"],
+    ["repository_identity_mismatch", "githubRepositoryIdentityMismatch"],
   ];
   for (const [locale, labels] of Object.entries(locales)) {
     const message = githubImportErrorMessage(temporaryError, labels);

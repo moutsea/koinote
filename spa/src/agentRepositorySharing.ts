@@ -4,7 +4,7 @@ export { publicRepositoryClonePrompt } from "./agentRepositoryClonePrompt";
 import type { AgentWorkspaceTransferSource } from "./agentWorkspaceTransfer";
 
 export type AgentRepositoryEngagement = { starCount: number; starred: boolean; cloneCount: number };
-export type PublicAgentRepository = AgentWorkspace & AgentRepositoryEngagement & { license: string; url: string; manifestUrl: string };
+export type PublicAgentRepository = AgentWorkspace & AgentRepositoryEngagement & { license: string; url: string; manifestUrl: string; publicationId: string; syncDisabledReason?: string };
 export type AgentRepositorySource = { workspaceId: number | null; revision: number; name: string; license: string };
 export const REPOSITORY_SHARING_QUERY_KEY = "agent-repository-sharing";
 export const PUBLIC_REPOSITORIES_QUERY_KEY = "public-agent-repositories";
@@ -23,27 +23,55 @@ export function listPublicAgentRepositories(query: string, cursor?: string, filt
   if (filters.category) params.set("category", filters.category);
   return apiJson<{ repositories: PublicRepositorySummary[]; nextCursor: string | null; total?: number; facets?: RepositoryFacet[] }>(`/api/agent/repositories?${params}`);
 }
-export function getPublicAgentRepository(id: number, revision?: number, signal?: AbortSignal) {
-  return apiJson<{ repository: PublicAgentRepository }>(`/api/agent/repositories/${id}${revision === undefined ? "" : `?revision=${revision}`}`, { signal });
+export function getPublicAgentRepository(id: number, revision?: number, signal?: AbortSignal, publicationId?: string) {
+  const params = new URLSearchParams();
+  if (revision !== undefined) params.set("revision", String(revision));
+  if (publicationId) params.set("publication", publicationId);
+  return apiJson<{ repository: PublicAgentRepository }>(`/api/agent/repositories/${id}${params.size ? `?${params}` : ""}`, { signal });
 }
-export function getPublicAgentRepositoryFile(repository: AgentWorkspace, fileId: number, signal?: AbortSignal) {
-  return apiJson<{ file: AgentWorkspaceFileContent }>(`/api/agent/repositories/${repository.workspaceId}/files/${fileId}?revision=${repository.revision}`, { signal });
+export function getPublicAgentRepositoryFile(repository: PublicAgentRepository, fileId: number, signal?: AbortSignal) {
+  return apiJson<{ file: AgentWorkspaceFileContent }>(`/api/agent/repositories/${repository.workspaceId}/files/${fileId}?revision=${repository.revision}&publication=${encodeURIComponent(repository.publicationId)}`, { signal });
 }
-export function forkPublicAgentRepository(repository: AgentWorkspace, requestId: string) {
-  return apiJson<{ workspace: AgentWorkspace }>(`/api/agent/repositories/${repository.workspaceId}/fork`, { method: "POST", body: JSON.stringify({ expectedRevision: repository.revision, requestId }) });
+/** `code` explains a skip: a retired source, an edited personal copy, or a personal fork. */
+export type PublicAgentRepositorySync = { status: "updated" | "unchanged" | "skipped"; code?: string; warningCode?: string };
+/**
+ * Ask the server to refresh this repository from its GitHub origin. Metadata-only
+ * changes (including a new upstream mark) never republish or bump the revision.
+ */
+export function syncPublicAgentRepository(id: number, signal?: AbortSignal) {
+  return apiJson<{ repository: PublicAgentRepository; sync: PublicAgentRepositorySync }>(`/api/agent/repositories/${id}/sync`, { method: "POST", signal });
+}
+/**
+ * Prepare the current public snapshot using server-side eligibility and upstream
+ * state. Cached client metadata must never decide whether GitHub is contacted.
+ * Known retired sources keep their saved snapshot; only manual sync rechecks.
+ */
+export type PublicAgentRepositoryRefresh = { repository: PublicAgentRepository; sync: PublicAgentRepositorySync };
+export async function refreshPublicAgentRepository(repository: PublicAgentRepository): Promise<PublicAgentRepositoryRefresh> {
+  return apiJson<PublicAgentRepositoryRefresh>(`/api/agent/repositories/${repository.workspaceId}/sync?recheck=false`, { method: "POST" });
+}
+/**
+ * Fork the latest published snapshot. GitHub-origin repositories refresh first
+ * unless the caller already prepared a snapshot (an uncertain retry must not be
+ * retargeted by a newer upstream commit).
+ */
+export async function forkPublicAgentRepository(repository: PublicAgentRepository, requestId: string, refresh = true) {
+  const latest = refresh ? (await refreshPublicAgentRepository(repository)).repository : repository;
+  const result = await apiJson<{ workspace: AgentWorkspace }>(`/api/agent/repositories/${latest.workspaceId}/fork`, { method: "POST", body: JSON.stringify({ expectedRevision: latest.revision, expectedPublication: latest.publicationId, requestId, refresh: false }) });
+  return { ...result, repository: latest };
 }
 export function publicAgentRepositoryTransferSource(repository: PublicAgentRepository): AgentWorkspaceTransferSource {
   return {
     readFile: (fileId, signal) => getPublicAgentRepositoryFile(repository, fileId, signal),
-    readWorkspace: async (signal) => ({ workspace: (await getPublicAgentRepository(repository.workspaceId, repository.revision, signal)).repository }),
+    readWorkspace: async (signal) => ({ workspace: (await getPublicAgentRepository(repository.workspaceId, repository.revision, signal, repository.publicationId)).repository }),
   };
 }
 
 export function updatePublicAgentRepositoryStar(id: number, starred: boolean) {
  return apiJson<AgentRepositoryEngagement>(`/api/agent/repositories/${id}/star`, { method: starred ? "PUT" : "DELETE" });
 }
-export function recordPublicAgentRepositoryClone(repository: AgentWorkspace, requestId: string, method: "zip" | "home" | "agent") {
- return apiJson<AgentRepositoryEngagement>(`/api/agent/repositories/${repository.workspaceId}/clone`, { method: "POST", body: JSON.stringify({ expectedRevision: repository.revision, requestId, method }) });
+export function recordPublicAgentRepositoryClone(repository: PublicAgentRepository, requestId: string, method: "zip" | "home" | "agent", refresh = true) {
+ return apiJson<AgentRepositoryEngagement>(`/api/agent/repositories/${repository.workspaceId}/clone`, { method: "POST", body: JSON.stringify({ expectedRevision: repository.revision, expectedPublication: repository.publicationId, requestId, method, refresh }) });
 }
 
 export const SYSTEM_REPOSITORIES_QUERY_KEY = "system-agent-repositories";

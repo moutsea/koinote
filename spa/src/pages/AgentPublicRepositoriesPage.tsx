@@ -6,6 +6,7 @@ import { useSession } from "../auth";
 import { listPublicAgentRepositories, PUBLIC_REPOSITORIES_QUERY_KEY, type PublicRepositorySummary } from "../agentRepositorySharing";
 import { REPOSITORY_CATEGORIES, parseRepositoryDirectorySearch, repositoryCategory, repositoryFacetCount, type RepositoryCategory, type RepositoryDirectorySearch } from "../agentRepositoryDirectory";
 import { PageContainer } from "../components/PageContainer";
+import { githubUpstreamLabel, githubUpstreamNotice } from "../components/AgentGitHubAttribution";
 import { useI18n } from "../i18n";
 
 const CATEGORY_ICONS: Record<RepositoryCategory, LucideIcon> = {
@@ -107,6 +108,7 @@ function RepositoryCard({ item, directorySearch }: { item: PublicRepositorySumma
   const category = repositoryCategory(item.category);
   const Icon = CATEGORY_ICONS[category];
   const author = item.githubSource?.author;
+  const upstream = githubUpstreamLabel(item.githubSource, labels);
   const name = author && item.name.toLowerCase().startsWith(`${author.toLowerCase()}/`) ? item.name.slice(author.length + 1) : item.name;
   return <article data-repository-card className="hub-repository-card group flex min-w-0 flex-col rounded-xl border bg-[var(--ink-paper-soft)] p-5 transition duration-200 hover:border-[var(--ink-mid)] hover:shadow-sm">
     <div className="mb-4 flex items-center justify-between gap-3"><span className="rounded-lg bg-[var(--ink-wash)] p-2 text-[var(--ink-mid)]"><Icon className="h-4 w-4" aria-hidden="true" /></span><span className="text-[11px] text-[var(--ink-mid)]">{item.systemManaged ? labels.hubSystemBadge : labels.hubCommunity}</span></div>
@@ -117,6 +119,7 @@ function RepositoryCard({ item, directorySearch }: { item: PublicRepositorySumma
     <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-[var(--ink-mid)]">
       <span className="rounded-md bg-[var(--ink-wash)] px-2 py-1">{labels[`hubCategory_${category}`]}</span>
       {item.githubSource && <a href={item.githubSource.authorUrl} title={`${labels.githubOriginalAuthor} ${author}`} aria-label={`${labels.githubOriginalAuthor} ${author}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1.5 hover:underline"><Github className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">{author}</span></a>}
+      {upstream && <span className="rounded-full border px-2 py-0.5" style={{ borderColor: "var(--cinnabar)", color: "var(--cinnabar)" }} title={githubUpstreamNotice(item.githubSource, labels)}>{upstream}</span>}
     </div>
     <div className="mt-auto pt-4"><div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-3 text-[11px] text-[var(--ink-mid)]">
       <span>{item.license}</span><span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" aria-hidden="true" />{labels.fileCount.replace("{count}", String(item.fileCount))}</span>

@@ -314,6 +314,9 @@ func runTestAgentRepositoryForkIsolationIdempotencyAndQuota(t *testing.T, storag
 	// Fill another member's quota with valid-sized files, and ensure a failed
 	// fork leaves neither a destination repository nor a provenance record.
 	full := seedMCPUser(t, pool, app, membershipTierLifetime)
+	if err := app.setAgentWorkspaceEnabled(ctx, full.ID, true); err != nil {
+		t.Fatal(err)
+	}
 	fullWorkspace, err := app.createAgentWorkspace(ctx, full.ID, "Full", "", "en")
 	if err != nil {
 		t.Fatal(err)

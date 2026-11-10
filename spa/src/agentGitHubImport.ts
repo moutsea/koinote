@@ -14,13 +14,18 @@ export function deleteAgentGitHubCredential() {
 export function importGitHubAgentRepository(input: { repositoryUrl: string; ref?: string; requestId: string }) {
   return apiJson<{ workspace: AgentWorkspace }>("/api/agent/workspaces/import/github", { method: "POST", body: JSON.stringify(input) });
 }
-export function githubImportErrorMessage(error: unknown, labels: Record<string, string>): string {
+export function githubImportErrorMessage(error: unknown, labels: Record<string, string>, fallback = labels.githubImportFailed): string {
   const keys: Record<string, string> = {
     github_token_required: "githubTokenRequired", github_token_invalid: "githubTokenInvalid",
     github_credential_unavailable: "githubCredentialUnavailable", github_repository_invalid: "githubRepositoryInvalid",
     github_repository_unavailable: "githubRepositoryUnavailable", github_archive_invalid: "githubArchiveInvalid",
     github_temporarily_unavailable: "githubTemporarilyUnavailable", github_rate_limited: "githubRateLimited", rate_limited: "githubRateLimited", sensitive_data_detected: "githubSensitive",
     agent_workspace_quota_exceeded: "githubQuota", revision_conflict: "sharingConflict",
+    github_transient_error: "githubTemporarilyUnavailable", github_unavailable: "githubRepositoryUnavailable",
+    github_credentials_invalid: "githubTokenInvalid", github_access_denied: "githubTokenRequired",
+    license_changed: "githubLicenseChanged", license_review_required: "githubLicenseReviewRequired",
+    publication_license_mismatch: "githubPublicationLicenseMismatch",
+    repository_identity_mismatch: "githubRepositoryIdentityMismatch",
   };
-  return error instanceof ApiError && error.code && keys[error.code] ? labels[keys[error.code]] : labels.githubImportFailed;
+  return error instanceof ApiError && error.code && keys[error.code] ? labels[keys[error.code]] : fallback;
 }

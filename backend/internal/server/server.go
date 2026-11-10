@@ -21,6 +21,8 @@ import (
 type App struct {
 	agentGPTTestExternalID  string // Set only by live integration fixtures.
 	agentObjectStore        agentRepositoryObjectStore
+	agentRepositorySyncMu   sync.Mutex
+	agentRepositorySyncs    map[agentRepositoryRefreshKey]*agentRepositoryRefresh
 	githubHTTPClient        *http.Client
 	githubImportOnce        sync.Once
 	githubImportSlots       chan struct{}
@@ -187,6 +189,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/agent/repositories/{workspaceId}/star", a.publicAgentRepositoryStar)
 	mux.HandleFunc("DELETE /api/agent/repositories/{workspaceId}/star", a.publicAgentRepositoryStar)
 	mux.HandleFunc("POST /api/agent/repositories/{workspaceId}/clone", a.publicAgentRepositoryClone)
+	mux.HandleFunc("POST /api/agent/repositories/{workspaceId}/sync", a.publicAgentRepositorySync)
 	mux.HandleFunc("GET /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)
 	mux.HandleFunc("PUT /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)
 	mux.HandleFunc("DELETE /api/agent/workspaces/{workspaceId}/sharing", a.agentRepositorySharing)

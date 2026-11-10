@@ -408,7 +408,7 @@ try {
     "window.agentUITest.completeBackgroundTask(window.agentUITest.server.sessions[1].id)",
   );
   await evaluate("document.querySelectorAll('[role=tab]')[0].click()");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   assert.equal(
     await evaluate("document.querySelector('.agent-skill-select') === null"),
     true,
@@ -542,7 +542,7 @@ try {
       );
     }
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(
       await evaluate("window.agentUITest.submissions.at(-1)"),
       accepted,
@@ -565,11 +565,11 @@ try {
     if (restart) {
       // Completing a migrated request must not resurrect it from the old cache.
       await send("Page.reload");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
       await send("Input.insertText", { text: accepted.message });
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.notEqual(await evaluate("window.agentUITest.submissions.at(-1).requestId"), accepted.requestId);
       assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 2);
     }
@@ -601,12 +601,12 @@ try {
       await retry.wait("document.querySelector('textarea')?.value==='旧版选择 Skill 后发送的消息'");
       await retry.evaluate("window.agentUITest.failFirst=false");
       await retry.click("发送");
-      await retry.wait("document.querySelector('textarea')?.value===''");
+      await retry.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await retry.evaluate("window.agentUITest.submissions.at(-1)"), legacy.input);
       await retry.evaluate("document.querySelector('textarea').focus()");
       await retry.send("Input.insertText", {text:legacy.input.message});
       await retry.click("发送");
-      await retry.wait("document.querySelector('textarea')?.value===''");
+      await retry.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const followup=await retry.evaluate("window.agentUITest.submissions.at(-1)");
       assert.notEqual(followup.requestId,legacy.input.requestId);
       assert.equal(followup.skillRepositoryId,0);
@@ -633,7 +633,7 @@ try {
       await wait("document.body.textContent.includes('当前文档: 产品介绍')");
     }
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     const retried = await evaluate("window.agentUITest.submissions.at(-1)");
     assert.notEqual(
       retried.requestId,
@@ -651,7 +651,7 @@ try {
     await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
     await send("Input.insertText", { text: "初始提案" });
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     await click("要求调整");
     await evaluate("document.querySelector('textarea').focus()");
     await send("Input.insertText", { text: "进一步调整开头" });
@@ -710,7 +710,7 @@ try {
           await peer.send("Page.navigate", {url: `http://127.0.0.1:${server.address().port}/?lang=zh`});
           await peer.wait("document.querySelector('textarea')?.value==='进一步调整开头' && document.body.textContent.includes('正在调整上一份提案')");
           await peer.click("发送");
-          await peer.wait("document.querySelector('textarea')?.value===''");
+          await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
           assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), original);
         } finally { await peer.close(); }
         await recovery.send("Page.reload");
@@ -718,7 +718,7 @@ try {
       }
       await recovery.evaluate("window.agentUITest.failFirst=false");
       await recovery.click("发送");
-      await recovery.wait("document.querySelector('textarea')?.value===''");
+      await recovery.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const retried = await recovery.evaluate("window.agentUITest.submissions.at(-1)");
       if (scenario === "cancelled") {
         assert.notEqual(retried.requestId, original.requestId);
@@ -740,7 +740,7 @@ try {
       if (recovery !== primary) await recovery.close();
     }
     await send("Page.reload");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.equal(
       await evaluate("document.body.textContent.includes('正在调整上一份提案')"),
       false,
@@ -775,12 +775,12 @@ try {
   assert.ok(await evaluate("document.body.textContent.includes('未附加当前文档')"));
   await evaluate("window.agentUITest.failFirst=false");
   await click("发送");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), detached);
 
   // Restoring context is an explicit choice and survives another reload.
   await send("Page.reload");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   await evaluate("window.agentUITest.switchDoc()");
   await wait("document.querySelector('.agent-context').textContent.includes('当前文档: 产品介绍')");
   await evaluate("window.agentUITest.switchDoc('00000000-0000-4000-8000-000000000001')");
@@ -792,7 +792,7 @@ try {
   await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
   await send("Input.insertText", { text: "重新附加当前文章" });
   await click("发送");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   const reattached = await evaluate("window.agentUITest.submissions.at(-1)");
   assert.equal(reattached.context.path, "/documents/00000000-0000-4000-8000-000000000001");
   assert.notEqual(reattached.requestId, detached.requestId, "reattaching context creates a new request intent");
@@ -826,7 +826,7 @@ try {
     await evaluate("window.agentUITest.remount()");
     await wait("document.querySelector('textarea')?.value==='退出账号期间的请求'");
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), accepted);
     assert.equal(
       await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`),
@@ -856,7 +856,7 @@ try {
       await wait("document.querySelector('textarea')?.value==='重新登录后的新请求'");
       await evaluate("window.agentUITest.failFirst=false");
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), nextRequest);
       assert.equal(
         await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`),
@@ -902,7 +902,7 @@ try {
       await peer.click("发送");
       await peer.wait(peerLosesResponse
         ? "document.body.textContent.includes('Accepted response was lost')"
-        : "document.querySelector('textarea')?.value===''");
+        : "document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const peerAccepted = await peer.evaluate("window.agentUITest.submissions.at(-1)");
       const peerSessionID = await peer.evaluate("window.agentUITest.server.sessions[0].id");
 
@@ -912,7 +912,7 @@ try {
       await wait(`document.querySelector('textarea')?.value===${JSON.stringify(originalMessage)}`);
       await evaluate("window.agentUITest.failFirst=false");
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(
         await evaluate("window.agentUITest.submissions.at(-1)"), accepted,
         "another live window must not replace the original retry request",
@@ -928,7 +928,7 @@ try {
         await peer.wait(`document.querySelector('textarea')?.value===${JSON.stringify(peerMessage)}`);
         await peer.evaluate("window.agentUITest.failFirst=false");
         await peer.click("发送");
-        await peer.wait("document.querySelector('textarea')?.value===''");
+        await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
         assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), peerAccepted);
         assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(peerSessionID)}].length`), 1);
         assert.equal(await peer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(peerSessionID)}).chargedCredits`), 2);
@@ -957,7 +957,7 @@ try {
     const sessionID = await evaluate("window.agentUITest.server.sessions[0].id");
     await peer.evaluate("window.agentUITest.failFirst=false");
     await peer.click("发送");
-    await peer.wait("document.querySelector('textarea')?.value===''");
+    await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), accepted);
     assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 1);
     assert.equal(await peer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 2);
@@ -977,7 +977,7 @@ try {
     await peer.wait("document.querySelector('textarea')?.value==='另一窗口的后续新请求'");
     await peer.evaluate("window.agentUITest.failFirst=false");
     await peer.click("发送");
-    await peer.wait("document.querySelector('textarea')?.value===''");
+    await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), nextRequest);
     assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 2);
   } finally {
@@ -1013,7 +1013,7 @@ try {
         await wait(`document.querySelector('textarea')?.value===${JSON.stringify(messageA)}`);
       }
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), accepted,
         "a different shared request must not replace A's matching original request");
       assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 1);
@@ -1024,7 +1024,7 @@ try {
       await peer.wait(`document.querySelector('textarea')?.value===${JSON.stringify(messageB)}`);
       await peer.evaluate("window.agentUITest.failFirst=false");
       await peer.click("发送");
-      await peer.wait("document.querySelector('textarea')?.value===''");
+      await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), other);
       assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 2);
       assert.equal(await peer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 4);
@@ -1093,11 +1093,11 @@ try {
     const accepted = await evaluate("window.agentUITest.submissions.at(-1)");
     const sessionID = await evaluate("window.agentUITest.server.sessions[0].id");
     await completedPeer.click("发送");
-    await completedPeer.wait("document.querySelector('textarea')?.value===''");
+    await completedPeer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     await send("Page.reload");
     await wait("document.querySelector('textarea')?.value==='另一窗口确认后仍可刷新重试'");
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), accepted);
     assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 1);
     assert.equal(await evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 2);
@@ -1107,7 +1107,7 @@ try {
   await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
   await send("Input.insertText", {text: "同窗口调整初始提案"});
   await click("发送");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   await click("要求调整");
   await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;document.querySelector('textarea').focus()");
   await send("Input.insertText", {text: "已发送的调整内容"});
@@ -1123,71 +1123,38 @@ try {
   assert.equal(await evaluate("document.body.textContent.includes('正在调整上一份提案')"), true);
   await evaluate("window.agentUITest.failFirst=false");
   await click("发送");
-  await wait("document.querySelector('textarea')?.value===''");
+  await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
   assert.equal(await evaluate("window.agentUITest.submissions.at(-1).supersedeTaskId"), adjustment);
 
-  // Undoing a temporary edit restores the submitted draft's retry identity.
-  // After acknowledgement, explicitly typing the same text is a new turn.
-  for (const { restart, loseResponse, restoreAfterError } of [false, true].flatMap((restart) => [
-    { restart, loseResponse: false, restoreAfterError: false },
-    { restart, loseResponse: true, restoreAfterError: false },
-    { restart, loseResponse: true, restoreAfterError: true },
-  ]
+  // Once the composer clears, typing starts a new turn. Returning to the same
+  // text must not turn that new draft back into a retry of the outgoing turn.
+  for (const { restart, loseResponse } of [false, true].flatMap((restart) =>
+    [false, true].map((loseResponse) => ({ restart, loseResponse })),
   )) {
     await newTestSession();
     await evaluate(`window.agentUITest.failFirst=false;window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false;window.agentUITest.loseHeldResponse=${loseResponse};document.querySelector('textarea').focus()`);
-    await send("Input.insertText", {text: "修改后撤回原文"});
+    await send("Input.insertText", {text: "发送后重新输入原文"});
     await click("发送");
     await wait("window.agentUITest.responseHeld");
+    assert.equal(await evaluate("document.querySelector('textarea').value"), "");
     const accepted = await evaluate("window.agentUITest.submissions.at(-1)");
     const sessionID = await evaluate("window.agentUITest.server.sessions[0].id");
-    for (const text of ["修改后撤回原文！", "修改后撤回原文"]) {
-      if (text === "修改后撤回原文" && restoreAfterError) {
-        await evaluate("window.agentUITest.releaseResponse()");
-        await wait("document.body.textContent.includes('Accepted held response was lost')");
-        if (restart) {
-          await send("Page.reload");
-          await wait("document.querySelector('textarea')?.value==='修改后撤回原文！'");
-          const recovered = await createClient();
-          try {
-            await recovered.send("Page.navigate", {url: `http://127.0.0.1:${server.address().port}/?lang=zh`});
-            await recovered.wait("document.querySelector('textarea')?.value==='修改后撤回原文！'");
-            await recovered.evaluate("{const input=document.querySelector('textarea');input.focus();input.setSelectionRange(0,input.value.length);}");
-            await recovered.send("Input.insertText", {text: "修改后撤回原文"});
-            await recovered.click("发送");
-            await recovered.wait("document.querySelector('textarea')?.value===''");
-            assert.deepEqual(await recovered.evaluate("window.agentUITest.submissions.at(-1)"), accepted,
-              "a fresh window restores the failed draft's original retry association");
-          } finally { await recovered.close(); }
-        }
-      }
+    for (const text of ["发送后重新输入原文！", "发送后重新输入原文"]) {
       await evaluate("{const input=document.querySelector('textarea');input.focus();input.setSelectionRange(0,input.value.length);}");
       await send("Input.insertText", {text});
     }
-    if (!restoreAfterError) {
-      await evaluate("window.agentUITest.releaseResponse()");
-      await wait(loseResponse
-        ? "document.body.textContent.includes('Accepted held response was lost')"
-        : "document.querySelector('textarea')?.value===''");
-    }
-    if (restart && !restoreAfterError) {
+    await evaluate("window.agentUITest.releaseResponse()");
+    await wait("document.querySelector('select[aria-label=\"改动权限\"]').disabled===false");
+    assert.equal(await evaluate("document.querySelector('textarea').value"), "发送后重新输入原文", "the outgoing response preserves a new draft with identical text");
+    if (restart) {
       await send("Page.reload");
-      await wait(`document.querySelector('textarea')?.value===${JSON.stringify(loseResponse ? "修改后撤回原文" : "")}`);
+      await wait("document.querySelector('textarea')?.value==='发送后重新输入原文'");
     }
-    if (loseResponse) {
-      await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
-      assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), accepted,
-        `undoing edits preserves the complete retry (restart=${restart}, restoreAfterError=${restoreAfterError})`);
-    }
-    assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 1);
-    assert.equal(await evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 2);
-    await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");
-    await send("Input.insertText", {text: "修改后撤回原文"});
+    await evaluate("window.agentUITest.failFirst=false");
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]').disabled===false");
     assert.notEqual(await evaluate("window.agentUITest.submissions.at(-1).requestId"), accepted.requestId,
-      "a later identical message must not reuse a completed request");
+      `a new identical draft must not replay the outgoing request (restart=${restart}, loseResponse=${loseResponse})`);
     assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 2);
     assert.equal(await evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 4);
   }
@@ -1218,10 +1185,10 @@ try {
         await evaluate("window.agentUITest.holdNextResponse=true;window.agentUITest.responseHeld=false");
       await click("发送");
       if (timing === "after-response") {
-        await wait("document.querySelector('textarea')?.value===''");
+        await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
         if (restart) {
           await send("Page.reload");
-          await wait("document.querySelector('textarea')?.value===''");
+          await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
         }
       } else {
         await wait("window.agentUITest.responseHeld");
@@ -1257,7 +1224,7 @@ try {
       }
       await evaluate("window.agentUITest.failFirst=false");
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const next = await evaluate("window.agentUITest.submissions.at(-1)");
       assert.notEqual(next.requestId, original.requestId,
         `the same text in a later turn must get a new request ID (${timing}, restart=${restart})`);
@@ -1291,7 +1258,7 @@ try {
       await peer.send("Page.reload");
       await peer.wait("document.querySelector('textarea')?.value==='继续'");
       await peer.click("发送");
-      await peer.wait("document.querySelector('textarea')?.value===''");
+      await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), original);
       assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), 3);
       assert.equal(await peer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), 6);
@@ -1331,7 +1298,7 @@ try {
       await peer.click("发送");
       await peer.wait(peerLosesResponse
         ? "document.body.textContent.includes('Accepted response was lost')"
-        : "document.querySelector('textarea')?.value===''");
+        : "document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       const accepted = await peer.evaluate("window.agentUITest.submissions.at(-1)");
       if (sameText) assert.notEqual(accepted.requestId, earlier.requestId,
         "the queued turn must not replay an older identical message, even before the previous response arrives");
@@ -1348,7 +1315,7 @@ try {
       }
       await evaluate("window.agentUITest.failFirst=false");
       await click("发送");
-      await wait("document.querySelector('textarea')?.value===''");
+      await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
       assert.deepEqual(await evaluate("window.agentUITest.submissions.at(-1)"), accepted,
         `the late response must preserve the peer's request (restart=${restart}, sameText=${sameText}, peerLosesResponse=${peerLosesResponse})`);
       const taskCount = sameText ? 3 : 2;
@@ -1358,7 +1325,7 @@ try {
         await peer.send("Page.reload");
         await peer.wait(`document.querySelector('textarea')?.value===${JSON.stringify(nextMessage)}`);
         await peer.click("发送");
-        await peer.wait("document.querySelector('textarea')?.value===''");
+        await peer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
         assert.deepEqual(await peer.evaluate("window.agentUITest.submissions.at(-1)"), accepted);
         assert.equal(await peer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionID)}].length`), taskCount);
         assert.equal(await peer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(sessionID)}).chargedCredits`), taskCount * 2);
@@ -1406,7 +1373,7 @@ try {
     await wait("document.querySelector('textarea')?.value==='本窗口提前输入的下一条消息'");
     await evaluate("window.agentUITest.failFirst=false");
     await click("发送");
-    await wait("document.querySelector('textarea')?.value===''");
+    await wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.equal(await evaluate(`window.agentUITest.server.tasks[${JSON.stringify(queuedSessionID)}].length`), 2);
     assert.equal(await evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(queuedSessionID)}).chargedCredits`), 4);
     assert.deepEqual(await evaluate(readSharedComposer), newerComposer,
@@ -1471,7 +1438,7 @@ try {
     await quotaPeer.send("Page.reload");
     await quotaPeer.wait("document.querySelector('textarea')?.value==='容量回收期间保留的重试'");
     await quotaPeer.click("发送");
-    await quotaPeer.wait("document.querySelector('textarea')?.value===''");
+    await quotaPeer.wait("document.querySelector('textarea')?.value==='' && document.querySelector('select[aria-label=\"改动权限\"]')?.disabled===false");
     assert.deepEqual(await quotaPeer.evaluate("window.agentUITest.submissions.at(-1)"), quotaPending);
     assert.equal(await quotaPeer.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(quotaSessionID)}].length`), 1);
     assert.equal(await quotaPeer.evaluate(`window.agentUITest.server.sessions.find(s=>s.id===${JSON.stringify(quotaSessionID)}).chargedCredits`), 2);

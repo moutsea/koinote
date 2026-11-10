@@ -118,6 +118,10 @@ func githubArchive(t *testing.T, entries ...githubArchiveEntry) []byte {
 
 const githubTestSHA = "1234567890abcdef1234567890abcdef12345678"
 
+func githubArchiveTestRequest(r *http.Request) bool {
+	return r.URL.Host == githubCodeLoadHost || strings.Contains(r.URL.Path, "/zipball/")
+}
+
 func githubImportClient(t *testing.T, archive []byte, token string, private bool) *http.Client {
 	t.Helper()
 	return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -634,8 +638,9 @@ func TestGitHubImportExpiredCredentialAndExplicitMediaTypes(t *testing.T) {
 					case base + "/commits/main":
 						body = githubTestSHA
 						accept = "application/vnd.github.sha"
-					case base + "/zipball/" + githubTestSHA:
+					case "/" + owner + "/" + repo + "/zip/" + githubTestSHA:
 						body = string(archive)
+						accept = "application/zip"
 					default:
 						t.Fatalf("unexpected path %s", r.URL.Path)
 					}
@@ -704,5 +709,49 @@ func TestGitHubSystemImportRejectsPrivateBeforeReadingContent(t *testing.T) {
 	_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "", "admin-token", false)
 	if err != nil || len(files) != 1 || source == nil || !source.Private {
 		t.Fatalf("personal private imports regressed: %v", err)
+	}
+}
+
+func TestGitHubSystemImportVisibilityRaceRejectsPrivateArchive(t *testing.T) {
+	archive := githubArchive(t, githubArchiveEntry{"root/README.md", "# Private unpublished skill", 0})
+	upstream := githubImportClient(t, archive, "admin-token", false)
+	private, blocked := false, false
+	app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "/commits/") {
+			private = true
+		}
+		if githubArchiveTestRequest(r) {
+			if r.Header.Get("Authorization") != "" {
+				t.Error("catalog import used a token to fetch potentially private bytes")
+			} else if private {
+				blocked = true
+				return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody, Request: r}, nil
+			}
+		}
+		return upstream.Transport.RoundTrip(r)
+	})}}
+	_, files, _, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "", "admin-token", true)
+	if !blocked || !errors.Is(err, errAgentGitHubDownloadFailed) || len(files) != 0 {
+		t.Fatalf("catalog import accepted private contents: blocked=%t files=%d err=%v", blocked, len(files), err)
+	}
+}
+
+func TestGitHubSystemImportPublicArchiveIsAnonymous(t *testing.T) {
+	archive := githubArchive(t, githubArchiveEntry{"root/SKILL.md", "# Public skill", 0})
+	authenticated := githubImportClient(t, archive, "admin-token", false)
+	anonymous := githubImportClient(t, archive, "", false)
+	var archiveRequests int
+	app := &App{githubHTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if githubArchiveTestRequest(r) || r.URL.Host == githubCodeLoadHost {
+			if githubArchiveTestRequest(r) {
+				archiveRequests++
+			}
+			return anonymous.Transport.RoundTrip(r)
+		}
+		return authenticated.Transport.RoundTrip(r)
+	})}}
+	_, files, source, err := app.fetchGitHubRepository(context.Background(), "octo", "demo", "", "admin-token", true)
+	if err != nil || archiveRequests != 1 || len(files) != 1 || source == nil || source.Private {
+		t.Fatalf("public catalog import failed: archives=%d files=%d source=%+v err=%v", archiveRequests, len(files), source, err)
 	}
 }

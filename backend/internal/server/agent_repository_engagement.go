@@ -40,15 +40,19 @@ func loadAgentRepositoryEngagement(ctx context.Context, q agentWorkspaceQuerier,
 	return result, err
 }
 
-func lockPublicAgentRepository(ctx context.Context, tx pgx.Tx, id int64) (int64, error) {
+func lockPublicAgentRepository(ctx context.Context, tx pgx.Tx, id int64, publicationID string) (int64, error) {
 	// Match publish/Fork/delete lock order; withdrawal cannot race an interaction.
 	var workspaceID, revision int64
+	var published time.Time
 	err := tx.QueryRow(ctx, `SELECT id FROM agent_workspaces WHERE id=$1 AND deleted_at IS NULL FOR SHARE`, id).Scan(&workspaceID)
 	if err == nil {
-		err = tx.QueryRow(ctx, `SELECT revision FROM agent_repository_publications WHERE workspace_id=$1 FOR SHARE`, id).Scan(&revision)
+		err = tx.QueryRow(ctx, `SELECT revision,published_at FROM agent_repository_publications WHERE workspace_id=$1 FOR SHARE`, id).Scan(&revision, &published)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, errAgentWorkspaceNotFound
+	}
+	if err == nil && publicationID != "" && publicationID != published.UTC().Format(time.RFC3339Nano) {
+		return 0, errAgentWorkspaceConflict
 	}
 	return revision, err
 }
@@ -73,7 +77,7 @@ func (a *App) publicAgentRepositoryStar(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	if _, err = lockPublicAgentRepository(r.Context(), tx, id); err == nil {
+	if _, err = lockPublicAgentRepository(r.Context(), tx, id, ""); err == nil {
 		if r.Method == http.MethodPut {
 			_, err = tx.Exec(r.Context(), `INSERT INTO agent_repository_stars(workspace_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, id, user.ID)
 		} else {
@@ -108,9 +112,11 @@ func (a *App) publicAgentRepositoryClone(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var input struct {
-		ExpectedRevision *int64 `json:"expectedRevision"`
-		RequestID        string `json:"requestId"`
-		Method           string `json:"method"`
+		ExpectedRevision    *int64 `json:"expectedRevision"`
+		ExpectedPublication string `json:"expectedPublication"`
+		RequestID           string `json:"requestId"`
+		Method              string `json:"method"`
+		Refresh             *bool  `json:"refresh"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if json.NewDecoder(r.Body).Decode(&input) != nil || !validUUID(input.RequestID) || input.ExpectedRevision == nil || *input.ExpectedRevision < 0 || (input.Method != "zip" && input.Method != "home" && input.Method != "agent") {
@@ -122,13 +128,56 @@ func (a *App) publicAgentRepositoryClone(w http.ResponseWriter, r *http.Request)
 		writeAgentWorkspaceError(w, err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*githubRequestTimeout)
+	defer cancel()
+	var matches bool
+	err = a.db.QueryRow(ctx, `SELECT workspace_id=$2 AND user_id IS NOT DISTINCT FROM $3::integer AND revision=$4 AND method=$5 FROM agent_repository_clones WHERE request_id=$1::uuid`, input.RequestID, id, viewer, *input.ExpectedRevision, input.Method).Scan(&matches)
+	if err == nil {
+		if !matches {
+			writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+			return
+		}
+		var currentRevision int64
+		var published time.Time
+		if err := a.db.QueryRow(ctx, `SELECT p.revision,p.published_at FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE p.workspace_id=$1 AND w.deleted_at IS NULL`, id).Scan(&currentRevision, &published); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				err = errAgentWorkspaceNotFound
+			}
+			writeAgentWorkspaceError(w, err)
+			return
+		}
+		if currentRevision != *input.ExpectedRevision || (input.ExpectedPublication != "" && input.ExpectedPublication != published.UTC().Format(time.RFC3339Nano)) {
+			writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+			return
+		}
+		engagement, err := loadAgentRepositoryEngagement(ctx, a.db, id, viewer)
+		if err != nil {
+			writeAgentWorkspaceError(w, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, engagement)
+		return
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		writeAgentWorkspaceError(w, err)
+		return
+	}
+	repository, err := a.preparePublicAgentRepositoryAction(ctx, id, viewer, input.Refresh)
+	if err != nil {
+		writePublicAgentRepositorySyncError(w, err)
+		return
+	}
+	if repository.Revision != *input.ExpectedRevision || (input.ExpectedPublication != "" && repository.PublicationID != input.ExpectedPublication) {
+		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+		return
+	}
 	tx, err := a.db.Begin(r.Context())
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	revision, err := lockPublicAgentRepository(r.Context(), tx, id)
+	revision, err := lockPublicAgentRepository(r.Context(), tx, id, repository.PublicationID)
 	if err == nil && revision != *input.ExpectedRevision {
 		err = errAgentWorkspaceConflict
 	}
