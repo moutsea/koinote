@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.13] - 2026-11-10
+
+### Added
+
+- Mon espace propose les paramètres Koi AI : consulter la configuration du service, choisir les autorisations par défaut des nouvelles sessions, gérer les identifiants GitHub et accéder aux Credits.
+
+### Fixed
+
+- Les identifiants GitHub indiquent les conditions d’abonnement et distinguent les erreurs de chargement, d’enregistrement et de suppression. Le chargement peut être relancé et un changement de compte efface l’état des identifiants du compte précédent.
+
 ## [1.1.12] - 2026-11-10
 
 ### Added

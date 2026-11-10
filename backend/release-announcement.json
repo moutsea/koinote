@@ -1,36 +1,32 @@
 {
-  "version": "1.1.12",
+  "version": "1.1.13",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.12",
+      "title": "What's new in Koinote 1.1.13",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "GitHub-backed Skills/Agent Hub repositories can refresh in one click and before Fork/Clone. Archived, disabled or unavailable upstreams are marked while their last usable snapshot stays accessible; personal forks and edits are preserved.",
-        "Koi AI clears the composer immediately when Enter or Send submits a message. Failed sends restore the original text, while later responses preserve any new draft typed during sending."
+        "My Space now includes Koi AI settings for platform service configuration, default permissions for new sessions, GitHub credentials and a shortcut to Credits."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.12 新功能",
+      "title": "Koinote 1.1.13 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Skills/Agent Hub 的 GitHub 来源仓库支持一键同步，Fork/Clone 前自动检查最新内容；上游已归档、禁用或不可访问时标记状态，继续使用最后可用快照，不覆盖个人 Fork 或已有编辑。",
-        "Koi AI 按回车或点击发送后立即清空输入框；发送失败时恢复原文，发送期间输入的新草稿不会被后续响应清除。"
+        "我的空间新增 Koi AI 设置，可查看平台服务配置、设置新会话的默认权限、管理 GitHub 凭据，并快捷前往 Credits。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.12",
+      "title": "Nouveautés de Koinote 1.1.13",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Les dépôts GitHub du Skills/Agent Hub peuvent être actualisés en un clic et avant Fork/Clone. Les sources archivées, désactivées ou indisponibles sont signalées tout en conservant le dernier instantané utilisable, sans écraser les forks personnels ni les modifications.",
-        "Koi AI vide immédiatement le champ après Entrée ou Envoyer. Un échec restaure le texte d’origine ; une réponse tardive conserve le nouveau brouillon saisi pendant l’envoi."
+        "Mon espace propose les paramètres Koi AI : consulter la configuration du service, choisir les autorisations par défaut des nouvelles sessions, gérer les identifiants GitHub et accéder aux Credits."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.12 の新機能",
+      "title": "Koinote 1.1.13 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Skills/Agent Hub の GitHub 由来リポジトリをワンクリックで同期し、Fork/Clone 前にも最新内容を確認します。アーカイブ済み・無効・利用不可の上流は状態を表示し、最後の利用可能なスナップショットを維持します。個人の Fork や編集内容は上書きしません。",
-        "Koi AI で Enter または送信ボタンを押すと、入力欄がすぐに空になります。送信失敗時は元の文章を復元し、送信中に入力した新しい下書きは応答後も保持します。"
+        "マイスペースに Koi AI 設定を追加しました。プラットフォームのサービス設定の確認、新規セッションの既定の権限設定、GitHub 認証情報の管理、Credits への移動ができます。"
       ]
     }
   }

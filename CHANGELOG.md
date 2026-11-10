@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.13] - 2026-11-10
+
+### Added
+
+- My Space now includes Koi AI settings for platform service configuration, default permissions for new sessions, GitHub credentials and a shortcut to Credits.
+
+### Fixed
+
+- GitHub credentials show clear membership requirements and separate loading, saving and removal errors. Failed loads can be retried, and switching accounts clears the previous account's credential state.
+
 ## [1.1.12] - 2026-11-10
 
 ### Added
