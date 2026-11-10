@@ -4,6 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.14] - 2026-11-11
+
+### Changed
+
+- Les réglages Koi AI proposent un aperçu compact du service et des cartes d’autorisation expliquées, avec une présentation améliorée sur mobile et en mode sombre.
+- Les autorisations par défaut affichent la progression de l’enregistrement et permettent de réessayer en cas d’échec. L’éditeur de jeton GitHub s’ouvre à la demande et l’annulation efface le brouillon.
+
 ## [1.1.13] - 2026-11-10
 
 ### Added

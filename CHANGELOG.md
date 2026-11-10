@@ -6,6 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.14] - 2026-11-11
+
+### Changed
+
+- Koi AI settings now use a compact service overview and clearly explained permission cards, with improved mobile and dark-mode layouts.
+- Default permissions show saving progress and allow retrying failed changes. GitHub token editing opens on demand, and canceling clears the draft.
+
 ## [1.1.13] - 2026-11-10
 
 ### Added
