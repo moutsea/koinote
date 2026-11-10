@@ -230,7 +230,7 @@ func TestCuratedRepositoryOwnershipMigration(t *testing.T) {
 	}
 	// Adopt a real published R2 snapshot that already has a personal fork.
 	enableRepositoryR2Fixture(t, app)
-	if _, err := pool.Exec(ctx, `INSERT INTO agent_workspace_settings(user_id,enabled) VALUES($1,true)`, admin.ID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_workspace_settings(user_id,enabled) VALUES($1,true),($2,true)`, admin.ID, member.ID); err != nil {
 		t.Fatal(err)
 	}
 	before, err := app.patchAgentWorkspace(ctx, admin.ID, ids[0], 0, []agentWorkspaceFile{repositoryTestFile("SKILL.md", "# Preserved system skill")}, nil)
