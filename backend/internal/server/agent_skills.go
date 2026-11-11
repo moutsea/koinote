@@ -137,22 +137,7 @@ func automaticSkillPackage(raw json.RawMessage, repositoryID int64, skillPath st
 		if err := yaml.Unmarshal([]byte(normalized[4:4+end]), &fields); err != nil {
 			return nil, err
 		}
-		manifest = map[string]any{"format": "agent-gpt.skill/v1", "entrypoint": "SKILL.md"}
-		known := map[string]string{"name": "name", "description": "description", "requiredTools": "requiredTools", "requestedCapabilities": "requestedCapabilities", "files": "files", "scripts": "scripts", "runtime": "runtime", "user-invocable": "userInvocable", "disable-model-invocation": "disableModelInvocation", "command-dispatch": "commandDispatch", "command-tool": "commandTool", "command-arg-mode": "commandArgMode"}
-		metadata, _ := fields["metadata"].(map[string]any)
-		if metadata == nil {
-			metadata = map[string]any{}
-		}
-		for key, value := range fields {
-			if target, ok := known[key]; ok {
-				manifest[target] = value
-			} else if key != "id" && key != "version" && key != "metadata" {
-				metadata[key] = value
-			}
-		}
-		if len(metadata) > 0 {
-			manifest["metadata"] = metadata
-		}
+		manifest = agentSkillManifest(fields)
 	}
 	identity := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", repositoryID, skillPath)))
 	content := sha256.Sum256(raw)
