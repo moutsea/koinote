@@ -581,6 +581,18 @@ func (a *App) resolveGitHubRepositoryCommit(ctx context.Context, metadata github
 }
 
 func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit, token string) ([]agentWorkspaceFile, error) {
+	var files []agentWorkspaceFile
+	err := a.readGitHubRepositoryArchive(ctx, owner, repo, commit, token, func(reader io.ReaderAt, size int64) error {
+		var err error
+		files, err = readGitHubArchive(ctx, reader, size)
+		return err
+	})
+	return files, err
+}
+
+// Share the bounded, pinned download without forcing Skill imports through the
+// whole-repository content limits. Readers still validate every archive path.
+func (a *App) readGitHubRepositoryArchive(ctx context.Context, owner, repo, commit, token string, readArchive func(io.ReaderAt, int64) error) error {
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", githubAPIBaseURL, url.PathEscape(owner), url.PathEscape(repo))
 	// Download by resolved commit, so a moving branch cannot falsify provenance.
 	endpoint := apiURL + "/zipball/" + commit
@@ -593,12 +605,12 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 	if err != nil {
 		if ctx.Err() != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return nil, errAgentGitHubTransient
+				return errAgentGitHubTransient
 			}
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 		// A dropped connection is retryable and says nothing about the repository.
-		return nil, errAgentGitHubTransient
+		return errAgentGitHubTransient
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -609,38 +621,34 @@ func (a *App) downloadGitHubRepository(ctx context.Context, owner, repo, commit,
 			// a saved token is invalid, nor trigger another anonymous resolution.
 			err = errAgentGitHubDownloadFailed
 		}
-		return nil, err
+		return err
 	}
 	if response.ContentLength > githubArchiveMaxBytes {
-		return nil, errAgentGitHubArchiveInvalid
+		return errAgentGitHubArchiveInvalid
 	}
 	// Keep the compressed archive off the heap and private even for private repos.
 	archiveFile, err := os.CreateTemp("", "koinote-github-*.zip")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = archiveFile.Close(); _ = os.Remove(archiveFile.Name()) }()
 	size, err := io.Copy(archiveFile, io.LimitReader(response.Body, githubArchiveMaxBytes+1))
 	if size > githubArchiveMaxBytes {
-		return nil, errAgentGitHubArchiveInvalid
+		return errAgentGitHubArchiveInvalid
 	}
 	if err != nil {
 		if ctx.Err() != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return nil, errAgentGitHubTransient
+				return errAgentGitHubTransient
 			}
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 		// Transport/local I/O failures are retryable. Treating them as malformed
 		// archives would put otherwise eligible discovery candidates on cooldown.
 		// Do not expose the raw error: redirected URLs may contain signed tokens.
-		return nil, errAgentGitHubDownloadFailed
+		return errAgentGitHubDownloadFailed
 	}
-	files, err := readGitHubArchive(ctx, archiveFile, size)
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
+	return readArchive(archiveFile, size)
 }
 
 func githubArchiveContextError(ctx context.Context) error {
@@ -653,7 +661,14 @@ func githubArchiveContextError(ctx context.Context) error {
 	return nil
 }
 
-func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]agentWorkspaceFile, error) {
+// Read and validate archive metadata before opening any member. Both complete
+// repository imports and Skill imports enforce the same path/type boundaries.
+type githubArchiveMember struct {
+	Path string
+	File *zip.File
+}
+
+func githubArchiveMembers(ctx context.Context, reader io.ReaderAt, size int64) ([]githubArchiveMember, error) {
 	if err := githubArchiveContextError(ctx); err != nil {
 		return nil, err
 	}
@@ -664,30 +679,18 @@ func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]a
 		}
 		return nil, errAgentGitHubArchiveInvalid
 	}
-	if err := githubArchiveContextError(ctx); err != nil {
-		return nil, err
-	}
 	if len(archive.File) > githubImportMaxFiles*2 {
 		return nil, errAgentGitHubArchiveInvalid
 	}
-	files := make([]agentWorkspaceFile, 0, min(len(archive.File), githubImportMaxFiles))
-	paths := make(map[string]bool) // value is true for regular files, false for directories
+	members := make([]githubArchiveMember, 0, len(archive.File))
+	paths := make(map[string]bool) // true for regular files, false for directories
 	root := ""
-	totalBytes := 0
 	for _, entry := range archive.File {
-		if err := ctx.Err(); err != nil {
-			// The import deadline expiring mid-scan is retryable upstream load,
-			// not a caller error; only user cancellation keeps its raw sentinel.
-			if errors.Is(err, context.DeadlineExceeded) {
-				return nil, errAgentGitHubTransient
-			}
+		if err := githubArchiveContextError(ctx); err != nil {
 			return nil, err
 		}
 		isDir := entry.FileInfo().IsDir()
-		if !entry.Mode().IsRegular() && !isDir {
-			return nil, errAgentGitHubArchiveInvalid
-		}
-		if strings.Contains(entry.Name, "\\") {
+		if !entry.Mode().IsRegular() && !isDir || strings.Contains(entry.Name, "\\") {
 			return nil, errAgentGitHubArchiveInvalid
 		}
 		name := strings.TrimSuffix(entry.Name, "/")
@@ -715,34 +718,9 @@ func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]a
 			return nil, errAgentGitHubArchiveInvalid
 		}
 		paths[clean] = !isDir
-		if isDir {
-			continue
+		if !isDir {
+			members = append(members, githubArchiveMember{Path: clean, File: entry})
 		}
-		if len(files) >= githubImportMaxFiles || entry.UncompressedSize64 > uint64(agentWorkspaceMaxFileBytes) || entry.UncompressedSize64 > uint64(githubImportMaxBytes-totalBytes) {
-			return nil, errAgentGitHubArchiveInvalid
-		}
-		stream, err := entry.Open()
-		if err != nil {
-			return nil, errAgentGitHubArchiveInvalid
-		}
-		content, err := io.ReadAll(io.LimitReader(stream, agentWorkspaceMaxFileBytes+1))
-		_ = stream.Close()
-		if err != nil || len(content) > agentWorkspaceMaxFileBytes {
-			return nil, errAgentGitHubArchiveInvalid
-		}
-		totalBytes += len(content)
-		if totalBytes > githubImportMaxBytes {
-			return nil, errAgentGitHubArchiveInvalid
-		}
-		if agentWorkspaceSensitiveContent(content) {
-			return nil, &agentWorkspaceSensitiveError{Path: clean}
-		}
-		digest := sha256.Sum256(content)
-		mimeType := mime.TypeByExtension(filepath.Ext(clean))
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		files = append(files, agentWorkspaceFile{Path: clean, Content: content, MimeType: mimeType, SHA256: hex.EncodeToString(digest[:])})
 	}
 	for entry := range paths {
 		parts := strings.Split(entry, "/")
@@ -752,11 +730,66 @@ func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]a
 			}
 		}
 	}
-	if len(files) == 0 {
+	if len(members) == 0 {
 		return nil, errAgentGitHubArchiveInvalid
 	}
-	// A deadline expiring while the last entry was being read must not yield a
-	// successful-looking file list that discovery would treat as a valid result.
+	if err := githubArchiveContextError(ctx); err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+func readGitHubArchiveMember(ctx context.Context, member githubArchiveMember, limit int64) ([]byte, error) {
+	if err := githubArchiveContextError(ctx); err != nil {
+		return nil, err
+	}
+	if member.File.UncompressedSize64 > uint64(limit) {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	stream, err := member.File.Open()
+	if err != nil {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	content, err := io.ReadAll(io.LimitReader(stream, limit+1))
+	_ = stream.Close()
+	if contextErr := githubArchiveContextError(ctx); contextErr != nil {
+		return nil, contextErr
+	}
+	if err != nil || int64(len(content)) > limit || uint64(len(content)) != member.File.UncompressedSize64 {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	return content, nil
+}
+
+func readGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64) ([]agentWorkspaceFile, error) {
+	members, err := githubArchiveMembers(ctx, reader, size)
+	if err != nil {
+		return nil, err
+	}
+	if len(members) > githubImportMaxFiles {
+		return nil, errAgentGitHubArchiveInvalid
+	}
+	files := make([]agentWorkspaceFile, 0, len(members))
+	totalBytes := 0
+	for _, member := range members {
+		if member.File.UncompressedSize64 > uint64(githubImportMaxBytes-totalBytes) {
+			return nil, errAgentGitHubArchiveInvalid
+		}
+		content, err := readGitHubArchiveMember(ctx, member, agentWorkspaceMaxFileBytes)
+		if err != nil {
+			return nil, err
+		}
+		totalBytes += len(content)
+		if agentWorkspaceSensitiveContent(content) {
+			return nil, &agentWorkspaceSensitiveError{Path: member.Path}
+		}
+		digest := sha256.Sum256(content)
+		mimeType := mime.TypeByExtension(filepath.Ext(member.Path))
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		files = append(files, agentWorkspaceFile{Path: member.Path, Content: content, MimeType: mimeType, SHA256: hex.EncodeToString(digest[:])})
+	}
 	if err := githubArchiveContextError(ctx); err != nil {
 		return nil, err
 	}
