@@ -165,6 +165,10 @@ func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext)
 		case candidate.SizeBytes > koiSkillPackageBytes:
 			reject(name, "package_too_large")
 		default:
+			if issues := koiSkillRuntimeIssues(raw, name, description, rebased); len(issues) > 0 {
+				reject(name, "invalid_runtime_metadata", issues...)
+				continue
+			}
 			candidate.ContentSHA256 = koiSkillContentDigest(rebased)
 			candidate.ID = "sk-" + koiDigest([]byte(candidate.Directory + ":" + candidate.ContentSHA256))[:16]
 			candidates = append(candidates, candidate)
