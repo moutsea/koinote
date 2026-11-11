@@ -16,7 +16,7 @@ func koiGitHubSourceTestClient(t *testing.T, token string) *http.Client {
 	archive := githubArchive(t,
 		githubArchiveEntry{"root/LICENSE", "MIT License", 0},
 		githubArchiveEntry{"root/SKILL.md", "# Root", 0},
-		githubArchiveEntry{"root/review/SKILL.md", "# Review", 0},
+		githubArchiveEntry{"root/review/SKILL.md", "---\nname: review\ndescription: Review a document.\n---\n# Review", 0},
 		githubArchiveEntry{"root/review/guide.md", "Guide", 0},
 		githubArchiveEntry{"root/review/nested/SKILL.md", "# Nested", 0},
 		githubArchiveEntry{"root/other/SKILL.md", "# Other", 0})
@@ -46,16 +46,16 @@ func TestKoiGitHubSourceResolvesAndPinsSelectedFiles(t *testing.T) {
 		name, suffix, ref, dir string
 		input                  koiGitHubSourceInput
 		exact                  bool
-		count                  int
+		count, candidateCount  int
 	}{
-		{name: "default branch", ref: "main", count: 6},
-		{name: "tree directory", suffix: "/tree/main/review", ref: "main", dir: "review", count: 4},
-		{name: "file entry", suffix: "/blob/main/review/SKILL.md", ref: "main", dir: "review", exact: true, count: 3},
-		{name: "slash branch", suffix: "/blob/feature/review/review/SKILL.md", ref: "feature/review", dir: "review", exact: true, count: 3},
-		{name: "commit permalink", suffix: "/blob/" + githubTestSHA + "/review/SKILL.md", ref: githubTestSHA, dir: "review", exact: true, count: 3},
-		{name: "advanced overrides blob", suffix: "/blob/main/other/SKILL.md", input: koiGitHubSourceInput{Ref: "feature/review", Path: " /review/ "}, ref: "feature/review", dir: "review", count: 4},
-		{name: "advanced root", suffix: "/blob/main/other/SKILL.md", input: koiGitHubSourceInput{Ref: "main"}, ref: "main", count: 6},
-		{name: "explicit exact directory", input: koiGitHubSourceInput{Path: "review", ExactSkill: true}, ref: "main", dir: "review", exact: true, count: 3},
+		{name: "default branch", ref: "main", count: 6, candidateCount: 4},
+		{name: "tree directory", suffix: "/tree/main/review", ref: "main", dir: "review", count: 4, candidateCount: 2},
+		{name: "file entry", suffix: "/blob/main/review/SKILL.md", ref: "main", dir: "review", exact: true, count: 3, candidateCount: 1},
+		{name: "slash branch", suffix: "/blob/feature/review/review/SKILL.md", ref: "feature/review", dir: "review", exact: true, count: 3, candidateCount: 1},
+		{name: "commit permalink", suffix: "/blob/" + githubTestSHA + "/review/SKILL.md", ref: githubTestSHA, dir: "review", exact: true, count: 3, candidateCount: 1},
+		{name: "advanced overrides blob", suffix: "/blob/main/other/SKILL.md", input: koiGitHubSourceInput{Ref: "feature/review", Path: " /review/ "}, ref: "feature/review", dir: "review", count: 4, candidateCount: 2},
+		{name: "advanced root", suffix: "/blob/main/other/SKILL.md", input: koiGitHubSourceInput{Ref: "main"}, ref: "main", count: 6, candidateCount: 4},
+		{name: "explicit exact directory", input: koiGitHubSourceInput{Path: "review", ExactSkill: true}, ref: "main", dir: "review", exact: true, count: 3, candidateCount: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := koiGitHubSourceTestClient(t, "")
@@ -100,6 +100,17 @@ func TestKoiGitHubSourceResolvesAndPinsSelectedFiles(t *testing.T) {
 			for _, file := range result.Files {
 				if file.SHA256 != koiDigest(file.Content) {
 					t.Fatalf("unverified source bytes: %s", file.Path)
+				}
+			}
+			candidates, rejected := koiSkillCandidates(result.Files, koiSkillSourceContext{
+				Directory: result.Target.Path, RootName: result.Target.Repo, License: result.Source.License,
+			})
+			if len(candidates) != tc.candidateCount || len(rejected) != 0 {
+				t.Fatalf("source did not produce the selected packages: candidates=%d, rejected=%+v", len(candidates), rejected)
+			}
+			for _, candidate := range candidates {
+				if candidate.EntryPath != "SKILL.md" || candidate.License != "MIT License" {
+					t.Fatalf("source entry or license lost during analysis: %+v", candidate)
 				}
 			}
 		})

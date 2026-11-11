@@ -47,8 +47,9 @@ func TestKoiHubSourceReadsPublishedPackageOnly(t *testing.T) {
 	for _, r2 := range []bool{false, true} {
 		t.Run(fmt.Sprintf("r2=%v", r2), func(t *testing.T) {
 			ctx := context.Background()
+			publishedEntry := "\ufeff---\r\nname: review\r\ndescription: Review a document.\r\n---\r\n# Review v1"
 			app, owner, workspace, objects := koiHubSourceTestApp(t, r2, map[string]string{
-				"LICENSE": "MIT License", "review/SKILL.md": "# Review v1", "review/guide.md": "Published guide",
+				"LICENSE": "MIT License", "review/SKILL.md": publishedEntry, "review/guide.md": "Published guide",
 				"review/nested/SKILL.md": "# Independent child", "review/nested/large.bin": strings.Repeat("x", koiSkillFileBytes+1),
 				"other/SKILL.md": "# Other", "docs/unrelated.bin": strings.Repeat("y", koiSkillFileBytes+1),
 			})
@@ -61,6 +62,7 @@ func TestKoiHubSourceReadsPublishedPackageOnly(t *testing.T) {
 				[]agentWorkspaceFile{repositoryTestFile("review/SKILL.md", "# Private v2"), repositoryTestFile("private/SKILL.md", "# Private skill")}, []string{"review/guide.md"}); err != nil {
 				t.Fatal(err)
 			}
+			parentDigest := ""
 			for _, exact := range []bool{true, false} {
 				if objects != nil {
 					objects.mu.Lock()
@@ -88,7 +90,7 @@ func TestKoiHubSourceReadsPublishedPackageOnly(t *testing.T) {
 					if file.SHA256 != koiDigest(file.Content) || file.SizeBytes != int64(len(file.Content)) {
 						t.Fatalf("unverified file: %s", file.Path)
 					}
-					if file.Path == "review/SKILL.md" && string(file.Content) != "# Review v1" {
+					if file.Path == "review/SKILL.md" && string(file.Content) != publishedEntry {
 						t.Fatal("unpublished workspace content leaked into Hub source")
 					}
 				}
@@ -100,6 +102,20 @@ func TestKoiHubSourceReadsPublishedPackageOnly(t *testing.T) {
 				}
 				if !reflect.DeepEqual(paths, want) {
 					t.Fatalf("wrong source scope: %v", paths)
+				}
+				candidates, rejected := koiSkillCandidates(result.Files, koiSkillSourceContext{
+					Directory: result.Path, RootName: result.Publication.Name, License: result.Publication.License,
+				})
+				if len(candidates) != 1 || candidates[0].Directory != "" || candidates[0].FileCount != 3 || candidates[0].License != "MIT License" {
+					t.Fatalf("published parent package changed during analysis: %+v", candidates)
+				}
+				if exact {
+					parentDigest = candidates[0].ContentSHA256
+					if len(rejected) != 0 {
+						t.Fatalf("exact selection included rejected children: %+v", rejected)
+					}
+				} else if len(rejected) != 1 || rejected[0].Directory != "nested" || rejected[0].Reason != "file_too_large" || candidates[0].ContentSHA256 != parentDigest {
+					t.Fatalf("invalid child affected the parent package: digest=%s, rejected=%+v", candidates[0].ContentSHA256, rejected)
 				}
 				if objects != nil {
 					objects.mu.Lock()

@@ -20,9 +20,13 @@ const (
 )
 
 var (
-	errKoiSkillPackage  = errors.New("skill package is invalid")
-	errKoiSkillTooLarge = errors.New("skill package exceeds Koinote limits")
-	koiSkillNamePattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	errKoiSkillPackage            = errors.New("skill package is invalid")
+	errKoiSkillTooLarge           = errors.New("skill package exceeds Koinote limits")
+	errKoiSkillMissingName        = fmt.Errorf("%w: frontmatter name is required", errKoiSkillPackage)
+	errKoiSkillMissingDescription = fmt.Errorf("%w: frontmatter description is required", errKoiSkillPackage)
+	errKoiSkillEmptyEntry         = fmt.Errorf("%w: SKILL.md body is empty", errKoiSkillPackage)
+	koiSkillNamePattern           = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	koiSkillFrontmatterEndPattern = regexp.MustCompile(`(?m)^(?:---|\.\.\.)[ \t]*$`)
 )
 
 // koiSkillFile holds source bytes and their reported metadata during validation.
@@ -35,8 +39,8 @@ type koiSkillFile struct {
 }
 
 // Parse SKILL.md without rewriting its source. Plain Markdown leaves the name
-// unset for the caller to derive; malformed YAML never silently falls back.
-// Package validation decides whether missing metadata can be derived.
+// unset for the caller to derive. Native entries require name, description and
+// a non-empty Markdown body; invalid frontmatter never silently falls back.
 func koiParseSkillEntry(file koiSkillFile) (name, description string, raw map[string]any, format, instructions string, err error) {
 	if len(file.Content) > koiSkillEntryBytes || file.SizeBytes > koiSkillEntryBytes {
 		return "", "", nil, "", "", fmt.Errorf("%w: entry too large", errKoiSkillTooLarge)
@@ -44,14 +48,18 @@ func koiParseSkillEntry(file koiSkillFile) (name, description string, raw map[st
 	instructions = string(file.Content)
 	normalized := strings.ReplaceAll(strings.TrimPrefix(instructions, "\ufeff"), "\r\n", "\n")
 	raw = map[string]any{}
-	if !strings.HasPrefix(normalized, "---\n") {
+	firstLine, remainder, hasLineBreak := strings.Cut(normalized, "\n")
+	if !hasLineBreak || strings.TrimRight(firstLine, " \t") != "---" {
+		if strings.TrimSpace(normalized) == "" {
+			return "", "", nil, "", "", errKoiSkillEmptyEntry
+		}
 		return "", koiPlainDescription(normalized), raw, "plain-markdown", instructions, nil
 	}
-	end := strings.Index(normalized[4:], "\n---")
-	if end < 0 {
+	end := koiSkillFrontmatterEndPattern.FindStringIndex(remainder)
+	if end == nil {
 		return "", "", nil, "", "", fmt.Errorf("%w: unterminated YAML frontmatter", errKoiSkillPackage)
 	}
-	if yamlErr := yaml.Unmarshal([]byte(normalized[4:4+end]), &raw); yamlErr != nil {
+	if yamlErr := yaml.Unmarshal([]byte(remainder[:end[0]]), &raw); yamlErr != nil {
 		return "", "", nil, "", "", fmt.Errorf("%w: invalid YAML frontmatter", errKoiSkillPackage)
 	}
 	if raw == nil {
@@ -63,8 +71,17 @@ func koiParseSkillEntry(file koiSkillFile) (name, description string, raw map[st
 	if description, err = koiFrontmatterString(raw["description"]); err != nil {
 		return "", "", nil, "", "", err
 	}
-	if name != "" && !koiValidSkillName(name) {
+	if name == "" {
+		return "", "", nil, "", "", errKoiSkillMissingName
+	}
+	if !koiValidSkillName(name) {
 		return "", "", nil, "", "", fmt.Errorf("%w: name must be lowercase letters, digits and single hyphens (at most %d characters)", errKoiSkillPackage, koiSkillNameMaxRunes)
+	}
+	if description == "" {
+		return "", "", nil, "", "", errKoiSkillMissingDescription
+	}
+	if strings.TrimSpace(remainder[end[1]:]) == "" {
+		return "", "", nil, "", "", errKoiSkillEmptyEntry
 	}
 	return name, strings.TrimSpace(description), raw, "agent-skills", instructions, nil
 }
