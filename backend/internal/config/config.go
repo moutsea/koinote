@@ -54,6 +54,9 @@ type Config struct {
 	WorkerURL string
 	// Production repository content is stored in R2; database mode is development-only.
 	AgentRepositoryStorage string
+	// Folder Skill management is staged independently of the task runtime.
+	// Empty means closed; values are comma-separated auth user IDs.
+	KoiSkillTestAccounts []string
 
 	// ImageQuotaBytes 是每用户的图床上限，来自 IMAGE_QUOTA_MB。
 	//
@@ -194,6 +197,7 @@ func Load() Config {
 		MigrationsDir:                 getenv("MIGRATIONS_DIR", "migrations"),
 		WorkerURL:                     strings.TrimRight(os.Getenv("WORKER_URL"), "/"),
 		AgentRepositoryStorage:        strings.ToLower(strings.TrimSpace(getenv("AGENT_REPOSITORY_STORAGE", "r2"))),
+		KoiSkillTestAccounts:          strings.Split(os.Getenv("KOI_SKILL_TEST_ACCOUNTS"), ","),
 
 		ImageQuotaBytes: imageQuotaBytes(),
 

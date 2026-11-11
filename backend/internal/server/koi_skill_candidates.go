@@ -103,6 +103,19 @@ func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext)
 		reject := func(name, reason string, details ...string) {
 			rejected = append(rejected, koiSkillRejected{Directory: displayDir, EntryPath: strings.TrimPrefix(entry, source.Directory+"/"), Name: name, Reason: reason, Details: details})
 		}
+		// Never turn a rejected member into a missing or empty file. Use the same
+		// boundaries for rejected entries, nested Skills and inherited notices.
+		blocked := false
+		for _, file := range pkgFiles {
+			if file.RejectionCode != "" {
+				reject("", file.RejectionCode, file.RejectionCode+":"+file.Path)
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
 		entryFile := byPath[entry]
 		name, description, raw, format, instructions, err := koiParseSkillEntry(entryFile)
 		if err != nil {

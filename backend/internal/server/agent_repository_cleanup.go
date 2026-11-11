@@ -35,9 +35,15 @@ func (a *App) StartAgentRepositoryCleanup(ctx context.Context) {
 			}
 			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			err := a.cleanupAgentRepositoryClones(runCtx)
+			if err == nil {
+				err = a.cleanupKoiSkillImports(runCtx)
+			}
+			if err == nil {
+				err = a.cleanupKoiSkillVersions(runCtx)
+			}
 			cancel()
 			if err != nil && ctx.Err() == nil {
-				log.Printf("repository Clone cleanup: %v", err)
+				log.Printf("repository and Skill cleanup: %v", err)
 			}
 			select {
 			case <-ctx.Done():

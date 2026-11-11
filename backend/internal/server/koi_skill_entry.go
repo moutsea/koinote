@@ -36,6 +36,8 @@ type koiSkillFile struct {
 	MimeType  string
 	SHA256    string
 	SizeBytes int64
+	// A rejected source member still establishes package boundaries and ownership.
+	RejectionCode string
 }
 
 // Parse SKILL.md without rewriting its source. Plain Markdown leaves the name

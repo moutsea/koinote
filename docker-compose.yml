@@ -92,6 +92,7 @@ services:
       # 留空时图片待删记录仍会排队，但邮箱注册无法发送验证码。
       WORKER_URL: ${WORKER_URL:-}
       AGENT_REPOSITORY_STORAGE: ${AGENT_REPOSITORY_STORAGE:-r2}
+      KOI_SKILL_TEST_ACCOUNTS: ${KOI_SKILL_TEST_ACCOUNTS:-}
       # 每用户云端存储上限（文档正文 + 图片），单位 MB。留空用后端默认的 500。
       # 非正数或非数字会回落到默认值，不会变成"谁都传不了图"
       IMAGE_QUOTA_MB: ${IMAGE_QUOTA_MB:-}
