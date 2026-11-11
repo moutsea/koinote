@@ -109,6 +109,7 @@ func (a *App) collectAgentRepositoryObjects(ctx context.Context, limit int) (int
 		var key string
 		err = tx.QueryRow(ctx, `SELECT o.object_key FROM agent_repository_objects o
  WHERE o.delete_after<=now() AND NOT EXISTS(SELECT 1 FROM agent_workspace_blobs b WHERE b.r2_object_key=o.object_key)
+ AND NOT EXISTS(SELECT 1 FROM koi_skill_version_files f WHERE f.r2_object_key=o.object_key)
  ORDER BY o.delete_after,o.object_key LIMIT 1 FOR UPDATE OF o SKIP LOCKED`).Scan(&key)
 		if errors.Is(err, pgx.ErrNoRows) {
 			tx.Rollback(ctx)
@@ -121,7 +122,7 @@ func (a *App) collectAgentRepositoryObjects(ctx context.Context, limit int) (int
 		// Recheck after acquiring the row lock using a fresh READ COMMITTED snapshot.
 		// FK locks prevent another transaction from adopting this object during deletion.
 		var referenced bool
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_workspace_blobs WHERE r2_object_key=$1)`, key).Scan(&referenced)
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_workspace_blobs WHERE r2_object_key=$1) OR EXISTS(SELECT 1 FROM koi_skill_version_files WHERE r2_object_key=$1)`, key).Scan(&referenced)
 		if err != nil {
 			tx.Rollback(ctx)
 			return removed, err
