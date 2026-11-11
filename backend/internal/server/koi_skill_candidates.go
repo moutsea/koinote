@@ -14,19 +14,20 @@ const (
 )
 
 type koiSkillCandidate struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
-	Description    string         `json:"description"`
-	Directory      string         `json:"directory"`
-	EntryPath      string         `json:"entryPath"`
-	MetadataFormat string         `json:"metadataFormat"`
-	Instructions   string         `json:"instructions"`
-	RawMetadata    map[string]any `json:"rawMetadata"`
-	Files          []koiSkillFile `json:"-"`
-	FileCount      int            `json:"fileCount"`
-	SizeBytes      int64          `json:"sizeBytes"`
-	ContentSHA256  string         `json:"contentSha256"`
-	License        string         `json:"license"`
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	Description    string                `json:"description"`
+	Directory      string                `json:"directory"`
+	EntryPath      string                `json:"entryPath"`
+	MetadataFormat string                `json:"metadataFormat"`
+	Instructions   string                `json:"instructions"`
+	RawMetadata    map[string]any        `json:"rawMetadata"`
+	Files          []koiSkillFile        `json:"-"`
+	FileCount      int                   `json:"fileCount"`
+	SizeBytes      int64                 `json:"sizeBytes"`
+	ContentSHA256  string                `json:"contentSha256"`
+	License        string                `json:"license"`
+	Compatibility  koiSkillCompatibility `json:"compatibility"`
 }
 
 type koiSkillRejected struct {
@@ -56,8 +57,8 @@ func (f *koiSkillFile) normalize() {
 
 // Split a verified source tree into structurally valid packages and per-package
 // rejections. Source readers must supply normalized, unique paths and verified
-// bytes/digests (oversized members may be metadata-only). This does not establish
-// runtime compatibility or authorize installation; callers must check both.
+// bytes/digests (oversized members may be metadata-only). Candidates must support
+// hosted conversation use; installation authorization is checked by callers.
 func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext) (candidates []koiSkillCandidate, rejected []koiSkillRejected) {
 	source := koiSkillSourceContext{}
 	if len(contexts) > 0 {
@@ -167,6 +168,11 @@ func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext)
 		default:
 			if issues := koiSkillRuntimeIssues(raw, name, description, rebased); len(issues) > 0 {
 				reject(name, "invalid_runtime_metadata", issues...)
+				continue
+			}
+			candidate.Compatibility = koiSkillCompatibilityFor(raw)
+			if !candidate.Compatibility.Conversation {
+				reject(name, "incompatible", candidate.Compatibility.Reasons...)
 				continue
 			}
 			candidate.ContentSHA256 = koiSkillContentDigest(rebased)

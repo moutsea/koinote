@@ -101,12 +101,20 @@ func TestKoiSkillInvocationDeclarations(t *testing.T) {
 					t.Fatalf("invalid invocation declaration not isolated: %+v %+v", candidates, rejected)
 				}
 			} else {
-				if len(candidates) != 2 || len(rejected) != 0 {
-					t.Fatalf("valid invocation declaration rejected: %+v %+v", candidates, rejected)
-				}
-				candidate := candidates[1]
-				if candidate.Instructions != entry || len(candidate.Files) != 1 || string(candidate.Files[0].Content) != entry {
-					t.Fatal("validation changed invocation declarations or source bytes")
+				if tc.name == "boolean values" || tc.name == "combined restrictions" {
+					// These are well-formed declarations, but the hosted automatic
+					// discovery path cannot invoke a model-disabled Skill.
+					if len(candidates) != 1 || len(rejected) != 1 || rejected[0].Reason != "incompatible" || !slices.Contains(rejected[0].Details, "model_invocation_disabled") {
+						t.Fatalf("valid restriction lost its compatibility reason: %+v %+v", candidates, rejected)
+					}
+				} else {
+					if len(candidates) != 2 || len(rejected) != 0 {
+						t.Fatalf("valid invocation declaration rejected: %+v %+v", candidates, rejected)
+					}
+					candidate := candidates[1]
+					if candidate.Instructions != entry || len(candidate.Files) != 1 || string(candidate.Files[0].Content) != entry {
+						t.Fatal("validation changed invocation declarations or source bytes")
+					}
 				}
 			}
 			after, _ := json.Marshal(files)
@@ -118,7 +126,7 @@ func TestKoiSkillInvocationDeclarations(t *testing.T) {
 }
 
 func TestKoiSkillRuntimeManifestKeepsProvenanceAndSource(t *testing.T) {
-	entry := "\ufeff" + strings.ReplaceAll("---\nname: method\ndescription: Review a note.\nrequiredTools: [koinote.get_document, web_fetch]\nrequestedCapabilities: [workspace.read, network]\nfiles: [LICENSE, references/guide.md, scripts/check.py]\nscripts: {check: scripts/check.py}\nruntime: {}\nuser-invocable: false\ndisable-model-invocation: true\ncommand-dispatch: tool\ncommand-tool: koinote.get_document\ncommand-arg-mode: raw\nmetadata: {author: Example}\n---\nRead the guide.\n", "\n", "\r\n")
+	entry := "\ufeff" + strings.ReplaceAll("---\nname: method\ndescription: Review a note.\nrequiredTools: [koinote.get_document, web_fetch]\nrequestedCapabilities: [workspace.read, network]\nfiles: [LICENSE, references/guide.md, scripts/check.py]\nscripts: {check: scripts/check.py}\nruntime: {}\nuser-invocable: false\ndisable-model-invocation: false\ncommand-dispatch: tool\ncommand-tool: koinote.get_document\ncommand-arg-mode: raw\nmetadata: {author: Example}\n---\nRead the guide.\n", "\n", "\r\n")
 	files := koiCandidateTestFiles(map[string]string{
 		"LICENSE": "MIT License", "NOTICE.md": "Attribution", "method/LICENSE": "Local license",
 		"method/SKILL.md": entry, "method/references/guide.md": "Guide", "method/scripts/check.py": "print('check')",
@@ -139,7 +147,7 @@ func TestKoiSkillRuntimeManifestKeepsProvenanceAndSource(t *testing.T) {
 		t.Fatal("preparing provenance changed source metadata, bytes or repeated output")
 	}
 	declared := manifest["files"].([]any)
-	if len(declared) != len(candidate.Files)-1 || candidate.FileCount != 6 || manifest["userInvocable"] != false || manifest["disableModelInvocation"] != true {
+	if len(declared) != len(candidate.Files)-1 || candidate.FileCount != 6 || manifest["userInvocable"] != false || manifest["disableModelInvocation"] != false {
 		t.Fatalf("manifest lost members or invocation restrictions: %+v", manifest)
 	}
 	for _, file := range candidate.Files {

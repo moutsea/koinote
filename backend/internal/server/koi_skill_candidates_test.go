@@ -57,14 +57,14 @@ func TestKoiSkillCandidatesDeriveMetadataAndPreserveDeclarations(t *testing.T) {
 			t.Fatalf("root %q lost display metadata: %+v %+v", root, candidates, rejected)
 		}
 	}
-	entry := "\ufeff---\r\nname: method\r\ndescription: Editing method\r\nlicense: Apache-2.0\r\nmetadata: {author: Acme}\r\ndisable-model-invocation: true\r\n---\r\nRead the guide.\r\n"
+	entry := "\ufeff---\r\nname: method\r\ndescription: Editing method\r\nlicense: Apache-2.0\r\nmetadata: {author: Acme}\r\nuser-invocable: false\r\n---\r\nRead the guide.\r\n"
 	candidates, rejected := koiSkillCandidates(koiCandidateTestFiles(map[string]string{"method/SKILL.md": entry}))
 	if len(candidates) != 1 || len(rejected) != 0 {
 		t.Fatalf("structural analysis failed: %+v %+v", candidates, rejected)
 	}
 	candidate := candidates[0]
 	if candidate.Name != "method" || candidate.Description != "Editing method" || candidate.Instructions != entry || string(candidate.Files[0].Content) != entry || candidate.License != "Apache-2.0" ||
-		candidate.RawMetadata["disable-model-invocation"] != true || candidate.RawMetadata["metadata"].(map[string]any)["author"] != "Acme" {
+		candidate.RawMetadata["user-invocable"] != false || candidate.RawMetadata["metadata"].(map[string]any)["author"] != "Acme" {
 		t.Fatal("analysis changed source bytes, metadata or invocation declarations")
 	}
 }
