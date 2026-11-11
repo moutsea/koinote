@@ -54,6 +54,9 @@ const h = globalThis.__sharingTest = {
     calls.push({ path, method, body });
     const gate = h.gates.get(`${method} ${path}`);
     if (gate) { h.gates.delete(`${method} ${path}`); await gate.promise; }
+    if (path === "/api/koi/settings") return { managementAvailable: Boolean(h.koiAvailable), canInstall: Boolean(h.koiAvailable), settings: { autoSkills: true, revision: 1 } };
+    if (path === "/api/koi/skill-imports") return { preview: { id: "hub-preview", sourceKind: "hub", source: { kind: "hub", name: publicRepository.name }, status: "ready", revision: 1, candidates: [], rejected: [] } };
+    if (path === "/api/koi/skill-imports/hub-preview") return { status: "cancelled" };
     if (path === "/api/agent/github-credential") {
       if (method === "PUT") h.credential = { configured: true, tokenHint: body.token.slice(-4) };
       if (method === "DELETE") h.credential = { configured: false };
@@ -410,6 +413,32 @@ try {
 
   assert.deepEqual(parseRepositorySearch({file:'docs/使用指南.md'}),{...emptyFilters,file:'docs/使用指南.md'});
   assert.deepEqual(parseRepositorySearch({file:['README.md']}),{...emptyFilters,file:undefined});
+  assert.equal(parseRepositorySearch({ installKoi: true }).installKoi, true);
+  assert.equal(parseRepositorySearch({ installKoi: ['true'] }).installKoi, undefined);
+  const beforeKoiUser = h.user;
+  h.user = null;
+  await mount(AgentPublicRepositoryPage);
+  const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.installToKoi));
+  assert.ok(installLogin, 'anonymous visitors can return to the Hub installation after login');
+  assert.equal(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), '/repositories/7?installKoi=true');
+  h.user = { id: 1, authUserId: 'hub-viewer', membershipTier: 'lifetime' };
+  h.koiAvailable = true; h.search = { installKoi: true };
+  const koiCreates = calls.filter(call => call.path === '/api/koi/skill-imports').length;
+  const koiConfirms = calls.filter(call => call.path.endsWith('/confirm')).length;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.querySelector('[role="dialog"]'), 'login return opens the install preview');
+  assert.equal(h.search.installKoi, undefined, 'login intent is consumed once');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, koiCreates + 1);
+  const koiInput = calls.findLast(call => call.path === '/api/koi/skill-imports').body;
+  assert.equal(koiInput.publicationId, publicRepository.publicationId);
+  assert.equal(koiInput.revision, publicRepository.revision);
+  assert.equal(calls.filter(call => call.path.endsWith('/confirm')).length, koiConfirms, 'returning from login never auto-confirms an install');
+  await click(zh.koi.cancel);
+  h.koiAvailable = false; h.search = { installKoi: true };
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.ok(document.body.textContent.includes(zh.koi.koiUnavailable), 'accounts outside rollout receive an explanation');
+  h.user = beforeKoiUser; h.search = {}; delete h.koiAvailable;
   assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
   assert.deepEqual(parseRepositoryDirectorySearch({q:['skills'],source:'admin',category:'invalid'}),emptyFilters);
   assert.deepEqual(parseRepositoryDirectorySearch({q:'x'.repeat(81),source:['system'],category:['design']}),emptyFilters);

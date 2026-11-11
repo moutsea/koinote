@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { build } from "esbuild";
@@ -23,7 +24,7 @@ let root, client;
 try {
   const outfile = join(directory, "skills.cjs");
   await build({
-    stdin: { contents: 'export {KoiSkillLibrary} from "./spa/src/components/KoiSkillLibrary";export {zh} from "./spa/src/i18n/zh";export {ApiError} from "./spa/src/api";', resolveDir: process.cwd(), loader: "tsx" },
+    stdin: { contents: 'export {KoiSkillLibrary} from "./spa/src/components/KoiSkillLibrary";export {KoiInstallDialog} from "./spa/src/components/KoiInstallDialog";export {zh} from "./spa/src/i18n/zh";export {ApiError} from "./spa/src/api";', resolveDir: process.cwd(), loader: "tsx" },
     outfile, bundle: true, platform: "node", format: "cjs", packages: "external", jsx: "automatic", logLevel: "silent",
     plugins: [{ name: "skills-host", setup(builder) {
       const hosts = {
@@ -35,13 +36,13 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "skills-host" }, ({ path }) => ({ contents: hosts[path], loader: "js" }));
     } }],
   });
-  const { KoiSkillLibrary, zh, ApiError } = require(outfile);
+  const { KoiSkillLibrary, KoiInstallDialog, zh, ApiError } = require(outfile);
   const labels = zh.koi;
   state.i18n = { t: zh, locale: "zh" };
   let user = { id: 1, authUserId: "skills-one", membershipTier: "lifetime" };
   let available = false, canInstall = true, settings = { autoSkills: true, revision: 1 };
   let skills = [], preview, createInput, rejectNextToggle = true, loseConfirmation = true;
-  let saveDelay;
+  let saveDelay, rejectRemote = false;
   const calls = [], uploads = [];
   const candidate = { id: "candidate-review", name: "review", description: "检查文章结构", entryPath: "SKILL.md", directory: "review", fileCount: 2, sizeBytes: 100, instructions: "# Review\nRead guide.md.", compatibility: { conversation: true, article: false, reasons: [] }, metadataFormat: "plain-markdown" };
   const installed = { ...candidate, id: "installation-review", versionId: "version-one", version: "123456abcdef", contentSha256: "1".repeat(64), sourceKind: "folder", source: { directoryName: "collection" }, enabled: true, revision: 1, installedAt: "2026-11-11T00:00:00Z", updatedAt: "2026-11-11T00:00:00Z", license: "" };
@@ -64,7 +65,9 @@ try {
     }
     if (url.pathname === "/api/koi/skill-imports" && method === "POST") {
       createInput = body;
-      preview = { id: "preview-one", status: "pending", revision: 1, sourceKind: "folder", source: {}, candidates: [], rejected: [], uploadedFiles: 0, rejectedFiles: 0, declaredFiles: body.declaredPaths.length, expiresAt: "2099-01-01T00:00:00Z" };
+      if (body.source !== "folder" && rejectRemote) throw new ApiError(403, "access denied", "github_token_required");
+      preview = { id: "preview-one", status: "pending", revision: 1, sourceKind: "folder", source: {}, candidates: [], rejected: [], uploadedFiles: 0, rejectedFiles: 0, declaredFiles: body.declaredPaths?.length ?? 0, expiresAt: "2099-01-01T00:00:00Z" };
+      if (body.source !== "folder") preview = { ...preview, status: "ready", revision: 2, sourceKind: body.source, source: { kind: body.source, repositoryUrl: body.repositoryUrl, ref: "main", commitSha: "a".repeat(40), name: "Hub review" }, candidates: [candidate] };
       return { preview: { ...preview } };
     }
     if (url.pathname === "/api/koi/skill-imports/preview-one/files") {
@@ -75,14 +78,15 @@ try {
       return { path: member };
     }
     if (url.pathname.endsWith("/analyze")) {
-      assert.equal(uploads.length, createInput.declaredPaths.length, "a rejected member must not stop sibling uploads");
+      assert.equal(uploads.length % createInput.declaredPaths.length, 0, "a rejected member must not stop sibling uploads");
       preview = { ...preview, status: "ready", revision: 2, candidates: [candidate], rejected: [{ entryPath: "bad/SKILL.md", directory: "bad", reason: "sensitive_data_detected", details: ["sensitive_data_detected:bad/guide.md"] }] };
+      if (createInput.updateFromId) preview.candidates = [{ ...candidate, installedStatus: "update", installedId: skills[0].id, previousVersion: skills[0].version, previousSizeBytes: 100 }];
       return { preview: { ...preview } };
     }
     if (url.pathname.endsWith("/confirm")) {
       assert.equal(body.previewRevision, 2);
       assert.deepEqual(body.candidateIds, [candidate.id]);
-      skills = [{ ...installed, enabled: body.enable }];
+      skills = createInput.updateFromId ? [{ ...skills[0], versionId: "version-two", revision: skills[0].revision + 1 }] : [{ ...installed, sourceKind: createInput.source, source: { ...preview.source }, enabled: body.enable }];
       preview = { ...preview, status: "committed", candidates: [], installed: skills };
       if (loseConfirmation) { loseConfirmation = false; throw new Error("response lost"); }
       return { installed: skills };
@@ -91,11 +95,13 @@ try {
       if (method === "DELETE") return { status: "cancelled" };
       return { preview: { ...preview } };
     }
+    if (url.pathname.endsWith("/check-update")) return { status: "update_available", preview: { ...preview, id: "preview-one", status: "ready", revision: 2, sourceKind: "github", candidates: [{ ...candidate, installedStatus: "update", installedId: skills[0].id, previousVersion: skills[0].version, previousSizeBytes: 100 }] } };
     if (url.pathname === "/api/koi/skills/installation-review/files/2") {
       assert.equal(url.searchParams.get("version"), "version-one", "file preview pins the displayed version");
       return { file: { position: 2, path: "guide.md", sha256: "guide-hash" }, contentBase64: Buffer.from("结构说明：保持作者原意。").toString("base64") };
     }
     if (url.pathname === "/api/koi/skills/installation-review") {
+      if (method === "GET" && !skills[0]) throw new ApiError(404, "missing", "not_found");
       if (method === "PATCH") {
         assert.equal(body.expectedRevision, skills[0].revision);
         skills[0] = { ...skills[0], enabled: body.enabled, revision: skills[0].revision + 1 };
@@ -175,9 +181,52 @@ try {
   await click("review");
   await click("guide.md50 B");
   assert.ok(document.body.textContent.includes("结构说明：保持作者原意。"));
-  assert.equal(document.body.textContent.includes(labels.uploadNewVersion ?? "not-present"), false);
+  await click(labels.uploadNewVersion);
+  await change(document.querySelector('input[type="file"]'), { files, value: "replacement" });
+  assert.equal(document.querySelectorAll('input[name="folder-package"][type="radio"]').length, 2, "replacement accepts one package");
+  uploads.length = 0;
+  await click(labels.uploadAndAnalyze);
+  assert.equal(createInput.updateFromId, installed.id);
+  assert.equal(createInput.expectedRevision, skills[0].revision);
+  assert.ok(document.body.textContent.includes(labels.existingKeepsState));
+  assert.equal(document.body.textContent.includes(labels.enableAfterInstall), false);
+  await click(labels.confirmUpdate);
+  assert.equal(skills[0].id, installed.id);
+  assert.equal(skills[0].versionId, "version-two");
+  assert.equal(skills[0].enabled, true);
   await click(labels.uninstall);
   assert.ok(document.body.textContent.includes(labels.emptySkills));
+
+  await click(labels.installSkill);
+  await click(labels.sourceGithub);
+  await change(document.querySelector('input[type="url"]'), { value: "https://github.com/octo/demo" });
+  const form = document.querySelector('form');
+  rejectRemote = true;
+  await act(async () => propsOf(form).onSubmit({ preventDefault() {} })); await settle();
+  assert.ok(document.body.textContent.includes(labels.githubTokenRequired));
+  const failedID = createInput.requestId;
+  rejectRemote = false;
+  await act(async () => propsOf(form).onSubmit({ preventDefault() {} })); await settle();
+  assert.equal(createInput.requestId, failedID, "remote retries reuse their request ID");
+  assert.equal(createInput.repositoryUrl, "https://github.com/octo/demo");
+  await click(labels.confirmInstall.replace("{count}", "1"));
+  await click("review");
+  const createsBeforeUpdate = calls.filter((item) => item.path === "/api/koi/skill-imports").length;
+  await click(labels.checkUpdate);
+  assert.ok(document.querySelector('[role="dialog"]'));
+  assert.equal(calls.filter((item) => item.path === "/api/koi/skill-imports").length, createsBeforeUpdate, "update uses the server's reviewed preview");
+  await click(labels.cancel);
+
+  const confirmsBeforeHub = calls.filter((item) => item.path.endsWith("/confirm")).length;
+  await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(React.StrictMode, null, React.createElement(KoiInstallDialog, { authUserId: user.authUserId, hubTarget: { workspaceId: 7, name: "Hub review", revision: 3, publicationId: "publication-one" }, onClose() {} })))));
+  await settle();
+  assert.equal(createInput.source, "hub");
+  assert.ok(document.body.textContent.includes("Hub review"), "the source name remains visible in the preview");
+  assert.equal(createInput.publicationId, "publication-one");
+  assert.equal(createInput.revision, 3);
+  assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmsBeforeHub, "Hub entry only opens a preview");
+  await click(labels.confirmInstall.replace("{count}", "1"));
+  assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmsBeforeHub + 1);
 
   // Account-scoped data and UI reset together; a non-member can read/remove but
   // cannot install or change automatic discovery.
@@ -189,7 +238,16 @@ try {
   assert.equal(auto().disabled, true);
   assert.equal([...document.querySelectorAll("button")].some((button) => button.textContent === labels.installSkill), false);
   assert.equal(document.querySelector('[role="dialog"]'), null);
-  console.log("Koi Skill UI passed: rollout gate, settings, folder selection/upload, partial rejection, confirmation recovery, conflict refresh, file preview, uninstall and account isolation");
+  // Send the UI's serialized request bodies through the actual strict Go
+  // decoder. A permissive API mock cannot catch extra display-only fields.
+  const requestsPath = join(directory, "import-requests.json");
+  await writeFile(requestsPath, JSON.stringify(calls.filter((call) => call.path === "/api/koi/skill-imports" && call.method === "POST").map((call) => call.body)));
+  execFileSync("go", ["test", "./internal/server", "-run", "^TestKoiImportRequestContract$", "-count=1"], {
+    cwd: join(process.cwd(), "backend"),
+    env: { ...process.env, KOINOTE_TEST_IMPORT_REQUESTS: requestsPath },
+    stdio: "inherit", timeout: 300_000,
+  });
+  console.log("Koi Skill UI passed: rollout gate, settings, folder selection/upload, partial rejection, confirmation recovery, replacement, GitHub retries/updates, Hub preview, file preview and account isolation");
 } finally {
   if (root) await act(async () => root.unmount());
   client?.clear();

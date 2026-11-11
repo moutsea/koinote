@@ -1,4 +1,5 @@
 import { apiJson, ApiError } from "./api";
+import { githubImportErrorMessage } from "./agentGitHubImport";
 
 export type KoiCompatibility = {
   conversation: boolean;
@@ -50,7 +51,10 @@ export type KoiImportCandidate = {
   license: string;
   instructions: string;
   compatibility: KoiCompatibility;
-  installedStatus?: "installed";
+  installedStatus?: "installed" | "update";
+  installedRevision?: number;
+  previousVersion?: string;
+  previousSizeBytes?: number;
   installedId?: string;
 };
 
@@ -90,7 +94,10 @@ export const setKoiSkillEnabled = (id: string, input: { expectedRevision: number
  apiJson<{ skill: KoiSkill }>(`/api/koi/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 export const deleteKoiSkill = (id: string, expectedRevision: number) =>
  apiJson<{ deleted: boolean; retainedBytes: number }>(`/api/koi/skills/${encodeURIComponent(id)}?expectedRevision=${expectedRevision}`, { method: "DELETE" });
-export const createKoiImport = (input: { requestId: string; source: "folder"; declaredPaths: string[]; directoryName: string }) =>
+export type KoiImportInput = { requestId: string; source: "folder" | "github" | "hub"; declaredPaths?: string[]; directoryName?: string; repositoryUrl?: string; ref?: string; path?: string; workspaceId?: number; publicationId?: string; revision?: number; updateFromId?: string; expectedRevision?: number };
+export type KoiHubTarget = { workspaceId: number; name: string; publicationId: string; revision: number };
+export const checkKoiSkillUpdate = (id: string) => apiJson<{ status: "up_to_date" | "manual_only" | "source_unavailable" | "update_available"; preview?: KoiPreview }>(`/api/koi/skills/${encodeURIComponent(id)}/check-update`, { method: "POST", body: "{}" });
+export const createKoiImport = (input: KoiImportInput) =>
  apiJson<{ preview: KoiPreview }>("/api/koi/skill-imports", { method: "POST", body: JSON.stringify(input) });
 export const getKoiImport = (id: string) => apiJson<{ preview: KoiPreview }>(`/api/koi/skill-imports/${encodeURIComponent(id)}`);
 export const cancelKoiImport = (id: string) => apiJson<{ status: string }>(`/api/koi/skill-imports/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -109,6 +116,7 @@ const KOI_ERROR_LABELS: Record<string, string> = {
  revision_conflict: "koiConflict", idempotency_conflict: "koiConflict",
  upload_incomplete: "koiUploadIncomplete", file_too_large: "koiFileTooLarge",
  koi_unavailable: "koiUnavailable", not_found: "koiSkillMissing",
+ source_unavailable: "sourceUnavailable",
 };
 
 export function koiErrorMessage(
@@ -123,7 +131,8 @@ export function koiErrorMessage(
     if (error.code === "membership_required") return labels.koiMembersOnly;
     if (error.code === "unauthorized") return labels.koiLoginRequired;
   }
-  return fallback;
+  const github = githubImportErrorMessage(error, labels, "");
+  return github || fallback;
 }
 
 export function koiPreviewErrorLabel(preview: KoiPreview, labels: Record<string, string>): string {

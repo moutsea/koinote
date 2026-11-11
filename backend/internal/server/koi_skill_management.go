@@ -43,6 +43,10 @@ func (a *App) requireKoiSkillUser(w http.ResponseWriter, r *http.Request, write 
 func writeKoiError(w http.ResponseWriter, err error) {
 	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.Is(err, errKoiSourceUnavailable):
+		httpx.ErrorCode(w, http.StatusNotFound, "source_unavailable", errKoiSourceUnavailable.Error())
+	case errors.Is(err, errKoiGitHubLink):
+		httpx.ErrorCode(w, http.StatusBadRequest, "github_repository_invalid", err.Error())
 	case errors.Is(err, errKoiSkillConflict):
 		httpx.ErrorCode(w, http.StatusConflict, "revision_conflict", err.Error())
 	case errors.Is(err, errKoiImportExpired):

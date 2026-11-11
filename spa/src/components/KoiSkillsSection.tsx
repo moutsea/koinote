@@ -6,14 +6,17 @@ import {
   FileText,
   LoaderCircle,
   Search,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { confirmAction } from "../confirmAction";
 import { ApiError } from "../api";
 import {
   KOI_SKILLS_QUERY_KEY,
   deleteKoiSkill,
+  cancelKoiImport,
+  checkKoiSkillUpdate,
   getKoiSkill,
   getKoiSkillFile,
   koiErrorMessage,
@@ -22,11 +25,13 @@ import {
   setKoiSkillEnabled,
   type KoiSkill,
   type KoiSkillFile,
+  type KoiPreview,
 } from "../koiSkills";
 import { formatBytes } from "../storage";
 import type { User } from "../api";
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
+import { KoiInstallDialog } from "./KoiInstallDialog";
 import { KoiEmptyState, KoiPending, KoiRetry, KoiSkillSourceLabel, KoiSkillStatusBadge, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
 
 type StateFilter = "" | "enabled" | "disabled" | "unavailable";
@@ -181,6 +186,20 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
   const { t, locale } = useI18n();
   const labels = t.koi;
   const userId = user.authUserId;
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updatePreview, setUpdatePreview] = useState<KoiPreview>();
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const check = useMutation({
+    mutationFn: () => checkKoiSkillUpdate(id),
+    onSuccess: (result) => {
+      if (result.preview) {
+        if (!active.current) { void cancelKoiImport(result.preview.id).catch(() => undefined); return; }
+        setUpdatePreview(result.preview);
+        setUpdateOpen(true);
+      }
+    },
+  });
   const detailKey = [KOI_SKILLS_QUERY_KEY, userId, "detail", id];
   const detail = useQuery({ queryKey: detailKey, queryFn: () => getKoiSkill(id), enabled: Boolean(userId), retry: false });
   const client = useQueryClient();
@@ -211,7 +230,8 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
     return <section className="space-y-5">{backButton}<KoiRetry label={labels.loadFailed} action={labels.retry} busy={detail.isFetching} onRetry={() => void detail.refetch()} /></section>;
   }
   const { skill, files, instructions } = detail.data;
-  const error = toggle.isError ? koiErrorMessage(toggle.error, labels) : remove.isError ? koiErrorMessage(remove.error, labels) : "";
+  const error = toggle.isError ? koiErrorMessage(toggle.error, labels) : remove.isError ? koiErrorMessage(remove.error, labels) : check.isError ? koiErrorMessage(check.error, labels) : "";
+  const busy = toggle.isPending || remove.isPending || check.isPending || updateOpen;
   return (
     <section className="space-y-5">
       {backButton}
@@ -225,19 +245,27 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {canInstall && <button type="button" disabled={busy} onClick={() => {
+            check.reset(); toggle.reset(); remove.reset();
+            if (skill.sourceKind === "folder") { setUpdatePreview(undefined); setUpdateOpen(true); }
+            else check.mutate();
+          }} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>
+            <RefreshCw className={`h-3.5 w-3.5 ${check.isPending ? "animate-spin" : ""}`} />
+            {skill.sourceKind === "folder" ? labels.uploadNewVersion : check.isPending ? labels.checkingUpdate : labels.checkUpdate}
+          </button>}
           <label className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "var(--ink-line)" }}>
             <input
               type="checkbox"
               role="switch"
               checked={skill.enabled}
-              disabled={toggle.isPending || remove.isPending || (!skill.enabled && (!skill.compatibility.conversation || !canInstall))}
+              disabled={busy || (!skill.enabled && (!skill.compatibility.conversation || !canInstall))}
               onChange={() => toggle.mutate(skill)}
             />
             {labels.enabledToggle}
           </label>
           <button
             type="button"
-            disabled={remove.isPending || toggle.isPending}
+            disabled={busy}
             onClick={async () => { if (await confirmAction(labels.uninstallConfirm.replace("{name}", skill.name))) remove.mutate(skill); }}
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50"
             style={{ borderColor: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
@@ -248,6 +276,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
         </div>
       </div>
       {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
+      {check.data && !updateOpen && check.data.status !== "update_available" && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{check.data.status === "up_to_date" ? labels.upToDate : check.data.status === "source_unavailable" ? labels.sourceUnavailable : labels.manualOnly}</p>}
       <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={labels.versionLabel} value={skill.version} />
         <Fact label={labels.filesLabel} value={String(skill.fileCount)} />
@@ -274,6 +303,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
       )}
 
       <KoiSkillFiles key={`${skill.id}:${skill.versionId}`} user={user} skill={skill} files={files} instructions={instructions} />
+      {updateOpen && canInstall && <KoiInstallDialog authUserId={userId} updateTarget={skill.sourceKind === "folder" ? skill : undefined} resumePreview={updatePreview} onClose={() => { setUpdateOpen(false); setUpdatePreview(undefined); check.reset(); void reconcile(); }} />}
     </section>
   );
 }

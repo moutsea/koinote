@@ -11,34 +11,44 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"koinote/backend/internal/httpx"
 )
 
 const koiSkillImportTTL = 24 * time.Hour
 
 type koiImportRequest struct {
-	RequestID     string   `json:"requestId"`
-	SourceKind    string   `json:"source"`
-	DeclaredPaths []string `json:"declaredPaths"`
-	DirectoryName string   `json:"directoryName"`
+	RequestID        string   `json:"requestId"`
+	SourceKind       string   `json:"source"`
+	DeclaredPaths    []string `json:"declaredPaths"`
+	DirectoryName    string   `json:"directoryName"`
+	RepositoryURL    string   `json:"repositoryUrl"`
+	Ref              string   `json:"ref"`
+	Path             string   `json:"path"`
+	WorkspaceID      int64    `json:"workspaceId"`
+	PublicationID    string   `json:"publicationId"`
+	Revision         *int64   `json:"revision"`
+	UpdateFromID     string   `json:"updateFromId"`
+	ExpectedRevision int64    `json:"expectedRevision"`
 }
 
 type koiSkillImportCandidate struct {
-	ID              string                `json:"id"`
-	Name            string                `json:"name"`
-	Description     string                `json:"description"`
-	EntryPath       string                `json:"entryPath"`
-	Directory       string                `json:"directory"`
-	MetadataFormat  string                `json:"metadataFormat"`
-	FileCount       int                   `json:"fileCount"`
-	SizeBytes       int64                 `json:"sizeBytes"`
-	ContentSHA256   string                `json:"contentSha256"`
-	License         string                `json:"license"`
-	Instructions    string                `json:"instructions"`
-	Compatibility   koiSkillCompatibility `json:"compatibility"`
-	InstalledID     string                `json:"installedId,omitempty"`
-	InstalledStatus string                `json:"installedStatus,omitempty"`
+	ID                string                `json:"id"`
+	Name              string                `json:"name"`
+	Description       string                `json:"description"`
+	EntryPath         string                `json:"entryPath"`
+	Directory         string                `json:"directory"`
+	MetadataFormat    string                `json:"metadataFormat"`
+	FileCount         int                   `json:"fileCount"`
+	SizeBytes         int64                 `json:"sizeBytes"`
+	ContentSHA256     string                `json:"contentSha256"`
+	License           string                `json:"license"`
+	Instructions      string                `json:"instructions"`
+	Compatibility     koiSkillCompatibility `json:"compatibility"`
+	InstalledID       string                `json:"installedId,omitempty"`
+	InstalledStatus   string                `json:"installedStatus,omitempty"`
+	InstalledRevision int64                 `json:"installedRevision,omitempty"`
+	PreviousVersion   string                `json:"previousVersion,omitempty"`
+	PreviousSizeBytes int64                 `json:"previousSizeBytes,omitempty"`
 }
 
 type koiSkillImportView struct {
@@ -128,7 +138,15 @@ func (a *App) koiImportCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	var input koiImportRequest
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
-	if decodeJSONBody(r, &input) != nil || !validUUID(input.RequestID) || input.SourceKind != "folder" ||
+	if decodeJSONBody(r, &input) != nil || !validUUID(input.RequestID) {
+		httpx.ErrorCode(w, 400, "bad_request", "Invalid import request")
+		return
+	}
+	if input.SourceKind == "github" || input.SourceKind == "hub" {
+		a.koiRemoteImportCreate(w, r, user, input)
+		return
+	}
+	if input.SourceKind != "folder" ||
 		len(input.DeclaredPaths) == 0 || len(input.DeclaredPaths) > koiSkillImportFiles ||
 		len(input.DirectoryName) > 512 || strings.ContainsAny(input.DirectoryName, "/\\\x00") {
 		httpx.ErrorCode(w, 400, "bad_request", "Declare a folder with 1 to 512 relative file paths")
@@ -153,7 +171,20 @@ func (a *App) koiImportCreate(w http.ResponseWriter, r *http.Request) {
 	canonical.RequestID = ""
 	raw, _ := json.Marshal(canonical)
 	hash := koiDigest(raw)
-	source, _ := json.Marshal(map[string]any{"kind": "folder", "directoryName": input.DirectoryName})
+	sourceData := map[string]any{"kind": "folder", "directoryName": input.DirectoryName}
+	if input.UpdateFromID != "" {
+		target, err := a.loadKoiInstallation(r.Context(), a.db, user.ID, input.UpdateFromID)
+		if err != nil {
+			writeKoiError(w, err)
+			return
+		}
+		if target.SourceKind != "folder" || input.ExpectedRevision != target.Revision {
+			writeKoiError(w, errKoiSkillConflict)
+			return
+		}
+		sourceData["updateFromId"], sourceData["updateRevision"] = target.ID, target.Revision
+	}
+	source, _ := json.Marshal(sourceData)
 	// Concurrent retries share a receipt; a reused key with different input is a conflict.
 	_, err = a.db.Exec(r.Context(), `INSERT INTO koi_skill_imports(id,user_id,request_id,input_hash,source_kind,source,declared_paths,expires_at)
  VALUES($1,$2,$3,$4,'folder',$5,$6,now()+$7::interval) ON CONFLICT(user_id,request_id) DO NOTHING`,
@@ -282,11 +313,25 @@ func (a *App) koiImportFilePut(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{"uploadedFiles": uploaded, "bytes": total, "path": clean})
 }
 
-// Analysis has no upstream calls. Hold the preview lock through validation and
-// result storage; cancellation rolls back to a retryable state, never "analyzing".
+// Remote reads happen outside locks; folder analysis keeps uploaded bytes and
+// the saved preview consistent in one short transaction.
 func (a *App) koiImportAnalyze(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireKoiSkillUser(w, r, true)
 	if !ok {
+		return
+	}
+	view, err := a.loadKoiImport(r.Context(), a.db, user.ID, r.PathValue("importId"), false)
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	if view.SourceKind != "folder" {
+		view, err = a.analyzeKoiRemotePreview(r.Context(), user.ID, view)
+		if err != nil {
+			writeKoiError(w, err)
+			return
+		}
+		httpx.JSON(w, 200, map[string]any{"preview": view})
 		return
 	}
 	tx, err := a.db.Begin(r.Context())
@@ -295,7 +340,7 @@ func (a *App) koiImportAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	view, err := a.loadKoiImport(r.Context(), tx, user.ID, r.PathValue("importId"), true)
+	view, err = a.loadKoiImport(r.Context(), tx, user.ID, r.PathValue("importId"), true)
 	if err != nil {
 		writeKoiError(w, err)
 		return
@@ -317,20 +362,10 @@ func (a *App) koiImportAnalyze(w http.ResponseWriter, r *http.Request) {
 		writeKoiError(w, err)
 		return
 	}
-	previews := []koiSkillImportCandidate{}
-	for _, candidate := range candidates {
-		item := koiSkillImportCandidate{ID: candidate.ID, Name: candidate.Name, Description: candidate.Description,
-			EntryPath: candidate.EntryPath, Directory: candidate.Directory, MetadataFormat: candidate.MetadataFormat,
-			FileCount: candidate.FileCount, SizeBytes: candidate.SizeBytes, ContentSHA256: candidate.ContentSHA256,
-			License: candidate.License, Instructions: candidate.Instructions, Compatibility: candidate.Compatibility}
-		id, err := koiFolderInstallationID(r.Context(), tx, user.ID, candidate.ContentSHA256)
-		if err == nil {
-			item.InstalledID, item.InstalledStatus = id, "installed"
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			writeKoiError(w, err)
-			return
-		}
-		previews = append(previews, item)
+	previews, err := a.koiPreviewCandidates(r.Context(), tx, user.ID, view.SourceKind, view.Source, candidates)
+	if err != nil {
+		writeKoiError(w, err)
+		return
 	}
 	status, code := "ready", ""
 	if len(previews) == 0 {

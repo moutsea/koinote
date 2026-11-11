@@ -23,6 +23,8 @@ import { confirmAction } from "../confirmAction";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { useI18n } from "../i18n";
 import { clipDescription, notFoundTitle, publicPageMeta, repositoryPageTitle } from "../seoMeta";
+import { getKoiOverview, KOI_SETTINGS_QUERY_KEY, type KoiHubTarget } from "../koiSkills";
+import { KoiInstallDialog } from "../components/KoiInstallDialog";
 
 export function AgentPublicRepositoryPage() {
   const { repositoryId } = useParams({ from: "/repositories/$repositoryId" });
@@ -48,6 +50,23 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   const settings = useQuery({ queryKey: ["agent-workspace-settings"], queryFn: getAgentWorkspaceSettings, enabled: Boolean(member), retry: false });
   const detail = useQuery({ queryKey: ["public-agent-repository", id, user?.id], queryFn: () => getPublicAgentRepository(id), enabled: Number.isSafeInteger(id) && id > 0, retry: false });
   const repository = detail.data?.repository;
+  const koi = useQuery({ queryKey: [KOI_SETTINGS_QUERY_KEY, user?.authUserId], queryFn: getKoiOverview, enabled: Boolean(user && !user.isLocalMode), retry: false });
+  const [koiTarget, setKoiTarget] = useState<KoiHubTarget>();
+  const [koiMessage, setKoiMessage] = useState("");
+  const installHandled = useRef(false);
+  const hasSkills = Boolean(repository?.files.some((file) => /(^|\/)SKILL\.md$/.test(file.path)));
+  const canInstallKoi = Boolean(member && koi.data?.managementAvailable && koi.data.canInstall);
+  const openKoi = () => {
+    if (repository) setKoiTarget({ workspaceId: repository.workspaceId, name: repository.name, publicationId: repository.publicationId, revision: repository.revision });
+  };
+  // Login return opens the reviewed snapshot only; confirmation stays explicit.
+  useEffect(() => {
+    if (!routeSearch.installKoi || installHandled.current || !repository || !user || user.isLocalMode || koi.isPending) return;
+    installHandled.current = true;
+    void navigate({ to: "/repositories/$repositoryId", params: { repositoryId }, search: { ...directorySearch, file: selected }, replace: true, resetScroll: false });
+    if (canInstallKoi && hasSkills) openKoi();
+    else setKoiMessage(!member ? t.koi.koiMembersOnly : t.koi.koiUnavailable);
+  }, [routeSearch.installKoi, repository, user, koi.isPending, canInstallKoi, hasSkills]);
   // AppShell 的统一同步不管本页的标题和描述（见 seoMeta.pageOwnsMeta），由这里按仓库
   // 数据设置，与 Worker 首屏渲染的保持一致。
   // 数据回来之前不改：首屏已由 Worker 按仓库写好，先改成通用标题会闪一下。
@@ -242,6 +261,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
     {back}
     <header className="mt-6 border-b pb-6"><div className="flex items-start gap-3"><FolderGit2 className="mt-1 h-6 w-6 shrink-0 text-[var(--ink-mid)]" aria-hidden="true" /><h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{repository.name}</h1></div><p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-[var(--ink-mid)]">{repository.description}</p><div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-mid)]"><span className="rounded-full border px-2 py-0.5">{repository.systemManaged ? labels.hubSystemBadge : labels.hubPublicBadge}</span><span>{repository.license}</span><span>{labels.fileCount.replace("{count}", String(repository.files.length))}</span><span>{formatBytes(repository.files.reduce((total, file) => total + file.sizeBytes, 0))}</span><span>r{repository.revision}</span></div></header>
     <div className="mt-6 flex flex-wrap items-start gap-3">
+      {hasSkills && (!user || user.isLocalMode ? <a href={`/login?redirectTo=${encodeURIComponent(`/repositories/${repositoryId}?installKoi=true`)}`} className="rounded-full border px-4 py-2 text-sm">{t.koi.installToKoi} · {t.dashboard.goLogin}</a> : canInstallKoi ? <button type="button" disabled={busy || Boolean(koiTarget)} onClick={openKoi} className="rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{t.koi.installToKoi}</button> : null)}
       {!user || user.isLocalMode ? <Link to="/login" className="rounded-full border px-4 py-2 text-sm">{labels.starRepository} · {t.dashboard.goLogin}</Link> : <button type="button" disabled={star.isPending || busy} aria-pressed={repository.starred} onClick={() => star.mutate()} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm disabled:opacity-50"><Star className={`h-4 w-4 ${repository.starred ? "fill-current" : ""}`} />{repository.starred ? labels.unstarRepository : labels.starRepository} · {repository.starCount ?? 0}</button>}
       <LocalSyncMenu label={labels.cloneRepository} disabled={!repository.files.length || clone.isPending || sync.isPending} download={!isDesktopRuntime()} onKoinote={() => { clone.reset(); void clone.mutateAsync({ snapshot: repository, method: isDesktopRuntime() ? "home" : "zip" }).then((snapshot) => { if (activeCloneContext.current === cloneContext) setTransfer(snapshot); }).catch(() => {}); }} onAgent={() => { clone.reset(); void copy.copy(async () => publicRepositoryClonePrompt(await clone.mutateAsync({ snapshot: repository, method: "agent" }), locale)).catch(() => {}); }} />
       {!user || user.isLocalMode ? <Link to="/login" className="rounded-full border px-4 py-2 text-sm">{labels.forkRepository} · {t.dashboard.goLogin}</Link>
@@ -251,6 +271,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
       {ownership.data?.publication && <button type="button" className="rounded-full border px-4 py-2 text-sm disabled:opacity-50" disabled={withdraw.isPending || busy} onClick={async () => { if (await confirmAction(labels.revokeConfirm)) withdraw.mutate(); }}>{labels.revokeSharing}</button>}
     </div>
     {star.isError && <p role="alert" className="mt-3 text-sm">{labels.starFailed}</p>}
+    {koiMessage && <p role="alert" className="mt-3 text-sm">{koiMessage}</p>}
     {member && !settings.isPending && !settings.data?.enabled && <Link to="/space/settings" className="mt-2 inline-block text-xs underline">{labels.forkEnable}</Link>}
     {repository.githubSource && repository.syncDisabledReason && <p className="mt-3 text-sm text-[var(--ink-mid)]">{syncFeedback({ status: "skipped", code: repository.syncDisabledReason })}</p>}
     {fork.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{fork.error instanceof ApiError && fork.error.code === "revision_conflict" ? labels.sharingConflict : fork.error instanceof ApiError && fork.error.code === "agent_workspace_disabled" ? labels.forkEnable : githubImportErrorMessage(fork.error, labels, labels.forkFailed)}</p>}
@@ -277,5 +298,6 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
     </div>
     {transfer && <AgentWorkspaceTransferDialog workspace={transfer} source={publicAgentRepositoryTransferSource(transfer)} initialDestination={isDesktopRuntime() ? "home" : "zip"} onClose={() => setTransfer(null)} onComplete={(value) => { setTransfer(null); setMessage(value); }} />}
     {copy.dialog}
+    {koiTarget && canInstallKoi && user && <KoiInstallDialog authUserId={user.authUserId} hubTarget={koiTarget} onClose={() => setKoiTarget(undefined)} />}
   </PageContainer>;
 }

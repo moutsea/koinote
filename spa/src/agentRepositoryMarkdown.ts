@@ -14,8 +14,8 @@ export function repositoryFileHref(workspaceId: number, path: string, fragment?:
   return `/repositories/${workspaceId}${defaultStringifySearch({ file: path })}${fragment ? `#${encodeURIComponent(repositoryAnchorID(fragment))}` : ""}`;
 }
 
-export function parseRepositorySearch(search: Record<string, unknown>): RepositoryDirectorySearch & { file?: string } {
-  return { ...parseRepositoryDirectorySearch(search), file: typeof search.file === "string" && search.file.length <= 4096 ? search.file : undefined };
+export function parseRepositorySearch(search: Record<string, unknown>): RepositoryDirectorySearch & { file?: string; installKoi?: boolean } {
+  return { ...parseRepositoryDirectorySearch(search), file: typeof search.file === "string" && search.file.length <= 4096 ? search.file : undefined, ...(search.installKoi === true ? { installKoi: true } : {}) };
 }
 
 export function repositoryReadme(files: AgentWorkspaceFile[]) {

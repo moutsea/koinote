@@ -24,7 +24,8 @@ export function KoiSkillStatusBadge({ state }: { state: "enabled" | "disabled" |
 export function KoiSkillSourceLabel({ source }: { source: Record<string, unknown> }) {
  const { t } = useI18n();
  const directory = typeof source.directoryName === "string" ? source.directoryName : "";
- return <span className="max-w-64 truncate text-xs" style={{ color: "var(--ink-mid)" }}>{directory || t.koi.sourceFolder}</span>;
+ const label = source.kind === "github" ? `${t.koi.sourceGithub} · ${source.owner}/${source.repo}${source.path ? `/${source.path}` : ""}` : source.kind === "hub" ? `${t.koi.sourceHub} · ${source.name}` : directory || t.koi.sourceFolder;
+ return <span title={label} className="max-w-64 truncate text-xs" style={{ color: "var(--ink-mid)" }}>{label}</span>;
 }
 
 export function KoiEmptyState({ onInstall, canInstall, message }: { onInstall: () => void; canInstall: boolean; message: string }) {

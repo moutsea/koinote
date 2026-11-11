@@ -3,11 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"sort"
 
-	"github.com/jackc/pgx/v5"
 	"koinote/backend/internal/httpx"
 	"koinote/backend/internal/model"
 )
@@ -38,7 +36,7 @@ func (a *App) koiImportConfirm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	installed, err := a.confirmKoiFolder(r.Context(), user, r.PathValue("importId"), input)
+	installed, err := a.confirmKoiImport(r.Context(), user, r.PathValue("importId"), input)
 	if err != nil {
 		writeKoiError(w, err)
 		return
@@ -67,7 +65,7 @@ func koiCheckConfirmation(view koiSkillImportView, input koiImportConfirmation, 
 
 // Stage R2 bytes before locking the account. Installation, quota checking and
 // the confirmation receipt commit together, including after concurrent retries.
-func (a *App) confirmKoiFolder(ctx context.Context, user model.User, id string, input koiImportConfirmation) ([]koiSkillInstallation, error) {
+func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, input koiImportConfirmation) ([]koiSkillInstallation, error) {
 	raw, _ := json.Marshal(input)
 	hash := koiDigest(raw)
 	// Keep the preview and its uploaded bytes consistent with concurrent confirms
@@ -87,27 +85,49 @@ func (a *App) confirmKoiFolder(ctx context.Context, user model.User, id string, 
 	if view.Status == "committed" {
 		return view.Installed, nil
 	}
-	candidates, _, err := a.koiAnalyzeFolder(ctx, previewTx, view)
+	var candidates []koiSkillCandidate
+	if view.SourceKind == "folder" {
+		candidates, _, err = a.koiAnalyzeFolder(ctx, previewTx, view)
+		if err == nil {
+			err = previewTx.Commit(ctx)
+		}
+	} else {
+		err = previewTx.Commit(ctx)
+		if err == nil {
+			var analysis koiAnalysis
+			analysis, err = a.koiAnalyzeSource(ctx, user.ID, view.Source)
+			candidates = analysis.candidates
+		}
+	}
 	if err != nil {
+		// A concurrent confirm can reclaim the folder bytes or its source can vanish
+		// after another request committed. The durable receipt wins in either case.
+		latest, loadErr := a.loadKoiImport(ctx, a.db, user.ID, id, false)
+		if loadErr == nil && latest.Status == "committed" {
+			if checkErr := koiCheckConfirmation(latest, input, hash); checkErr != nil {
+				return nil, checkErr
+			}
+			return latest.Installed, nil
+		}
 		return nil, err
 	}
 	fresh := map[string]koiSkillCandidate{}
 	for _, candidate := range candidates {
 		fresh[candidate.ID] = candidate
 	}
-	reviewed := map[string]string{}
+	reviewed := map[string]koiSkillImportCandidate{}
 	for _, candidate := range view.Candidates {
-		reviewed[candidate.ID] = candidate.ContentSHA256
+		reviewed[candidate.ID] = candidate
 	}
 	selected := []koiSkillCandidate{}
 	files := []agentWorkspaceFile{}
 	seen := map[string]bool{}
 	for _, candidateID := range input.CandidateIDs {
 		candidate, ok := fresh[candidateID]
-		if !ok || reviewed[candidateID] != candidate.ContentSHA256 || !candidate.Compatibility.Conversation {
+		if !ok || reviewed[candidateID].ContentSHA256 != candidate.ContentSHA256 || !candidate.Compatibility.Conversation {
 			return nil, errKoiSkillConflict
 		}
-		if seen[candidate.ContentSHA256] {
+		if view.SourceKind == "folder" && seen[candidate.ContentSHA256] {
 			continue
 		}
 		seen[candidate.ContentSHA256] = true
@@ -116,8 +136,8 @@ func (a *App) confirmKoiFolder(ctx context.Context, user model.User, id string, 
 			files = append(files, agentWorkspaceFile{Path: file.Path, Content: file.Content, MimeType: file.MimeType, SHA256: file.SHA256})
 		}
 	}
-	if err = previewTx.Commit(ctx); err != nil {
-		return nil, err
+	if koiSourceText(view.Source, "updateFromId") != "" && len(selected) != 1 {
+		return nil, errKoiSkillConflict
 	}
 	staged, err := a.stageAgentRepositoryFilesForOwner(ctx, nil, files)
 	if err != nil {
@@ -148,35 +168,21 @@ func (a *App) confirmKoiFolder(ctx context.Context, user model.User, id string, 
 	}
 	enabled := input.Enable == nil || *input.Enable
 	installed := []koiSkillInstallation{}
-	for _, candidate := range selected {
-		installationID, err := koiFolderInstallationID(ctx, tx, user.ID, candidate.ContentSHA256)
-		if errors.Is(err, pgx.ErrNoRows) {
-			installationID, err = randomUUID()
-			if err != nil {
-				return nil, err
-			}
-			source := map[string]any{"kind": "folder", "directoryName": view.Source["directoryName"], "path": candidate.Directory}
-			encoded, _ := json.Marshal(source)
-			_, err = tx.Exec(ctx, `INSERT INTO koi_skill_installations(id,user_id,source_key,source_kind,source,name,description,enabled)
- VALUES($1,$2,$3,'folder',$4,$5,$6,$7)`, installationID, user.ID, "folder:"+installationID, encoded, candidate.Name, candidate.Description, enabled)
-			if err != nil {
-				return nil, err
-			}
-			versionID, err := a.koiWriteSkillVersion(ctx, tx, user.ID, installationID, candidate, staged)
-			if err != nil {
-				return nil, err
-			}
-			if _, err = tx.Exec(ctx, `UPDATE koi_skill_installations SET current_version_id=$2 WHERE id=$1`, installationID, versionID); err != nil {
-				return nil, err
-			}
-		} else if err != nil {
+	if view.SourceKind == "hub" {
+		if err = a.lockKoiHubSource(ctx, tx, view.Source); err != nil {
 			return nil, err
 		}
-		// An existing installation keeps its switch, including when disabled.
-		skill, err := a.loadKoiInstallation(ctx, tx, user.ID, installationID)
+	}
+	seenTargets := map[string]bool{}
+	for _, candidate := range selected {
+		skill, err := a.commitKoiCandidate(ctx, tx, user.ID, view, candidate, reviewed[candidate.ID], enabled, staged)
 		if err != nil {
 			return nil, err
 		}
+		if seenTargets[skill.ID] {
+			return nil, errKoiSkillConflict
+		}
+		seenTargets[skill.ID] = true
 		installed = append(installed, skill)
 	}
 	after, err := storageUsageForQuerier(ctx, tx, user.ID)

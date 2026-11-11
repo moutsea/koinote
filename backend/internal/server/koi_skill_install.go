@@ -349,9 +349,17 @@ func (a *App) koiRetainedBytes(ctx context.Context, q imageUsageQuerier, userID 
 	return retained, err
 }
 
-func (a *App) koiWriteSkillVersion(ctx context.Context, tx pgx.Tx, userID int, installationID string, candidate koiSkillCandidate, staged map[string]string) (string, error) {
+func (a *App) koiWriteSkillVersion(ctx context.Context, tx pgx.Tx, userID int, installationID string, candidate koiSkillCandidate, staged map[string]string, source map[string]any) (string, error) {
 	if candidate.ContentSHA256 != koiSkillContentDigest(candidate.Files) {
 		return "", errKoiSkillPackage
+	}
+	var existing string
+	err := tx.QueryRow(ctx, `SELECT id::text FROM koi_skill_versions WHERE installation_id=$1 AND content_sha256=$2`, installationID, candidate.ContentSHA256).Scan(&existing)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
 	}
 	rawMetadata, _ := json.Marshal(candidate.RawMetadata)
 	compatibility, _ := json.Marshal(candidate.Compatibility)
@@ -359,12 +367,13 @@ func (a *App) koiWriteSkillVersion(ctx context.Context, tx pgx.Tx, userID int, i
 	if err != nil {
 		return "", err
 	}
+	sourceJSON, _ := json.Marshal(source)
 	if _, err = tx.Exec(ctx, `INSERT INTO koi_skill_versions(id,installation_id,user_id,content_sha256,entry_path,name,description,
- raw_metadata,metadata_format,file_count,size_bytes,license,compatibility)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+ raw_metadata,metadata_format,file_count,size_bytes,license,compatibility,source_fixed)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		versionID, installationID, userID, candidate.ContentSHA256, candidate.EntryPath, candidate.Name, candidate.Description,
 		rawMetadata, candidate.MetadataFormat, candidate.FileCount, candidate.SizeBytes,
-		candidate.License, compatibility); err != nil {
+		candidate.License, compatibility, sourceJSON); err != nil {
 		return "", err
 	}
 	for index, file := range candidate.Files {
