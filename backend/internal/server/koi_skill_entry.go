@@ -10,9 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// These are Koinote entry limits, not universal Agent Skills limits.
+// These are Koinote parsing and source-read limits, not universal Agent Skills limits.
 const (
 	koiSkillEntryBytes   = 64 << 10
+	koiSkillFileBytes    = 128 << 10
+	koiSkillImportBytes  = 8 << 20
+	koiSkillImportFiles  = 512
 	koiSkillNameMaxRunes = 64
 )
 
