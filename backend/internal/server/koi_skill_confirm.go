@@ -86,6 +86,7 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 		return view.Installed, nil
 	}
 	var candidates []koiSkillCandidate
+	var freshSource map[string]any
 	if view.SourceKind == "folder" {
 		candidates, _, err = a.koiAnalyzeFolder(ctx, previewTx, view)
 		if err == nil {
@@ -97,6 +98,7 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 			var analysis koiAnalysis
 			analysis, err = a.koiAnalyzeSource(ctx, user.ID, view.Source)
 			candidates = analysis.candidates
+			freshSource = analysis.source
 		}
 	}
 	if err != nil {
@@ -162,6 +164,20 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 	if view.Status == "committed" {
 		return view.Installed, nil
 	}
+	settings, err := a.resolveKoiLibraryMode(ctx, tx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if view.SourceKind == "migration" {
+		if settings.LibraryMode != "legacy" {
+			return nil, errKoiSkillConflict
+		}
+		if err = a.lockKoiMigrationSources(ctx, tx, user.ID, freshSource, selected); err != nil {
+			return nil, err
+		}
+	} else if settings.LibraryMode == "legacy" {
+		return nil, errKoiMigrationRequired
+	}
 	before, err := storageUsageForQuerier(ctx, tx, user.ID)
 	if err != nil {
 		return nil, err
@@ -191,6 +207,11 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 	}
 	if after.Total() > a.storageQuotaFor(user) && after.Total() > before.Total() {
 		return nil, errAgentWorkspaceQuota
+	}
+	if view.SourceKind == "migration" {
+		if _, err = tx.Exec(ctx, `UPDATE agent_session_settings SET library_mode='installed',revision=revision+1 WHERE user_id=$1`, user.ID); err != nil {
+			return nil, err
+		}
 	}
 	result, _ := json.Marshal(map[string]any{"installed": installed, "confirmationHash": hash})
 	if _, err = tx.Exec(ctx, `UPDATE koi_skill_imports SET status='committed',result=$2,candidates='[]',updated_at=now() WHERE id=$1`, view.ID, result); err != nil {

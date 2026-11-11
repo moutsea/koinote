@@ -35,11 +35,15 @@ func (a *App) commitKoiCandidate(ctx context.Context, tx pgx.Tx, userID int, vie
 			return current, loadErr
 		}
 		if target != "" {
-			if revision < 1 || revision != current.Revision || current.SourceKind != view.SourceKind {
+			manualMigration := view.SourceKind == "folder" && current.SourceKind == "migration"
+			if revision < 1 || revision != current.Revision || current.SourceKind != view.SourceKind && !manualMigration {
 				return current, errKoiSkillConflict
 			}
 			if view.SourceKind != "folder" && koiRemoteSourceKey(view.SourceKind, current.Source) != key {
 				return current, errKoiSkillConflict
+			}
+			if manualMigration {
+				source = current.Source
 			}
 		}
 		if current.ContentSHA256 == candidate.ContentSHA256 {

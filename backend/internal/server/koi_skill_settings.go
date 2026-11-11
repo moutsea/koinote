@@ -10,14 +10,15 @@ import (
 )
 
 type koiSkillSettings struct {
-	AutoSkills bool  `json:"autoSkills"`
-	Revision   int64 `json:"revision"`
+	AutoSkills  bool   `json:"autoSkills"`
+	Revision    int64  `json:"revision"`
+	LibraryMode string `json:"libraryMode"`
 }
 
 func loadKoiSkillSettings(ctx context.Context, q imageUsageQuerier, userID int) (koiSkillSettings, error) {
-	settings := koiSkillSettings{AutoSkills: true, Revision: 1}
-	err := q.QueryRow(ctx, `SELECT auto_skills,revision FROM agent_session_settings WHERE user_id=$1`, userID).
-		Scan(&settings.AutoSkills, &settings.Revision)
+	settings := koiSkillSettings{AutoSkills: true, Revision: 1, LibraryMode: "installed"}
+	err := q.QueryRow(ctx, `SELECT auto_skills,revision,COALESCE(library_mode,'installed') FROM agent_session_settings WHERE user_id=$1`, userID).
+		Scan(&settings.AutoSkills, &settings.Revision, &settings.LibraryMode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return settings, nil
 	}
@@ -32,14 +33,26 @@ func (a *App) koiSettingsGet(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed := a.koiSkillAccountAllowed(user.AuthUserID)
 	settings, err := loadKoiSkillSettings(r.Context(), a.db, user.ID)
+	if err == nil && allowed {
+		settings, err = a.koiSettingsForUser(r.Context(), user.ID)
+	}
 	if err != nil {
 		writeKoiError(w, err)
 		return
+	}
+	var legacyCount int
+	if allowed && settings.LibraryMode == "legacy" {
+		err = a.db.QueryRow(r.Context(), `SELECT count(*) FROM agent_workspace_files f JOIN agent_workspaces w ON w.id=f.workspace_id WHERE w.user_id=$1 AND w.deleted_at IS NULL AND (f.path='SKILL.md' OR f.path LIKE '%/SKILL.md')`, user.ID).Scan(&legacyCount)
+		if err != nil {
+			writeKoiError(w, err)
+			return
+		}
 	}
 	httpx.JSON(w, 200, map[string]any{
 		"managementAvailable": allowed,
 		"canInstall":          allowed && user.MembershipTier == membershipTierLifetime,
 		"settings":            settings,
+		"legacySkillCount":    legacyCount,
 	})
 }
 
@@ -74,8 +87,8 @@ func (a *App) koiSettingsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	var settings koiSkillSettings
 	err = tx.QueryRow(r.Context(), `UPDATE agent_session_settings SET auto_skills=$2,revision=revision+1
- WHERE user_id=$1 AND revision=$3 RETURNING auto_skills,revision`, user.ID, *input.AutoSkills, input.ExpectedRevision).
-		Scan(&settings.AutoSkills, &settings.Revision)
+ WHERE user_id=$1 AND revision=$3 RETURNING auto_skills,revision,COALESCE(library_mode,'installed')`, user.ID, *input.AutoSkills, input.ExpectedRevision).
+		Scan(&settings.AutoSkills, &settings.Revision, &settings.LibraryMode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = errKoiSkillConflict
 	}

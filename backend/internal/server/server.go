@@ -274,6 +274,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/koi/skills", a.koiSkillsList)
 	mux.HandleFunc("PATCH /api/koi/skills/{skillId}", a.koiSkillPatch)
 	mux.HandleFunc("POST /api/koi/skills/{skillId}/check-update", a.koiSkillCheckUpdate)
+	mux.HandleFunc("POST /api/koi/skill-migration/skip", a.koiMigrationSkip)
 	mux.HandleFunc("GET /api/koi/skills/{skillId}", a.koiSkillGet)
 	mux.HandleFunc("GET /api/koi/skills/{skillId}/files/{fileId}", a.koiSkillFileGet)
 	mux.HandleFunc("DELETE /api/koi/skills/{skillId}", a.koiSkillDelete)

@@ -235,21 +235,22 @@ func TestKoiSettingsAndTaskProtocolBoundaries(t *testing.T) {
 	if !strings.Contains(list.Body.String(), skill.ID) {
 		t.Fatal("enabled Skill missing from filtered list")
 	}
-	// Article-bound sessions keep their existing tool scope in this batch.
+	// New article tasks use compatible installed Skills within their original
+	// document authority. Older tasks above keep their frozen protocol.
 	article := koiFolderRequest(t, a, user, "POST", "/api/documents/"+doc.DocID+"/koi-session", nil, 200)
 	var response struct {
 		Session agentSession `json:"session"`
 	}
 	json.Unmarshal(article.Body.Bytes(), &response)
 	articleTask := agentTestTask(t, a, user, response.Session, model.Document{}, "review article")
-	if len(articleTask.SkillSnapshot) != 0 {
-		t.Fatal("article entry was switched to installed Skills")
+	if len(articleTask.SkillSnapshot) == 0 || koiTaskLibraryMode(articleTask) != "installed" {
+		t.Fatal("article entry did not snapshot the installed library")
 	}
 	if err := a.prepareAgentConversationInput(ctx, &articleTask, input, ""); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(fmt.Sprint(input["policy"]), "koinote.find_skills") {
-		t.Fatal("article tool scope expanded")
+	if !strings.Contains(fmt.Sprint(input["policy"]), "koinote.find_skills") || strings.Contains(fmt.Sprint(input["policy"]), "koinote.propose_operations") {
+		t.Fatal("article Skill tools or write scope changed incorrectly")
 	}
 	if !automaticAgentSkills(ordinary) || koiTaskLibraryMode(ordinary) != "legacy" {
 		t.Fatal("existing task changed with allowlist/settings")

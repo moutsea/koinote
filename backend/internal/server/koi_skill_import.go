@@ -142,7 +142,32 @@ func (a *App) koiImportCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid import request")
 		return
 	}
-	if input.SourceKind == "github" || input.SourceKind == "hub" {
+	if input.SourceKind == "migration" && (len(input.DeclaredPaths) != 0 || input.DirectoryName != "" || input.RepositoryURL != "" || input.Ref != "" || input.Path != "" || input.WorkspaceID != 0 || input.PublicationID != "" || input.Revision != nil || input.UpdateFromID != "" || input.ExpectedRevision != 0) {
+		httpx.ErrorCode(w, 400, "bad_request", "Migration does not accept a separate source")
+		return
+	}
+	settings, err := a.koiSettingsForUser(r.Context(), user.ID)
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	if settings.LibraryMode == "legacy" && input.SourceKind != "migration" {
+		writeKoiError(w, errKoiMigrationRequired)
+		return
+	}
+	if input.SourceKind == "migration" && settings.LibraryMode != "legacy" {
+		var committed bool
+		err = a.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM koi_skill_imports WHERE user_id=$1 AND request_id=$2 AND source_kind='migration' AND status='committed')`, user.ID, input.RequestID).Scan(&committed)
+		if err != nil {
+			writeKoiError(w, err)
+			return
+		}
+		if !committed {
+			writeKoiError(w, errKoiImportState)
+			return
+		}
+	}
+	if input.SourceKind == "github" || input.SourceKind == "hub" || input.SourceKind == "migration" {
 		a.koiRemoteImportCreate(w, r, user, input)
 		return
 	}
@@ -178,7 +203,7 @@ func (a *App) koiImportCreate(w http.ResponseWriter, r *http.Request) {
 			writeKoiError(w, err)
 			return
 		}
-		if target.SourceKind != "folder" || input.ExpectedRevision != target.Revision {
+		if (target.SourceKind != "folder" && target.SourceKind != "migration") || input.ExpectedRevision != target.Revision {
 			writeKoiError(w, errKoiSkillConflict)
 			return
 		}

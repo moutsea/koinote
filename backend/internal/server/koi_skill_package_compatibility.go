@@ -1,9 +1,53 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"github.com/jackc/pgx/v5/pgconn"
 	"slices"
 	"strings"
 )
+
+const koiSkillEntryRulesVersion = 2
+
+type koiCompatibilityQuerier interface {
+	agentWorkspaceQuerier
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+// Entry capabilities changed when article Skills became available. Refresh
+// derived compatibility once; original package bytes and identities stay fixed.
+func refreshKoiSkillEntryCompatibility(ctx context.Context, q koiCompatibilityQuerier, userID int) error {
+	rows, err := q.Query(ctx, `SELECT v.id::text,v.raw_metadata FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id WHERE i.user_id=$1 AND i.deleted_at IS NULL AND v.rules_version<$2`, userID, koiSkillEntryRulesVersion)
+	if err != nil {
+		return err
+	}
+	type update struct {
+		id  string
+		raw map[string]any
+	}
+	var updates []update
+	for rows.Next() {
+		var item update
+		if err = rows.Scan(&item.id, &item.raw); err != nil {
+			rows.Close()
+			return err
+		}
+		updates = append(updates, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, item := range updates {
+		raw, _ := json.Marshal(koiSkillCompatibilityFor(item.raw))
+		if _, err = q.Exec(ctx, `UPDATE koi_skill_versions SET compatibility=$2,rules_version=$3 WHERE id=$1 AND rules_version<$3`, item.id, raw, koiSkillEntryRulesVersion); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 type koiSkillCompatibility struct {
 	Conversation  bool     `json:"conversation"`

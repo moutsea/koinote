@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleSlash, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useI18n } from "../i18n";
-import { KOI_SKILLS_QUERY_KEY } from "../koiSkills";
+import { KOI_SKILLS_QUERY_KEY, KOI_SETTINGS_QUERY_KEY } from "../koiSkills";
 import { PaperCard } from "./Ink";
 
 export function KoiSkillStatusBadge({ state }: { state: "enabled" | "disabled" | "unavailable" }) {
@@ -24,7 +24,7 @@ export function KoiSkillStatusBadge({ state }: { state: "enabled" | "disabled" |
 export function KoiSkillSourceLabel({ source }: { source: Record<string, unknown> }) {
  const { t } = useI18n();
  const directory = typeof source.directoryName === "string" ? source.directoryName : "";
- const label = source.kind === "github" ? `${t.koi.sourceGithub} · ${source.owner}/${source.repo}${source.path ? `/${source.path}` : ""}` : source.kind === "hub" ? `${t.koi.sourceHub} · ${source.name}` : directory || t.koi.sourceFolder;
+ const label = source.kind === "github" ? `${t.koi.sourceGithub} · ${source.owner}/${source.repo}${source.path ? `/${source.path}` : ""}` : source.kind === "hub" ? `${t.koi.sourceHub} · ${source.name}` : source.kind === "migration" ? `${t.koi.sourceMigration} · ${directory}` : directory || t.koi.sourceFolder;
  return <span title={label} className="max-w-64 truncate text-xs" style={{ color: "var(--ink-mid)" }}>{label}</span>;
 }
 
@@ -68,6 +68,7 @@ export function useKoiSkillStorageInvalidation(authUserId: string) {
  const client = useQueryClient();
  return () => Promise.all([
   client.invalidateQueries({ queryKey: [KOI_SKILLS_QUERY_KEY, authUserId] }),
+  client.invalidateQueries({ queryKey: [KOI_SETTINGS_QUERY_KEY, authUserId] }),
   client.invalidateQueries({ queryKey: ["storage-usage"] }),
  ]);
 }

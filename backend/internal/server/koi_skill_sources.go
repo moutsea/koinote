@@ -39,6 +39,9 @@ func koiSourceText(source map[string]any, key string) string {
 }
 
 func koiCandidateSource(source map[string]any, candidate koiSkillCandidate) map[string]any {
+	if koiSourceText(source, "kind") == "migration" {
+		return koiMigrationCandidateSource(source, candidate.ID)
+	}
 	result := map[string]any{}
 	for key, value := range source {
 		result[key] = value
@@ -56,7 +59,7 @@ func koiCandidateSource(source map[string]any, candidate koiSkillCandidate) map[
 // cannot silently take over an existing installation. Each package owns its path.
 func koiRemoteSourceKey(kind string, source map[string]any) string {
 	key := "repositoryId"
-	if kind == "hub" {
+	if kind == "hub" || kind == "migration" {
 		key = "workspaceId"
 	}
 	return kind + ":" + strconv.FormatInt(koiSourceID(source, key), 10) + ":" + koiSourceText(source, "path")
@@ -68,6 +71,8 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 	var root, license, dir string
 	var exact bool
 	switch kind {
+	case "migration":
+		return a.koiAnalyzeLegacyRepositories(ctx, userID)
 	case "github":
 		token, err := a.loadGitHubToken(ctx, userID)
 		if err != nil {
@@ -140,7 +145,7 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 	return koiAnalysis{candidates: candidates, rejected: rejected, source: source}, nil
 }
 
-func (a *App) koiPreviewCandidates(ctx context.Context, q agentWorkspaceQuerier, userID int, kind string, source map[string]any, candidates []koiSkillCandidate) ([]koiSkillImportCandidate, error) {
+func (a *App) koiPreviewCandidates(ctx context.Context, q koiCompatibilityQuerier, userID int, kind string, source map[string]any, candidates []koiSkillCandidate) ([]koiSkillImportCandidate, error) {
 	previews := []koiSkillImportCandidate{}
 	for _, candidate := range candidates {
 		item := koiSkillImportCandidate{ID: candidate.ID, Name: candidate.Name, Description: candidate.Description, EntryPath: candidate.EntryPath, Directory: candidate.Directory, MetadataFormat: candidate.MetadataFormat, FileCount: candidate.FileCount, SizeBytes: candidate.SizeBytes, ContentSHA256: candidate.ContentSHA256, License: candidate.License, Instructions: candidate.Instructions, Compatibility: candidate.Compatibility}
@@ -289,7 +294,7 @@ func (a *App) koiSkillCheckUpdate(w http.ResponseWriter, r *http.Request) {
 		writeKoiError(w, err)
 		return
 	}
-	if installed.SourceKind == "folder" {
+	if installed.SourceKind == "folder" || installed.SourceKind == "migration" {
 		httpx.JSON(w, 200, map[string]any{"status": "manual_only"})
 		return
 	}

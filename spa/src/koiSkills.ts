@@ -76,8 +76,8 @@ export type KoiPreview = {
   installed?: KoiSkill[];
 };
 
-export type KoiSettings = { autoSkills: boolean; revision: number };
-export type KoiOverview = { managementAvailable: boolean; canInstall: boolean; settings: KoiSettings };
+export type KoiSettings = { autoSkills: boolean; revision: number; libraryMode: "legacy" | "installed" };
+export type KoiOverview = { managementAvailable: boolean; canInstall: boolean; settings: KoiSettings; legacySkillCount: number };
 export type KoiSkillPage = { skills: KoiSkill[]; nextCursor: string; storage: { usedBytes: number } };
 export const KOI_SKILLS_QUERY_KEY = "koi-skills";
 export const KOI_SETTINGS_QUERY_KEY = "koi-settings";
@@ -94,7 +94,8 @@ export const setKoiSkillEnabled = (id: string, input: { expectedRevision: number
  apiJson<{ skill: KoiSkill }>(`/api/koi/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 export const deleteKoiSkill = (id: string, expectedRevision: number) =>
  apiJson<{ deleted: boolean; retainedBytes: number }>(`/api/koi/skills/${encodeURIComponent(id)}?expectedRevision=${expectedRevision}`, { method: "DELETE" });
-export type KoiImportInput = { requestId: string; source: "folder" | "github" | "hub"; declaredPaths?: string[]; directoryName?: string; repositoryUrl?: string; ref?: string; path?: string; workspaceId?: number; publicationId?: string; revision?: number; updateFromId?: string; expectedRevision?: number };
+export type KoiImportInput = { requestId: string; source: "folder" | "github" | "hub" | "migration"; declaredPaths?: string[]; directoryName?: string; repositoryUrl?: string; ref?: string; path?: string; workspaceId?: number; publicationId?: string; revision?: number; updateFromId?: string; expectedRevision?: number };
+export const skipKoiMigration = (expectedRevision: number) => apiJson<{ libraryMode: "installed" }>("/api/koi/skill-migration/skip", { method: "POST", body: JSON.stringify({ expectedRevision }) });
 export type KoiHubTarget = { workspaceId: number; name: string; publicationId: string; revision: number };
 export const checkKoiSkillUpdate = (id: string) => apiJson<{ status: "up_to_date" | "manual_only" | "source_unavailable" | "update_available"; preview?: KoiPreview }>(`/api/koi/skills/${encodeURIComponent(id)}/check-update`, { method: "POST", body: "{}" });
 export const createKoiImport = (input: KoiImportInput) =>
@@ -110,6 +111,7 @@ export const confirmKoiImport = (id: string, input: { requestId: string; preview
 
 // Stable error codes map to localized guidance; raw upstream text is never shown.
 const KOI_ERROR_LABELS: Record<string, string> = {
+ skill_migration_required: "legacyRequired",
  preview_expired: "koiPreviewExpired", preview_not_ready: "koiPreviewNotReady",
  skill_incompatible: "koiIncompatible", skill_invalid: "koiSkillInvalid",
  sensitive_data_detected: "koiSensitive", storage_quota_exceeded: "koiQuota",

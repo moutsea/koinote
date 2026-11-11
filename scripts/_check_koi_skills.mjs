@@ -40,7 +40,8 @@ try {
   const labels = zh.koi;
   state.i18n = { t: zh, locale: "zh" };
   let user = { id: 1, authUserId: "skills-one", membershipTier: "lifetime" };
-  let available = false, canInstall = true, settings = { autoSkills: true, revision: 1 };
+  let available = false, canInstall = true, settings = { autoSkills: true, revision: 1, libraryMode: "installed" };
+  let failMigration = false, loseSkip = false;
   let skills = [], preview, createInput, rejectNextToggle = true, loseConfirmation = true;
   let saveDelay, rejectRemote = false;
   const calls = [], uploads = [];
@@ -54,10 +55,16 @@ try {
       if (method === "PUT") {
         if (saveDelay) await saveDelay;
         assert.equal(body.expectedRevision, settings.revision);
-        settings = { autoSkills: body.autoSkills, revision: settings.revision + 1 };
+        settings = { ...settings, autoSkills: body.autoSkills, revision: settings.revision + 1 };
         return { settings: { ...settings } };
       }
-      return { managementAvailable: available, canInstall, settings: { ...settings } };
+      return { managementAvailable: available, canInstall, settings: { ...settings }, legacySkillCount: 2 };
+    }
+    if (url.pathname === "/api/koi/skill-migration/skip") {
+      assert.equal(body.expectedRevision, settings.revision);
+      settings = { ...settings, libraryMode: "installed", revision: settings.revision + 1 };
+      if (loseSkip) { loseSkip = false; throw new Error("response lost"); }
+      return { libraryMode: "installed" };
     }
     if (url.pathname === "/api/koi/skills") {
       const filtered = skills.filter((skill) => (!url.searchParams.get("q") || skill.name.includes(url.searchParams.get("q"))) && (!url.searchParams.get("state") || (skill.enabled ? "enabled" : "disabled") === url.searchParams.get("state")));
@@ -68,6 +75,7 @@ try {
       if (body.source !== "folder" && rejectRemote) throw new ApiError(403, "access denied", "github_token_required");
       preview = { id: "preview-one", status: "pending", revision: 1, sourceKind: "folder", source: {}, candidates: [], rejected: [], uploadedFiles: 0, rejectedFiles: 0, declaredFiles: body.declaredPaths?.length ?? 0, expiresAt: "2099-01-01T00:00:00Z" };
       if (body.source !== "folder") preview = { ...preview, status: "ready", revision: 2, sourceKind: body.source, source: { kind: body.source, repositoryUrl: body.repositoryUrl, ref: "main", commitSha: "a".repeat(40), name: "Hub review" }, candidates: [candidate] };
+      if (body.source === "migration") preview.candidates.push({ ...candidate, id: "candidate-other", name: "other" });
       return { preview: { ...preview } };
     }
     if (url.pathname === "/api/koi/skill-imports/preview-one/files") {
@@ -86,6 +94,8 @@ try {
     if (url.pathname.endsWith("/confirm")) {
       assert.equal(body.previewRevision, 2);
       assert.deepEqual(body.candidateIds, [candidate.id]);
+      if (preview.sourceKind === "migration" && failMigration) { failMigration = false; throw new ApiError(409, "full", "storage_quota_exceeded"); }
+      if (preview.sourceKind === "migration") settings = { ...settings, libraryMode: "installed", revision: settings.revision + 1 };
       skills = createInput.updateFromId ? [{ ...skills[0], versionId: "version-two", revision: skills[0].revision + 1 }] : [{ ...installed, sourceKind: createInput.source, source: { ...preview.source }, enabled: body.enable }];
       preview = { ...preview, status: "committed", candidates: [], installed: skills };
       if (loseConfirmation) { loseConfirmation = false; throw new Error("response lost"); }
@@ -228,6 +238,51 @@ try {
   await click(labels.confirmInstall.replace("{count}", "1"));
   assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmsBeforeHub + 1);
 
+  // Legacy accounts explicitly choose what to keep; failed confirmation keeps
+  // the old library, and a Hub entry resumes its original source after migration.
+  settings = { autoSkills: true, revision: 10, libraryMode: "legacy" };
+  client.clear();
+  await render();
+  assert.ok(document.body.textContent.includes(labels.legacyTitle));
+  assert.equal([...document.querySelectorAll("button")].some((button) => button.textContent === labels.installSkill), false, "legacy accounts choose their library before using install controls");
+  await click(labels.legacyAction);
+  assert.equal(createInput.source, "migration");
+  const otherCandidate = [...document.querySelectorAll('input[name="preview-candidate"]')].find((input) => input.parentElement.textContent.includes("other"));
+  await change(otherCandidate, {});
+  failMigration = true;
+  await click(labels.legacyConfirm.replace("{count}", "1"));
+  assert.equal(settings.libraryMode, "legacy");
+  assert.ok(document.body.textContent.includes(labels.koiQuota));
+  await click(labels.legacyConfirm.replace("{count}", "1"));
+  assert.equal(settings.libraryMode, "installed");
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.equal(skills.length, 1);
+
+  settings = { autoSkills: true, revision: 20, libraryMode: "legacy" };
+  client.clear();
+  const createsBeforeMigration = calls.filter((item) => item.path === "/api/koi/skill-imports").length;
+  await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(KoiInstallDialog, { key: "legacy-hub", authUserId: user.authUserId, hubTarget: { workspaceId: 7, name: "Original Hub", revision: 3, publicationId: "publication-one" }, onClose() {} }))));
+  await settle();
+  assert.ok(document.body.textContent.includes(labels.legacyTitle));
+  assert.equal(calls.filter((item) => item.path === "/api/koi/skill-imports").length, createsBeforeMigration, "Hub does not bypass the migration choice");
+  await click(labels.legacyAction);
+  await change([...document.querySelectorAll('input[name="preview-candidate"]')].find((input) => input.parentElement.textContent.includes("other")), {});
+  const confirmationsBeforeSwitch = calls.filter((item) => item.path.endsWith("/confirm")).length;
+  await click(labels.legacyConfirm.replace("{count}", "1"));
+  await settle();
+  assert.equal(settings.libraryMode, "installed");
+  assert.equal(createInput.source, "hub", "migration returns to the original Hub preview");
+  assert.equal(createInput.workspaceId, 7);
+  assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmationsBeforeSwitch + 1, "the resumed Hub source is not automatically confirmed");
+
+  settings = { autoSkills: true, revision: 30, libraryMode: "legacy" };
+  client.clear();
+  await render();
+  loseSkip = true;
+  await click(labels.legacySkip);
+  assert.equal(settings.libraryMode, "installed");
+  assert.equal(document.body.textContent.includes(labels.legacyTitle), false, "a lost empty-library response reconciles the actual mode");
+
   // Account-scoped data and UI reset together; a non-member can read/remove but
   // cannot install or change automatic discovery.
   user = { id: 2, authUserId: "skills-two", membershipTier: "free" };
@@ -247,7 +302,7 @@ try {
     env: { ...process.env, KOINOTE_TEST_IMPORT_REQUESTS: requestsPath },
     stdio: "inherit", timeout: 300_000,
   });
-  console.log("Koi Skill UI passed: rollout gate, settings, folder selection/upload, partial rejection, confirmation recovery, replacement, GitHub retries/updates, Hub preview, file preview and account isolation");
+  console.log("Koi Skill UI passed: rollout gate, settings, folder installation/replacement, GitHub/Hub previews, migration selection/retry, Hub continuation, empty-library recovery, file preview and account isolation");
 } finally {
   if (root) await act(async () => root.unmount());
   client?.clear();

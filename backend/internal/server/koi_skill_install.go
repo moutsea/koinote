@@ -74,9 +74,12 @@ type koiSkillFileView struct {
 	SHA256    string `json:"sha256"`
 }
 
-func (a *App) loadKoiInstallation(ctx context.Context, q imageUsageQuerier, userID int, id string) (koiSkillInstallation, error) {
+func (a *App) loadKoiInstallation(ctx context.Context, q koiCompatibilityQuerier, userID int, id string) (koiSkillInstallation, error) {
 	if !validUUID(id) {
 		return koiSkillInstallation{}, errKoiSkillNotFound
+	}
+	if err := refreshKoiSkillEntryCompatibility(ctx, q, userID); err != nil {
+		return koiSkillInstallation{}, err
 	}
 	return scanKoiInstallation(q.QueryRow(ctx, `SELECT `+koiInstallationColumns+` FROM koi_skill_installations i
  JOIN koi_skill_versions v ON v.id=i.current_version_id
@@ -96,6 +99,10 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 	query, state := strings.TrimSpace(r.URL.Query().Get("q")), r.URL.Query().Get("state")
 	if len(query) > 800 || (state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid Skill filter")
+		return
+	}
+	if err := refreshKoiSkillEntryCompatibility(r.Context(), a.db, user.ID); err != nil {
+		writeKoiError(w, err)
 		return
 	}
 	rows, err := a.db.Query(r.Context(), `SELECT `+koiInstallationColumns+` FROM koi_skill_installations i
@@ -369,11 +376,11 @@ func (a *App) koiWriteSkillVersion(ctx context.Context, tx pgx.Tx, userID int, i
 	}
 	sourceJSON, _ := json.Marshal(source)
 	if _, err = tx.Exec(ctx, `INSERT INTO koi_skill_versions(id,installation_id,user_id,content_sha256,entry_path,name,description,
- raw_metadata,metadata_format,file_count,size_bytes,license,compatibility,source_fixed)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+ raw_metadata,metadata_format,file_count,size_bytes,license,compatibility,source_fixed,rules_version)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		versionID, installationID, userID, candidate.ContentSHA256, candidate.EntryPath, candidate.Name, candidate.Description,
 		rawMetadata, candidate.MetadataFormat, candidate.FileCount, candidate.SizeBytes,
-		candidate.License, compatibility, sourceJSON); err != nil {
+		candidate.License, compatibility, sourceJSON, koiSkillEntryRulesVersion); err != nil {
 		return "", err
 	}
 	for index, file := range candidate.Files {

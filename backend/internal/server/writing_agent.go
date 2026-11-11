@@ -150,7 +150,16 @@ func (a *App) writingConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := a.db.Query(r.Context(), `SELECT w.id,w.name,f.path FROM agent_workspaces w JOIN agent_workspace_files f ON f.workspace_id=w.id WHERE w.user_id=$1 AND w.deleted_at IS NULL AND (f.path='SKILL.md' OR f.path LIKE '%/SKILL.md') ORDER BY w.name,f.path LIMIT 200`, user.ID)
+	discoverRepositories := true
+	if a.koiSkillAccountAllowed(user.AuthUserID) {
+		settings, err := a.koiSettingsForUser(r.Context(), user.ID)
+		if err != nil {
+			writingError(w, err)
+			return
+		}
+		discoverRepositories = settings.LibraryMode == "legacy" && settings.AutoSkills
+	}
+	rows, err := a.db.Query(r.Context(), `SELECT w.id,w.name,f.path FROM agent_workspaces w JOIN agent_workspace_files f ON f.workspace_id=w.id WHERE w.user_id=$1 AND $2::boolean AND w.deleted_at IS NULL AND (f.path='SKILL.md' OR f.path LIKE '%/SKILL.md') ORDER BY w.name,f.path LIMIT 200`, user.ID, discoverRepositories)
 	if err != nil {
 		writingError(w, err)
 		return
@@ -322,6 +331,19 @@ func (a *App) writingTaskCreate(w http.ResponseWriter, r *http.Request) {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		writingError(w, err)
 		return
+	}
+	// Receipt recovery above retains its frozen payload. A new legacy-format
+	// request must not restore a repository Skill after migration or disablement.
+	if (in.SkillRepositoryID != 0 || in.SkillPath != "") && a.koiSkillAccountAllowed(user.AuthUserID) {
+		settings, modeErr := a.resolveKoiLibraryMode(r.Context(), tx, user.ID)
+		if modeErr != nil {
+			writingError(w, modeErr)
+			return
+		}
+		if settings.LibraryMode != "legacy" || !settings.AutoSkills {
+			httpx.ErrorCode(w, 400, "skill_unavailable", "Repository Skill selection is no longer available; use Koi AI in the current editor")
+			return
+		}
 	}
 	var active int
 	err = tx.QueryRow(r.Context(), `SELECT count(*) FROM writing_agent_tasks WHERE user_id=$1 AND status NOT IN ('completed','failed','cancelled')`, user.ID).Scan(&active)

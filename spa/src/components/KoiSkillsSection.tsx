@@ -247,11 +247,11 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {canInstall && <button type="button" disabled={busy} onClick={() => {
             check.reset(); toggle.reset(); remove.reset();
-            if (skill.sourceKind === "folder") { setUpdatePreview(undefined); setUpdateOpen(true); }
+            if ((skill.sourceKind === "folder" || skill.sourceKind === "migration")) { setUpdatePreview(undefined); setUpdateOpen(true); }
             else check.mutate();
           }} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>
             <RefreshCw className={`h-3.5 w-3.5 ${check.isPending ? "animate-spin" : ""}`} />
-            {skill.sourceKind === "folder" ? labels.uploadNewVersion : check.isPending ? labels.checkingUpdate : labels.checkUpdate}
+            {(skill.sourceKind === "folder" || skill.sourceKind === "migration") ? labels.uploadNewVersion : check.isPending ? labels.checkingUpdate : labels.checkUpdate}
           </button>}
           <label className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "var(--ink-line)" }}>
             <input
@@ -277,6 +277,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
       </div>
       {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
       {check.data && !updateOpen && check.data.status !== "update_available" && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{check.data.status === "up_to_date" ? labels.upToDate : check.data.status === "source_unavailable" ? labels.sourceUnavailable : labels.manualOnly}</p>}
+      <p role="note" className="text-xs" style={{ color: "var(--ink-mid)" }}>{skill.compatibility.article ? labels.entryBoth : labels.entryConversation}</p>
       <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={labels.versionLabel} value={skill.version} />
         <Fact label={labels.filesLabel} value={String(skill.fileCount)} />
@@ -303,7 +304,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
       )}
 
       <KoiSkillFiles key={`${skill.id}:${skill.versionId}`} user={user} skill={skill} files={files} instructions={instructions} />
-      {updateOpen && canInstall && <KoiInstallDialog authUserId={userId} updateTarget={skill.sourceKind === "folder" ? skill : undefined} resumePreview={updatePreview} onClose={() => { setUpdateOpen(false); setUpdatePreview(undefined); check.reset(); void reconcile(); }} />}
+      {updateOpen && canInstall && <KoiInstallDialog authUserId={userId} updateTarget={(skill.sourceKind === "folder" || skill.sourceKind === "migration") ? skill : undefined} resumePreview={updatePreview} onClose={() => { setUpdateOpen(false); setUpdatePreview(undefined); check.reset(); void reconcile(); }} />}
     </section>
   );
 }

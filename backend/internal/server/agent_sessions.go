@@ -515,8 +515,8 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	advice := agentAdviceOnly(in.Message)
 	_, err = tx.Exec(r.Context(), `INSERT INTO writing_agent_tasks(id,user_id,doc_id,request_key,input_hash,message,source,skill,reservation_id,reserved_credits,deadline,session_id,storage_budget_bytes,permission_revision,advice_only,conversation_task,intent_version,intent_state) VALUES($1::uuid,$2,$3,$4,$5,$6,$7,$8,$1::text,$9,now()+interval '24 hours',$10,$11,$12,$13,true,$14,$15)`, taskID, u.ID, source.DocID, in.RequestID, hash, in.Message, sourceJSON, skill, writingReservationCredits, s.ID, agentTaskStorageBudget, s.Revision, advice, intentVersion, intentState)
-	if err == nil && s.WriteDocumentID == "" && a.koiSkillAccountAllowed(u.AuthUserID) {
-		err = a.pinKoiTaskSkills(r.Context(), tx, u, taskID)
+	if err == nil && a.koiSkillAccountAllowed(u.AuthUserID) {
+		err = a.pinKoiTaskSkills(r.Context(), tx, u, taskID, s.WriteDocumentID != "")
 	}
 	if err == nil && in.SupersedeTaskID != "" {
 		_, err = tx.Exec(r.Context(), `UPDATE agent_operations SET status='superseded',updated_at=now() WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE id=$1 AND session_id=$2) AND status='pending'`, in.SupersedeTaskID, s.ID)

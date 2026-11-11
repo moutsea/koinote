@@ -24,25 +24,33 @@ type koiTaskSkill struct {
 	Compatibility  koiSkillCompatibility
 }
 
-// Only new bottom-panel tasks on allowlisted accounts use the installed library.
+// Only new tasks on allowlisted accounts use the selected account library.
 // The caller holds the account lock shared with confirmation, enable and delete.
 type koiTaskSkillSnapshot struct {
 	Revision           int64  `json:"revision"`
 	LibraryMode        string `json:"libraryMode"`
 	AutomaticDiscovery bool   `json:"automaticDiscovery"`
+	Article            bool   `json:"article,omitempty"`
 }
 
-func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, taskID string) error {
-	settings, err := loadKoiSkillSettings(ctx, tx, user.ID)
+func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, taskID string, article bool) error {
+	settings, err := a.resolveKoiLibraryMode(ctx, tx, user.ID)
 	if err != nil {
 		return err
 	}
-	snapshot := koiTaskSkillSnapshot{Revision: settings.Revision, LibraryMode: "installed", AutomaticDiscovery: settings.AutoSkills}
-	if settings.AutoSkills {
+	snapshot := koiTaskSkillSnapshot{Revision: settings.Revision, LibraryMode: settings.LibraryMode, AutomaticDiscovery: settings.AutoSkills, Article: article}
+	if article && settings.LibraryMode == "legacy" {
+		snapshot.AutomaticDiscovery = false
+	}
+	if snapshot.AutomaticDiscovery && settings.LibraryMode == "installed" {
+		if err = refreshKoiSkillEntryCompatibility(ctx, tx, user.ID); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO agent_task_skill_versions(task_id,version_id)
  SELECT $1,v.id FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id
  WHERE i.user_id=$2 AND i.deleted_at IS NULL AND i.enabled
- AND COALESCE((v.compatibility->>'conversation')::boolean,false)`, taskID, user.ID)
+ AND COALESCE((v.compatibility->>'conversation')::boolean,false)
+ AND (NOT $3 OR COALESCE((v.compatibility->>'article')::boolean,false))`, taskID, user.ID, article)
 		if err != nil {
 			return err
 		}
@@ -58,6 +66,8 @@ func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, 
 // Load the task's pinned skills for discovery. Only versions recorded on the
 // task are visible; later library changes only affect subsequent tasks.
 func (a *App) koiTaskSkills(ctx context.Context, task writingTask) ([]koiTaskSkill, error) {
+	var snapshot koiTaskSkillSnapshot
+	_ = json.Unmarshal(task.SkillSnapshot, &snapshot)
 	rows, err := a.db.Query(ctx, `SELECT i.id::text,v.id::text,v.name,v.description,v.entry_path,v.file_count,v.size_bytes,v.compatibility
  FROM agent_task_skill_versions refs
  JOIN koi_skill_versions v ON v.id=refs.version_id
@@ -77,7 +87,7 @@ func (a *App) koiTaskSkills(ctx context.Context, task writingTask) ([]koiTaskSki
 			return nil, err
 		}
 		_ = json.Unmarshal(compatibility, &skill.Compatibility)
-		if !skill.Compatibility.Conversation {
+		if !skill.Compatibility.Conversation || snapshot.Article && !skill.Compatibility.Article {
 			continue
 		}
 		skills = append(skills, skill)

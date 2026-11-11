@@ -25,7 +25,7 @@ func automaticAgentSkills(t writingTask) bool {
 		return false
 	}
 	var snapshot koiTaskSkillSnapshot
-	if json.Unmarshal(t.SkillSnapshot, &snapshot) == nil && snapshot.LibraryMode == "installed" {
+	if json.Unmarshal(t.SkillSnapshot, &snapshot) == nil && (snapshot.LibraryMode == "installed" || snapshot.LibraryMode == "legacy") {
 		return snapshot.AutomaticDiscovery
 	}
 	// Tasks accepted before the snapshot existed keep their original protocol.
@@ -43,7 +43,7 @@ func usesExplicitAgentSkill(t writingTask) bool {
 		return true
 	}
 	var snapshot koiTaskSkillSnapshot
-	if json.Unmarshal(t.SkillSnapshot, &snapshot) == nil && snapshot.LibraryMode == "installed" {
+	if json.Unmarshal(t.SkillSnapshot, &snapshot) == nil && (snapshot.LibraryMode == "installed" || snapshot.LibraryMode == "legacy") {
 		return false
 	}
 	return !automaticAgentSkills(t)
