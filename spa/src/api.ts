@@ -2304,6 +2304,7 @@ export type StorageUsage = {
   configBytes?: number;
   agentAllocatedBytes?: number;
   agentSessionBytes?: number;
+  koiSkillBytes?: number;
   quotaBytes: number;
 };
 

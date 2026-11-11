@@ -880,6 +880,7 @@ export const ja: Messages = {
     },
   },
   koi: {
+    skillStorageLabel: "Skill の使用量",
     title: "Koi AI",
     subtitle: "Koi との共同作業の方法と外部サービスの認証を管理します。",
     localMode: "完全ローカルモードは Koi クラウドに接続しません。設定を管理するにはアカウントモードに切り替えてください。",

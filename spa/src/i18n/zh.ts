@@ -866,6 +866,7 @@ export const zh: Messages = {
     },
   },
   koi: {
+    skillStorageLabel: "技能占用",
     title: "Koi AI",
     subtitle: "管理 Koi 的协作方式与外部授权。",
     localMode: "完全本地模式不连接 Koi 云端。请切换到账号模式后管理设置。",

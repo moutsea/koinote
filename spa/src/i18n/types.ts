@@ -515,6 +515,7 @@ export interface Messages {
     };
   };
   koi: {
+    skillStorageLabel: string;
     title: string;
     subtitle: string;
     localMode: string;

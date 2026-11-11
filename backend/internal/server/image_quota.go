@@ -70,6 +70,8 @@ func (a *App) storageQuotaFor(user model.User) int64 {
 // 一个存了 400 MB 图片的人可能会去删文档，白费功夫。
 type storageBreakdown struct {
 	AgentSessionBytes int64
+	// Current Skill versions and historical versions retained by active tasks.
+	KoiSkillBytes int64
 	// DocumentBytes 是文档正文、标题、封面地址与提示词的字节数（Postgres 里的 text）
 	DocumentBytes int64
 	// ImageBytes 是图床对象的字节数（R2）
@@ -81,7 +83,7 @@ type storageBreakdown struct {
 }
 
 func (s storageBreakdown) Total() int64 {
-	return s.DocumentBytes + s.ImageBytes + s.ConfigBytes + s.AgentAllocatedBytes + s.AgentSessionBytes
+	return s.DocumentBytes + s.ImageBytes + s.ConfigBytes + s.AgentAllocatedBytes + s.AgentSessionBytes + s.KoiSkillBytes
 }
 
 // storageUsageFor 查某用户占用的云端存储。
@@ -123,8 +125,8 @@ func storageUsageForQuerier(
 				SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $1
 			), 0),
 			COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $1), 0),
- agent_session_storage_bytes($1)
-	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes, &out.ConfigBytes, &out.AgentAllocatedBytes, &out.AgentSessionBytes)
+ agent_session_storage_bytes($1), koi_skill_storage_bytes($1)
+	`, userID).Scan(&out.DocumentBytes, &out.ImageBytes, &out.ConfigBytes, &out.AgentAllocatedBytes, &out.AgentSessionBytes, &out.KoiSkillBytes)
 	return out, err
 }
 
@@ -195,7 +197,7 @@ func (a *App) recordImageObject(
 				 FROM documents WHERE user_id = $2), 0)
 			+ COALESCE(
 				(SELECT SUM(bytes) FROM config_snapshots WHERE user_id = $2), 0)
-			+ COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0) + agent_session_storage_bytes($2)
+			+ COALESCE((SELECT allocated_bytes FROM agent_workspace_storage_quotas WHERE user_id = $2), 0) + agent_session_storage_bytes($2) + koi_skill_storage_bytes($2)
 			+ $3::bigint <= $4
 		) OR (
 			$5::text = 'wechat-export'
@@ -304,6 +306,7 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 		"configBytes":         used.ConfigBytes,
 		"agentAllocatedBytes": used.AgentAllocatedBytes,
 		"agentSessionBytes":   used.AgentSessionBytes,
+		"koiSkillBytes":       used.KoiSkillBytes,
 		"quotaBytes":          a.storageQuotaFor(user),
 	})
 }
@@ -382,6 +385,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 			"configBytes":         used.ConfigBytes,
 			"agentAllocatedBytes": used.AgentAllocatedBytes,
 			"agentSessionBytes":   used.AgentSessionBytes,
+			"koiSkillBytes":       used.KoiSkillBytes,
 			"quotaBytes":          quotaBytes,
 		})
 		return
@@ -409,6 +413,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		"configBytes":         used.ConfigBytes,
 		"agentAllocatedBytes": used.AgentAllocatedBytes,
 		"agentSessionBytes":   used.AgentSessionBytes,
+		"koiSkillBytes":       used.KoiSkillBytes,
 		"quotaBytes":          quotaBytes,
 	})
 }

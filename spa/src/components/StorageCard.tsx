@@ -36,7 +36,7 @@ const LEVEL_COLOR: Record<UsageLevel, string> = {
 /**
  * 云端存储用量卡片。
  *
- * 展示文档、图片、加密配置和已划拨给仓库的额外容量。
+ * 展示文档、图片、加密配置、仓库分配、会话和 Skill 的存储占用。
  *
  * 放在控制台的账户信息卡下面 —— 它比邮箱、注册时间更需要被看到，尤其是快满的时候。
  */
@@ -66,13 +66,13 @@ export function StorageCard() {
     );
   }
 
-  const { usedBytes, documentBytes, imageBytes, configBytes = 0, agentAllocatedBytes = 0, agentSessionBytes = 0, quotaBytes } = usage.data;
+  const { usedBytes, documentBytes, imageBytes, configBytes = 0, agentAllocatedBytes = 0, agentSessionBytes = 0, koiSkillBytes = 0, quotaBytes } = usage.data;
   const level = usageLevel(usedBytes, quotaBytes);
   const ratio = usageRatio(usedBytes, quotaBytes);
   const color = LEVEL_COLOR[level];
 
-  // 文档、配置、图片和仓库分配分别展示；各段之和不超过 100%。
-  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes, agentAllocatedBytes, agentSessionBytes);
+  // 各类占用分别展示；各段之和不超过 100%。
+  const segments = barSegments(documentBytes, imageBytes, quotaBytes, configBytes, agentAllocatedBytes, agentSessionBytes, koiSkillBytes);
 
   // 接近上限时各段都转朱砂：此时"哪部分占得多"已经不重要，
   // 重要的是"满了"。正常状态下才用多色区分
@@ -130,6 +130,7 @@ export function StorageCard() {
           style={{ width: `${segments.agent}%`, background: barColors.agent }}
         />
         <div className="h-full" style={{ width: `${segments.sessions}%`, background: "var(--ink-strong)" }} />
+        <div className="h-full" style={{ width: `${segments.skills}%`, background: "var(--cinnabar)" }} />
       </div>
 
       {/* 分项：满了之后要知道该删什么。只报总数的话，一个存了 400 MB 图片的人
@@ -177,6 +178,7 @@ export function StorageCard() {
           <dd style={{ color: "var(--ink-strong)" }}>{formatBytes(agentAllocatedBytes, locale)}</dd>
         </div>}
         {agentSessionBytes > 0 && <div className="flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: "var(--ink-strong)" }} /><dt>Agent {agentPanelText[locale].storage}</dt><dd>{formatBytes(agentSessionBytes, locale)}</dd></div>}
+        {koiSkillBytes > 0 && <div className="flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: "var(--cinnabar)" }} /><dt>{t.koi.skillStorageLabel}</dt><dd>{formatBytes(koiSkillBytes, locale)}</dd></div>}
       </dl>
 
       {/* 只在需要提醒时出文字。正常状态下多一行字是噪音 */}

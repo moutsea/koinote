@@ -44,7 +44,7 @@ export function remainingBytes(usedBytes: number, quotaBytes: number): number {
 /**
  * 分段进度条各段的宽度（百分比）。
  *
- * 控制台把条分成「文档」「配置」「图片」「仓库分配」四段。各段之和绝不能超过 100 —— 它们是 flex 子项，
+ * 按文档、配置、图片、仓库分配、会话和 Skill 分段。各段之和绝不能超过 100 —— 它们是 flex 子项，
  * 超了会把前一段挤出去或溢出圆角容器。
  *
  * 分别算各自占配额的比例、再给图片段封顶，而不是「先算总比例再按各自权重切」：
@@ -60,7 +60,8 @@ export function barSegments(
   configBytes = 0,
   agentAllocatedBytes = 0,
   agentSessionBytes = 0,
-): { documents: number; config: number; images: number; agent: number; sessions: number } {
+  koiSkillBytes = 0,
+): { documents: number; config: number; images: number; agent: number; sessions: number; skills: number } {
   const documents = usageRatio(documentBytes, quotaBytes) * 100;
   const config = Math.min(
     Math.max(0, 100 - documents),
@@ -76,7 +77,8 @@ export function barSegments(
     usageRatio(agentAllocatedBytes, quotaBytes) * 100,
   );
   const sessions = Math.min(Math.max(0, 100 - documents - config - images - agent), usageRatio(agentSessionBytes, quotaBytes) * 100);
-  return { documents, config, images, agent, sessions };
+  const skills = Math.min(Math.max(0, 100 - documents - config - images - agent - sessions), usageRatio(koiSkillBytes, quotaBytes) * 100);
+  return { documents, config, images, agent, sessions, skills };
 }
 
 const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;

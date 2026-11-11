@@ -889,6 +889,7 @@ export const en: Messages = {
     },
   },
   koi: {
+    skillStorageLabel: "Skill storage",
     title: "Koi AI",
     subtitle: "Manage how Koi works with you and connects to external services.",
     localMode: "Fully local mode does not connect to Koi cloud. Switch to account mode to manage settings.",

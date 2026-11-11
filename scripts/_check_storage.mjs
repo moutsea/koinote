@@ -221,6 +221,13 @@ function segments(docBytes, imgBytes, quota, configBytes = 0) {
   eq("仓库分配不可为负", barSegments(0, 0, 100, 0, -1).agent, 0);
 }
 
+{
+  const result = barSegments(10, 20, 100, 5, 10, 5, 20);
+  eq("技能容量分段", result.skills, 20);
+  eq("包含技能的总用量", Object.values(result).reduce((a, b) => a + b, 0), 70);
+  eq("技能分段不超出剩余空间", barSegments(80, 0, 100, 0, 0, 0, 50).skills, 20);
+}
+
 // ---------- 阈值常量 ----------
 ok("阈值在 0 与 1 之间", NEAR_LIMIT_RATIO > 0 && NEAR_LIMIT_RATIO < 1, NEAR_LIMIT_RATIO);
 
