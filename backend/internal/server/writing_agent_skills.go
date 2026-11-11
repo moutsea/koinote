@@ -56,18 +56,26 @@ func (a *App) writingSkillPackage(ctx context.Context, userID int, repositoryID 
 		if path.Base(skillPath) != "SKILL.md" || path.Clean(skillPath) != skillPath || strings.HasPrefix(skillPath, "/") || strings.Contains(skillPath, "../") {
 			return nil, fmt.Errorf("invalid skill path")
 		}
-		dir := path.Dir(skillPath)
-		prefix := ""
-		if dir != "." {
-			prefix = dir + "/"
+		dir := koiSkillDirOf(skillPath)
+		byPath := make(map[string]koiSkillFile, len(view.Files))
+		for _, file := range view.Files {
+			byPath[file.Path] = koiSkillFile{Path: file.Path}
 		}
+		// Select the package before reading bytes or applying limits. Nested
+		// SKILL.md directories are independent packages, even when their files
+		// are too large or unavailable. Ancestor notices remain an install-time
+		// concern; keep the existing repository runtime envelope unchanged.
+		needed := koiSkillNeededPaths(byPath, dir, true)
 		found := false
 		total := 0
 		for _, file := range view.Files {
-			if !strings.HasPrefix(file.Path, prefix) {
+			if !needed[file.Path] || !koiSkillUnder(dir, file.Path) {
 				continue
 			}
-			rel := strings.TrimPrefix(file.Path, prefix)
+			rel := file.Path
+			if dir != "" {
+				rel = strings.TrimPrefix(rel, dir+"/")
+			}
 			if file.SizeBytes > 128<<10 || (rel != "SKILL.md" && len(files) >= 31) {
 				return nil, fmt.Errorf("skill package exceeds limits")
 			}

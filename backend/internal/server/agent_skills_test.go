@@ -83,7 +83,11 @@ func TestAgentAutomaticSkillsCatalogAndLazyLoad(t *testing.T) {
 	task.WorkspaceID = "isolated-skill-task"
 	ctx := context.WithValue(context.Background(), writingMCPContext{}, task)
 	instructions := "---\nname: review\ndescription: 检查文章结构\ndisable-model-invocation: true\nuser-invocable: false\nrequiredTools: [web_fetch]\nscripts:\n  check: scripts/check.py\nruntime:\n  kind: python\n---\nOnly review; never rewrite without a request."
-	files := map[string]string{"review/SKILL.md": instructions, "review/scripts/check.py": "print(55)", "unrelated.txt": "excluded"}
+	files := map[string]string{
+		"review/SKILL.md": instructions, "review/scripts/check.py": "print(55)", "unrelated.txt": "excluded",
+		"review/nested/SKILL.md":  "# Independent skill",
+		"review/nested/large.txt": strings.Repeat("x", 129<<10),
+	}
 	repo := agentSkillRepositoryForTest(t, a, u.ID, files)
 	foreign := agentSkillRepositoryForTest(t, a, other.ID, files)
 	many := map[string]string{}
@@ -96,12 +100,15 @@ func TestAgentAutomaticSkillsCatalogAndLazyLoad(t *testing.T) {
 		t.Fatalf("catalog first page: %v %v", page, err)
 	}
 	_, next, err := a.agentFindSkills(ctx, nil, agentSearchInput{Limit: 100, Cursor: page["nextCursor"].(string)})
-	if err != nil || len(next["skills"].([]map[string]any)) != 4 || next["nextCursor"] != "" {
+	if err != nil || len(next["skills"].([]map[string]any)) != 5 || next["nextCursor"] != "" {
 		t.Fatalf("catalog pagination/ownership: %v %v", next, err)
 	}
 	_, page, err = a.agentFindSkills(ctx, nil, agentSearchInput{Query: "review/"})
-	if err != nil || len(page["skills"].([]map[string]any)) != 1 {
+	if err != nil || len(page["skills"].([]map[string]any)) != 2 {
 		t.Fatalf("catalog search: %v %v", page, err)
+	}
+	if page["skills"].([]map[string]any)[1]["path"] != "review/nested/SKILL.md" {
+		t.Fatal("nested Skill must remain independently discoverable")
 	}
 
 	installed := []map[string]any{}
