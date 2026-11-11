@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.16] - 2026-11-11
+
+### Changed
+
+- Sign-in returns to the requested in-app page, preserving query parameters and section anchors on web and desktop.
+
+### Fixed
+
+- Desktop authorization returns to valid destinations instead of always opening the editor; invalid targets fall back safely.
+
 ## [1.1.15] - 2026-11-11
 
 ### Changed

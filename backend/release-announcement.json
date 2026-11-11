@@ -1,36 +1,32 @@
 {
-  "version": "1.1.15",
+  "version": "1.1.16",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.15",
+      "title": "What's new in Koinote 1.1.16",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Koi AI in My Space now uses the app logo, with light and dark theme support.",
-        "View balance and usage expands total balance, reserved credits, available credits, recent activity and top-ups on the same page."
+        "Sign-in returns to the requested in-app page, preserving query parameters and section anchors on web and desktop."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.15 新功能",
+      "title": "Koinote 1.1.16 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "我的空间中的 Koi AI 使用应用 Logo，支持深浅主题。",
-        "查看余额与用量可在当前页展开总余额、预计扣除、可用额度和近期记录，并直接充值。"
+        "网页与桌面登录完成后返回指定页面，并保留查询参数与页面锚点。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.15",
+      "title": "Nouveautés de Koinote 1.1.16",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Koi AI dans Mon espace utilise désormais le logo de l’application, adapté aux thèmes clair et sombre.",
-        "Le solde total, les crédits réservés et disponibles, l’activité récente et les recharges s’affichent directement sur la même page."
+        "Après connexion sur le Web ou l’application de bureau, Koinote revient à la page demandée en conservant les paramètres et les ancres."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.15 の新機能",
+      "title": "Koinote 1.1.16 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "マイスペースの Koi AI にアプリのロゴを使用し、ライト・ダークテーマに対応しました。",
-        "残高と使用量を開くと、総残高、差し引き予定、利用可能クレジット、最近の履歴を同じページで確認でき、そのままチャージできます。"
+        "Web とデスクトップのログイン後、クエリとページ内リンクを保ったまま指定ページに戻ります。"
       ]
     }
   }

@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.16] - 2026-11-11
+
+### Changed
+
+- Après connexion sur le Web ou l’application de bureau, Koinote revient à la page demandée en conservant les paramètres et les ancres.
+
+### Fixed
+
+- L’autorisation de l’application de bureau n’ouvre plus systématiquement l’éditeur ; une destination invalide revient à la page par défaut.
+
 ## [1.1.15] - 2026-11-11
 
 ### Changed
