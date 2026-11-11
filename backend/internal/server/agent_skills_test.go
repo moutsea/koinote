@@ -156,7 +156,7 @@ func TestAgentAutomaticSkillsCatalogAndLazyLoad(t *testing.T) {
 	if len(packages) != 0 {
 		t.Fatal("task eagerly installed a Skill")
 	}
-	for _, in := range []agentLoadSkillInput{{foreign, 1, "review/SKILL.md"}, {repo, 2, "review/SKILL.md"}, {repo, 1, "../SKILL.md"}} {
+	for _, in := range []agentLoadSkillInput{{RepositoryID: foreign, Revision: 1, Path: "review/SKILL.md"}, {RepositoryID: repo, Revision: 2, Path: "review/SKILL.md"}, {RepositoryID: repo, Revision: 1, Path: "../SKILL.md"}} {
 		_, result, err := a.agentLoadSkill(ctx, nil, in)
 		if err != nil || result["available"] != false {
 			t.Fatalf("invalid source loaded: %v %v", result, err)
@@ -165,7 +165,7 @@ func TestAgentAutomaticSkillsCatalogAndLazyLoad(t *testing.T) {
 	if len(packages) != 0 {
 		t.Fatal("unowned/stale Skill uploaded")
 	}
-	in := agentLoadSkillInput{repo, 1, "review/SKILL.md"}
+	in := agentLoadSkillInput{RepositoryID: repo, Revision: 1, Path: "review/SKILL.md"}
 	_, failed, err := a.agentLoadSkill(ctx, nil, in)
 	if err != nil || failed["available"] != false || strings.Contains(fmt.Sprint(failed), "private remote") {
 		t.Fatalf("optional failure: %v %v", failed, err)
@@ -187,7 +187,7 @@ func TestAgentAutomaticSkillsCatalogAndLazyLoad(t *testing.T) {
 		t.Fatal("loader exposed body before native invocation checks")
 	}
 	second := agentSkillRepositoryForTest(t, a, u.ID, files)
-	_, result, err := a.agentLoadSkill(ctx, nil, agentLoadSkillInput{second, 1, "review/SKILL.md"})
+	_, result, err := a.agentLoadSkill(ctx, nil, agentLoadSkillInput{RepositoryID: second, Revision: 1, Path: "review/SKILL.md"})
 	if err != nil || result["skillId"] == loaded["skillId"] || len(packages) != 2 {
 		t.Fatal("identical names from different repositories collided")
 	}

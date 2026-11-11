@@ -376,7 +376,7 @@ func (a *App) prepareWritingInput(ctx context.Context, t *writingTask) error {
 		}
 	}
 	skillID := ""
-	if !automaticAgentSkills(*t) {
+	if usesExplicitAgentSkill(*t) {
 		var err error
 		skillID, err = a.installWritingSkill(ctx, *t, t.Skill)
 		if err != nil {

@@ -45,7 +45,15 @@ type writingIntentSummary struct {
 	Reason       string `json:"reason,omitempty"`
 }
 
+type writingLoadedSkill struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Loaded string `json:"loadedAt"`
+}
+
 type writingTask struct {
+	LoadedSkills    []writingLoadedSkill  `json:"loadedSkills,omitempty"`
+	SkillSnapshot   json.RawMessage       `json:"-"`
 	IntentVersion   int64                 `json:"intentVersion,omitempty"`
 	IntentState     json.RawMessage       `json:"-"`
 	IntentResult    json.RawMessage       `json:"-"`
@@ -76,7 +84,7 @@ type writingTask struct {
 	CreatedAt       time.Time             `json:"createdAt"`
 }
 
-const writingTaskColumns = `id::text,user_id,message,source,skill,workspace_id,job_id,remote_input,status,result,error,proposal,applied_document,reservation_id,reserved_credits,charged_credits,usage,billing_status,cursor,cancel_requested,deadline,created_at,COALESCE(session_id::text,''),conversation_task,intent_version,intent_state,intent_result`
+const writingTaskColumns = `id::text,user_id,message,source,skill,skill_snapshot,workspace_id,job_id,remote_input,status,result,error,proposal,applied_document,reservation_id,reserved_credits,charged_credits,usage,billing_status,cursor,cancel_requested,deadline,created_at,COALESCE(session_id::text,''),conversation_task,intent_version,intent_state,intent_result`
 
 const writingResultClipped = "\n结果过长，已保存前文；请缩小范围继续。"
 
@@ -90,7 +98,7 @@ func writingDisplayResult(text string) string {
 
 func scanWritingTask(row pgx.Row) (writingTask, error) {
 	var t writingTask
-	err := row.Scan(&t.ID, &t.UserID, &t.Message, &t.Source, &t.Skill, &t.WorkspaceID, &t.JobID, &t.RemoteInput, &t.Status, &t.Result, &t.Error, &t.Proposal, &t.AppliedDocument, &t.ReservationID, &t.ReservedCredits, &t.ChargedCredits, &t.Usage, &t.BillingStatus, &t.Cursor, &t.CancelRequested, &t.Deadline, &t.CreatedAt, &t.SessionID, &t.Conversation, &t.IntentVersion, &t.IntentState, &t.IntentResult)
+	err := row.Scan(&t.ID, &t.UserID, &t.Message, &t.Source, &t.Skill, &t.SkillSnapshot, &t.WorkspaceID, &t.JobID, &t.RemoteInput, &t.Status, &t.Result, &t.Error, &t.Proposal, &t.AppliedDocument, &t.ReservationID, &t.ReservedCredits, &t.ChargedCredits, &t.Usage, &t.BillingStatus, &t.Cursor, &t.CancelRequested, &t.Deadline, &t.CreatedAt, &t.SessionID, &t.Conversation, &t.IntentVersion, &t.IntentState, &t.IntentResult)
 	if t.SessionID != "" {
 		t.Result = writingDisplayResult(t.Result)
 	}
@@ -116,7 +124,11 @@ func (a *App) loadWritingTask(ctx context.Context, id string, userID int) (writi
 	if !validUUID(id) {
 		return writingTask{}, pgx.ErrNoRows
 	}
-	return scanWritingTask(a.db.QueryRow(ctx, `SELECT `+writingTaskColumns+` FROM writing_agent_tasks WHERE id=$1 AND user_id=$2 AND (session_id IS NULL OR EXISTS(SELECT 1 FROM agent_sessions WHERE id=session_id AND deleted_at IS NULL))`, id, userID))
+	t, err := scanWritingTask(a.db.QueryRow(ctx, `SELECT `+writingTaskColumns+` FROM writing_agent_tasks WHERE id=$1 AND user_id=$2 AND (session_id IS NULL OR EXISTS(SELECT 1 FROM agent_sessions WHERE id=session_id AND deleted_at IS NULL))`, id, userID))
+	if err == nil {
+		t.LoadedSkills, err = a.loadWritingLoadedSkills(ctx, id)
+	}
+	return t, err
 }
 func writingError(w http.ResponseWriter, err error) {
 	switch {

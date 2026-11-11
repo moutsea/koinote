@@ -11,6 +11,7 @@ import { AgentGitHubCredentialCard } from "./AgentGitHubCredentialCard";
 import { AgentCreditsCard } from "./AgentCreditsCard";
 import { PaperCard } from "./Ink";
 import { Logo } from "./Logo";
+import { KoiSkillLibrary } from "./KoiSkillLibrary";
 
 export function KoiPage({ user }: { user: User }) {
   const { t } = useI18n();
@@ -104,6 +105,7 @@ function AccountKoiSettings({ user }: { user: User }) {
         </PaperCard>
         <AgentGitHubCredentialCard />
       </div>
+      <KoiSkillLibrary user={user} />
     </section>
   );
 }

@@ -93,9 +93,18 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
 		return
 	}
+	query, state := strings.TrimSpace(r.URL.Query().Get("q")), r.URL.Query().Get("state")
+	if len(query) > 800 || (state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
+		httpx.ErrorCode(w, 400, "bad_request", "Invalid Skill filter")
+		return
+	}
 	rows, err := a.db.Query(r.Context(), `SELECT `+koiInstallationColumns+` FROM koi_skill_installations i
  JOIN koi_skill_versions v ON v.id=i.current_version_id
- WHERE i.user_id=$1 AND i.deleted_at IS NULL ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset)
+ WHERE i.user_id=$1 AND i.deleted_at IS NULL
+ AND (strpos(lower(i.name),lower($4))>0 OR strpos(lower(i.description),lower($4))>0)
+ AND ($5='' OR ($5='enabled' AND i.enabled) OR ($5='disabled' AND NOT i.enabled)
+ OR ($5='unavailable' AND NOT COALESCE((v.compatibility->>'conversation')::boolean,false)))
+ ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state)
 	if err != nil {
 		writeKoiError(w, err)
 		return
@@ -114,12 +123,74 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 		writeKoiError(w, err)
 		return
 	}
+	rows.Close()
+	var usedBytes int64
+	if err = a.db.QueryRow(r.Context(), `SELECT koi_skill_storage_bytes($1)`, user.ID).Scan(&usedBytes); err != nil {
+		writeKoiError(w, err)
+		return
+	}
 	cursor := ""
 	if len(skills) > limit {
 		skills = skills[:limit]
 		cursor = encodeMCPCursor(offset + limit)
 	}
-	httpx.JSON(w, 200, map[string]any{"skills": skills, "nextCursor": cursor})
+	httpx.JSON(w, 200, map[string]any{"skills": skills, "nextCursor": cursor, "storage": map[string]any{"usedBytes": usedBytes}})
+}
+
+func (a *App) koiSkillPatch(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireKoiSkillUser(w, r, false)
+	if !ok {
+		return
+	}
+	var input struct {
+		ExpectedRevision int64 `json:"expectedRevision"`
+		Enabled          *bool `json:"enabled"`
+	}
+	if decodeJSONBody(r, &input) != nil || input.ExpectedRevision < 1 || input.Enabled == nil || !validUUID(r.PathValue("skillId")) {
+		httpx.ErrorCode(w, 400, "bad_request", "expectedRevision and enabled are required")
+		return
+	}
+	if *input.Enabled && user.MembershipTier != membershipTierLifetime {
+		httpx.ErrorCode(w, http.StatusForbidden, "membership_required", "Lifetime membership required")
+		return
+	}
+	tx, err := a.db.Begin(r.Context())
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock($1)`, user.ID); err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	skill, err := a.loadKoiInstallation(r.Context(), tx, user.ID, r.PathValue("skillId"))
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	if skill.Revision != input.ExpectedRevision {
+		writeKoiError(w, errKoiSkillConflict)
+		return
+	}
+	if *input.Enabled && !skill.Compatibility.Conversation {
+		httpx.ErrorCode(w, http.StatusUnprocessableEntity, "skill_incompatible", "Skill is incompatible with Koi AI")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `UPDATE koi_skill_installations SET enabled=$3,revision=revision+1,updated_at=now()
+ WHERE user_id=$1 AND id=$2`, user.ID, skill.ID, *input.Enabled); err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	skill, err = a.loadKoiInstallation(r.Context(), tx, user.ID, skill.ID)
+	if err == nil {
+		err = tx.Commit(r.Context())
+	}
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"skill": skill})
 }
 
 func (a *App) koiSkillGet(w http.ResponseWriter, r *http.Request) {

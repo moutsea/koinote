@@ -57,6 +57,7 @@ try {
   state.api = async (path, init = {}) => {
     const method = init.method ?? "GET";
     calls.push({ path, method, body: init.body });
+    if (path === "/api/koi/settings") return { managementAvailable: false, canInstall: false, settings: { autoSkills: true, revision: 1 } };
     if (path === "/api/agent/credits") {
       if (creditsReadDelay) await creditsReadDelay;
       if (creditsReadError) throw creditsReadError;
@@ -260,7 +261,7 @@ try {
   assert.ok(document.querySelector('a[href="/pricing"]'));
   assert.equal(tokenCard().querySelector("form"), null, "free accounts are not offered member-only credential writes");
   assert.ok(tokenCard().textContent.includes(tokenLabels.githubTokenMembersOnly));
-  assert.ok(!calls.some((call) => call.path !== "/api/agent/github-credential"), "free accounts do not call member-only endpoints");
+  assert.ok(!calls.some((call) => !["/api/agent/github-credential", "/api/koi/settings"].includes(call.path)), "free accounts do not call member-only endpoints");
   client.setQueryData(["agent-credits", member.authUserId], { credits: creditsData });
   await toggleCredits();
   assert.ok(creditsPanel().textContent.includes(zh.agentCredits.membersOnly));

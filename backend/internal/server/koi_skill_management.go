@@ -20,7 +20,7 @@ var (
 	errKoiRequestReplay = errors.New("request id was used with different input")
 )
 
-// A server-side allowlist keeps installation separate from the existing runtime.
+// A server-side allowlist gates Skill management and new installed-library tasks.
 // Owners may still inspect and remove data after their membership expires.
 func (a *App) requireKoiSkillUser(w http.ResponseWriter, r *http.Request, write bool) (model.User, bool) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -28,13 +28,7 @@ func (a *App) requireKoiSkillUser(w http.ResponseWriter, r *http.Request, write 
 	if !ok {
 		return user, false
 	}
-	allowed := false
-	for _, id := range a.cfg.KoiSkillTestAccounts {
-		if strings.TrimSpace(id) != "" && strings.TrimSpace(id) == user.AuthUserID {
-			allowed = true
-			break
-		}
-	}
+	allowed := a.koiSkillAccountAllowed(user.AuthUserID)
 	if !allowed {
 		httpx.ErrorCode(w, http.StatusForbidden, "koi_unavailable", "Skill management is not available for this account")
 		return user, false
@@ -75,4 +69,13 @@ func writeKoiError(w http.ResponseWriter, err error) {
 func koiParsePositiveID(raw string) (int64, bool) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	return value, err == nil && value > 0
+}
+
+func (a *App) koiSkillAccountAllowed(authID string) bool {
+	for _, id := range a.cfg.KoiSkillTestAccounts {
+		if strings.TrimSpace(id) != "" && strings.TrimSpace(id) == authID {
+			return true
+		}
+	}
+	return false
 }

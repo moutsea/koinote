@@ -18,11 +18,12 @@ export function AgentTaskReply({ task, operations }: {
   task: WritingTask;
   operations: AgentOperation[];
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const result = agentTaskResult(task, operations, locale);
-  if (!result) return null;
+  if (!result && !task.loadedSkills?.length) return null;
   return (
     <div className="agent-message-body prose prose-sm min-w-0 max-w-none break-words dark:prose-invert" data-task-result={task.id}>
+      {Boolean(task.loadedSkills?.length) && <p className="not-prose mb-2 text-xs" style={{ color: "var(--ink-mid)" }}>{t.koi.loadedSkills} {task.loadedSkills!.map((skill) => skill.name).join(" · ")}</p>}
       <Markdown remarkPlugins={plugins} components={components}>{result}</Markdown>
     </div>
   );

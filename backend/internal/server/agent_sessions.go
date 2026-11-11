@@ -229,6 +229,14 @@ func (a *App) agentSessionGet(w http.ResponseWriter, r *http.Request) {
 	for _, t := range tasks {
 		ids = append(ids, t.ID)
 	}
+	loadedSkills, err := a.loadWritingLoadedSkillsForTasks(r.Context(), ids)
+	if err != nil {
+		agentError(w, err)
+		return
+	}
+	for index := range tasks {
+		tasks[index].LoadedSkills = loadedSkills[tasks[index].ID]
+	}
 	ops, err := a.loadAgentOperations(r.Context(), u.ID, ids)
 	if err != nil {
 		agentError(w, err)
@@ -349,6 +357,7 @@ func (a *App) agentSessionDelete(w http.ResponseWriter, r *http.Request) {
 		`UPDATE agent_sessions SET deleted_at=now(),intent_state=NULL,title='',revision=revision+1 WHERE id=$1`,
 		`UPDATE writing_agent_tasks SET cancel_requested=true,storage_budget_bytes=0,intent_state=NULL,intent_result=NULL,message='',result='',source='{}',proposal=NULL,applied_document=NULL,skill='{}',remote_input=CASE WHEN job_id<>'' OR status IN('completed','failed','cancelled') THEN NULL ELSE remote_input END,next_poll_at=now() WHERE session_id=$1`,
 		`DELETE FROM agent_document_reads WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
+		`DELETE FROM koi_skill_loads WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM agent_operations WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM agent_artifacts WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM writing_agent_events WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
@@ -506,6 +515,9 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	advice := agentAdviceOnly(in.Message)
 	_, err = tx.Exec(r.Context(), `INSERT INTO writing_agent_tasks(id,user_id,doc_id,request_key,input_hash,message,source,skill,reservation_id,reserved_credits,deadline,session_id,storage_budget_bytes,permission_revision,advice_only,conversation_task,intent_version,intent_state) VALUES($1::uuid,$2,$3,$4,$5,$6,$7,$8,$1::text,$9,now()+interval '24 hours',$10,$11,$12,$13,true,$14,$15)`, taskID, u.ID, source.DocID, in.RequestID, hash, in.Message, sourceJSON, skill, writingReservationCredits, s.ID, agentTaskStorageBudget, s.Revision, advice, intentVersion, intentState)
+	if err == nil && s.WriteDocumentID == "" && a.koiSkillAccountAllowed(u.AuthUserID) {
+		err = a.pinKoiTaskSkills(r.Context(), tx, u, taskID)
+	}
 	if err == nil && in.SupersedeTaskID != "" {
 		_, err = tx.Exec(r.Context(), `UPDATE agent_operations SET status='superseded',updated_at=now() WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE id=$1 AND session_id=$2) AND status='pending'`, in.SupersedeTaskID, s.ID)
 	}
