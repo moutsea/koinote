@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { DesktopAccountMismatchError, DesktopCredentialStoreError } from "./sessionErrors";
 import type { User } from "../api";
+import { loginRedirectPath } from "../loginRedirect";
 import {
   desktopAPIOrigin,
   desktopAuthClientID,
@@ -167,7 +168,7 @@ async function handleDesktopURLs(urls: string[]): Promise<void> {
     try {
       await exchangeDesktopCallback(callback);
       window.dispatchEvent(new CustomEvent("koinote:desktop-authenticated"));
-      window.location.replace("/editor");
+      window.location.replace(loginRedirectPath(window.location.search, "/editor"));
     } catch (error) {
       window.dispatchEvent(
         new CustomEvent("koinote:desktop-auth-error", {

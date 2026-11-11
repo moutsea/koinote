@@ -15,6 +15,7 @@ import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
 import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 import { isDesktopRuntime } from "../desktop/runtime";
+import { loginRedirectPath } from "../loginRedirect";
 
 const DesktopLoginPage = lazy(() =>
   import("./DesktopLoginPage").then((module) => ({
@@ -23,19 +24,6 @@ const DesktopLoginPage = lazy(() =>
 );
 
 type Mode = "login" | "register";
-
-function loginRedirectPath() {
-  const candidate =
-    new URLSearchParams(window.location.search).get("redirectTo")?.trim() ?? "";
-  if (
-    !candidate.startsWith("/") ||
-    candidate.startsWith("//") ||
-    candidate.includes("\\")
-  ) {
-    return "/settings";
-  }
-  return candidate;
-}
 
 // OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
 function startOAuth(
@@ -64,7 +52,7 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
 function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
-  const redirectTo = loginRedirectPath();
+  const redirectTo = loginRedirectPath(window.location.search);
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [identifier, setIdentifier] = useState(""); // 登录用：用户名或邮箱

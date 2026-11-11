@@ -12,10 +12,12 @@ const {window}=parseHTML('<html><body><div id="root"></div></body></html>');
 Object.assign(globalThis,{window,document:window.document,CustomEvent:window.CustomEvent,IS_REACT_ACT_ENVIRONMENT:true});
 window.__TAURI_INTERNALS__={};
 window.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+window.location={search:'',replace:(target)=>{h.destination=target;}};
 const mocks={
  '@tauri-apps/api/core':'export const invoke=(...args)=>globalThis.__desktopSessionTest.invoke(...args);',
  '@tauri-apps/plugin-opener':'export const openUrl=(url)=>globalThis.__desktopSessionTest.openUrl(url);',
  '@tauri-apps/plugin-http':'export const fetch=(...args)=>globalThis.__desktopSessionTest.fetch(...args);',
+ '@tauri-apps/plugin-deep-link':'export const getCurrent=async()=>null; export const onOpenUrl=async(listener)=>{globalThis.__desktopSessionTest.receiveURLs=listener;return ()=>{};};',
 };
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
@@ -32,6 +34,7 @@ function reset(){
 h.invoke=async(cmd,args)=>{
  if(readFailure)throw Error('OS credential access denied');
  if(cmd==='desktop_pending_auth_store'){h.pending=args.pending;return;}
+ if(cmd==='desktop_pending_auth_get')return structuredClone(h.pending);
  if(cmd==='desktop_pending_auth_clear'){h.pending=null;return;}
  if(cmd==='desktop_session_get')return structuredClone(stored);
  if(cmd==='desktop_session_store'){stored=structuredClone(args.session);return;}
@@ -69,7 +72,7 @@ function rotate(init){
 let root;
 try{
  const result=await build({stdin:{contents:`
- export {refreshDesktopSession,updateCachedDesktopUser,clearDesktopSession} from './spa/src/desktop/auth';
+ export {initializeDesktopAuth,refreshDesktopSession,updateCachedDesktopUser,clearDesktopSession} from './spa/src/desktop/auth';
  export {desktopFetch} from './spa/src/desktop/network';
  export {getSession} from './spa/src/api';
  export {sessionQueryOptions} from './spa/src/auth';
@@ -192,5 +195,35 @@ try{
  for(let i=0;i<100&&!document.body.textContent.includes('Authorization failed');i++) await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));});
  assert.ok(document.body.textContent.includes('Authorization failed'));assert.equal(authorize.disabled,false);assert.equal(clears,0);assert.equal(h.pending,null);
  mismatchClient.clear();
+ // Exercise the real deep-link callback, token exchange and navigation together.
+ await api.initializeDesktopAuth();
+ const receiveAuthCallback=(eventName)=>act(async()=>{
+  await new Promise((resolve,reject)=>{
+   const listener=(event)=>{clearTimeout(timer);resolve(event);};
+   const timer=setTimeout(()=>{window.removeEventListener(eventName,listener);reject(Error('Desktop callback timed out'));},2_000);
+   window.addEventListener(eventName,listener,{once:true});
+   h.receiveURLs(['koinote://auth?state=return-state&code=return-code']);
+  });
+ });
+ const target='/repositories/42?file=skills%2Fwrite%2FSKILL.md&install=koi#details';
+ for(const [search,expected] of [['','/editor'],[`?${new URLSearchParams({redirectTo:target})}`,target],[`?${new URLSearchParams({redirectTo:'//example.test/'})}`,'/editor']]){
+  reset();h.destination=undefined;window.location.search=search;
+  h.pending={state:'return-state',codeVerifier:'return-verifier',createdAt:Date.now()};
+  h.fetch=async(url,init)=>{
+   assert.equal(new URL(url).pathname,'/api/auth/desktop/token');
+   assert.deepEqual(JSON.parse(init.body),{grantType:'authorization_code',clientId:'koinote-desktop',code:'return-code',codeVerifier:'return-verifier'});
+   return json({accessToken:'knt_app_at_return',refreshToken:'knt_app_rt_return',user});
+  };
+  await receiveAuthCallback('koinote:desktop-authenticated');
+  assert.equal(h.destination,expected,'authorization should return to the safe requested page');
+  assert.equal(stored.accessToken,'knt_app_at_return');assert.equal(h.pending,null);
+ }
+ reset();h.destination=undefined;
+ h.pending={state:'return-state',codeVerifier:'return-verifier',createdAt:Date.now()};
+ h.fetch=async()=>json({code:'authorization_failed'},401);
+ await receiveAuthCallback('koinote:desktop-auth-error');
+ assert.equal(h.destination,undefined,'failed authorization must not navigate');
+ assert.equal(stored.accessToken,'knt_app_at_old','failed authorization must retain the existing session');
+ console.log('Desktop authorization callback return targets and failed-exchange navigation checks passed');
  console.log('Desktop session recovery, persisted attempts, atomic profile updates, delayed 401s, account changes, logout/rejection and keychain retry UI checks passed');
 }finally{if(root)await act(async()=>root.unmount());stop();rmSync(dir,{recursive:true,force:true});delete globalThis.__desktopSessionTest;}

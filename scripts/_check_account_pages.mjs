@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import assert from "node:assert/strict";
+import { build } from "esbuild";
 
 let pass = 0;
 let fail = 0;
@@ -36,7 +38,21 @@ const admin = fs.readFileSync("spa/src/pages/AdminPage.tsx", "utf8");
 includes("注册文档页路由", main, 'path: "/documents"');
 includes("注册价格页路由", main, 'path: "/pricing"');
 includes("注册统一设置页路由", main, 'path: "/settings"');
-includes("登录默认落点进入设置", login, 'return "/settings";');
+includes("登录使用共用的返回路径校验", login, "loginRedirectPath(window.location.search)");
+
+const redirectBundle = await build({ entryPoints: ["spa/src/loginRedirect.ts"], bundle: true, write: false, format: "esm", platform: "node", logLevel: "error" });
+const { loginRedirectPath } = await import(`data:text/javascript;base64,${Buffer.from(redirectBundle.outputFiles[0].text).toString("base64")}`);
+assert.equal(loginRedirectPath(""), "/settings", "网页登录默认仍进入设置");
+assert.equal(loginRedirectPath("", "/editor"), "/editor", "桌面默认仍进入编辑器");
+for (const target of ["/", "/space?tab=koi", "/repositories/42?file=skills%2Fwrite%2FSKILL.md&install=koi#details", " /editor/doc-1?focus=hello%20world "]) {
+  assert.equal(loginRedirectPath(`?${new URLSearchParams({ redirectTo: target })}`), target.trim(), "站内目标、查询串和锚点不应丢失或二次解码");
+}
+for (const target of ["", "editor", "https://example.test/", "//example.test/", "/\\example.test/", "/\n/example.test/", "/\t/example.test/", "/safe\u0000path", "/safe\u007fpath"]) {
+  const search = `?${new URLSearchParams({ redirectTo: target })}`;
+  assert.equal(loginRedirectPath(search), "/settings", "无效返回地址应安全回退");
+  assert.equal(loginRedirectPath(search, "/editor"), "/editor", "桌面端应使用自身默认落点");
+}
+console.log("Login return targets, query/hash preservation and safe fallbacks passed");
 includes(
   "文档路由绑定 DocumentsPage",
   main,
