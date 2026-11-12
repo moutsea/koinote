@@ -9,7 +9,34 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"koinote/backend/internal/config"
 )
+
+func TestKoiSkillAccountRollout(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		accounts []string
+		authID   string
+		allowed  bool
+	}{
+		{"closed", nil, "member", false},
+		{"empty configuration", []string{"", " "}, "member", false},
+		{"selected account", []string{" member "}, "member", true},
+		{"other account", []string{"member"}, "other", false},
+		{"public rollout", []string{" * "}, "other", true},
+		{"wildcard is explicit", []string{"member-*"}, "member-other", false},
+		{"no anonymous access", []string{"*"}, "", false},
+		{"no blank identity", []string{"*"}, " ", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a := &App{cfg: config.Config{KoiSkillTestAccounts: test.accounts}}
+			if got := a.koiSkillAccountAllowed(test.authID); got != test.allowed {
+				t.Fatalf("allowed=%v, want %v", got, test.allowed)
+			}
+		})
+	}
+}
 
 func TestKoiDesktopRequestScopes(t *testing.T) {
 	id := "550e8400-e29b-41d4-a716-446655440000"
@@ -81,8 +108,11 @@ func TestKoiDesktopManagementLifecycle(t *testing.T) {
 	if !strings.Contains(blocked.Body.String(), `"code":"koi_unavailable"`) {
 		t.Fatal(blocked.Body.String())
 	}
-	a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
-	request("GET", "/api/koi/settings", nil, 200)
+	a.cfg.KoiSkillTestAccounts = []string{"*"}
+	opened := request("GET", "/api/koi/settings", nil, 200)
+	if !strings.Contains(opened.Body.String(), `"managementAvailable":true`) || !strings.Contains(opened.Body.String(), `"canInstall":true`) {
+		t.Fatal(opened.Body.String())
+	}
 	request("PUT", "/api/koi/settings", map[string]any{"expectedRevision": 1, "autoSkills": false}, 200)
 	requestID, _ := randomUUID()
 	view := koiFolderView(t, request("POST", "/api/koi/skill-imports", koiImportRequest{RequestID: requestID, SourceKind: "folder", DeclaredPaths: []string{"SKILL.md", "guide.md"}}, 202))
@@ -105,7 +135,6 @@ func TestKoiDesktopManagementLifecycle(t *testing.T) {
 	request("GET", skillPath, nil, 200)
 	request("GET", skillPath+"/files/2?version="+skill.VersionID, nil, 200)
 	other := insertAgentReviewTestUser(t, a.db)
-	a.cfg.KoiSkillTestAccounts = append(a.cfg.KoiSkillTestAccounts, other.AuthUserID)
 	otherTokens, err := a.issueDesktopTokenPair(ctx, a.db, other.ID, "")
 	if err != nil {
 		t.Fatal(err)
@@ -116,10 +145,20 @@ func TestKoiDesktopManagementLifecycle(t *testing.T) {
 	request("GET", previewPath, nil, 404)
 	accessToken = tokens.AccessToken
 	request("POST", skillPath+"/check-update", nil, 200)
-	request("PATCH", skillPath, map[string]any{"expectedRevision": skill.Revision, "enabled": false}, 200)
 	if _, err := a.db.Exec(ctx, `UPDATE users SET membership_tier='free' WHERE id=$1`, user.ID); err != nil {
 		t.Fatal(err)
 	}
+	free := request("GET", "/api/koi/settings", nil, 200)
+	if !strings.Contains(free.Body.String(), `"managementAvailable":true`) || !strings.Contains(free.Body.String(), `"canInstall":false`) {
+		t.Fatal(free.Body.String())
+	}
+	request("GET", skillPath, nil, 200)
+	blocked = request("POST", "/api/koi/skill-imports", koiImportRequest{RequestID: requestID, SourceKind: "folder", DeclaredPaths: []string{"SKILL.md"}}, 403)
+	if !strings.Contains(blocked.Body.String(), `"code":"membership_required"`) {
+		t.Fatal(blocked.Body.String())
+	}
+	request("POST", skillPath+"/check-update", nil, 403)
+	request("PATCH", skillPath, map[string]any{"expectedRevision": skill.Revision, "enabled": false}, 200)
 	blocked = request("PATCH", skillPath, map[string]any{"expectedRevision": skill.Revision + 1, "enabled": true}, 403)
 	if !strings.Contains(blocked.Body.String(), `"code":"membership_required"`) {
 		t.Fatal(blocked.Body.String())

@@ -20,7 +20,7 @@ var (
 	errKoiRequestReplay = errors.New("request id was used with different input")
 )
 
-// A server-side allowlist gates Skill management and new installed-library tasks.
+// A server-side rollout setting gates Skill management and new installed-library tasks.
 // Owners may still inspect and remove data after their membership expires.
 func (a *App) requireKoiSkillUser(w http.ResponseWriter, r *http.Request, write bool) (model.User, bool) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -78,8 +78,11 @@ func koiParsePositiveID(raw string) (int64, bool) {
 }
 
 func (a *App) koiSkillAccountAllowed(authID string) bool {
+	if strings.TrimSpace(authID) == "" {
+		return false
+	}
 	for _, id := range a.cfg.KoiSkillTestAccounts {
-		if strings.TrimSpace(id) != "" && strings.TrimSpace(id) == authID {
+		if id = strings.TrimSpace(id); id == "*" || id == authID {
 			return true
 		}
 	}
