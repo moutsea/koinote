@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, Code2, FileText, FolderGit2, RefreshCw, Star } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, Code2, Copy, Download, FileText, FolderGit2, FolderSync, GitFork, LoaderCircle, RefreshCw, Star, Undo2 } from "lucide-react";
 import { updatePublicAgentRepositoryStar, recordPublicAgentRepositoryClone, refreshPublicAgentRepository, syncPublicAgentRepository, type PublicAgentRepositorySync } from "../agentRepositorySharing";
 import { AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, publicRepositoryPreparationFeedback, publicRepositorySyncFeedback } from "../agentRepositorySyncFeedback";
 import { AgentGitHubAttribution } from "../components/AgentGitHubAttribution";
@@ -16,15 +16,16 @@ import { useSession } from "../auth";
 import { AgentWorkspaceFileTree } from "../components/AgentWorkspaceFileTree";
 import { AgentWorkspaceTransferDialog } from "../components/AgentWorkspaceTransferDialog";
 import { useAgentSyncCopy } from "../components/AgentSyncCopyDialog";
-import { LocalSyncMenu } from "../components/LocalSyncMenu";
+import { PublicRepositoryActionsMenu, type PublicRepositoryAction } from "../components/PublicRepositoryActionsMenu";
 import { PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { confirmAction } from "../confirmAction";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { useI18n } from "../i18n";
 import { clipDescription, notFoundTitle, publicPageMeta, repositoryPageTitle } from "../seoMeta";
-import { getKoiOverview, KOI_SETTINGS_QUERY_KEY, type KoiHubTarget } from "../koiSkills";
+import { getKoiHubSkills, getKoiOverview, KOI_SETTINGS_QUERY_KEY, KOI_SKILLS_QUERY_KEY, type KoiHubTarget } from "../koiSkills";
 import { KoiInstallDialog } from "../components/KoiInstallDialog";
+import { KoiRetry } from "../components/KoiSkillUi";
 
 export function AgentPublicRepositoryPage() {
   const { repositoryId } = useParams({ from: "/repositories/$repositoryId" });
@@ -53,20 +54,31 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   const koi = useQuery({ queryKey: [KOI_SETTINGS_QUERY_KEY, user?.authUserId], queryFn: getKoiOverview, enabled: Boolean(user && !user.isLocalMode), retry: false });
   const [koiTarget, setKoiTarget] = useState<KoiHubTarget>();
   const [koiMessage, setKoiMessage] = useState("");
+  const [cloneAction, setCloneAction] = useState<"clone" | "agent" | null>(null);
   const installHandled = useRef(false);
-  const hasSkills = Boolean(repository?.files.some((file) => /(^|\/)SKILL\.md$/.test(file.path)));
+  // A manifest only identifies potential entries. The install preview owns
+  // validation, so do not present a raw SKILL.md count as an installable total.
+  const skillPaths = repository?.files.filter((file) => /(^|\/)SKILL\.md$/.test(file.path)).map((file) => file.path) ?? [];
+  const hasSkills = skillPaths.length > 0;
   const canInstallKoi = Boolean(member && koi.data?.managementAvailable && koi.data.canInstall);
+  const installed = useQuery({ queryKey: [KOI_SKILLS_QUERY_KEY, user?.authUserId, "hub", id], queryFn: ({ signal }) => getKoiHubSkills(id, signal), enabled: canInstallKoi && hasSkills, retry: false });
+  const installedPaths = new Set(installed.data?.map((skill) => [skill.source.path, "SKILL.md"].filter(Boolean).join("/")));
+  // Overview and installation reads inform the UI; neither owns the preview
+  // entry. The dialog checks permission before it reads an import source.
+  const installedCount = installed.isSuccess ? skillPaths.filter((path) => installedPaths.has(path)).length : 0;
+  const installLabel = installed.isSuccess && installedCount === skillPaths.length ? t.koi.alreadyInstalled : installedCount > 0 ? t.koi.installedCount.replace("{count}", String(installedCount)) : t.koi.viewSkills;
+  const loadingInstallStatus = koi.isFetching || canInstallKoi && installed.isFetching;
   const openKoi = () => {
     if (repository) setKoiTarget({ workspaceId: repository.workspaceId, name: repository.name, publicationId: repository.publicationId, revision: repository.revision });
   };
   // Login return opens the reviewed snapshot only; confirmation stays explicit.
   useEffect(() => {
-    if (!routeSearch.installKoi || installHandled.current || !repository || !user || user.isLocalMode || koi.isPending) return;
+    if (!routeSearch.installKoi || installHandled.current || !repository || !user || user.isLocalMode) return;
     installHandled.current = true;
     void navigate({ to: "/repositories/$repositoryId", params: { repositoryId }, search: { ...directorySearch, file: selected }, hash, replace: true, resetScroll: false, hashScrollIntoView: false });
-    if (canInstallKoi && hasSkills) openKoi();
-    else if (hasSkills) setKoiMessage(!member ? t.koi.koiMembersOnly : t.koi.koiUnavailable);
-  }, [routeSearch.installKoi, repository, user, koi.isPending, canInstallKoi, hasSkills]);
+    if (member && hasSkills) openKoi();
+    else if (hasSkills) setKoiMessage(t.koi.koiMembersOnly);
+  }, [routeSearch.installKoi, repository, user, member, hasSkills]);
   // AppShell 的统一同步不管本页的标题和描述（见 seoMeta.pageOwnsMeta），由这里按仓库
   // 数据设置，与 Worker 首屏渲染的保持一致。
   // 数据回来之前不改：首屏已由 Worker 按仓库写好，先改成通用标题会闪一下。
@@ -88,6 +100,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   // A 404 simply means the signed-in viewer does not own this repository.
   const ownership = useQuery({ queryKey: [REPOSITORY_SHARING_QUERY_KEY, id, user?.id, Boolean(repository?.systemManaged)], queryFn: () => getAgentRepositorySharing(id, Boolean(repository?.systemManaged)), enabled: Boolean(user && !user.isLocalMode && repository && (!repository.systemManaged || user.isAdmin)), retry: false });
   const withdraw = useMutation({
+    onMutate: clearActionFeedback,
     mutationFn: () => setAgentRepositorySharing(id, ownership.data!.currentRevision, "", true, Boolean(repository?.systemManaged)),
     onSuccess: async () => {
       setTransfer(null);
@@ -108,6 +121,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   const [message, setMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const copy = useAgentSyncCopy(() => setMessage(labels.copied));
+  function clearActionFeedback() { setMessage(""); setSyncMessage(""); }
   // Reuse the same idempotency key and the already prepared snapshot after an
   // uncertain outcome; a newer upstream commit must not retarget the retry.
   const forkRequest = useRef<{ key: string; requestId: string; repository: PublicAgentRepository; sync: PublicAgentRepositorySync } | null>(null);
@@ -120,6 +134,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
     queryFn: ({ signal }) => getPublicAgentRepositoryFile(repository!, previewFile!.fileId, signal), enabled: Boolean(repository && previewFile), retry: false,
   });
   const fork = useMutation({
+    onMutate: clearActionFeedback,
     mutationFn: async (snapshot: PublicAgentRepository) => {
       requireCurrentView();
       // An uncertain outcome keeps both the prepared snapshot and its request ID;
@@ -179,7 +194,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   function requireCurrentView() {
     if (activeCloneContext.current !== cloneContext) throw new DOMException("Repository action cancelled", "AbortError");
   }
-  const clone = useMutation({ mutationFn: async ({ snapshot, method }: { snapshot: PublicAgentRepository; method: "zip" | "home" | "agent" }) => {
+  const clone = useMutation({ onMutate: clearActionFeedback, mutationFn: async ({ snapshot, method }: { snapshot: PublicAgentRepository; method: "zip" | "home" | "agent" }) => {
     requireCurrentView();
     // Retry the prepared snapshot and request ID after an uncertain outcome; only
     // a fresh Clone refreshes upstream again.
@@ -227,7 +242,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
         client.invalidateQueries({ queryKey: [SYSTEM_REPOSITORIES_QUERY_KEY] }),
       ]);
     },
-    onMutate: () => setSyncMessage(""),
+    onMutate: clearActionFeedback,
   });
   const star = useMutation({ mutationFn: () => updatePublicAgentRepositoryStar(id, !repository?.starred), onSuccess: async () => {
     await Promise.all([client.invalidateQueries({ queryKey: ["public-agent-repository", id] }), client.invalidateQueries({ queryKey: [PUBLIC_REPOSITORIES_QUERY_KEY] })]);
@@ -253,26 +268,34 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   function preparationFeedback(result: PublicAgentRepositorySync) {
     return publicRepositoryPreparationFeedback(result, labels);
   }
-  const busy = sync.isPending || fork.isPending || clone.isPending;
+  const busy = sync.isPending || fork.isPending || clone.isPending || cloneAction !== null || withdraw.isPending;
+  const busyMessage = sync.isPending ? labels.syncingGitHub
+    : cloneAction || clone.isPending ? cloneAction === "agent" ? labels.preparingAgentCopy : labels.preparingClone
+      : fork.isPending ? labels.forkingRepository : withdraw.isPending ? labels.withdrawingSharing : "";
+  const actions: PublicRepositoryAction[] = repository ? [
+    { id: "clone", label: isDesktopRuntime() ? labels.cloneRepository : labels.transferZip, icon: isDesktopRuntime() ? FolderSync : Download, disabled: !repository.files.length || busy, onSelect: () => { clone.reset(); setCloneAction("clone"); void clone.mutateAsync({ snapshot: repository, method: isDesktopRuntime() ? "home" : "zip" }).then((snapshot) => { if (activeCloneContext.current === cloneContext) setTransfer(snapshot); }).catch(() => {}).finally(() => { if (activeCloneContext.current === cloneContext) setCloneAction(null); }); } },
+    { id: "agent", label: t.space.configSnapshots.syncWithAgent, icon: Copy, disabled: !repository.files.length || busy, onSelect: () => { clone.reset(); setCloneAction("agent"); void copy.copy(async () => publicRepositoryClonePrompt(await clone.mutateAsync({ snapshot: repository, method: "agent" }), locale)).catch(() => {}).finally(() => { if (activeCloneContext.current === cloneContext) setCloneAction(null); }); } },
+    { id: "fork", label: !user || user.isLocalMode ? `${labels.forkRepository} · ${t.dashboard.goLogin}` : !member ? `${labels.forkRepository} · ${t.mcp.upgrade}` : labels.forkRepository, icon: GitFork, separator: true, href: !user || user.isLocalMode ? "/login" : !member ? "/pricing" : undefined, disabled: busy || !settings.data?.enabled, onSelect: async () => { if (await confirmAction(labels.forkConfirm)) fork.mutate(repository); } },
+    ...(repository.githubSource ? [{ id: "sync", label: sync.isPending ? labels.syncingGitHub : repository.syncDisabledReason ? labels.syncGitHub : repository.githubSource.upstreamStatus ? labels.syncRecheckGitHub : labels.syncGitHub, icon: RefreshCw, disabled: busy || Boolean(repository.syncDisabledReason), title: repository.syncDisabledReason ? syncFeedback({ status: "skipped", code: repository.syncDisabledReason }) : undefined, onSelect: () => sync.mutate() }] : []),
+    ...(ownership.data?.publication ? [{ id: "withdraw", label: labels.revokeSharing, icon: Undo2, danger: true, separator: true, disabled: withdraw.isPending || busy, onSelect: async () => { if (await confirmAction(labels.revokeConfirm)) withdraw.mutate(); } }] : []),
+  ] : [];
   const back = <Link to="/repositories" search={directorySearch} className="text-sm underline">← {labels.publicRepositories}</Link>;
   if (detail.isPending && Number.isSafeInteger(id) && id > 0) return <PageContainer className="flex-1 py-8">{back}<p className="mt-5">{labels.loading}</p></PageContainer>;
   if (!repository || detail.isError) return <PageContainer className="flex-1 py-8">{back}<p role="alert" className="mt-5">{labels.sharingUnavailable}</p><button type="button" onClick={() => void detail.refetch()} className="mt-3 underline">{labels.refresh}</button></PageContainer>;
   return <PageContainer className="repository-detail flex-1 py-8 sm:py-10">
     {back}
     <header className="mt-6 border-b pb-6"><div className="flex items-start gap-3"><FolderGit2 className="mt-1 h-6 w-6 shrink-0 text-[var(--ink-mid)]" aria-hidden="true" /><h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{repository.name}</h1></div><p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-[var(--ink-mid)]">{repository.description}</p><div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-mid)]"><span className="rounded-full border px-2 py-0.5">{repository.systemManaged ? labels.hubSystemBadge : labels.hubPublicBadge}</span><span>{repository.license}</span><span>{labels.fileCount.replace("{count}", String(repository.files.length))}</span><span>{formatBytes(repository.files.reduce((total, file) => total + file.sizeBytes, 0))}</span><span>r{repository.revision}</span></div></header>
-    <div className="mt-6 flex flex-wrap items-start gap-3">
-      {hasSkills && (!user || user.isLocalMode ? <a href={`/login?redirectTo=${encodeURIComponent(repositoryKoiLoginRedirect(repositoryId, routeSearch, hash))}`} className="rounded-full border px-4 py-2 text-sm">{t.koi.installToKoi} · {t.dashboard.goLogin}</a> : canInstallKoi ? <button type="button" disabled={busy || Boolean(koiTarget)} onClick={openKoi} className="rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{t.koi.installToKoi}</button> : null)}
+    <div className="mt-6 flex flex-wrap items-center gap-3">
+      {hasSkills && (!user || user.isLocalMode ? <a href={`/login?redirectTo=${encodeURIComponent(repositoryKoiLoginRedirect(repositoryId, routeSearch, hash))}`} className="inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm">{t.koi.viewSkills} · {t.dashboard.goLogin}</a> : member ? <button type="button" disabled={busy || Boolean(koiTarget)} aria-busy={loadingInstallStatus} onClick={openKoi} className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${installedCount > 0 ? "border-[var(--ink-line)] hover:bg-[var(--ink-wash)]" : "border-transparent text-white hover:brightness-95"}`} style={installedCount > 0 ? { background: "var(--ink-paper-soft)" } : { background: "var(--cinnabar)" }}>{loadingInstallStatus ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : installedCount > 0 && <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}{installLabel}</button> : null)}
       {!hasSkills && <span className="self-center text-xs text-[var(--ink-faint)]">{t.koi.noInstallableSkills}</span>}
-      {!user || user.isLocalMode ? <Link to="/login" className="rounded-full border px-4 py-2 text-sm">{labels.starRepository} · {t.dashboard.goLogin}</Link> : <button type="button" disabled={star.isPending || busy} aria-pressed={repository.starred} onClick={() => star.mutate()} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm disabled:opacity-50"><Star className={`h-4 w-4 ${repository.starred ? "fill-current" : ""}`} />{repository.starred ? labels.unstarRepository : labels.starRepository} · {repository.starCount ?? 0}</button>}
-      <LocalSyncMenu label={labels.cloneRepository} disabled={!repository.files.length || clone.isPending || sync.isPending} download={!isDesktopRuntime()} onKoinote={() => { clone.reset(); void clone.mutateAsync({ snapshot: repository, method: isDesktopRuntime() ? "home" : "zip" }).then((snapshot) => { if (activeCloneContext.current === cloneContext) setTransfer(snapshot); }).catch(() => {}); }} onAgent={() => { clone.reset(); void copy.copy(async () => publicRepositoryClonePrompt(await clone.mutateAsync({ snapshot: repository, method: "agent" }), locale)).catch(() => {}); }} />
-      {!user || user.isLocalMode ? <Link to="/login" className="rounded-full border px-4 py-2 text-sm">{labels.forkRepository} · {t.dashboard.goLogin}</Link>
-        : !member ? <Link to="/pricing" className="rounded-full border px-4 py-2 text-sm">{labels.forkRepository} · {t.mcp.upgrade}</Link>
-        : <button type="button" className="rounded-full border px-4 py-2 text-sm disabled:opacity-50" disabled={fork.isPending || sync.isPending || !settings.data?.enabled} onClick={async () => { if (await confirmAction(labels.forkConfirm)) fork.mutate(repository); }}>{labels.forkRepository}</button>}
-      {repository.githubSource && <button type="button" className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm disabled:opacity-50" disabled={busy || Boolean(repository.syncDisabledReason)} title={repository.syncDisabledReason ? syncFeedback({ status: "skipped", code: repository.syncDisabledReason }) : undefined} aria-busy={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}{sync.isPending ? labels.syncingGitHub : repository.syncDisabledReason ? labels.syncGitHub : repository.githubSource.upstreamStatus ? labels.syncRecheckGitHub : labels.syncGitHub}</button>}
-      {ownership.data?.publication && <button type="button" className="rounded-full border px-4 py-2 text-sm disabled:opacity-50" disabled={withdraw.isPending || busy} onClick={async () => { if (await confirmAction(labels.revokeConfirm)) withdraw.mutate(); }}>{labels.revokeSharing}</button>}
+      {!user || user.isLocalMode ? <Link to="/login" className="inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm">{labels.starRepository} · {t.dashboard.goLogin}</Link> : <button type="button" disabled={star.isPending || busy} aria-pressed={repository.starred} onClick={() => star.mutate()} className="inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-sm transition hover:bg-[var(--ink-wash)] disabled:opacity-50"><Star className={`h-4 w-4 ${repository.starred ? "fill-current" : ""}`} aria-hidden="true" />{repository.starred ? labels.unstarRepository : labels.starRepository} · {repository.starCount ?? 0}</button>}
+      <PublicRepositoryActionsMenu label={labels.repositoryActions} actions={actions} />
     </div>
+    {busyMessage && <p role="status" aria-live="polite" className="mt-3 inline-flex items-center gap-2 text-sm text-[var(--ink-mid)]"><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />{busyMessage}</p>}
     {star.isError && <p role="alert" className="mt-3 text-sm">{labels.starFailed}</p>}
     {koiMessage && <p role="alert" className="mt-3 text-sm">{koiMessage}</p>}
+    {member && hasSkills && !koiTarget && koi.isError && <div className="mt-3"><KoiRetry label={t.koi.loadFailed} action={t.koi.retry} busy={koi.isFetching} onRetry={() => void koi.refetch()} /></div>}
+    {canInstallKoi && !koiTarget && installed.isError && <div className="mt-3"><KoiRetry label={t.koi.installStatusUnavailable} action={t.koi.retry} busy={installed.isFetching} onRetry={() => void installed.refetch()} /></div>}
     {member && !settings.isPending && !settings.data?.enabled && <Link to="/space/settings" className="mt-2 inline-block text-xs underline">{labels.forkEnable}</Link>}
     {repository.githubSource && repository.syncDisabledReason && <p className="mt-3 text-sm text-[var(--ink-mid)]">{syncFeedback({ status: "skipped", code: repository.syncDisabledReason })}</p>}
     {fork.isError && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--cinnabar)" }}>{fork.error instanceof ApiError && fork.error.code === "revision_conflict" ? labels.sharingConflict : fork.error instanceof ApiError && fork.error.code === "agent_workspace_disabled" ? labels.forkEnable : githubImportErrorMessage(fork.error, labels, labels.forkFailed)}</p>}
@@ -299,6 +322,6 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
     </div>
     {transfer && <AgentWorkspaceTransferDialog workspace={transfer} source={publicAgentRepositoryTransferSource(transfer)} initialDestination={isDesktopRuntime() ? "home" : "zip"} onClose={() => setTransfer(null)} onComplete={(value) => { setTransfer(null); setMessage(value); }} />}
     {copy.dialog}
-    {koiTarget && canInstallKoi && user && <KoiInstallDialog authUserId={user.authUserId} hubTarget={koiTarget} onClose={() => setKoiTarget(undefined)} />}
+    {koiTarget && member && user && <KoiInstallDialog authUserId={user.authUserId} hubTarget={koiTarget} onClose={() => setKoiTarget(undefined)} />}
   </PageContainer>;
 }

@@ -1,4 +1,4 @@
-import { FolderUp, Github, LoaderCircle, X } from "lucide-react";
+import { ChevronDown, FolderUp, Github, LoaderCircle, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api";
@@ -7,7 +7,7 @@ import { koiFolderEntries, koiFolderPackages, koiSelectedFolderEntries, type Koi
 import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiImportInput, type KoiImportConfirmation, type KoiOverview } from "../koiSkills";
 import { pushModal } from "../modalStack";
 import { formatBytes } from "../storage";
-import { KoiPending, KoiSkillCompatibilityNote, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
+import { KoiPending, KoiRetry, KoiSkillCompatibilityNote, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
 import { KoiLegacyBanner } from "./KoiLegacyBanner";
 
 export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePreview, hubTarget, initialSource = "folder", migration = false }: { authUserId: string; onClose: () => void; updateTarget?: KoiSkill; resumePreview?: KoiPreview; hubTarget?: KoiHubTarget; initialSource?: "folder" | "github"; migration?: boolean }) {
@@ -16,6 +16,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const client = useQueryClient();
   const overviewKey = [KOI_SETTINGS_QUERY_KEY, authUserId];
   const overview = useQuery({ queryKey: overviewKey, queryFn: getKoiOverview, retry: false });
+  const canInstall = overview.isSuccess && overview.data.managementAvailable && overview.data.canInstall;
   const [migrating, setMigrating] = useState(migration);
   const migrationOnly = useRef(migration).current;
   const legacy = overview.data?.settings.libraryMode === "legacy";
@@ -158,8 +159,8 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     }
   };
   useEffect(() => {
-    if ((migration || hubTarget && !legacy && !migrating) && overview.isSuccess && !resumePreview && !autoStarted.current) { autoStarted.current = true; void loadRemote(); }
-  }, [overview.isSuccess, legacy, migrating]);
+    if ((migration || hubTarget && !legacy && !migrating) && canInstall && !resumePreview && !autoStarted.current) { autoStarted.current = true; void loadRemote(); }
+  }, [canInstall, legacy, migrating]);
 
   const complete = async () => {
     previewRef.current = null;
@@ -251,21 +252,24 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const oversized = uploadEntries.some((entry) => entry.file.size > 128 * 1024);
   const tooMany = uploadEntries.length > 512 || uploadEntries.reduce((sum, entry) => sum + entry.file.size, 0) > 8 * 1024 * 1024;
 
-  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancel(); }}>
-    <div role="dialog" aria-modal="true" aria-labelledby="koi-install-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border sm:rounded-2xl" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)" }}>
-      <header className="flex items-start justify-between gap-3 border-b p-5" style={{ borderColor: "var(--ink-line)" }}>
-        <div><h2 id="koi-install-title" className="kn-heading-cn text-lg font-semibold">{migrating ? labels.legacyTitle : updateTarget ? `${labels.uploadNewVersion} · ${updateTarget.name}` : replacing ? labels.updateTitle : labels.installSkill}</h2><p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{migrating ? labels.legacyPreviewDescription : hubTarget ? hubTarget.name : preview?.sourceKind === "hub" ? String(preview.source.name ?? "") : source === "github" ? labels.githubUrlHint : labels.folderDescription}</p></div>
-        <button type="button" autoFocus onClick={cancel} aria-label={labels.close} className="rounded-lg border p-2" style={{ borderColor: "var(--ink-line)" }}><X className="h-4 w-4" /></button>
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancel(); }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="koi-install-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border shadow-2xl sm:rounded-2xl" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)" }}>
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-6" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+        <div className="min-w-0"><h2 id="koi-install-title" className="kn-heading-cn text-xl font-semibold">{migrating ? labels.legacyTitle : updateTarget ? `${labels.uploadNewVersion} · ${updateTarget.name}` : replacing ? labels.updateTitle : labels.installSkill}</h2><p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{migrating ? labels.legacyPreviewDescription : hubTarget ? hubTarget.name : preview?.sourceKind === "hub" ? String(preview.source.name ?? "") : source === "github" ? labels.githubUrlHint : labels.folderDescription}</p></div>
+        <button type="button" autoFocus onClick={cancel} aria-label={labels.close} className="shrink-0 rounded-lg p-2 transition hover:bg-[var(--ink-wash-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cinnabar)]"><X className="h-5 w-5" /></button>
       </header>
-      <div className="space-y-4 overflow-y-auto p-5">
+      <div className="min-h-0 space-y-5 overflow-y-auto p-4 sm:p-6">
         {!preview && overview.isPending && <KoiPending label={labels.loading} />}
-        {!preview && overview.isError && <button type="button" onClick={() => void overview.refetch()} className="text-sm underline">{labels.loadFailed} · {labels.retry}</button>}
-        {legacy && (!preview || migrating && preview.status === "failed") && !busy && overview.data && <KoiLegacyBanner settings={overview.data.settings} count={overview.data.legacySkillCount} onReview={() => { autoStarted.current = true; setMigrating(true); void loadRemote(true); }} onChanged={async () => { await client.invalidateQueries({ queryKey: overviewKey, exact: true }); if (migration && client.getQueryData<typeof overview.data>(overviewKey)?.settings.libraryMode === "installed") cancel(); }} />}
-        {!preview && !hubTarget && !migrating && !legacy && overview.isSuccess && <>
-          {!updateTarget && <div role="tablist" aria-label={labels.installSource} className="flex flex-wrap gap-3 text-sm">
-            <button type="button" role="tab" aria-selected={source === "folder"} disabled={Boolean(busy)} onClick={() => { setSource("folder"); setError(""); }} className="rounded-lg border px-3 py-2 aria-selected:font-semibold">{labels.sourceFolder}</button>
-            <button type="button" role="tab" aria-selected={source === "github"} disabled={Boolean(busy)} onClick={() => { setSource("github"); setError(""); }} className="rounded-lg border px-3 py-2 aria-selected:font-semibold">{labels.sourceGithub}</button>
-            <a href="/repositories" className="px-3 py-2 underline">{labels.hubBrowse}</a>
+        {!preview && overview.isError && <KoiRetry label={labels.loadFailed} action={labels.retry} busy={overview.isFetching} onRetry={() => void overview.refetch()} />}
+        {!preview && overview.isSuccess && !canInstall && <p role="alert" className="text-sm">{overview.data.managementAvailable ? labels.koiMembersOnly : labels.koiUnavailable}</p>}
+        {canInstall && legacy && (!preview || migrating && preview.status === "failed") && !busy && <KoiLegacyBanner settings={overview.data.settings} count={overview.data.legacySkillCount} onReview={() => { autoStarted.current = true; setMigrating(true); void loadRemote(true); }} onChanged={async () => { await client.invalidateQueries({ queryKey: overviewKey, exact: true }); if (migration && client.getQueryData<typeof overview.data>(overviewKey)?.settings.libraryMode === "installed") cancel(); }} />}
+        {!preview && !hubTarget && !migrating && !legacy && canInstall && <>
+          {!updateTarget && <div className="flex flex-wrap items-center gap-3">
+            <div role="tablist" aria-label={labels.installSource} className="inline-flex rounded-lg border p-1" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}>
+              <button type="button" role="tab" aria-selected={source === "folder"} disabled={Boolean(busy)} onClick={() => { setSource("folder"); setError(""); }} className="rounded-md px-3 py-2 text-sm transition aria-selected:font-semibold aria-selected:shadow-sm disabled:opacity-50" style={source === "folder" ? { background: "var(--ink-paper-soft)" } : undefined}>{labels.sourceFolder}</button>
+              <button type="button" role="tab" aria-selected={source === "github"} disabled={Boolean(busy)} onClick={() => { setSource("github"); setError(""); }} className="rounded-md px-3 py-2 text-sm transition aria-selected:font-semibold aria-selected:shadow-sm disabled:opacity-50" style={source === "github" ? { background: "var(--ink-paper-soft)" } : undefined}>{labels.sourceGithub}</button>
+            </div>
+            <a href="/repositories" className="px-1 py-2 text-sm underline underline-offset-4" style={{ color: "var(--ink-mid)" }}>{labels.hubBrowse}</a>
           </div>}
           {source === "github" ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void loadRemote(); }}>
             <label className="block text-sm">{labels.githubUrlLabel}<input type="url" required value={githubUrl} disabled={Boolean(busy)} onChange={(event) => setGithubUrl(event.target.value)} placeholder="https://github.com/owner/repo" className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
@@ -290,9 +294,9 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
               setError(next.length === 0 ? labels.folderEmpty : found.length === 0 ? labels.koiNoSkills : "");
             } catch { setEntries([]); setDirectories([]); setError(labels.koiSkillInvalid); }
           }} />
-          <button type="button" disabled={Boolean(busy)} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--ink-line)" }}><FolderUp className="h-4 w-4" />{entries.length ? labels.rechoose : labels.folderChoose}</button>
-          {packages.length > 0 && <fieldset disabled={Boolean(busy)} className="space-y-2 rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}>
-            <legend className="px-1 text-xs font-semibold">{labels.folderSelectSkills}</legend>
+          <button type="button" disabled={Boolean(busy)} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink-wash)] disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}><FolderUp className="h-4 w-4" />{entries.length ? labels.rechoose : labels.folderChoose}</button>
+          {packages.length > 0 && <fieldset disabled={Boolean(busy)} className="space-y-2 rounded-lg border p-4 disabled:opacity-60" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+            <legend className="px-1 text-sm font-semibold">{labels.folderSelectSkills}</legend>
             {packages.map((item) => <label key={item.directory} className="flex items-start gap-2.5 text-sm">
               <input type={updateTarget ? "radio" : "checkbox"} name="folder-package" className="mt-1 accent-[var(--cinnabar)]" checked={directories.includes(item.directory)} onChange={() => setDirectories((current) => updateTarget ? [item.directory] : current.includes(item.directory) ? current.filter((path) => path !== item.directory) : [...current, item.directory])} />
               <span className="break-all">{item.directory || folderName || "SKILL.md"}<span className="ml-2 text-xs" style={{ color: "var(--ink-mid)" }}>{labels.fileCount.replace("{count}", String(item.entries.length))} · {formatBytes(item.entries.reduce((sum, entry) => sum + entry.file.size, 0), locale)}</span></span>
@@ -300,41 +304,57 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
           </fieldset>}
           {oversized && <p role="alert" className="text-xs" style={{ color: "var(--cinnabar)" }}>{labels.fileTooLarge}</p>}
           {tooMany && <p role="alert" className="text-xs" style={{ color: "var(--cinnabar)" }}>{labels.folderImportLimit}</p>}
-          {packages.length > 0 && <button type="button" disabled={Boolean(busy) || uploadEntries.length === 0 || oversized || tooMany} onClick={() => void upload()} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{labels.uploadAndAnalyze}</button>}
+          {packages.length > 0 && <button type="button" disabled={Boolean(busy) || uploadEntries.length === 0 || oversized || tooMany} onClick={() => void upload()} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{labels.uploadAndAnalyze}</button>}
           <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.folderCloudNotice}</p>
           </>}
         </>}
-        {!preview && hubTarget && !legacy && !busy && <button type="button" onClick={() => void loadRemote()} className="text-sm underline">{labels.retry}</button>}
+        {!preview && hubTarget && !legacy && !busy && canInstall && <button type="button" onClick={() => void loadRemote()} className="text-sm underline">{labels.retry}</button>}
         {busy && <KoiPending label={busy === "upload" ? `${labels.uploading} ${progress}/${uploadEntries.length}` : busy === "analyze" ? migrating ? labels.legacyAnalyzing.replace("{count}", String(overview.data?.legacySkillCount ?? 0)) : labels.analyzing : busy === "check" ? labels.checkingInstallResult : confirmationSlow ? labels.installingSlow : labels.installing} />}
         {preview?.status === "ready" && <>
-          <h3 className="text-sm font-semibold">{labels.previewTitle}</h3>
+          <h3 className="text-base font-semibold">{labels.previewTitle}</h3>
           {preview.candidates.length > 1 && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.previewMultiHint}</p>}
           {migrating && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.legacyStorage.replace("{size}", formatBytes(preview.candidates.filter((item) => selected.includes(item.id)).reduce((total, item) => total + item.sizeBytes, 0), locale))}</p>}
-          <p className="break-all text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}</p>
-          <ul className="space-y-3">{preview.candidates.map((candidate) => <li key={candidate.id} className="rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}>
-            {migrating && <p className="mb-2 break-all text-xs" style={{ color: "var(--ink-mid)" }}>{migrationSourceLabel(preview, candidate.id)}</p>}
-            <label className="flex items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy) || confirmationPending} className="mt-1 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
-              <span className="min-w-0"><span className="text-sm font-semibold">{candidate.name}</span>{candidate.installedStatus && <span className="ml-2 text-xs" style={{ color: candidate.installedStatus === "update" ? "var(--cinnabar)" : "var(--ink-mid)" }}>{candidate.installedStatus === "update" ? labels.updateAvailable : labels.alreadyInstalled}</span>}<span className="mt-1 block text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{candidate.description}</span><span className="mt-1 block break-all text-xs" style={{ color: "var(--ink-faint)" }}>{candidate.entryPath} · {formatBytes(candidate.sizeBytes, locale)} · {labels.fileCount.replace("{count}", String(candidate.fileCount))}</span></span>
+          <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }} title={preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}>{preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}</p>
+          <ul className="space-y-3">{preview.candidates.map((candidate) => <li key={candidate.id} className="rounded-lg border p-4 sm:p-5" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+            {migrating && <p className="mb-3 break-all text-xs" style={{ color: "var(--ink-faint)" }}>{migrationSourceLabel(preview, candidate.id)}</p>}
+            <label className="flex cursor-pointer items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy) || confirmationPending} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
+              <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold"><span>{candidate.name}</span>{candidate.installedStatus && <span className="rounded px-1.5 py-0.5 text-xs font-medium" style={{ background: candidate.installedStatus === "update" ? "var(--cinnabar-soft)" : "var(--ink-wash-strong)", color: candidate.installedStatus === "update" ? "var(--cinnabar)" : "var(--ink-mid)" }}>{candidate.installedStatus === "update" ? labels.updateAvailable : labels.alreadyInstalled}</span>}</span><span className="mt-1.5 block text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{candidate.description}</span><span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: "var(--ink-faint)" }}><span className="break-all">{candidate.entryPath}</span><span aria-hidden="true">·</span><span>{formatBytes(candidate.sizeBytes, locale)}</span><span aria-hidden="true">·</span><span>{labels.fileCount.replace("{count}", String(candidate.fileCount))}</span><span className="rounded px-1.5 py-0.5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{candidate.metadataFormat === "plain-markdown" ? labels.formatPlain : labels.formatStandard}</span></span></span>
             </label>
-            <p className="mt-2 break-words text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.licenseLabel}：{candidate.license || labels.licenseNone} · {candidate.metadataFormat === "plain-markdown" ? labels.formatPlain : labels.formatStandard}</p>
-            <div className="mt-2"><KoiSkillCompatibilityNote compatibility={candidate.compatibility} /></div>
-            {candidate.installedStatus === "update" && <p className="mt-2 text-xs" style={{ color: "var(--ink-mid)" }}>{labels.updateComparison.replace("{version}", candidate.previousVersion ?? "—").replace("{oldSize}", formatBytes(candidate.previousSizeBytes ?? 0, locale)).replace("{newSize}", formatBytes(candidate.sizeBytes, locale))}</p>}
-            <details className="mt-3"><summary className="cursor-pointer text-xs underline">{labels.viewSkillMd}</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-6">{candidate.instructions}</pre></details>
+            <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--ink-line)" }}>
+              {candidate.license.trim() ? <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs underline underline-offset-2 [&::-webkit-details-marker]:hidden" style={{ color: "var(--ink-mid)" }}>{labels.viewLicense}<ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" aria-hidden="true" /></summary>
+                <p className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-md p-3 text-xs leading-5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{candidate.license}</p>
+              </details> : <p className="text-xs" style={{ color: "var(--ink-faint)" }}>{labels.licenseLabel} · {labels.licenseNone}</p>}
+              <div className="mt-3"><KoiSkillCompatibilityNote compatibility={candidate.compatibility} /></div>
+              {candidate.installedStatus === "update" && <p className="mt-2 text-xs" style={{ color: "var(--ink-mid)" }}>{labels.updateComparison.replace("{version}", candidate.previousVersion ?? "—").replace("{oldSize}", formatBytes(candidate.previousSizeBytes ?? 0, locale)).replace("{newSize}", formatBytes(candidate.sizeBytes, locale))}</p>}
+              <details className="group mt-2">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs underline underline-offset-2 [&::-webkit-details-marker]:hidden" style={{ color: "var(--ink-mid)" }}>{labels.viewSkillMd}<ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" aria-hidden="true" /></summary>
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md p-3 text-xs leading-5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{candidate.instructions}</pre>
+              </details>
+            </div>
           </li>)}</ul>
           {preview.candidates.length === 0 ? <p className="text-sm">{labels.koiNoSkills}</p> : <>
             {preview.candidates.some((candidate) => selected.includes(candidate.id) && !candidate.installedStatus) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enable} disabled={Boolean(busy) || confirmationPending} onChange={(event) => setEnable(event.target.checked)} />{labels.enableAfterInstall}</label>}
             {preview.candidates.some((candidate) => selected.includes(candidate.id) && Boolean(candidate.installedStatus)) && <p className="text-xs" style={{ color: "var(--ink-mid)" }}>{labels.existingKeepsState}</p>}
             <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.installNotGuaranteed}</p>
-            <button type="button" disabled={Boolean(busy) || selected.length === 0} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{busy === "confirm" && <LoaderCircle className="h-4 w-4 animate-spin" />}{confirmationPending ? labels.retryInstall : migrating ? labels.legacyConfirm.replace("{count}", String(selected.length)) : replacing ? labels.confirmUpdate : labels.confirmInstall.replace("{count}", String(selected.length))}</button>
           </>}
         </>}
         {preview && preview.rejected.length > 0 && <div className="rounded-lg border p-3" style={{ borderColor: "var(--ink-line)" }}><h3 className="text-xs font-semibold">{labels.rejectedTitle}</h3><ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{preview.rejected.map((item) => <li key={`${item.entryPath}:${item.reason}`}>{item.entryPath} — {koiRejectionLabel(item, labels)}</li>)}</ul></div>}
         {preview && ["failed", "expired", "cancelled"].includes(preview.status) && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{koiPreviewErrorLabel(preview, labels)}</p>}
         {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
         {confirmationPending && !busy && <button type="button" onClick={() => void checkConfirmation()} className="text-sm underline">{labels.checkInstallResult}</button>}
-        {preview && !busy && !confirmationPending && <div className="flex gap-4">{pending && <button type="button" onClick={() => void (preview.sourceKind === "folder" ? upload() : loadRemote())} className="text-sm underline">{labels.retry}</button>}<button type="button" onClick={resumePreview ? cancel : restart} className="text-sm underline">{resumePreview ? labels.close : labels.startOver}</button></div>}
+        {preview && !busy && !confirmationPending && pending && <button type="button" onClick={() => void (preview.sourceKind === "folder" ? upload() : loadRemote())} className="text-sm underline underline-offset-2">{labels.retry}</button>}
       </div>
-      <footer className="flex items-center justify-between gap-4 border-t p-4" style={{ borderColor: "var(--ink-line)" }}><div className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}><p>{labels.installRuntimeNotice}</p><p>{labels.skillTaskScope}</p>{(busy === "confirm" || confirmationPending) && <p>{labels.installCloseNotice}</p>}</div><button type="button" onClick={cancel} className="shrink-0 rounded-lg border px-4 py-2 text-sm" style={{ borderColor: "var(--ink-line)" }}>{busy === "confirm" || confirmationPending ? labels.close : labels.cancel}</button></footer>
+      <footer className="shrink-0 space-y-3 border-t px-4 py-4 sm:px-6" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {preview && !busy && !confirmationPending && !resumePreview ? <button type="button" onClick={restart} className="py-2 text-xs underline underline-offset-2" style={{ color: "var(--ink-mid)" }}>{labels.startOver}</button> : <span />}
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <button type="button" onClick={cancel} className="rounded-lg border px-4 py-2.5 text-sm transition hover:bg-[var(--ink-wash)]" style={{ borderColor: "var(--ink-line)" }}>{busy === "confirm" || confirmationPending ? labels.close : labels.cancel}</button>
+            {preview?.status === "ready" && preview.candidates.length > 0 && <button type="button" disabled={Boolean(busy) || selected.length === 0} onClick={() => void submit()} className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{busy === "confirm" && <LoaderCircle className="h-4 w-4 animate-spin" />}{confirmationPending ? labels.retryInstall : migrating ? labels.legacyConfirm.replace("{count}", String(selected.length)) : replacing ? labels.confirmUpdate : labels.confirmInstall.replace("{count}", String(selected.length))}</button>}
+          </div>
+        </div>
+        <div className="space-y-0.5 text-xs leading-5" style={{ color: "var(--ink-mid)" }}><p>{labels.installRuntimeNotice}</p><p>{labels.skillTaskScope}</p>{(busy === "confirm" || confirmationPending) && <p>{labels.installCloseNotice}</p>}</div>
+      </footer>
     </div>
   </div>;
 }

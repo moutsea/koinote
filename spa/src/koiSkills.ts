@@ -84,8 +84,25 @@ export const KOI_SETTINGS_QUERY_KEY = "koi-settings";
 export const getKoiOverview = () => apiJson<KoiOverview>("/api/koi/settings");
 export const updateKoiSettings = (input: { expectedRevision: number; autoSkills: boolean }) =>
  apiJson<{ settings: KoiSettings }>("/api/koi/settings", { method: "PUT", body: JSON.stringify(input) });
-export const listKoiSkills = (params: { q?: string; source?: KoiSkill["sourceKind"] | ""; state?: string; cursor?: string }) =>
- apiJson<KoiSkillPage>(`/api/koi/skills?${new URLSearchParams({ q: params.q ?? "", source: params.source ?? "", state: params.state ?? "", cursor: params.cursor ?? "" })}`);
+export const listKoiSkills = (params: { q?: string; source?: KoiSkill["sourceKind"] | ""; state?: string; cursor?: string; hubWorkspaceId?: number }, signal?: AbortSignal) => {
+ const query = new URLSearchParams({ q: params.q ?? "", source: params.source ?? "", state: params.state ?? "", cursor: params.cursor ?? "" });
+ if (params.hubWorkspaceId !== undefined) query.set("hubWorkspaceId", String(params.hubWorkspaceId));
+ return apiJson<KoiSkillPage>(`/api/koi/skills?${query}`, { signal });
+};
+
+// Read only this repository's installations, including disabled Skills and pages
+// beyond the first 20. The shared query-key prefix keeps install/remove refreshes
+// in sync with the Skill library.
+export async function getKoiHubSkills(workspaceId: number, signal?: AbortSignal): Promise<KoiSkill[]> {
+ const skills: KoiSkill[] = [];
+ let cursor = "";
+ do {
+  const page = await listKoiSkills({ source: "hub", hubWorkspaceId: workspaceId, cursor }, signal);
+  skills.push(...page.skills.filter((skill) => skill.sourceKind === "hub" && Number(skill.source.workspaceId) === workspaceId));
+  cursor = page.nextCursor;
+ } while (cursor);
+ return skills;
+}
 export const getKoiSkill = (id: string) =>
  apiJson<{ skill: KoiSkill; files: KoiSkillFile[]; instructions: string }>(`/api/koi/skills/${encodeURIComponent(id)}`);
 export const getKoiSkillFile = (id: string, position: number, version: string) =>

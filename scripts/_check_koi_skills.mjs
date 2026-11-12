@@ -215,7 +215,11 @@ try {
   assert.ok(document.body.textContent.includes(labels.rejectedTitle));
   assert.ok(document.body.textContent.includes(labels.reject_sensitive_data_detected));
   const previewCard = document.querySelector('input[name="preview-candidate"]').closest("li");
-  assert.ok(previewCard.textContent.includes("MIT"), "the license is visible before confirmation");
+  const licenseDetails = [...previewCard.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent === labels.viewLicense);
+  assert.ok(licenseDetails, "the license remains available before confirmation");
+  assert.equal(licenseDetails.hasAttribute("open"), false, "license text is collapsed by default");
+  assert.equal(licenseDetails.querySelector("p").textContent, candidate.license, "expanding retains the full original license");
+  assert.ok([...document.querySelectorAll('[role="dialog"] footer button')].some((button) => button.textContent.trim() === labels.confirmInstall.replace("{count}", "1")), "the install action stays in the fixed footer");
   assert.ok(previewCard.textContent.includes(labels.formatPlain));
   assert.ok(previewCard.textContent.includes(labels.articleUnavailable));
   assert.ok(previewCard.textContent.includes(labels.requirement_scripts_not_executed), "the preview explains declared script restrictions");

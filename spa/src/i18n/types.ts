@@ -552,6 +552,9 @@ export interface Messages {
     githubRateLimited: string;
     reject_missing_description: string;
     alreadyInstalled: string;
+    installedCount: string;
+    viewSkills: string;
+    installStatusUnavailable: string;
     analyzing: string;
     autoSkillsDescription: string;
     legacyTitle: string;
@@ -627,6 +630,7 @@ export interface Messages {
     koiUploadIncomplete: string;
     licenseLabel: string;
     licenseNone: string;
+    viewLicense: string;
     loadMore: string;
     loadedSkills: string;
     noDescription: string;

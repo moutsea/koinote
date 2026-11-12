@@ -14,7 +14,7 @@ func TestKoiSkillSourceFiltersAndPagination(t *testing.T) {
 	user := seedMCPUser(t, a.db, a, membershipTierLifetime)
 	other := seedMCPUser(t, a.db, a, membershipTierLifetime)
 	a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
-	seed := func(userID int, source string, enabled, deleted bool) {
+	seed := func(userID int, source string, enabled, deleted bool) string {
 		t.Helper()
 		installation, _ := randomUUID()
 		version, _ := randomUUID()
@@ -28,6 +28,7 @@ func TestKoiSkillSourceFiltersAndPagination(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		return installation
 	}
 	for index := range 22 {
 		seed(user.ID, "github", index != 0, false)
@@ -73,4 +74,49 @@ func TestKoiSkillSourceFiltersAndPagination(t *testing.T) {
 		})
 	}
 	koiFolderRequest(t, a, user, "GET", "/api/koi/skills?source=unknown", nil, 400)
+
+	// Repository status includes disabled installations and every page, but never
+	// another account, another repository, a different source, or a removed Skill.
+	seedHub := func(userID int, source string, workspace int, enabled, deleted bool) string {
+		id := seed(userID, source, enabled, deleted)
+		if _, err := a.db.Exec(context.Background(), `UPDATE koi_skill_installations SET source=jsonb_build_object('workspaceId',$2::int) WHERE id=$1`, id, workspace); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	expected := map[string]bool{}
+	for index := range 21 {
+		expected[seedHub(user.ID, "hub", 7, index != 0, false)] = true
+	}
+	seedHub(user.ID, "hub", 8, true, false)
+	seedHub(user.ID, "hub", 7, true, true)
+	seedHub(other.ID, "hub", 7, true, false)
+	seedHub(user.ID, "github", 7, true, false)
+	params := url.Values{"source": {"hub"}, "hubWorkspaceId": {"7"}}
+	for {
+		w := koiFolderRequest(t, a, user, "GET", "/api/koi/skills?"+params.Encode(), nil, 200)
+		var page struct {
+			Skills     []koiSkillInstallation `json:"skills"`
+			NextCursor string                 `json:"nextCursor"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+			t.Fatal(err)
+		}
+		for _, skill := range page.Skills {
+			if !expected[skill.ID] {
+				t.Fatalf("unexpected or duplicate Hub Skill: %+v", skill)
+			}
+			delete(expected, skill.ID)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		params.Set("cursor", page.NextCursor)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing %d Hub installations", len(expected))
+	}
+	for _, filter := range []string{"hubWorkspaceId=0", "hubWorkspaceId=-1", "hubWorkspaceId=invalid", "hubWorkspaceId=7&source=github"} {
+		koiFolderRequest(t, a, user, "GET", "/api/koi/skills?"+filter, nil, 400)
+	}
 }

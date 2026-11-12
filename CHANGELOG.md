@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.19] - 2026-11-12
+
+### Changed
+
+- Refined Skill installation previews with collapsed licenses and an always-visible confirmation button. Hub repositories group Clone, Fork and sync actions in one menu and display operation progress.
+- Hub Skill entries show installed status and partial installation counts. Settings and status failures can be retried, and signing in resumes the installation preview.
+
+### Fixed
+
+- Disabled installations now count toward installed status. Slow or failed status requests no longer block previews, and Skills are analyzed only after installation permission is confirmed.
+
 ## [1.1.18] - 2026-11-12
 
 ### Changed

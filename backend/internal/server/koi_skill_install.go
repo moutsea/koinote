@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,6 +99,15 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 	}
 	query, state := strings.TrimSpace(r.URL.Query().Get("q")), r.URL.Query().Get("state")
 	source := r.URL.Query().Get("source")
+	hubWorkspace := r.URL.Query().Get("hubWorkspaceId")
+	if hubWorkspace != "" {
+		id, parseErr := strconv.ParseInt(hubWorkspace, 10, 64)
+		if parseErr != nil || id <= 0 || source != "" && source != "hub" {
+			httpx.ErrorCode(w, 400, "bad_request", "Invalid Hub repository filter")
+			return
+		}
+		hubWorkspace = strconv.FormatInt(id, 10)
+	}
 	if len(query) > 800 || (source != "" && source != "github" && source != "folder" && source != "hub" && source != "migration") ||
 		(state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid Skill filter")
@@ -114,7 +124,8 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
  AND ($5='' OR ($5='enabled' AND i.enabled) OR ($5='disabled' AND NOT i.enabled)
  OR ($5='unavailable' AND NOT COALESCE((v.compatibility->>'conversation')::boolean,false)))
  AND ($6='' OR i.source_kind=$6)
- ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source)
+ AND ($7='' OR (i.source_kind='hub' AND i.source->>'workspaceId'=$7))
+ ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source, hubWorkspace)
 	if err != nil {
 		writeKoiError(w, err)
 		return

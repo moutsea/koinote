@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.19] - 2026-11-12
+
+### Changed
+
+- L’aperçu d’installation des Skills présente une mise en page améliorée, des licences repliées et un bouton de confirmation toujours visible. Les dépôts Hub regroupent les actions Clone, Fork et synchronisation dans un menu et affichent leur progression.
+- Les entrées Skills du Hub indiquent l’état installé et le nombre d’installations partielles. Les erreurs de lecture des réglages et de l’état peuvent être réessayées ; après connexion, l’aperçu d’installation reprend.
+
+### Fixed
+
+- Les installations désactivées sont désormais comptées dans l’état installé. Une lecture lente ou échouée de l’état ne bloque plus l’aperçu, et les Skills ne sont analysés qu’après confirmation du droit d’installation.
+
 ## [1.1.18] - 2026-11-12
 
 ### Changed

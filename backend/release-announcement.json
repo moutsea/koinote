@@ -1,32 +1,36 @@
 {
-  "version": "1.1.18",
+  "version": "1.1.19",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.18",
+      "title": "What's new in Koinote 1.1.19",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Migration confirmation now re-reads only selected Skills and reports repository scan timeouts. Delayed installation responses can be checked or safely retried, and closing the window does not interrupt an installation in progress."
+        "Refined Skill installation previews with collapsed licenses and an always-visible confirmation button. Hub repositories group Clone, Fork and sync actions in one menu and display operation progress.",
+        "Hub Skill entries show installed status and partial installation counts. Settings and status failures can be retried, and signing in resumes the installation preview."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.18 新功能",
+      "title": "Koinote 1.1.19 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "迁移确认只重新读取所选技能；仓库扫描超时会提示重试。安装响应延迟时可以查询结果或安全重试，关闭窗口不会中断进行中的安装。"
+        "优化技能安装预览的布局，许可证默认折叠，安装确认按钮始终可见；Hub 仓库将 Clone、Fork、同步等操作收拢至统一菜单，并展示操作进度。",
+        "Hub 技能入口显示已安装状态和部分安装数量；设置或状态读取失败时可直接重试，登录后继续打开安装预览。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.18",
+      "title": "Nouveautés de Koinote 1.1.19",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "La confirmation de migration relit uniquement les Skills sélectionnés et signale les délais d’analyse des dépôts. En cas de réponse tardive, le résultat peut être vérifié ou la même demande relancée sans risque ; fermer la fenêtre n’interrompt pas une installation en cours."
+        "L’aperçu d’installation des Skills présente une mise en page améliorée, des licences repliées et un bouton de confirmation toujours visible. Les dépôts Hub regroupent les actions Clone, Fork et synchronisation dans un menu et affichent leur progression.",
+        "Les entrées Skills du Hub indiquent l’état installé et le nombre d’installations partielles. Les erreurs de lecture des réglages et de l’état peuvent être réessayées ; après connexion, l’aperçu d’installation reprend."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.18 の新機能",
+      "title": "Koinote 1.1.19 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "移行の確認時は選択した Skill だけを再読み込みし、リポジトリの解析がタイムアウトした場合は明示します。インストール応答が遅い場合は結果を確認して安全に再試行でき、ウィンドウを閉じても進行中のインストールは中断されません。"
+        "スキルのインストールプレビューを改善し、ライセンスを初期状態で折りたたみ、確認ボタンを常に表示します。Hub リポジトリの Clone・Fork・同期などを一つのメニューにまとめ、処理状況を表示します。",
+        "Hub のスキル入口にインストール済みの状態と一部インストール済みの件数を表示します。設定や状態の読み込みに失敗した場合は再試行でき、ログイン後はインストールプレビューを再開します。"
       ]
     }
   }

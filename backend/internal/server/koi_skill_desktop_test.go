@@ -41,8 +41,9 @@ func TestKoiSkillAccountRollout(t *testing.T) {
 func TestKoiDesktopRequestScopes(t *testing.T) {
 	id := "550e8400-e29b-41d4-a716-446655440000"
 	routes := map[string]string{
-		"/api/koi/settings":                                     "GET PUT",
-		"/api/koi/skills":                                       "GET",
+		"/api/koi/settings": "GET PUT",
+		"/api/koi/skills":   "GET",
+		"/api/koi/skills?source=hub&hubWorkspaceId=7":           "GET",
 		"/api/koi/skills/" + id:                                 "GET PATCH DELETE",
 		"/api/koi/skills/" + id + "/check-update":               "POST",
 		"/api/koi/skills/" + id + "/files/1?version=" + id:      "GET",

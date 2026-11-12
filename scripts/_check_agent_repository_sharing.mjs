@@ -54,8 +54,19 @@ const h = globalThis.__sharingTest = {
     calls.push({ path, method, body });
     const gate = h.gates.get(`${method} ${path}`);
     if (gate) { h.gates.delete(`${method} ${path}`); await gate.promise; }
-    if (path === "/api/koi/settings") return { managementAvailable: Boolean(h.koiAvailable), canInstall: Boolean(h.koiAvailable), settings: { autoSkills: true, revision: 1 } };
-    if (path === "/api/koi/skill-imports") return { preview: { id: "hub-preview", sourceKind: "hub", source: { kind: "hub", name: publicRepository.name }, status: "ready", revision: 1, candidates: [], rejected: [] } };
+    if (path === "/api/koi/settings") {
+      if (h.koiOverviewError) throw new ApiError(503, "unavailable", "koi_unavailable");
+      return { managementAvailable: Boolean(h.koiAvailable), canInstall: Boolean(h.koiAvailable), settings: { autoSkills: true, revision: 1, libraryMode: "installed" }, legacySkillCount: 0 };
+    }
+    if (path.startsWith("/api/koi/skills?")) {
+      if (h.koiSkillsError) throw new ApiError(503, "unavailable", "koi_unavailable");
+      const params = new URL(path, "https://koinote.example").searchParams;
+      const skills = (h.koiSkillsByUser?.[h.user?.authUserId] ?? h.koiSkills ?? []).filter(skill => skill.sourceKind === "hub" && String(skill.source.workspaceId) === params.get("hubWorkspaceId"));
+      const offset = Number(params.get("cursor") || 0);
+      return { skills: skills.slice(offset, offset + 20), nextCursor: skills.length > offset + 20 ? String(offset + 20) : "", storage: { usedBytes: 0 } };
+    }
+    if (path === "/api/koi/skill-imports/hub-preview/confirm") { h.koiSkills = h.koiInstallResult; return { installed: h.koiSkills }; }
+    if (path === "/api/koi/skill-imports") return { preview: { id: "hub-preview", sourceKind: "hub", source: { kind: "hub", name: publicRepository.name }, status: "ready", revision: 1, candidates: h.koiCandidates ?? [], rejected: h.koiRejected ?? [] } };
     if (path === "/api/koi/skill-imports/hub-preview") return { status: "cancelled" };
     if (path === "/api/agent/github-credential") {
       if (method === "PUT") h.credential = { configured: true, tokenHint: body.token.slice(-4) };
@@ -240,7 +251,16 @@ function renderForkDestination(props) {
   root.render(createElement(QueryClientProvider, { client }, createElement(AgentRepositoryForkNotice, props)));
 }
 function button(label) { const result=[...document.querySelectorAll('button')].find(item=>item.textContent===label);assert.ok(Boolean(result),`Missing button: ${label}`);return result; }
-async function click(label) { await act(async()=>button(label).click());await settle(); }
+const actionProgress = () => document.querySelector('p[role="status"][aria-live="polite"]');
+async function openActions() {
+  const trigger = [...document.querySelectorAll('button')].find(item => item.textContent === labels.repositoryActions);
+  if (trigger && trigger.getAttribute('aria-expanded') !== 'true') { await act(async()=>trigger.click()); await settle(); }
+}
+async function actionButton(label) { await openActions(); return button(label); }
+async function click(label) {
+  if (![...document.querySelectorAll('button')].some(item => item.textContent === label)) await openActions();
+  await act(async()=>button(label).click()); await settle();
+}
 function reactProps(element) { assert.ok(Boolean(element));return element[Object.keys(element).find(key=>key.startsWith('__reactProps'))]; }
 async function input(selector,value) { await act(async()=>reactProps(document.querySelector(selector)).onChange({target:{value}}));await settle(); }
 async function submit() { await act(async()=>reactProps(document.querySelector('form')).onSubmit({preventDefault(){}}));await settle(); }
@@ -305,19 +325,21 @@ try {
   assert.ok(document.querySelector('pre')?.textContent.startsWith('# Shared skill'),'source tab preserves Markdown');
   await click(labels.readmeRendered);
   assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'Shared skill');
+  await openActions();
   assert.ok(Boolean(document.querySelector('a[href="/pricing"]')),"free users get the Fork membership entry");
-  assert.equal(button(labels.cloneRepository).disabled,false,"free users can clone");
+  assert.equal((await actionButton(labels.transferZip)).disabled,false,"free users can clone");
   h.failStar=true;await click(`${labels.starRepository} · 0`);
   assert.ok(document.body.textContent.includes(labels.starFailed));
   h.failStar=false;await click(`${labels.starRepository} · 0`);
   assert.equal(publicRepository.starred,true,"free users can Star");
   await click(`${labels.unstarRepository} · 1`);assert.equal(publicRepository.starred,false);
   h.failClone=true;
-  await click(labels.cloneRepository);await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions);await click(zh.space.configSnapshots.syncWithAgent);
   assert.ok(document.body.textContent.includes(labels.sharingUnavailable));
+  assert.equal(actionProgress(), null, 'a failed Clone clears its pending feedback');
   const failedClone=calls.findLast(call=>call.path.endsWith('/clone')).body;
   h.failClone=false;
-  await click(labels.cloneRepository);
+  await click(labels.repositoryActions);
   await click(zh.space.configSnapshots.syncWithAgent);
   assert.deepEqual(calls.findLast(call=>call.path.endsWith('/clone')).body,failedClone,"Clone retries preserve the request ID");
   const prompt=document.querySelector('textarea')?.value;
@@ -327,12 +349,12 @@ try {
   assert.equal(publicRepository.cloneCount,1,"a failed request followed by a successful retry counts once");
   await click(zh.space.syncCancel);
   h.loseCloneResponse=true;
-  await click(labels.cloneRepository);await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions);await click(zh.space.configSnapshots.syncWithAgent);
   const nextClone=calls.findLast(call=>call.path.endsWith('/clone')).body;
   assert.notEqual(nextClone.requestId,failedClone.requestId,"a new Clone after success must use a new request ID");
   assert.equal(publicRepository.cloneCount,2,"another Clone on the same page counts separately");
   h.loseCloneResponse=false;
-  await click(labels.cloneRepository);await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions);await click(zh.space.configSnapshots.syncWithAgent);
   assert.deepEqual(calls.findLast(call=>call.path.endsWith('/clone')).body,nextClone,"retry after a lost success response keeps its request ID");
   assert.equal(publicRepository.cloneCount,2,"a lost response must not make a retry double-count");
   await click(zh.space.syncCancel);
@@ -346,17 +368,47 @@ try {
   assert.deepEqual(calls.findLast(call=>call.path.endsWith('/fork')).body,first,"retry reuses the Fork request ID");
   assert.equal(navigations.at(-1).params.workspaceId,'8');
 
+  // Progress must remain visible after the menu closes, including preparation
+  // before the actual Clone/Fork request and the clipboard write after it.
+  for (const [action, progress, cancel] of [
+    [labels.transferZip, labels.preparingClone, labels.scanReviewCancel],
+    [zh.space.configSnapshots.syncWithAgent, labels.preparingAgentCopy, zh.space.syncCancel],
+    [labels.forkRepository, labels.forkingRepository],
+  ]) {
+    await mount(AgentPublicRepositoryPage);
+    const release = hold('POST', '/api/agent/repositories/7/sync?recheck=false');
+    await click(action);
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    assert.equal(actionProgress()?.textContent, progress, `${action} stays visible outside the closed menu`);
+    await act(async()=>release()); await settle();
+    assert.equal(actionProgress(), null, `${action} clears progress at completion`);
+    if (cancel) await click(cancel);
+  }
+  await mount(AgentPublicRepositoryPage);
+  let finishClipboard;
+  const clipboard = navigator.clipboard;
+  navigator.clipboard = { writeText: () => new Promise(resolve => { finishClipboard = resolve; }) };
+  await click(zh.space.configSnapshots.syncWithAgent);
+  assert.equal(typeof finishClipboard, 'function');
+  assert.equal(actionProgress()?.textContent, labels.preparingAgentCopy, 'progress covers clipboard work after repository preparation');
+  await act(async()=>finishClipboard()); await settle();
+  navigator.clipboard = clipboard;
+  assert.equal(actionProgress(), null);
+  assert.ok(document.body.textContent.includes(labels.copied));
+
   // Settings may change in another window while the Fork request is pending.
   h.enabled=true;
   await mount(AgentPublicRepositoryPage);
   const beforeDisabledFork=navigations.length;
   const releaseDisabledFork=hold('POST','/api/agent/repositories/7/fork');
   await click(labels.forkRepository);
+  assert.equal(actionProgress()?.textContent, labels.forkingRepository);
   h.enabled=false;
   await act(async()=>releaseDisabledFork());await settle();
+  assert.equal(actionProgress(), null, 'a rejected Fork clears progress');
   assert.equal(document.querySelector('[role="alert"]')?.textContent,labels.forkEnable,'disabled sync explains how to enable Fork again');
   assert.ok(!document.body.textContent.includes(labels.forkFailed),'disabled sync must not blame repository capacity');
-  assert.equal(button(labels.forkRepository).disabled,true,'the refreshed setting disables new Fork attempts');
+  assert.equal((await actionButton(labels.forkRepository)).disabled,true,'the refreshed setting disables new Fork attempts');
   assert.equal(navigations.length,beforeDisabledFork,'a rejected Fork never navigates');
   const disabledFork=calls.findLast(call=>call.path.endsWith('/fork')).body;
   h.enabled=true;
@@ -367,7 +419,7 @@ try {
 
   h.enabled=false;
   await mount(AgentPublicRepositoryPage);
-  assert.equal(button(labels.forkRepository).disabled,true);assert.ok(document.body.textContent.includes(labels.forkEnable));
+  assert.equal((await actionButton(labels.forkRepository)).disabled,true);assert.ok(document.body.textContent.includes(labels.forkEnable));
   h.user=null;
   await mount(AgentPublicRepositoriesPage);
   assert.ok(Boolean(document.querySelector('a[href="/repositories/7"]')),"public list works without a user session");
@@ -421,7 +473,7 @@ try {
   const loginHash = 'user-content-安装 & 配置';
   h.search = loginContext; h.hash = loginHash;
   await mount(AgentPublicRepositoryPage);
-  const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.installToKoi));
+  const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.viewSkills));
   assert.ok(installLogin, 'anonymous visitors can return to the Hub installation after login');
   const loginReturn = new URL(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), 'https://koinote.example');
   assert.equal(loginReturn.pathname, '/repositories/7');
@@ -442,10 +494,128 @@ try {
   assert.equal(koiInput.revision, publicRepository.revision);
   assert.equal(calls.filter(call => call.path.endsWith('/confirm')).length, koiConfirms, 'returning from login never auto-confirms an install');
   await click(zh.koi.cancel);
-  h.koiAvailable = false; h.search = { installKoi: true };
+  // Read account-scoped installations and keep the action current after changes.
+  h.search = {}; h.hash = '';
+  const installedSkill = { id: 'installed-hub-skill', name: 'demo', sourceKind: 'hub', source: { workspaceId: 7, path: '.codex/skills/demo' }, enabled: false, entryPath: 'SKILL.md' };
+  h.koiSkills = [];
+  h.koiCandidates = [{ id: 'demo', name: 'demo', description: 'Review writing', license: 'MIT', entryPath: 'SKILL.md', fileCount: 1, sizeBytes: 100, instructions: '# Demo', compatibility: { conversation: true, article: true }, metadataFormat: 'agent-skills' }];
+  h.koiInstallResult = [installedSkill];
   await mount(AgentPublicRepositoryPage);
+  assert.ok(button(zh.koi.viewSkills));
+  assert.equal(document.querySelector('[role="menu"]'), null, 'secondary actions start collapsed');
+  assert.equal(document.querySelector('button[aria-haspopup="menu"]').textContent, labels.repositoryActions, 'one menu replaces separate Clone/Fork controls');
+  await click(zh.koi.viewSkills);
+  await click(zh.koi.confirmInstall.replace('{count}', '1'));
   assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.ok(button(zh.koi.alreadyInstalled), 'installation immediately refreshes the Hub action');
+  assert.equal(button(zh.koi.alreadyInstalled).disabled, false, 'disabled Skills are still installed and can be reviewed');
+  await click(zh.koi.alreadyInstalled);
+  assert.ok(document.querySelector('[role="dialog"]'), 'installed status keeps review/update available');
+  await click(zh.koi.cancel);
+  const statusFiles = publicRepository.files;
+  const createsBeforeReview = calls.filter(call => call.path === '/api/koi/skill-imports').length;
+  publicRepository.files = [...statusFiles, { ...statusFiles[0], path: 'another/SKILL.md', fileId: 22 }];
+  await act(async()=>client.invalidateQueries({queryKey:['public-agent-repository',7]})); await settle();
+  assert.ok(button(zh.koi.installedCount.replace('{count}','1')), 'extra SKILL.md files are not treated as a verified installable total');
+  // Only preview validation can establish compatibility. A mixed collection
+  // must not tell users to install a rejected Skill to complete an impossible 1/2.
+  const validHubCandidate = h.koiCandidates[0];
+  h.koiCandidates = [{ ...validHubCandidate, installedStatus: 'installed' }];
+  h.koiRejected = [{ entryPath: 'another/SKILL.md', directory: 'another', reason: 'incompatible' }];
+  assert.equal(createsBeforeReview, calls.filter(call => call.path === '/api/koi/skill-imports').length, 'status rendering does not scan the repository');
+  await click(zh.koi.installedCount.replace('{count}','1'));
+  assert.equal(document.querySelectorAll('input[name="preview-candidate"]').length, 1);
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.reject_incompatible));
+  assert.equal(button(zh.koi.confirmInstall.replace('{count}','0')).disabled, true, 'installed-only candidates need no repeated confirmation');
+  await click(zh.koi.cancel);
+  h.koiSkills = [];
+  await act(async()=>client.invalidateQueries({queryKey:['koi-skills','hub-viewer']})); await settle();
+  assert.ok(button(zh.koi.viewSkills), 'removing the Skill restores review without promising compatibility');
+  h.koiCandidates = [];
+  await click(zh.koi.viewSkills);
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.koiNoSkills), 'all-rejected repositories explain why nothing can be installed');
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.reject_incompatible));
+  assert.equal(document.querySelector('[role="dialog"] input[name="preview-candidate"]'), null);
+  assert.equal(document.querySelectorAll('[role="dialog"] footer button').length, 2, 'an all-rejected preview only offers restart and cancel');
+  await click(zh.koi.cancel);
+  h.koiCandidates = [validHubCandidate]; delete h.koiRejected;
+  publicRepository.files = Array.from({length:21},(_,index)=>({...statusFiles[0],path:`skills/${index}/SKILL.md`,fileId:100+index}));
+  h.koiSkills = publicRepository.files.map((file,index)=>({...installedSkill,id:`installed-${index}`,source:{workspaceId:7,path:`skills/${index}`}}));
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(button(zh.koi.alreadyInstalled), 'status includes installations beyond the first 20');
+  assert.ok(calls.some(call=>call.path.startsWith('/api/koi/skills?')&&new URL(call.path,'https://koinote.example').searchParams.get('cursor')==='20'));
+  h.koiSkillsByUser = { 'hub-viewer': h.koiSkills, 'another-viewer': [] };
+  await act(async()=>h.setUser({ id: 9, authUserId: 'another-viewer', membershipTier: 'lifetime' })); await settle();
+  assert.ok(button(zh.koi.viewSkills), 'switching accounts never reuses the previous installation status');
+  const statusGate = hold('GET', '/api/koi/skills?q=&source=hub&state=&cursor=&hubWorkspaceId=7');
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(button(zh.koi.viewSkills).disabled, false, 'a pending status lookup does not block opening the install preview');
+  await click(zh.koi.viewSkills);
+  assert.ok(document.querySelector('[role="dialog"]'), 'the install preview remains available while status is loading');
+  await click(zh.koi.cancel);
+  statusGate(); await settle();
+  h.koiSkillsError = true;
+  await act(async()=>client.invalidateQueries({queryKey:['koi-skills','another-viewer']})); await settle();
+  assert.ok(document.body.textContent.includes(zh.koi.installStatusUnavailable), 'a failed status read is distinguished from not installed');
+  await click(zh.koi.viewSkills);
+  assert.ok(document.querySelector('[role="dialog"]'), 'a failed status lookup does not block reviewing the repository');
+  await click(zh.koi.cancel);
+  await click(zh.koi.retry);
+  h.koiSkillsError = false;
+  await click(zh.koi.retry);
+  assert.equal(document.querySelector('[role="dialog"]'), null, 'retrying status only refreshes the status');
+  assert.equal(document.body.textContent.includes(zh.koi.installStatusUnavailable), false, 'a successful status retry clears the error');
+  publicRepository.files = statusFiles;
+  h.user = { id: 1, authUserId: 'hub-viewer', membershipTier: 'lifetime' };
+  delete h.koiSkillsByUser; delete h.koiSkills; delete h.koiCandidates; delete h.koiInstallResult;
+
+  h.koiAvailable = false; h.search = { installKoi: true };
+  const importsBeforeRestriction = calls.filter(call => call.path === '/api/koi/skill-imports').length;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.querySelector('[role="dialog"]'), 'the entry remains visible while the dialog explains account availability');
   assert.ok(document.body.textContent.includes(zh.koi.koiUnavailable), 'accounts outside rollout receive an explanation');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction, 'an unavailable account never starts source analysis');
+  await click(zh.koi.cancel);
+  assert.equal(button(zh.koi.viewSkills).disabled, false, 'the member entry remains available when account permissions are unresolved or unavailable');
+  await click(zh.koi.viewSkills);
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.koiUnavailable), 'ordinary entry explains a confirmed rollout restriction');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction, 'opening a restricted entry never starts source analysis');
+  await click(zh.koi.cancel);
+
+  // Overview failures are recoverable read errors, not permission denials.
+  // Login return keeps its snapshot/context while the shared read is pending.
+  h.koiAvailable = true; h.koiOverviewError = true;
+  h.search = { ...loginContext, installKoi: true }; h.hash = loginHash;
+  const overviewGate = hold('GET', '/api/koi/settings');
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.querySelector('[role="dialog"] [role="status"]'), 'login return opens a waiting dialog before permission is known');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction, 'pending permission never starts source analysis');
+  assert.deepEqual(h.search, loginContext, 'login intent is consumed without losing the selected file or Hub filters');
+  assert.equal(h.hash, loginHash);
+  overviewGate(); await settle();
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.loadFailed), 'a failed permission read is not misreported as a rollout restriction');
+  assert.equal(document.body.textContent.includes(zh.koi.koiUnavailable), false);
+  await click(zh.koi.retry);
+  h.koiOverviewError = false;
+  await click(zh.koi.retry);
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction + 1, 'successful permission retry resumes source analysis exactly once');
+  assert.equal(calls.filter(call => call.path.endsWith('/confirm')).length, koiConfirms + 1, 'permission recovery never auto-confirms installation');
+  assert.equal(calls.findLast(call => call.path === '/api/koi/skill-imports').body.publicationId, publicRepository.publicationId);
+  await click(zh.koi.cancel);
+
+  h.koiOverviewError = true; h.search = {}; h.hash = '';
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(button(zh.koi.viewSkills).disabled, false, 'an initial overview failure keeps the preview entry usable');
+  assert.ok(document.body.textContent.includes(zh.koi.loadFailed), 'ordinary visits also expose an explicit permission-read retry');
+  const importsBeforeRecovery = calls.filter(call => call.path === '/api/koi/skill-imports').length;
+  await click(zh.koi.retry);
+  h.koiOverviewError = false;
+  await click(zh.koi.retry);
+  assert.equal(document.body.textContent.includes(zh.koi.loadFailed), false, 'successful retry clears the overview error');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRecovery, 'a page-level status retry does not open or install anything');
+  await click(zh.koi.viewSkills);
+  assert.ok(document.querySelector('[role="dialog"]'), 'the install path works after recovering the permission read');
+  await click(zh.koi.cancel);
   const filesBeforeEmpty = publicRepository.files;
   publicRepository.files = [{ ...filesBeforeEmpty[0], path: 'README.md' }]; h.koiAvailable = true; h.search = { installKoi: true };
   const createsBeforeEmpty = calls.filter(call => call.path === '/api/koi/skill-imports').length;
@@ -456,7 +626,7 @@ try {
   h.user = null;
   await mount(AgentPublicRepositoryPage);
   assert.ok(document.body.textContent.includes(zh.koi.noInstallableSkills), 'anonymous visitors also see the empty repository explanation');
-  assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.installToKoi)), false);
+  assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.viewSkills)), false);
   publicRepository.files = filesBeforeEmpty;
   h.user = beforeKoiUser; h.search = {}; h.hash = ''; delete h.koiAvailable;
   assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
@@ -513,8 +683,12 @@ try {
   h.withdrawn=false;h.publication=publicRepository;h.privateRevision=4;h.revokePublic=true;
   h.user={id:1,membershipTier:'free'};h.enabled=false;
   await mount(AgentPublicRepositoryPage);
-  assert.equal(button(labels.revokeSharing).disabled,false,"authors retain withdrawal after sync/membership is disabled");
+  assert.equal((await actionButton(labels.revokeSharing)).disabled,false,"authors retain withdrawal after sync/membership is disabled");
+  const releaseWithdraw = hold('DELETE', '/api/agent/workspaces/7/sharing');
   await click(labels.revokeSharing);
+  assert.equal(actionProgress()?.textContent, labels.withdrawingSharing, 'withdrawal progress remains visible after the menu closes');
+  await act(async()=>releaseWithdraw()); await settle();
+  assert.equal(actionProgress(), null, 'withdrawal clears progress after completion');
   assert.equal(calls.findLast(call=>call.method==='DELETE').body.expectedRevision,4,"withdrawal uses the private workspace's latest revision");
   assert.ok(document.body.textContent.includes(labels.sharingUnavailable));
 
@@ -585,14 +759,14 @@ try {
   h.nextUpstream = { revision: 4, files: [freshFile], manifestUrl: publicRepository.manifestUrl.replace('revision=3', 'revision=4'), githubSource: { ...githubSource, commitSha: 'b'.repeat(40) } };
   h.failClone = true;
   const cloneRefreshes = calls.filter(call => call.path.endsWith('/sync?recheck=false')).length;
-  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
   const refreshedClone = calls.findLast(call => call.path.endsWith('/clone')).body;
   assert.equal(refreshedClone.expectedRevision, 4, 'Clone uses the refreshed revision, not the opened page revision');
   assert.equal(refreshedClone.refresh, false, 'Clone consumes its prepared snapshot without a second backend refresh');
   assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, cloneRefreshes + 1, 'a fresh Clone prepares upstream once');
   h.failClone = false;
   h.nextUpstream = { revision: 5, manifestUrl: publicRepository.manifestUrl.replace('revision=4', 'revision=5') };
-  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
   assert.deepEqual(calls.findLast(call => call.path.endsWith('/clone')).body, refreshedClone, 'uncertain Clone retries preserve both revision and request ID');
   assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, cloneRefreshes + 1, 'uncertain Clone retries do not refresh upstream');
   assert.ok(document.querySelector('textarea')?.value.includes('revision=4'), 'retry opens the originally prepared snapshot');
@@ -620,7 +794,7 @@ try {
 
   h.failSync = true;
   await mount(AgentPublicRepositoryPage);
-  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
   assert.equal(document.querySelector('textarea'), null, 'upstream refresh failure never offers a stale install prompt');
   assert.ok(document.querySelector('[role="alert"]'), 'upstream refresh failure is visible');
   h.failSync = false;
@@ -630,7 +804,7 @@ try {
   assert.ok(document.body.textContent.includes(labels.githubUpstreamArchived), 'manual refresh displays the saved upstream mark');
   h.failSync = true;
   const beforeRetiredClone = calls.filter(call => call.path.endsWith('/sync?recheck=false')).length;
-  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
   assert.ok(document.querySelector('textarea')?.value.includes('revision=5'), 'known-retired upstream keeps the last saved snapshot usable');
   assert.equal(calls.filter(call => call.path.endsWith('/sync?recheck=false')).length, beforeRetiredClone + 1, 'server preparation skips the retired upstream even during an outage');
   await click(zh.space.syncCancel);
@@ -643,17 +817,17 @@ try {
     if (origin === 'ordinary') delete publicRepository.githubSource;
     await mount(AgentPublicRepositoryPage);
     h.loseCloneResponse = true;
-    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
     const uncertain = calls.findLast(call => call.path.endsWith('/clone')).body;
     h.loseCloneResponse = false;
     const updatedBytes = Buffer.from('# Recovered snapshot\n' + origin);
     const updatedFile = { fileId: 91, path: 'README.md', mimeType: 'text/markdown', sizeBytes: updatedBytes.length, sha256: createHash('sha256').update(updatedBytes).digest('hex') };
     Object.assign(publicRepository, { revision: 6, files: [updatedFile], manifestUrl: publicRepository.manifestUrl.replace('revision=5', 'revision=6') });
     h.extraFiles['/api/agent/repositories/7/files/91?revision=6'] = { ...updatedFile, contentBase64: updatedBytes.toString('base64') };
-    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
     assert.ok(document.querySelector('[role="alert"]'), 'the expired initiation reports a conflict');
     assert.equal(client.getQueryData(['public-agent-repository', 7, h.user.id]).repository.revision, 6, 'conflict reloads the current publication');
-    await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+    await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
     const recovered = calls.findLast(call => call.path.endsWith('/clone')).body;
     assert.equal(recovered.expectedRevision, 6, 'retry uses the replacement publication');
     assert.notEqual(recovered.requestId, uncertain.requestId, 'replacement publication gets a new initiation');
@@ -679,7 +853,7 @@ try {
     for (const status of ['unchanged', 'skipped', 'updated']) {
       Object.assign(publicRepository, structuredClone(beforeRefresh));
       await mount(AgentPublicRepositoryPage);
-      const startClone = async () => { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); };
+      const startClone = async () => { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); };
       const start = action === 'fork' ? () => click(labels.forkRepository) : startClone;
       const count = () => action === 'fork' ? h.forkResults.size : h.cloneIDs.size;
       const beforeCount = count();
@@ -921,10 +1095,13 @@ try {
   const navigationsBeforeStale = workspaceNavigations();
   const releaseSevenSync = hold('POST', '/api/agent/repositories/7/sync');
   await click(labels.syncGitHub);
-  assert.ok(button(labels.syncingGitHub), 'the sync stays pending while its response is held');
+  assert.equal(document.querySelector('[role="menu"]'), null);
+  assert.equal(actionProgress()?.textContent, labels.syncingGitHub, 'sync progress does not require reopening the menu');
+  assert.ok(await actionButton(labels.syncingGitHub), 'the sync stays pending while its response is held');
   await act(async () => h.setRepository('8')); await settle();
+  assert.equal(actionProgress(), null, 'navigation drops the previous repository’s progress');
   assert.equal(repositoryTitle(), 'Second skills', 'navigating to repository 8 renders B while A is still in flight');
-  assert.equal(button(labels.cloneRepository).disabled, false, 'the new view does not inherit the previous view’s busy state');
+  assert.equal((await actionButton(labels.transferZip)).disabled, false, 'the new view does not inherit the previous view’s busy state');
   assert.equal(cached(8, 1)?.workspaceId, 8);
   await act(async () => { releaseSevenSync(); }); await settle();
   assert.equal(repositoryTitle(), 'Second skills', 'B keeps its heading after A’s late response');
@@ -979,7 +1156,7 @@ try {
   await mount(AgentPublicRepositoryPage);
   const clonesBeforeLeave = clonePosts();
   const releaseClonePrep = hold('POST', '/api/agent/repositories/7/sync?recheck=false');
-  await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent);
+  await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent);
   await act(async () => h.setRepository('8')); await settle();
   await act(async () => { releaseClonePrep(); }); await settle();
   assert.equal(clonePosts(), clonesBeforeLeave, 'a Clone whose view left before preparation never posts');
@@ -1009,7 +1186,7 @@ try {
     delete publicRepository.githubSource.upstreamStatus;
     h.nextUpstream = { revision: oldRevision + 1, manifestUrl: publicRepository.manifestUrl.replace(`revision=${oldRevision}`, `revision=${oldRevision + 1}`) };
     if (action === 'fork') await click(labels.forkRepository);
-    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
     assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedRevision, oldRevision + 1, `${action} checks the recovered source instead of trusting a cached archived mark`);
     if (action === 'clone') await click(zh.space.syncCancel);
   }
@@ -1021,7 +1198,7 @@ try {
     publicRepository.githubSource.upstreamStatus = 'archived';
     h.failSync = true;
     if (action === 'fork') await click(labels.forkRepository);
-    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
     assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedRevision, publicRepository.revision);
     assert.equal(document.querySelector('[role="alert"]'), null, `${action} can consume a server-known retired source while GitHub is unavailable`);
     if (action === 'clone') await click(zh.space.syncCancel);
@@ -1032,10 +1209,10 @@ try {
   for (const [reason, key] of [['personal_fork', 'syncSkippedPersonalFork'], ['local_changes', 'syncSkippedLocalChanges'], ['agent_workspace_disabled', 'syncSkippedDisabled']]) {
     publicRepository.syncDisabledReason = reason;
     await mount(AgentPublicRepositoryPage);
-    assert.equal(button(labels.syncGitHub).disabled, true);
+    assert.equal((await actionButton(labels.syncGitHub)).disabled, true);
     assert.ok(![...document.querySelectorAll('button')].some(el => el.textContent === labels.syncRecheckGitHub), 'saved copies never advertise a working recheck');
     assert.ok(document.body.textContent.includes(labels[key]));
-    assert.equal(button(labels.cloneRepository).disabled, false, 'the saved copy remains clonable');
+    assert.equal((await actionButton(labels.transferZip)).disabled, false, 'the saved copy remains clonable');
   }
   delete publicRepository.syncDisabledReason;
   delete publicRepository.githubSource.upstreamStatus;
@@ -1049,7 +1226,7 @@ try {
       await mount(AgentPublicRepositoryPage);
       const previous = calls.filter(call => call.path.endsWith(`/${action}`)).length;
       if (action === 'fork') await click(labels.forkRepository);
-      else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+      else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
       assert.equal(calls.filter(call => call.path.endsWith(`/${action}`)).length, previous + 1, `${action} keeps the saved snapshot after ${code}`);
       assert.equal(calls.findLast(call => call.path.endsWith(`/${action}`)).body.expectedPublication, publicRepository.publicationId);
       assert.ok(document.body.textContent.includes(labels[key]), 'preparation preserves the reason the update was skipped');
@@ -1111,7 +1288,7 @@ try {
       await mount(AgentPublicRepositoryPage);
       const previous = calls.filter(call => call.path.endsWith(`/${action}`)).length;
       if (action === 'fork') await click(labels.forkRepository);
-      else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+      else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
       assert.equal(calls.filter(call => call.path.endsWith(`/${action}`)).length, previous + 1);
       assert.ok(document.body.textContent.includes(labels[key] + ' ' + labels.githubCredentialPublicFallback));
       assert.equal(document.querySelector('[role="alert"]'), null);
@@ -1140,7 +1317,7 @@ try {
     const original = structuredClone(publicRepository);
     const release = hold('POST', `/api/agent/repositories/7/${action}`);
     if (action === 'fork') await click(labels.forkRepository);
-    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
     const stale = calls.findLast(call => call.path.endsWith(`/${action}`)).body;
     assert.equal(stale.expectedPublication, original.publicationId);
     publicRepository.license = 'Apache-2.0';
@@ -1154,7 +1331,7 @@ try {
     assert.equal(document.querySelector('textarea'), null, 'a conflicting Clone must not generate stale license instructions');
     await assert.rejects(() => loadAgentWorkspaceFiles(original, new Set(original.files.map(file => file.fileId)), () => {}, undefined, publicAgentRepositoryTransferSource(original)), error => error.code === 'transferChanged');
     if (action === 'fork') await click(labels.forkRepository);
-    else { await click(labels.cloneRepository); await click(zh.space.configSnapshots.syncWithAgent); }
+    else { await click(labels.repositoryActions); await click(zh.space.configSnapshots.syncWithAgent); }
     const retried = calls.findLast(call => call.path.endsWith(`/${action}`)).body;
     assert.equal(retried.expectedPublication, publicRepository.publicationId);
     assert.notEqual(retried.requestId, stale.requestId, 'a conflict starts a new operation');
