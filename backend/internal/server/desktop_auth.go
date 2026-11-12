@@ -551,6 +551,12 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPut
 	case "/api/agent/session-settings":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/koi/settings":
+		return method == http.MethodGet || method == http.MethodPut
+	case "/api/koi/skills":
+		return method == http.MethodGet
+	case "/api/koi/skill-imports", "/api/koi/skill-migration/skip":
+		return method == http.MethodPost
 	case "/api/agent/sessions":
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/agent/workspace/settings":
@@ -611,6 +617,34 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet
 	case "/api/tree/move", "/api/tree/delete":
 		return method == http.MethodPost
+	}
+	if rest, found := strings.CutPrefix(path, "/api/koi/skills/"); found {
+		parts := strings.Split(rest, "/")
+		if !validUUID(parts[0]) {
+			return false
+		}
+		if len(parts) == 1 {
+			return method == http.MethodGet || method == http.MethodPatch || method == http.MethodDelete
+		}
+		if len(parts) == 2 && parts[1] == "check-update" {
+			return method == http.MethodPost
+		}
+		if len(parts) == 3 && parts[1] == "files" {
+			_, valid := koiParsePositiveID(parts[2])
+			return valid && method == http.MethodGet
+		}
+		return false
+	}
+	if rest, found := strings.CutPrefix(path, "/api/koi/skill-imports/"); found {
+		parts := strings.Split(rest, "/")
+		if !validUUID(parts[0]) {
+			return false
+		}
+		if len(parts) == 1 {
+			return method == http.MethodGet || method == http.MethodDelete
+		}
+		return len(parts) == 2 && ((parts[1] == "files" && method == http.MethodPut) ||
+			((parts[1] == "analyze" || parts[1] == "confirm") && method == http.MethodPost))
 	}
 	if rest, found := strings.CutPrefix(path, "/api/wechat/accounts/"); found {
 		parts := strings.Split(rest, "/")
