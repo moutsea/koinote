@@ -97,7 +97,9 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query, state := strings.TrimSpace(r.URL.Query().Get("q")), r.URL.Query().Get("state")
-	if len(query) > 800 || (state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
+	source := r.URL.Query().Get("source")
+	if len(query) > 800 || (source != "" && source != "github" && source != "folder" && source != "hub" && source != "migration") ||
+		(state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid Skill filter")
 		return
 	}
@@ -111,7 +113,8 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
  AND (strpos(lower(i.name),lower($4))>0 OR strpos(lower(i.description),lower($4))>0)
  AND ($5='' OR ($5='enabled' AND i.enabled) OR ($5='disabled' AND NOT i.enabled)
  OR ($5='unavailable' AND NOT COALESCE((v.compatibility->>'conversation')::boolean,false)))
- ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state)
+ AND ($6='' OR i.source_kind=$6)
+ ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source)
 	if err != nil {
 		writeKoiError(w, err)
 		return

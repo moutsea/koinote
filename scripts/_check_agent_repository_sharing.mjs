@@ -417,17 +417,25 @@ try {
   assert.equal(parseRepositorySearch({ installKoi: ['true'] }).installKoi, undefined);
   const beforeKoiUser = h.user;
   h.user = null;
+  const loginContext = { file: publicRepository.files[0].path, q: '写作 & review', source: 'system', category: 'writing' };
+  const loginHash = 'user-content-安装 & 配置';
+  h.search = loginContext; h.hash = loginHash;
   await mount(AgentPublicRepositoryPage);
   const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.installToKoi));
   assert.ok(installLogin, 'anonymous visitors can return to the Hub installation after login');
-  assert.equal(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), '/repositories/7?installKoi=true');
+  const loginReturn = new URL(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), 'https://koinote.example');
+  assert.equal(loginReturn.pathname, '/repositories/7');
+  assert.deepEqual(Object.fromEntries(loginReturn.searchParams), { ...loginContext, installKoi: 'true' }, 'login retains the file and Hub filters');
+  assert.equal(decodeURIComponent(loginReturn.hash.slice(1)), loginHash, 'login retains the document anchor');
   h.user = { id: 1, authUserId: 'hub-viewer', membershipTier: 'lifetime' };
-  h.koiAvailable = true; h.search = { installKoi: true };
+  h.koiAvailable = true; h.search = { ...loginContext, installKoi: true };
   const koiCreates = calls.filter(call => call.path === '/api/koi/skill-imports').length;
   const koiConfirms = calls.filter(call => call.path.endsWith('/confirm')).length;
   await mount(AgentPublicRepositoryPage);
   assert.ok(document.querySelector('[role="dialog"]'), 'login return opens the install preview');
   assert.equal(h.search.installKoi, undefined, 'login intent is consumed once');
+  assert.deepEqual(h.search, loginContext, 'consuming the install intent retains the file and Hub filters');
+  assert.equal(h.hash, loginHash, 'consuming the install intent retains the anchor');
   assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, koiCreates + 1);
   const koiInput = calls.findLast(call => call.path === '/api/koi/skill-imports').body;
   assert.equal(koiInput.publicationId, publicRepository.publicationId);
@@ -438,7 +446,19 @@ try {
   await mount(AgentPublicRepositoryPage);
   assert.equal(document.querySelector('[role="dialog"]'), null);
   assert.ok(document.body.textContent.includes(zh.koi.koiUnavailable), 'accounts outside rollout receive an explanation');
-  h.user = beforeKoiUser; h.search = {}; delete h.koiAvailable;
+  const filesBeforeEmpty = publicRepository.files;
+  publicRepository.files = [{ ...filesBeforeEmpty[0], path: 'README.md' }]; h.koiAvailable = true; h.search = { installKoi: true };
+  const createsBeforeEmpty = calls.filter(call => call.path === '/api/koi/skill-imports').length;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.body.textContent.includes(zh.koi.noInstallableSkills), 'repositories without Skills explain why installation is unavailable');
+  assert.equal(document.body.textContent.includes(zh.koi.koiUnavailable), false, 'missing Skills are not reported as an account restriction');
+  assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, createsBeforeEmpty, 'an empty repository never starts an install preview');
+  h.user = null;
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(document.body.textContent.includes(zh.koi.noInstallableSkills), 'anonymous visitors also see the empty repository explanation');
+  assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.installToKoi)), false);
+  publicRepository.files = filesBeforeEmpty;
+  h.user = beforeKoiUser; h.search = {}; h.hash = ''; delete h.koiAvailable;
   assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
   assert.deepEqual(parseRepositoryDirectorySearch({q:['skills'],source:'admin',category:'invalid'}),emptyFilters);
   assert.deepEqual(parseRepositoryDirectorySearch({q:'x'.repeat(81),source:['system'],category:['design']}),emptyFilters);
@@ -823,6 +843,7 @@ try {
   const directoryRoute=createRoute({getParentRoute:()=>routeRoot,path:'/repositories',validateSearch:parseRepositoryDirectorySearch});
   const detailRoute=createRoute({getParentRoute:()=>routeRoot,path:'/repositories/$repositoryId',validateSearch:parseRepositorySearch});
   const router=createRouter({routeTree:routeRoot.addChildren([directoryRoute,detailRoute]),isServer:true,history:createMemoryHistory({initialEntries:['/repositories']})});
+  assert.deepEqual(router.matchRoutes(loginReturn.pathname,defaultParseSearch(loginReturn.search)).at(-1).search,{...loginContext,installKoi:true},'the real router restores the login context and install intent');
   for(const [raw,expected] of [
     ['?q=123',{q:'123'}],
     ['?q=true',{q:'true'}],

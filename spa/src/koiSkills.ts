@@ -84,8 +84,8 @@ export const KOI_SETTINGS_QUERY_KEY = "koi-settings";
 export const getKoiOverview = () => apiJson<KoiOverview>("/api/koi/settings");
 export const updateKoiSettings = (input: { expectedRevision: number; autoSkills: boolean }) =>
  apiJson<{ settings: KoiSettings }>("/api/koi/settings", { method: "PUT", body: JSON.stringify(input) });
-export const listKoiSkills = (params: { q?: string; state?: string; cursor?: string }) =>
- apiJson<KoiSkillPage>(`/api/koi/skills?${new URLSearchParams({ q: params.q ?? "", state: params.state ?? "", cursor: params.cursor ?? "" })}`);
+export const listKoiSkills = (params: { q?: string; source?: KoiSkill["sourceKind"] | ""; state?: string; cursor?: string }) =>
+ apiJson<KoiSkillPage>(`/api/koi/skills?${new URLSearchParams({ q: params.q ?? "", source: params.source ?? "", state: params.state ?? "", cursor: params.cursor ?? "" })}`);
 export const getKoiSkill = (id: string) =>
  apiJson<{ skill: KoiSkill; files: KoiSkillFile[]; instructions: string }>(`/api/koi/skills/${encodeURIComponent(id)}`);
 export const getKoiSkillFile = (id: string, position: number, version: string) =>
@@ -113,6 +113,7 @@ export const confirmKoiImport = (id: string, input: { requestId: string; preview
 const KOI_ERROR_LABELS: Record<string, string> = {
  skill_migration_required: "legacyRequired",
  preview_expired: "koiPreviewExpired", preview_not_ready: "koiPreviewNotReady",
+ no_skills: "koiNoSkills", validation_failed: "koiValidationFailed",
  skill_incompatible: "koiIncompatible", skill_invalid: "koiSkillInvalid",
  sensitive_data_detected: "koiSensitive", storage_quota_exceeded: "koiQuota",
  revision_conflict: "koiConflict", idempotency_conflict: "koiConflict",

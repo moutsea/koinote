@@ -6,6 +6,23 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.17] - 2026-11-12
+
+### Added
+
+- Accounts included in the rollout can preview and install Koi Skills from folders, GitHub or Hub, manage and update them in My Space → Koi AI, or choose to migrate their legacy library. Installation, updates and enabling require lifetime membership.
+- Filter the Skill library by source and state. Installation previews show licenses, compatibility and specific validation issues, with direct links to settings and installation.
+
+### Changed
+
+- Bottom-panel chat and the article sidebar can load enabled, compatible Skills as needed. Each task uses a fixed version; article changes still go through review.
+- Signing in from Hub retains the selected file, filters and page anchor before opening the installation preview. Repositories without a Skill entry explain why installation is unavailable.
+
+### Fixed
+
+- Article polishing continues through editing and review instead of ending after an execution plan.
+- Canceling folder selection preserves the existing selection without reporting an empty folder.
+
 ## [1.1.16] - 2026-11-11
 
 ### Changed

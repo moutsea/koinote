@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleSlash, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useI18n } from "../i18n";
-import { KOI_SKILLS_QUERY_KEY, KOI_SETTINGS_QUERY_KEY } from "../koiSkills";
+import { KOI_SKILLS_QUERY_KEY, KOI_SETTINGS_QUERY_KEY, koiRequirementLabel, type KoiCompatibility } from "../koiSkills";
 import { PaperCard } from "./Ink";
 
 export function KoiSkillStatusBadge({ state }: { state: "enabled" | "disabled" | "unavailable" }) {
@@ -26,6 +26,16 @@ export function KoiSkillSourceLabel({ source }: { source: Record<string, unknown
  const directory = typeof source.directoryName === "string" ? source.directoryName : "";
  const label = source.kind === "github" ? `${t.koi.sourceGithub} · ${source.owner}/${source.repo}${source.path ? `/${source.path}` : ""}` : source.kind === "hub" ? `${t.koi.sourceHub} · ${source.name}` : source.kind === "migration" ? `${t.koi.sourceMigration} · ${directory}` : directory || t.koi.sourceFolder;
  return <span title={label} className="max-w-64 truncate text-xs" style={{ color: "var(--ink-mid)" }}>{label}</span>;
+}
+
+export function KoiSkillCompatibilityNote({ compatibility }: { compatibility: KoiCompatibility }) {
+  const { t } = useI18n();
+  const labels = t.koi;
+  return <div role="note" className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>
+    <p>{!compatibility.conversation ? labels.stateUnavailable : compatibility.article ? labels.entryBoth : labels.entryConversation}</p>
+    {compatibility.conversation && !compatibility.article && <p>{labels.articleUnavailable}</p>}
+    {Boolean(compatibility.warnings?.length) && <p>{labels.warningsLabel} {compatibility.warnings?.map((warning) => koiRequirementLabel(warning, labels)).join("; ")}</p>}
+  </div>;
 }
 
 export function KoiEmptyState({ onInstall, canInstall, message }: { onInstall: () => void; canInstall: boolean; message: string }) {

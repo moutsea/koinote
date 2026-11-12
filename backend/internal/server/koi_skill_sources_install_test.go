@@ -148,6 +148,24 @@ func TestKoiFolderReplacementPreservesIdentityPinsAndQuota(t *testing.T) {
 	if err != nil || usage.KoiSkillBytes != second.SizeBytes {
 		t.Fatalf("old version was not reclaimed: %+v %v", usage, err)
 	}
+	// Reimporting the old content creates an independent installation; a
+	// historical version must not be mistaken for the current installed package.
+	fresh := koiTestConfirm(t, a, user, koiFolderPreview(t, a, user, map[string]string{"SKILL.md": "# Review v1"}))
+	if fresh.ID == first.ID || fresh.ContentSHA256 != first.ContentSHA256 {
+		t.Fatalf("old content overwrote the updated installation: %+v", fresh)
+	}
+	for _, version := range []struct {
+		text  string
+		skill koiSkillInstallation
+	}{{"# Review v1", fresh}, {"# Review v2\nNew guidance", second}} {
+		view := koiFolderPreview(t, a, user, map[string]string{"SKILL.md": version.text})
+		if len(view.Candidates) != 1 || view.Candidates[0].InstalledStatus != "installed" || view.Candidates[0].InstalledID != version.skill.ID {
+			t.Fatalf("reimport matched historical content: %+v", view.Candidates)
+		}
+		if same := koiTestConfirm(t, a, user, view); same.ID != version.skill.ID || same.VersionID != version.skill.VersionID || same.Enabled != version.skill.Enabled {
+			t.Fatalf("reimport changed the current installation: %+v", same)
+		}
+	}
 }
 
 func TestKoiGitHubInstallAndUpdateStayPinned(t *testing.T) {
@@ -218,6 +236,30 @@ func TestKoiGitHubInstallAndUpdateStayPinned(t *testing.T) {
 	if duplicate.ID != second.ID || duplicate.Revision != second.Revision || duplicate.Enabled {
 		t.Fatal("duplicate installation changed state")
 	}
+	// An upstream release may become incompatible. Keep its detailed rejection
+	// in the preview and leave the currently installed package untouched.
+	current = strings.Repeat("c", 40)
+	archives[current] = githubArchive(t, githubArchiveEntry{"root/review/SKILL.md", "---\nname: review\ndescription: Review\nrequiredTools: [shell]\n---\nRun a local command.", 0})
+	w = koiFolderRequest(t, a, user, "POST", "/api/koi/skills/"+first.ID+"/check-update", nil, 200)
+	if err := json.Unmarshal(w.Body.Bytes(), &update); err != nil {
+		t.Fatal(err)
+	}
+	failed := update.Preview
+	if update.Status != "update_available" || failed.Status != "failed" || failed.ErrorCode != "validation_failed" || len(failed.Rejected) != 1 || len(failed.Rejected[0].Details) == 0 {
+		t.Fatalf("invalid update lost its explanation: %s", w.Body.String())
+	}
+	stored := koiFolderView(t, koiFolderRequest(t, a, user, "GET", "/api/koi/skill-imports/"+failed.ID, nil, 200))
+	if stored.Status != failed.Status || len(stored.Rejected) != 1 || stored.Rejected[0].Details[0] != failed.Rejected[0].Details[0] {
+		t.Fatal("reading a failed preview lost the rejection")
+	}
+	invalidConfirmation := koiFolderConfirmation(failed)
+	invalidConfirmation.CandidateIDs = []string{preview.Candidates[0].ID}
+	koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports/"+failed.ID+"/confirm", invalidConfirmation, 409)
+	unchanged, err := a.loadKoiInstallation(context.Background(), a.db, user.ID, first.ID)
+	if err != nil || unchanged.VersionID != second.VersionID || unchanged.Revision != second.Revision || unchanged.Enabled != second.Enabled {
+		t.Fatalf("invalid update changed the installed version: %+v %v", unchanged, err)
+	}
+	current = sha2
 	repositoryID = 456
 	koiFolderRequest(t, a, user, "POST", "/api/koi/skills/"+first.ID+"/check-update", nil, 409)
 	// Invalid links are actionable input errors rather than server faults.

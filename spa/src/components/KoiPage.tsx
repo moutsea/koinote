@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Check, ChevronDown, CircleCheck, Coins, Crown, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "../api";
 import { getAgentSessionSettings, updateAgentSessionSettings } from "../agentSessions";
 import { getWritingConfig } from "../writingAgent";
@@ -12,8 +12,11 @@ import { AgentCreditsCard } from "./AgentCreditsCard";
 import { PaperCard } from "./Ink";
 import { Logo } from "./Logo";
 import { KoiSkillLibrary } from "./KoiSkillLibrary";
+import type { SpaceSearch } from "../spaceSearch";
 
-export function KoiPage({ user }: { user: User }) {
+type KoiPageProps = { user: User; section?: SpaceSearch["section"]; install?: SpaceSearch["install"]; onInstallClose?: () => void };
+
+export function KoiPage({ user, ...navigation }: KoiPageProps) {
   const { t } = useI18n();
   if (user.isLocalMode) {
     return <PaperCard className="flex items-start gap-4 p-6">
@@ -21,16 +24,20 @@ export function KoiPage({ user }: { user: User }) {
       <div><h2 className="text-base font-semibold">{t.koi.title}</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{t.koi.localMode}</p></div>
     </PaperCard>;
   }
-  return <AccountKoiSettings key={user.authUserId} user={user} />;
+  return <AccountKoiSettings key={user.authUserId} user={user} {...navigation} />;
 }
 
-function AccountKoiSettings({ user }: { user: User }) {
+function AccountKoiSettings({ user, section, install, onInstallClose }: KoiPageProps) {
   const { t, locale } = useI18n();
   const labels = t.koi;
   const panel = agentPanelText[locale];
   const client = useQueryClient();
   const member = user.membershipTier === "lifetime";
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const settingsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (section === "settings" && !install) settingsRef.current?.scrollIntoView?.({ block: "start" });
+  }, [section, install]);
   // Share the bottom panel's account-scoped cache and existing settings API.
   const settingsKey = ["agent-session-settings", user.authUserId];
   const settings = useQuery({ queryKey: settingsKey, queryFn: getAgentSessionSettings, enabled: member, retry: false });
@@ -44,7 +51,7 @@ function AccountKoiSettings({ user }: { user: User }) {
   const help = { review: panel.reviewHelp, assist: panel.approvalHelp, full: panel.fullHelp };
 
   return (
-    <section aria-labelledby="koi-settings-title" className="space-y-5">
+    <section id="koi-settings" ref={settingsRef} aria-labelledby="koi-settings-title" className="scroll-mt-24 space-y-5">
       <PaperCard className="overflow-hidden">
         <header className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
           <div className="flex items-start gap-3">
@@ -105,7 +112,7 @@ function AccountKoiSettings({ user }: { user: User }) {
         </PaperCard>
         <AgentGitHubCredentialCard />
       </div>
-      <KoiSkillLibrary user={user} />
+      <KoiSkillLibrary user={user} focus={section === "skills" || Boolean(install)} install={install} onInstallClose={onInstallClose} />
     </section>
   );
 }

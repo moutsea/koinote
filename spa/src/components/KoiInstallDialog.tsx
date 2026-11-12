@@ -7,10 +7,10 @@ import { koiFolderEntries, koiFolderPackages, koiSelectedFolderEntries, type Koi
 import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiImportInput } from "../koiSkills";
 import { pushModal } from "../modalStack";
 import { formatBytes } from "../storage";
-import { KoiPending, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
+import { KoiPending, KoiSkillCompatibilityNote, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
 import { KoiLegacyBanner } from "./KoiLegacyBanner";
 
-export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePreview, hubTarget, migration = false }: { authUserId: string; onClose: () => void; updateTarget?: KoiSkill; resumePreview?: KoiPreview; hubTarget?: KoiHubTarget; migration?: boolean }) {
+export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePreview, hubTarget, initialSource = "folder", migration = false }: { authUserId: string; onClose: () => void; updateTarget?: KoiSkill; resumePreview?: KoiPreview; hubTarget?: KoiHubTarget; initialSource?: "folder" | "github"; migration?: boolean }) {
   const { t, locale } = useI18n();
   const labels = t.koi;
   const client = useQueryClient();
@@ -23,7 +23,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const [directories, setDirectories] = useState<string[]>([]);
   const packages = useMemo(() => koiFolderPackages(entries), [entries]);
   const uploadEntries = koiSelectedFolderEntries(packages, directories);
-  const [source, setSource] = useState<"folder" | "github">(resumePreview?.sourceKind === "github" ? "github" : "folder");
+  const [source, setSource] = useState<"folder" | "github">(updateTarget ? "folder" : resumePreview ? resumePreview.sourceKind === "github" ? "github" : "folder" : initialSource);
   const [githubUrl, setGithubUrl] = useState("");
   const [githubRef, setGithubRef] = useState("");
   const [githubPath, setGithubPath] = useState("");
@@ -205,13 +205,14 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
               <label className="text-xs">{labels.githubRefLabel}<input value={githubRef} disabled={Boolean(busy)} onChange={(event) => setGithubRef(event.target.value)} className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
               <label className="text-xs">{labels.githubPathLabel}<input value={githubPath} disabled={Boolean(busy)} onChange={(event) => setGithubPath(event.target.value)} className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
             </div></details>
-            <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.githubPrivateHint} <a href="/space?tab=koi" className="underline">{labels.githubCredentials}</a></p>
+            <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.githubPrivateHint} <a href="/space?tab=koi&section=settings" className="underline">{labels.githubCredentials}</a></p>
             <button type="submit" disabled={Boolean(busy) || !githubUrl.trim()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}><Github className="h-4 w-4" />{labels.analyzeSource}</button>
           </form> : <>
 
           <input ref={fileInput} type="file" multiple hidden {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} onChange={(event) => {
             const files = Array.from(event.currentTarget.files ?? []);
             event.currentTarget.value = "";
+            if (files.length === 0) return;
             try {
               const next = koiFolderEntries(files);
               setEntries(next);
@@ -239,6 +240,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
         {busy && <KoiPending label={busy === "upload" ? `${labels.uploading} ${progress}/${uploadEntries.length}` : busy === "analyze" ? labels.analyzing : labels.installing} />}
         {preview?.status === "ready" && <>
           <h3 className="text-sm font-semibold">{labels.previewTitle}</h3>
+          {preview.candidates.length > 1 && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.previewMultiHint}</p>}
           {migrating && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.legacyStorage.replace("{size}", formatBytes(preview.candidates.filter((item) => selected.includes(item.id)).reduce((total, item) => total + item.sizeBytes, 0), locale))}</p>}
           <p className="break-all text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}</p>
           <ul className="space-y-3">{preview.candidates.map((candidate) => <li key={candidate.id} className="rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}>
@@ -246,7 +248,8 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
             <label className="flex items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy)} className="mt-1 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
               <span className="min-w-0"><span className="text-sm font-semibold">{candidate.name}</span>{candidate.installedStatus && <span className="ml-2 text-xs" style={{ color: candidate.installedStatus === "update" ? "var(--cinnabar)" : "var(--ink-mid)" }}>{candidate.installedStatus === "update" ? labels.updateAvailable : labels.alreadyInstalled}</span>}<span className="mt-1 block text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{candidate.description}</span><span className="mt-1 block break-all text-xs" style={{ color: "var(--ink-faint)" }}>{candidate.entryPath} · {formatBytes(candidate.sizeBytes, locale)} · {labels.fileCount.replace("{count}", String(candidate.fileCount))}</span></span>
             </label>
-            <p className="mt-2 text-xs" style={{ color: "var(--ink-mid)" }}>{candidate.compatibility.article ? labels.entryBoth : labels.entryConversation}</p>
+            <p className="mt-2 break-words text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.licenseLabel}：{candidate.license || labels.licenseNone} · {candidate.metadataFormat === "plain-markdown" ? labels.formatPlain : labels.formatStandard}</p>
+            <div className="mt-2"><KoiSkillCompatibilityNote compatibility={candidate.compatibility} /></div>
             {candidate.installedStatus === "update" && <p className="mt-2 text-xs" style={{ color: "var(--ink-mid)" }}>{labels.updateComparison.replace("{version}", candidate.previousVersion ?? "—").replace("{oldSize}", formatBytes(candidate.previousSizeBytes ?? 0, locale)).replace("{newSize}", formatBytes(candidate.sizeBytes, locale))}</p>}
             <details className="mt-3"><summary className="cursor-pointer text-xs underline">{labels.viewSkillMd}</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-6">{candidate.instructions}</pre></details>
           </li>)}</ul>
@@ -262,7 +265,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
         {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
         {preview && !busy && <div className="flex gap-4">{pending && <button type="button" onClick={() => void (preview.sourceKind === "folder" ? upload() : loadRemote())} className="text-sm underline">{labels.retry}</button>}<button type="button" onClick={resumePreview ? cancel : restart} className="text-sm underline">{resumePreview ? labels.close : labels.startOver}</button></div>}
       </div>
-      <footer className="flex items-center justify-between gap-4 border-t p-4" style={{ borderColor: "var(--ink-line)" }}><p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.skillTaskScope}</p><button type="button" disabled={busy === "confirm"} onClick={cancel} className="shrink-0 rounded-lg border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>{labels.cancel}</button></footer>
+      <footer className="flex items-center justify-between gap-4 border-t p-4" style={{ borderColor: "var(--ink-line)" }}><div className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}><p>{labels.installRuntimeNotice}</p><p>{labels.skillTaskScope}</p></div><button type="button" disabled={busy === "confirm"} onClick={cancel} className="shrink-0 rounded-lg border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>{labels.cancel}</button></footer>
     </div>
   </div>;
 }

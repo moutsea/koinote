@@ -11,28 +11,30 @@ const require = createRequire(import.meta.url);
 const { QueryClient, QueryClientProvider, QueryObserver } = require("@tanstack/react-query");
 const { window } = parseHTML('<html><body><div id="root"></div></body></html>');
 window.location = { href: "https://koinote.test/space?tab=koi" };
-Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { window, self: window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
 const member = { id: 1, authUserId: "account-one", membershipTier: "lifetime" };
 const state = globalThis.__koiSettingsTest = { user: member, search: { tab: "koi" }, api: null, i18n: null };
+window.HTMLElement.prototype.scrollIntoView = function () { state.scrolled = this.id; };
 const directory = await mkdtemp(join(process.cwd(), "scripts/.koi-settings-test-"));
 let root, client, unsubscribe;
 try {
   const outfile = join(directory, "settings.cjs");
   await build({
-    stdin: { contents: 'export {SpacePage} from "./spa/src/pages/SpacePage";export {zh} from "./spa/src/i18n/zh";export {ApiError} from "./spa/src/api";', resolveDir: process.cwd(), loader: "tsx" },
+    stdin: { contents: 'export {SpacePage} from "./spa/src/pages/SpacePage";export {parseSpaceSearch} from "./spa/src/spaceSearch";export {zh} from "./spa/src/i18n/zh";export {ApiError} from "./spa/src/api";', resolveDir: process.cwd(), loader: "tsx" },
     outfile, bundle: true, platform: "node", format: "cjs", packages: "external", jsx: "automatic", logLevel: "silent",
     plugins: [{ name: "settings-host", setup(builder) {
       const hosts = {
         api: 'export const apiJson=(...args)=>globalThis.__koiSettingsTest.api(...args);export const AGENT_CREDITS_QUERY_KEY=["agent-credits"];export const getAgentCredits=()=>apiJson("/api/agent/credits");export const createAgentCreditsCheckout=(packCode,currency)=>apiJson("/api/agent/credits/checkout",{method:"POST",body:JSON.stringify({packCode,currency})});export const confirmAgentCreditsCheckout=(sessionId)=>apiJson("/api/agent/credits/checkout/confirm",{method:"POST",body:JSON.stringify({sessionId})});export class ApiError extends Error{constructor(status,message,code){super(message);this.status=status;this.code=code;}};',
         auth: 'export const useSession=()=>({data:{user:globalThis.__koiSettingsTest.user}});',
         i18n: 'export const useI18n=()=>globalThis.__koiSettingsTest.i18n;export const interpolate=(template,vars)=>template.replace(/\\{(\\w+)\\}/g,(_,key)=>key in vars?String(vars[key]):`{${key}}`);',
-        router: 'import React from "react";export const useRouterState=({select})=>select({location:{pathname:"/space"}});export const useSearch=()=>globalThis.__koiSettingsTest.search;export const Link=({to,search,hash,children,...props})=><a href={to+(search?"?"+new URLSearchParams(search):"")+(hash?"#"+hash:"")} {...props}>{children}</a>;',
+        router: 'import React from "react";export {defaultStringifySearch} from "@tanstack/router-core";export const useRouterState=({select})=>select({location:{pathname:"/space"}});export const useSearch=()=>globalThis.__koiSettingsTest.search;export const useNavigate=()=>async(target)=>{globalThis.__koiSettingsTest.search=target.search;};export const Link=({to,search,hash,children,...props})=><a href={to+(search?"?"+new URLSearchParams(search):"")+(hash?"#"+hash:"")} {...props}>{children}</a>;',
         repositories: 'export const AgentWorkspaceRepositoriesPage=()=>null;',
         snapshots: 'export const ConfigSnapshotsCard=()=>null;',
         confirmation: 'export const confirmAction=async()=>true;',
         navigation: 'export const openMembershipCheckout=async(url)=>{(globalThis.__koiSettingsTest.checkoutUrls??=[]).push(url);};',
       };
       builder.onResolve({ filter: /^react(?:\/.*)?$/, namespace: "settings-host" }, ({ path }) => ({ path, external: true }));
+      builder.onResolve({ filter: /^@tanstack\/router-core$/, namespace: "settings-host" }, ({ path }) => ({ path, external: true }));
       for (const [filter, path] of [
         [/(^|\/)api$/, "api"], [/(^|\/)auth$/, "auth"], [/(^|\/)i18n$/, "i18n"],
         [/^@tanstack\/react-router$/, "router"], [/AgentWorkspaceRepositoriesPage$/, "repositories"],
@@ -42,12 +44,22 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "settings-host" }, ({ path }) => ({ contents: hosts[path], loader: "jsx" }));
     } }],
   });
-  const { SpacePage, zh, ApiError } = require(outfile);
+  const { SpacePage, parseSpaceSearch, zh, ApiError } = require(outfile);
+  const { createRouter, createRootRoute, createRoute, defaultParseSearch } = await import("@tanstack/react-router");
+  const { createMemoryHistory } = await import("@tanstack/history");
+  const routeRoot = createRootRoute();
+  const route = createRoute({ getParentRoute: () => routeRoot, path: "/space", validateSearch: parseSpaceSearch });
+  const router = createRouter({ routeTree: routeRoot.addChildren([route]), isServer: true, history: createMemoryHistory({ initialEntries: ["/space"] }) });
+  assert.deepEqual(router.matchRoutes("/space", defaultParseSearch("?tab=koi&section=skills&install=github")).at(-1).search, { tab: "koi", section: "skills", install: "github" });
+  assert.deepEqual(router.matchRoutes("/space", defaultParseSearch('?tab=koi&section=%5B%22skills%22%5D&install=unknown')).at(-1).search, { tab: "koi", section: undefined, install: undefined });
+  assert.deepEqual(parseSpaceSearch({ tab: "config", section: "skills", install: "folder" }), { tab: "config", section: undefined, install: undefined });
   state.i18n = { t: zh, locale: "zh" };
   const calls = [];
   let permission = "assist", failRead = false, failSave = false, writeDelay;
   let credential = { configured: false }, credentialReadError, credentialSaveError, credentialRemoveError;
   let creditsReadError, creditsReadDelay;
+  let skillsAvailable = false;
+  let libraryMode = "installed";
   const creditsData = {
     balance: 900, reserved: 25, available: 875, tokensPerCredit: 1000,
     builtinEnabled: true, purchaseEnabled: true,
@@ -57,7 +69,9 @@ try {
   state.api = async (path, init = {}) => {
     const method = init.method ?? "GET";
     calls.push({ path, method, body: init.body });
-    if (path === "/api/koi/settings") return { managementAvailable: false, canInstall: false, settings: { autoSkills: true, revision: 1 } };
+    if (path === "/api/koi/settings") return { managementAvailable: skillsAvailable, canInstall: skillsAvailable && state.user.membershipTier === "lifetime", settings: { autoSkills: true, revision: 1, libraryMode }, legacySkillCount: 1 };
+    if (path === "/api/koi/skill-migration/skip") { libraryMode = "installed"; return { libraryMode }; }
+    if (path.startsWith("/api/koi/skills?")) return { skills: [], nextCursor: "", storage: { usedBytes: 0 } };
     if (path === "/api/agent/credits") {
       if (creditsReadDelay) await creditsReadDelay;
       if (creditsReadError) throw creditsReadError;
@@ -281,6 +295,47 @@ try {
   await render();
   assert.ok(!tokenCard().textContent.includes("••••9876"), "account switch does not display the previous account's credential");
   credentialReadError = undefined;
+  calls.length = 0; state.user = null;
+  state.search = { tab: "koi", section: "skills", install: "github" };
+  await mount();
+  const login = document.querySelector('a[href^="/login"]');
+  assert.equal(new URL(login.getAttribute("href"), "https://koinote.test").searchParams.get("redirectTo"), "/space?tab=koi&section=skills&install=github", "sign-in retains the requested installation source");
+  assert.equal(calls.length, 0);
+  state.user = member; skillsAvailable = true;
+  await mount();
+  assert.ok(document.querySelector('[role="dialog"] input[type="url"]'), "a GitHub link opens its source form");
+  assert.equal(state.scrolled, "koi-skills", "the Skills link scrolls after the library is available");
+  assert.equal(calls.some(call => call.method === "POST"), false, "opening an installation link never starts an upload or confirms an install");
+  await act(async () => [...document.querySelectorAll("button")].find(button => button.textContent === zh.koi.cancel).click());
+  await render();
+  assert.deepEqual(state.search, { tab: "koi", section: "skills" }, "closing consumes the installation request");
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  state.search = { tab: "koi", install: "folder" };
+  await render();
+  assert.ok(document.querySelector('[role="dialog"] input[type="file"]'), "a folder link opens the local picker");
+  state.search = { tab: "koi", install: "github" };
+  await render();
+  assert.ok(document.querySelector('[role="dialog"] input[type="url"]'), "changing the link updates the source without leaving the page");
+  state.search = { tab: "koi", section: "settings" };
+  await render();
+  assert.equal(state.scrolled, "koi-settings");
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  skillsAvailable = false; state.search = { tab: "koi", install: "github" };
+  await mount();
+  assert.ok(document.body.textContent.includes(zh.koi.koiUnavailable), "direct links explain the rollout restriction");
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  skillsAvailable = true; state.user = { ...member, membershipTier: "free" };
+  await mount();
+  assert.ok(document.body.textContent.includes(zh.koi.koiMembersOnly), "direct links preserve membership restrictions");
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  state.user = member; libraryMode = "legacy"; calls.length = 0;
+  await mount();
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.legacyTitle), "legacy accounts see migration guidance before the requested installer");
+  assert.equal(calls.some(call => call.method === "POST"), false, "a link does not start migration without a user choice");
+  await act(async () => [...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent === zh.koi.legacySkip).click());
+  await settle();
+  assert.ok(document.querySelector('[role="dialog"] input[type="url"]'), "choosing an empty library resumes the requested GitHub source");
+  assert.equal(calls.filter(call => call.method === "POST").length, 1, "resuming the installer only performs the explicit library choice");
   calls.length = 0; state.user = { ...member, isLocalMode: true };
   await mount();
   assert.equal(calls.length, 0, "local mode must not make cloud requests");

@@ -1,5 +1,7 @@
 # Koinote Agent Repositories：开发需求与实施方案
 
+> Koi 自身的技能安装见 [Koi AI 设置与 Skills 管理](./KOI_AI_SETTINGS_SKILLS_PLAN.zh.md)：支持文件夹、GitHub 和 Hub，安装库独立于仓库，仍按账号灰度开放；Hub 安装无需先 Fork。本文的发布、Clone 与本机同步继续沿用各自流程。
+
 > 版本：0.2
 >
 > 整理日期：2026-09-11

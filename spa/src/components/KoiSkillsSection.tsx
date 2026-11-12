@@ -32,8 +32,9 @@ import type { User } from "../api";
 import { useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
 import { KoiInstallDialog } from "./KoiInstallDialog";
-import { KoiEmptyState, KoiPending, KoiRetry, KoiSkillSourceLabel, KoiSkillStatusBadge, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
+import { KoiEmptyState, KoiPending, KoiRetry, KoiSkillCompatibilityNote, KoiSkillSourceLabel, KoiSkillStatusBadge, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
 
+type SourceFilter = "" | KoiSkill["sourceKind"];
 type StateFilter = "" | "enabled" | "disabled" | "unavailable";
 
 export function KoiSkillsSection({ user, canInstall, onInstall }: {
@@ -43,6 +44,7 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
   const labels = t.koi;
   const userId = user.authUserId;
   const [search, setSearch] = useState("");
+  const [source, setSource] = useState<SourceFilter>("");
   const [state, setState] = useState<StateFilter>("");
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -52,8 +54,8 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
     return () => clearTimeout(timer);
   }, [search]);
   const page = useInfiniteQuery({
-    queryKey: [KOI_SKILLS_QUERY_KEY, userId, query, state],
-    queryFn: ({ pageParam }) => listKoiSkills({ q: query, state, cursor: pageParam }),
+    queryKey: [KOI_SKILLS_QUERY_KEY, userId, query, source, state],
+    queryFn: ({ pageParam }) => listKoiSkills({ q: query, source, state, cursor: pageParam }),
     initialPageParam: "",
     getNextPageParam: (last) => last.nextCursor || undefined,
   });
@@ -93,7 +95,7 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <label className="relative block flex-1">
+        <label className="relative block min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--ink-faint)" }} />
           <span className="sr-only">{labels.searchSkills}</span>
           <input
@@ -104,6 +106,13 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
             style={{ borderColor: "var(--ink-line)" }}
           />
         </label>
+        <select value={source} onChange={(event) => setSource(event.target.value as SourceFilter)} aria-label={labels.filterSource} className="rounded-lg border bg-transparent px-3 py-2 text-sm" style={{ borderColor: "var(--ink-line)" }}>
+          <option value="">{labels.filterAllSources}</option>
+          <option value="github">GitHub</option>
+          <option value="hub">Hub</option>
+          <option value="folder">{labels.sourceFolder}</option>
+          <option value="migration">{labels.sourceMigration}</option>
+        </select>
         <select value={state} onChange={(event) => setState(event.target.value as StateFilter)} aria-label={labels.filterState} className="rounded-lg border bg-transparent px-3 py-2 text-sm" style={{ borderColor: "var(--ink-line)" }}>
           <option value="">{labels.filterAllStates}</option>
           <option value="enabled">{labels.stateEnabled}</option>
@@ -120,7 +129,7 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
         <KoiEmptyState
           canInstall={canInstall}
           onInstall={() => onInstall()}
-          message={query || state ? labels.noMatches : labels.emptySkills}
+          message={query || source || state ? labels.noMatches : labels.emptySkills}
         />
       ) : (
         <ul className="space-y-3">
@@ -277,7 +286,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
       </div>
       {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
       {check.data && !updateOpen && check.data.status !== "update_available" && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{check.data.status === "up_to_date" ? labels.upToDate : check.data.status === "source_unavailable" ? labels.sourceUnavailable : labels.manualOnly}</p>}
-      <p role="note" className="text-xs" style={{ color: "var(--ink-mid)" }}>{skill.compatibility.article ? labels.entryBoth : labels.entryConversation}</p>
+      <KoiSkillCompatibilityNote compatibility={skill.compatibility} />
       <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={labels.versionLabel} value={skill.version} />
         <Fact label={labels.filesLabel} value={String(skill.fileCount)} />
@@ -297,12 +306,6 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
           </p>
         </PaperCard>
       )}
-      {skill.compatibility.warnings && skill.compatibility.warnings.length > 0 && (
-        <p role="note" className="text-xs leading-5" style={{ color: "var(--ink-faint)" }}>
-          {labels.warningsLabel} {skill.compatibility.warnings.map((warning) => koiRequirementLabel(warning, labels)).join("; ")}
-        </p>
-      )}
-
       <KoiSkillFiles key={`${skill.id}:${skill.versionId}`} user={user} skill={skill} files={files} instructions={instructions} />
       {updateOpen && canInstall && <KoiInstallDialog authUserId={userId} updateTarget={(skill.sourceKind === "folder" || skill.sourceKind === "migration") ? skill : undefined} resumePreview={updatePreview} onClose={() => { setUpdateOpen(false); setUpdatePreview(undefined); check.reset(); void reconcile(); }} />}
     </section>

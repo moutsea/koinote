@@ -18,6 +18,10 @@ export function parseRepositorySearch(search: Record<string, unknown>): Reposito
   return { ...parseRepositoryDirectorySearch(search), file: typeof search.file === "string" && search.file.length <= 4096 ? search.file : undefined, ...(search.installKoi === true ? { installKoi: true } : {}) };
 }
 
+export function repositoryKoiLoginRedirect(repositoryId: string, search: Record<string, unknown>, hash?: string) {
+  return `/repositories/${encodeURIComponent(repositoryId)}${defaultStringifySearch({ ...parseRepositorySearch(search), installKoi: true })}${hash ? `#${encodeURIComponent(hash)}` : ""}`;
+}
+
 export function repositoryReadme(files: AgentWorkspaceFile[]) {
   for (const directory of ["", ".github/", "docs/"]) {
     for (const extension of ["md", "markdown", "mdown", "txt"]) {

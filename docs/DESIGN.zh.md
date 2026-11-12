@@ -9,6 +9,8 @@
 
 > 中文是这份文档的原本。English: [DESIGN.en.md](DESIGN.en.md)
 
+Koi 的设置、安装库及灰度边界见 [Koi AI 设置与 Skills 管理](./KOI_AI_SETTINGS_SKILLS_PLAN.zh.md)。
+
 ## 目录
 
 - [架构](#架构)

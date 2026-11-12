@@ -20,6 +20,7 @@ import { installDesktopSyncQueryRefresh } from "./desktop/syncQueries";
 import { installDropNavigationGuard } from "./dropNavigation";
 import { parseRepositorySearch } from "./agentRepositoryMarkdown";
 import { parseRepositoryDirectorySearch } from "./agentRepositoryDirectory";
+import { parseSpaceSearch } from "./spaceSearch";
 
 const queryClient = new QueryClient();
 const desktopRuntime = isDesktopRuntime();
@@ -197,12 +198,6 @@ function parseSettingsSearch(search: Record<string, unknown>): {
 function parseAgentWorkspaceSearch(search: Record<string, unknown>): { from?: "hub" | "space" | "settings" } {
   return {
     from: search.from === "hub" || search.from === "space" || search.from === "settings" ? search.from : undefined,
-  };
-}
-
-function parseSpaceSearch(search: Record<string, unknown>): { tab?: "config" | "agent" | "koi" } {
-  return {
-    tab: search.tab === "agent" || search.tab === "config" || search.tab === "koi" ? search.tab : undefined,
   };
 }
 

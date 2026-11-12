@@ -185,6 +185,55 @@ func TestKoiInstalledTaskPinsLoadsAndReleases(t *testing.T) {
 	}
 }
 
+func TestKoiSkillCleanupAfterTaskTermination(t *testing.T) {
+	for _, status := range []string{"failed", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			a, user, _ := writingTestApp(t)
+			a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
+			enableRepositoryR2Fixture(t, a)
+			ctx := context.Background()
+			t.Cleanup(func() {
+				if _, err := a.db.Exec(ctx, `DELETE FROM users WHERE id=$1`, user.ID); err != nil {
+					t.Error(err)
+				}
+			})
+			skill := koiRuntimeInstall(t, a, user, map[string]string{"SKILL.md": "# Review"})
+			task := agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), model.Document{}, "Review")
+			pinned, err := a.koiTaskSkills(ctx, task)
+			if err != nil || len(pinned) != 1 {
+				t.Fatalf("task did not pin the installation: %+v %v", pinned, err)
+			}
+			if err = a.recordKoiSkillLoad(ctx, task, pinned[0]); err != nil {
+				t.Fatal(err)
+			}
+			koiFolderRequest(t, a, user, "DELETE", fmt.Sprintf("/api/koi/skills/%s?expectedRevision=%d", skill.ID, skill.Revision), nil, 200)
+			if err = a.cleanupKoiSkillVersionsForUser(ctx, user.ID); err != nil {
+				t.Fatal(err)
+			}
+			if usage, err := a.storageUsageFor(ctx, user.ID); err != nil || usage.KoiSkillBytes != skill.SizeBytes {
+				t.Fatalf("active task lost its retained bytes: %+v %v", usage, err)
+			}
+			if err = a.finishWritingTask(ctx, task, status, "", json.RawMessage(`{"totalTokens":0}`), ""); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				if err = a.cleanupKoiSkillVersionsForUser(ctx, user.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if usage, err := a.storageUsageFor(ctx, user.ID); err != nil || usage.KoiSkillBytes != 0 {
+				t.Fatalf("terminated task retained quota: %+v %v", usage, err)
+			}
+			if pins, err := a.koiTaskSkills(ctx, task); err != nil || len(pins) != 0 {
+				t.Fatalf("terminated task retained package references: %+v %v", pins, err)
+			}
+			if loads, err := a.loadWritingLoadedSkills(ctx, task.ID); err != nil || len(loads) != 1 || loads[0].ID != skill.VersionID {
+				t.Fatalf("cleanup removed the load history: %+v %v", loads, err)
+			}
+		})
+	}
+}
+
 func TestKoiSettingsAndTaskProtocolBoundaries(t *testing.T) {
 	a, user, doc := writingTestApp(t)
 	ctx := context.Background()

@@ -4,6 +4,23 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.17] - 2026-11-12
+
+### Added
+
+- Les comptes inclus dans le déploiement progressif peuvent prévisualiser et installer des Skills Koi depuis un dossier, GitHub ou Hub, les gérer et les mettre à jour dans Mon espace → Koi AI, ou choisir de migrer leur ancienne bibliothèque. L’installation, la mise à jour et l’activation nécessitent un abonnement à vie.
+- La bibliothèque peut être filtrée par source et état. L’aperçu d’installation présente la licence, la compatibilité et les erreurs de validation précises, avec des liens directs vers les réglages et l’installation.
+
+### Changed
+
+- Le chat du panneau inférieur et la barre latérale des articles peuvent charger les Skills activés et compatibles selon les besoins. Chaque tâche conserve une version fixe ; les modifications d’articles restent soumises à validation.
+- Après connexion depuis Hub, le fichier sélectionné, les filtres et l’ancre sont conservés avant l’ouverture de l’aperçu d’installation. Les dépôts sans entrée Skill indiquent pourquoi l’installation est indisponible.
+
+### Fixed
+
+- L’amélioration d’un article se poursuit jusqu’à la modification et à la validation, au lieu de s’arrêter après un plan d’exécution.
+- Annuler la sélection d’un dossier conserve la sélection précédente sans signaler un dossier vide.
+
 ## [1.1.16] - 2026-11-11
 
 ### Changed

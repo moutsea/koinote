@@ -1,5 +1,5 @@
 import { Archive, Cloud, Files, FolderOpen, FolderSync, ShieldCheck } from "lucide-react";
-import { Link, useSearch } from "@tanstack/react-router";
+import { defaultStringifySearch, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useSession } from "../auth";
 import { AgentWorkspaceRepositoriesPage } from "./AgentWorkspaceRepositoriesPage";
@@ -8,12 +8,14 @@ import { KoiPage } from "../components/KoiPage";
 import { Logo } from "../components/Logo";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n } from "../i18n";
+import { parseSpaceSearch } from "../spaceSearch";
 
 export function SpacePage() {
   const session = useSession();
   const { t } = useI18n();
   const [syncOpen, setSyncOpen] = useState(false);
-  const search = useSearch({ strict: false }) as { tab?: "config" | "agent" | "koi" };
+  const navigate = useNavigate();
+  const search = parseSpaceSearch(useSearch({ strict: false }));
   const activeTab = search.tab === "config" || (!search.tab && session.data?.user?.isLocalMode)
     ? "config" : search.tab === "koi" ? "koi" : "agent";
 
@@ -37,6 +39,7 @@ export function SpacePage() {
         </p>
         <Link
           to="/login"
+          search={activeTab === "koi" ? { redirectTo: `/space${defaultStringifySearch(search)}` } : undefined}
           className="rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           style={{ background: "var(--cinnabar)" }}
         >
@@ -102,7 +105,9 @@ export function SpacePage() {
           </Link>
         </div>
 
-        {activeTab === "koi" && <KoiPage key={user.authUserId} user={user} />}
+        {activeTab === "koi" && <KoiPage key={user.authUserId} user={user} section={search.section} install={search.install} onInstallClose={() => {
+          void navigate({ to: "/space", search: { tab: "koi", section: "skills" }, replace: true, resetScroll: false });
+        }} />}
 
         {activeTab === "config" && <>
         <section className="border-b pb-7" style={{ borderColor: "var(--ink-line)" }}>

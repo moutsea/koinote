@@ -515,6 +515,9 @@ export interface Messages {
     };
   };
   koi: {
+    previewMultiHint: string;
+    installRuntimeNotice: string;
+    articleUnavailable: string;
     uploadNewVersion: string;
     installSource: string;
     sourceGithub: string;
@@ -530,6 +533,7 @@ export interface Messages {
     manualOnly: string;
     sourceUnavailable: string;
     installToKoi: string;
+    noInstallableSkills: string;
     hubBrowse: string;
     githubPrivateHint: string;
     githubCredentials: string;
@@ -579,7 +583,9 @@ export interface Messages {
     fileLoading: string;
     fileTooLarge: string;
     filesLabel: string;
+    filterAllSources: string;
     filterAllStates: string;
+    filterSource: string;
     filterState: string;
     folderChoose: string;
     folderCloudNotice: string;
@@ -602,6 +608,7 @@ export interface Messages {
     koiLoginRequired: string;
     koiMembersOnly: string;
     koiNoSkills: string;
+    koiValidationFailed: string;
     koiPreviewExpired: string;
     koiPreviewNotReady: string;
     koiQuota: string;
