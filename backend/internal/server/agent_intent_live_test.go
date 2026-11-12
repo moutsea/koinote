@@ -162,6 +162,10 @@ func TestAgentIntentLiveHost(t *testing.T) {
 		reports = append(reports, map[string]any{"taskId": task.ID, "inputVersion": task.IntentVersion, "channel": envelope.Channel, "modelJobs": envelope.Jobs, "transportEvents": envelope.TransportEvents, "taskIntent": task.IntentResult, "operationCount": len(ops), "billingStatus": task.BillingStatus, "chargedCredits": task.ChargedCredits, "callbackDeliveries": deliveries})
 		return task
 	}
+	if scenario := os.Getenv("KOINOTE_AGENT_INTENT_CASE"); scenario == "article" || scenario == "article-body" {
+		checkArticlePolishLive(t, a, u, run)
+		return
+	}
 	review := agentTestSession(t, a, u, "review")
 	first := run(review, doc, "读取当前文章，保持原标题，将正文替换为“这是经过确认的验收正文。”，提交修改提案等待审批。")
 	ops, err := a.loadAgentOperations(ctx, u.ID, []string{first.ID})
