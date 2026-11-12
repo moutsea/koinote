@@ -337,6 +337,17 @@ func (a *App) refreshAgentRepositoryWithToken(ctx context.Context, before agentR
 	if before.ownerID == nil && (discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseFilesAllowed(files, source.RepositoryID, source.License)) {
 		return result, errAgentRepositorySyncLicenseReview
 	}
+	if before.ownerID == nil {
+		var discovered bool
+		if err = a.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_repository_discoveries WHERE workspace_id=$1 AND accepted_on IS NOT NULL)`, before.id).Scan(&discovered); err != nil {
+			return result, err
+		}
+		if discovered && validateDiscoveredKoiSkills(files, source.License) != "" {
+			// Retain the last usable publication, including for viewer-triggered
+			// refreshes. Legacy Agent-only system repositories keep their policy.
+			return skip("koi_skills_unavailable")
+		}
+	}
 	if !options.Apply {
 		result.Status = "would_update"
 		return result, nil
@@ -456,6 +467,7 @@ func recordAgentRepositorySyncEvent(ctx context.Context, tx pgx.Tx, before agent
 }
 
 func (a *App) applyAgentRepositorySync(ctx context.Context, before agentRepositorySyncSnapshot, source *agentGitHubSource, files []agentWorkspaceFile) error {
+	installable := before.publishedRevision != nil && validateDiscoveredKoiSkills(files, source.License) == ""
 	// Reuse immutable R2 blobs; a one-file upstream edit should not upload every
 	// other file again. Missing/new blobs are staged before taking write locks.
 	keys := map[string]string{}
@@ -538,7 +550,7 @@ func (a *App) applyAgentRepositorySync(ctx context.Context, before agentReposito
 		if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET revision=$2,github_source=(SELECT github_source-'private' FROM agent_workspaces WHERE id=$1),published_at=now() WHERE workspace_id=$1`, before.id, revision); err != nil {
 			return err
 		}
-		if err = replaceAgentRepositoryPublicationFiles(ctx, tx, before.id); err != nil {
+		if err = replaceAgentRepositoryPublicationFiles(ctx, tx, before.id, &installable); err != nil {
 			return err
 		}
 	}

@@ -3,12 +3,14 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"koinote/backend/internal/httpx"
 )
 
@@ -23,10 +25,12 @@ func agentRepositoryCategoryAllowed(category string) bool {
 type agentRepositoryDirectoryItem struct {
 	agentWorkspaceSummary
 	agentRepositoryEngagement
-	SystemManaged bool               `json:"systemManaged"`
-	Category      string             `json:"category"`
-	License       string             `json:"license"`
-	GitHubSource  *agentGitHubSource `json:"githubSource,omitempty"`
+	SystemManaged  bool               `json:"systemManaged"`
+	Category       string             `json:"category"`
+	License        string             `json:"license"`
+	GitHubSource   *agentGitHubSource `json:"githubSource,omitempty"`
+	KoiInstallable bool               `json:"koiInstallable"`
+	koiPriority    bool
 }
 
 type agentRepositoryDirectoryFacet struct {
@@ -48,9 +52,11 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var cursor struct {
-		PublishedAt time.Time `json:"publishedAt"`
-		ID          int64     `json:"id"`
-		Scope       *string   `json:"scope,omitempty"`
+		PublishedAt    time.Time `json:"publishedAt"`
+		ID             int64     `json:"id"`
+		Scope          *string   `json:"scope,omitempty"`
+		KoiInstallable *bool     `json:"koiInstallable,omitempty"`
+		KoiSnapshot    *string   `json:"koiSnapshot,omitempty"`
 	}
 	scope := source + "\n" + category + "\n" + query
 	if raw := r.URL.Query().Get("cursor"); raw != "" {
@@ -59,11 +65,15 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 			return
 		}
 		decoded, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || json.Unmarshal(decoded, &cursor) != nil || cursor.PublishedAt.IsZero() || cursor.ID <= 0 || (cursor.Scope != nil && *cursor.Scope != scope) {
+		if err != nil || json.Unmarshal(decoded, &cursor) != nil || cursor.PublishedAt.IsZero() || cursor.ID <= 0 || (cursor.Scope != nil && *cursor.Scope != scope) || (cursor.KoiInstallable == nil) != (cursor.KoiSnapshot == nil) {
 			httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
 			return
 		}
 	}
+	// Let a pre-upgrade cursor finish in its original time order. Fresh pages and
+	// all their cursors use the same compatibility/time/ID ordering across pages.
+	prioritizeKoi := cursor.ID == 0 || cursor.KoiInstallable != nil
+	cursorInstallable := cursor.KoiInstallable != nil && *cursor.KoiInstallable
 	viewer, err := a.publicRepositoryViewerID(r)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
@@ -75,18 +85,39 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if prioritizeKoi {
+		var snapshot string
+		// Snapshot visibility handles checks that started before this request but
+		// finish later, including a transaction still uncommitted at the first page.
+		if err = tx.QueryRow(r.Context(), `SELECT COALESCE($1::pg_snapshot,pg_current_snapshot())::text`, cursor.KoiSnapshot).Scan(&snapshot); err != nil {
+			var inputErr *pgconn.PgError
+			if errors.As(err, &inputErr) && strings.HasPrefix(inputErr.Code, "22") {
+				httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
+			} else {
+				writeAgentWorkspaceError(w, err)
+			}
+			return
+		}
+		cursor.KoiSnapshot = &snapshot
+	}
 	rows, err := tx.Query(r.Context(), `SELECT p.workspace_id,p.name,p.description,p.revision,p.published_at,
       count(f.path),COALESCE(sum(f.size_bytes),0)::bigint,p.license,p.github_source,w.is_system,w.hub_category,
       COALESCE((SELECT star_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
       EXISTS(SELECT 1 FROM agent_repository_stars s WHERE s.workspace_id=p.workspace_id AND s.user_id=$5),
-      COALESCE((SELECT clone_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0)
+      COALESCE((SELECT clone_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
+      COALESCE(p.koi_installable,false),priority.value
       FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
+      CROSS JOIN LATERAL (SELECT CASE WHEN $9 THEN
+        COALESCE(p.koi_installable AND pg_visible_in_snapshot(p.koi_installability_xid,$10::pg_snapshot),false)
+        ELSE false END AS value) priority
       LEFT JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id
-      WHERE w.deleted_at IS NULL AND ($1::bigint=0 OR (p.published_at,p.workspace_id)<($4::timestamptz,$1))
+      WHERE w.deleted_at IS NULL AND ($1::bigint=0 OR
+      (priority.value,p.published_at,p.workspace_id)<($8::boolean,$4::timestamptz,$1))
       AND (strpos(lower(p.name||' '||p.description||' '||COALESCE(p.github_source->>'author','')),lower($2))>0 OR $2='')
       AND ($6='' OR w.is_system=($6='system')) AND ($7='' OR w.hub_category=$7)
-      GROUP BY p.workspace_id,w.is_system,w.hub_category ORDER BY p.published_at DESC,p.workspace_id DESC LIMIT $3`,
-		cursor.ID, query, publicRepositoryPageSize+1, cursor.PublishedAt, viewer, source, category)
+      GROUP BY p.workspace_id,w.is_system,w.hub_category,priority.value
+      ORDER BY priority.value DESC,p.published_at DESC,p.workspace_id DESC LIMIT $3`,
+		cursor.ID, query, publicRepositoryPageSize+1, cursor.PublishedAt, viewer, source, category, cursorInstallable, prioritizeKoi, cursor.KoiSnapshot)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -94,7 +125,7 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 	items := []agentRepositoryDirectoryItem{}
 	for rows.Next() {
 		var item agentRepositoryDirectoryItem
-		if err = rows.Scan(&item.WorkspaceID, &item.Name, &item.Description, &item.Revision, &item.UpdatedAt, &item.FileCount, &item.SizeBytes, &item.License, &item.GitHubSource, &item.SystemManaged, &item.Category, &item.StarCount, &item.Starred, &item.CloneCount); err != nil {
+		if err = rows.Scan(&item.WorkspaceID, &item.Name, &item.Description, &item.Revision, &item.UpdatedAt, &item.FileCount, &item.SizeBytes, &item.License, &item.GitHubSource, &item.SystemManaged, &item.Category, &item.StarCount, &item.Starred, &item.CloneCount, &item.KoiInstallable, &item.koiPriority); err != nil {
 			rows.Close()
 			writeAgentWorkspaceError(w, err)
 			return
@@ -152,6 +183,9 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		cursor.PublishedAt = last.UpdatedAt
 		cursor.ID = last.WorkspaceID
 		cursor.Scope = &scope
+		if prioritizeKoi {
+			cursor.KoiInstallable = &last.koiPriority
+		}
 		encoded, _ := json.Marshal(cursor)
 		value := base64.RawURLEncoding.EncodeToString(encoded)
 		next = &value

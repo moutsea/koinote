@@ -118,6 +118,7 @@ function RepositoryCard({ item, directorySearch }: { item: PublicRepositorySumma
     </Link>
     <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-[var(--ink-mid)]">
       <span className="rounded-md bg-[var(--ink-wash)] px-2 py-1">{labels[`hubCategory_${category}`]}</span>
+      {item.koiInstallable && <span className="rounded-md bg-[var(--ink-wash)] px-2 py-1 text-[var(--cinnabar)]">{labels.hubKoiInstallable}</span>}
       {item.githubSource && <a href={item.githubSource.authorUrl} title={`${labels.githubOriginalAuthor} ${author}`} aria-label={`${labels.githubOriginalAuthor} ${author}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1.5 hover:underline"><Github className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">{author}</span></a>}
       {upstream && <span className="rounded-full border px-2 py-0.5" style={{ borderColor: "var(--cinnabar)", color: "var(--cinnabar)" }} title={githubUpstreamNotice(item.githubSource, labels)}>{upstream}</span>}
     </div>

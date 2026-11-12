@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -81,40 +82,119 @@ func (a *App) loadKoiHubFiles(ctx context.Context, publication *agentRepositoryP
 		return nil, errKoiSkillTooLarge
 	}
 	files := make([]koiSkillFile, 0, len(needed))
+	paths := []string{}
+	seen := map[string]bool{}
 	for _, member := range publication.Files {
 		if !needed[member.Path] {
 			continue
 		}
 		file := byPath[member.Path]
+		files = append(files, file)
 		// Retain oversized metadata for candidate rejection without reading it.
-		if file.SizeBytes > koiSkillFileBytes {
-			files = append(files, file)
-			continue
+		if file.SizeBytes <= koiSkillFileBytes && !seen[file.SHA256] {
+			seen[file.SHA256] = true
+			paths = append(paths, file.Path)
 		}
-		var key *string
-		err := a.db.QueryRow(ctx, `SELECT b.content,b.r2_object_key
+	}
+	if len(paths) == 0 {
+		return files, nil
+	}
+	// Read one representative per content hash, bound to the exact publication.
+	// Release the database connection before starting any object-store requests.
+	type download struct {
+		file koiSkillFile
+		key  *string
+	}
+	rows, err := a.db.Query(ctx, `SELECT f.path,f.sha256,f.size_bytes,b.content,b.r2_object_key
  FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
  JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id
  JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
  WHERE p.workspace_id=$1 AND p.published_at=$2::timestamptz AND p.revision=$3
- AND f.path=$4 AND f.sha256=$5 AND w.deleted_at IS NULL`, publication.WorkspaceID, publication.PublicationID, publication.Revision, file.Path, file.SHA256).Scan(&file.Content, &key)
-		if errors.Is(err, pgx.ErrNoRows) {
-			if err = a.checkKoiHubPublication(ctx, publication); err != nil {
-				return nil, err
-			}
+ AND f.path=ANY($4::text[]) AND w.deleted_at IS NULL ORDER BY f.path`, publication.WorkspaceID, publication.PublicationID, publication.Revision, paths)
+	if err != nil {
+		return nil, err
+	}
+	downloads := make([]download, 0, len(paths))
+	byHash := map[string]int{}
+	for rows.Next() {
+		var item download
+		if err = rows.Scan(&item.file.Path, &item.file.SHA256, &item.file.SizeBytes, &item.file.Content, &item.key); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		expected, exists := byPath[item.file.Path]
+		if !exists || expected.SHA256 != item.file.SHA256 || expected.SizeBytes != item.file.SizeBytes {
+			rows.Close()
 			return nil, errAgentRepositoryStorage
 		}
-		if err != nil {
+		byHash[item.file.SHA256] = len(downloads)
+		downloads = append(downloads, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if len(downloads) != len(paths) {
+		if err = a.checkKoiHubPublication(ctx, publication); err != nil {
 			return nil, err
 		}
-		file.Content, err = a.readAgentRepositoryContent(ctx, file.Content, key, file.SHA256, file.SizeBytes, 0, koiSkillFileBytes)
-		if err != nil {
-			return nil, err
+		return nil, errAgentRepositoryStorage
+	}
+	work, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+	for range min(8, len(downloads)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				if work.Err() != nil {
+					return
+				}
+				item := &downloads[index]
+				content, readErr := a.readAgentRepositoryContent(work, item.file.Content, item.key, item.file.SHA256, item.file.SizeBytes, 0, koiSkillFileBytes)
+				if readErr == nil && agentWorkspaceSensitiveContent(content) {
+					readErr = &agentWorkspaceSensitiveError{Path: item.file.Path}
+				}
+				if readErr != nil {
+					once.Do(func() { firstErr = readErr; cancel() })
+					return
+				}
+				item.file.Content = content
+			}
+		}()
+	}
+	for index := range downloads {
+		select {
+		case jobs <- index:
+		case <-work.Done():
 		}
-		if agentWorkspaceSensitiveContent(file.Content) {
-			return nil, &agentWorkspaceSensitiveError{Path: file.Path}
+		if work.Err() != nil {
+			break
 		}
-		files = append(files, file)
+	}
+	close(jobs)
+	wg.Wait()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	for i := range files {
+		file := &files[i]
+		if file.SizeBytes > koiSkillFileBytes {
+			continue
+		}
+		index, exists := byHash[file.SHA256]
+		if !exists || downloads[index].file.SizeBytes != file.SizeBytes {
+			return nil, errAgentRepositoryStorage
+		}
+		file.Content = downloads[index].file.Content
 	}
 	return files, nil
 }

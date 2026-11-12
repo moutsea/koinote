@@ -1,36 +1,36 @@
 {
-  "version": "1.1.19",
+  "version": "1.1.20",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.19",
+      "title": "What's new in Koinote 1.1.20",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Refined Skill installation previews with collapsed licenses and an always-visible confirmation button. Hub repositories group Clone, Fork and sync actions in one menu and display operation progress.",
-        "Hub Skill entries show installed status and partial installation counts. Settings and status failures can be retried, and signing in resumes the installation preview."
+        "Hub prioritizes verified repositories containing at least one installable Skill and marks them as installable in Koi AI. Uninstalled entries now clearly say “Install to Koi AI”.",
+        "Automatic discovery prioritizes writing, knowledge management and research Skills and categorizes repositories by use. If an upstream update is no longer installable, the saved version is retained with an explanation."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.19 新功能",
+      "title": "Koinote 1.1.20 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "优化技能安装预览的布局，许可证默认折叠，安装确认按钮始终可见；Hub 仓库将 Clone、Fork、同步等操作收拢至统一菜单，并展示操作进度。",
-        "Hub 技能入口显示已安装状态和部分安装数量；设置或状态读取失败时可直接重试，登录后继续打开安装预览。"
+        "Hub 优先展示经过校验、至少含一项可安装技能的仓库，并标记「Koi AI 可安装」；未安装入口明确显示「安装到 Koi AI」。",
+        "自动发掘优先补充写作、知识管理和研究用途的技能仓库，并按用途分类；上游新版本无法安装时保留原版本并说明原因。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.19",
+      "title": "Nouveautés de Koinote 1.1.20",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "L’aperçu d’installation des Skills présente une mise en page améliorée, des licences repliées et un bouton de confirmation toujours visible. Les dépôts Hub regroupent les actions Clone, Fork et synchronisation dans un menu et affichent leur progression.",
-        "Les entrées Skills du Hub indiquent l’état installé et le nombre d’installations partielles. Les erreurs de lecture des réglages et de l’état peuvent être réessayées ; après connexion, l’aperçu d’installation reprend."
+        "Le Hub affiche en priorité les dépôts vérifiés contenant au moins un Skill installable et les identifie comme installables dans Koi AI. Les entrées non installées indiquent clairement « Installer dans Koi AI ».",
+        "La découverte automatique privilégie les Skills de rédaction, de gestion des connaissances et de recherche, et classe les dépôts par usage. Si une mise à jour en amont n’est plus installable, la version enregistrée est conservée avec une explication."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.19 の新機能",
+      "title": "Koinote 1.1.20 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "スキルのインストールプレビューを改善し、ライセンスを初期状態で折りたたみ、確認ボタンを常に表示します。Hub リポジトリの Clone・Fork・同期などを一つのメニューにまとめ、処理状況を表示します。",
-        "Hub のスキル入口にインストール済みの状態と一部インストール済みの件数を表示します。設定や状態の読み込みに失敗した場合は再試行でき、ログイン後はインストールプレビューを再開します。"
+        "Hub では、検証済みで少なくとも一つのスキルをインストールできるリポジトリを優先表示し、Koi AI にインストール可能と表示します。未インストール時のボタンも「Koi AI にインストール」と明示します。",
+        "自動収集では執筆・知識管理・研究向けのスキルを優先し、用途別に分類します。上流の更新版がインストールできない場合は、保存済みのバージョンを保持して理由を表示します。"
       ]
     }
   }

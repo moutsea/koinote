@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.20] - 2026-11-12
+
+### Changed
+
+- Hub prioritizes verified repositories containing at least one installable Skill and marks them as installable in Koi AI. Uninstalled entries now clearly say “Install to Koi AI”.
+- Automatic discovery prioritizes writing, knowledge management and research Skills and categorizes repositories by use. If an upstream update is no longer installable, the saved version is retained with an explanation.
+
+### Fixed
+
+- Fixed missing or repeated repositories during pagination when compatibility results change. Skill collections are analyzed faster, reducing waits and timeouts.
+
 ## [1.1.19] - 2026-11-12
 
 ### Changed

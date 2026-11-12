@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.20] - 2026-11-12
+
+### Changed
+
+- Le Hub affiche en priorité les dépôts vérifiés contenant au moins un Skill installable et les identifie comme installables dans Koi AI. Les entrées non installées indiquent clairement « Installer dans Koi AI ».
+- La découverte automatique privilégie les Skills de rédaction, de gestion des connaissances et de recherche, et classe les dépôts par usage. Si une mise à jour en amont n’est plus installable, la version enregistrée est conservée avec une explication.
+
+### Fixed
+
+- Correction des dépôts manquants ou répétés pendant la pagination lorsque les résultats de compatibilité changent. L’analyse des collections de Skills est plus rapide et réduit l’attente et les dépassements de délai.
+
 ## [1.1.19] - 2026-11-12
 
 ### Changed

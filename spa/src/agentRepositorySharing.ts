@@ -15,7 +15,7 @@ export function getAgentRepositorySharing(id: number, system = false) {
 export function setAgentRepositorySharing(id: number, expectedRevision: number, license: string, revoke = false, system = false, category?: RepositoryCategory) {
   return apiJson<{ success: boolean }>(`${system ? "/api/admin/agent-repositories" : "/api/agent/workspaces"}/${id}/sharing`, { method: revoke ? "DELETE" : "PUT", body: JSON.stringify({ expectedRevision, license, category }) });
 }
-export type PublicRepositorySummary = AgentWorkspaceSummary & AgentRepositoryEngagement & { license: string };
+export type PublicRepositorySummary = AgentWorkspaceSummary & AgentRepositoryEngagement & { license: string; koiInstallable?: boolean };
 export function listPublicAgentRepositories(query: string, cursor?: string, filters: { source?: RepositorySource; category?: RepositoryCategory | "" } = {}) {
   const params = new URLSearchParams({ q: query });
   if (cursor !== undefined) params.set("cursor", cursor);

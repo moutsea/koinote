@@ -473,7 +473,7 @@ try {
   const loginHash = 'user-content-安装 & 配置';
   h.search = loginContext; h.hash = loginHash;
   await mount(AgentPublicRepositoryPage);
-  const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.viewSkills));
+  const installLogin = [...document.querySelectorAll('a')].find(a => a.textContent.includes(zh.koi.installToKoi));
   assert.ok(installLogin, 'anonymous visitors can return to the Hub installation after login');
   const loginReturn = new URL(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), 'https://koinote.example');
   assert.equal(loginReturn.pathname, '/repositories/7');
@@ -501,10 +501,10 @@ try {
   h.koiCandidates = [{ id: 'demo', name: 'demo', description: 'Review writing', license: 'MIT', entryPath: 'SKILL.md', fileCount: 1, sizeBytes: 100, instructions: '# Demo', compatibility: { conversation: true, article: true }, metadataFormat: 'agent-skills' }];
   h.koiInstallResult = [installedSkill];
   await mount(AgentPublicRepositoryPage);
-  assert.ok(button(zh.koi.viewSkills));
+  assert.ok(button(zh.koi.installToKoi), 'an uninstalled repository offers installation as the primary action');
   assert.equal(document.querySelector('[role="menu"]'), null, 'secondary actions start collapsed');
   assert.equal(document.querySelector('button[aria-haspopup="menu"]').textContent, labels.repositoryActions, 'one menu replaces separate Clone/Fork controls');
-  await click(zh.koi.viewSkills);
+  await click(zh.koi.installToKoi);
   await click(zh.koi.confirmInstall.replace('{count}', '1'));
   assert.equal(document.querySelector('[role="dialog"]'), null);
   assert.ok(button(zh.koi.alreadyInstalled), 'installation immediately refreshes the Hub action');
@@ -530,9 +530,9 @@ try {
   await click(zh.koi.cancel);
   h.koiSkills = [];
   await act(async()=>client.invalidateQueries({queryKey:['koi-skills','hub-viewer']})); await settle();
-  assert.ok(button(zh.koi.viewSkills), 'removing the Skill restores review without promising compatibility');
+  assert.ok(button(zh.koi.installToKoi), 'removing the Skill restores the installation action without promising compatibility');
   h.koiCandidates = [];
-  await click(zh.koi.viewSkills);
+  await click(zh.koi.installToKoi);
   assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.koiNoSkills), 'all-rejected repositories explain why nothing can be installed');
   assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.reject_incompatible));
   assert.equal(document.querySelector('[role="dialog"] input[name="preview-candidate"]'), null);
@@ -546,18 +546,18 @@ try {
   assert.ok(calls.some(call=>call.path.startsWith('/api/koi/skills?')&&new URL(call.path,'https://koinote.example').searchParams.get('cursor')==='20'));
   h.koiSkillsByUser = { 'hub-viewer': h.koiSkills, 'another-viewer': [] };
   await act(async()=>h.setUser({ id: 9, authUserId: 'another-viewer', membershipTier: 'lifetime' })); await settle();
-  assert.ok(button(zh.koi.viewSkills), 'switching accounts never reuses the previous installation status');
+  assert.ok(button(zh.koi.installToKoi), 'switching accounts never reuses the previous installation status');
   const statusGate = hold('GET', '/api/koi/skills?q=&source=hub&state=&cursor=&hubWorkspaceId=7');
   await mount(AgentPublicRepositoryPage);
-  assert.equal(button(zh.koi.viewSkills).disabled, false, 'a pending status lookup does not block opening the install preview');
-  await click(zh.koi.viewSkills);
+  assert.equal(button(zh.koi.installToKoi).disabled, false, 'a pending status lookup does not block opening the install preview');
+  await click(zh.koi.installToKoi);
   assert.ok(document.querySelector('[role="dialog"]'), 'the install preview remains available while status is loading');
   await click(zh.koi.cancel);
   statusGate(); await settle();
   h.koiSkillsError = true;
   await act(async()=>client.invalidateQueries({queryKey:['koi-skills','another-viewer']})); await settle();
   assert.ok(document.body.textContent.includes(zh.koi.installStatusUnavailable), 'a failed status read is distinguished from not installed');
-  await click(zh.koi.viewSkills);
+  await click(zh.koi.installToKoi);
   assert.ok(document.querySelector('[role="dialog"]'), 'a failed status lookup does not block reviewing the repository');
   await click(zh.koi.cancel);
   await click(zh.koi.retry);
@@ -576,8 +576,8 @@ try {
   assert.ok(document.body.textContent.includes(zh.koi.koiUnavailable), 'accounts outside rollout receive an explanation');
   assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction, 'an unavailable account never starts source analysis');
   await click(zh.koi.cancel);
-  assert.equal(button(zh.koi.viewSkills).disabled, false, 'the member entry remains available when account permissions are unresolved or unavailable');
-  await click(zh.koi.viewSkills);
+  assert.equal(button(zh.koi.installToKoi).disabled, false, 'the member entry remains available when account permissions are unresolved or unavailable');
+  await click(zh.koi.installToKoi);
   assert.ok(document.querySelector('[role="dialog"]').textContent.includes(zh.koi.koiUnavailable), 'ordinary entry explains a confirmed rollout restriction');
   assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRestriction, 'opening a restricted entry never starts source analysis');
   await click(zh.koi.cancel);
@@ -605,7 +605,7 @@ try {
 
   h.koiOverviewError = true; h.search = {}; h.hash = '';
   await mount(AgentPublicRepositoryPage);
-  assert.equal(button(zh.koi.viewSkills).disabled, false, 'an initial overview failure keeps the preview entry usable');
+  assert.equal(button(zh.koi.installToKoi).disabled, false, 'an initial overview failure keeps the preview entry usable');
   assert.ok(document.body.textContent.includes(zh.koi.loadFailed), 'ordinary visits also expose an explicit permission-read retry');
   const importsBeforeRecovery = calls.filter(call => call.path === '/api/koi/skill-imports').length;
   await click(zh.koi.retry);
@@ -613,7 +613,7 @@ try {
   await click(zh.koi.retry);
   assert.equal(document.body.textContent.includes(zh.koi.loadFailed), false, 'successful retry clears the overview error');
   assert.equal(calls.filter(call => call.path === '/api/koi/skill-imports').length, importsBeforeRecovery, 'a page-level status retry does not open or install anything');
-  await click(zh.koi.viewSkills);
+  await click(zh.koi.installToKoi);
   assert.ok(document.querySelector('[role="dialog"]'), 'the install path works after recovering the permission read');
   await click(zh.koi.cancel);
   const filesBeforeEmpty = publicRepository.files;
@@ -626,7 +626,7 @@ try {
   h.user = null;
   await mount(AgentPublicRepositoryPage);
   assert.ok(document.body.textContent.includes(zh.koi.noInstallableSkills), 'anonymous visitors also see the empty repository explanation');
-  assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.viewSkills)), false);
+  assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.installToKoi)), false);
   publicRepository.files = filesBeforeEmpty;
   h.user = beforeKoiUser; h.search = {}; h.hash = ''; delete h.koiAvailable;
   assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
@@ -941,7 +941,7 @@ try {
   h.failPublish=false;
   h.user=null;h.directoryPageSize=2;
   h.directory=[
-    {workspaceId:101,name:'Design one',systemManaged:true,category:'design'},
+    {workspaceId:101,name:'Design one',systemManaged:true,category:'design',koiInstallable:true},
     {workspaceId:102,name:'Build tools',systemManaged:true,category:'development'},
     {workspaceId:103,name:'Community design',systemManaged:false,category:'design'},
     {workspaceId:104,name:'Design two',systemManaged:true,category:'design'},
@@ -952,6 +952,10 @@ try {
   const cards=()=>[...document.querySelectorAll('[data-repository-card]')].map(card=>card.querySelector('h3').textContent);
   async function filter(label) {const target=[...document.querySelectorAll('button[aria-pressed]')].find(b=>b.textContent.startsWith(label));assert.ok(target,`Missing filter ${label}`);await act(async()=>target.click());await settle();}
   assert.deepEqual(cards(),['Design one','Build tools']);
+  assert.ok(document.body.textContent.includes(labels.publicSortUpdated), 'the directory explains Koi installation priority');
+  const initialCards=[...document.querySelectorAll('[data-repository-card]')];
+  assert.ok(initialCards[0].textContent.includes(labels.hubKoiInstallable), 'verified compatible repositories show their installation badge');
+  assert.equal(initialCards[1].textContent.includes(labels.hubKoiInstallable),false,'unchecked repositories do not promise installation compatibility');
   await filter(labels.hubCategory_design);
   assert.deepEqual(cards(),['Design one','Community design']);
   await filter(labels.hubSystemBadge);
@@ -1238,7 +1242,7 @@ try {
     }
   }
   delete h.syncErrorCode;
-  for (const [code, key] of [['license_changed', 'githubLicenseChanged'], ['license_review_required', 'githubLicenseReviewRequired'], ['publication_license_mismatch', 'githubPublicationLicenseMismatch'], ['repository_identity_mismatch', 'githubRepositoryIdentityMismatch'], ['agent_workspace_disabled', 'syncSkippedDisabled'], ['github_token_required', 'githubTokenRequired']]) {
+  for (const [code, key] of [['license_changed', 'githubLicenseChanged'], ['license_review_required', 'githubLicenseReviewRequired'], ['publication_license_mismatch', 'githubPublicationLicenseMismatch'], ['repository_identity_mismatch', 'githubRepositoryIdentityMismatch'], ['agent_workspace_disabled', 'syncSkippedDisabled'], ['github_token_required', 'githubTokenRequired'], ['koi_skills_unavailable', 'githubKoiSkillsUnavailable']]) {
     h.syncResult = { status: 'skipped', code };
     await mount(AgentPublicRepositoryPage);
     await click(labels.syncGitHub);
@@ -1249,6 +1253,7 @@ try {
   // rather than merely record a route change while leaving the source visible.
   h.openForkDestination = true;
   for (const result of [
+    { status: 'skipped', code: 'koi_skills_unavailable' },
     { status: 'unchanged', warningCode: 'github_credential_unavailable' },
     { status: 'skipped', code: 'publication_license_mismatch' },
     { status: 'skipped', code: 'license_changed', warningCode: 'github_credential_unavailable' },
@@ -1257,7 +1262,7 @@ try {
     await mount(AgentPublicRepositoryPage);
     await click(labels.forkRepository);
     assert.equal(document.querySelector('h1'), null, 'successful Fork leaves the source page');
-    const expected = (result.status === 'unchanged' ? labels.syncUnchanged : result.code === 'license_changed' ? labels.githubLicenseChanged : labels.githubPublicationLicenseMismatch)
+    const expected = (result.status === 'unchanged' ? labels.syncUnchanged : result.code === 'koi_skills_unavailable' ? labels.githubKoiSkillsUnavailable : result.code === 'license_changed' ? labels.githubLicenseChanged : labels.githubPublicationLicenseMismatch)
       + (result.warningCode ? ' ' + labels.githubCredentialPublicFallback : '');
     assert.ok(document.querySelector('[role="status"]')?.textContent.includes(expected), 'the destination preserves the preparation notice');
     const target = h.forkDestination;

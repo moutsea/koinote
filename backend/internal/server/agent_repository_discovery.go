@@ -40,6 +40,7 @@ type SystemRepositoryDiscoveryOptions struct {
 type SystemRepositoryDiscoveryResult struct {
 	Repository  string `json:"repository"`
 	Stars       int    `json:"stars"`
+	Category    string `json:"category,omitempty"`
 	WorkspaceID int64  `json:"workspaceId,omitempty"`
 	Status      string `json:"status"`
 	Code        string `json:"code,omitempty"`
@@ -201,13 +202,12 @@ func systemRepositoryDiscoveryKnown(ctx context.Context, q imageUsageQuerier, id
 }
 
 func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string) ([]githubRepositoryMetadata, error) {
-	// Merge several searches before ranking; a topic query must not preempt a
-	// more popular candidate from another query. 12 requests fit Search's quota.
-	queries := []string{"skills in:name,description", "topic:agent-skills", "topic:claude-skills", "topic:skills"}
+	// Keep broad discovery, but give writing and knowledge repositories their
+	// own search windows instead of losing them below generic popularity pages.
 	byID := map[int64]githubRepositoryMetadata{}
-	for _, query := range queries {
-		for page := 1; page <= 3; page++ {
-			values := url.Values{"q": {fmt.Sprintf("%s stars:>=%d fork:false archived:false is:public", query, agentRepositoryDiscoveryMinStars)}, "sort": {"stars"}, "order": {"desc"}, "per_page": {"100"}, "page": {strconv.Itoa(page)}}
+	for _, search := range systemRepositoryDiscoverySearches {
+		for page := 1; page <= search.pages; page++ {
+			values := url.Values{"q": {fmt.Sprintf("%s stars:>=%d fork:false archived:false is:public", search.query, agentRepositoryDiscoveryMinStars)}, "sort": {"stars"}, "order": {"desc"}, "per_page": {"100"}, "page": {strconv.Itoa(page)}}
 			items, err := a.readSystemRepositorySearchPage(ctx, githubAPIBaseURL+"/search/repositories?"+values.Encode(), token)
 			if err != nil {
 				return nil, err
@@ -227,6 +227,11 @@ func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool {
+		preferredI := systemRepositoryDiscoveryCategory(items[i].Name, items[i].Description) != "agents"
+		preferredJ := systemRepositoryDiscoveryCategory(items[j].Name, items[j].Description) != "agents"
+		if preferredI != preferredJ {
+			return preferredI
+		}
 		if items[i].Stars != items[j].Stars {
 			return items[i].Stars > items[j].Stars
 		}
@@ -331,11 +336,10 @@ func compactLicenseRestrictionText(value string) string {
 func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, license string) string {
 	hasSkill := false
 	for _, file := range files {
-		base := strings.ToLower(path.Base(file.Path))
 		if agentRepositorySensitivePath(file.Path) || agentWorkspaceSensitiveContent([]byte(file.Path)) {
 			return "sensitive_path"
 		}
-		if base == "skill.md" && len(bytes.TrimSpace(file.Content)) > 0 {
+		if path.Base(file.Path) == "SKILL.md" && len(bytes.TrimSpace(file.Content)) > 0 {
 			hasSkill = true
 		}
 	}
@@ -344,6 +348,34 @@ func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, li
 	}
 	if !systemRepositoryLicenseFilesAllowed(files, repositoryID, license) {
 		return "license_review_required"
+	}
+	return validateDiscoveredKoiSkills(files, license)
+}
+
+// Match the root Hub installation preview, including its aggregate read limits
+// and per-package parsing, size and declared capability checks. Keep the full
+// repository unchanged; a mixed collection needs at least one usable Skill.
+func validateDiscoveredKoiSkills(files []agentWorkspaceFile, license string) string {
+	byPath := make(map[string]koiSkillFile, len(files))
+	for _, file := range files {
+		byPath[file.Path] = koiSkillFile{Path: file.Path, Content: file.Content, MimeType: file.MimeType, SizeBytes: int64(len(file.Content)), SHA256: file.SHA256}
+	}
+	needed := koiSkillNeededPaths(byPath, "", false)
+	var total int64
+	selected := make([]koiSkillFile, 0, len(needed))
+	for filePath := range needed {
+		file := byPath[filePath]
+		if file.SizeBytes <= koiSkillFileBytes {
+			total += file.SizeBytes
+		}
+		selected = append(selected, file)
+	}
+	if len(needed) > koiSkillImportFiles || total > koiSkillImportBytes {
+		return "koi_preview_too_large"
+	}
+	candidates, _ := koiSkillCandidates(selected, koiSkillSourceContext{RootName: "repository", License: license})
+	if len(candidates) == 0 {
+		return "no_koi_compatible_skills"
 	}
 	return ""
 }
@@ -434,6 +466,7 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 		return skip("ineligible_source")
 	}
 	result.Repository, result.Stars = source.RepositoryURL, metadata.Stars
+	result.Category = systemRepositoryDiscoveryCategory(metadata.Name, metadata.Description)
 	if discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License) {
 		return skip("license_review_required")
 	}
@@ -510,7 +543,7 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
 	}
 	var id, revision int64
 	err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,is_system,name,description,github_source,hub_category)
- VALUES(NULL,true,$1,$2,$3,'agents') RETURNING id,revision`, name, description, source).Scan(&id, &revision)
+	 VALUES(NULL,true,$1,$2,$3,$4) RETURNING id,revision`, name, description, source, systemRepositoryDiscoveryCategory(name, description)).Scan(&id, &revision)
 	if err != nil {
 		return 0, err
 	}
@@ -532,7 +565,8 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
  VALUES($1,$2,$3,$4,$5,(SELECT github_source-'private' FROM agent_workspaces WHERE id=$1))`, id, revision, name, description, source.License); err != nil {
 		return 0, err
 	}
-	if err = replaceAgentRepositoryPublicationFiles(ctx, tx, id); err != nil {
+	installable := true // Already verified by validateDiscoveredSkills before publication.
+	if err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, &installable); err != nil {
 		return 0, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,accepted_on,workspace_id)

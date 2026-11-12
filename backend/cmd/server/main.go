@@ -155,6 +155,7 @@ func main() {
 	app.StartConfigSyncCleanup(backgroundCtx)
 	app.StartAgentRepositoryCleanup(backgroundCtx)
 	app.StartAgentRepositoryObjectMaintenance(backgroundCtx)
+	app.StartAgentRepositoryKoiInstallability(backgroundCtx)
 	app.StartWritingAgent(backgroundCtx)
 
 	httpServer := &http.Server{

@@ -2,13 +2,90 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"koinote/backend/internal/config"
 )
+
+func TestAgentRepositoryDirectoryKoiPriorityAcrossPages(t *testing.T) {
+	ctx := context.Background()
+	pool := newGCTestPool(t)
+	app := New(config.Config{SessionSecret: "directory-koi-priority"}, pool)
+	owner := seedMCPUser(t, pool, app, membershipTierLifetime)
+	var ids []int64
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM agent_workspaces WHERE id=ANY($1)`, ids) })
+	for i := 0; i < 2*publicRepositoryPageSize+3; i++ {
+		var id int64
+		if err := pool.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description,hub_category) VALUES($1,'priority-test','','writing') RETURNING id`, owner.ID).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+		var installable *bool
+		if i != 2*publicRepositoryPageSize+2 { // Unchecked entries share the ordinary group.
+			value := i <= publicRepositoryPageSize
+			installable = &value
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable)
+ VALUES($1,0,'priority-test','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),$3)`, id, i, installable); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type page struct {
+		Repositories []agentRepositoryDirectoryItem
+		NextCursor   *string
+		Total        int
+	}
+	get := func(path string) page {
+		t.Helper()
+		var result page
+		decodeJSONResponse(t, callRepositoryAPI(t, app, nil, http.MethodGet, path, "", 200), &result)
+		return result
+	}
+	want := append([]int64{}, ids[:publicRepositoryPageSize+1]...)
+	for i, j := 0, len(want)-1; i < j; i, j = i+1, j-1 {
+		want[i], want[j] = want[j], want[i]
+	}
+	for i := len(ids) - 1; i > publicRepositoryPageSize; i-- {
+		want = append(want, ids[i])
+	}
+	// Filters must preserve the same global ranking, not sort one page at a time.
+	for _, filter := range []string{"", "&category=writing&source=community"} {
+		path := "/api/agent/repositories?q=priority-test" + filter
+		var got []agentRepositoryDirectoryItem
+		for pageNumber := 0; pageNumber < 4; pageNumber++ {
+			result := get(path)
+			if pageNumber == 0 && result.Total != len(want) {
+				t.Fatalf("wrong count: %d", result.Total)
+			}
+			got = append(got, result.Repositories...)
+			if result.NextCursor == nil {
+				break
+			}
+			path = "/api/agent/repositories?q=priority-test" + filter + "&cursor=" + url.QueryEscape(*result.NextCursor)
+		}
+		if len(got) != len(want) {
+			t.Fatalf("pagination omitted or repeated rows: got %d, want %d", len(got), len(want))
+		}
+		for i, item := range got {
+			if item.WorkspaceID != want[i] || item.KoiInstallable != (i <= publicRepositoryPageSize) {
+				t.Fatalf("rank %d: %+v, want workspace %d", i, item, want[i])
+			}
+		}
+	}
+	// Clients already browsing before rollout may still hold a time-only cursor.
+	legacyAt := 2*publicRepositoryPageSize - 1
+	encoded, _ := json.Marshal(map[string]any{"id": ids[legacyAt], "publishedAt": time.Date(2026, 10, 1, 0, legacyAt, 0, 0, time.UTC)})
+	legacy := get("/api/agent/repositories?q=priority-test&cursor=" + base64.RawURLEncoding.EncodeToString(encoded))
+	if len(legacy.Repositories) == 0 || legacy.Repositories[0].WorkspaceID != ids[legacyAt-1] {
+		t.Fatal("an older client's cursor changed ordering in the middle of browsing")
+	}
+}
 
 func TestAgentRepositoryDirectoryFiltersAndPagination(t *testing.T) {
 	pool := newGCTestPool(t)

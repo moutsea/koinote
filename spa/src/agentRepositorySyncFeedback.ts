@@ -15,6 +15,7 @@ function syncStatusFeedback(result: PublicAgentRepositorySync, labels: Record<st
     local_changes: "syncSkippedLocalChanges", personal_fork: "syncSkippedPersonalFork", no_github_source: "syncSkippedNoSource",
     agent_workspace_disabled: "syncSkippedDisabled", license_changed: "githubLicenseChanged",
     publication_license_mismatch: "githubPublicationLicenseMismatch", license_review_required: "githubLicenseReviewRequired",
+    koi_skills_unavailable: "githubKoiSkillsUnavailable",
     repository_identity_mismatch: "githubRepositoryIdentityMismatch", github_token_required: "githubTokenRequired",
   };
   if (result.code && keys[result.code]) return labels[keys[result.code]];
@@ -23,6 +24,6 @@ function syncStatusFeedback(result: PublicAgentRepositorySync, labels: Record<st
 }
 
 export function publicRepositoryPreparationFeedback(result: PublicAgentRepositorySync, labels: Record<string, string>): string {
-  const needsReview = result.code && ["license_changed", "license_review_required", "publication_license_mismatch", "repository_identity_mismatch"].includes(result.code);
+  const needsReview = result.code && ["license_changed", "license_review_required", "publication_license_mismatch", "repository_identity_mismatch", "koi_skills_unavailable"].includes(result.code);
   return result.warningCode === "github_credential_unavailable" || needsReview ? publicRepositorySyncFeedback(result, labels) : "";
 }
