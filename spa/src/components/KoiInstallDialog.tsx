@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api";
 import { useI18n } from "../i18n";
 import { koiFolderEntries, koiFolderPackages, koiSelectedFolderEntries, type KoiFolderEntry } from "../koiSkillFolder";
-import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiImportInput } from "../koiSkills";
+import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiImportInput, type KoiImportConfirmation, type KoiOverview } from "../koiSkills";
 import { pushModal } from "../modalStack";
 import { formatBytes } from "../storage";
 import { KoiPending, KoiSkillCompatibilityNote, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
@@ -17,6 +17,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const overviewKey = [KOI_SETTINGS_QUERY_KEY, authUserId];
   const overview = useQuery({ queryKey: overviewKey, queryFn: getKoiOverview, retry: false });
   const [migrating, setMigrating] = useState(migration);
+  const migrationOnly = useRef(migration).current;
   const legacy = overview.data?.settings.libraryMode === "legacy";
   const [entries, setEntries] = useState<KoiFolderEntry[]>([]);
   const [folderName, setFolderName] = useState("");
@@ -34,17 +35,20 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const [busy, setBusy] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [confirmationPending, setConfirmationPending] = useState(false);
+  const [confirmationSlow, setConfirmationSlow] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const previewRef = useRef(preview);
   const closed = useRef(false);
   const confirming = useRef(false);
-  const confirmationID = useRef(crypto.randomUUID());
+  const confirmationInput = useRef<KoiImportConfirmation | null>(null);
   const createRequest = useRef<{ key: string; id: string } | null>(null);
   const autoStarted = useRef(false);
-  const create = (input: Omit<KoiImportInput, "requestId">) => {
+  const remoteAbort = useRef<AbortController | null>(null);
+  const create = (input: Omit<KoiImportInput, "requestId">, signal?: AbortSignal) => {
     const key = JSON.stringify(input);
     if (createRequest.current?.key !== key) createRequest.current = { key, id: crypto.randomUUID() };
-    return createKoiImport({ ...input, requestId: createRequest.current.id });
+    return createKoiImport({ ...input, requestId: createRequest.current.id }, signal);
   };
   const invalidate = useKoiSkillStorageInvalidation(authUserId);
 
@@ -54,14 +58,15 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     return () => {
       closed.current = true;
       queueMicrotask(() => {
-        if (closed.current && !confirming.current && previewRef.current) void cancelKoiImport(previewRef.current.id).catch(() => undefined);
+        if (closed.current) remoteAbort.current?.abort();
+        if (closed.current && !confirmationInput.current && previewRef.current) void cancelKoiImport(previewRef.current.id).catch(() => undefined);
       });
     };
   }, []);
 
   const cancel = () => {
-    if (confirming.current) return;
     closed.current = true;
+    remoteAbort.current?.abort();
     onClose();
   };
   useEffect(() => {
@@ -84,8 +89,9 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     setPreview(null);
     setSelected([]);
     setError("");
+    setConfirmationPending(false);
+    confirmationInput.current = null;
     createRequest.current = null;
-    confirmationID.current = crypto.randomUUID();
   };
 
   const upload = async () => {
@@ -132,16 +138,24 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
 
   const loadRemote = async (fromMigration = false) => {
     setError(""); setBusy("analyze");
+    const controller = new AbortController();
+    remoteAbort.current = controller;
+    const migrationRequest = migrating || fromMigration;
+    const timeout = migrationRequest ? setTimeout(() => controller.abort(), 65_000) : undefined;
     try {
       // Hub targets include display data; send only the published snapshot's
       // protocol fields to the strict import API.
-      const input: Omit<KoiImportInput, "requestId"> = migrating || fromMigration ? { source: "migration" } : hubTarget
+      const input: Omit<KoiImportInput, "requestId"> = migrationRequest ? { source: "migration" } : hubTarget
         ? { source: "hub", workspaceId: hubTarget.workspaceId, publicationId: hubTarget.publicationId, revision: hubTarget.revision }
         : { source: "github", repositoryUrl: githubUrl.trim(), ref: githubRef.trim(), path: githubPath.trim() };
-      const ready = (await create(input)).preview;
+      const ready = (await create(input, controller.signal)).preview;
       if (acceptPreview(ready)) setSelected(ready.candidates.filter((item) => item.installedStatus !== "installed").map((item) => item.id));
-    } catch (caught) { if (!closed.current) setError(koiErrorMessage(caught, labels)); }
-    finally { if (!closed.current) setBusy(""); }
+    } catch (caught) { if (!closed.current) setError(controller.signal.aborted && migrationRequest ? labels.legacyTimeout : koiErrorMessage(caught, labels)); }
+    finally {
+      clearTimeout(timeout);
+      if (remoteAbort.current === controller) remoteAbort.current = null;
+      if (!closed.current) setBusy("");
+    }
   };
   useEffect(() => {
     if ((migration || hubTarget && !legacy && !migrating) && overview.isSuccess && !resumePreview && !autoStarted.current) { autoStarted.current = true; void loadRemote(); }
@@ -149,8 +163,12 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
 
   const complete = async () => {
     previewRef.current = null;
-    await invalidate();
-    if (migrating && !migration) {
+    confirmationInput.current = null;
+    if (!closed.current) setConfirmationPending(false);
+    if (migrating) client.setQueryData<KoiOverview>(overviewKey, (current) => current ? { ...current, settings: { ...current.settings, libraryMode: "installed" }, legacySkillCount: 0 } : current);
+    // A successful install must not wait on unrelated settings/storage refetches.
+    void invalidate().catch(() => undefined);
+    if (migrating && !migrationOnly) {
       if (!closed.current) { setMigrating(false); restart(); autoStarted.current = false; }
       return;
     }
@@ -161,8 +179,25 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     confirming.current = true;
     setBusy("confirm");
     setError("");
+    setConfirmationSlow(false);
+    const slowTimer = setTimeout(() => { if (!closed.current) setConfirmationSlow(true); }, 10_000);
     try {
-      await confirmKoiImport(preview.id, { requestId: confirmationID.current, previewRevision: preview.revision, candidateIds: selected, enable });
+      if (confirmationPending) {
+        const latest = (await getKoiImport(preview.id)).preview;
+        if (latest.status === "committed") { await complete(); return; }
+        if (closed.current) return;
+        acceptPreview(latest);
+        if (latest.status !== "ready") {
+          confirmationInput.current = null;
+          setConfirmationPending(false);
+          setError(koiPreviewErrorLabel(latest, labels));
+          return;
+        }
+      }
+      // One preview owns one confirmation, including retries after reopening.
+      const input = confirmationInput.current ?? { requestId: preview.id, previewRevision: preview.revision, candidateIds: [...selected], enable };
+      confirmationInput.current = input;
+      await confirmKoiImport(preview.id, input);
       await complete();
     } catch (caught) {
       // A lost response may follow a committed installation. Read its receipt
@@ -170,14 +205,47 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
       try {
         const latest = (await getKoiImport(preview.id)).preview;
         if (latest.status === "committed") { await complete(); return; }
+        if (closed.current) { void invalidate().catch(() => undefined); return; }
         acceptPreview(latest);
+        if (latest.status !== "ready") {
+          confirmationInput.current = null;
+          setConfirmationPending(false);
+          setError(caught instanceof ApiError ? koiErrorMessage(caught, labels) : koiPreviewErrorLabel(latest, labels));
+          return;
+        }
+        if (caught instanceof ApiError && caught.status >= 400 && caught.status < 500) {
+          confirmationInput.current = null;
+          setConfirmationPending(false);
+          setError(koiErrorMessage(caught, labels));
+          return;
+        }
       } catch { /* Keep the preview and stable confirmation ID for retry. */ }
-      if (!closed.current) setError(koiErrorMessage(caught, labels));
-      await invalidate();
+      if (!closed.current) { setConfirmationPending(true); setError(labels.installResultUnknown); }
+      void invalidate().catch(() => undefined);
     } finally {
+      clearTimeout(slowTimer);
       confirming.current = false;
-      if (!closed.current) setBusy("");
+      if (!closed.current) { setBusy(""); setConfirmationSlow(false); }
     }
+  };
+  const checkConfirmation = async () => {
+    if (!preview || confirming.current) return;
+    confirming.current = true;
+    setBusy("check");
+    try {
+      const latest = (await getKoiImport(preview.id)).preview;
+      if (latest.status === "committed") { await complete(); return; }
+      if (!closed.current) {
+        acceptPreview(latest);
+        if (latest.status === "ready") setError(labels.installResultUnknown);
+        else {
+          confirmationInput.current = null;
+          setConfirmationPending(false);
+          setError(koiPreviewErrorLabel(latest, labels));
+        }
+      }
+    } catch { if (!closed.current) setError(labels.installResultUnknown); }
+    finally { confirming.current = false; if (!closed.current) setBusy(""); }
   };
   const pending = preview?.status === "pending" || preview?.status === "analyzing";
   const oversized = uploadEntries.some((entry) => entry.file.size > 128 * 1024);
@@ -187,7 +255,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     <div role="dialog" aria-modal="true" aria-labelledby="koi-install-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border sm:rounded-2xl" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)" }}>
       <header className="flex items-start justify-between gap-3 border-b p-5" style={{ borderColor: "var(--ink-line)" }}>
         <div><h2 id="koi-install-title" className="kn-heading-cn text-lg font-semibold">{migrating ? labels.legacyTitle : updateTarget ? `${labels.uploadNewVersion} · ${updateTarget.name}` : replacing ? labels.updateTitle : labels.installSkill}</h2><p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{migrating ? labels.legacyPreviewDescription : hubTarget ? hubTarget.name : preview?.sourceKind === "hub" ? String(preview.source.name ?? "") : source === "github" ? labels.githubUrlHint : labels.folderDescription}</p></div>
-        <button type="button" autoFocus onClick={cancel} disabled={busy === "confirm"} aria-label={labels.close} className="rounded-lg border p-2 disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}><X className="h-4 w-4" /></button>
+        <button type="button" autoFocus onClick={cancel} aria-label={labels.close} className="rounded-lg border p-2" style={{ borderColor: "var(--ink-line)" }}><X className="h-4 w-4" /></button>
       </header>
       <div className="space-y-4 overflow-y-auto p-5">
         {!preview && overview.isPending && <KoiPending label={labels.loading} />}
@@ -237,7 +305,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
           </>}
         </>}
         {!preview && hubTarget && !legacy && !busy && <button type="button" onClick={() => void loadRemote()} className="text-sm underline">{labels.retry}</button>}
-        {busy && <KoiPending label={busy === "upload" ? `${labels.uploading} ${progress}/${uploadEntries.length}` : busy === "analyze" ? labels.analyzing : labels.installing} />}
+        {busy && <KoiPending label={busy === "upload" ? `${labels.uploading} ${progress}/${uploadEntries.length}` : busy === "analyze" ? migrating ? labels.legacyAnalyzing.replace("{count}", String(overview.data?.legacySkillCount ?? 0)) : labels.analyzing : busy === "check" ? labels.checkingInstallResult : confirmationSlow ? labels.installingSlow : labels.installing} />}
         {preview?.status === "ready" && <>
           <h3 className="text-sm font-semibold">{labels.previewTitle}</h3>
           {preview.candidates.length > 1 && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.previewMultiHint}</p>}
@@ -245,7 +313,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
           <p className="break-all text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}</p>
           <ul className="space-y-3">{preview.candidates.map((candidate) => <li key={candidate.id} className="rounded-xl border p-4" style={{ borderColor: "var(--ink-line)" }}>
             {migrating && <p className="mb-2 break-all text-xs" style={{ color: "var(--ink-mid)" }}>{migrationSourceLabel(preview, candidate.id)}</p>}
-            <label className="flex items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy)} className="mt-1 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
+            <label className="flex items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy) || confirmationPending} className="mt-1 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
               <span className="min-w-0"><span className="text-sm font-semibold">{candidate.name}</span>{candidate.installedStatus && <span className="ml-2 text-xs" style={{ color: candidate.installedStatus === "update" ? "var(--cinnabar)" : "var(--ink-mid)" }}>{candidate.installedStatus === "update" ? labels.updateAvailable : labels.alreadyInstalled}</span>}<span className="mt-1 block text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{candidate.description}</span><span className="mt-1 block break-all text-xs" style={{ color: "var(--ink-faint)" }}>{candidate.entryPath} · {formatBytes(candidate.sizeBytes, locale)} · {labels.fileCount.replace("{count}", String(candidate.fileCount))}</span></span>
             </label>
             <p className="mt-2 break-words text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.licenseLabel}：{candidate.license || labels.licenseNone} · {candidate.metadataFormat === "plain-markdown" ? labels.formatPlain : labels.formatStandard}</p>
@@ -254,18 +322,19 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
             <details className="mt-3"><summary className="cursor-pointer text-xs underline">{labels.viewSkillMd}</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-6">{candidate.instructions}</pre></details>
           </li>)}</ul>
           {preview.candidates.length === 0 ? <p className="text-sm">{labels.koiNoSkills}</p> : <>
-            {preview.candidates.some((candidate) => selected.includes(candidate.id) && !candidate.installedStatus) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enable} disabled={Boolean(busy)} onChange={(event) => setEnable(event.target.checked)} />{labels.enableAfterInstall}</label>}
+            {preview.candidates.some((candidate) => selected.includes(candidate.id) && !candidate.installedStatus) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enable} disabled={Boolean(busy) || confirmationPending} onChange={(event) => setEnable(event.target.checked)} />{labels.enableAfterInstall}</label>}
             {preview.candidates.some((candidate) => selected.includes(candidate.id) && Boolean(candidate.installedStatus)) && <p className="text-xs" style={{ color: "var(--ink-mid)" }}>{labels.existingKeepsState}</p>}
             <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.installNotGuaranteed}</p>
-            <button type="button" disabled={Boolean(busy) || selected.length === 0} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{busy === "confirm" && <LoaderCircle className="h-4 w-4 animate-spin" />}{migrating ? labels.legacyConfirm.replace("{count}", String(selected.length)) : replacing ? labels.confirmUpdate : labels.confirmInstall.replace("{count}", String(selected.length))}</button>
+            <button type="button" disabled={Boolean(busy) || selected.length === 0} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--cinnabar)" }}>{busy === "confirm" && <LoaderCircle className="h-4 w-4 animate-spin" />}{confirmationPending ? labels.retryInstall : migrating ? labels.legacyConfirm.replace("{count}", String(selected.length)) : replacing ? labels.confirmUpdate : labels.confirmInstall.replace("{count}", String(selected.length))}</button>
           </>}
         </>}
         {preview && preview.rejected.length > 0 && <div className="rounded-lg border p-3" style={{ borderColor: "var(--ink-line)" }}><h3 className="text-xs font-semibold">{labels.rejectedTitle}</h3><ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{preview.rejected.map((item) => <li key={`${item.entryPath}:${item.reason}`}>{item.entryPath} — {koiRejectionLabel(item, labels)}</li>)}</ul></div>}
         {preview && ["failed", "expired", "cancelled"].includes(preview.status) && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{koiPreviewErrorLabel(preview, labels)}</p>}
         {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
-        {preview && !busy && <div className="flex gap-4">{pending && <button type="button" onClick={() => void (preview.sourceKind === "folder" ? upload() : loadRemote())} className="text-sm underline">{labels.retry}</button>}<button type="button" onClick={resumePreview ? cancel : restart} className="text-sm underline">{resumePreview ? labels.close : labels.startOver}</button></div>}
+        {confirmationPending && !busy && <button type="button" onClick={() => void checkConfirmation()} className="text-sm underline">{labels.checkInstallResult}</button>}
+        {preview && !busy && !confirmationPending && <div className="flex gap-4">{pending && <button type="button" onClick={() => void (preview.sourceKind === "folder" ? upload() : loadRemote())} className="text-sm underline">{labels.retry}</button>}<button type="button" onClick={resumePreview ? cancel : restart} className="text-sm underline">{resumePreview ? labels.close : labels.startOver}</button></div>}
       </div>
-      <footer className="flex items-center justify-between gap-4 border-t p-4" style={{ borderColor: "var(--ink-line)" }}><div className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}><p>{labels.installRuntimeNotice}</p><p>{labels.skillTaskScope}</p></div><button type="button" disabled={busy === "confirm"} onClick={cancel} className="shrink-0 rounded-lg border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--ink-line)" }}>{labels.cancel}</button></footer>
+      <footer className="flex items-center justify-between gap-4 border-t p-4" style={{ borderColor: "var(--ink-line)" }}><div className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}><p>{labels.installRuntimeNotice}</p><p>{labels.skillTaskScope}</p>{(busy === "confirm" || confirmationPending) && <p>{labels.installCloseNotice}</p>}</div><button type="button" onClick={cancel} className="shrink-0 rounded-lg border px-4 py-2 text-sm" style={{ borderColor: "var(--ink-line)" }}>{busy === "confirm" || confirmationPending ? labels.close : labels.cancel}</button></footer>
     </div>
   </div>;
 }

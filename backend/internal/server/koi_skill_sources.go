@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"koinote/backend/internal/httpx"
@@ -72,7 +73,13 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 	var exact bool
 	switch kind {
 	case "migration":
-		return a.koiAnalyzeLegacyRepositories(ctx, userID)
+		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		analysis, err := a.koiAnalyzeLegacyRepositories(ctx, userID, source)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return koiAnalysis{}, errKoiMigrationTimeout
+		}
+		return analysis, err
 	case "github":
 		token, err := a.loadGitHubToken(ctx, userID)
 		if err != nil {

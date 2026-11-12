@@ -43,6 +43,8 @@ func (a *App) requireKoiSkillUser(w http.ResponseWriter, r *http.Request, write 
 func writeKoiError(w http.ResponseWriter, err error) {
 	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.Is(err, errKoiMigrationTimeout):
+		httpx.ErrorCode(w, http.StatusGatewayTimeout, "migration_timeout", errKoiMigrationTimeout.Error())
 	case errors.Is(err, errKoiMigrationRequired):
 		httpx.ErrorCode(w, http.StatusConflict, "skill_migration_required", err.Error())
 	case errors.Is(err, errKoiSourceUnavailable):

@@ -4,6 +4,16 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.18] - 2026-11-12
+
+### Changed
+
+- La confirmation de migration relit uniquement les Skills sélectionnés et signale les délais d’analyse des dépôts. En cas de réponse tardive, le résultat peut être vérifié ou la même demande relancée sans risque ; fermer la fenêtre n’interrompt pas une installation en cours.
+
+### Fixed
+
+- Les grands anciens dépôts ne ralentissent plus inutilement l’installation d’un Skill sélectionné, et une réponse incertaine du serveur ne laisse plus la fenêtre en attente indéfiniment.
+
 ## [1.1.17] - 2026-11-12
 
 ### Added

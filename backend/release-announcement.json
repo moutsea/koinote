@@ -1,44 +1,32 @@
 {
-  "version": "1.1.17",
+  "version": "1.1.18",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.17",
+      "title": "What's new in Koinote 1.1.18",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Accounts included in the rollout can preview and install Koi Skills from folders, GitHub or Hub, manage and update them in My Space → Koi AI, or choose to migrate their legacy library. Installation, updates and enabling require lifetime membership.",
-        "Filter the Skill library by source and state. Installation previews show licenses, compatibility and specific validation issues, with direct links to settings and installation.",
-        "Bottom-panel chat and the article sidebar can load enabled, compatible Skills as needed. Each task uses a fixed version; article changes still go through review.",
-        "Signing in from Hub retains the selected file, filters and page anchor before opening the installation preview. Repositories without a Skill entry explain why installation is unavailable."
+        "Migration confirmation now re-reads only selected Skills and reports repository scan timeouts. Delayed installation responses can be checked or safely retried, and closing the window does not interrupt an installation in progress."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.17 新功能",
+      "title": "Koinote 1.1.18 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "已开放灰度的账号可从文件夹、GitHub 或 Hub 预览并安装 Koi 技能，在「我的空间 → Koi AI」管理、更新技能，或选择迁移旧库；安装、更新和启用需要终生会员。",
-        "技能库支持按来源与状态筛选，安装预览展示许可证、兼容范围和具体校验原因，并支持直达设置或安装入口。",
-        "已启用的兼容技能可供底部聊天与文章侧栏按任务需要加载；每个任务使用固定版本，文章修改继续提交审核。",
-        "从 Hub 登录后保留文件、筛选条件和页面锚点，再打开安装预览；无技能入口的仓库会明确说明原因。"
+        "迁移确认只重新读取所选技能；仓库扫描超时会提示重试。安装响应延迟时可以查询结果或安全重试，关闭窗口不会中断进行中的安装。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.17",
+      "title": "Nouveautés de Koinote 1.1.18",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Les comptes inclus dans le déploiement progressif peuvent prévisualiser et installer des Skills Koi depuis un dossier, GitHub ou Hub, les gérer et les mettre à jour dans Mon espace → Koi AI, ou choisir de migrer leur ancienne bibliothèque. L’installation, la mise à jour et l’activation nécessitent un abonnement à vie.",
-        "La bibliothèque peut être filtrée par source et état. L’aperçu d’installation présente la licence, la compatibilité et les erreurs de validation précises, avec des liens directs vers les réglages et l’installation.",
-        "Le chat du panneau inférieur et la barre latérale des articles peuvent charger les Skills activés et compatibles selon les besoins. Chaque tâche conserve une version fixe ; les modifications d’articles restent soumises à validation.",
-        "Après connexion depuis Hub, le fichier sélectionné, les filtres et l’ancre sont conservés avant l’ouverture de l’aperçu d’installation. Les dépôts sans entrée Skill indiquent pourquoi l’installation est indisponible."
+        "La confirmation de migration relit uniquement les Skills sélectionnés et signale les délais d’analyse des dépôts. En cas de réponse tardive, le résultat peut être vérifié ou la même demande relancée sans risque ; fermer la fenêtre n’interrompt pas une installation en cours."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.17 の新機能",
+      "title": "Koinote 1.1.18 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "段階的公開の対象アカウントでは、フォルダー・GitHub・Hub から Koi スキルをプレビューしてインストールし、マイスペース → Koi AI で管理・更新できます。旧ライブラリーの移行も選択できます。インストール・更新・有効化には永久会員資格が必要です。",
-        "スキルを提供元と状態で絞り込めます。インストール前にライセンス、対応範囲、具体的な検証エラーを確認でき、設定やインストールへの直接リンクにも対応しました。",
-        "下部チャットと記事サイドバーは、必要に応じて有効な対応スキルを読み込みます。各タスクは固定バージョンを使用し、記事の変更は引き続きレビューに提出します。",
-        "Hub からログインした後も、選択ファイル、絞り込み条件、ページ内リンクを保ってインストールプレビューを開きます。スキルの入口がないリポジトリーでは、インストールできない理由を表示します。"
+        "移行の確認時は選択した Skill だけを再読み込みし、リポジトリの解析がタイムアウトした場合は明示します。インストール応答が遅い場合は結果を確認して安全に再試行でき、ウィンドウを閉じても進行中のインストールは中断されません。"
       ]
     }
   }

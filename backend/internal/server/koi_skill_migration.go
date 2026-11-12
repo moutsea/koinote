@@ -11,12 +11,35 @@ import (
 )
 
 var errKoiMigrationRequired = errors.New("review the existing repository Skills before switching libraries")
+var errKoiMigrationTimeout = errors.New("reading repository Skills took too long; retry the migration")
 
 // Read only packages owned by this user. Package boundaries, sensitive-data
 // checks and unsupported declarations use the same parser as every installation.
-func (a *App) koiAnalyzeLegacyRepositories(ctx context.Context, userID int) (koiAnalysis, error) {
+func (a *App) koiAnalyzeLegacyRepositories(ctx context.Context, userID int, source map[string]any) (koiAnalysis, error) {
+	// Confirmation only revalidates selected packages. A large unselected sibling
+	// must not make installing a single reviewed Skill scan the whole library again.
+	selected := map[int64]map[string]bool{}
+	var workspaceIDs []int64
+	if entries, ok := source["selectedEntries"].(map[string]any); ok {
+		for _, value := range entries {
+			entry, _ := value.(map[string]any)
+			id := koiSourceID(entry, "workspaceId")
+			if id <= 0 {
+				return koiAnalysis{}, errKoiSkillConflict
+			}
+			if selected[id] == nil {
+				selected[id] = map[string]bool{}
+				workspaceIDs = append(workspaceIDs, id)
+			}
+			selected[id][koiSourceText(entry, "path")] = true
+		}
+		if len(workspaceIDs) == 0 {
+			return koiAnalysis{}, errKoiSkillConflict
+		}
+	}
 	rows, err := a.db.Query(ctx, `SELECT DISTINCT w.id FROM agent_workspaces w JOIN agent_workspace_files f ON f.workspace_id=w.id
- WHERE w.user_id=$1 AND w.deleted_at IS NULL AND (f.path='SKILL.md' OR f.path LIKE '%/SKILL.md') ORDER BY w.id`, userID)
+ WHERE w.user_id=$1 AND w.deleted_at IS NULL AND ($2::bigint[] IS NULL OR w.id=ANY($2))
+ AND (f.path='SKILL.md' OR f.path LIKE '%/SKILL.md') ORDER BY w.id`, userID, workspaceIDs)
 	if err != nil {
 		return koiAnalysis{}, err
 	}
@@ -34,46 +57,34 @@ func (a *App) koiAnalyzeLegacyRepositories(ctx context.Context, userID int) (koi
 	if err != nil {
 		return koiAnalysis{}, err
 	}
+	if workspaceIDs != nil && len(ids) != len(workspaceIDs) {
+		return koiAnalysis{}, errKoiSkillConflict
+	}
 	entries := map[string]any{}
 	analysis := koiAnalysis{source: map[string]any{"kind": "migration", "entries": entries}}
+	content := map[string][]byte{}
 	for _, id := range ids {
 		view, err := a.loadAgentWorkspace(ctx, userID, id)
 		if err != nil {
 			return koiAnalysis{}, err
 		}
-		byPath := map[string]koiSkillFile{}
-		for _, file := range view.Files {
-			byPath[file.Path] = koiSkillFile{Path: file.Path, MimeType: file.MimeType, SHA256: file.SHA256, SizeBytes: file.SizeBytes}
-		}
-		needed := koiSkillNeededPaths(byPath, "", false)
-		files := []koiSkillFile{}
-		for _, file := range view.Files {
-			if !needed[file.Path] {
-				continue
-			}
-			member := byPath[file.Path]
-			if file.SizeBytes <= koiSkillFileBytes {
-				var objectKey *string
-				err = a.db.QueryRow(ctx, `SELECT COALESCE(f.content,b.content),b.r2_object_key FROM agent_workspace_files f
- LEFT JOIN agent_workspace_blobs b ON b.workspace_id=f.workspace_id AND b.sha256=f.sha256
- WHERE f.id=$1 AND f.workspace_id=$2`, file.FileID, id).Scan(&member.Content, &objectKey)
-				if err != nil {
-					return koiAnalysis{}, err
-				}
-				member.Content, err = a.readAgentRepositoryContent(ctx, member.Content, objectKey, file.SHA256, file.SizeBytes, 0, koiSkillFileBytes)
-				if err != nil {
-					return koiAnalysis{}, err
-				}
-			}
-			files = append(files, member)
+		files, err := a.loadKoiMigrationFiles(ctx, userID, view, selected[id], content)
+		if err != nil {
+			return koiAnalysis{}, err
 		}
 		candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{RootName: view.Name})
 		for _, candidate := range candidates {
+			if selected[id] != nil && !selected[id][candidate.Directory] {
+				continue
+			}
 			candidate.ID = "sk-" + koiDigest([]byte(strconv.FormatInt(id, 10) + ":" + candidate.Directory))[:16]
 			entries[candidate.ID] = map[string]any{"kind": "migration", "workspaceId": id, "path": candidate.Directory, "directoryName": view.Name, "revision": view.Revision}
 			analysis.candidates = append(analysis.candidates, candidate)
 		}
 		for _, item := range rejected {
+			if selected[id] != nil && !selected[id][koiSkillDirOf(item.EntryPath)] {
+				continue
+			}
 			item.EntryPath = view.Name + "/" + item.EntryPath
 			analysis.rejected = append(analysis.rejected, item)
 		}

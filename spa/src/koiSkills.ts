@@ -98,19 +98,35 @@ export type KoiImportInput = { requestId: string; source: "folder" | "github" | 
 export const skipKoiMigration = (expectedRevision: number) => apiJson<{ libraryMode: "installed" }>("/api/koi/skill-migration/skip", { method: "POST", body: JSON.stringify({ expectedRevision }) });
 export type KoiHubTarget = { workspaceId: number; name: string; publicationId: string; revision: number };
 export const checkKoiSkillUpdate = (id: string) => apiJson<{ status: "up_to_date" | "manual_only" | "source_unavailable" | "update_available"; preview?: KoiPreview }>(`/api/koi/skills/${encodeURIComponent(id)}/check-update`, { method: "POST", body: "{}" });
-export const createKoiImport = (input: KoiImportInput) =>
- apiJson<{ preview: KoiPreview }>("/api/koi/skill-imports", { method: "POST", body: JSON.stringify(input) });
-export const getKoiImport = (id: string) => apiJson<{ preview: KoiPreview }>(`/api/koi/skill-imports/${encodeURIComponent(id)}`);
+export const createKoiImport = (input: KoiImportInput, signal?: AbortSignal) =>
+ apiJson<{ preview: KoiPreview }>("/api/koi/skill-imports", { method: "POST", body: JSON.stringify(input), signal });
+export const getKoiImport = (id: string) => koiRequestWithDeadline((signal) =>
+ apiJson<{ preview: KoiPreview }>(`/api/koi/skill-imports/${encodeURIComponent(id)}`, { signal }), 15_000);
 export const cancelKoiImport = (id: string) => apiJson<{ status: string }>(`/api/koi/skill-imports/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const uploadKoiImportFile = (id: string, path: string, contentBase64: string) =>
  apiJson<{ path: string; errorCode?: string }>(`/api/koi/skill-imports/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`, { method: "PUT", body: JSON.stringify({ contentBase64 }) });
 export const analyzeKoiImport = (id: string) =>
  apiJson<{ preview: KoiPreview }>(`/api/koi/skill-imports/${encodeURIComponent(id)}/analyze`, { method: "POST", body: "{}" });
-export const confirmKoiImport = (id: string, input: { requestId: string; previewRevision: number; candidateIds: string[]; enable: boolean }) =>
- apiJson<{ installed: KoiSkill[] }>(`/api/koi/skill-imports/${encodeURIComponent(id)}/confirm`, { method: "POST", body: JSON.stringify(input) });
+export type KoiImportConfirmation = { requestId: string; previewRevision: number; candidateIds: string[]; enable: boolean };
+export const confirmKoiImport = (id: string, input: KoiImportConfirmation) => koiRequestWithDeadline((signal) =>
+ apiJson<{ installed: KoiSkill[] }>(`/api/koi/skill-imports/${encodeURIComponent(id)}/confirm`, { method: "POST", body: JSON.stringify(input), signal }), 180_000);
+
+// Confirmation may spend 45 seconds reading sources and 2 minutes staging bytes.
+// Bound both the request and receipt lookup, including native transports that
+// cannot reject immediately when aborted. A timeout does not prove rollback.
+async function koiRequestWithDeadline<T>(request: (signal: AbortSignal) => Promise<T>, milliseconds: number): Promise<T> {
+ const controller = new AbortController();
+ let timer: ReturnType<typeof setTimeout> | undefined;
+ const deadline = new Promise<never>((_resolve, reject) => {
+  timer = setTimeout(() => { controller.abort(); reject(new Error("koi_request_timeout")); }, milliseconds);
+ });
+ try { return await Promise.race([request(controller.signal), deadline]); }
+ finally { clearTimeout(timer); }
+}
 
 // Stable error codes map to localized guidance; raw upstream text is never shown.
 const KOI_ERROR_LABELS: Record<string, string> = {
+ migration_timeout: "legacyTimeout",
  skill_migration_required: "legacyRequired",
  preview_expired: "koiPreviewExpired", preview_not_ready: "koiPreviewNotReady",
  no_skills: "koiNoSkills", validation_failed: "koiValidationFailed",

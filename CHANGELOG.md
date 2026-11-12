@@ -6,6 +6,16 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.18] - 2026-11-12
+
+### Changed
+
+- Migration confirmation now re-reads only selected Skills and reports repository scan timeouts. Delayed installation responses can be checked or safely retried, and closing the window does not interrupt an installation in progress.
+
+### Fixed
+
+- Large legacy repositories no longer needlessly slow down installation of a selected Skill, and an uncertain server response no longer leaves the dialog waiting indefinitely.
+
 ## [1.1.17] - 2026-11-12
 
 ### Added

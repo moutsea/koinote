@@ -42,6 +42,9 @@ try {
   let user = { id: 1, authUserId: "skills-one", membershipTier: "lifetime" };
   let available = false, canInstall = true, settings = { autoSkills: true, revision: 1, libraryMode: "installed" };
   let failMigration = false, loseSkip = false;
+  let holdMigration = false, migrationSignal;
+  let holdConfirmation = false, releaseConfirmation, confirmationSignal;
+  let holdReceipt = false, receiptSignal;
   let skills = [], preview, createInput, rejectNextToggle = true, loseConfirmation = true;
   let saveDelay, rejectRemote = false, remoteFailure = "", failFile = false, failUpload = true;
   const calls = [], uploads = [];
@@ -73,6 +76,10 @@ try {
     }
     if (url.pathname === "/api/koi/skill-imports" && method === "POST") {
       createInput = body;
+      if (body.source === "migration" && holdMigration) {
+        migrationSignal = init.signal;
+        await new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+      }
       if (body.source !== "folder" && rejectRemote) throw new ApiError(403, "access denied", "github_token_required");
       preview = { id: "preview-one", status: "pending", revision: 1, sourceKind: "folder", source: {}, candidates: [], rejected: [], uploadedFiles: 0, rejectedFiles: 0, declaredFiles: body.declaredPaths?.length ?? 0, expiresAt: "2099-01-01T00:00:00Z" };
       if (body.source !== "folder") preview = { ...preview, status: "ready", revision: 2, sourceKind: body.source, source: { kind: body.source, repositoryUrl: body.repositoryUrl, ref: "main", commitSha: "a".repeat(40), name: "Hub review" }, candidates: [candidate] };
@@ -100,6 +107,13 @@ try {
     if (url.pathname.endsWith("/confirm")) {
       assert.equal(body.previewRevision, 2);
       assert.deepEqual(body.candidateIds, [candidate.id]);
+      if (holdConfirmation) {
+        confirmationSignal = init.signal;
+        // Deliberately ignore abort: the UI must still leave its waiting state,
+        // even when a native transport cannot reject immediately.
+        await new Promise((resolve) => { releaseConfirmation = resolve; });
+      }
+      if (preview.status === "committed") return { installed: skills };
       if (preview.sourceKind === "migration" && failMigration) { failMigration = false; throw new ApiError(409, "full", "storage_quota_exceeded"); }
       if (preview.sourceKind === "migration") settings = { ...settings, libraryMode: "installed", revision: settings.revision + 1 };
       skills = createInput.updateFromId ? [{ ...skills[0], versionId: "version-two", revision: skills[0].revision + 1 }] : [{ ...installed, sourceKind: createInput.source, source: { ...preview.source }, enabled: body.enable }];
@@ -109,6 +123,7 @@ try {
     }
     if (url.pathname === "/api/koi/skill-imports/preview-one") {
       if (method === "DELETE") return { status: "cancelled" };
+      if (holdReceipt) { receiptSignal = init.signal; await new Promise(() => {}); }
       return { preview: { ...preview } };
     }
     if (url.pathname.endsWith("/check-update")) return { status: "update_available", preview: { ...preview, id: "preview-one", status: "ready", revision: 2, sourceKind: "github", candidates: [{ ...candidate, installedStatus: "update", installedId: skills[0].id, previousVersion: skills[0].version, previousSizeBytes: 100 }] } };
@@ -356,6 +371,134 @@ try {
   await click(labels.legacySkip);
   assert.equal(settings.libraryMode, "installed");
   assert.equal(document.body.textContent.includes(labels.legacyTitle), false, "a lost empty-library response reconciles the actual mode");
+
+  // A stalled migration times out, can retry with its stable request ID, and
+  // actually aborts the network request when the user closes the dialog.
+  settings = { autoSkills: true, revision: 40, libraryMode: "legacy" };
+  client.clear();
+  await render();
+  const nativeSetTimeout = globalThis.setTimeout;
+  let migrationTimeout;
+  globalThis.setTimeout = (callback, delay, ...args) => delay === 65_000
+    ? (migrationTimeout = callback, -1) : nativeSetTimeout(callback, delay, ...args);
+  try {
+    holdMigration = true;
+    await click(labels.legacyAction);
+    assert.ok(document.body.textContent.includes(labels.legacyAnalyzing.replace("{count}", "2")));
+    const timedOutRequest = createInput.requestId;
+    await act(async () => migrationTimeout());
+    await settle();
+    assert.equal(migrationSignal.aborted, true);
+    assert.ok(document.body.textContent.includes(labels.legacyTimeout));
+    assert.equal(document.querySelector('[role="dialog"] [role="status"]'), null, "timeout stops the spinner");
+    assert.equal(settings.libraryMode, "legacy");
+    holdMigration = false;
+    const retryMigration = [...document.querySelector('[role="dialog"]').querySelectorAll("button")].find((button) => button.textContent.trim() === labels.legacyAction);
+    assert.ok(retryMigration, "failed migration has a retry action inside the dialog");
+    await act(async () => retryMigration.click());
+    await settle();
+    assert.equal(createInput.requestId, timedOutRequest, "timeout retries reuse the import receipt");
+    assert.ok(document.querySelector('input[name="preview-candidate"]'));
+    await click(labels.cancel);
+    holdMigration = true;
+    await click(labels.legacyAction);
+    const pendingSignal = migrationSignal;
+    await click(labels.cancel);
+    assert.equal(pendingSignal.aborted, true, "closing migration cancels its HTTP request");
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+  } finally {
+    globalThis.setTimeout = nativeSetTimeout;
+    holdMigration = false;
+  }
+
+  // Confirmation and receipt reads have independent deadlines. An unknown
+  // result preserves the same payload; closing must never delete its preview.
+  const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  const deadlineTimers = new Map();
+  let nextTimer = -1;
+  globalThis.setTimeout = (callback, delay, ...args) => [10_000, 15_000, 180_000].includes(delay)
+    ? (deadlineTimers.set(nextTimer, { callback, delay }), nextTimer--)
+    : realSetTimeout(callback, delay, ...args);
+  globalThis.clearTimeout = (timer) => { if (!deadlineTimers.delete(timer)) realClearTimeout(timer); };
+  const fireDeadline = async (delay) => {
+    const timer = [...deadlineTimers].find(([, value]) => value.delay === delay);
+    assert.ok(timer, `Missing ${delay}ms deadline`);
+    deadlineTimers.delete(timer[0]);
+    await act(async () => timer[1].callback());
+    await settle();
+  };
+  const openMigration = async (revision) => {
+    settings = { autoSkills: true, revision, libraryMode: "legacy" };
+    client.clear();
+    await render();
+    await click(labels.legacyAction);
+    await change([...document.querySelectorAll('input[name="preview-candidate"]')].find((input) => input.parentElement.textContent.includes("other")), {});
+  };
+  try {
+    await openMigration(50);
+    holdConfirmation = true;
+    holdReceipt = true;
+    await click(labels.legacyConfirm.replace("{count}", "1"));
+    const originalConfirmation = calls.filter((call) => call.path.endsWith("/confirm")).at(-1).body;
+    const confirmSignal = confirmationSignal;
+    assert.equal(document.querySelector('[role="dialog"] button[aria-label="' + labels.close + '"]').disabled, false);
+    assert.ok(document.body.textContent.includes(labels.installCloseNotice));
+    await fireDeadline(10_000);
+    assert.ok(document.body.textContent.includes(labels.installingSlow));
+    await fireDeadline(180_000);
+    assert.equal(confirmSignal.aborted, true);
+    await fireDeadline(15_000);
+    assert.equal(receiptSignal.aborted, true);
+    assert.equal(document.querySelector('[role="dialog"] [role="status"]'), null, "both stalled requests release the waiting UI");
+    assert.ok(document.body.textContent.includes(labels.installResultUnknown));
+    assert.ok([...document.querySelectorAll('input[name="preview-candidate"]')].every((input) => input.disabled), "uncertain results freeze the original selection");
+    const firstRelease = releaseConfirmation;
+    holdReceipt = false;
+    holdConfirmation = false;
+    const confirmationsBeforeRetry = calls.filter((call) => call.path.endsWith("/confirm")).length;
+    await click(labels.checkInstallResult);
+    assert.equal(calls.filter((call) => call.path.endsWith("/confirm")).length, confirmationsBeforeRetry, "checking a receipt never submits another install");
+    const retryStart = calls.length;
+    await click(labels.retryInstall);
+    assert.equal(calls[retryStart].method, "GET", "retry checks the durable receipt before posting");
+    assert.deepEqual(calls.filter((call) => call.path.endsWith("/confirm")).at(-1).body, originalConfirmation);
+    assert.equal(settings.libraryMode, "installed");
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    await act(async () => firstRelease());
+    await settle();
+    assert.equal(settings.revision, 51, "a late original response does not duplicate the migration");
+
+    await openMigration(60);
+    holdConfirmation = true;
+    await click(labels.legacyConfirm.replace("{count}", "1"));
+    const deletesBeforeClose = calls.filter((call) => call.method === "DELETE" && call.path === "/api/koi/skill-imports/preview-one").length;
+    const backgroundSignal = confirmationSignal;
+    await click(labels.close);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(backgroundSignal.aborted, false, "closing the window does not abort a confirmation");
+    assert.equal(calls.filter((call) => call.method === "DELETE" && call.path === "/api/koi/skill-imports/preview-one").length, deletesBeforeClose, "closing a confirmation preserves its preview");
+    holdConfirmation = false;
+    await act(async () => releaseConfirmation());
+    await settle();
+    assert.equal(settings.libraryMode, "installed", "the late result refreshes the library after closing");
+
+    await openMigration(70);
+    loseConfirmation = true;
+    holdReceipt = true;
+    const confirmationsBeforeLoss = calls.filter((call) => call.path.endsWith("/confirm")).length;
+    await click(labels.legacyConfirm.replace("{count}", "1"));
+    await fireDeadline(15_000);
+    assert.ok(document.body.textContent.includes(labels.installResultUnknown));
+    holdReceipt = false;
+    await click(labels.retryInstall);
+    assert.equal(calls.filter((call) => call.path.endsWith("/confirm")).length, confirmationsBeforeLoss + 1, "a committed receipt recovers without a second POST");
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+  } finally {
+    holdConfirmation = false;
+    holdReceipt = false;
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+  }
 
   // Account-scoped data and UI reset together; a non-member can read/remove but
   // cannot install or change automatic discovery.

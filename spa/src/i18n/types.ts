@@ -561,6 +561,8 @@ export interface Messages {
     legacySkipConfirm: string;
     legacyAutoDescription: string;
     legacyPreviewDescription: string;
+    legacyAnalyzing: string;
+    legacyTimeout: string;
     legacyStorage: string;
     legacyConfirm: string;
     legacyRequired: string;
@@ -600,6 +602,12 @@ export interface Messages {
     installSkill: string;
     installedLabel: string;
     installing: string;
+    installingSlow: string;
+    installResultUnknown: string;
+    checkInstallResult: string;
+    checkingInstallResult: string;
+    retryInstall: string;
+    installCloseNotice: string;
     koiAnalysisFailed: string;
     koiConflict: string;
     koiFileTooLarge: string;

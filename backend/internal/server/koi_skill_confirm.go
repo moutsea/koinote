@@ -95,8 +95,21 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 	} else {
 		err = previewTx.Commit(ctx)
 		if err == nil {
+			source := view.Source
+			if view.SourceKind == "migration" {
+				entries, _ := source["entries"].(map[string]any)
+				selectedEntries := map[string]any{}
+				for _, id := range input.CandidateIDs {
+					entry, ok := entries[id]
+					if !ok {
+						return nil, errKoiSkillConflict
+					}
+					selectedEntries[id] = entry
+				}
+				source = map[string]any{"kind": "migration", "selectedEntries": selectedEntries}
+			}
 			var analysis koiAnalysis
-			analysis, err = a.koiAnalyzeSource(ctx, user.ID, view.Source)
+			analysis, err = a.koiAnalyzeSource(ctx, user.ID, source)
 			candidates = analysis.candidates
 			freshSource = analysis.source
 		}
