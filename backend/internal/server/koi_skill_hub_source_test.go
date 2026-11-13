@@ -223,6 +223,40 @@ func TestKoiHubSourceRejectsCorruptContent(t *testing.T) {
 	}
 }
 
+func TestKoiHubSourceIsolatesSensitivePackages(t *testing.T) {
+	ctx := context.Background()
+	app, _, workspace, _ := koiHubSourceTestApp(t, false, map[string]string{
+		"review/SKILL.md": "# Review",
+		"sync/SKILL.md":   "# Sync",
+		"sync/guide.txt":  "Previously accepted content.",
+		"other/SKILL.md":  "# Other",
+		"other/guide.txt": "Previously accepted content.",
+	})
+	// Model a historical publication that predates the current scanner. Shared
+	// blobs must retain rejection metadata at every selected path.
+	content := []byte("-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----")
+	digest := koiDigest(content)
+	if _, err := app.db.Exec(ctx, `INSERT INTO agent_workspace_blobs(workspace_id,sha256,size_bytes,content) VALUES($1,$2,$3,$4)`, workspace.WorkspaceID, digest, len(content), content); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publication_files SET sha256=$2,size_bytes=$3 WHERE workspace_id=$1 AND path IN ('sync/guide.txt','other/guide.txt')`, workspace.WorkspaceID, digest, len(content)); err != nil {
+		t.Fatal(err)
+	}
+	source, err := app.readKoiHubSource(ctx, koiHubSourceInput{WorkspaceID: workspace.WorkspaceID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range source.Files {
+		if file.SHA256 == digest && (file.RejectionCode != "sensitive_data_detected" || len(file.Content) != 0) {
+			t.Fatalf("shared rejected content was retained: %+v", file)
+		}
+	}
+	candidates, rejected := koiSkillCandidates(source.Files)
+	if len(candidates) != 1 || candidates[0].Directory != "review" || len(rejected) != 2 {
+		t.Fatalf("historical rejected content affected independent packages: %+v %+v", candidates, rejected)
+	}
+}
+
 func TestKoiHubSourceRejectsInvalidInputBeforeDatabaseRead(t *testing.T) {
 	negative := int64(-1)
 	for _, input := range []koiHubSourceInput{

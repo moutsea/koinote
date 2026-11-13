@@ -160,14 +160,15 @@ func (a *App) loadKoiHubFiles(ctx context.Context, publication *agentRepositoryP
 				}
 				item := &downloads[index]
 				content, readErr := a.readAgentRepositoryContent(work, item.file.Content, item.key, item.file.SHA256, item.file.SizeBytes, 0, koiSkillFileBytes)
-				if readErr == nil && agentWorkspaceSensitiveContent(content) {
-					readErr = &agentWorkspaceSensitiveError{Path: item.file.Path}
-				}
 				if readErr != nil {
 					once.Do(func() { firstErr = readErr; cancel() })
 					return
 				}
 				item.file.Content = content
+				if agentWorkspaceSensitiveContent(content) {
+					item.file.RejectionCode = "sensitive_data_detected"
+					item.file.Content = nil
+				}
 			}
 		}()
 	}
@@ -198,6 +199,7 @@ func (a *App) loadKoiHubFiles(ctx context.Context, publication *agentRepositoryP
 			return nil, errAgentRepositoryStorage
 		}
 		file.Content = downloads[index].file.Content
+		file.RejectionCode = downloads[index].file.RejectionCode
 	}
 	return files, nil
 }

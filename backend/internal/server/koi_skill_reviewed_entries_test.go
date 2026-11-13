@@ -203,3 +203,98 @@ func TestKoiReviewedNetworkPolicyRefreshesCachedPreviewAndReceipt(t *testing.T) 
 		t.Fatalf("confirmation receipt showed obsolete entry advice: %+v %v", updated, err)
 	}
 }
+
+// Reviewed requirements apply to local uploads even when a standalone folder
+// does not include the repository's inherited license/provenance files.
+func TestKoiReviewedLocalDependenciesCoverFolderAndExistingTasks(t *testing.T) {
+	for _, tc := range []struct {
+		name, instructions    string
+		reasons, capabilities []string
+	}{
+		{"local commands", "Run bash scripts/check.sh before writing to ~/.local-workflow/.", []string{"local_command:shell"}, []string{"shell", "filesystem_write"}},
+		{"local files", "Read ~/.local-workflow/sessions/ to restore the previous diagnosis.", []string{"file_system_read:filesystem_read"}, []string{"filesystem_read"}},
+		{"local knowledge library", "Scan the user's knowledge directory and update its navigation files.", []string{"file_system_read:filesystem_read", "file_system_write:filesystem_write"}, []string{"filesystem_read", "filesystem_write"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			a, user, doc := writingTestApp(t)
+			a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
+			enableRepositoryR2Fixture(t, a)
+			t.Cleanup(func() { _, _ = a.db.Exec(ctx, `DELETE FROM users WHERE id=$1`, user.ID) })
+			source := koiCandidateTestFiles(map[string]string{
+				"LICENSE":                       "Test notice",
+				"skills/local/SKILL.md":         "---\nname: local-workflow\ndescription: Manage local work.\n---\n" + tc.instructions,
+				"skills/local/scripts/check.sh": "exit 0\n",
+			})
+			candidates, rejected := koiSkillCandidates(source)
+			if len(candidates) != 1 || len(rejected) != 0 {
+				t.Fatal("invalid source fixture")
+			}
+			full, folder := map[string]string{}, map[string]string{}
+			for _, file := range candidates[0].Files {
+				full[file.Path] = string(file.Content)
+				if !strings.HasPrefix(file.Path, "_provenance/") {
+					folder[file.Path] = string(file.Content)
+				}
+			}
+			decorated := map[string]string{"README.md": "Private library import instructions."}
+			for path, content := range folder {
+				decorated[path] = content
+			}
+			variants := []map[string]string{full, folder, decorated}
+			var cached []koiSkillImportView
+			var installed []koiSkillInstallation
+			digests := map[string]bool{}
+			for _, files := range variants {
+				preview := koiFolderPreview(t, a, user, files)
+				installed = append(installed, koiTestConfirm(t, a, user, preview))
+				cached = append(cached, koiFolderPreview(t, a, user, files))
+				digests[preview.Candidates[0].ContentSHA256] = true
+			}
+			if len(digests) != len(variants) {
+				t.Fatal("source variants did not exercise distinct content digests")
+			}
+			requirements := map[string][]string{koiSkillEntryDigest(candidates[0].Instructions): tc.capabilities}
+			old := agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), model.Document{}, "Existing work")
+			// These digests are intentionally outside the approved package set. Their
+			// requirements must still restrict imports without a trusted repository ID.
+			koiTestCuration(t, a, koiReviewedRepository{RepositoryID: 11, RepositoryURL: "https://github.com/review/local", Packages: map[string]string{}, RequiredCapabilities: requirements})
+			for index, skill := range installed {
+				current, err := a.loadKoiInstallation(ctx, a.db, user.ID, skill.ID)
+				if err != nil || current.Compatibility.Conversation || current.Compatibility.Article {
+					t.Fatalf("existing local skill retained unsupported availability: %+v %v", current, err)
+				}
+				for _, reason := range tc.reasons {
+					if !slices.Contains(current.Compatibility.Reasons, reason) {
+						t.Fatalf("existing local skill lost dependency %s: %+v", reason, current)
+					}
+				}
+				preview := koiFolderView(t, koiFolderRequest(t, a, user, "GET", "/api/koi/skill-imports/"+cached[index].ID, nil, 200))
+				if preview.Candidates[0].Compatibility.Conversation || preview.Candidates[0].Compatibility.Article {
+					t.Fatal("cached preview retained unsupported availability")
+				}
+				koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports/"+preview.ID+"/confirm", koiFolderConfirmation(preview), 409)
+			}
+			for _, files := range variants {
+				view := koiFolderCreate(t, a, user, files)
+				for path, content := range files {
+					koiFolderUpload(t, a, user, view.ID, path, content, 200)
+				}
+				view = koiFolderView(t, koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports/"+view.ID+"/analyze", nil, 200))
+				if view.Status != "failed" || len(view.Candidates) != 0 || len(view.Rejected) != 1 || view.Rejected[0].Reason != "incompatible" {
+					t.Fatalf("local import bypassed dependency review: %+v", view)
+				}
+			}
+			for _, session := range []agentSession{agentTestSession(t, a, user, "review"), koiArticleSession(t, a, user, doc)} {
+				task := agentTestTask(t, a, user, session, model.Document{}, "New work")
+				if pins, err := a.koiTaskSkills(ctx, task); err != nil || len(pins) != 0 {
+					t.Fatalf("new task pinned a local dependency: %+v %v", pins, err)
+				}
+			}
+			pins, err := a.koiTaskSkills(ctx, old)
+			if err != nil || len(pins) != len(variants) || !pins[0].Compatibility.Conversation || !pins[1].Compatibility.Conversation {
+				t.Fatalf("review rewrote running task snapshots: %+v %v", pins, err)
+			}
+		})
+	}
+}

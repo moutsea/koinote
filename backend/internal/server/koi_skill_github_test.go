@@ -70,14 +70,60 @@ func TestKoiGitHubArchiveValidatesAllPaths(t *testing.T) {
 	}
 }
 
-func TestKoiGitHubArchiveRejectsSelectedSensitiveContent(t *testing.T) {
-	archive := githubArchive(t,
-		githubArchiveEntry{"root/review/SKILL.md", "# Review", 0},
-		githubArchiveEntry{"root/review/private.key", "-----BEGIN OPENSSH PRIVATE KEY-----\nexample\n-----END OPENSSH PRIVATE KEY-----", 0})
-	files, err := readKoiGitHubArchive(context.Background(), bytes.NewReader(archive), int64(len(archive)), "review", true)
-	var sensitive *agentWorkspaceSensitiveError
-	if files != nil || !errors.As(err, &sensitive) || sensitive.Path != "review/private.key" {
-		t.Fatalf("sensitive package did not fail atomically: %v", err)
+func TestKoiGitHubArchiveIsolatesSensitivePackages(t *testing.T) {
+	for _, sensitivePath := range []string{"blocked/private.key", "blocked/SKILL.md", "blocked/LICENSE"} {
+		t.Run(sensitivePath, func(t *testing.T) {
+			entries := []githubArchiveEntry{
+				{"root/LICENSE", "MIT License", 0},
+				{"root/review/SKILL.md", "# Review\nRead references/guide.md.", 0},
+				{"root/review/references/guide.md", "Improve clarity.", 0},
+				{"root/blocked/nested/SKILL.md", "# Independent child", 0},
+				{"root/" + sensitivePath, "-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----", 0},
+			}
+			if sensitivePath != "blocked/SKILL.md" {
+				entries = append(entries, githubArchiveEntry{"root/blocked/SKILL.md", "# Blocked", 0})
+			}
+			archive := githubArchive(t, entries...)
+			files, err := readKoiGitHubArchive(context.Background(), bytes.NewReader(archive), int64(len(archive)), "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, file := range files {
+				if file.Path == sensitivePath {
+					found = true
+					if file.RejectionCode != "sensitive_data_detected" || len(file.Content) != 0 || file.SHA256 != "" || file.SizeBytes == 0 {
+						t.Fatalf("rejected member lost its boundary or retained bytes: %+v", file)
+					}
+				}
+			}
+			candidates, rejected := koiSkillCandidates(files)
+			wantRejected := 1
+			if sensitivePath == "blocked/LICENSE" {
+				wantRejected = 2 // Both packages inherit this notice.
+			}
+			if !found || len(candidates) != 3-wantRejected || len(rejected) != wantRejected {
+				t.Fatalf("wrong package boundaries: %v %+v %+v", found, candidates, rejected)
+			}
+			for _, item := range rejected {
+				if item.Reason != "sensitive_data_detected" || len(item.Details) != 1 || item.Details[0] != "sensitive_data_detected:"+sensitivePath {
+					t.Fatalf("missing rejection detail: %+v", item)
+				}
+			}
+			selected, err := readKoiGitHubArchive(context.Background(), bytes.NewReader(archive), int64(len(archive)), "review", true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			standalone, rejected := koiSkillCandidates(selected, koiSkillSourceContext{Directory: "review"})
+			if len(standalone) != 1 || len(rejected) != 0 {
+				t.Fatalf("independent package unavailable: %+v", rejected)
+			}
+			for _, candidate := range candidates {
+				if candidate.Directory == "review" && candidate.ContentSHA256 != standalone[0].ContentSHA256 {
+					t.Fatal("full preview changed the independent package")
+				}
+			}
+		})
 	}
 }
 

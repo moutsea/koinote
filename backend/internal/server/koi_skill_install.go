@@ -36,15 +36,15 @@ type koiSkillInstallation struct {
 }
 
 const koiInstallationColumns = `i.id::text,i.name,i.description,i.source_kind,i.source,i.enabled,i.revision,i.created_at,i.updated_at,
- v.id::text,v.content_sha256,v.entry_path,v.metadata_format,v.license,v.compatibility,v.file_count,v.size_bytes,` + koiInstallationReviewRepositoryID
+ v.id::text,v.content_sha256,v.entry_path,v.metadata_format,v.license,v.compatibility,v.file_count,v.size_bytes,` + koiInstallationReviewRepositoryID + `,` + koiSkillEntryDigestSQL
 
 func scanKoiInstallation(row pgx.Row, review koiRepositoryCuration) (koiSkillInstallation, error) {
 	var skill koiSkillInstallation
 	var source, compatibility []byte
-	var versionID, sha, entry, format, license, reviewRepositoryID string
+	var versionID, sha, entry, format, license, reviewRepositoryID, entryDigest string
 	err := row.Scan(&skill.ID, &skill.Name, &skill.Description, &skill.SourceKind, &source, &skill.Enabled,
 		&skill.Revision, &skill.InstalledAt, &skill.UpdatedAt, &versionID, &sha, &entry, &format, &license,
-		&compatibility, &skill.FileCount, &skill.SizeBytes, &reviewRepositoryID)
+		&compatibility, &skill.FileCount, &skill.SizeBytes, &reviewRepositoryID, &entryDigest)
 	if err != nil {
 		return skill, err
 	}
@@ -55,7 +55,7 @@ func scanKoiInstallation(row pgx.Row, review koiRepositoryCuration) (koiSkillIns
 	// Use a short content hash as the installed version label.
 	skill.Version = sha[:12]
 	_ = json.Unmarshal(compatibility, &skill.Compatibility)
-	skill.Compatibility = review.compatibility(reviewRepositoryID, sha, skill.Compatibility)
+	skill.Compatibility = review.compatibility(reviewRepositoryID, sha, skill.Compatibility, entryDigest)
 	return skill, nil
 }
 

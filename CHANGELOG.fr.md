@@ -4,6 +4,18 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.24] - 2026-11-14
+
+### Changed
+
+- Koi AI permet d’installer neuf Skills de rédaction indépendants de dbskill après vérification, en conservant leurs instructions et références d’origine. Les Skills nécessitant des scripts locaux, un accès aux fichiers de l’ordinateur ou des identifiants externes restent limités.
+- L’aperçu explique les indisponibilités et empêche de sélectionner les Skills incompatibles. Les badges, filtres et compteurs du Hub suivent désormais les mêmes règles de compatibilité.
+
+### Fixed
+
+- L’ajout d’un README ou d’autres pièces jointes ne supprime plus les restrictions de dépendances vérifiées. Elles s’appliquent aux imports locaux, aux confirmations en cache, aux installations existantes et aux nouvelles tâches ; les tâches en cours conservent leur version.
+- Les fichiers sensibles sont isolés par Skill afin qu’un paquet inadapté ne bloque plus les Skills indépendants d’une même collection.
+
 ## [1.1.23] - 2026-11-13
 
 ### Changed

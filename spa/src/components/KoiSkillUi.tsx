@@ -28,11 +28,12 @@ export function KoiSkillSourceLabel({ source }: { source: Record<string, unknown
  return <span title={label} className="max-w-64 truncate text-xs" style={{ color: "var(--ink-mid)" }}>{label}</span>;
 }
 
-export function KoiSkillCompatibilityNote({ compatibility }: { compatibility: KoiCompatibility }) {
+export function KoiSkillCompatibilityNote({ compatibility, showReasons = false }: { compatibility: KoiCompatibility; showReasons?: boolean }) {
   const { t } = useI18n();
   const labels = t.koi;
   return <div role="note" className="space-y-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>
     <p>{!compatibility.conversation ? labels.stateUnavailable : compatibility.article ? labels.entryBoth : labels.entryConversation}</p>
+    {showReasons && !compatibility.conversation && compatibility.reasons.length > 0 && <p>{labels.unavailableReason} {compatibility.reasons.map((reason) => koiRequirementLabel(reason, labels)).join("; ")}</p>}
     {compatibility.conversation && !compatibility.article && <p>{labels.articleUnavailable}</p>}
     {Boolean(compatibility.warnings?.length) && <p>{labels.warningsLabel} {compatibility.warnings?.map((warning) => koiRequirementLabel(warning, labels)).join("; ")}</p>}
   </div>;

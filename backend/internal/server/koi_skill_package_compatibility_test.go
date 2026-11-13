@@ -19,6 +19,8 @@ func TestKoiSkillCandidateCompatibility(t *testing.T) {
 		{"allowed-tools: koinote.get_document, web_fetch", "", false},
 		{"requiredTools: [sandbox_execute]", "unsupported_tool:sandbox_execute", false},
 		{"allowed-tools: shell", "local_command:shell", false},
+		{"capabilities: filesystem_read", "file_system_read:filesystem_read", false},
+		{"requiredTools: [read_file]", "", true},
 		{"requestedCapabilities: [workspace.read]", "", true},
 		{"requestedCapabilities: [network]", "", false},
 		{"requestedCapabilities: [workspace.write]", "unsupported_capability:workspace.write", false},

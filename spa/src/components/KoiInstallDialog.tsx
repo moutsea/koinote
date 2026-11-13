@@ -31,7 +31,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const [githubPath, setGithubPath] = useState("");
   const [preview, setPreview] = useState<KoiPreview | null>(resumePreview ?? null);
   const replacing = Boolean(updateTarget || preview?.source.updateFromId || preview?.candidates.some((item) => item.installedStatus === "update"));
-  const [selected, setSelected] = useState<string[]>(resumePreview?.candidates.filter((item) => item.installedStatus !== "installed").map((item) => item.id) ?? []);
+  const [selected, setSelected] = useState<string[]>(resumePreview?.candidates.filter((item) => item.compatibility.conversation && item.installedStatus !== "installed").map((item) => item.id) ?? []);
   const [enable, setEnable] = useState(true);
   const [busy, setBusy] = useState("");
   const [progress, setProgress] = useState(0);
@@ -124,7 +124,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
       if (closed.current) return;
       setBusy("analyze");
       const ready = (await analyzeKoiImport(current.id)).preview;
-      if (acceptPreview(ready)) setSelected(ready.candidates.filter((candidate) => candidate.installedStatus !== "installed").map((candidate) => candidate.id));
+      if (acceptPreview(ready)) setSelected(ready.candidates.filter((candidate) => candidate.compatibility.conversation && candidate.installedStatus !== "installed").map((candidate) => candidate.id));
     } catch (caught) {
       if (!closed.current) {
         if (previewRef.current) {
@@ -150,7 +150,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
         ? { source: "hub", workspaceId: hubTarget.workspaceId, publicationId: hubTarget.publicationId, revision: hubTarget.revision }
         : { source: "github", repositoryUrl: githubUrl.trim(), ref: githubRef.trim(), path: githubPath.trim() };
       const ready = (await create(input, controller.signal)).preview;
-      if (acceptPreview(ready)) setSelected(ready.candidates.filter((item) => item.installedStatus !== "installed").map((item) => item.id));
+      if (acceptPreview(ready)) setSelected(ready.candidates.filter((item) => item.compatibility.conversation && item.installedStatus !== "installed").map((item) => item.id));
     } catch (caught) { if (!closed.current) setError(controller.signal.aborted && migrationRequest ? labels.legacyTimeout : koiErrorMessage(caught, labels)); }
     finally {
       clearTimeout(timeout);
@@ -318,7 +318,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
           <p className="truncate text-xs" style={{ color: "var(--ink-faint)" }} title={preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}>{preview.sourceKind === "github" ? `${preview.source.repositoryUrl} · ${preview.source.ref} · ${preview.source.commitSha}` : preview.sourceKind === "hub" ? `${preview.source.name} · ${preview.source.revision}` : folderName}</p>
           <ul className="space-y-3">{preview.candidates.map((candidate) => <li key={candidate.id} className="rounded-lg border p-4 sm:p-5" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
             {migrating && <p className="mb-3 break-all text-xs" style={{ color: "var(--ink-faint)" }}>{migrationSourceLabel(preview, candidate.id)}</p>}
-            <label className="flex cursor-pointer items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy) || confirmationPending} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
+            <label className="flex cursor-pointer items-start gap-3"><input type={updateTarget ? "radio" : "checkbox"} name="preview-candidate" checked={selected.includes(candidate.id)} disabled={Boolean(busy) || confirmationPending || !candidate.compatibility.conversation} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--cinnabar)]" onChange={() => setSelected((current) => updateTarget ? [candidate.id] : current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} />
               <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold"><span>{candidate.name}</span>{candidate.installedStatus && <span className="rounded px-1.5 py-0.5 text-xs font-medium" style={{ background: candidate.installedStatus === "update" ? "var(--cinnabar-soft)" : "var(--ink-wash-strong)", color: candidate.installedStatus === "update" ? "var(--cinnabar)" : "var(--ink-mid)" }}>{candidate.installedStatus === "update" ? labels.updateAvailable : labels.alreadyInstalled}</span>}</span><span className="mt-1.5 block text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{candidate.description}</span><span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: "var(--ink-faint)" }}><span className="break-all">{[candidate.directory, candidate.entryPath].filter(Boolean).join("/")}</span><span aria-hidden="true">·</span><span>{formatBytes(candidate.sizeBytes, locale)}</span><span aria-hidden="true">·</span><span>{labels.fileCount.replace("{count}", String(candidate.fileCount))}</span><span className="rounded px-1.5 py-0.5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{candidate.metadataFormat === "plain-markdown" ? labels.formatPlain : labels.formatStandard}</span></span></span>
             </label>
             <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--ink-line)" }}>
@@ -326,7 +326,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs underline underline-offset-2 [&::-webkit-details-marker]:hidden" style={{ color: "var(--ink-mid)" }}>{labels.viewLicense}<ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" aria-hidden="true" /></summary>
                 <p className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-md p-3 text-xs leading-5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{candidate.license}</p>
               </details> : <p className="text-xs" style={{ color: "var(--ink-faint)" }}>{labels.licenseLabel} · {labels.licenseNone}</p>}
-              <div className="mt-3"><KoiSkillCompatibilityNote compatibility={candidate.compatibility} /></div>
+              <div className="mt-3"><KoiSkillCompatibilityNote compatibility={candidate.compatibility} showReasons /></div>
               {candidate.installedStatus === "update" && <p className="mt-2 text-xs" style={{ color: "var(--ink-mid)" }}>{labels.updateComparison.replace("{version}", candidate.previousVersion ?? "—").replace("{oldSize}", formatBytes(candidate.previousSizeBytes ?? 0, locale)).replace("{newSize}", formatBytes(candidate.sizeBytes, locale))}</p>}
               <details className="group mt-2">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs underline underline-offset-2 [&::-webkit-details-marker]:hidden" style={{ color: "var(--ink-mid)" }}>{labels.viewSkillMd}<ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" aria-hidden="true" /></summary>

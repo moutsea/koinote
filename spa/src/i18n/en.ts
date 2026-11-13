@@ -1038,6 +1038,7 @@ export const en: Messages = {
     requirement_external_mcp: "Requires another MCP service: {name}",
     requirement_external_write: "Requires unsupported external writes: {name}",
     requirement_fallback_target_available: "This Skill is only applicable when this tool or toolset is unavailable: {name}",
+    requirement_file_system_read: "This Skill needs files on your computer, which Koi AI in the cloud cannot access. Use an agent with local file access.",
     requirement_file_system_write: "Requires unsupported local file writes: {name}",
     requirement_file_too_large: "File exceeds 128 KiB: {name}",
     requirement_interactive_browser: "Requires unsupported interactive browser access: {name}",

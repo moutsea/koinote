@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"koinote/backend/internal/model"
 )
 
 func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
@@ -25,8 +27,14 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	objects := enableRepositoryR2Fixture(t, a)
-	t.Cleanup(func() { _, _ = a.db.Exec(ctx, `DELETE FROM koi_skill_installations WHERE user_id=$1`, user.ID) })
-	archive := githubArchive(t, githubArchiveEntry{"root/review/SKILL.md", "---\nname: review\ndescription: Improve an article.\n---\n# Review", 0})
+	t.Cleanup(func() { _, _ = a.db.Exec(ctx, `DELETE FROM users WHERE id=$1`, user.ID) })
+	const entry = "---\nname: review\ndescription: Improve an article.\n---\nRead references/guide.md."
+	archive := githubArchive(t,
+		githubArchiveEntry{"root/LICENSE", "Original license", 0},
+		githubArchiveEntry{"root/review/SKILL.md", entry, 0},
+		githubArchiveEntry{"root/review/references/guide.md", "Improve clarity.", 0},
+		githubArchiveEntry{"root/sync/SKILL.md", "# Local sync", 0},
+		githubArchiveEntry{"root/sync/scripts/certificate.pem", "-----BEGIN CERTIFICATE-----\nexample\n-----END CERTIFICATE-----", 0})
 	client := githubImportClient(t, archive, "", false)
 	base := client.Transport
 	downloads := 0
@@ -145,6 +153,9 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 	if downloads != 1 || objects.puts != 0 {
 		t.Fatalf("preview downloads=%d puts=%d", downloads, objects.puts)
 	}
+	if preview.Status != "ready" || len(preview.Candidates) != 1 || preview.Candidates[0].Directory != "review" || len(preview.Rejected) != 1 || preview.Rejected[0].Reason != "sensitive_data_detected" {
+		t.Fatalf("unrelated local tool blocked writing installation: %+v", preview)
+	}
 	skill := koiTestConfirm(t, a, user, preview)
 	if skill.SourceKind != "github" || skill.Source["commitSha"] != githubTestSHA {
 		t.Fatalf("private install lost source: %+v", skill.Source)
@@ -162,6 +173,19 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 	}
 	if checked, err := a.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || checked != 0 {
 		t.Fatalf("verified link was downloaded again: %d %v", checked, err)
+	}
+	task := agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), model.Document{}, "Improve clarity")
+	pins, err := a.koiTaskSkills(ctx, task)
+	if err != nil || len(pins) != 1 {
+		t.Fatalf("installed writing skill missing from new task: %+v %v", pins, err)
+	}
+	pkg, err := a.koiSkillPackageFor(ctx, pins[0])
+	if err != nil || !strings.Contains(string(pkg), "Read references/guide.md.") || !strings.Contains(string(pkg), base64.StdEncoding.EncodeToString([]byte("Improve clarity."))) || !strings.Contains(string(pkg), base64.StdEncoding.EncodeToString([]byte("Original license"))) || strings.Contains(string(pkg), "certificate.pem") {
+		t.Fatalf("runtime package lost dependencies or included rejected files: %s %v", pkg, err)
+	}
+	usage, err := a.storageUsageFor(ctx, user.ID)
+	if err != nil || usage.KoiSkillBytes != int64(len(entry)+len("Improve clarity.")+len("Original license")) || objects.puts != 3 {
+		t.Fatalf("rejected files entered storage or quota: %+v puts=%d %v", usage, objects.puts, err)
 	}
 	var files, blobs, published int
 	err = a.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_workspace_files WHERE workspace_id=$1),(SELECT count(*) FROM agent_workspace_blobs WHERE workspace_id=$1),(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=$1)`, w.WorkspaceID).Scan(&files, &blobs, &published)

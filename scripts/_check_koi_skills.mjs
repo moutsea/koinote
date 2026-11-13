@@ -253,7 +253,7 @@ try {
   await change(stateFilter(), { value: "" });
   await change(sourceFilter(), { value: "hub" });
   assert.ok(document.body.textContent.includes(labels.noMatches));
-  skills = [{ ...installed, enabled: true, compatibility: { conversation: false, article: false, reasons: ["review_not_approved"] } }];
+  skills = [{ ...installed, enabled: true, compatibility: { conversation: false, article: false, reasons: ["review_not_approved", "file_system_read:filesystem_read"] } }];
   rejectNextToggle = false;
   await change(sourceFilter(), { value: "" });
   await act(async () => client.invalidateQueries({ queryKey: ["koi-skills", user.authUserId] })); await settle();
@@ -269,6 +269,7 @@ try {
   await act(async () => client.invalidateQueries({ queryKey: ["koi-skills", user.authUserId] })); await settle();
   await click("review");
   assert.ok(document.body.textContent.includes(labels.requirement_review_not_approved), "legacy installations explain why new tasks cannot use them");
+  assert.ok(document.body.textContent.includes(labels.requirement_file_system_read), "local file dependencies explain the cloud access limit in installed details");
   const detailSwitch = [...document.querySelectorAll('input[role="switch"]')].find((input) => input.parentElement.textContent === labels.enabledToggle);
   assert.equal(detailSwitch.checked, true);
   assert.equal(detailSwitch.disabled, false);
@@ -370,6 +371,19 @@ try {
   await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(KoiInstallDialog, { key: "reviewed-subset-failed", authUserId: user.authUserId, resumePreview: { ...reviewedPreview, status: "failed", errorCode: "validation_failed", candidates: [] }, onClose() {} }))));
   await settle();
   assert.equal(document.querySelector('[role="alert"]').textContent, labels.reject_not_reviewed, "an unreviewed version must not tell users to modify upstream files");
+
+  const localFileCandidate = { ...candidate, id: "local-archive", name: "local-archive", compatibility: { conversation: false, article: false, reasons: ["file_system_read:filesystem_read"] } };
+  for (const candidates of [[localFileCandidate], [candidate, localFileCandidate]]) {
+    await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(KoiInstallDialog, { key: `local-read-${candidates.length}`, authUserId: user.authUserId, resumePreview: { ...reviewedPreview, candidates }, onClose() {} }))));
+    await settle();
+    const localChoice = [...document.querySelectorAll('input[name="preview-candidate"]')].find((input) => input.closest("li").textContent.includes("local-archive"));
+    assert.equal(localChoice.disabled, true, "a cached incompatible candidate cannot be selected");
+    assert.equal(localChoice.checked, false, "a cached incompatible candidate is not selected by default");
+    assert.ok(localChoice.closest("li").textContent.includes(labels.requirement_file_system_read), "cached previews explain which files the cloud cannot access");
+    const confirm = [...document.querySelectorAll('[role="dialog"] footer button')].find((button) => button.textContent === labels.confirmInstall.replace("{count}", String(candidates.length - 1)));
+    assert.ok(confirm, "the install count only includes compatible candidates");
+    assert.equal(confirm.disabled, candidates.length === 1, "compatible siblings remain installable");
+  }
 
   // Legacy accounts explicitly choose what to keep; failed confirmation keeps
   // the old library, and a Hub entry resumes its original source after migration.

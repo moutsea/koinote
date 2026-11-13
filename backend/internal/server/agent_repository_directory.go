@@ -107,15 +107,16 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		}
 		cursor.KoiSnapshot = &snapshot
 	}
+	cacheCurrent := agentRepositoryKoiCacheCurrentSQL("p")
 	rows, err := tx.Query(r.Context(), `SELECT p.workspace_id,p.name,p.description,p.revision,p.published_at,
       count(f.path),COALESCE(sum(f.size_bytes),0)::bigint,p.license,p.github_source,w.is_system,w.hub_category,
       COALESCE((SELECT star_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
       EXISTS(SELECT 1 FROM agent_repository_stars s WHERE s.workspace_id=p.workspace_id AND s.user_id=$5),
       COALESCE((SELECT clone_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
-      COALESCE(p.koi_installable AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),false),priority.value
+      COALESCE(p.koi_installable AND `+cacheCurrent+`,false),priority.value
       FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
       CROSS JOIN LATERAL (SELECT CASE WHEN $9 THEN
-        COALESCE(p.koi_installable AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)
+        COALESCE(p.koi_installable AND `+cacheCurrent+`
         AND pg_visible_in_snapshot(p.koi_installability_xid,$10::pg_snapshot),false)
         ELSE false END AS value) priority
       LEFT JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id
@@ -154,8 +155,8 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		facets := []agentRepositoryDirectoryFacet{}
 		total, pending := 0, 0
 		rows, err = tx.Query(r.Context(), `SELECT w.is_system,w.hub_category,count(*),count(*) FILTER (WHERE p.koi_installable
-      AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)),
-      count(*) FILTER (WHERE p.koi_installable IS NULL OR p.koi_installability_curation_revision<>(SELECT revision FROM agent_repository_curation_state WHERE singleton)) FROM agent_repository_publications p
+      AND `+cacheCurrent+`),
+      count(*) FILTER (WHERE NOT `+cacheCurrent+`) FROM agent_repository_publications p
       JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.deleted_at IS NULL
       AND (strpos(lower(p.name||' '||p.description||' '||COALESCE(p.github_source->>'author','')),lower($1))>0 OR $1='')
       GROUP BY w.is_system,w.hub_category ORDER BY w.is_system,w.hub_category`, query)

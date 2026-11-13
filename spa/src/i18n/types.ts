@@ -664,6 +664,7 @@ export interface Messages {
     requirement_external_mcp: string;
     requirement_external_write: string;
     requirement_fallback_target_available: string;
+    requirement_file_system_read: string;
     requirement_file_system_write: string;
     requirement_file_too_large: string;
     requirement_interactive_browser: string;

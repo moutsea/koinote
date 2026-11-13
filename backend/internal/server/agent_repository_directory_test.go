@@ -31,8 +31,8 @@ func TestAgentRepositoryDirectoryKoiPriorityAcrossPages(t *testing.T) {
 			value := i <= publicRepositoryPageSize
 			installable = &value
 		}
-		if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable,koi_installability_curation_revision)
- VALUES($1,0,'priority-test','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),$3,(SELECT revision FROM agent_repository_curation_state WHERE singleton))`, id, i, installable); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable,koi_installability_curation_revision,koi_installability_evidence)
+ VALUES($1,0,'priority-test','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),$3,(SELECT revision FROM agent_repository_curation_state WHERE singleton),$4)`, id, i, installable, koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -186,8 +186,8 @@ func TestAgentRepositoryDirectoryFiltersAndPagination(t *testing.T) {
 	_, err := pool.Exec(ctx, `UPDATE agent_repository_publications p SET
  koi_installable=CASE WHEN w.is_system AND w.hub_category='design' THEN true WHEN w.hub_category='agents' THEN false ELSE NULL END,
  koi_installability_xid=pg_current_xact_id(),
- koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)
- FROM agent_workspaces w WHERE w.id=p.workspace_id AND p.workspace_id=ANY($1::bigint[])`, ids)
+ koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_evidence=$2
+ FROM agent_workspaces w WHERE w.id=p.workspace_id AND p.workspace_id=ANY($1::bigint[])`, ids, koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

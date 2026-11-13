@@ -62,11 +62,16 @@ func readKoiGitHubArchive(ctx context.Context, reader io.ReaderAt, size int64, d
 			if err != nil {
 				return nil, err
 			}
-			if agentWorkspaceSensitiveContent(file.Content) {
-				return nil, &agentWorkspaceSensitiveError{Path: file.Path}
-			}
-			file.SHA256 = koiDigest(file.Content)
 			totalBytes += len(file.Content)
+			if agentWorkspaceSensitiveContent(file.Content) {
+				// Keep the member's boundary, but never retain rejected bytes.
+				// Candidate validation rejects its package and any inheritors;
+				// independent siblings can still be previewed and installed.
+				file.RejectionCode = "sensitive_data_detected"
+				file.Content = nil
+			} else {
+				file.SHA256 = koiDigest(file.Content)
+			}
 		}
 		files = append(files, file)
 	}

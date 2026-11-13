@@ -1,40 +1,36 @@
 {
-  "version": "1.1.23",
+  "version": "1.1.24",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.23",
+      "title": "What's new in Koinote 1.1.24",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Hub adds an “Installable in Koi AI” filter that works with search, source and category filters, while continuing to prioritize writing, knowledge management and research Skills.",
-        "Identical Skill copies from the same repository are grouped for preview and installation, with clearer installation status, supported entry points and availability explanations.",
-        "Skill availability reflects compatibility rule changes while running tasks retain their pinned versions. Temporarily unavailable Skills can also be switched off."
+        "Koi AI supports nine reviewed, independent writing Skills from dbskill, preserving their original instructions and reference files. Skills requiring local scripts, local file access or external credentials remain restricted.",
+        "Installation previews explain unavailable Skills and prevent selecting incompatible ones. Hub installability badges, filters and counts now follow the same current compatibility rules."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.23 新功能",
+      "title": "Koinote 1.1.24 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Hub 新增「Koi AI 可安装」筛选，支持结合搜索、来源与用途分类浏览；继续优先发现写作、知识管理和研究类技能。",
-        "同一仓库中相同内容的技能副本合并展示和安装，技能的已安装状态、可用范围及不可用原因更清晰。",
-        "兼容性规则变化后及时更新技能可用状态，运行中的任务保留原版本；暂不可用的技能也可主动关闭。"
+        "Koi AI 支持安装 dbskill 中已审核的 9 个独立写作技能，保留原始说明和参考资料；需要本机脚本、文件读写或外部凭证的技能仍受限制。",
+        "安装预览明确展示不可用原因并禁选不兼容技能；Hub 的可安装标记、筛选与数量统一按当前兼容规则更新。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.23",
+      "title": "Nouveautés de Koinote 1.1.24",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Le Hub ajoute un filtre « Installable dans Koi AI », combinable avec la recherche, la source et les catégories, et continue de privilégier les Skills de rédaction, de gestion des connaissances et de recherche.",
-        "Les copies identiques d’un Skill provenant du même dépôt sont regroupées dans l’aperçu et à l’installation. Le statut d’installation, les modes d’utilisation compatibles et les raisons d’indisponibilité sont plus clairs.",
-        "La disponibilité des Skills suit les changements de règles de compatibilité, tandis que les tâches en cours conservent leur version. Les Skills temporairement indisponibles peuvent également être désactivés."
+        "Koi AI permet d’installer neuf Skills de rédaction indépendants de dbskill après vérification, en conservant leurs instructions et références d’origine. Les Skills nécessitant des scripts locaux, un accès aux fichiers de l’ordinateur ou des identifiants externes restent limités.",
+        "L’aperçu explique les indisponibilités et empêche de sélectionner les Skills incompatibles. Les badges, filtres et compteurs du Hub suivent désormais les mêmes règles de compatibilité."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.23 の新機能",
+      "title": "Koinote 1.1.24 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Hub に「Koi AI にインストール可能」フィルターを追加しました。検索、掲載元、用途カテゴリと組み合わせて閲覧でき、執筆・知識管理・研究向けスキルを引き続き優先して収集します。",
-        "同じリポジトリ内の内容が同一のスキルをプレビューとインストールでまとめ、インストール状態、利用可能な画面、利用できない理由を分かりやすくしました。",
-        "互換性ルールの変更に応じてスキルの利用可否を更新し、実行中のタスクは元のバージョンを保持します。一時的に利用できないスキルも無効にできます。"
+        "dbskill の審査済みの独立した執筆スキル9件を Koi AI にインストールできるようになりました。元の説明と参考資料を保持します。ローカルスクリプト、PC上のファイル操作、外部認証情報が必要なスキルは引き続き制限されます。",
+        "インストール画面に利用できない理由を表示し、非対応スキルを選択できないようにしました。Hub の対応マーク、絞り込み、件数は同じ最新の互換性ルールに従います。"
       ]
     }
   }

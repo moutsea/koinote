@@ -1029,6 +1029,7 @@ export const ja: Messages = {
     requirement_external_mcp: "別の MCP サービスが必要です：{name}",
     requirement_external_write: "未対応の外部書き込みが必要です：{name}",
     requirement_fallback_target_available: "この Skill は次のツールまたはツールセットが利用できない場合のみ適用されます：{name}",
+    requirement_file_system_read: "この Skill はお使いのコンピューター上のファイルを読む必要がありますが、クラウドの Koi AI からはアクセスできません。ローカルファイルを読める Agent で使用してください。",
     requirement_file_system_write: "未対応のローカルファイル書き込みが必要です：{name}",
     requirement_file_too_large: "ファイルが 128 KiB を超えています：{name}",
     requirement_interactive_browser: "未対応の対話型ブラウザー操作が必要です：{name}",

@@ -66,16 +66,20 @@ func TestKoiBackgroundChecksLeaveGitHubQuotaForInstallations(t *testing.T) {
 func TestKoiLinkRecheckPreservesResultAndRetriesTemporaryFailures(t *testing.T) {
 	const token = "maintenance-test-token"
 	for _, status := range []int{503, 429, 401} {
-		for _, prior := range []string{"unknown", "compatible", "incompatible"} {
+		for _, prior := range []string{"unknown", "compatible", "incompatible", "old-compatible", "old-incompatible"} {
 			t.Run(fmt.Sprintf("%d/%s", status, prior), func(t *testing.T) {
 				ctx := context.Background()
 				app, _, id, _ := koiLinkIndexFixture(t)
 				var previous *bool
 				if prior != "unknown" {
-					value := prior == "compatible"
+					value := strings.TrimPrefix(prior, "old-") == "compatible"
 					previous = &value
 				}
-				if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=$2,koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_checked_at=now()-interval '25 hours' WHERE workspace_id=$1`, id, previous); err != nil {
+				evidence := koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion}
+				if strings.HasPrefix(prior, "old-") {
+					evidence.RulesVersion--
+				}
+				if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=$2,koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_checked_at=now()-interval '25 hours',koi_installability_evidence=$3 WHERE workspace_id=$1`, id, previous, evidence); err != nil {
 					t.Fatal(err)
 				}
 				snapshot := func() string {
@@ -110,7 +114,7 @@ func TestKoiLinkRecheckPreservesResultAndRetriesTemporaryFailures(t *testing.T) 
 				if directory.Total != want {
 					t.Fatalf("temporary failure changed filtered results: got %d want %d", directory.Total, want)
 				}
-				if (directory.KoiPending == 1) != (prior == "unknown") {
+				if (directory.KoiPending == 1) != (prior == "unknown" || strings.HasPrefix(prior, "old-")) {
 					t.Fatalf("pending status disagrees with the retained result: %+v", directory)
 				}
 				if count, err := app.RefreshAgentRepositoryKoiInstallability(ctx, token); count != 0 || err != nil || requests != 1 {

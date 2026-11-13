@@ -51,31 +51,43 @@ func (a *App) RefreshAgentRepositoryKoiInstallability(ctx context.Context, token
 
 // Attempts throttle retries independently of the last definitive result.
 // A failed recheck must neither erase that result nor delay retry for a day.
-const agentRepositoryKoiCheckDue = `((koi_installable IS NULL)
- OR koi_installability_curation_revision<>(SELECT revision FROM agent_repository_curation_state WHERE singleton)
+var agentRepositoryKoiCheckDue = `(NOT ` + agentRepositoryKoiCacheCurrentSQL("") + `
  OR (github_source->>'linkOnly'='true' AND
  (koi_installability_checked_at IS NULL OR koi_installability_checked_at<now()-interval '24 hours')))
  AND (koi_installability_attempted_at IS NULL OR koi_installability_attempted_at<now()-interval '5 minutes'
  OR (koi_installability_curation_revision<>(SELECT revision FROM agent_repository_curation_state WHERE singleton)
  AND koi_installability_checked_at>=koi_installability_attempted_at))`
 
+// Use the same cache validity for maintenance, directory badges, filters and
+// pending counts. A definitive result from an older scanner still needs review.
+func agentRepositoryKoiCacheCurrentSQL(alias string) string {
+	if alias != "" {
+		alias += "."
+	}
+	return `(` + alias + `koi_installable IS NOT NULL
+ AND COALESCE(` + alias + `koi_installability_evidence->>'rulesVersion'='` + strconv.Itoa(koiSkillEntryRulesVersion) + `',false)
+ AND ` + alias + `koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton))`
+}
+
 type koiInstallabilityEvidence struct {
-	RulesVersion int      `json:"rulesVersion"`
-	Digests      []string `json:"digests"`
+	RulesVersion int               `json:"rulesVersion"`
+	Digests      []string          `json:"digests"`
+	EntryDigests map[string]string `json:"entryDigests,omitempty"`
 }
 
 func newKoiInstallabilityEvidence(files []koiSkillFile, root, license string) *koiInstallabilityEvidence {
 	candidates, _ := koiSkillCandidates(files, koiSkillSourceContext{RootName: root, License: license})
-	evidence := &koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion, Digests: []string{}}
+	evidence := &koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion, Digests: []string{}, EntryDigests: map[string]string{}}
 	for _, candidate := range candidates {
 		evidence.Digests = append(evidence.Digests, candidate.ContentSHA256)
+		evidence.EntryDigests[candidate.ContentSHA256] = koiSkillEntryDigest(candidate.Instructions)
 	}
 	return evidence
 }
 
 func (review koiRepositoryCuration) evidenceInstallable(repositoryID int64, evidence *koiInstallabilityEvidence) bool {
 	for _, digest := range evidence.Digests {
-		if review.compatibility(strconv.FormatInt(repositoryID, 10), digest, koiSkillCompatibility{Conversation: true}).Conversation {
+		if review.compatibility(strconv.FormatInt(repositoryID, 10), digest, koiSkillCompatibility{Conversation: true}, evidence.EntryDigests[digest]).Conversation {
 			return true
 		}
 	}
@@ -204,7 +216,7 @@ func (a *App) checkAgentRepositoryKoiInstallability(ctx context.Context, limit i
  koi_installability_checked_at=CASE WHEN $9 THEN koi_installability_checked_at ELSE clock_timestamp() END,
  koi_installability_attempted_at=NULL,koi_installability_evidence=$8,
  koi_installability_curation_revision=$7,
- koi_installability_xid=CASE WHEN koi_installable IS NOT DISTINCT FROM $4::boolean AND koi_installability_curation_revision=$7
+ koi_installability_xid=CASE WHEN koi_installable IS NOT DISTINCT FROM $4::boolean AND `+agentRepositoryKoiCacheCurrentSQL("")+`
  THEN koi_installability_xid ELSE pg_current_xact_id() END
  WHERE workspace_id=$1 AND revision=$2 AND published_at=$3 AND koi_installability_attempted_at=$5
  AND github_source IS NOT DISTINCT FROM $6::jsonb
@@ -225,7 +237,7 @@ func (a *App) rememberKoiGitHubInstallability(ctx context.Context, source *agent
 	_, err := a.db.Exec(ctx, `UPDATE agent_repository_publications p SET koi_installable=$4,
  koi_installability_checked_at=clock_timestamp(),koi_installability_attempted_at=NULL,
  koi_installability_curation_revision=$6,koi_installability_evidence=$7,
- koi_installability_xid=CASE WHEN koi_installable IS NOT DISTINCT FROM $4::boolean AND koi_installability_curation_revision=$6
+ koi_installability_xid=CASE WHEN koi_installable IS NOT DISTINCT FROM $4::boolean AND `+agentRepositoryKoiCacheCurrentSQL("p")+`
  THEN koi_installability_xid ELSE pg_current_xact_id() END
  FROM agent_workspaces w WHERE w.id=p.workspace_id AND w.deleted_at IS NULL
  AND p.github_source->>'linkOnly'='true' AND p.github_source->>'repositoryId'=$1

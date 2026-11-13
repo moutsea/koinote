@@ -132,6 +132,12 @@ func koiSkillContentDigest(files []koiSkillFile) string {
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
+// Required capabilities in an unchanged entry remain required when a user adds
+// a README or other attachments. Package approvals still use the full digest.
+func koiSkillEntryDigest(instructions string) string {
+	return koiSkillContentDigest([]koiSkillFile{{Path: "SKILL.md", SHA256: koiDigest([]byte(instructions))}})
+}
+
 // Use selected source paths before rebasing. Prefer a local license, then a
 // frontmatter declaration, then the closest ancestor's license. Attribution
 // notices stay in the package but never stand in for a license declaration.

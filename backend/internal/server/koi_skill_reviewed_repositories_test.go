@@ -54,6 +54,9 @@ func TestKoiRepositoryCurationUsesDatabaseAndExactContent(t *testing.T) {
 	if accepted, rejected := review.candidates(11, []koiSkillCandidate{{ContentSHA256: digest}}); len(accepted) != 1 || len(rejected) != 0 {
 		t.Fatal("approved content was rejected")
 	}
+	if got := review.compatibility("11", strings.Repeat("b", 64), base, digest); got.Conversation || got.Article {
+		t.Fatal("an entry digest must never authorize an unapproved package")
+	}
 	for _, id := range []int64{11, 12, 13} {
 		accepted, rejected := review.candidates(id, []koiSkillCandidate{{ContentSHA256: strings.Repeat("b", 64)}})
 		if (id == 13 && len(accepted) != 1) || (id != 13 && len(rejected) != 1) {

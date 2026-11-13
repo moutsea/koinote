@@ -1015,6 +1015,7 @@ export const zh: Messages = {
     requirement_external_mcp: "要求额外的 MCP 服务：{name}",
     requirement_external_write: "要求不支持的外部写入：{name}",
     requirement_fallback_target_available: "此技能仅在以下工具或工具集不可用时适用：{name}",
+    requirement_file_system_read: "此技能需要读取你电脑上的文件，Koi AI 云端无法访问。请在支持本机文件读取的 Agent 中使用。",
     requirement_file_system_write: "要求不支持的本机文件写入：{name}",
     requirement_file_too_large: "文件超过 128 KiB：{name}",
     requirement_interactive_browser: "要求不支持的交互式浏览器能力：{name}",

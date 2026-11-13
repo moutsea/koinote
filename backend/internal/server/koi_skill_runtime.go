@@ -51,7 +51,7 @@ func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, 
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (i.source_kind,(`+koiInstallationOriginSQL+`),v.content_sha256)
- v.id::text,v.content_sha256,v.compatibility,`+koiInstallationReviewRepositoryID+`
+ v.id::text,v.content_sha256,v.compatibility,`+koiInstallationReviewRepositoryID+`,`+koiSkillEntryDigestSQL+`
  FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id
  WHERE i.user_id=$1 AND i.deleted_at IS NULL AND i.enabled
  AND COALESCE((v.compatibility->>'conversation')::boolean,false)
@@ -67,13 +67,13 @@ func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, 
 		}
 		var pinned []pinnedSkill
 		for rows.Next() {
-			var id, digest, repositoryID string
+			var id, digest, repositoryID, entryDigest string
 			var compatibility koiSkillCompatibility
-			if err = rows.Scan(&id, &digest, &compatibility, &repositoryID); err != nil {
+			if err = rows.Scan(&id, &digest, &compatibility, &repositoryID, &entryDigest); err != nil {
 				rows.Close()
 				return err
 			}
-			pinned = append(pinned, pinnedSkill{id, review.compatibility(repositoryID, digest, compatibility)})
+			pinned = append(pinned, pinnedSkill{id, review.compatibility(repositoryID, digest, compatibility, entryDigest)})
 		}
 		err = rows.Err()
 		rows.Close()

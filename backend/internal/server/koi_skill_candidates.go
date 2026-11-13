@@ -185,7 +185,7 @@ func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext)
 				continue
 			}
 			candidate.ContentSHA256 = koiSkillContentDigest(rebased)
-			candidate.Compatibility = source.Review.contentCompatibility(candidate.ContentSHA256, koiSkillCompatibilityFor(raw))
+			candidate.Compatibility = source.Review.contentCompatibility(candidate.ContentSHA256, koiSkillCompatibilityFor(raw), koiSkillEntryDigest(instructions))
 			if !candidate.Compatibility.Conversation {
 				reject(name, "incompatible", candidate.Compatibility.Reasons...)
 				continue

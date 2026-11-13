@@ -111,7 +111,7 @@ func (a *App) loadKoiImport(ctx context.Context, q imageUsageQuerier, userID int
 		if parseErr == nil {
 			candidate.Compatibility = koiSkillCompatibilityFor(raw)
 		}
-		candidate.Compatibility = review.contentCompatibility(candidate.ContentSHA256, candidate.Compatibility)
+		candidate.Compatibility = review.contentCompatibility(candidate.ContentSHA256, candidate.Compatibility, koiSkillEntryDigest(candidate.Instructions))
 	}
 	view.Rejected = []koiSkillRejected{}
 	if len(result) > 0 {
@@ -129,16 +129,17 @@ func (a *App) loadKoiImport(ctx context.Context, q imageUsageQuerier, userID int
 		view.Installed, view.confirmationHash = stored.Installed, stored.Hash
 		for index := range view.Installed {
 			skill := &view.Installed[index]
+			var entryDigest string
 			if validUUID(skill.VersionID) {
 				var raw map[string]any
-				loadErr := q.QueryRow(ctx, `SELECT raw_metadata FROM koi_skill_versions WHERE id=$1 AND user_id=$2`, skill.VersionID, userID).Scan(&raw)
+				loadErr := q.QueryRow(ctx, `SELECT v.raw_metadata,`+koiSkillEntryDigestSQL+` FROM koi_skill_versions v WHERE v.id=$1 AND v.user_id=$2`, skill.VersionID, userID).Scan(&raw, &entryDigest)
 				if loadErr == nil {
 					skill.Compatibility = koiSkillCompatibilityFor(raw)
 				} else if !errors.Is(loadErr, pgx.ErrNoRows) {
 					return view, loadErr
 				}
 			}
-			skill.Compatibility = review.contentCompatibility(skill.ContentSHA256, skill.Compatibility)
+			skill.Compatibility = review.contentCompatibility(skill.ContentSHA256, skill.Compatibility, entryDigest)
 		}
 	}
 	view.DeclaredFiles = len(view.DeclaredPaths)

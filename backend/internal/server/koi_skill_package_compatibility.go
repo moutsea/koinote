@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const koiSkillEntryRulesVersion = 4
+const koiSkillEntryRulesVersion = 5
 
 type koiCompatibilityQuerier interface {
 	agentWorkspaceQuerier
@@ -59,6 +59,7 @@ type koiSkillCompatibility struct {
 
 // These declarations request authority that a hosted Skill cannot grant.
 var koiSkillUnsupportedCapabilities = map[string]string{
+	"filesystem_read":  "file_system_read",
 	"filesystem_write": "file_system_write", "filesystem": "file_system_write",
 	"external_write": "external_write", "publish": "external_write",
 	"credentials": "credential_required", "secrets": "credential_required", "oauth": "credential_required",

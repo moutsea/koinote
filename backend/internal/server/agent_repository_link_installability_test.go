@@ -25,14 +25,14 @@ func TestKoiCurationRechecksCachedPublications(t *testing.T) {
 	for _, link := range []bool{false, true} {
 		t.Run(map[bool]string{false: "mirror", true: "link"}[link], func(t *testing.T) {
 			ctx := context.Background()
-			content := map[string]string{"SKILL.md": "# Write clearly"}
+			content := map[string]string{"SKILL.md": "# Write clearly", "README.md": "Repository import instructions."}
 			a, _, workspace, _ := koiHubSourceTestApp(t, true, content)
 			source := &agentGitHubSource{RepositoryID: 123, RepositoryURL: "https://github.com/Octo/demo", Ref: "main", LinkOnly: link}
 			if _, err := a.db.Exec(ctx, `UPDATE agent_repository_publications SET github_source=$2 WHERE workspace_id=$1`, workspace.WorkspaceID, source); err != nil {
 				t.Fatal(err)
 			}
 			const token = "maintenance-test-token"
-			a.githubHTTPClient = githubImportClient(t, githubArchive(t, githubArchiveEntry{"root/SKILL.md", content["SKILL.md"], 0}), token, false)
+			a.githubHTTPClient = githubImportClient(t, githubArchive(t, githubArchiveEntry{"root/SKILL.md", content["SKILL.md"], 0}, githubArchiveEntry{"root/README.md", content["README.md"], 0}), token, false)
 			requests := 0
 			base := a.githubHTTPClient.Transport
 			a.githubHTTPClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) { requests++; return base.RoundTrip(r) })
@@ -100,7 +100,11 @@ func TestKoiCurationRechecksCachedPublications(t *testing.T) {
 			}
 			check(true)
 			directory(1)
-			if _, err := a.db.Exec(ctx, `UPDATE agent_repository_curation SET required_capabilities=$1 WHERE repository_id=123`, map[string][]string{digest: {"shell"}}); err != nil {
+			entryDigest := koiSkillEntryDigest(content["SKILL.md"])
+			if entryDigest == digest {
+				t.Fatal("the repository must include files beyond its entry")
+			}
+			if _, err := a.db.Exec(ctx, `UPDATE agent_repository_curation SET required_capabilities=$1 WHERE repository_id=123`, map[string][]string{entryDigest: {"filesystem_read", "filesystem_write"}}); err != nil {
 				t.Fatal(err)
 			}
 			directory(0)
@@ -117,27 +121,67 @@ func TestKoiCurationRechecksCachedPublications(t *testing.T) {
 func TestKoiLinkUpgradeWarmsThenReappliesRulesLocally(t *testing.T) {
 	ctx := context.Background()
 	a, _, id, _ := koiLinkIndexFixture(t)
-	if _, err := a.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=true,koi_installability_checked_at=now(),koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, id); err != nil {
-		t.Fatal(err)
-	}
 	assertDirectory := func(total, pending int) {
 		t.Helper()
-		var page struct{ Total, KoiPending int }
+		var page struct {
+			Total, KoiPending int
+			Facets            []agentRepositoryDirectoryFacet
+			Repositories      []agentRepositoryDirectoryItem
+		}
 		decodeJSONResponse(t, callRepositoryAPI(t, a, nil, "GET", "/api/agent/repositories?koiInstallable=true&q=Review%20skills", "", 200), &page)
-		if page.Total != total || page.KoiPending != pending {
+		if page.Total != total || page.KoiPending != pending || len(page.Repositories) != total {
 			t.Fatalf("directory: %+v", page)
 		}
-	}
-	assertDirectory(0, 1)
-	if checked, err := a.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || checked != 0 {
-		t.Fatalf("unknown links used anonymous checks: %d %v", checked, err)
+		installableCount, pendingCount := 0, 0
+		for _, facet := range page.Facets {
+			installableCount += facet.KoiInstallableCount
+			pendingCount += facet.KoiPendingCount
+		}
+		if installableCount != total || pendingCount != pending {
+			t.Fatalf("facet counts disagree with directory: %+v", page)
+		}
+		decodeJSONResponse(t, callRepositoryAPI(t, a, nil, "GET", "/api/agent/repositories?q=Review%20skills", "", 200), &page)
+		if len(page.Repositories) != 1 || page.Repositories[0].KoiInstallable != (total == 1) {
+			t.Fatalf("unfiltered directory retained an obsolete badge: %+v", page)
+		}
 	}
 	const token = "maintenance-test-token"
 	a.githubHTTPClient = githubImportClient(t, githubArchive(t, githubArchiveEntry{"root/SKILL.md", "# Write clearly", 0}), token, false)
-	if checked, err := a.RefreshAgentRepositoryKoiInstallability(ctx, token); err != nil || checked != 1 {
-		t.Fatalf("deployment warm-up: %d %v", checked, err)
+	// Both old positive and negative results need rechecking, even when checked
+	// moments ago at the current curation revision. Missing evidence is stale too.
+	for _, cached := range []struct {
+		name        string
+		installable bool
+		evidence    *koiInstallabilityEvidence
+	}{
+		{"old false", false, &koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion - 1}},
+		{"old true", true, &koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion - 1}},
+		{"missing evidence", true, nil},
+	} {
+		t.Run(cached.name, func(t *testing.T) {
+			if _, err := a.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=$2,koi_installability_evidence=$3,
+ koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),
+ koi_installability_checked_at=now(),koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, id, cached.installable, cached.evidence); err != nil {
+				t.Fatal(err)
+			}
+			assertDirectory(0, 1)
+			if checked, err := a.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || checked != 0 {
+				t.Fatalf("old links used anonymous checks: %d %v", checked, err)
+			}
+			var snapshot string
+			if err := a.db.QueryRow(ctx, `SELECT pg_current_snapshot()::text`).Scan(&snapshot); err != nil {
+				t.Fatal(err)
+			}
+			if checked, err := a.RefreshAgentRepositoryKoiInstallability(ctx, token); err != nil || checked != 1 {
+				t.Fatalf("deployment warm-up: %d %v", checked, err)
+			}
+			assertDirectory(1, 0)
+			var visible bool
+			if err := a.db.QueryRow(ctx, `SELECT pg_visible_in_snapshot(koi_installability_xid,$2::pg_snapshot) FROM agent_repository_publications WHERE workspace_id=$1`, id, snapshot).Scan(&visible); err != nil || visible {
+				t.Fatalf("revalidated result entered an older pagination snapshot: visible=%v %v", visible, err)
+			}
+		})
 	}
-	assertDirectory(1, 0)
 	var checkedAt time.Time
 	if err := a.db.QueryRow(ctx, `SELECT koi_installability_checked_at FROM agent_repository_publications WHERE workspace_id=$1`, id).Scan(&checkedAt); err != nil {
 		t.Fatal(err)
@@ -184,6 +228,18 @@ func TestKoiLinkCompatibilityChecksAndRevalidatesUpstream(t *testing.T) {
 	if value := repositoryKoiInstallability(t, app, id); value == nil || !*value {
 		t.Fatal("compatible public link was excluded")
 	}
+	// A recent false result from the old whole-archive scanner must be retried
+	// with the new package boundaries, without waiting for the daily interval.
+	legacy := koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion - 1, Digests: []string{}}
+	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=false,koi_installability_evidence=$2 WHERE workspace_id=$1`, id, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := app.checkAgentRepositoryKoiInstallability(ctx, 8, token); err != nil || count != 1 {
+		t.Fatalf("old scanner result was not revalidated: %d %v", count, err)
+	}
+	if value := repositoryKoiInstallability(t, app, id); value == nil || !*value {
+		t.Fatal("old negative compatibility result was retained")
+	}
 	var xid string
 	if err := app.db.QueryRow(ctx, `SELECT koi_installability_xid::text FROM agent_repository_publications WHERE workspace_id=$1`, id).Scan(&xid); err != nil {
 		t.Fatal(err)
@@ -218,7 +274,7 @@ func TestKoiLinkCompatibilityChecksAndRevalidatesUpstream(t *testing.T) {
 func TestKoiLinkMigrationPreservesVerifiedInstallability(t *testing.T) {
 	ctx := context.Background()
 	app, _, id, _ := koiLinkIndexFixture(t)
-	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=true,koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_checked_at=now(),koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, id); err != nil {
+	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=true,koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_checked_at=now(),koi_installability_xid=pg_current_xact_id(),koi_installability_evidence=$2 WHERE workspace_id=$1`, id, koiInstallabilityEvidence{RulesVersion: koiSkillEntryRulesVersion}); err != nil {
 		t.Fatal(err)
 	}
 	var before string

@@ -1046,6 +1046,7 @@ export const fr: Messages = {
     requirement_external_mcp: "Autre service MCP requis : {name}",
     requirement_external_write: "Écriture externe non prise en charge requise : {name}",
     requirement_fallback_target_available: "Ce Skill ne s’applique que si cet outil ou groupe d’outils est indisponible : {name}",
+    requirement_file_system_read: "Ce Skill doit lire des fichiers sur votre ordinateur, auxquels Koi AI dans le cloud ne peut pas accéder. Utilisez un agent ayant accès aux fichiers locaux.",
     requirement_file_system_write: "Écriture locale non prise en charge requise : {name}",
     requirement_file_too_large: "Le fichier dépasse 128 KiB : {name}",
     requirement_interactive_browser: "Accès interactif au navigateur non pris en charge requis : {name}",

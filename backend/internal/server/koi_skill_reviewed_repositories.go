@@ -73,8 +73,12 @@ func koiRepositoryCurationFrom(entries []koiReviewedRepository) koiRepositoryCur
 	return review
 }
 
-func (review koiRepositoryCuration) contentCompatibility(digest string, compatibility koiSkillCompatibility) koiSkillCompatibility {
-	if required, ok := review.requirements[digest]; ok {
+func (review koiRepositoryCuration) contentCompatibility(digest string, compatibility koiSkillCompatibility, entryDigests ...string) koiSkillCompatibility {
+	for _, digest := range append([]string{digest}, entryDigests...) {
+		required, ok := review.requirements[digest]
+		if !ok {
+			continue
+		}
 		compatibility.Conversation = compatibility.Conversation && required.Conversation
 		compatibility.Article = compatibility.Article && required.Article
 		merge := func(current, extra []string) []string {
@@ -94,8 +98,8 @@ func (review koiRepositoryCuration) contentCompatibility(digest string, compatib
 
 // Apply review changes to the current library and new tasks, without rewriting
 // the compatibility stored on immutable versions pinned by running tasks.
-func (review koiRepositoryCuration) compatibility(repositoryID string, digest string, compatibility koiSkillCompatibility) koiSkillCompatibility {
-	compatibility = review.contentCompatibility(digest, compatibility)
+func (review koiRepositoryCuration) compatibility(repositoryID string, digest string, compatibility koiSkillCompatibility, entryDigests ...string) koiSkillCompatibility {
+	compatibility = review.contentCompatibility(digest, compatibility, entryDigests...)
 	id, _ := strconv.ParseInt(repositoryID, 10, 64)
 	if policy, reviewed := review.repositories[id]; reviewed {
 		if _, approved := policy.Packages[digest]; !approved {
@@ -116,13 +120,21 @@ const koiInstallationReviewRepositoryID = `CASE WHEN i.source_kind IN ('github',
      FROM agent_workspaces w WHERE w.id::text=i.source->>'workspaceId' AND w.user_id=i.user_id) END, '')
  ELSE '' END`
 
+// Same single-entry digest as koiSkillEntryDigest, using the verified stored
+// file hash without loading private file bytes from object storage.
+const koiSkillEntryDigestSQL = `COALESCE((SELECT encode(sha256(convert_to('SKILL.md','UTF8')||decode('00','hex')||convert_to(f.sha256,'UTF8')||decode('0a','hex')),'hex')
+ FROM koi_skill_version_files f WHERE f.version_id=v.id AND f.path=v.entry_path),'')`
+
 func koiInstallationReviewAllowsSQL(parameter, article string) string {
 	repositories := `(` + parameter + `::jsonb -> 'repositories')`
-	requirements := `(` + parameter + `::jsonb -> 'requirements' -> v.content_sha256)`
+	allows := func(digest string) string {
+		requirements := `(` + parameter + `::jsonb -> 'requirements' -> (` + digest + `))`
+		return `(COALESCE((` + requirements + ` ->> 'conversation')::boolean,true)
+ AND (NOT (` + article + `) OR COALESCE((` + requirements + ` ->> 'article')::boolean,true)))`
+	}
 	return `((NOT (` + repositories + ` ? (` + koiInstallationReviewRepositoryID + `))
  OR (` + repositories + ` -> (` + koiInstallationReviewRepositoryID + `)) ? v.content_sha256)
- AND COALESCE((` + requirements + ` ->> 'conversation')::boolean,true)
- AND (NOT (` + article + `) OR COALESCE((` + requirements + ` ->> 'article')::boolean,true)))`
+ AND ` + allows("v.content_sha256") + ` AND ` + allows(koiSkillEntryDigestSQL) + `)`
 }
 
 func (review koiRepositoryCuration) candidates(repositoryID int64, candidates []koiSkillCandidate) ([]koiSkillCandidate, []koiSkillRejected) {
