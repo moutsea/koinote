@@ -1059,7 +1059,7 @@ func (a *App) importGitHubRepositoryForOwner(ctx context.Context, ownerID *int, 
 		return *existing, nil
 	}
 	if source.LinkOnly {
-		known, err := systemRepositoryDiscoveryKnown(ctx, tx, source.RepositoryID, source.RepositoryURL, true)
+		known, err := systemRepositoryCollected(ctx, tx, source.RepositoryID, source.RepositoryURL)
 		if err != nil {
 			return empty, err
 		}

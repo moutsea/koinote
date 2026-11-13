@@ -213,7 +213,7 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 	delete(policy, "maxSteps")
 	delete(policy, "maxToolCalls")
 	policy["maxContextChars"] = 200000
-	tools := agentEntryTools(s.WriteDocumentID != "", automaticAgentSkills(*t))
+	tools := agentEntryTools(s.WriteDocumentID != "", automaticAgentSkills(*t), t.CoverEnabled)
 	if s.WriteDocumentID != "" {
 		if t.Source.DocID != s.WriteDocumentID {
 			return errArticleWriteScope
@@ -237,6 +237,7 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 		}
 	}
 	policy["allowTools"] = tools
+	input["systemPrompt"] = input["systemPrompt"].(string) + "\n\n" + agentCoverPrompt(*t)
 	// Old operations have no native tool-call IDs. Keep them as explicitly
 	// labelled host facts, including approvals that happened after the reply.
 	ops, err := a.loadAgentOperations(ctx, t.UserID, taskIDs)
@@ -259,8 +260,11 @@ func (a *App) prepareAgentIntentInput(ctx context.Context, t *writingTask, input
 
 // Keep Skill compatibility checks and task policy on the same entry tool set.
 // Session permissions and task-specific denials remain separate restrictions.
-func agentEntryTools(article, automaticSkills bool) []string {
+func agentEntryTools(article, automaticSkills, covers bool) []string {
 	tools := []string{"koinote.get_document", "koinote.search_documents", "koinote.list_folders", "koinote.propose_document_change", "koinote.get_conversation", "koinote.get_operation_results"}
+	if covers {
+		tools = append(tools, "koinote.generate_cover")
+	}
 	if article && automaticSkills {
 		tools = append(tools, "koinote.find_skills", "koinote.load_skill", "skills_list", "skill_view", "read_file", "list_files", "search_files")
 	}
@@ -296,6 +300,21 @@ func (a *App) agentValidateOperation(ctx context.Context, _ *mcp.CallToolRequest
 	var inputs []agentOperationInput
 	arguments, _ := json.Marshal(in.Arguments)
 	switch in.ToolName {
+	case "generate_cover":
+		if !t.CoverEnabled {
+			return nil, nil, errAgentCoverClient
+		}
+		var args agentCoverInput
+		if json.Unmarshal(arguments, &args) != nil {
+			return nil, nil, errAgentInput
+		}
+		args, err = normalizeAgentCover(args)
+		if err != nil {
+			return nil, nil, err
+		}
+		proof := &agentIntentProof{TaskID: t.SessionID, SessionID: t.SessionID, Version: t.IntentVersion, CurrentMessageID: agentUserMessageID(t.ID), Effects: agentCoverEffects(t)}
+		proof.Token = a.agentIntentToken(t, s, in.ToolName, args, proof.Effects)
+		return nil, proof, nil
 	case "propose_operations":
 		var args agentProposeInput
 		if json.Unmarshal(arguments, &args) != nil {
@@ -326,13 +345,13 @@ func (a *App) agentValidateOperation(ctx context.Context, _ *mcp.CallToolRequest
 	// Deliberately roll back: validation creates no proposals, receipts or charges.
 	return nil, proof, nil
 }
-func (a *App) agentIntentToken(t writingTask, s agentSession, tool string, inputs []agentOperationInput, effects []agentIntentEffect) string {
+func (a *App) agentIntentToken(t writingTask, s agentSession, tool string, inputs any, effects []agentIntentEffect) string {
 	raw, _ := json.Marshal(struct {
 		Task                                               string
 		User                                               int
 		Workspace, Job, Session, Message, Tool, Permission string
 		Version, PermissionRevision                        int64
-		Inputs                                             []agentOperationInput
+		Inputs                                             any
 		Effects                                            []agentIntentEffect
 	}{t.ID, t.UserID, t.WorkspaceID, t.JobID, t.SessionID, agentUserMessageID(t.ID), tool, s.Permission, t.IntentVersion, s.Revision, inputs, effects})
 	mac := hmac.New(sha256.New, []byte(a.writingSecret(t.ID, "intent-proof")))

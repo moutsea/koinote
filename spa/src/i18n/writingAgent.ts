@@ -23,7 +23,10 @@ const zh = {
   saveError: "请先保存文章并解决版本冲突。",
   failed: "操作失败，请重试。",
   conflict: "文章已变化，请基于最新版本重新开始任务。",
-  unknownUsage: "用量未完整返回，未扣费，等待核对。",
+  unknownUsage: "文本费用尚未结算，等待核对。",
+  imageCharge: "生图已扣 {credits} Credits",
+  textCharge: "文本已扣 {credits} Credits",
+  textReserved: "文本预留 {credits} Credits",
   noProposal: "任务已结束，未生成可应用的修改提案。",
   approval: "任务请求了额外授权。本版不会自动授权，可停止任务并调整需求。",
   events: "执行记录",
@@ -67,7 +70,10 @@ export const writingAgentText: Record<Locale, Text> = {
     saveError: "Save the document and resolve conflicts first.",
     failed: "Operation failed. Please retry.",
     conflict: "The document changed. Start a new task from the latest version.",
-    unknownUsage: "Usage is incomplete. No charge; awaiting reconciliation.",
+    unknownUsage: "Text charges are unsettled, awaiting reconciliation.",
+    imageCharge: "Image charged: {credits} Credits",
+    textCharge: "Text charged: {credits} Credits",
+    textReserved: "Text reserved: {credits} Credits",
     noProposal: "The task finished without an applicable proposal.",
     approval:
       "Additional authorization requested. This version does not grant it automatically; stop the task and adjust the request.",
@@ -110,7 +116,10 @@ export const writingAgentText: Record<Locale, Text> = {
     failed: "Échec de l’opération. Réessayez.",
     conflict:
       "Le document a changé. Relancez une tâche sur la dernière version.",
-    unknownUsage: "Usage incomplet. Aucun débit, en attente de vérification.",
+    unknownUsage: "Frais de texte non réglés, en attente de vérification.",
+    imageCharge: "Image débitée : {credits} Credits",
+    textCharge: "Texte débité : {credits} Credits",
+    textReserved: "Texte réservé : {credits} Credits",
     noProposal: "La tâche s’est terminée sans proposition applicable.",
     approval:
       "Autorisation supplémentaire requise. Arrêtez la tâche et ajustez la demande.",
@@ -153,7 +162,10 @@ export const writingAgentText: Record<Locale, Text> = {
     failed: "操作に失敗しました。再試行してください。",
     conflict:
       "文書が変更されました。最新版から新しいタスクを開始してください。",
-    unknownUsage: "使用量が不完全です。請求せず、確認を待ちます。",
+    unknownUsage: "テキスト料金は未精算です。確認を待っています。",
+    imageCharge: "画像の請求済み料金：{credits} Credits",
+    textCharge: "テキストの請求済み料金：{credits} Credits",
+    textReserved: "テキストの予約料金：{credits} Credits",
     noProposal: "適用可能な変更案なしで終了しました。",
     approval:
       "追加の承認が必要です。自動承認は行いません。停止して依頼を調整してください。",

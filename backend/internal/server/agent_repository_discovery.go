@@ -113,7 +113,7 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 		if _, err = lock.Exec(ctx, `SELECT 1`); err != nil {
 			return summary, err
 		}
-		known, err := systemRepositoryDiscoveryKnown(ctx, a.db, candidate.ID, "https://github.com/"+candidate.FullName, options.LinkOnly)
+		known, err := systemRepositoryDiscoveryShouldSkip(ctx, a.db, candidate.ID, "https://github.com/"+candidate.FullName, options.LinkOnly)
 		if err != nil {
 			return summary, err
 		}
@@ -191,15 +191,30 @@ func systemRepositoryDiscoveryBudget(ctx context.Context, q imageUsageQuerier) (
 	return day, count, err
 }
 
-func systemRepositoryDiscoveryKnown(ctx context.Context, q imageUsageQuerier, id int64, repositoryURL string, linkOnly bool) (bool, error) {
-	var known bool
-	// Include withdrawn and soft-deleted system rows. Never revive an admin's
-	// removal. IDs handle renames for new imports; URL matching covers old seeds.
+// Collected includes withdrawn/deleted entries and accepted discovery history.
+// A rejected candidate is not a catalog entry, even while it is cooling down.
+func systemRepositoryCollected(ctx context.Context, q imageUsageQuerier, id int64, repositoryURL string) (bool, error) {
+	var collected bool
 	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_repository_discoveries
- WHERE github_id=$1 AND (accepted_on IS NOT NULL OR (retry_after>now() AND NOT ($3 AND code IN ('license_review_required','no_koi_compatible_skills','koi_preview_too_large','github_archive_invalid'))))) OR EXISTS(
+ WHERE github_id=$1 AND accepted_on IS NOT NULL) OR EXISTS(
  SELECT 1 FROM agent_workspaces WHERE is_system AND
- (lower(github_source->>'repositoryUrl')=lower($2) OR github_source->>'repositoryId'=$1::bigint::text))`, id, repositoryURL, linkOnly).Scan(&known)
-	return known, err
+ (lower(github_source->>'repositoryUrl')=lower($2) OR github_source->>'repositoryId'=$1::bigint::text))`, id, repositoryURL).Scan(&collected)
+	return collected, err
+}
+
+func systemRepositoryDiscoveryShouldSkip(ctx context.Context, q imageUsageQuerier, id int64, repositoryURL string, linkOnly bool) (bool, error) {
+	collected, err := systemRepositoryCollected(ctx, q, id, repositoryURL)
+	if err != nil || collected {
+		return collected, err
+	}
+	var deferred bool
+	// Links never read mirror files. Old archive, file-safety and redistribution
+	// failures must be re-evaluated under the metadata/tree-only link policy.
+	// Keep cooldowns for no Skills, invalid metadata and unavailable sources.
+	err = q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_repository_discoveries
+ WHERE github_id=$1 AND retry_after>now() AND NOT ($2 AND code IN
+ ('license_review_required','no_koi_compatible_skills','koi_preview_too_large','github_archive_invalid','archive_rejected','sensitive_path','sensitive_data_detected')))`, id, linkOnly).Scan(&deferred)
+	return deferred, err
 }
 
 func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string) ([]githubRepositoryMetadata, error) {
@@ -471,7 +486,7 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	if !options.LinkOnly && (discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License)) {
 		return skip("license_review_required")
 	}
-	known, err := systemRepositoryDiscoveryKnown(ctx, a.db, metadata.ID, source.RepositoryURL, options.LinkOnly)
+	known, err := systemRepositoryDiscoveryShouldSkip(ctx, a.db, metadata.ID, source.RepositoryURL, options.LinkOnly)
 	if err != nil {
 		return result, err
 	}
@@ -542,7 +557,7 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(nil)); err != nil {
 		return 0, err
 	}
-	known, err := systemRepositoryDiscoveryKnown(ctx, tx, source.RepositoryID, source.RepositoryURL, source.LinkOnly)
+	known, err := systemRepositoryDiscoveryShouldSkip(ctx, tx, source.RepositoryID, source.RepositoryURL, source.LinkOnly)
 	if err != nil || known {
 		return 0, err
 	}

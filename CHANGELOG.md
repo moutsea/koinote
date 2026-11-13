@@ -6,6 +6,14 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.22] - 2026-11-13
+
+### Changed
+
+- Koi AI can generate article covers with in-chat previews and downloads. Each successful image costs 20 additional Credits, billed separately from text usage, and does not replace the article cover automatically.
+- Combined image and writing requests retain both results, with clearer slow-generation, retry and billing status messages.
+- Older clients receive installation guidance for GitHub link entries, and repository discovery re-evaluates previously skipped sources under the link collection policy.
+
 ## [1.1.21] - 2026-11-13
 
 ### Changed

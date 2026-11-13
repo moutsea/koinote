@@ -43,6 +43,7 @@ type writingIntentSummary struct {
 	InputVersion int64  `json:"inputVersion"`
 	Question     string `json:"question,omitempty"`
 	Reason       string `json:"reason,omitempty"`
+	Reply        string `json:"reply,omitempty"`
 }
 
 type writingLoadedSkill struct {
@@ -52,6 +53,8 @@ type writingLoadedSkill struct {
 }
 
 type writingTask struct {
+	CoverEnabled    bool                  `json:"-"`
+	CoverGeneration *agentCoverState      `json:"coverGeneration,omitempty"`
 	LoadedSkills    []writingLoadedSkill  `json:"loadedSkills,omitempty"`
 	SkillSnapshot   json.RawMessage       `json:"-"`
 	IntentVersion   int64                 `json:"intentVersion,omitempty"`
@@ -84,7 +87,7 @@ type writingTask struct {
 	CreatedAt       time.Time             `json:"createdAt"`
 }
 
-const writingTaskColumns = `id::text,user_id,message,source,skill,skill_snapshot,workspace_id,job_id,remote_input,status,result,error,proposal,applied_document,reservation_id,reserved_credits,charged_credits,usage,billing_status,cursor,cancel_requested,deadline,created_at,COALESCE(session_id::text,''),conversation_task,intent_version,intent_state,intent_result`
+const writingTaskColumns = `id::text,user_id,message,source,skill,skill_snapshot,workspace_id,job_id,remote_input,status,result,error,proposal,applied_document,reservation_id,reserved_credits,charged_credits,usage,billing_status,cursor,cancel_requested,deadline,created_at,COALESCE(session_id::text,''),conversation_task,intent_version,intent_state,intent_result,cover_enabled,(SELECT jsonb_build_object('status',g.status,'errorCode',g.error_code) FROM agent_cover_generations g WHERE g.task_id=writing_agent_tasks.id)`
 
 const writingResultClipped = "\n结果过长，已保存前文；请缩小范围继续。"
 
@@ -98,13 +101,30 @@ func writingDisplayResult(text string) string {
 
 func scanWritingTask(row pgx.Row) (writingTask, error) {
 	var t writingTask
-	err := row.Scan(&t.ID, &t.UserID, &t.Message, &t.Source, &t.Skill, &t.SkillSnapshot, &t.WorkspaceID, &t.JobID, &t.RemoteInput, &t.Status, &t.Result, &t.Error, &t.Proposal, &t.AppliedDocument, &t.ReservationID, &t.ReservedCredits, &t.ChargedCredits, &t.Usage, &t.BillingStatus, &t.Cursor, &t.CancelRequested, &t.Deadline, &t.CreatedAt, &t.SessionID, &t.Conversation, &t.IntentVersion, &t.IntentState, &t.IntentResult)
+	err := row.Scan(&t.ID, &t.UserID, &t.Message, &t.Source, &t.Skill, &t.SkillSnapshot, &t.WorkspaceID, &t.JobID, &t.RemoteInput, &t.Status, &t.Result, &t.Error, &t.Proposal, &t.AppliedDocument, &t.ReservationID, &t.ReservedCredits, &t.ChargedCredits, &t.Usage, &t.BillingStatus, &t.Cursor, &t.CancelRequested, &t.Deadline, &t.CreatedAt, &t.SessionID, &t.Conversation, &t.IntentVersion, &t.IntentState, &t.IntentResult, &t.CoverEnabled, &t.CoverGeneration)
+	if t.CoverGeneration != nil && t.CoverGeneration.Status == "completed" {
+		t.CoverGeneration.ChargedCredits = wechatCoverGenerationCredits
+	} else if t.CoverGeneration != nil && writingTerminal(t.Status) && t.CoverGeneration.Status == "generating" {
+		// A finished/cancelled task can no longer commit an in-flight image.
+		t.CoverGeneration.Status = "failed"
+		t.CoverGeneration.ErrorCode = "generation_failed"
+	}
 	if t.SessionID != "" {
 		t.Result = writingDisplayResult(t.Result)
 	}
 	if err == nil && len(t.IntentResult) != 0 {
-		var summary writingIntentSummary
-		if json.Unmarshal(t.IntentResult, &summary) == nil && summary.Outcome != "" {
+		var result struct {
+			writingIntentSummary
+			ModelOutput string `json:"modelOutput"`
+		}
+		if json.Unmarshal(t.IntentResult, &result) == nil && result.Outcome != "" {
+			summary := result.writingIntentSummary
+			// Only project the final reviewed reply, never the private continuation
+			// or an upstream field that merely claims to be public.
+			summary.Reply = ""
+			if (summary.Outcome == "operations_reported" || summary.Outcome == "partial") && strings.TrimSpace(result.ModelOutput) != "" {
+				summary.Reply = writingDisplayResult(redactAgentReply(result.ModelOutput))
+			}
 			switch summary.Reason {
 			case "step_limit", "tool_limit", "no_progress":
 			default:

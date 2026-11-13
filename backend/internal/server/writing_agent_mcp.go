@@ -22,7 +22,7 @@ func (a *App) writingMCP() http.Handler {
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		s := mcp.NewServer(&mcp.Implementation{Name: "koinote-writing", Version: "1.0.0"}, nil)
 		if task, ok := r.Context().Value(writingMCPContext{}).(writingTask); ok && task.Conversation {
-			a.addAgentConversationTools(s)
+			a.addAgentConversationTools(s, task)
 			return s
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_document", Description: "Read this task's authorized document snapshot. Call with {} for the first page: omit docId to select the bound document automatically. Use offset and limit for additional pages. The response supplies the actual docId and revision required for a proposal.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, a.writingReadDocument)

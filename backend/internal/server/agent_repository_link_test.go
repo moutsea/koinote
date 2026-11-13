@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -43,6 +46,12 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 		return base.RoundTrip(r)
 	})
 	a.githubHTTPClient = client
+	// Discovery backoff describes an earlier failed mirror check, not an
+	// existing entry. An administrator can intentionally collect the public link.
+	if _, err := a.db.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,retry_after) VALUES(123,'https://github.com/octo/demo',1000,'sensitive_data_detected',now()+interval '7 days')`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = a.db.Exec(ctx, `DELETE FROM agent_repository_discoveries WHERE github_id=123`) })
 	requestID, _ := randomUUID()
 	input := fmt.Sprintf(`{"repositoryUrl":"https://github.com/octo/demo","linkOnly":true,"requestId":%q}`, requestID)
 	cookie := mcpSessionCookie(a, user.AuthUserID)
@@ -74,11 +83,47 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 	publicPath := fmt.Sprintf("/api/agent/repositories/%d", w.WorkspaceID)
 	var public struct{ Repository agentRepositoryPublication }
 	decodeJSONResponse(t, callRepositoryAPI(t, a, nil, "GET", publicPath, "", 200), &public)
-	if !public.Repository.GitHubSource.LinkOnly || len(public.Repository.Files) != 0 || public.Repository.SyncDisabledReason != "link_only" {
+	if !public.Repository.GitHubSource.LinkOnly || len(public.Repository.Files) != 1 || public.Repository.Files[0].Path != "README.md" || public.Repository.SyncDisabledReason != "link_only" {
 		t.Fatalf("link publication lost mode: %+v", public.Repository)
 	}
+	// Old clients read the application guide with their existing README renderer.
+	guideURL := fmt.Sprintf("%s/files/1?revision=%d&publication=%s", publicPath, public.Repository.Revision, url.QueryEscape(public.Repository.PublicationID))
+	var guide struct{ File agentWorkspaceFileContentView }
+	decodeJSONResponse(t, callRepositoryAPI(t, a, nil, "GET", guideURL, "", 200), &guide)
+	content, err := base64.StdEncoding.DecodeString(guide.File.ContentBase64)
+	if err != nil || guide.File.SHA256 != koiDigest(content) || guide.File.SizeBytes != int64(len(content)) || guide.File.SHA256 != public.Repository.Files[0].SHA256 {
+		t.Fatalf("guide metadata mismatch: %+v %v", guide, err)
+	}
+	for _, expected := range []string{fmt.Sprintf("/repositories/%d?installKoi=true", w.WorkspaceID), "/download", "1.1.21", "已有技能无需重新安装", w.GitHubSource.RepositoryURL} {
+		if !strings.Contains(string(content), expected) {
+			t.Fatalf("guide missing installation path %q: %s", expected, content)
+		}
+	}
+	callRepositoryAPI(t, a, nil, "GET", strings.Replace(guideURL, "publication=", "publication=stale", 1), "", 409)
+	callRepositoryAPI(t, a, nil, "GET", fmt.Sprintf("%s/files/1?revision=%d", publicPath, public.Repository.Revision+1), "", 404)
+	callRepositoryAPI(t, a, nil, "GET", strings.Replace(guideURL, "/files/1?", "/files/2?", 1), "", 404)
+	// A capability-aware client keeps the empty, honest source-link manifest.
+	for _, action := range []struct{ method, path string }{{"GET", publicPath}, {"POST", publicPath + "/sync"}} {
+		req := httptest.NewRequest(action.method, action.path, nil)
+		req.Header.Set(repositoryLinksHeader, "1")
+		response := httptest.NewRecorder()
+		a.Routes().ServeHTTP(response, req)
+		var modern struct{ Repository agentRepositoryPublication }
+		if response.Code != 200 {
+			t.Fatalf("modern link response: %d %s", response.Code, response.Body)
+		}
+		decodeJSONResponse(t, response, &modern)
+		if len(modern.Repository.Files) != 0 || !modern.Repository.GitHubSource.LinkOnly {
+			t.Fatalf("modern link acquired fake files: %+v", modern)
+		}
+	}
+	// Refreshing an old-client view must preserve its installation guide.
+	var refreshed struct{ Repository agentRepositoryPublication }
+	decodeJSONResponse(t, callRepositoryAPI(t, a, cookie, "POST", publicPath+"/sync", "", 200), &refreshed)
+	if len(refreshed.Repository.Files) != 1 || refreshed.Repository.Files[0].SHA256 != guide.File.SHA256 {
+		t.Fatalf("refresh dropped guide: %+v", refreshed)
+	}
 	// Sync, Fork and Clone cannot turn a catalog link into a mirror or an empty copy.
-	callRepositoryAPI(t, a, cookie, "POST", publicPath+"/sync", "", 200)
 	if _, err := a.forkAgentRepository(ctx, user.ID, w.WorkspaceID, w.Revision, requestID); !errors.Is(err, errAgentGitHubRepositoryInvalid) {
 		t.Fatalf("link fork: %v", err)
 	}
@@ -105,7 +150,7 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 		t.Fatalf("private install lost source: %+v", skill.Source)
 	}
 	var files, blobs, published int
-	err := a.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_workspace_files WHERE workspace_id=$1),(SELECT count(*) FROM agent_workspace_blobs WHERE workspace_id=$1),(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=$1)`, w.WorkspaceID).Scan(&files, &blobs, &published)
+	err = a.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_workspace_files WHERE workspace_id=$1),(SELECT count(*) FROM agent_workspace_blobs WHERE workspace_id=$1),(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=$1)`, w.WorkspaceID).Scan(&files, &blobs, &published)
 	if err != nil || files+blobs+published != 0 {
 		t.Fatalf("link acquired content: %d/%d/%d %v", files, blobs, published, err)
 	}
@@ -124,16 +169,32 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 			t.Fatal("status crossed repository boundary")
 		}
 	}
+	callRepositoryAPI(t, a, cookie, "DELETE", sharing, fmt.Sprintf(`{"expectedRevision":%d}`, w.Revision), 200)
+	callRepositoryAPI(t, a, nil, "GET", guideURL, "", 404)
+	// Withdrawal and deletion are administrator decisions, never new candidates.
+	for _, deleted := range []bool{false, true} {
+		if deleted {
+			if _, err := a.db.Exec(ctx, `UPDATE agent_workspaces SET deleted_at=now() WHERE id=$1`, w.WorkspaceID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		attempt, _ := randomUUID()
+		callRepositoryAPI(t, a, cookie, "POST", "/api/admin/agent-repositories/import/github", strings.Replace(input, requestID, attempt, 1), 409)
+	}
 }
 
 func TestDiscoveredGitHubLinksDoNotMirrorOrPromiseCompatibility(t *testing.T) {
-	a, objects, f := newDiscoveryFixture(t, 1)
+	codes := []string{"license_review_required", "no_koi_compatible_skills", "koi_preview_too_large", "github_archive_invalid", "archive_rejected", "sensitive_path", "sensitive_data_detected"}
+	a, objects, f := newDiscoveryFixture(t, len(codes))
 	ctx := context.Background()
-	f.items[0].License.SPDXID = "NOASSERTION"
-	item := f.items[0]
-	if _, err := a.db.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,retry_after) VALUES($1,$2,1000,'license_review_required',now()+interval '7 days')`, item.ID, "https://github.com/"+item.FullName); err != nil {
-		t.Fatal(err)
+	for i, code := range codes {
+		item := f.items[i]
+		f.items[i].License.SPDXID = "NOASSERTION"
+		if _, err := a.db.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,retry_after) VALUES($1,$2,1000,$3,now()+interval '7 days')`, item.ID, "https://github.com/"+item.FullName, code); err != nil {
+			t.Fatal(err)
+		}
 	}
+	item := f.items[0]
 	base := a.githubHTTPClient.Transport
 	treeCalls := 0
 	a.githubHTTPClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -147,7 +208,7 @@ func TestDiscoveredGitHubLinksDoNotMirrorOrPromiseCompatibility(t *testing.T) {
 		return base.RoundTrip(r)
 	})
 	summary, err := a.DiscoverSystemAgentRepositories(ctx, SystemRepositoryDiscoveryOptions{Apply: true, LinkOnly: true, GitHubToken: "discovery-test-token"})
-	if err != nil || summary.Added != 1 || f.archiveCalls != 0 || objects.puts != 0 || treeCalls != 1 {
+	if err != nil || summary.Added != len(codes) || f.archiveCalls != 0 || objects.puts != 0 || treeCalls != len(codes) {
 		t.Fatalf("link discovery: %+v %v downloads=%d puts=%d trees=%d", summary, err, f.archiveCalls, objects.puts, treeCalls)
 	}
 	var link, installable bool
@@ -155,5 +216,47 @@ func TestDiscoveredGitHubLinksDoNotMirrorOrPromiseCompatibility(t *testing.T) {
 	err = a.db.QueryRow(ctx, `SELECT (p.github_source->>'linkOnly')::bool,p.koi_installable,(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=p.workspace_id) FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.github_source->>'repositoryId'=$1`, fmt.Sprint(item.ID)).Scan(&link, &installable, &files)
 	if err != nil || !link || installable || files != 0 {
 		t.Fatalf("link marked compatible or mirrored: %v %v %d %v", link, installable, files, err)
+	}
+}
+
+func TestLinkDiscoveryKeepsRelevantCooldownAndCollectionHistory(t *testing.T) {
+	cases := []struct {
+		code      string
+		accepted  bool
+		collected bool
+	}{
+		{code: "no_skills"},
+		{code: "invalid_metadata"},
+		{code: "unavailable_source"},
+		{code: "ineligible_source"},
+		{code: "repository_tree_incomplete"},
+		{code: "added", accepted: true, collected: true},
+	}
+	a, _, fixture := newDiscoveryFixture(t, len(cases))
+	ctx := context.Background()
+	for i, tc := range cases {
+		item := fixture.items[i]
+		sourceURL := "https://github.com/" + item.FullName
+		if _, err := a.db.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,retry_after,accepted_on)
+ VALUES($1,$2,1000,$3,now()+interval '7 days',CASE WHEN $4 THEN current_date ELSE NULL END)`, item.ID, sourceURL, tc.code, tc.accepted); err != nil {
+			t.Fatal(err)
+		}
+		collected, err := systemRepositoryCollected(ctx, a.db, item.ID, sourceURL)
+		if err != nil || collected != tc.collected {
+			t.Fatalf("%s collection status: %t %v", tc.code, collected, err)
+		}
+		for _, linkOnly := range []bool{false, true} {
+			skip, err := systemRepositoryDiscoveryShouldSkip(ctx, a.db, item.ID, sourceURL, linkOnly)
+			if err != nil || !skip {
+				t.Fatalf("%s cooldown/history lost (link=%t): %t %v", tc.code, linkOnly, skip, err)
+			}
+		}
+		if _, err := a.db.Exec(ctx, `UPDATE agent_repository_discoveries SET retry_after=now()-interval '1 minute' WHERE github_id=$1`, item.ID); err != nil {
+			t.Fatal(err)
+		}
+		skip, err := systemRepositoryDiscoveryShouldSkip(ctx, a.db, item.ID, sourceURL, true)
+		if err != nil || skip != tc.collected {
+			t.Fatalf("%s expired cooldown: %t %v", tc.code, skip, err)
+		}
 	}
 }

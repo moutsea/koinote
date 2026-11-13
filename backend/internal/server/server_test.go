@@ -98,6 +98,7 @@ func TestCORSPreflight(t *testing.T) {
 	app := newTestApp(config.Config{AllowedOrigins: []string{"http://localhost:5173"}})
 	req := httptest.NewRequest(http.MethodOptions, "/api/auth/login", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Access-Control-Request-Headers", strings.ToLower(repositoryLinksHeader))
 	rec := httptest.NewRecorder()
 	app.Routes().ServeHTTP(rec, req)
 
@@ -108,6 +109,12 @@ func TestCORSPreflight(t *testing.T) {
 		t.Error("预检响应应带 Allow-Methods")
 	} else if !strings.Contains(methods, http.MethodPatch) {
 		t.Errorf("预检响应应允许 PATCH，实际 %q", methods)
+	}
+	if headers := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, repositoryLinksHeader) {
+		t.Errorf("预检响应应允许仓库链接能力协商，实际 %q", headers)
+	}
+	if headers := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, agentCoversHeader) {
+		t.Errorf("预检响应应允许生图交付能力协商，实际 %q", headers)
 	}
 }
 

@@ -3,7 +3,7 @@ import type { WritingEvent, WritingTask } from "./writingAgent";
 export type ProgressAction =
   | "documents" | "folders" | "read" | "proposal" | "review"
   | "conversation" | "references" | "search" | "web" | "compute"
-  | "save" | "work";
+  | "save" | "cover" | "work";
 export type ProgressPhase =
   | ProgressAction | WritingTask["status"] | "thinking" | "finishing"
   | "retrying" | "cancelling" | "clarification" | "partial";
@@ -19,7 +19,7 @@ const actions = new Map<string, ProgressAction>([
   ["web_fetch", "web"], ["browser_markdown", "web"],
   ["browser_links", "web"], ["browser_scrape", "web"],
   ["browser_accessibility", "web"], ["browser_read", "web"],
-  ["sandbox_compute", "compute"], ["save_artifact", "save"],
+  ["sandbox_compute", "compute"], ["save_artifact", "save"], ["generate_cover", "cover"],
 ]);
 
 export type ProgressStep = { seq: number; action: ProgressAction; failed: boolean };

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   FilePenLine,
   FileText,
+  Image,
   ListFilter,
   Plus,
   RotateCcw,
@@ -20,6 +21,7 @@ import { confirmAction } from "../../confirmAction";
 import { useI18n } from "../../i18n";
 import { agentPanelText } from "../../i18n/agentPanel";
 import { writingAgentText } from "../../i18n/writingAgent";
+import { agentTaskBilling } from "../../agentTaskBilling";
 import {
   actOnAgentOperation,
   deleteAgentSession,
@@ -27,6 +29,7 @@ import {
   openArticleAgentSession,
   sendAgentMessage,
   type AgentOperation,
+  type AgentArtifact,
   type AgentSessionPage,
 } from "../../agentSessions";
 import { notifyAgentDocumentChange } from "../../agentContext";
@@ -36,6 +39,7 @@ import {
   writingFinished,
 } from "../../writingAgent";
 import { AgentTaskReply } from "../AgentTaskReply";
+import { AgentArtifactCard } from "../AgentArtifactCard";
 import { AgentProgress } from "../AgentProgress";
 import { AgentDiffDialog } from "../AgentDiffDialog";
 import { AgentReviewSheet } from "./AgentReviewSheet";
@@ -71,7 +75,7 @@ const articleText = {
     stale: "这份修订基于旧正文。请先拒绝旧稿，再按最新文章重新发起修改。",
     staleUndo: "文章已有新的文字修改。为保留这些内容，无法直接撤销这份修订。",
     placeholder: "告诉 Koi 想改哪里…",
-    starters: ["润色表达", "检查错别字", "精简开头"],
+    starters: ["润色表达", "检查错别字", "精简开头", "生成封面图"],
   },
   en: {
     scope: "Current article",
@@ -84,7 +88,7 @@ const articleText = {
     staleUndo:
       "The text has changed again. This revision cannot be undone without overwriting those edits.",
     placeholder: "Tell Koi what to revise…",
-    starters: ["Polish the wording", "Check spelling", "Tighten the opening"],
+    starters: ["Polish the wording", "Check spelling", "Tighten the opening", "Generate a cover"],
   },
   fr: {
     scope: "Article actuel",
@@ -102,6 +106,7 @@ const articleText = {
       "Affiner le style",
       "Corriger les fautes",
       "Raccourcir l’introduction",
+      "Générer une couverture",
     ],
   },
   ja: {
@@ -115,10 +120,10 @@ const articleText = {
     staleUndo:
       "本文が再び更新されました。その変更を保つため、この修正を取り消せません。",
     placeholder: "Koi に修正したい箇所を伝える…",
-    starters: ["表現を整える", "誤字を確認する", "冒頭を短くする"],
+    starters: ["表現を整える", "誤字を確認する", "冒頭を短くする", "カバーを生成する"],
   },
 };
-const starterIcons = [Sparkles, ScanText, ListFilter];
+const starterIcons = [Sparkles, ScanText, ListFilter, Image];
 const button = "koi-article-action";
 
 export function ArticleAgentPanel({
@@ -162,6 +167,7 @@ export function ArticleAgentPanel({
     import("../../writingAgent").WritingTask[]
   >([]);
   const [olderOps, setOlderOps] = useState<AgentOperation[]>([]);
+  const [olderArtifacts, setOlderArtifacts] = useState<AgentArtifact[]>([]);
   const mounted = useRef(true),
     locked = useRef(false),
     composing = useRef(false);
@@ -252,6 +258,8 @@ export function ArticleAgentPanel({
     ...ops,
     ...olderOps.filter((old) => !ops.some((op) => op.id === old.id)),
   ];
+  const artifacts = page?.artifacts ?? [];
+  const allArtifacts = [...artifacts, ...olderArtifacts.filter((old) => !artifacts.some((file) => file.id === old.id))];
   useLayoutEffect(() => {
     const el = thread.current;
     if (!el || !page) return;
@@ -418,6 +426,7 @@ export function ArticleAgentPanel({
                 setOlderCursor("");
                 setOlderTasks([]);
                 setOlderOps([]);
+                setOlderArtifacts([]);
                 setPreviewId("");
                 await opened.refetch();
               })
@@ -501,6 +510,7 @@ export function ArticleAgentPanel({
                   };
                 setOlderTasks((rows) => [...rows, ...older.tasks]);
                 setOlderOps((rows) => [...rows, ...older.operations]);
+                setOlderArtifacts((rows) => [...rows, ...older.artifacts]);
                 setOlderCursor(older.nextCursor || "end");
               })
             }
@@ -531,9 +541,14 @@ export function ArticleAgentPanel({
                 />
               )}
               {(!changes.length ||
+                Boolean(task.taskIntent?.reply) ||
+                task.coverGeneration?.status === "failed" ||
                 task.taskIntent?.outcome !== "operations_reported") && (
-                <AgentTaskReply task={task} operations={allOps} />
+                <AgentTaskReply task={task} operations={allOps} artifacts={allArtifacts} />
               )}
+              {allArtifacts.filter((file) => file.taskId === task.id).map((file) => (
+                <AgentArtifactCard key={file.id} file={file} disabled={busy} />
+              ))}
               {task.status === "cancelled" && (
                 <p className="koi-article-note">
                   {applied ? copy.stopped : writing.cancelled}
@@ -544,6 +559,7 @@ export function ArticleAgentPanel({
                   {task.error}
                 </p>
               )}
+              {task.coverGeneration && <p className="koi-article-note">{agentTaskBilling(task, locale)}</p>}
               {changes.map((op) => {
                 const details = (
                   <>
@@ -706,7 +722,7 @@ export function ArticleAgentPanel({
                 type="submit"
                 className="koi-article-send"
                 aria-label={labels.send}
-                title={labels.send}
+                title={`${labels.send} · ${labels.coverCost}`}
                 disabled={!page || !!active || busy || !draft.trim()}
               >
                 <ArrowUp size={17} />
@@ -714,6 +730,7 @@ export function ArticleAgentPanel({
               </button>
             </div>
           </div>
+          <p className="mt-2 text-[11px] text-[var(--ink-mid)]">{labels.coverCost}</p>
         </form>
       )}
       {preview && (

@@ -1,36 +1,40 @@
 {
-  "version": "1.1.21",
+  "version": "1.1.22",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.21",
+      "title": "What's new in Koinote 1.1.22",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Hub supports GitHub link entries. Installation fetches and previews Skills from GitHub before saving them to your private cloud Skill library.",
-        "System mirrors with publicly accessible sources become links. Installed Skills are preserved and can check GitHub for updates."
+        "Koi AI can generate article covers with in-chat previews and downloads. Each successful image costs 20 additional Credits, billed separately from text usage, and does not replace the article cover automatically.",
+        "Combined image and writing requests retain both results, with clearer slow-generation, retry and billing status messages.",
+        "Older clients receive installation guidance for GitHub link entries, and repository discovery re-evaluates previously skipped sources under the link collection policy."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.21 新功能",
+      "title": "Koinote 1.1.22 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Hub 支持收录 GitHub 链接，安装时从 GitHub 解析并预览技能，再保存到个人云端技能库。",
-        "仍公开可访问的系统镜像改为来源链接；已安装技能保留，后续可从 GitHub 检查更新。"
+        "Koi AI 可按文章内容生成封面，支持会话内预览和下载；每张成功生成的封面额外收取 20 Credits，文本费用另计，不会自动替换文章封面。",
+        "同时请求生图和文字建议时，两项成果均会保留；优化慢速生成、失败重试及费用状态提示。",
+        "完善 GitHub 链接仓库在旧客户端的安装引导，并让自动发掘按链接收录规则重新评估此前未收录的来源。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.21",
+      "title": "Nouveautés de Koinote 1.1.22",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Le Hub prend en charge les liens GitHub. L’installation récupère les Skills depuis GitHub, affiche un aperçu, puis les enregistre dans votre bibliothèque privée dans le cloud.",
-        "Les miroirs système dont la source est publique deviennent des liens. Les Skills installés sont conservés et peuvent rechercher des mises à jour sur GitHub."
+        "Koi AI peut générer des couvertures d’articles, avec aperçu et téléchargement dans la conversation. Chaque image générée coûte 20 Credits supplémentaires, hors texte, sans remplacer automatiquement la couverture de l’article.",
+        "Les demandes combinant image et conseils conservent les deux résultats. Les messages de génération lente, de nouvelle tentative et de facturation sont plus clairs.",
+        "Les anciens clients affichent un guide d’installation pour les liens GitHub. La découverte réévalue les sources précédemment ignorées selon les règles de référencement par lien."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.21 の新機能",
+      "title": "Koinote 1.1.22 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Hub で GitHub リンクを掲載できるようになりました。インストール時に GitHub からスキルを取得し、プレビューで確認してから個人のクラウドライブラリに保存します。",
-        "公開アクセス可能なソースを持つシステムミラーをリンクに切り替えます。インストール済みのスキルは保持され、GitHub で更新を確認できます。"
+        "Koi AI が記事の内容に合わせたカバー画像を生成し、会話内でプレビュー・ダウンロードできるようになりました。生成成功時は1枚につき20 Creditsが追加され、テキスト料金は別途精算します。記事のカバーは自動変更しません。",
+        "画像生成と文章の提案を同時に依頼した場合も、両方の結果を保持します。生成に時間がかかる場合や再試行、料金の表示も改善しました。",
+        "旧クライアント向けに GitHub リンク項目のインストール案内を追加し、自動発見では過去に見送ったソースをリンク収録のルールで再評価します。"
       ]
     }
   }

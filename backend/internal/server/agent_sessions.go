@@ -514,7 +514,10 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	advice := agentAdviceOnly(in.Message)
-	_, err = tx.Exec(r.Context(), `INSERT INTO writing_agent_tasks(id,user_id,doc_id,request_key,input_hash,message,source,skill,reservation_id,reserved_credits,deadline,session_id,storage_budget_bytes,permission_revision,advice_only,conversation_task,intent_version,intent_state) VALUES($1::uuid,$2,$3,$4,$5,$6,$7,$8,$1::text,$9,now()+interval '24 hours',$10,$11,$12,$13,true,$14,$15)`, taskID, u.ID, source.DocID, in.RequestID, hash, in.Message, sourceJSON, skill, writingReservationCredits, s.ID, agentTaskStorageBudget, s.Revision, advice, intentVersion, intentState)
+	// Freeze delivery support at acceptance. Headers do not alter the request
+	// hash: a retry from a newer/older window must return the original task.
+	coverEnabled := r.Header.Get(agentCoversHeader) == "1"
+	_, err = tx.Exec(r.Context(), `INSERT INTO writing_agent_tasks(id,user_id,doc_id,request_key,input_hash,message,source,skill,reservation_id,reserved_credits,deadline,session_id,storage_budget_bytes,permission_revision,advice_only,conversation_task,intent_version,intent_state,cover_enabled) VALUES($1::uuid,$2,$3,$4,$5,$6,$7,$8,$1::text,$9,now()+interval '24 hours',$10,$11,$12,$13,true,$14,$15,$16)`, taskID, u.ID, source.DocID, in.RequestID, hash, in.Message, sourceJSON, skill, writingReservationCredits, s.ID, agentTaskStorageBudget, s.Revision, advice, intentVersion, intentState, coverEnabled)
 	if err == nil && a.koiSkillAccountAllowed(u.AuthUserID) {
 		err = a.pinKoiTaskSkills(r.Context(), tx, u, taskID, s.WriteDocumentID != "")
 	}

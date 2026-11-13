@@ -31,6 +31,9 @@ type agentArtifactInput struct {
 
 func (a *App) agentSaveArtifact(ctx context.Context, _ *mcp.CallToolRequest, in agentArtifactInput) (*mcp.CallToolResult, agentArtifact, error) {
 	t := ctx.Value(writingMCPContext{}).(writingTask)
+	if strings.HasPrefix(in.Name, "koi-cover-") {
+		return nil, agentArtifact{}, errors.New("koi-cover- filenames are reserved for generate_cover")
+	}
 	if strings.TrimSpace(in.Name) == "" || utf8.RuneCountInString(in.Name) > 120 || strings.ContainsAny(in.Name, "/\\\r\n\x00") || len(in.MimeType) > 100 || strings.ContainsAny(in.MimeType, "\r\n") || (in.Content != "" && in.Base64 != "") {
 		return nil, agentArtifact{}, errAgentInput
 	}
@@ -99,15 +102,19 @@ func (a *App) agentArtifactDownload(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var name string
+	var name, mimeType string
 	var data []byte
-	err := a.db.QueryRow(r.Context(), `SELECT a.name,a.data FROM agent_artifacts a JOIN writing_agent_tasks t ON t.id=a.task_id JOIN agent_sessions s ON s.id=t.session_id WHERE a.id=$1 AND a.user_id=$2 AND s.deleted_at IS NULL`, r.PathValue("artifactId"), u.ID).Scan(&name, &data)
+	err := a.db.QueryRow(r.Context(), `SELECT a.name,a.mime_type,a.data FROM agent_artifacts a JOIN writing_agent_tasks t ON t.id=a.task_id JOIN agent_sessions s ON s.id=t.session_id WHERE a.id=$1 AND a.user_id=$2 AND s.deleted_at IS NULL`, r.PathValue("artifactId"), u.ID).Scan(&name, &mimeType, &data)
 	if err != nil {
 		agentError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	if r.URL.Query().Get("preview") == "1" && mimeType == "image/jpeg" && http.DetectContentType(data) == mimeType {
+		w.Header().Set("Content-Type", mimeType)
+		w.Header().Set("Content-Disposition", "inline")
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)

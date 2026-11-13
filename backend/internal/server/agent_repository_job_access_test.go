@@ -110,7 +110,7 @@ func TestSystemRepositoryJobsGitHubAccessFailures(t *testing.T) {
 			if err == nil || summary.Failed != 1 || summary.Checked != wantChecked || summary.Added != wantAdded || len(results) != wantChecked || results[0].Code != tc.code {
 				t.Fatalf("discovery: %+v %+v %v", summary, results, err)
 			}
-			known, err := systemRepositoryDiscoveryKnown(context.Background(), app.db, first.ID, "https://github.com/"+first.FullName, false)
+			known, err := systemRepositoryDiscoveryShouldSkip(context.Background(), app.db, first.ID, "https://github.com/"+first.FullName, false)
 			if err != nil || known {
 				t.Fatalf("access failure must remain retryable: known=%t %v", known, err)
 			}

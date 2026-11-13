@@ -119,5 +119,5 @@ func (a *App) publicAgentRepositorySync(w http.ResponseWriter, r *http.Request) 
 		writePublicAgentRepositorySyncError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"repository": repository, "sync": result})
+	httpx.JSON(w, http.StatusOK, map[string]any{"repository": a.publicRepositoryForClient(r, repository), "sync": result})
 }

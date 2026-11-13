@@ -23,11 +23,16 @@ import (
 	"koinote/backend/internal/model"
 )
 
-func writingTestRequest(t *testing.T, a *App, user model.User, method, path string, input any) *httptest.ResponseRecorder {
+func writingTestRequest(t *testing.T, a *App, user model.User, method, path string, input any, headers ...http.Header) *httptest.ResponseRecorder {
 	t.Helper()
 	raw, _ := json.Marshal(input)
 	r := httptest.NewRequest(method, path, strings.NewReader(string(raw)))
 	r.Header.Set("Content-Type", "application/json")
+	for _, fields := range headers {
+		for name, values := range fields {
+			r.Header[name] = values
+		}
+	}
 	r.AddCookie(sessionCookieFor(t, a, user.AuthUserID, user.SessionVersion))
 	w := httptest.NewRecorder()
 	a.Routes().ServeHTTP(w, r)

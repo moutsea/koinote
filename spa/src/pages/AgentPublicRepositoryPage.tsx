@@ -129,7 +129,7 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
   useEffect(() => { setTransfer(null); setMessage(""); setSyncMessage(""); copy.clear(); }, [id]);
   useEffect(() => { setRaw(false); }, [id, selected, hash]);
   const readmeFile = repository ? repositoryReadme(repository.files) : undefined;
-  const previewFile = repository?.files.find((file) => file.path === selected) ?? readmeFile;
+  const previewFile = linkSource ? undefined : repository?.files.find((file) => file.path === selected) ?? readmeFile;
   const preview = useQuery({
     queryKey: ["public-agent-file", id, repository?.revision, previewFile?.fileId, previewFile?.sha256, repository?.publicationId],
     queryFn: ({ signal }) => getPublicAgentRepositoryFile(repository!, previewFile!.fileId, signal), enabled: Boolean(repository && previewFile), retry: false,

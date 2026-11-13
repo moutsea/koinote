@@ -4,6 +4,14 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.22] - 2026-11-13
+
+### Changed
+
+- Koi AI peut générer des couvertures d’articles, avec aperçu et téléchargement dans la conversation. Chaque image générée coûte 20 Credits supplémentaires, hors texte, sans remplacer automatiquement la couverture de l’article.
+- Les demandes combinant image et conseils conservent les deux résultats. Les messages de génération lente, de nouvelle tentative et de facturation sont plus clairs.
+- Les anciens clients affichent un guide d’installation pour les liens GitHub. La découverte réévalue les sources précédemment ignorées selon les règles de référencement par lien.
+
 ## [1.1.21] - 2026-11-13
 
 ### Changed

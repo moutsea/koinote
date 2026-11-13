@@ -8,14 +8,14 @@ import (
 	"strings"
 )
 
-const koiSkillEntryRulesVersion = 2
+const koiSkillEntryRulesVersion = 3
 
 type koiCompatibilityQuerier interface {
 	agentWorkspaceQuerier
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-// Entry capabilities changed when article Skills became available. Refresh
+// Entry capabilities now include cover generation. Refresh
 // derived compatibility once; original package bytes and identities stay fixed.
 func refreshKoiSkillEntryCompatibility(ctx context.Context, q koiCompatibilityQuerier, userID int) error {
 	rows, err := q.Query(ctx, `SELECT v.id::text,v.raw_metadata FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id WHERE i.user_id=$1 AND i.deleted_at IS NULL AND v.rules_version<$2`, userID, koiSkillEntryRulesVersion)
@@ -101,10 +101,10 @@ func koiSkillCompatibilityFor(raw map[string]any) koiSkillCompatibility {
 		}
 	}
 	conversation, article := map[string]bool{}, map[string]bool{}
-	for _, name := range agentEntryTools(false, true) {
+	for _, name := range agentEntryTools(false, true, true) {
 		conversation[name] = true
 	}
-	for _, name := range agentEntryTools(true, true) {
+	for _, name := range agentEntryTools(true, true, true) {
 		article[name] = true
 	}
 	articleAvailable := true

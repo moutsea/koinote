@@ -186,7 +186,7 @@ const bundle = await build({
     export { parseRepositoryDirectorySearch } from "./spa/src/agentRepositoryDirectory";
     export { RepositoryMarkdown } from "./spa/src/components/RepositoryMarkdown";
     export { repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES } from "./spa/src/agentRepositoryMarkdown";
-    export { publicAgentRepositoryTransferSource, publicRepositoryClonePrompt } from "./spa/src/agentRepositorySharing";
+    export { publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, getPublicAgentRepository, syncPublicAgentRepository, refreshPublicAgentRepository } from "./spa/src/agentRepositorySharing";
     export { loadAgentWorkspaceFiles } from "./spa/src/agentWorkspaceTransfer";
     export { zh } from "./spa/src/i18n/zh";
   ` }, bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
@@ -231,7 +231,7 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentRepositoryForkNotice, AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentRepositoryForkNotice, AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, getPublicAgentRepository, syncPublicAgentRepository, refreshPublicAgentRepository, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
 assert.equal(githubImportErrorMessage(new ApiError(503, "GitHub unavailable", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "transient GitHub failures use the dedicated retry message");
@@ -632,14 +632,40 @@ try {
   // GitHub preview, while installed state is scoped to the GitHub numeric ID.
   const sourceBeforeLink = publicRepository.githubSource;
   publicRepository.githubSource = { repositoryId: 123, repositoryUrl: 'https://github.com/Octo/demo', author: 'Octo', authorUrl: 'https://github.com/Octo', ref: 'main', commitSha: 'a'.repeat(40), license: 'UNLICENSED', linkOnly: true };
-  publicRepository.files = [];
+  // An older server/client negotiation may return the compatibility guide.
+  // The current page must still use the GitHub installation, without reading
+  // or treating that guide as an upstream Skill.
+  const legacyGuideBytes = Buffer.from('# GitHub link\n\n[在网页版安装到 Koi AI](https://koinote.example/repositories/7?installKoi=true) · [下载新版客户端](https://koinote.example/download)');
+  const legacyGuideFile = { fileId: 1, path: 'README.md', mimeType: 'text/markdown', sizeBytes: legacyGuideBytes.length, sha256: createHash('sha256').update(legacyGuideBytes).digest('hex') };
+  publicRepository.files = [legacyGuideFile];
+  await mount(RepositoryMarkdown, { repository: publicRepository, filePath: repositoryReadme(publicRepository.files).path, content: repositoryPreview(legacyGuideBytes.toString('base64')).text });
+  const webInstall = [...document.querySelectorAll('a')].find(a => a.textContent === '在网页版安装到 Koi AI');
+  assert.equal(webInstall.getAttribute('href'), 'https://koinote.example/repositories/7?installKoi=true');
+  assert.equal(webInstall.getAttribute('target'), '_blank', 'legacy README links open the web installation separately');
+  assert.ok([...document.querySelectorAll('a')].some(a => a.getAttribute('href') === 'https://koinote.example/download'));
+  // The advertised capability covers direct loads and refresh responses.
+  const originalAPI = h.api;
+  const negotiated = [];
+  h.api = async (path, init = {}) => { negotiated.push(init); return { repository: publicRepository, sync: { status: 'skipped', code: 'link_only' } }; };
+  try {
+    await getPublicAgentRepository(7);
+    await syncPublicAgentRepository(7);
+    await refreshPublicAgentRepository(publicRepository);
+  } finally { h.api = originalAPI; }
+  assert.equal(negotiated.length, 3);
+  assert.ok(negotiated.every(init => init.headers['X-Koinote-Repository-Links'] === '1'));
+  const readsBeforeLink = calls.filter(call => call.path.includes('/files/')).length;
   h.user = { ...beforeKoiUser, membershipTier: 'lifetime' }; h.search = {}; h.koiAvailable = true;
   h.koiSkills = [{ id: 'github-skill', sourceKind: 'github', source: { repositoryId: 123, path: 'review' }, enabled: true }];
   await mount(AgentPublicRepositoryPage);
   assert.ok(button(zh.koi.installedCount.replace('{count}', '1')), 'linked entries show installed GitHub Skills without claiming all are installed');
   assert.ok(document.body.textContent.includes(labels.hubGitHubLinkDescription));
+  assert.equal(calls.filter(call => call.path.includes('/files/')).length, readsBeforeLink, 'current clients never fetch a hidden compatibility README');
   assert.equal(document.body.textContent.includes(zh.koi.noInstallableSkills), false);
   assert.equal(document.body.textContent.includes(labels.githubImportedCopy), false);
+  publicRepository.files = [];
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(button(zh.koi.installedCount.replace('{count}', '1')), 'the negotiated empty link manifest keeps its installation entry');
   await click(zh.koi.installedCount.replace('{count}', '1'));
   const linkInput = calls.findLast(call => call.path === '/api/koi/skill-imports').body;
   assert.equal(linkInput.source, 'github');

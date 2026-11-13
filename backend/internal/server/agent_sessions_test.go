@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -33,14 +34,14 @@ func agentTestSession(t *testing.T, a *App, u model.User, mode string) agentSess
 	}
 	return out.Session
 }
-func agentTestTask(t *testing.T, a *App, u model.User, s agentSession, doc model.Document, message string) writingTask {
+func agentTestTask(t *testing.T, a *App, u model.User, s agentSession, doc model.Document, message string, headers ...http.Header) writingTask {
 	t.Helper()
 	id, _ := randomUUID()
 	in := map[string]any{"requestId": id, "message": message}
 	if doc.DocID != "" {
 		in["context"] = map[string]string{"title": doc.Title, "path": agentDocumentPath(doc.DocID)}
 	}
-	w := writingTestRequest(t, a, u, "POST", "/api/agent/sessions/"+s.ID+"/tasks", in)
+	w := writingTestRequest(t, a, u, "POST", "/api/agent/sessions/"+s.ID+"/tasks", in, headers...)
 	if w.Code != 202 {
 		t.Fatalf("task create: %d %s", w.Code, w.Body.String())
 	}

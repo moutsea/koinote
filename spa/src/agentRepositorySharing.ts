@@ -27,7 +27,7 @@ export function getPublicAgentRepository(id: number, revision?: number, signal?:
   const params = new URLSearchParams();
   if (revision !== undefined) params.set("revision", String(revision));
   if (publicationId) params.set("publication", publicationId);
-  return apiJson<{ repository: PublicAgentRepository }>(`/api/agent/repositories/${id}${params.size ? `?${params}` : ""}`, { signal });
+  return apiJson<{ repository: PublicAgentRepository }>(`/api/agent/repositories/${id}${params.size ? `?${params}` : ""}`, { signal, headers: { "X-Koinote-Repository-Links": "1" } });
 }
 export function getPublicAgentRepositoryFile(repository: PublicAgentRepository, fileId: number, signal?: AbortSignal) {
   return apiJson<{ file: AgentWorkspaceFileContent }>(`/api/agent/repositories/${repository.workspaceId}/files/${fileId}?revision=${repository.revision}&publication=${encodeURIComponent(repository.publicationId)}`, { signal });
@@ -39,7 +39,7 @@ export type PublicAgentRepositorySync = { status: "updated" | "unchanged" | "ski
  * changes (including a new upstream mark) never republish or bump the revision.
  */
 export function syncPublicAgentRepository(id: number, signal?: AbortSignal) {
-  return apiJson<{ repository: PublicAgentRepository; sync: PublicAgentRepositorySync }>(`/api/agent/repositories/${id}/sync`, { method: "POST", signal });
+  return apiJson<{ repository: PublicAgentRepository; sync: PublicAgentRepositorySync }>(`/api/agent/repositories/${id}/sync`, { method: "POST", signal, headers: { "X-Koinote-Repository-Links": "1" } });
 }
 /**
  * Prepare the current public snapshot using server-side eligibility and upstream
@@ -48,7 +48,7 @@ export function syncPublicAgentRepository(id: number, signal?: AbortSignal) {
  */
 export type PublicAgentRepositoryRefresh = { repository: PublicAgentRepository; sync: PublicAgentRepositorySync };
 export async function refreshPublicAgentRepository(repository: PublicAgentRepository): Promise<PublicAgentRepositoryRefresh> {
-  return apiJson<PublicAgentRepositoryRefresh>(`/api/agent/repositories/${repository.workspaceId}/sync?recheck=false`, { method: "POST" });
+  return apiJson<PublicAgentRepositoryRefresh>(`/api/agent/repositories/${repository.workspaceId}/sync?recheck=false`, { method: "POST", headers: { "X-Koinote-Repository-Links": "1" } });
 }
 /**
  * Fork the latest published snapshot. GitHub-origin repositories refresh first

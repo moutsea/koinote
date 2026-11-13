@@ -30,6 +30,7 @@ import "./AgentBottomPanel.css";
 import { useI18n } from "../i18n";
 import { agentPanelText } from "../i18n/agentPanel";
 import { writingAgentText } from "../i18n/writingAgent";
+import { agentTaskBilling } from "../agentTaskBilling";
 import {
   getWritingConfig,
   getWritingTask,
@@ -40,12 +41,13 @@ import {
 } from "../writingAgent";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { prepareDesktopSync } from "../desktop/logoutGuard";
-import { AGENT_CREDITS_QUERY_KEY, fetchAppResource, ApiError } from "../api";
+import { AGENT_CREDITS_QUERY_KEY, ApiError } from "../api";
 import { formatBytes } from "../storage";
 import { STORAGE_USAGE_KEY } from "./StorageCard";
 import { Logo } from "./Logo";
 import { AgentDiffDialog } from "./AgentDiffDialog";
 import { AgentProgress } from "./AgentProgress";
+import { AgentArtifactCard } from "./AgentArtifactCard";
 import { pushModal } from "../modalStack";
 import {
   AGENT_PANEL_OPEN,
@@ -1045,39 +1047,11 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                           {t.assistantName}
                           <span>{t.writingPartner}</span>
                         </div>
-                        <AgentTaskReply task={task} operations={operations} />
+                        <AgentTaskReply task={task} operations={operations} artifacts={artifacts} />
                         {artifacts
                           .filter((file) => file.taskId === task.id)
                           .map((file) => (
-                            <button
-                              type="button"
-                              key={file.id}
-                              className={`${control} mr-2 border`}
-                              style={border}
-                              disabled={busy}
-                              onClick={() =>
-                                void perform(async () => {
-                                  const response = await fetchAppResource(
-                                    `/api/agent/artifacts/${file.id}`,
-                                    { credentials: "include" },
-                                  );
-                                  if (!response.ok) throw new Error(wt.failed);
-                                  const { saveExportBlob, safeFilename } =
-                                    await import("./editor/exportDocument");
-                                  const name = safeFilename(
-                                    file.name,
-                                    "agent-result.txt",
-                                  );
-                                  await saveExportBlob(
-                                    await response.blob(),
-                                    name,
-                                    name.split(".").pop() || "txt",
-                                  );
-                                })
-                              }
-                            >
-                              ↓ {file.name} · {formatBytes(file.bytes, locale)}
-                            </button>
+                            <AgentArtifactCard key={file.id} file={file} disabled={busy} />
                           ))}
                         {task.proposal && (
                           <LegacyProposal
@@ -1195,11 +1169,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                                   ? wt.partial
                                   : wt[task.status]}{" "}
                           ·{" "}
-                          {task.billingStatus === "needs_review"
-                            ? wt.unknownUsage
-                            : task.billingStatus === "reserved"
-                              ? `${t.reserved}: ${task.reservedCredits} Credits`
-                              : `${task.chargedCredits} Credits`}
+                          {agentTaskBilling(task, locale)}
                         </p>
                       </div>
                     </div>
@@ -1426,7 +1396,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                         <button
                           type="button"
                           className="agent-send flex items-center gap-1.5 disabled:opacity-40"
-                          title={t.sendShortcut}
+                          title={`${t.sendShortcut} · ${t.coverCost}`}
                           disabled={
                             busy || !draft.trim() || !config.data?.enabled
                           }
@@ -1437,6 +1407,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                         </button>
                       )}
                     </div>
+                    <p className="mt-2 text-[11px] text-[var(--ink-faint)]">{t.coverCost}</p>
                     {!config.data?.enabled && (
                       <p className="mt-1 text-xs" role="status">
                         {config.isError

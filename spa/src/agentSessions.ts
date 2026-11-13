@@ -126,6 +126,7 @@ export function agentTaskIntentFingerprint(
 export const sendAgentMessage = (id: string, input: AgentTaskRequest) =>
   apiJson<{ task: WritingTask }>(`${base}/${encodeURIComponent(id)}/tasks`, {
     method: "POST",
+    headers: { "X-Koinote-Agent-Covers": "1" },
     body: JSON.stringify(input),
   });
 export const actOnAgentOperation = (

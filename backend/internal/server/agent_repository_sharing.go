@@ -355,7 +355,7 @@ func (a *App) publicAgentRepositoryGet(w http.ResponseWriter, r *http.Request) {
 		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"repository": repository})
+	httpx.JSON(w, 200, map[string]any{"repository": a.publicRepositoryForClient(r, repository)})
 }
 
 func (a *App) publicAgentRepositoryFileGet(w http.ResponseWriter, r *http.Request) {
@@ -374,6 +374,23 @@ func (a *App) publicAgentRepositoryFileGet(w http.ResponseWriter, r *http.Reques
 	if err != nil || fileID <= 0 {
 		writeAgentWorkspaceError(w, errAgentWorkspaceFileNotFound)
 		return
+	}
+	// The compatibility README is generated from the same live publication as
+	// its manifest. Check revision and publication before returning any content.
+	if fileID == 1 {
+		repository, err := a.loadPublicAgentRepository(r.Context(), id, revision)
+		if err != nil {
+			writeAgentWorkspaceError(w, err)
+			return
+		}
+		if guide := a.repositoryLinkGuide(repository); guide != nil {
+			if expected := r.URL.Query().Get("publication"); expected != "" && expected != repository.PublicationID {
+				writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
+				return
+			}
+			httpx.JSON(w, 200, map[string]any{"file": guide})
+			return
+		}
 	}
 	var file agentWorkspaceFileContentView
 	var content []byte

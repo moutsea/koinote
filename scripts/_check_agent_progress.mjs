@@ -12,6 +12,7 @@ try {
   const { agentProgress } = await import(pathToFileURL(outfile).href);
   const running = { status: "running", cancelRequested: false };
   const tool = (seq, type, name) => ({ seq, event: { type: `tool.${type}`, toolCall: { name } } });
+  assert.equal(agentProgress(running, [tool(1, "started", "koinote.generate_cover")]).phase, "cover");
   for (const name of ["koinote.find_skills", "koinote.load_skill"]) {
     assert.equal(agentProgress(running, [tool(1, "started", name)]).phase, "references",
       "automatic Skill loading uses a readable progress label");

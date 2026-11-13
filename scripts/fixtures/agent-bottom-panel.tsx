@@ -13,6 +13,7 @@ import {
   saveAgentPanelLayout,
   type AgentSession,
   type AgentOperation,
+  type AgentArtifact,
 } from "../../spa/src/agentSessions";
 import type { WritingEvent, WritingTask } from "../../spa/src/writingAgent";
 import type { Folder } from "../../spa/src/api";
@@ -32,6 +33,7 @@ function FolderTreeProbe() {
 const firstDoc = "00000000-0000-4000-8000-000000000001";
 const secondDoc = "00000000-0000-4000-8000-000000000002";
 type ServerState = {
+  artifacts?: AgentArtifact[];
   events?: Record<string, WritingEvent[]>;
   approvalRequests?: Array<{ taskId: string; count: number; action: string }>;
   approvalResumes?: number;
@@ -61,6 +63,12 @@ const server: ServerState = saved
       requests: {},
     };
 const state = {
+  coverPreviewFail: new URLSearchParams(location.search).has("cover-preview-fail"),
+  coverDownloadFail: false,
+  coverDownloads: 0,
+  coverErrorCode: "",
+  coverUsageIncomplete: false,
+  coverCapability: "",
   openOrganizer: openAgentOrganizer,
   libraryConflicts: [] as string[],
   libraryPreparations: 0,
@@ -195,6 +203,16 @@ window.fetch = async (request, init) => {
   const path = url.pathname;
   const method = init?.method ?? "GET";
   const body = init?.body ? JSON.parse(String(init.body)) : {};
+  if (path.startsWith("/api/agent/artifacts/")) {
+    const preview = url.searchParams.has("preview");
+    if (!preview) state.coverDownloads++;
+    if (preview ? state.coverPreviewFail : state.coverDownloadFail) return new Response(null, { status: 503 });
+    const canvas = document.createElement("canvas");
+    canvas.width = 640; canvas.height = 360;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#e6eee5"; ctx.fillRect(0, 0, 640, 360);
+    return new Response(await new Promise<Blob>((resolve) => canvas.toBlob((blob) => resolve(blob!), "image/jpeg")), { headers: { "Content-Type": preview ? "image/jpeg" : "application/octet-stream" } });
+  }
   const article = path.match(/^\/api\/documents\/([^/]+)\/koi-session$/);
   if (article && method==="POST") {
     const id = "article-"+article[1];
@@ -295,6 +313,24 @@ window.fetch = async (request, init) => {
       };
       server.tasks[id] = [task, ...(server.tasks[id] ?? [])];
       const auto = session.permission === "full";
+      const cover = body.message.includes("生成封面");
+      if (cover) {
+        state.coverCapability = new Headers(init?.headers).get("X-Koinote-Agent-Covers") ?? "";
+        task.result = "封面已生成，可在下方预览和下载。";
+        task.taskIntent = {outcome: "operations_reported", inputVersion: 1, ...(body.message.includes("标题") ? {reply: "三个标题建议：\n1. 山间来信\n2. 云南慢行\n3. 把日子写成诗"} : {})};
+        task.chargedCredits = 22;
+        if (state.coverErrorCode) {
+          task.result = "koinote.generate_cover: 宿主未提供可识别的执行状态";
+          task.taskIntent.outcome = "partial";
+          task.coverGeneration = {status:"failed",errorCode:state.coverErrorCode,chargedCredits:0};
+          task.chargedCredits = 2;
+        } else {
+          task.coverGeneration = {status:"completed",chargedCredits:20};
+          if (state.coverUsageIncomplete) { task.billingStatus = "needs_review"; task.chargedCredits = 20; task.usage = null; }
+          (server.artifacts ??= []).push({id: crypto.randomUUID(), taskId, name: "koi-cover-fixture.jpg", mimeType: "image/jpeg", bytes: 1024});
+        }
+      }
+      if (!cover || body.message.includes("润色")) {
       server.operations.push({
         id: crypto.randomUUID(),
         taskId,
@@ -325,6 +361,7 @@ window.fetch = async (request, init) => {
         createdAt: new Date().toISOString(),
       });
       session.pendingOperations = auto ? 0 : 1;
+      }
       server.requests[body.requestId] = {
         sessionId: id,
         input: JSON.stringify(body),
@@ -449,7 +486,7 @@ function page(id: string) {
     operations: server.operations.filter((op) =>
       tasks.some((task) => task.id === op.taskId),
     ),
-    artifacts: [],
+    artifacts: (server.artifacts ?? []).filter((file) => tasks.some((task) => task.id === file.taskId)),
     nextCursor: "",
   });
 }

@@ -1,4 +1,5 @@
 import { checkArticleKoi } from "./fixtures/article-koi-check.mjs";
+import { checkCoverGeneration } from "./fixtures/agent-panel-cover-check.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, readdir, writeFile, rm } from "node:fs/promises";
@@ -233,7 +234,12 @@ try {
       },
     };
   };
-  if (process.env.ARTICLE_KOI_UI_ONLY === "1") {
+  if (process.env.AGENT_COVER_UI_ONLY === "1") {
+    await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
+    await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh`);
+    assert.deepEqual(errors, []);
+    console.log("Koi cover UI passed: private image preview, download/retry, restored conversation and preview failure fallback.");
+  } else if (process.env.ARTICLE_KOI_UI_ONLY === "1") {
     await checkArticleKoi(createClient,`http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
     assert.deepEqual(errors, []);
   } else if (process.env.AGENT_LOCAL_RESTART_ONLY === "1") {

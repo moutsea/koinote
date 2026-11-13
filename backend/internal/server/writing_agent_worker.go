@@ -153,7 +153,7 @@ func (a *App) advanceWritingTask(ctx context.Context, t *writingTask) error {
 	expired := time.Now().After(t.Deadline)
 	graceExpired := time.Now().After(t.Deadline.Add(10 * time.Minute))
 	if graceExpired && t.JobID == "" {
-		return a.finishWritingTask(ctx, *t, "failed", "无法确认远端任务状态；文档授权已过期，本次未扣费，请联系管理员核对。", nil, "")
+		return a.finishWritingTask(ctx, *t, "failed", "无法确认远端任务状态；文档授权已过期，文本费用尚待核对，请联系管理员。", nil, "")
 	}
 	if (t.CancelRequested || expired) && t.JobID == "" && len(t.RemoteInput) == 0 {
 		return a.finishWritingTask(ctx, *t, "cancelled", "", nil, "")
@@ -231,7 +231,7 @@ func (a *App) advanceWritingTask(ctx context.Context, t *writingTask) error {
 	var job writingRemoteJob
 	lookupErr := a.agentGPTRequest(ctx, "GET", jobPath+"?view=settlement", a.writingExternalID(t.UserID), "", nil, &job)
 	if graceExpired && (lookupErr != nil || job.ID != t.JobID || !writingTerminal(job.Status)) {
-		return a.finishWritingTask(ctx, *t, "failed", "无法确认远端任务状态；文档授权已过期，本次未扣费，请联系管理员核对。", nil, "")
+		return a.finishWritingTask(ctx, *t, "failed", "无法确认远端任务状态；文档授权已过期，文本费用尚待核对，请联系管理员。", nil, "")
 	}
 	if lookupErr != nil {
 		return lookupErr
@@ -597,7 +597,7 @@ func (a *App) finishWritingTask(ctx context.Context, t writingTask, status, mess
 	if len(usage) == 0 {
 		usage = nil
 	}
-	_, err = tx.Exec(ctx, `UPDATE writing_agent_tasks SET status=$2,error=$3,usage=$4,result=$5,charged_credits=$6,billing_status=$7,updated_at=now() WHERE id=$1`, t.ID, status, message, usage, result, charged, billing)
+	_, err = tx.Exec(ctx, `UPDATE writing_agent_tasks SET status=$2,error=$3,usage=$4,result=$5,charged_credits=charged_credits+$6,billing_status=$7,updated_at=now() WHERE id=$1`, t.ID, status, message, usage, result, charged, billing)
 	if err != nil {
 		return err
 	}

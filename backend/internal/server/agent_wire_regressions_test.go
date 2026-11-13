@@ -326,6 +326,8 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 		{"legacy-chinese", "model_output", longAnswer, longAnswer, false},
 		{"legacy-redacted", "model_output", longAnswer + " token: [redacted]", longAnswer + " token: private-test-value", false},
 		{"distinct-draft", "operations_reported", "宿主操作已完成", "模型草稿", false},
+		{"cover-and-titles", "operations_reported", "koinote.generate_cover: 宿主确认已应用", "三个标题：\n1. 山间来信\n2. 云南慢行\n3. 把日子写成诗\n\ntoken: private-test-value", false},
+		{"partial-with-reply", "partial", "koinote.generate_cover: 宿主报告失败", "封面生成失败，以下是三个标题建议。", false},
 		{"budget-receipts", "partial", "已移动文档，其余工作尚未核实。", "", false},
 		{"invalid-state", "model_output", "reply", "reply", true},
 	} {
@@ -384,6 +386,16 @@ func TestAgentWireSettleAndContinue(t *testing.T) {
 			}
 			if !tc.invalid && (saved.TaskIntent == nil || saved.TaskIntent.Outcome != tc.outcome) {
 				t.Fatal("public result omitted the outcome")
+			}
+			wantReply := ""
+			if !tc.invalid && (tc.outcome == "operations_reported" || tc.outcome == "partial") {
+				wantReply = writingDisplayResult(redactAgentReply(tc.modelOutput))
+			}
+			if saved.TaskIntent != nil && saved.TaskIntent.Reply != wantReply {
+				t.Fatal("final reply missing, duplicated for prose, or manufactured for receipt-only results")
+			}
+			if strings.Contains(string(public), "private-test-value") {
+				t.Fatal("private model text leaked into public reply")
 			}
 			if tc.name == "budget-receipts" && (saved.TaskIntent.Reason != "step_limit" || saved.BillingStatus != "settled" || saved.Error != "") {
 				t.Fatal("receipt-only result did not reach the host as a settled partial result")
