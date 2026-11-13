@@ -13,6 +13,7 @@ import (
 func (a *App) backfillAgentRepositoryKoiInstallability(ctx context.Context, limit int) (int, error) {
 	rows, err := a.db.Query(ctx, `SELECT p.workspace_id,p.revision,p.published_at FROM agent_repository_publications p
  JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.deleted_at IS NULL AND p.koi_installable IS NULL
+ AND COALESCE(p.github_source->>'linkOnly','false')<>'true'
  AND (p.koi_installability_checked_at IS NULL OR p.koi_installability_checked_at<now()-interval '5 minutes')
  ORDER BY p.workspace_id LIMIT $1`, limit)
 	if err != nil {

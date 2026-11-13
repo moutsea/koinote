@@ -38,9 +38,9 @@ export function AgentGitHubAttribution({ source, compact = false }: { source?: A
     <p><a href={source.repositoryUrl} target="_blank" rel="noreferrer" className="break-all underline">{compact ? labels.githubOriginalLink : source.repositoryUrl}</a></p>
     <AgentGitHubUpstreamMark source={source} notice={!compact} />
     {!compact && <>
-      <p>{labels.githubImportedVersion} <a href={`${source.repositoryUrl}/tree/${source.commitSha}`} target="_blank" rel="noreferrer" className="underline">{source.ref !== source.commitSha && <>{source.ref} · </>}{source.commitSha.slice(0, 12)}</a></p>
-      <p>{labels.githubOriginalLicense} {source.license}</p>
-      <p>{labels.githubImportedCopy}</p>
+      <p>{source.linkOnly ? labels.githubListedVersion : labels.githubImportedVersion} <a href={`${source.repositoryUrl}/tree/${source.commitSha}`} target="_blank" rel="noreferrer" className="underline">{source.ref !== source.commitSha && <>{source.ref} · </>}{source.commitSha.slice(0, 12)}</a></p>
+      <p>{labels.githubOriginalLicense} {source.linkOnly && source.license === "UNLICENSED" ? labels.githubLicenseAtSource : source.license}</p>
+      {!source.linkOnly && <p>{labels.githubImportedCopy}</p>}
       {source.private && <p style={{ color: "var(--cinnabar)" }}>{labels.githubSourcePrivate}</p>}
     </>}
   </div>;

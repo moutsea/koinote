@@ -167,6 +167,10 @@ func (a *App) publicAgentRepositoryClone(w http.ResponseWriter, r *http.Request)
 		writePublicAgentRepositorySyncError(w, err)
 		return
 	}
+	if repository.GitHubSource != nil && repository.GitHubSource.LinkOnly {
+		writeAgentWorkspaceError(w, errAgentGitHubRepositoryInvalid)
+		return
+	}
 	if repository.Revision != *input.ExpectedRevision || (input.ExpectedPublication != "" && repository.PublicationID != input.ExpectedPublication) {
 		writeAgentWorkspaceError(w, errAgentWorkspaceConflict)
 		return

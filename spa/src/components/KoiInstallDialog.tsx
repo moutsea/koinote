@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api";
 import { useI18n } from "../i18n";
 import { koiFolderEntries, koiFolderPackages, koiSelectedFolderEntries, type KoiFolderEntry } from "../koiSkillFolder";
-import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiImportInput, type KoiImportConfirmation, type KoiOverview } from "../koiSkills";
+import { analyzeKoiImport, cancelKoiImport, confirmKoiImport, createKoiImport, getKoiImport, getKoiOverview, KOI_SETTINGS_QUERY_KEY, koiErrorMessage, koiPreviewErrorLabel, koiRejectionLabel, uploadKoiImportFile, type KoiPreview, type KoiSkill, type KoiHubTarget, type KoiGitHubTarget, type KoiImportInput, type KoiImportConfirmation, type KoiOverview } from "../koiSkills";
 import { pushModal } from "../modalStack";
 import { formatBytes } from "../storage";
 import { KoiPending, KoiRetry, KoiSkillCompatibilityNote, useKoiSkillStorageInvalidation } from "./KoiSkillUi";
 import { KoiLegacyBanner } from "./KoiLegacyBanner";
 
-export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePreview, hubTarget, initialSource = "folder", migration = false }: { authUserId: string; onClose: () => void; updateTarget?: KoiSkill; resumePreview?: KoiPreview; hubTarget?: KoiHubTarget; initialSource?: "folder" | "github"; migration?: boolean }) {
+export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePreview, hubTarget, githubTarget, initialSource = "folder", migration = false }: { authUserId: string; onClose: () => void; updateTarget?: KoiSkill; resumePreview?: KoiPreview; hubTarget?: KoiHubTarget; githubTarget?: KoiGitHubTarget; initialSource?: "folder" | "github"; migration?: boolean }) {
   const { t, locale } = useI18n();
   const labels = t.koi;
   const client = useQueryClient();
@@ -25,9 +25,9 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   const [directories, setDirectories] = useState<string[]>([]);
   const packages = useMemo(() => koiFolderPackages(entries), [entries]);
   const uploadEntries = koiSelectedFolderEntries(packages, directories);
-  const [source, setSource] = useState<"folder" | "github">(updateTarget ? "folder" : resumePreview ? resumePreview.sourceKind === "github" ? "github" : "folder" : initialSource);
-  const [githubUrl, setGithubUrl] = useState("");
-  const [githubRef, setGithubRef] = useState("");
+  const [source, setSource] = useState<"folder" | "github">(updateTarget ? "folder" : resumePreview ? resumePreview.sourceKind === "github" ? "github" : "folder" : githubTarget ? "github" : initialSource);
+  const [githubUrl, setGithubUrl] = useState(githubTarget?.repositoryUrl ?? "");
+  const [githubRef, setGithubRef] = useState(githubTarget?.ref ?? "");
   const [githubPath, setGithubPath] = useState("");
   const [preview, setPreview] = useState<KoiPreview | null>(resumePreview ?? null);
   const replacing = Boolean(updateTarget || preview?.source.updateFromId || preview?.candidates.some((item) => item.installedStatus === "update"));
@@ -159,7 +159,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
     }
   };
   useEffect(() => {
-    if ((migration || hubTarget && !legacy && !migrating) && canInstall && !resumePreview && !autoStarted.current) { autoStarted.current = true; void loadRemote(); }
+    if ((migration || (hubTarget || githubTarget) && !legacy && !migrating) && canInstall && !resumePreview && !autoStarted.current) { autoStarted.current = true; void loadRemote(); }
   }, [canInstall, legacy, migrating]);
 
   const complete = async () => {
@@ -255,7 +255,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancel(); }}>
     <div role="dialog" aria-modal="true" aria-labelledby="koi-install-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border shadow-2xl sm:rounded-2xl" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper)" }}>
       <header className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-6" style={{ borderColor: "var(--ink-line)", background: "var(--ink-paper-soft)" }}>
-        <div className="min-w-0"><h2 id="koi-install-title" className="kn-heading-cn text-xl font-semibold">{migrating ? labels.legacyTitle : updateTarget ? `${labels.uploadNewVersion} · ${updateTarget.name}` : replacing ? labels.updateTitle : labels.installSkill}</h2><p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{migrating ? labels.legacyPreviewDescription : hubTarget ? hubTarget.name : preview?.sourceKind === "hub" ? String(preview.source.name ?? "") : source === "github" ? labels.githubUrlHint : labels.folderDescription}</p></div>
+        <div className="min-w-0"><h2 id="koi-install-title" className="kn-heading-cn text-xl font-semibold">{migrating ? labels.legacyTitle : updateTarget ? `${labels.uploadNewVersion} · ${updateTarget.name}` : replacing ? labels.updateTitle : labels.installSkill}</h2><p className="mt-1 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>{migrating ? labels.legacyPreviewDescription : hubTarget ? hubTarget.name : githubTarget ? githubTarget.name : preview?.sourceKind === "hub" ? String(preview.source.name ?? "") : source === "github" ? labels.githubUrlHint : labels.folderDescription}</p></div>
         <button type="button" autoFocus onClick={cancel} aria-label={labels.close} className="shrink-0 rounded-lg p-2 transition hover:bg-[var(--ink-wash-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cinnabar)]"><X className="h-5 w-5" /></button>
       </header>
       <div className="min-h-0 space-y-5 overflow-y-auto p-4 sm:p-6">
@@ -263,8 +263,8 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
         {!preview && overview.isError && <KoiRetry label={labels.loadFailed} action={labels.retry} busy={overview.isFetching} onRetry={() => void overview.refetch()} />}
         {!preview && overview.isSuccess && !canInstall && <p role="alert" className="text-sm">{overview.data.managementAvailable ? labels.koiMembersOnly : labels.koiUnavailable}</p>}
         {canInstall && legacy && (!preview || migrating && preview.status === "failed") && !busy && <KoiLegacyBanner settings={overview.data.settings} count={overview.data.legacySkillCount} onReview={() => { autoStarted.current = true; setMigrating(true); void loadRemote(true); }} onChanged={async () => { await client.invalidateQueries({ queryKey: overviewKey, exact: true }); if (migration && client.getQueryData<typeof overview.data>(overviewKey)?.settings.libraryMode === "installed") cancel(); }} />}
-        {!preview && !hubTarget && !migrating && !legacy && canInstall && <>
-          {!updateTarget && <div className="flex flex-wrap items-center gap-3">
+        {!preview && !hubTarget && (!githubTarget || !busy) && !migrating && !legacy && canInstall && <>
+          {!updateTarget && !githubTarget && <div className="flex flex-wrap items-center gap-3">
             <div role="tablist" aria-label={labels.installSource} className="inline-flex rounded-lg border p-1" style={{ borderColor: "var(--ink-line)", background: "var(--ink-wash)" }}>
               <button type="button" role="tab" aria-selected={source === "folder"} disabled={Boolean(busy)} onClick={() => { setSource("folder"); setError(""); }} className="rounded-md px-3 py-2 text-sm transition aria-selected:font-semibold aria-selected:shadow-sm disabled:opacity-50" style={source === "folder" ? { background: "var(--ink-paper-soft)" } : undefined}>{labels.sourceFolder}</button>
               <button type="button" role="tab" aria-selected={source === "github"} disabled={Boolean(busy)} onClick={() => { setSource("github"); setError(""); }} className="rounded-md px-3 py-2 text-sm transition aria-selected:font-semibold aria-selected:shadow-sm disabled:opacity-50" style={source === "github" ? { background: "var(--ink-paper-soft)" } : undefined}>{labels.sourceGithub}</button>
@@ -272,7 +272,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
             <a href="/repositories" className="px-1 py-2 text-sm underline underline-offset-4" style={{ color: "var(--ink-mid)" }}>{labels.hubBrowse}</a>
           </div>}
           {source === "github" ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void loadRemote(); }}>
-            <label className="block text-sm">{labels.githubUrlLabel}<input type="url" required value={githubUrl} disabled={Boolean(busy)} onChange={(event) => setGithubUrl(event.target.value)} placeholder="https://github.com/owner/repo" className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
+            <label className="block text-sm">{labels.githubUrlLabel}<input type="url" required value={githubUrl} disabled={Boolean(busy) || Boolean(githubTarget)} onChange={(event) => setGithubUrl(event.target.value)} placeholder="https://github.com/owner/repo" className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
             <details><summary className="cursor-pointer text-xs underline">{labels.githubAdvanced}</summary><div className="mt-2 grid gap-3 sm:grid-cols-2">
               <label className="text-xs">{labels.githubRefLabel}<input value={githubRef} disabled={Boolean(busy)} onChange={(event) => setGithubRef(event.target.value)} className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>
               <label className="text-xs">{labels.githubPathLabel}<input value={githubPath} disabled={Boolean(busy)} onChange={(event) => setGithubPath(event.target.value)} className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2" /></label>

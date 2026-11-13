@@ -4,6 +4,13 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.21] - 2026-11-13
+
+### Changed
+
+- Le Hub prend en charge les liens GitHub. L’installation récupère les Skills depuis GitHub, affiche un aperçu, puis les enregistre dans votre bibliothèque privée dans le cloud.
+- Les miroirs système dont la source est publique deviennent des liens. Les Skills installés sont conservés et peuvent rechercher des mises à jour sur GitHub.
+
 ## [1.1.20] - 2026-11-12
 
 ### Changed

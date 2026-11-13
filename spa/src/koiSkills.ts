@@ -84,21 +84,28 @@ export const KOI_SETTINGS_QUERY_KEY = "koi-settings";
 export const getKoiOverview = () => apiJson<KoiOverview>("/api/koi/settings");
 export const updateKoiSettings = (input: { expectedRevision: number; autoSkills: boolean }) =>
  apiJson<{ settings: KoiSettings }>("/api/koi/settings", { method: "PUT", body: JSON.stringify(input) });
-export const listKoiSkills = (params: { q?: string; source?: KoiSkill["sourceKind"] | ""; state?: string; cursor?: string; hubWorkspaceId?: number }, signal?: AbortSignal) => {
+export const listKoiSkills = (params: { q?: string; source?: KoiSkill["sourceKind"] | ""; state?: string; cursor?: string; hubWorkspaceId?: number; githubRepositoryId?: number }, signal?: AbortSignal) => {
  const query = new URLSearchParams({ q: params.q ?? "", source: params.source ?? "", state: params.state ?? "", cursor: params.cursor ?? "" });
  if (params.hubWorkspaceId !== undefined) query.set("hubWorkspaceId", String(params.hubWorkspaceId));
+ if (params.githubRepositoryId !== undefined) query.set("githubRepositoryId", String(params.githubRepositoryId));
  return apiJson<KoiSkillPage>(`/api/koi/skills?${query}`, { signal });
 };
 
 // Read only this repository's installations, including disabled Skills and pages
 // beyond the first 20. The shared query-key prefix keeps install/remove refreshes
 // in sync with the Skill library.
-export async function getKoiHubSkills(workspaceId: number, signal?: AbortSignal): Promise<KoiSkill[]> {
+export function getKoiHubSkills(workspaceId: number, signal?: AbortSignal): Promise<KoiSkill[]> {
+ return getKoiRepositorySkills("hub", workspaceId, signal);
+}
+export function getKoiGitHubSkills(repositoryId: number, signal?: AbortSignal): Promise<KoiSkill[]> {
+ return getKoiRepositorySkills("github", repositoryId, signal);
+}
+async function getKoiRepositorySkills(source: "hub" | "github", id: number, signal?: AbortSignal): Promise<KoiSkill[]> {
  const skills: KoiSkill[] = [];
  let cursor = "";
  do {
-  const page = await listKoiSkills({ source: "hub", hubWorkspaceId: workspaceId, cursor }, signal);
-  skills.push(...page.skills.filter((skill) => skill.sourceKind === "hub" && Number(skill.source.workspaceId) === workspaceId));
+  const page = await listKoiSkills({ source, ...(source === "hub" ? { hubWorkspaceId: id } : { githubRepositoryId: id }), cursor }, signal);
+  skills.push(...page.skills.filter((skill) => skill.sourceKind === source && Number(source === "hub" ? skill.source.workspaceId : skill.source.repositoryId) === id));
   cursor = page.nextCursor;
  } while (cursor);
  return skills;
@@ -113,6 +120,7 @@ export const deleteKoiSkill = (id: string, expectedRevision: number) =>
  apiJson<{ deleted: boolean; retainedBytes: number }>(`/api/koi/skills/${encodeURIComponent(id)}?expectedRevision=${expectedRevision}`, { method: "DELETE" });
 export type KoiImportInput = { requestId: string; source: "folder" | "github" | "hub" | "migration"; declaredPaths?: string[]; directoryName?: string; repositoryUrl?: string; ref?: string; path?: string; workspaceId?: number; publicationId?: string; revision?: number; updateFromId?: string; expectedRevision?: number };
 export const skipKoiMigration = (expectedRevision: number) => apiJson<{ libraryMode: "installed" }>("/api/koi/skill-migration/skip", { method: "POST", body: JSON.stringify({ expectedRevision }) });
+export type KoiGitHubTarget = { repositoryUrl: string; name: string; ref?: string };
 export type KoiHubTarget = { workspaceId: number; name: string; publicationId: string; revision: number };
 export const checkKoiSkillUpdate = (id: string) => apiJson<{ status: "up_to_date" | "manual_only" | "source_unavailable" | "update_available"; preview?: KoiPreview }>(`/api/koi/skills/${encodeURIComponent(id)}/check-update`, { method: "POST", body: "{}" });
 export const createKoiImport = (input: KoiImportInput, signal?: AbortSignal) =>

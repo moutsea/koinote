@@ -108,6 +108,15 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 		}
 		hubWorkspace = strconv.FormatInt(id, 10)
 	}
+	githubRepository := r.URL.Query().Get("githubRepositoryId")
+	if githubRepository != "" {
+		id, parseErr := strconv.ParseInt(githubRepository, 10, 64)
+		if parseErr != nil || id <= 0 || hubWorkspace != "" || source != "" && source != "github" {
+			httpx.ErrorCode(w, 400, "bad_request", "Invalid GitHub repository filter")
+			return
+		}
+		githubRepository = strconv.FormatInt(id, 10)
+	}
 	if len(query) > 800 || (source != "" && source != "github" && source != "folder" && source != "hub" && source != "migration") ||
 		(state != "" && state != "enabled" && state != "disabled" && state != "unavailable") {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid Skill filter")
@@ -125,7 +134,8 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
  OR ($5='unavailable' AND NOT COALESCE((v.compatibility->>'conversation')::boolean,false)))
  AND ($6='' OR i.source_kind=$6)
  AND ($7='' OR (i.source_kind='hub' AND i.source->>'workspaceId'=$7))
- ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source, hubWorkspace)
+ AND ($8='' OR (i.source_kind='github' AND i.source->>'repositoryId'=$8))
+ ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source, hubWorkspace, githubRepository)
 	if err != nil {
 		writeKoiError(w, err)
 		return

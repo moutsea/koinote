@@ -84,6 +84,9 @@ func agentRepositoryRefreshSkipReason(ctx context.Context, queries agentWorkspac
 	if before.source == nil {
 		return "no_github_source", nil
 	}
+	if before.source.LinkOnly {
+		return "link_only", nil
+	}
 	if skipMarked && before.source.UpstreamStatus != "" {
 		return before.source.UpstreamStatus, nil
 	}

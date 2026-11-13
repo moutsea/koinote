@@ -144,7 +144,7 @@ func githubImportClient(t *testing.T, archive []byte, token string, private bool
 			t.Error("incorrect API credential")
 		}
 		switch r.URL.Path {
-		case "/repos/octo/demo":
+		case "/repos/octo/demo", "/repos/Octo/demo":
 			response.Body = io.NopCloser(strings.NewReader(fmt.Sprintf(`{"id":123,"name":"demo","full_name":"Octo/demo","owner":{"login":"Octo","html_url":"https://evil.example/ignored"},"html_url":"https://evil.example/ignored","description":"Imported skills","default_branch":"main","private":%t,"license":{"spdx_id":"MPL-2.0"}}`, private)))
 		case "/repos/Octo/demo/commits/main", "/repos/Octo/demo/commits/feature/import":
 			if r.Header.Get("Accept") != "application/vnd.github.sha" {

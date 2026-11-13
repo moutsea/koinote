@@ -32,6 +32,7 @@ var (
 )
 
 type SystemRepositoryDiscoveryOptions struct {
+	LinkOnly    bool
 	Apply       bool
 	GitHubToken string
 	OnResult    func(SystemRepositoryDiscoveryResult)
@@ -112,7 +113,7 @@ func (a *App) DiscoverSystemAgentRepositories(ctx context.Context, options Syste
 		if _, err = lock.Exec(ctx, `SELECT 1`); err != nil {
 			return summary, err
 		}
-		known, err := systemRepositoryDiscoveryKnown(ctx, a.db, candidate.ID, "https://github.com/"+candidate.FullName)
+		known, err := systemRepositoryDiscoveryKnown(ctx, a.db, candidate.ID, "https://github.com/"+candidate.FullName, options.LinkOnly)
 		if err != nil {
 			return summary, err
 		}
@@ -190,14 +191,14 @@ func systemRepositoryDiscoveryBudget(ctx context.Context, q imageUsageQuerier) (
 	return day, count, err
 }
 
-func systemRepositoryDiscoveryKnown(ctx context.Context, q imageUsageQuerier, id int64, repositoryURL string) (bool, error) {
+func systemRepositoryDiscoveryKnown(ctx context.Context, q imageUsageQuerier, id int64, repositoryURL string, linkOnly bool) (bool, error) {
 	var known bool
 	// Include withdrawn and soft-deleted system rows. Never revive an admin's
 	// removal. IDs handle renames for new imports; URL matching covers old seeds.
 	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_repository_discoveries
- WHERE github_id=$1 AND (accepted_on IS NOT NULL OR retry_after>now())) OR EXISTS(
+ WHERE github_id=$1 AND (accepted_on IS NOT NULL OR (retry_after>now() AND NOT ($3 AND code IN ('license_review_required','no_koi_compatible_skills','koi_preview_too_large','github_archive_invalid'))))) OR EXISTS(
  SELECT 1 FROM agent_workspaces WHERE is_system AND
- (lower(github_source->>'repositoryUrl')=lower($2) OR github_source->>'repositoryId'=$1::bigint::text))`, id, repositoryURL).Scan(&known)
+ (lower(github_source->>'repositoryUrl')=lower($2) OR github_source->>'repositoryId'=$1::bigint::text))`, id, repositoryURL, linkOnly).Scan(&known)
 	return known, err
 }
 
@@ -441,7 +442,7 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
  WHERE agent_repository_discoveries.accepted_on IS NULL`, candidate.ID, result.Repository, result.Stars, code)
 		return result, err
 	}
-	if discoveryManualLicenseReview(candidate.FullName) {
+	if !options.LinkOnly && discoveryManualLicenseReview(candidate.FullName) {
 		return skip("license_review_required")
 	}
 	owner, repo, _, err := parseGitHubRepositoryURL(result.Repository)
@@ -467,10 +468,10 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	}
 	result.Repository, result.Stars = source.RepositoryURL, metadata.Stars
 	result.Category = systemRepositoryDiscoveryCategory(metadata.Name, metadata.Description)
-	if discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License) {
+	if !options.LinkOnly && (discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License)) {
 		return skip("license_review_required")
 	}
-	known, err := systemRepositoryDiscoveryKnown(ctx, a.db, metadata.ID, source.RepositoryURL)
+	known, err := systemRepositoryDiscoveryKnown(ctx, a.db, metadata.ID, source.RepositoryURL, options.LinkOnly)
 	if err != nil {
 		return result, err
 	}
@@ -484,18 +485,32 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	if err != nil || agentWorkspaceSensitiveContent([]byte(name+"\n"+description)) {
 		return skip("invalid_metadata")
 	}
-	// Prove the exact contents are public, even if visibility changed after the
-	// authenticated metadata and commit checks.
-	files, err := a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, "")
-	var sensitive *agentWorkspaceSensitiveError
-	if errors.As(err, &sensitive) || errors.Is(err, errAgentGitHubArchiveInvalid) {
-		return skip(systemRepositorySyncErrorCode(err))
-	}
-	if err != nil {
-		return result, err
-	}
-	if code := validateDiscoveredSkills(files, source.RepositoryID, source.License); code != "" {
-		return skip(code)
+	var files []agentWorkspaceFile
+	if options.LinkOnly {
+		source.LinkOnly = true
+		// Check filenames only; compatibility and package size are checked when
+		// the user requests an installation preview, never promised by the Hub.
+		code, err := a.checkGitHubSkillLink(ctx, metadata, source)
+		if err != nil {
+			return result, err
+		}
+		if code != "" {
+			return skip(code)
+		}
+	} else {
+		// Prove the exact contents are public, even if visibility changed after the
+		// authenticated metadata and commit checks.
+		files, err = a.downloadGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, "")
+		var sensitive *agentWorkspaceSensitiveError
+		if errors.As(err, &sensitive) || errors.Is(err, errAgentGitHubArchiveInvalid) {
+			return skip(systemRepositorySyncErrorCode(err))
+		}
+		if err != nil {
+			return result, err
+		}
+		if code := validateDiscoveredSkills(files, source.RepositoryID, source.License); code != "" {
+			return skip(code)
+		}
 	}
 	if !options.Apply {
 		result.Status = "would_add"
@@ -527,7 +542,7 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, agentRepositoryOwnerLock(nil)); err != nil {
 		return 0, err
 	}
-	known, err := systemRepositoryDiscoveryKnown(ctx, tx, source.RepositoryID, source.RepositoryURL)
+	known, err := systemRepositoryDiscoveryKnown(ctx, tx, source.RepositoryID, source.RepositoryURL, source.LinkOnly)
 	if err != nil || known {
 		return 0, err
 	}
@@ -565,7 +580,7 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
  VALUES($1,$2,$3,$4,$5,(SELECT github_source-'private' FROM agent_workspaces WHERE id=$1))`, id, revision, name, description, source.License); err != nil {
 		return 0, err
 	}
-	installable := true // Already verified by validateDiscoveredSkills before publication.
+	installable := !source.LinkOnly // Mirrors were verified by validateDiscoveredSkills.
 	if err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, &installable); err != nil {
 		return 0, err
 	}
@@ -579,4 +594,32 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
 		return 0, err
 	}
 	return id, tx.Commit(ctx)
+}
+
+// Read the bounded public file tree, without downloading or retaining any file.
+func (a *App) checkGitHubSkillLink(ctx context.Context, metadata githubRepositoryMetadata, source *agentGitHubSource) (string, error) {
+	endpoint := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1", githubAPIBaseURL, url.PathEscape(metadata.Owner.Login), url.PathEscape(metadata.Name), source.CommitSHA)
+	data, err := a.githubRead(ctx, endpoint, "", "application/vnd.github+json", githubRequestMetadata)
+	if err != nil {
+		return "", err
+	}
+	var tree struct {
+		Truncated bool `json:"truncated"`
+		Tree      []struct {
+			Path string `json:"path"`
+			Type string `json:"type"`
+		} `json:"tree"`
+	}
+	if json.Unmarshal(data, &tree) != nil || tree.Tree == nil {
+		return "", errAgentGitHubResponseInvalid
+	}
+	for _, entry := range tree.Tree {
+		if entry.Type == "blob" && path.Base(entry.Path) == "SKILL.md" {
+			return "", nil
+		}
+	}
+	if tree.Truncated {
+		return "repository_tree_incomplete", nil
+	}
+	return "no_skills", nil
 }

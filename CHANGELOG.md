@@ -6,6 +6,13 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.21] - 2026-11-13
+
+### Changed
+
+- Hub supports GitHub link entries. Installation fetches and previews Skills from GitHub before saving them to your private cloud Skill library.
+- System mirrors with publicly accessible sources become links. Installed Skills are preserved and can check GitHub for updates.
+
 ## [1.1.20] - 2026-11-12
 
 ### Changed

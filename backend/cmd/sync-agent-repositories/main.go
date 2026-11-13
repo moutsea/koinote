@@ -25,8 +25,9 @@ func run() int {
 	apply := flag.Bool("apply", false, "Apply verified upstream changes (default: read-only preview)")
 	id := flag.Int64("workspace-id", 0, "Only update this system repository (default: all)")
 	discover := flag.Bool("discover", false, "Find and publish up to 20 new popular Skills repositories per Shanghai calendar day")
+	convertLinks := flag.Bool("convert-public-to-links", false, "Convert publicly available system GitHub mirrors to links; retain unavailable or hidden sources")
 	flag.Parse()
-	if flag.NArg() != 0 || *id < 0 || (*discover && *id != 0) {
+	if flag.NArg() != 0 || *id < 0 || (*discover && (*id != 0 || *convertLinks)) {
 		fmt.Fprintln(os.Stderr, "Use --apply with either --discover or --workspace-id; IDs must be nonnegative")
 		return 2
 	}
@@ -54,9 +55,18 @@ func run() int {
 	encoder := json.NewEncoder(os.Stdout)
 	app := server.New(cfg, pool)
 	var summary any
-	if *discover {
+	if *convertLinks {
+		summary, err = app.ConvertPublicSystemRepositoriesToLinks(ctx, server.SystemRepositoryLinkOptions{
+			Apply: *apply, WorkspaceID: *id, GitHubToken: token,
+			OnResult: func(result server.SystemRepositoryLinkResult) {
+				if encoder.Encode(result) != nil {
+					cancel()
+				}
+			},
+		})
+	} else if *discover {
 		summary, err = app.DiscoverSystemAgentRepositories(ctx, server.SystemRepositoryDiscoveryOptions{
-			Apply: *apply, GitHubToken: token,
+			Apply: *apply, LinkOnly: true, GitHubToken: token,
 			OnResult: func(result server.SystemRepositoryDiscoveryResult) {
 				if encoder.Encode(result) != nil {
 					cancel()

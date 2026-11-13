@@ -207,7 +207,12 @@ func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID
 		if err != nil {
 			return err
 		}
-		err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, nil)
+		var installable *bool
+		if githubSource != nil && githubSource.LinkOnly {
+			value := false
+			installable = &value
+		}
+		err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, installable)
 	}
 	if err != nil {
 		return err
@@ -540,6 +545,9 @@ func (a *App) forkAgentRepositorySnapshot(ctx context.Context, userID int, id, r
 	}
 	if err != nil {
 		return empty, err
+	}
+	if githubSource != nil && githubSource.LinkOnly {
+		return empty, errAgentGitHubRepositoryInvalid
 	}
 	if publishedRevision != revision || (publicationID != "" && publicationID != published.UTC().Format(time.RFC3339Nano)) {
 		return empty, errAgentWorkspaceConflict

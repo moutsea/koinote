@@ -49,6 +49,9 @@ func (a *App) readKoiHubSource(ctx context.Context, input koiHubSourceInput) (ko
 		input.Revision != nil && *input.Revision != publication.Revision {
 		return koiHubSource{}, errAgentWorkspaceConflict
 	}
+	if publication.GitHubSource != nil && publication.GitHubSource.LinkOnly {
+		return koiHubSource{}, errAgentGitHubRepositoryInvalid
+	}
 	files, err := a.loadKoiHubFiles(ctx, publication, dir, input.ExactSkill)
 	if err != nil {
 		return koiHubSource{}, err

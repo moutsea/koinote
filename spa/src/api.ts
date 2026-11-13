@@ -625,6 +625,7 @@ export type AgentWorkspaceFileContent = AgentWorkspaceFile & {
 };
 
 export type AgentGitHubSource = {
+  linkOnly?: boolean;
   repositoryId?: number;
   repositoryUrl: string;
   author: string;

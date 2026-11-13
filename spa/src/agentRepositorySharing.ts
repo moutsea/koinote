@@ -79,3 +79,7 @@ export type SystemAgentRepository = AgentWorkspaceSummary & { systemManaged: tru
 export function listSystemAgentRepositories() {
   return apiJson<{ repositories: SystemAgentRepository[] }>("/api/admin/agent-repositories");
 }
+
+export function collectSystemGitHubLink(repositoryUrl: string, requestId: string) {
+  return apiJson<{ workspace: AgentWorkspace }>("/api/admin/agent-repositories/import/github", { method: "POST", body: JSON.stringify({ repositoryUrl, requestId, linkOnly: true }) });
+}

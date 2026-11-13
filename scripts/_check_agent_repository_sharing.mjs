@@ -61,12 +61,12 @@ const h = globalThis.__sharingTest = {
     if (path.startsWith("/api/koi/skills?")) {
       if (h.koiSkillsError) throw new ApiError(503, "unavailable", "koi_unavailable");
       const params = new URL(path, "https://koinote.example").searchParams;
-      const skills = (h.koiSkillsByUser?.[h.user?.authUserId] ?? h.koiSkills ?? []).filter(skill => skill.sourceKind === "hub" && String(skill.source.workspaceId) === params.get("hubWorkspaceId"));
+      const skills = (h.koiSkillsByUser?.[h.user?.authUserId] ?? h.koiSkills ?? []).filter(skill => params.has("githubRepositoryId") ? skill.sourceKind === "github" && String(skill.source.repositoryId) === params.get("githubRepositoryId") : skill.sourceKind === "hub" && String(skill.source.workspaceId) === params.get("hubWorkspaceId"));
       const offset = Number(params.get("cursor") || 0);
       return { skills: skills.slice(offset, offset + 20), nextCursor: skills.length > offset + 20 ? String(offset + 20) : "", storage: { usedBytes: 0 } };
     }
     if (path === "/api/koi/skill-imports/hub-preview/confirm") { h.koiSkills = h.koiInstallResult; return { installed: h.koiSkills }; }
-    if (path === "/api/koi/skill-imports") return { preview: { id: "hub-preview", sourceKind: "hub", source: { kind: "hub", name: publicRepository.name }, status: "ready", revision: 1, candidates: h.koiCandidates ?? [], rejected: h.koiRejected ?? [] } };
+    if (path === "/api/koi/skill-imports") return { preview: { id: "hub-preview", sourceKind: body.source, source: { kind: body.source, name: publicRepository.name }, status: "ready", revision: 1, candidates: h.koiCandidates ?? [], rejected: h.koiRejected ?? [] } };
     if (path === "/api/koi/skill-imports/hub-preview") return { status: "cancelled" };
     if (path === "/api/agent/github-credential") {
       if (method === "PUT") h.credential = { configured: true, tokenHint: body.token.slice(-4) };
@@ -77,6 +77,7 @@ const h = globalThis.__sharingTest = {
       if (h.failImport) throw new ApiError(422, "sensitive", "sensitive_data_detected");
       return { workspace: { ...workspace, workspaceId: 9 } };
     }
+    if (path === "/api/admin/agent-repositories/import/github") return { workspace: { ...publicRepository, files: [] } };
     if (path === "/api/admin/agent-repositories") return { repositories: [{ ...publicRepository, fileCount: 1, sizeBytes: bytes.length, systemManaged: true, publishedRevision: h.publication ? 3 : null }] };
     if (path.endsWith("/sharing")) {
       if (method === "GET") return { publication: h.publication, source: h.source, currentRevision: h.privateRevision ?? workspace.revision };
@@ -627,6 +628,37 @@ try {
   await mount(AgentPublicRepositoryPage);
   assert.ok(document.body.textContent.includes(zh.koi.noInstallableSkills), 'anonymous visitors also see the empty repository explanation');
   assert.equal([...document.querySelectorAll('a')].some(a => a.textContent.includes(zh.koi.installToKoi)), false);
+  // A linked entry has no mirrored manifest. It still opens the existing
+  // GitHub preview, while installed state is scoped to the GitHub numeric ID.
+  const sourceBeforeLink = publicRepository.githubSource;
+  publicRepository.githubSource = { repositoryId: 123, repositoryUrl: 'https://github.com/Octo/demo', author: 'Octo', authorUrl: 'https://github.com/Octo', ref: 'main', commitSha: 'a'.repeat(40), license: 'UNLICENSED', linkOnly: true };
+  publicRepository.files = [];
+  h.user = { ...beforeKoiUser, membershipTier: 'lifetime' }; h.search = {}; h.koiAvailable = true;
+  h.koiSkills = [{ id: 'github-skill', sourceKind: 'github', source: { repositoryId: 123, path: 'review' }, enabled: true }];
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(button(zh.koi.installedCount.replace('{count}', '1')), 'linked entries show installed GitHub Skills without claiming all are installed');
+  assert.ok(document.body.textContent.includes(labels.hubGitHubLinkDescription));
+  assert.equal(document.body.textContent.includes(zh.koi.noInstallableSkills), false);
+  assert.equal(document.body.textContent.includes(labels.githubImportedCopy), false);
+  await click(zh.koi.installedCount.replace('{count}', '1'));
+  const linkInput = calls.findLast(call => call.path === '/api/koi/skill-imports').body;
+  assert.equal(linkInput.source, 'github');
+  assert.equal(linkInput.repositoryUrl, 'https://github.com/Octo/demo');
+  assert.equal(linkInput.ref, 'main');
+  assert.equal(linkInput.workspaceId, undefined, 'links must never use the empty Hub snapshot');
+  await click(zh.koi.startOver);
+  const directoryInput = [...document.querySelectorAll('form details input')][1];
+  await act(async () => reactProps(directoryInput).onChange({ target: { value: 'review' } })); await settle();
+  await submit();
+  assert.equal(calls.findLast(call => call.path === '/api/koi/skill-imports').body.path, 'review', 'a linked repository can be retried with a selected subdirectory');
+  await click(zh.koi.cancel);
+  h.koiSkills = [];
+  await mount(AgentPublicRepositoryPage);
+  assert.ok(button(zh.koi.installToKoi));
+  assert.equal([...document.querySelectorAll('button')].some(item => item.textContent === labels.forkRepository), false);
+  assert.equal([...document.querySelectorAll('button')].some(item => item.textContent === labels.syncGitHub), false);
+  delete h.koiSkills;
+  publicRepository.githubSource = sourceBeforeLink;
   publicRepository.files = filesBeforeEmpty;
   h.user = beforeKoiUser; h.search = {}; h.hash = ''; delete h.koiAvailable;
   assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
@@ -939,6 +971,13 @@ try {
   await click(labels.revokeSharing);
   assert.ok(document.body.textContent.includes(labels.sharingSensitive), 'system management failures are visible');
   h.failPublish=false;
+  await input('#system-github-link', 'https://github.com/dontbesilent2025/dbskill');
+  await submit();
+  const collectedLink = calls.findLast(call => call.path === '/api/admin/agent-repositories/import/github').body;
+  assert.equal(collectedLink.repositoryUrl, 'https://github.com/dontbesilent2025/dbskill');
+  assert.equal(collectedLink.linkOnly, true, 'admin collection saves a link, never a mirror');
+  assert.ok(collectedLink.requestId);
+  assert.equal(document.querySelector('#system-github-link').value, '');
   h.user=null;h.directoryPageSize=2;
   h.directory=[
     {workspaceId:101,name:'Design one',systemManaged:true,category:'design',koiInstallable:true},

@@ -44,6 +44,7 @@ var (
 	errAgentGitHubCredentialRequired = errors.New("a GitHub token is required for this repository")
 	errAgentGitHubCredentialInvalid  = errors.New("GitHub token is invalid")
 	errAgentGitHubCredentialCrypto   = errors.New("GitHub token encryption is unavailable")
+	errAgentGitHubAlreadyCollected   = errors.New("this GitHub repository is already collected")
 	errAgentGitHubRepositoryInvalid  = errors.New("GitHub repository URL is invalid")
 	errAgentGitHubRepositoryMissing  = errors.New("GitHub repository is unavailable or requires a valid token")
 	errAgentGitHubArchiveInvalid     = errors.New("GitHub repository archive is invalid")
@@ -62,6 +63,7 @@ type agentGitHubImportInput struct {
 	Name          string `json:"name,omitempty"`
 	Description   string `json:"description,omitempty"`
 	RequestID     string `json:"requestId"`
+	LinkOnly      bool   `json:"linkOnly,omitempty"`
 }
 
 type agentGitHubSource struct {
@@ -73,6 +75,7 @@ type agentGitHubSource struct {
 	CommitSHA     string `json:"commitSha"`
 	License       string `json:"license"`
 	Private       bool   `json:"private,omitempty"`
+	LinkOnly      bool   `json:"linkOnly,omitempty"`
 	// UpstreamStatus records a permanent upstream state discovered by a refresh
 	// (archived, disabled, unavailable, private). It never changes the snapshot
 	// bytes; a later successful refresh clears it.
@@ -925,6 +928,10 @@ func (a *App) agentGitHubImportWithTimeouts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	_ = controller.SetReadDeadline(time.Time{})
+	if input.LinkOnly && !system {
+		httpx.ErrorCode(w, 400, "bad_request", "Link collection is only available for the system directory")
+		return
+	}
 	if !validUUID(input.RequestID) {
 		httpx.ErrorCode(w, 400, "bad_request", "repositoryUrl and a UUID v4 requestId are required")
 		return
@@ -966,17 +973,34 @@ func (a *App) agentGitHubImportWithTimeouts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer a.releaseGitHubImportSlot()
-	token, err := a.loadGitHubToken(ctx, user.ID)
-	if err != nil {
-		writeAgentGitHubImportError(w, err)
-		return
+	token := ""
+	if !input.LinkOnly {
+		token, err = a.loadGitHubToken(ctx, user.ID)
+		if err != nil {
+			writeAgentGitHubImportError(w, err)
+			return
+		}
 	}
-	metadata, files, source, err := a.fetchGitHubRepository(ctx, owner, repo, ref, token, system)
+	var metadata githubRepositoryMetadata
+	var source *agentGitHubSource
+	var files []agentWorkspaceFile
+	if input.LinkOnly {
+		// Resolve publicly, without credentials, and never fetch repository bytes.
+		metadata, source, err = a.resolveGitHubRepository(ctx, owner, repo, ref, "", true)
+		if source != nil {
+			source.LinkOnly = true
+		}
+	} else {
+		metadata, files, source, err = a.fetchGitHubRepository(ctx, owner, repo, ref, token, system)
+	}
 	if err != nil {
 		writeAgentGitHubImportError(w, err)
 		return
 	}
 	name, description := input.Name, input.Description
+	if name == "" && input.LinkOnly {
+		name = string([]rune(metadata.FullName)[:min(80, utf8.RuneCountInString(metadata.FullName))])
+	}
 	if name == "" {
 		name = string([]rune(metadata.Name)[:min(80, utf8.RuneCountInString(metadata.Name))])
 	}
@@ -998,6 +1022,9 @@ func (a *App) importGitHubRepository(ctx context.Context, userID int, requestID,
 func (a *App) importGitHubRepositoryForOwner(ctx context.Context, ownerID *int, actorID int, requestID, fingerprint, name, description string, files []agentWorkspaceFile, source *agentGitHubSource) (agentWorkspaceView, error) {
 	var empty agentWorkspaceView
 	if ownerID == nil && (source == nil || source.Private) {
+		return empty, errAgentGitHubRepositoryInvalid
+	}
+	if source != nil && source.LinkOnly && (ownerID != nil || len(files) != 0) {
 		return empty, errAgentGitHubRepositoryInvalid
 	}
 	name, description, err := validateAgentWorkspaceMetadata(name, description)
@@ -1030,6 +1057,15 @@ func (a *App) importGitHubRepositoryForOwner(ctx context.Context, ownerID *int, 
 	}
 	if existing != nil {
 		return *existing, nil
+	}
+	if source.LinkOnly {
+		known, err := systemRepositoryDiscoveryKnown(ctx, tx, source.RepositoryID, source.RepositoryURL, true)
+		if err != nil {
+			return empty, err
+		}
+		if known {
+			return empty, errAgentGitHubAlreadyCollected
+		}
 	}
 	previous, err := checkAgentRepositoryImportCapacity(ctx, tx, ownerID)
 	if err != nil {

@@ -1,36 +1,36 @@
 {
-  "version": "1.1.20",
+  "version": "1.1.21",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.20",
+      "title": "What's new in Koinote 1.1.21",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Hub prioritizes verified repositories containing at least one installable Skill and marks them as installable in Koi AI. Uninstalled entries now clearly say “Install to Koi AI”.",
-        "Automatic discovery prioritizes writing, knowledge management and research Skills and categorizes repositories by use. If an upstream update is no longer installable, the saved version is retained with an explanation."
+        "Hub supports GitHub link entries. Installation fetches and previews Skills from GitHub before saving them to your private cloud Skill library.",
+        "System mirrors with publicly accessible sources become links. Installed Skills are preserved and can check GitHub for updates."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.20 新功能",
+      "title": "Koinote 1.1.21 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Hub 优先展示经过校验、至少含一项可安装技能的仓库，并标记「Koi AI 可安装」；未安装入口明确显示「安装到 Koi AI」。",
-        "自动发掘优先补充写作、知识管理和研究用途的技能仓库，并按用途分类；上游新版本无法安装时保留原版本并说明原因。"
+        "Hub 支持收录 GitHub 链接，安装时从 GitHub 解析并预览技能，再保存到个人云端技能库。",
+        "仍公开可访问的系统镜像改为来源链接；已安装技能保留，后续可从 GitHub 检查更新。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.20",
+      "title": "Nouveautés de Koinote 1.1.21",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Le Hub affiche en priorité les dépôts vérifiés contenant au moins un Skill installable et les identifie comme installables dans Koi AI. Les entrées non installées indiquent clairement « Installer dans Koi AI ».",
-        "La découverte automatique privilégie les Skills de rédaction, de gestion des connaissances et de recherche, et classe les dépôts par usage. Si une mise à jour en amont n’est plus installable, la version enregistrée est conservée avec une explication."
+        "Le Hub prend en charge les liens GitHub. L’installation récupère les Skills depuis GitHub, affiche un aperçu, puis les enregistre dans votre bibliothèque privée dans le cloud.",
+        "Les miroirs système dont la source est publique deviennent des liens. Les Skills installés sont conservés et peuvent rechercher des mises à jour sur GitHub."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.20 の新機能",
+      "title": "Koinote 1.1.21 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Hub では、検証済みで少なくとも一つのスキルをインストールできるリポジトリを優先表示し、Koi AI にインストール可能と表示します。未インストール時のボタンも「Koi AI にインストール」と明示します。",
-        "自動収集では執筆・知識管理・研究向けのスキルを優先し、用途別に分類します。上流の更新版がインストールできない場合は、保存済みのバージョンを保持して理由を表示します。"
+        "Hub で GitHub リンクを掲載できるようになりました。インストール時に GitHub からスキルを取得し、プレビューで確認してから個人のクラウドライブラリに保存します。",
+        "公開アクセス可能なソースを持つシステムミラーをリンクに切り替えます。インストール済みのスキルは保持され、GitHub で更新を確認できます。"
       ]
     }
   }

@@ -136,6 +136,8 @@ func agentWorkspaceIDFromRequest(w http.ResponseWriter, r *http.Request) (int64,
 func writeAgentWorkspaceError(w http.ResponseWriter, err error) {
 	var sensitive *agentWorkspaceSensitiveError
 	switch {
+	case errors.Is(err, errAgentGitHubAlreadyCollected):
+		httpx.ErrorCode(w, http.StatusConflict, "github_already_collected", err.Error())
 	case errors.Is(err, errAgentRepositoryStorage):
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "repository_storage_unavailable", errAgentRepositoryStorage.Error())
 	case errors.Is(err, errAgentWorkspaceCommentSensitive):
