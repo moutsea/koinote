@@ -14,6 +14,7 @@ type koiGitHubSourceInput struct {
 	Ref           string
 	Path          string
 	ExactSkill    bool
+	PublicOnly    bool // Shared compatibility checks must never read private Skills.
 }
 
 type koiGitHubSource struct {
@@ -45,7 +46,9 @@ func (a *App) readKoiGitHubSource(ctx context.Context, input koiGitHubSourceInpu
 	ctx, cancel := context.WithTimeout(ctx, 2*githubRequestTimeout)
 	defer cancel()
 	result, err := a.readKoiGitHubSourceWithToken(ctx, input, target, dir, token)
-	if err != nil && token != "" && agentGitHubTokenRejected(err) {
+	// Shared maintenance must stop on rejected credentials instead of spending
+	// the anonymous API quota reserved for interactive public installations.
+	if err != nil && token != "" && !input.PublicOnly && agentGitHubTokenRejected(err) {
 		public, publicErr := a.readKoiGitHubSourceWithToken(ctx, input, target, dir, "")
 		return public, agentGitHubFallbackError(err, publicErr)
 	}
@@ -53,7 +56,7 @@ func (a *App) readKoiGitHubSource(ctx context.Context, input koiGitHubSourceInpu
 }
 
 func (a *App) readKoiGitHubSourceWithToken(ctx context.Context, input koiGitHubSourceInput, target koiGitHubTarget, dir, token string) (koiGitHubSource, error) {
-	metadata, err := a.resolveGitHubRepositoryMetadata(ctx, target.Owner, target.Repo, token, false)
+	metadata, err := a.resolveGitHubRepositoryMetadata(ctx, target.Owner, target.Repo, token, input.PublicOnly)
 	if err != nil {
 		return koiGitHubSource{}, err
 	}
@@ -78,7 +81,11 @@ func (a *App) readKoiGitHubSourceWithToken(ctx context.Context, input koiGitHubS
 	if err != nil {
 		return koiGitHubSource{}, err
 	}
-	files, err := a.downloadKoiGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, token, target.Path, target.FileEntry)
+	archiveToken := token
+	if input.PublicOnly {
+		archiveToken = ""
+	}
+	files, err := a.downloadKoiGitHubRepository(ctx, metadata.Owner.Login, metadata.Name, source.CommitSHA, archiveToken, target.Path, target.FileEntry)
 	if err != nil {
 		return koiGitHubSource{}, err
 	}

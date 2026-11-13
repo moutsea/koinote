@@ -159,11 +159,11 @@ const h = globalThis.__sharingTest = {
       const facets=[];
       for(const item of searched) {
         let facet=facets.find(f=>f.category===item.category&&f.systemManaged===Boolean(item.systemManaged));
-        if(!facet) {facet={category:item.category,systemManaged:Boolean(item.systemManaged),count:0};facets.push(facet);} facet.count++;
+        if(!facet) {facet={category:item.category,systemManaged:Boolean(item.systemManaged),count:0,koiInstallableCount:0};facets.push(facet);} facet.count++;if(item.koiInstallable)facet.koiInstallableCount++;
       }
-      const filtered=searched.filter(item=>(!params.get('category')||item.category===params.get('category'))&&(!params.get('source')||Boolean(item.systemManaged)===(params.get('source')==='system')));
+      const filtered=searched.filter(item=>(!params.get('koiInstallable')||Boolean(item.koiInstallable))&&(!params.get('category')||item.category===params.get('category'))&&(!params.get('source')||Boolean(item.systemManaged)===(params.get('source')==='system')));
       const start=Number(params.get('cursor')??0),size=h.directoryPageSize??12;
-      return {repositories:filtered.slice(start,start+size),total:filtered.length,facets,nextCursor:start+size<filtered.length?String(start+size):null};
+      return {repositories:filtered.slice(start,start+size),total:filtered.length,koiPending:h.pendingKoi??0,facets,nextCursor:start+size<filtered.length?String(start+size):null};
     }
     throw new Error(`Unexpected API ${method} ${path}`);
   },
@@ -238,7 +238,7 @@ assert.equal(githubImportErrorMessage(new ApiError(503, "GitHub unavailable", "g
 assert.equal(githubImportErrorMessage(new ApiError(404, "missing", "github_repository_unavailable"), labels), labels.githubRepositoryUnavailable, "repository failures keep their specific message");
 assert.equal(githubImportErrorMessage(new ApiError(503, "archive download failed", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "archive download failures use the retry message");
 assert.equal(githubImportErrorMessage(new Error("unknown"), labels), labels.githubImportFailed, "unknown failures keep the generic fallback");
-const emptyFilters={q:undefined,source:undefined,category:undefined};
+const emptyFilters={q:undefined,source:undefined,category:undefined,koiInstallable:undefined};
 const root = createRoot(document.getElementById("root"));
 let client;
 async function settle() { for (let i=0;i<3;i++) await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));}); }
@@ -470,7 +470,7 @@ try {
   assert.equal(parseRepositorySearch({ installKoi: ['true'] }).installKoi, undefined);
   const beforeKoiUser = h.user;
   h.user = null;
-  const loginContext = { file: publicRepository.files[0].path, q: '写作 & review', source: 'system', category: 'writing' };
+  const loginContext = { koiInstallable: true, file: publicRepository.files[0].path, q: '写作 & review', source: 'system', category: 'writing' };
   const loginHash = 'user-content-安装 & 配置';
   h.search = loginContext; h.hash = loginHash;
   await mount(AgentPublicRepositoryPage);
@@ -478,7 +478,7 @@ try {
   assert.ok(installLogin, 'anonymous visitors can return to the Hub installation after login');
   const loginReturn = new URL(new URL(installLogin.getAttribute('href'), 'https://koinote.example').searchParams.get('redirectTo'), 'https://koinote.example');
   assert.equal(loginReturn.pathname, '/repositories/7');
-  assert.deepEqual(Object.fromEntries(loginReturn.searchParams), { ...loginContext, installKoi: 'true' }, 'login retains the file and Hub filters');
+  assert.deepEqual(Object.fromEntries(loginReturn.searchParams), { ...loginContext, koiInstallable: 'true', installKoi: 'true' }, 'login retains the file and Hub filters');
   assert.equal(decodeURIComponent(loginReturn.hash.slice(1)), loginHash, 'login retains the document anchor');
   h.user = { id: 1, authUserId: 'hub-viewer', membershipTier: 'lifetime' };
   h.koiAvailable = true; h.search = { ...loginContext, installKoi: true };
@@ -687,7 +687,7 @@ try {
   publicRepository.githubSource = sourceBeforeLink;
   publicRepository.files = filesBeforeEmpty;
   h.user = beforeKoiUser; h.search = {}; h.hash = ''; delete h.koiAvailable;
-  assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{q:'skills',source:'system',category:'design'});
+  assert.deepEqual(parseRepositoryDirectorySearch({q:'  skills  ',source:'system',category:'design',file:'README.md'}),{...emptyFilters,q:'skills',source:'system',category:'design'});
   assert.deepEqual(parseRepositoryDirectorySearch({q:['skills'],source:'admin',category:'invalid'}),emptyFilters);
   assert.deepEqual(parseRepositoryDirectorySearch({q:'x'.repeat(81),source:['system'],category:['design']}),emptyFilters);
   assert.equal(parseRepositoryDirectorySearch({q:'🛠'.repeat(80)}).q,'🛠'.repeat(80),'search validation uses the backend character limit');
@@ -1009,9 +1009,9 @@ try {
     {workspaceId:101,name:'Design one',systemManaged:true,category:'design',koiInstallable:true},
     {workspaceId:102,name:'Build tools',systemManaged:true,category:'development'},
     {workspaceId:103,name:'Community design',systemManaged:false,category:'design'},
-    {workspaceId:104,name:'Design two',systemManaged:true,category:'design'},
-    {workspaceId:105,name:'Writing tools',systemManaged:false,category:'writing'},
-    {workspaceId:106,name:'Focus agent',systemManaged:true,category:'design'},
+    {workspaceId:104,name:'Design two',systemManaged:true,category:'design',koiInstallable:true},
+    {workspaceId:105,name:'Writing tools',systemManaged:false,category:'writing',koiInstallable:true},
+    {workspaceId:106,name:'Focus agent',systemManaged:true,category:'design',koiInstallable:true},
   ].map(item=>({...publicRepository,fileCount:1,sizeBytes:bytes.length,...item}));
   await mount(AgentPublicRepositoriesPage);
   const cards=()=>[...document.querySelectorAll('[data-repository-card]')].map(card=>card.querySelector('h3').textContent);
@@ -1021,6 +1021,28 @@ try {
   const initialCards=[...document.querySelectorAll('[data-repository-card]')];
   assert.ok(initialCards[0].textContent.includes(labels.hubKoiInstallable), 'verified compatible repositories show their installation badge');
   assert.equal(initialCards[1].textContent.includes(labels.hubKoiInstallable),false,'unchecked repositories do not promise installation compatibility');
+  await filter(labels.hubKoiInstallable);
+  assert.deepEqual(cards(),['Design one','Design two'],'the Koi view filters on the server before paging');
+  assert.ok(document.body.textContent.includes(labels.hubResultCount.replace('{count}','4')));
+  assert.ok(document.body.textContent.includes(labels.hubKoiInstallableHint));
+  await filter(labels.hubKoiInstallable);
+  assert.deepEqual(cards(),['Design one','Build tools'],'the standalone filter toggles off');
+  await filter(labels.hubKoiInstallable);
+  await click(labels.loadMore);
+  assert.deepEqual(cards(),['Design one','Design two','Writing tools','Focus agent']);
+  await filter(labels.hubCategory_writing);
+  assert.deepEqual(cards(),['Writing tools'],'Koi eligibility combines with a topic');
+  assert.equal(h.directorySearch.koiInstallable,true);
+  h.pendingKoi=2;
+  await filter(labels.hubSystemBadge);
+  assert.equal(cards().length,0,'Koi eligibility combines with source filtering');
+  assert.ok(document.body.textContent.includes(labels.hubKoiChecking.replace('{count}','2')),'pending compatibility has its own status');
+  assert.equal(document.body.textContent.includes(labels.publicEmpty),false,'pending checks do not claim the directory is empty');
+  h.pendingKoi=0;
+  await click(labels.refresh);
+  assert.equal(document.body.textContent.includes(labels.hubKoiChecking.replace('{count}','2')),false,'refresh removes completed checks');
+  assert.ok(document.body.textContent.includes(labels.hubEmptyFiltered));
+  await click(labels.hubClearFilters);
   await filter(labels.hubCategory_design);
   assert.deepEqual(cards(),['Design one','Community design']);
   await filter(labels.hubSystemBadge);
@@ -1043,7 +1065,8 @@ try {
   assert.deepEqual(cards(),['Design one','Build tools']);
   await input('input[type="search"]','  Portable  ');await submit();
   await filter(labels.hubCategory_design);await filter(labels.hubSystemBadge);
-  const savedFilters={q:'Portable',source:'system',category:'design'};
+  await filter(labels.hubKoiInstallable);
+  const savedFilters={q:'Portable',source:'system',category:'design',koiInstallable:true};
   assert.deepEqual(h.directorySearch,savedFilters,'all committed filters are stored in the URL');
   await click(labels.loadMore);
   const selectedCards=cards();
@@ -1088,6 +1111,9 @@ try {
   const router=createRouter({routeTree:routeRoot.addChildren([directoryRoute,detailRoute]),isServer:true,history:createMemoryHistory({initialEntries:['/repositories']})});
   assert.deepEqual(router.matchRoutes(loginReturn.pathname,defaultParseSearch(loginReturn.search)).at(-1).search,{...loginContext,installKoi:true},'the real router restores the login context and install intent');
   for(const [raw,expected] of [
+    ['?koiInstallable=true',{koiInstallable:true}],
+    ['?koiInstallable=false',{}],
+    ['?koiInstallable=%5Btrue%5D',{}],
     ['?q=123',{q:'123'}],
     ['?q=true',{q:'true'}],
     ['?q=null',{}],

@@ -24,7 +24,7 @@ func TestAgentRepositoryKoiInstallabilityUsesPublication(t *testing.T) {
 		"local/SKILL.md":   "---\nname: local\ndescription: Local workflow\nallowed-tools: Bash\n---\nRun locally.",
 	})
 	var before string
-	if err := app.db.QueryRow(ctx, `SELECT (to_jsonb(p)-'koi_installable'-'koi_installability_checked_at'-'koi_installability_xid')::text FROM agent_repository_publications p WHERE workspace_id=$1`, workspace.WorkspaceID).Scan(&before); err != nil {
+	if err := app.db.QueryRow(ctx, `SELECT (to_jsonb(p)-'koi_installable'-'koi_installability_checked_at'-'koi_installability_xid'-'koi_installability_attempted_at'-'koi_installability_curation_revision'-'koi_installability_evidence')::text FROM agent_repository_publications p WHERE workspace_id=$1`, workspace.WorkspaceID).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if count, err := app.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || count != 1 {
@@ -34,7 +34,7 @@ func TestAgentRepositoryKoiInstallabilityUsesPublication(t *testing.T) {
 		t.Fatal("a mixed collection with one compatible Skill must be ranked as installable")
 	}
 	var after string
-	if err := app.db.QueryRow(ctx, `SELECT (to_jsonb(p)-'koi_installable'-'koi_installability_checked_at'-'koi_installability_xid')::text FROM agent_repository_publications p WHERE workspace_id=$1`, workspace.WorkspaceID).Scan(&after); err != nil || before != after {
+	if err := app.db.QueryRow(ctx, `SELECT (to_jsonb(p)-'koi_installable'-'koi_installability_checked_at'-'koi_installability_xid'-'koi_installability_attempted_at'-'koi_installability_curation_revision'-'koi_installability_evidence')::text FROM agent_repository_publications p WHERE workspace_id=$1`, workspace.WorkspaceID).Scan(&after); err != nil || before != after {
 		t.Fatalf("checking compatibility changed the published version: %v", err)
 	}
 	reads := objects.reads
@@ -66,7 +66,7 @@ func TestAgentRepositoryKoiInstallabilityReadRecovery(t *testing.T) {
 	ctx := context.Background()
 	app, owner, workspace, objects := koiHubSourceTestApp(t, true, map[string]string{"SKILL.md": "# Rewrite"})
 	objects.corruptRead = true
-	if count, err := app.backfillAgentRepositoryKoiInstallability(ctx, 8); err == nil || count != 1 {
+	if count, err := app.backfillAgentRepositoryKoiInstallability(ctx, 8); err == nil || errors.Is(err, ErrKoiInstallabilityDeferred) || count != 1 {
 		t.Fatalf("corrupt storage read: %d %v", count, err)
 	}
 	if value := repositoryKoiInstallability(t, app, workspace.WorkspaceID); value != nil {
@@ -93,7 +93,7 @@ func TestAgentRepositoryKoiInstallabilityReadRecovery(t *testing.T) {
 	if value := repositoryKoiInstallability(t, app, later.WorkspaceID); value == nil || !*value {
 		t.Fatal("later publication was not checked")
 	}
-	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installability_checked_at=now()-interval '6 minutes' WHERE workspace_id=$1`, workspace.WorkspaceID); err != nil {
+	if _, err := app.db.Exec(ctx, `UPDATE agent_repository_publications SET koi_installability_attempted_at=now()-interval '6 minutes' WHERE workspace_id=$1`, workspace.WorkspaceID); err != nil {
 		t.Fatal(err)
 	}
 	if count, err := app.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || count != 1 {

@@ -366,8 +366,8 @@ func TestKoiFolderInstallIdempotencyAndAccountIsolation(t *testing.T) {
 	}
 	root := "/api/koi/skill-imports/" + view.ID
 	view = koiFolderView(t, koiFolderRequest(t, a, user, "POST", root+"/analyze", nil, 200))
-	if len(view.Candidates) != 2 {
-		t.Fatalf("expected two identical candidates: %+v", view.Candidates)
+	if len(view.Candidates) != 1 {
+		t.Fatalf("identical folder packages should also be grouped in the preview: %+v", view.Candidates)
 	}
 	installed := koiFolderInstalled(t, koiFolderRequest(t, a, user, "POST", root+"/confirm", koiFolderConfirmation(view), 200))
 	if len(installed) != 1 {

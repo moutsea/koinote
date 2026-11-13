@@ -53,7 +53,7 @@ print(json.dumps({'args':args[12:], 'cwd':os.getcwd()}))
 """, encoding="utf-8")
             docker.chmod(0o700)
             env = dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"], KOINOTE_DEPLOY_DIR=directory)
-            for args in [[], ["--apply"], ["--discover"], ["--discover", "--apply"], ["--apply", "--workspace-id", "123"], ["--workspace-id", "bad; touch injected"]]:
+            for args in [[], ["--apply"], ["--discover"], ["--discover", "--apply"], ["--check-koi-installability", "--apply"], ["--apply", "--workspace-id", "123"], ["--workspace-id", "bad; touch injected"]]:
                 with self.subTest(args=args):
                     result = subprocess.run(["sh", str(SCRIPT), *args], input="fixture-ephemeral-token\n", text=True, capture_output=True, env=env, check=True)
                     self.assertEqual(json.loads(result.stdout), {"args": args, "cwd": str(root.resolve())})

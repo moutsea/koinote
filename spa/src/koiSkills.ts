@@ -180,6 +180,7 @@ export function koiErrorMessage(
 }
 
 export function koiPreviewErrorLabel(preview: KoiPreview, labels: Record<string, string>): string {
+  if (preview.errorCode === "validation_failed" && preview.rejected.length > 0 && preview.rejected.every((item) => item.reason === "not_reviewed")) return labels.reject_not_reviewed;
   const key = KOI_ERROR_LABELS[preview.errorCode ?? ""];
   return key ? labels[key] : preview.errorCode === "preview_expired" ? labels.koiPreviewExpired : labels.koiAnalysisFailed;
 }
@@ -194,5 +195,5 @@ export function koiRequirementLabel(detail: string, labels: Record<string, strin
   const separator = detail.indexOf(":");
   const code = separator < 0 ? detail : detail.slice(0, separator);
   const name = separator < 0 ? "" : detail.slice(separator + 1);
-  return (labels[`requirement_${code}`] ?? labels.koiIncompatible).replace("{name}", name);
+  return (labels[`requirement_${code}_${name}`] ?? labels[`requirement_${code}`] ?? labels.koiIncompatible).replace("{name}", name);
 }

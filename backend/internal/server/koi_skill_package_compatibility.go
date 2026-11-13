@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-const koiSkillEntryRulesVersion = 3
+const koiSkillEntryRulesVersion = 4
 
 type koiCompatibilityQuerier interface {
 	agentWorkspaceQuerier
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-// Entry capabilities now include cover generation. Refresh
-// derived compatibility once; original package bytes and identities stay fixed.
+// Store only declared capabilities on versions; apply database review separately.
+// Task references keep their own compatibility snapshots through this refresh.
 func refreshKoiSkillEntryCompatibility(ctx context.Context, q koiCompatibilityQuerier, userID int) error {
 	rows, err := q.Query(ctx, `SELECT v.id::text,v.raw_metadata FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id WHERE i.user_id=$1 AND i.deleted_at IS NULL AND v.rules_version<$2`, userID, koiSkillEntryRulesVersion)
 	if err != nil {

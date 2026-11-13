@@ -48,7 +48,7 @@ try {
   let skills = [], preview, createInput, rejectNextToggle = true, loseConfirmation = true;
   let saveDelay, rejectRemote = false, remoteFailure = "", failFile = false, failUpload = true;
   const calls = [], uploads = [];
-  const candidate = { id: "candidate-review", name: "review", description: "检查文章结构", entryPath: "SKILL.md", directory: "review", fileCount: 2, sizeBytes: 100, license: "MIT", instructions: "# Review\nRead guide.md.", compatibility: { conversation: true, article: false, reasons: [], warnings: ["scripts_not_executed"] }, metadataFormat: "plain-markdown" };
+  const candidate = { id: "candidate-review", name: "review", description: "检查文章结构", entryPath: "SKILL.md", directory: "review", fileCount: 2, sizeBytes: 100, license: "MIT", instructions: "# Review\nRead guide.md.", compatibility: { conversation: true, article: false, reasons: [], warnings: ["scripts_not_executed", "article_capability_unavailable:network"] }, metadataFormat: "plain-markdown" };
   const installed = { ...candidate, id: "installation-review", versionId: "version-one", version: "123456abcdef", contentSha256: "1".repeat(64), sourceKind: "folder", source: { directoryName: "collection" }, enabled: true, revision: 1, installedAt: "2026-11-11T00:00:00Z", updatedAt: "2026-11-11T00:00:00Z", license: "" };
   state.api = async (path, init = {}) => {
     const method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : undefined;
@@ -70,7 +70,7 @@ try {
       return { libraryMode: "installed" };
     }
     if (url.pathname === "/api/koi/skills") {
-      const filtered = skills.filter((skill) => (!url.searchParams.get("q") || skill.name.includes(url.searchParams.get("q"))) && (!url.searchParams.get("source") || skill.sourceKind === url.searchParams.get("source")) && (!url.searchParams.get("state") || (skill.enabled ? "enabled" : "disabled") === url.searchParams.get("state")));
+      const filtered = skills.filter((skill) => (!url.searchParams.get("q") || skill.name.includes(url.searchParams.get("q"))) && (!url.searchParams.get("source") || skill.sourceKind === url.searchParams.get("source")) && (!url.searchParams.get("state") || (!skill.compatibility.conversation ? "unavailable" : skill.enabled ? "enabled" : "disabled") === url.searchParams.get("state")));
       const offset = Number(url.searchParams.get("cursor") || 0);
       return { skills: filtered.slice(offset, offset + 20).map((item) => ({ ...item })), nextCursor: filtered.length > offset + 20 ? String(offset + 20) : "", storage: { usedBytes: skills.length * 100 } };
     }
@@ -215,6 +215,7 @@ try {
   assert.ok(document.body.textContent.includes(labels.rejectedTitle));
   assert.ok(document.body.textContent.includes(labels.reject_sensitive_data_detected));
   const previewCard = document.querySelector('input[name="preview-candidate"]').closest("li");
+  assert.ok(previewCard.textContent.includes("review/SKILL.md"), "the package path distinguishes similarly named Skills");
   const licenseDetails = [...previewCard.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent === labels.viewLicense);
   assert.ok(licenseDetails, "the license remains available before confirmation");
   assert.equal(licenseDetails.hasAttribute("open"), false, "license text is collapsed by default");
@@ -222,6 +223,7 @@ try {
   assert.ok([...document.querySelectorAll('[role="dialog"] footer button')].some((button) => button.textContent.trim() === labels.confirmInstall.replace("{count}", "1")), "the install action stays in the fixed footer");
   assert.ok(previewCard.textContent.includes(labels.formatPlain));
   assert.ok(previewCard.textContent.includes(labels.articleUnavailable));
+  assert.ok(previewCard.textContent.includes(labels.requirement_article_capability_unavailable_network), "network-dependent Skills explain which entry to use");
   assert.ok(previewCard.textContent.includes(labels.requirement_scripts_not_executed), "the preview explains declared script restrictions");
   assert.equal(uploads.some((file) => file.content === "must stay local"), false);
   const enable = [...document.querySelectorAll('input[type="checkbox"]')].find((input) => input.parentElement.textContent === labels.enableAfterInstall);
@@ -251,16 +253,41 @@ try {
   await change(stateFilter(), { value: "" });
   await change(sourceFilter(), { value: "hub" });
   assert.ok(document.body.textContent.includes(labels.noMatches));
-  skills = originalSkills;
+  skills = [{ ...installed, enabled: true, compatibility: { conversation: false, article: false, reasons: ["review_not_approved"] } }];
+  rejectNextToggle = false;
   await change(sourceFilter(), { value: "" });
+  await act(async () => client.invalidateQueries({ queryKey: ["koi-skills", user.authUserId] })); await settle();
+  const unavailableSwitch = () => document.querySelector(`input[aria-label="${labels.enabledToggle} review"]`);
+  assert.equal(unavailableSwitch().checked, true, "the switch preserves the user's enabled preference independently of availability");
+  assert.equal(unavailableSwitch().disabled, false, "an unavailable Skill can still be switched off");
+  assert.ok(document.body.textContent.includes(labels.unavailableEnabledHint));
+  await change(unavailableSwitch(), {});
+  assert.equal(unavailableSwitch().checked, false);
+  assert.equal(unavailableSwitch().disabled, true, "an unavailable Skill cannot be switched back on");
+  assert.equal(document.body.textContent.includes(labels.unavailableEnabledHint), false);
+  skills[0] = { ...skills[0], enabled: true, revision: skills[0].revision + 1 };
+  await act(async () => client.invalidateQueries({ queryKey: ["koi-skills", user.authUserId] })); await settle();
+  await click("review");
+  assert.ok(document.body.textContent.includes(labels.requirement_review_not_approved), "legacy installations explain why new tasks cannot use them");
+  const detailSwitch = [...document.querySelectorAll('input[role="switch"]')].find((input) => input.parentElement.textContent === labels.enabledToggle);
+  assert.equal(detailSwitch.checked, true);
+  assert.equal(detailSwitch.disabled, false);
+  await change(detailSwitch, {});
+  assert.equal(detailSwitch.checked, false);
+  assert.equal(detailSwitch.disabled, true);
+  await click(labels.backToSkills);
+  skills = originalSkills;
+  rejectNextToggle = true;
+  const togglesBeforeConflict = calls.filter((call) => call.method === "PATCH").length;
   await act(async () => client.invalidateQueries({ queryKey: ["koi-skills", user.authUserId] })); await settle();
   let skillSwitch = () => document.querySelector(`input[aria-label="${labels.enabledToggle} review"]`);
   assert.equal(skillSwitch().checked, false);
   await change(skillSwitch(), {});
   assert.equal(skillSwitch().checked, true, "conflicts refresh the current installation state");
-  assert.equal(calls.filter((call) => call.method === "PATCH").length, 1, "conflicts do not replay writes automatically");
+  assert.equal(calls.filter((call) => call.method === "PATCH").length, togglesBeforeConflict + 1, "conflicts do not replay writes automatically");
   await click("review");
   assert.ok(document.body.textContent.includes(labels.articleUnavailable), "preview and installed detail explain the same entry restrictions");
+  assert.ok(document.body.textContent.includes(labels.requirement_article_capability_unavailable_network), "installed detail retains the actionable network restriction");
   await click("example.html50 B");
   assert.ok(document.querySelector("pre").textContent.includes("<script>"));
   assert.equal(document.querySelectorAll("script, img").length, 0, "attachment HTML stays inert without loading external resources");
@@ -329,6 +356,20 @@ try {
   assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmsBeforeHub, "Hub entry only opens a preview");
   await click(labels.confirmInstall.replace("{count}", "1"));
   assert.equal(calls.filter((item) => item.path.endsWith("/confirm")).length, confirmsBeforeHub + 1);
+
+  const reviewedPreview = { ...preview, status: "ready", sourceKind: "github", source: { repositoryUrl: "https://github.com/octo/demo", ref: "main", reviewedSubset: true }, candidates: [candidate], rejected: [{ directory: "tools/publisher", entryPath: "tools/publisher/SKILL.md", reason: "not_reviewed" }] };
+  await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(KoiInstallDialog, { key: "reviewed-subset", authUserId: user.authUserId, resumePreview: reviewedPreview, onClose() {} }))));
+  await settle();
+  assert.ok(document.body.textContent.includes(labels.reviewedSubsetHint), "a curated subset is not presented as support for the entire repository");
+  assert.equal(document.querySelectorAll('input[name="preview-candidate"]').length, 1, "skipped packages cannot be selected");
+  const skipped = [...document.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent.includes(labels.rejectedTitle));
+  assert.ok(skipped);
+  assert.equal(skipped.hasAttribute("open"), false, "large skipped lists stay collapsed by default");
+  assert.ok(skipped.textContent.includes("tools/publisher/SKILL.md"));
+  assert.ok(skipped.textContent.includes(labels.reject_not_reviewed), "the reason for the skipped package is actionable");
+  await act(async () => root.render(React.createElement(QueryClientProvider, { client }, React.createElement(KoiInstallDialog, { key: "reviewed-subset-failed", authUserId: user.authUserId, resumePreview: { ...reviewedPreview, status: "failed", errorCode: "validation_failed", candidates: [] }, onClose() {} }))));
+  await settle();
+  assert.equal(document.querySelector('[role="alert"]').textContent, labels.reject_not_reviewed, "an unreviewed version must not tell users to modify upstream files");
 
   // Legacy accounts explicitly choose what to keep; failed confirmation keeps
   // the old library, and a Hub entry resumes its original source after migration.

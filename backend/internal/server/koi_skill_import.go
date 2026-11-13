@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"koinote/backend/internal/httpx"
 )
@@ -96,6 +99,20 @@ func (a *App) loadKoiImport(ctx context.Context, q imageUsageQuerier, userID int
 	if err = json.Unmarshal(candidates, &view.Candidates); err != nil {
 		return view, err
 	}
+	review, err := loadKoiRepositoryCuration(ctx, q)
+	if err != nil {
+		return view, err
+	}
+	// Cached previews may predate a capability review. Keep the same bytes and
+	// confirmation identity, but show the entry restrictions used by new tasks.
+	for index := range view.Candidates {
+		candidate := &view.Candidates[index]
+		_, _, raw, _, _, parseErr := koiParseSkillEntry(koiSkillFile{Content: []byte(candidate.Instructions)})
+		if parseErr == nil {
+			candidate.Compatibility = koiSkillCompatibilityFor(raw)
+		}
+		candidate.Compatibility = review.contentCompatibility(candidate.ContentSHA256, candidate.Compatibility)
+	}
 	view.Rejected = []koiSkillRejected{}
 	if len(result) > 0 {
 		var stored struct {
@@ -110,6 +127,19 @@ func (a *App) loadKoiImport(ctx context.Context, q imageUsageQuerier, userID int
 			view.Rejected = stored.Rejected
 		}
 		view.Installed, view.confirmationHash = stored.Installed, stored.Hash
+		for index := range view.Installed {
+			skill := &view.Installed[index]
+			if validUUID(skill.VersionID) {
+				var raw map[string]any
+				loadErr := q.QueryRow(ctx, `SELECT raw_metadata FROM koi_skill_versions WHERE id=$1 AND user_id=$2`, skill.VersionID, userID).Scan(&raw)
+				if loadErr == nil {
+					skill.Compatibility = koiSkillCompatibilityFor(raw)
+				} else if !errors.Is(loadErr, pgx.ErrNoRows) {
+					return view, loadErr
+				}
+			}
+			skill.Compatibility = review.contentCompatibility(skill.ContentSHA256, skill.Compatibility)
+		}
 	}
 	view.DeclaredFiles = len(view.DeclaredPaths)
 	if expired && (view.Status == "pending" || view.Status == "analyzing" || view.Status == "ready" || view.Status == "failed") {
@@ -461,7 +491,26 @@ func (a *App) koiAnalyzeFolder(ctx context.Context, q agentWorkspaceQuerier, vie
 		return nil, nil, errKoiSkillTooLarge
 	}
 	name, _ := view.Source["directoryName"].(string)
-	candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{RootName: name})
+	review, err := loadKoiRepositoryCuration(ctx, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{RootName: name, Review: review})
+	if target := koiSourceText(view.Source, "updateFromId"); target != "" {
+		// A manual replacement keeps a migrated installation's origin. Apply
+		// that origin's review before offering the replacement, also on confirm.
+		var repositoryID string
+		err = q.QueryRow(ctx, `SELECT `+koiInstallationReviewRepositoryID+` FROM koi_skill_installations i
+ JOIN koi_skill_imports imports ON imports.user_id=i.user_id
+ WHERE imports.id=$1 AND i.id=$2 AND i.deleted_at IS NULL`, view.ID, target).Scan(&repositoryID)
+		if err != nil {
+			return nil, nil, err
+		}
+		id, _ := strconv.ParseInt(repositoryID, 10, 64)
+		var skipped []koiSkillRejected
+		candidates, skipped = review.candidates(id, candidates)
+		rejected = append(rejected, skipped...)
+	}
 	return candidates, rejected, nil
 }
 

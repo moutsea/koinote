@@ -23,6 +23,8 @@ func (a *App) commitKoiCandidate(ctx context.Context, tx pgx.Tx, userID int, vie
 		id = target
 	} else if view.SourceKind == "folder" {
 		id, err = koiFolderInstallationID(ctx, tx, userID, candidate.ContentSHA256)
+	} else if view.SourceKind == "github" || view.SourceKind == "hub" || view.SourceKind == "migration" {
+		id, _, err = koiRemoteInstallationMatch(ctx, tx, userID, view.SourceKind, view.Source, []koiSkillCandidate{candidate})
 	} else {
 		err = tx.QueryRow(ctx, `SELECT id::text FROM koi_skill_installations WHERE user_id=$1 AND source_key=$2 AND deleted_at IS NULL`, userID, key).Scan(&id)
 	}

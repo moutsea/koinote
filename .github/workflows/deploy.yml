@@ -551,6 +551,20 @@ jobs:
             sleep 2
           done
 
+      # 可重试的 GitHub 故障由命令记录为 deferred，保留缓存并留待维护任务重试。
+      # 凭据、数据库或存储故障仍返回非零退出码，不能用 continue-on-error 忽略。
+      - name: 回填 Koi AI 安装兼容性
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          SYNC_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$SYNC_GITHUB_TOKEN"
+          printf '%s\n' "$SYNC_GITHUB_TOKEN" | ssh \
+            -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            "root@$HOST" 'sh /opt/koinote/deploy/sync-system-agent-repositories.sh --check-koi-installability --apply'
+
       # 部署 Worker（同时上传 SPA 静态资源，assets 绑定在 wrangler.jsonc 里）。
       # 放在后端健康检查之后，避免新注册页先请求尚不存在的验证码路由。
       - name: 部署 Worker

@@ -29,8 +29,8 @@ func TestAgentRepositoryDirectoryFreezesInFlightKoiChecks(t *testing.T) {
 				if err := app.db.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,name,description) VALUES($1,'Review skills','') RETURNING id`, owner).Scan(&ids[i]); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := app.db.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable)
- VALUES($1,0,'Review skills','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),false)`, ids[i], i); err != nil {
+				if _, err := app.db.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable,koi_installability_curation_revision)
+ VALUES($1,0,'Review skills','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),false,(SELECT revision FROM agent_repository_curation_state WHERE singleton))`, ids[i], i); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -71,7 +71,7 @@ func TestAgentRepositoryDirectoryFreezesInFlightKoiChecks(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer tx.Rollback(ctx)
-				if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=true,koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, target.WorkspaceID); err != nil {
+				if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=true,koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, target.WorkspaceID); err != nil {
 					t.Fatal(err)
 				}
 				first = get(path)

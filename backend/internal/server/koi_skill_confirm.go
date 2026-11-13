@@ -137,15 +137,20 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 	selected := []koiSkillCandidate{}
 	files := []agentWorkspaceFile{}
 	seen := map[string]bool{}
+	groupSource := view.Source
+	if view.SourceKind == "migration" {
+		groupSource = freshSource
+	}
 	for _, candidateID := range input.CandidateIDs {
 		candidate, ok := fresh[candidateID]
 		if !ok || reviewed[candidateID].ContentSHA256 != candidate.ContentSHA256 || !candidate.Compatibility.Conversation {
 			return nil, errKoiSkillConflict
 		}
-		if view.SourceKind == "folder" && seen[candidate.ContentSHA256] {
+		groupKey := koiCandidateGroupKey(view.SourceKind, groupSource, candidate)
+		if seen[groupKey] {
 			continue
 		}
-		seen[candidate.ContentSHA256] = true
+		seen[groupKey] = true
 		selected = append(selected, candidate)
 		for _, file := range candidate.Files {
 			files = append(files, agentWorkspaceFile{Path: file.Path, Content: file.Content, MimeType: file.MimeType, SHA256: file.SHA256})
@@ -188,6 +193,9 @@ func (a *App) confirmKoiImport(ctx context.Context, user model.User, id string, 
 		if err = a.lockKoiMigrationSources(ctx, tx, user.ID, freshSource, selected); err != nil {
 			return nil, err
 		}
+		// Older previews lack upstream identity. Commit the source metadata that
+		// was just revalidated and locked, together with the selected bytes.
+		view.Source = freshSource
 	} else if settings.LibraryMode == "legacy" {
 		return nil, errKoiMigrationRequired
 	}

@@ -46,13 +46,46 @@ func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, 
 		if err = refreshKoiSkillEntryCompatibility(ctx, tx, user.ID); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO agent_task_skill_versions(task_id,version_id)
- SELECT $1,v.id FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id
- WHERE i.user_id=$2 AND i.deleted_at IS NULL AND i.enabled
- AND COALESCE((v.compatibility->>'conversation')::boolean,false)
- AND (NOT $3 OR COALESCE((v.compatibility->>'article')::boolean,false))`, taskID, user.ID, article)
+		review, err := loadKoiRepositoryCuration(ctx, tx)
 		if err != nil {
 			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (i.source_kind,(`+koiInstallationOriginSQL+`),v.content_sha256)
+ v.id::text,v.content_sha256,v.compatibility,`+koiInstallationReviewRepositoryID+`
+ FROM koi_skill_installations i JOIN koi_skill_versions v ON v.id=i.current_version_id
+ WHERE i.user_id=$1 AND i.deleted_at IS NULL AND i.enabled
+ AND COALESCE((v.compatibility->>'conversation')::boolean,false)
+ AND (NOT $2 OR COALESCE((v.compatibility->>'article')::boolean,false))
+ AND `+koiInstallationReviewAllowsSQL("$3", "$2")+`
+ ORDER BY i.source_kind,(`+koiInstallationOriginSQL+`),v.content_sha256,i.created_at,i.id`, user.ID, article, review.policiesJSON)
+		if err != nil {
+			return err
+		}
+		type pinnedSkill struct {
+			ID            string                `json:"id"`
+			Compatibility koiSkillCompatibility `json:"compatibility"`
+		}
+		var pinned []pinnedSkill
+		for rows.Next() {
+			var id, digest, repositoryID string
+			var compatibility koiSkillCompatibility
+			if err = rows.Scan(&id, &digest, &compatibility, &repositoryID); err != nil {
+				rows.Close()
+				return err
+			}
+			pinned = append(pinned, pinnedSkill{id, review.compatibility(repositoryID, digest, compatibility)})
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if len(pinned) > 0 {
+			raw, _ := json.Marshal(pinned)
+			if _, err = tx.Exec(ctx, `INSERT INTO agent_task_skill_versions(task_id,version_id,compatibility)
+ SELECT $1,skill.id,skill.compatibility FROM jsonb_to_recordset($2::jsonb) AS skill(id uuid,compatibility jsonb)`, taskID, raw); err != nil {
+				return err
+			}
 		}
 	}
 	raw, err := json.Marshal(snapshot)
@@ -68,7 +101,7 @@ func (a *App) pinKoiTaskSkills(ctx context.Context, tx pgx.Tx, user model.User, 
 func (a *App) koiTaskSkills(ctx context.Context, task writingTask) ([]koiTaskSkill, error) {
 	var snapshot koiTaskSkillSnapshot
 	_ = json.Unmarshal(task.SkillSnapshot, &snapshot)
-	rows, err := a.db.Query(ctx, `SELECT i.id::text,v.id::text,v.name,v.description,v.entry_path,v.file_count,v.size_bytes,v.compatibility
+	rows, err := a.db.Query(ctx, `SELECT i.id::text,v.id::text,v.name,v.description,v.entry_path,v.file_count,v.size_bytes,COALESCE(refs.compatibility,v.compatibility)
  FROM agent_task_skill_versions refs
  JOIN koi_skill_versions v ON v.id=refs.version_id
  JOIN koi_skill_installations i ON i.id=v.installation_id

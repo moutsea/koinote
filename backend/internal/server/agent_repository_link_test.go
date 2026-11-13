@@ -132,13 +132,13 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 	if _, err := a.readKoiHubSource(ctx, koiHubSourceInput{WorkspaceID: w.WorkspaceID}); !errors.Is(err, errAgentGitHubRepositoryInvalid) {
 		t.Fatalf("link read as mirror: %v", err)
 	}
-	if checked, err := a.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || checked != 0 {
-		t.Fatalf("link compatibility backfill: %d %v", checked, err)
+	if value := repositoryKoiInstallability(t, a, w.WorkspaceID); value != nil {
+		t.Fatal("a new link must await compatibility checks")
 	}
 	if downloads != 0 {
 		t.Fatal("catalog action downloaded repository")
 	}
-	// Only a user-requested GitHub preview reads files. Confirmation saves the
+	// A GitHub preview reads files and updates compatibility. Confirmation saves the
 	// selected package privately and never adds public/workspace file content.
 	installID, _ := randomUUID()
 	preview := koiFolderView(t, koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports", koiImportRequest{RequestID: installID, SourceKind: "github", RepositoryURL: w.GitHubSource.RepositoryURL, Ref: w.GitHubSource.Ref}, 202))
@@ -148,6 +148,20 @@ func TestSystemGitHubLinkCollectionAndPrivateInstall(t *testing.T) {
 	skill := koiTestConfirm(t, a, user, preview)
 	if skill.SourceKind != "github" || skill.Source["commitSha"] != githubTestSHA {
 		t.Fatalf("private install lost source: %+v", skill.Source)
+	}
+	if value := repositoryKoiInstallability(t, a, w.WorkspaceID); value == nil || !*value {
+		t.Fatal("successful link installation did not certify the public repository")
+	}
+	var directory struct {
+		Repositories []agentRepositoryDirectoryItem
+		Total        int
+	}
+	decodeJSONResponse(t, callRepositoryAPI(t, a, nil, "GET", "/api/agent/repositories?koiInstallable=true&q=Octo%2Fdemo", "", 200), &directory)
+	if directory.Total != 1 || len(directory.Repositories) != 1 || directory.Repositories[0].WorkspaceID != w.WorkspaceID {
+		t.Fatalf("installed GitHub link missing from filter: %+v", directory)
+	}
+	if checked, err := a.backfillAgentRepositoryKoiInstallability(ctx, 8); err != nil || checked != 0 {
+		t.Fatalf("verified link was downloaded again: %d %v", checked, err)
 	}
 	var files, blobs, published int
 	err = a.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_workspace_files WHERE workspace_id=$1),(SELECT count(*) FROM agent_workspace_blobs WHERE workspace_id=$1),(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=$1)`, w.WorkspaceID).Scan(&files, &blobs, &published)
@@ -211,10 +225,11 @@ func TestDiscoveredGitHubLinksDoNotMirrorOrPromiseCompatibility(t *testing.T) {
 	if err != nil || summary.Added != len(codes) || f.archiveCalls != 0 || objects.puts != 0 || treeCalls != len(codes) {
 		t.Fatalf("link discovery: %+v %v downloads=%d puts=%d trees=%d", summary, err, f.archiveCalls, objects.puts, treeCalls)
 	}
-	var link, installable bool
+	var link bool
+	var installable *bool
 	var files int
 	err = a.db.QueryRow(ctx, `SELECT (p.github_source->>'linkOnly')::bool,p.koi_installable,(SELECT count(*) FROM agent_repository_publication_files WHERE workspace_id=p.workspace_id) FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.github_source->>'repositoryId'=$1`, fmt.Sprint(item.ID)).Scan(&link, &installable, &files)
-	if err != nil || !link || installable || files != 0 {
+	if err != nil || !link || installable != nil || files != 0 {
 		t.Fatalf("link marked compatible or mirrored: %v %v %d %v", link, installable, files, err)
 	}
 }

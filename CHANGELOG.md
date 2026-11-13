@@ -6,6 +6,19 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.23] - 2026-11-13
+
+### Changed
+
+- Hub adds an “Installable in Koi AI” filter that works with search, source and category filters, while continuing to prioritize writing, knowledge management and research Skills.
+- Identical Skill copies from the same repository are grouped for preview and installation, with clearer installation status, supported entry points and availability explanations.
+- Skill availability reflects compatibility rule changes while running tasks retain their pinned versions. Temporarily unavailable Skills can also be switched off.
+
+### Fixed
+
+- Fixed duplicate storage quota charges for previously installed copies of the same Skill.
+- Temporary GitHub check failures preserve existing results. Repositories awaiting confirmation show a clear status and can be checked again after recovery.
+
 ## [1.1.22] - 2026-11-13
 
 ### Changed

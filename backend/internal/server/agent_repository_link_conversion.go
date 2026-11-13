@@ -232,8 +232,8 @@ func (a *App) convertPublicSystemRepositoryToLink(ctx context.Context, id int64,
 		return result, err
 	}
 	// Keep its existing publication time and URL to preserve directory ordering.
-	if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET revision=$2,github_source=$3,koi_installable=false,
- koi_installability_checked_at=now(),koi_installability_xid=pg_current_xact_id() WHERE workspace_id=$1`, id, revision, &source); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET revision=$2,github_source=$3,koi_installable=NULL,koi_installability_evidence=NULL,
+ koi_installability_checked_at=NULL,koi_installability_attempted_at=NULL,koi_installability_xid=NULL WHERE workspace_id=$1`, id, revision, &source); err != nil {
 		return result, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO agent_repository_system_events(workspace_id,action,revision) VALUES($1,'import',$2)`, id, revision); err != nil {

@@ -516,6 +516,7 @@ export interface Messages {
   };
   koi: {
     previewMultiHint: string;
+    reviewedSubsetHint: string;
     installRuntimeNotice: string;
     articleUnavailable: string;
     uploadNewVersion: string;
@@ -581,6 +582,7 @@ export interface Messages {
     emptySkills: string;
     enableAfterInstall: string;
     enabledToggle: string;
+    unavailableEnabledHint: string;
     entryLabel: string;
     existingKeepsState: string;
     fileCount: string;
@@ -642,6 +644,7 @@ export interface Messages {
     reject_entry_too_large: string;
     reject_file_too_large: string;
     reject_incompatible: string;
+    reject_not_reviewed: string;
     reject_invalid_frontmatter: string;
     reject_invalid_metadata_type: string;
     reject_invalid_name: string;
@@ -653,6 +656,7 @@ export interface Messages {
     reject_too_many_files: string;
     rejectedTitle: string;
     requirement_article_capability_unavailable: string;
+    requirement_article_capability_unavailable_network: string;
     requirement_article_requirement_unavailable: string;
     requirement_article_tool_unavailable: string;
     requirement_credential_required: string;
@@ -669,6 +673,7 @@ export interface Messages {
     requirement_missing_file: string;
     requirement_model_invocation_disabled: string;
     requirement_reference_outside_package: string;
+    requirement_review_not_approved: string;
     requirement_scripts_not_executed: string;
     requirement_sensitive_data_detected: string;
     requirement_tool_namespace_required: string;

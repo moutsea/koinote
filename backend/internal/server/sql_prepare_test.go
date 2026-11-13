@@ -114,8 +114,14 @@ func allSQLStatements(t *testing.T) []namedSQL {
 		}
 		file := filepath.Base(path)
 		src := readSourceFile(t, file)
-		for _, m := range literal.FindAllStringSubmatch(src, -1) {
-			sql := m[1]
+		for _, m := range literal.FindAllStringSubmatchIndex(src, -1) {
+			// A literal joined to a constant or expression is only part of a
+			// query. The installation/runtime integration tests execute those
+			// assembled queries; preparing a truncated prefix is a false failure.
+			if strings.HasSuffix(strings.TrimSpace(src[:m[0]]), "+") || strings.HasPrefix(strings.TrimSpace(src[m[1]:]), "+") {
+				continue
+			}
+			sql := src[m[2]:m[3]]
 			if !verb.MatchString(sql) {
 				continue
 			}

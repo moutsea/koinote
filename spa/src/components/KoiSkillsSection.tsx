@@ -142,6 +142,7 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
                       {skill.name}
                     </button>
                     <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{skill.description || labels.noDescription}</p>
+                    {skill.enabled && !skill.compatibility.conversation && <p className="mt-1 text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.unavailableEnabledHint}</p>}
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                       <KoiSkillSourceLabel source={skill.source} />
                       <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{labels.versionLabel} {skill.version}</span>
@@ -159,7 +160,7 @@ export function KoiSkillsSection({ user, canInstall, onInstall }: {
                         aria-label={`${labels.enabledToggle} ${skill.name}`}
                         onChange={() => toggle.mutate(skill)}
                       />
-                      {skill.enabled ? labels.stateEnabled : labels.stateDisabled}
+                      {labels.enabledToggle}
                     </label>
                     <button
                       type="button"
@@ -287,6 +288,7 @@ function KoiSkillDetail({ id, user, onBack, canInstall }: { id: string; user: Us
       {error && <p role="alert" className="text-sm" style={{ color: "var(--cinnabar)" }}>{error}</p>}
       {check.data && !updateOpen && check.data.status !== "update_available" && <p role="status" className="text-sm" style={{ color: "var(--ink-mid)" }}>{check.data.status === "up_to_date" ? labels.upToDate : check.data.status === "source_unavailable" ? labels.sourceUnavailable : labels.manualOnly}</p>}
       <KoiSkillCompatibilityNote compatibility={skill.compatibility} />
+      {skill.enabled && !skill.compatibility.conversation && <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.unavailableEnabledHint}</p>}
       <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={labels.versionLabel} value={skill.version} />
         <Fact label={labels.filesLabel} value={String(skill.fileCount)} />

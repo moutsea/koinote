@@ -31,6 +31,114 @@ func koiMigrationPreview(t *testing.T, a *App, user model.User) (koiSkillImportV
 	return koiFolderView(t, koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports", koiImportRequest{RequestID: request, SourceKind: "migration"}, 202)), request
 }
 
+func TestKoiMigrationReviewedScopeRechecksOlderPreviews(t *testing.T) {
+	a, user, _ := writingTestApp(t)
+	a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
+	koiTestCuration(t, a, koiReviewedRepository{RepositoryID: 1250162731, RepositoryURL: "https://github.com/Octo/demo", Packages: map[string]string{}})
+	ctx := context.Background()
+	workspace := agentSkillRepositoryForTest(t, a, user.ID, map[string]string{
+		"tools/publisher/SKILL.md": "---\nname: publisher\ndescription: Publish PRD\n---\nRun dws to publish to DingTalk.",
+	})
+	old, _ := koiMigrationPreview(t, a, user)
+	if len(old.Candidates) != 1 {
+		t.Fatalf("old preview fixture: %+v", old)
+	}
+	// Old previews did not retain upstream identity. Read it from the source
+	// again when confirming, rather than trusting their declaration-only result.
+	if _, err := a.db.Exec(ctx, `UPDATE agent_workspaces SET github_source='{"repositoryId":1250162731}' WHERE id=$1`, workspace); err != nil {
+		t.Fatal(err)
+	}
+	preview, _ := koiMigrationPreview(t, a, user)
+	if preview.Status != "failed" || len(preview.Candidates) != 0 || len(preview.Rejected) != 1 || preview.Rejected[0].Reason != "not_reviewed" || preview.Source["reviewedSubset"] != true {
+		t.Fatalf("migration offered an unreviewed package: %+v", preview)
+	}
+	koiFolderRequest(t, a, user, "POST", "/api/koi/skill-imports/"+old.ID+"/confirm", koiFolderConfirmation(old), 409)
+	settings, err := a.koiSettingsForUser(ctx, user.ID)
+	if err != nil || settings.LibraryMode != "legacy" {
+		t.Fatalf("rejected confirmation switched the library: %+v %v", settings, err)
+	}
+	usage, err := a.storageUsageFor(ctx, user.ID)
+	if err != nil || usage.KoiSkillBytes != 0 {
+		t.Fatalf("rejected confirmation consumed quota: %+v %v", usage, err)
+	}
+}
+
+func TestKoiMigrationGroupsCopiesWithinOneWorkspace(t *testing.T) {
+	for _, oldPreview := range []bool{false, true} {
+		t.Run(fmt.Sprintf("oldPreview=%t", oldPreview), func(t *testing.T) {
+			a, user, doc := writingTestApp(t)
+			a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
+			ctx := context.Background()
+			entry := "---\nname: polishing\ndescription: Polish prose\n---\nPreserve facts and the author's voice."
+			different := entry + "\nCheck the title too."
+			workspace := agentSkillRepositoryForTest(t, a, user.ID, map[string]string{
+				"skills/polishing/SKILL.md": entry, "claude-plugin/polishing/SKILL.md": entry,
+				"alternate/polishing/SKILL.md": different,
+			})
+			if _, err := a.db.Exec(ctx, `UPDATE agent_workspaces SET github_source='{"repositoryId":123}' WHERE id=$1`, workspace); err != nil {
+				t.Fatal(err)
+			}
+			// Equal bytes in a second private repository remain independent.
+			agentSkillRepositoryForTest(t, a, user.ID, map[string]string{"skills/polishing/SKILL.md": entry})
+			preview, _ := koiMigrationPreview(t, a, user)
+			if len(preview.Candidates) != 3 {
+				t.Fatalf("migration grouping: %+v", preview.Candidates)
+			}
+			if oldPreview {
+				analysis, err := a.koiAnalyzeSource(ctx, user.ID, map[string]any{"kind": "migration"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Reconstruct a preview created before grouping and source identity.
+				entries := analysis.source["entries"].(map[string]any)
+				for _, value := range entries {
+					delete(value.(map[string]any), "repositoryId")
+				}
+				raw, _ := json.Marshal(analysis.candidates)
+				source, _ := json.Marshal(analysis.source)
+				if _, err = a.db.Exec(ctx, `UPDATE koi_skill_imports SET candidates=$2,source=$3 WHERE id=$1`, preview.ID, raw, source); err != nil {
+					t.Fatal(err)
+				}
+				preview = koiFolderView(t, koiFolderRequest(t, a, user, "GET", "/api/koi/skill-imports/"+preview.ID, nil, 200))
+				if len(preview.Candidates) != 4 {
+					t.Fatal("old preview must contain both adapters")
+				}
+			}
+			input := koiFolderConfirmation(preview)
+			path := "/api/koi/skill-imports/" + preview.ID + "/confirm"
+			installed := koiFolderInstalled(t, koiFolderRequest(t, a, user, "POST", path, input, 200))
+			if len(installed) != 3 {
+				t.Fatalf("confirmation duplicated or merged independent packages: %+v", installed)
+			}
+			for _, skill := range installed {
+				if koiSourceID(skill.Source, "workspaceId") == workspace && koiSourceID(skill.Source, "repositoryId") != 123 {
+					t.Fatalf("confirmation lost the revalidated source identity: %+v", skill.Source)
+				}
+			}
+			replay := koiFolderInstalled(t, koiFolderRequest(t, a, user, "POST", path, input, 200))
+			if len(replay) != len(installed) || replay[0].VersionID != installed[0].VersionID {
+				t.Fatal("confirmation replay changed the installation")
+			}
+			for _, session := range []agentSession{agentTestSession(t, a, user, "review"), koiArticleSession(t, a, user, doc)} {
+				task := agentTestTask(t, a, user, session, model.Document{}, "润色文章")
+				pins, err := a.koiTaskSkills(ctx, task)
+				if err != nil || len(pins) != 3 {
+					t.Fatalf("task repeated a migrated adapter: %+v %v", pins, err)
+				}
+				for _, pin := range pins {
+					if _, err = a.koiSkillPackageFor(ctx, pin); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			usage, err := a.storageUsageFor(ctx, user.ID)
+			if err != nil || usage.KoiSkillBytes != int64(2*len(entry)+len(different)) {
+				t.Fatalf("migrated adapters inflated quota: %+v %v", usage, err)
+			}
+		})
+	}
+}
+
 func TestKoiArticleInstalledSkillsKeepScopeAndVersion(t *testing.T) {
 	a, user, doc := writingTestApp(t)
 	a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}

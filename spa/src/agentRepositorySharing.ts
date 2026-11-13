@@ -16,12 +16,13 @@ export function setAgentRepositorySharing(id: number, expectedRevision: number, 
   return apiJson<{ success: boolean }>(`${system ? "/api/admin/agent-repositories" : "/api/agent/workspaces"}/${id}/sharing`, { method: revoke ? "DELETE" : "PUT", body: JSON.stringify({ expectedRevision, license, category }) });
 }
 export type PublicRepositorySummary = AgentWorkspaceSummary & AgentRepositoryEngagement & { license: string; koiInstallable?: boolean };
-export function listPublicAgentRepositories(query: string, cursor?: string, filters: { source?: RepositorySource; category?: RepositoryCategory | "" } = {}) {
+export function listPublicAgentRepositories(query: string, cursor?: string, filters: { source?: RepositorySource; category?: RepositoryCategory | ""; koiInstallable?: true } = {}) {
   const params = new URLSearchParams({ q: query });
   if (cursor !== undefined) params.set("cursor", cursor);
   if (filters.source) params.set("source", filters.source);
   if (filters.category) params.set("category", filters.category);
-  return apiJson<{ repositories: PublicRepositorySummary[]; nextCursor: string | null; total?: number; facets?: RepositoryFacet[] }>(`/api/agent/repositories?${params}`);
+  if (filters.koiInstallable) params.set("koiInstallable", "true");
+  return apiJson<{ repositories: PublicRepositorySummary[]; nextCursor: string | null; total?: number; koiPending?: number; facets?: RepositoryFacet[] }>(`/api/agent/repositories?${params}`);
 }
 export function getPublicAgentRepository(id: number, revision?: number, signal?: AbortSignal, publicationId?: string) {
   const params = new URLSearchParams();

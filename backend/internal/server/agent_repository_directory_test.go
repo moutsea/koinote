@@ -31,8 +31,8 @@ func TestAgentRepositoryDirectoryKoiPriorityAcrossPages(t *testing.T) {
 			value := i <= publicRepositoryPageSize
 			installable = &value
 		}
-		if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable)
- VALUES($1,0,'priority-test','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),$3)`, id, i, installable); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO agent_repository_publications(workspace_id,revision,name,description,license,published_at,koi_installable,koi_installability_curation_revision)
+ VALUES($1,0,'priority-test','','MIT',timestamptz '2026-10-01T00:00:00Z'+make_interval(mins=>$2),$3,(SELECT revision FROM agent_repository_curation_state WHERE singleton))`, id, i, installable); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -180,6 +180,41 @@ func TestAgentRepositoryDirectoryFiltersAndPagination(t *testing.T) {
 	}
 	for _, query := range []string{"source=admin", "category=unknown", "category=design%27", "cursor=invalid"} {
 		callRepositoryAPI(t, app, nil, http.MethodGet, "/api/agent/repositories?"+query, "", 400)
+	}
+	// Eligibility must filter the full directory before pagination and combine
+	// with topics/sources. Unknown and incompatible snapshots stay excluded.
+	_, err := pool.Exec(ctx, `UPDATE agent_repository_publications p SET
+ koi_installable=CASE WHEN w.is_system AND w.hub_category='design' THEN true WHEN w.hub_category='agents' THEN false ELSE NULL END,
+ koi_installability_xid=pg_current_xact_id(),
+ koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)
+ FROM agent_workspaces w WHERE w.id=p.workspace_id AND p.workspace_id=ANY($1::bigint[])`, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	koi := get("/api/agent/repositories?koiInstallable=true&source=system&category=design")
+	if koi.Total != publicRepositoryPageSize+1 || len(koi.Repositories) != publicRepositoryPageSize || koi.NextCursor == nil {
+		t.Fatalf("installable filter or count lost: %+v", koi)
+	}
+	for _, item := range koi.Repositories {
+		if !item.KoiInstallable || item.Category != "design" || !item.SystemManaged {
+			t.Fatalf("noninstallable repository leaked: %+v", item)
+		}
+	}
+	last := get("/api/agent/repositories?koiInstallable=true&source=system&category=design&cursor=" + url.QueryEscape(*koi.NextCursor))
+	if len(last.Repositories) != 1 || last.NextCursor != nil || !last.Repositories[0].KoiInstallable {
+		t.Fatalf("installable pagination: %+v", last)
+	}
+	callRepositoryAPI(t, app, nil, http.MethodGet, "/api/agent/repositories?source=system&category=design&cursor="+url.QueryEscape(*koi.NextCursor), "", 400)
+	if got := get("/api/agent/repositories?koiInstallable=true&source=community"); got.Total != 0 || len(got.Repositories) != 0 {
+		t.Fatalf("unknown compatibility promised installation: %+v", got)
+	}
+	for _, facet := range koi.Facets {
+		if facet.Category == "design" && facet.SystemManaged && facet.KoiInstallableCount != publicRepositoryPageSize+1 {
+			t.Fatalf("installable facet does not cover the directory: %+v", facet)
+		}
+	}
+	for _, value := range []string{"false", "1", "invalid"} {
+		callRepositoryAPI(t, app, nil, http.MethodGet, "/api/agent/repositories?koiInstallable="+value, "", 400)
 	}
 }
 

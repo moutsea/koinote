@@ -71,6 +71,9 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 	var files []koiSkillFile
 	var root, license, dir string
 	var exact bool
+	var indexSource *agentGitHubSource
+	var indexStarted time.Time
+	var repositoryID int64
 	switch kind {
 	case "migration":
 		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
@@ -89,6 +92,10 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 		pinned := koiSourceText(source, "commitSha")
 		if pinned != "" {
 			ref = pinned
+		} else {
+			// Compare check ordering on the database clock, not the application
+			// host's clock. Index failures must not block a private installation.
+			_ = a.db.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&indexStarted)
 		}
 		exact, _ = source["fileEntry"].(bool)
 		result, err := a.readKoiGitHubSource(ctx, koiGitHubSourceInput{RepositoryURL: koiSourceText(source, "repositoryUrl"), Ref: ref, Path: koiSourceText(source, "path"), ExactSkill: exact}, token)
@@ -102,6 +109,10 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 			return koiAnalysis{}, errKoiSkillConflict
 		}
 		fixed := result.Source
+		repositoryID = fixed.RepositoryID
+		if pinned == "" && result.Target.Path == "" && !result.Target.FileEntry {
+			indexSource = fixed
+		}
 		dir, root, license, files, exact = result.Target.Path, result.Target.Repo, fixed.License, result.Files, result.Target.FileEntry
 		// Preserve the tracking ref while confirmation reads the fixed commit.
 		tracking := fixed.Ref
@@ -128,11 +139,17 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 		source = map[string]any{"kind": kind, "workspaceId": publication.WorkspaceID, "publicationId": publication.PublicationID, "revision": publication.Revision, "name": root, "path": dir, "exactSkill": exact, "license": license}
 		if publication.GitHubSource != nil {
 			source["author"], source["authorUrl"] = publication.GitHubSource.Author, publication.GitHubSource.AuthorURL
+			repositoryID = publication.GitHubSource.RepositoryID
+			source["repositoryId"] = repositoryID
 		}
 	default:
 		return koiAnalysis{}, errKoiSkillPackage
 	}
-	candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{Directory: dir, RootName: root, License: license})
+	review, err := loadKoiRepositoryCuration(ctx, a.db)
+	if err != nil {
+		return koiAnalysis{}, err
+	}
+	candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{Directory: dir, RootName: root, License: license, Review: review})
 	if exact {
 		selected := []koiSkillCandidate{}
 		for _, candidate := range candidates {
@@ -149,22 +166,45 @@ func (a *App) koiAnalyzeSource(ctx context.Context, userID int, source map[strin
 		}
 		rejected = filtered
 	}
+	if repositoryID != 0 {
+		if _, reviewed := review.repositories[repositoryID]; reviewed {
+			source["reviewedSubset"] = true
+		}
+		var skipped []koiSkillRejected
+		candidates, skipped = review.candidates(repositoryID, candidates)
+		rejected = append(rejected, skipped...)
+	}
+	if indexSource != nil && !indexStarted.IsZero() {
+		a.rememberKoiGitHubInstallability(ctx, indexSource, indexStarted, len(candidates) > 0, review.revision, newKoiInstallabilityEvidence(files, root, license))
+	}
 	return koiAnalysis{candidates: candidates, rejected: rejected, source: source}, nil
 }
 
 func (a *App) koiPreviewCandidates(ctx context.Context, q koiCompatibilityQuerier, userID int, kind string, source map[string]any, candidates []koiSkillCandidate) ([]koiSkillImportCandidate, error) {
 	previews := []koiSkillImportCandidate{}
-	for _, candidate := range candidates {
-		item := koiSkillImportCandidate{ID: candidate.ID, Name: candidate.Name, Description: candidate.Description, EntryPath: candidate.EntryPath, Directory: candidate.Directory, MetadataFormat: candidate.MetadataFormat, FileCount: candidate.FileCount, SizeBytes: candidate.SizeBytes, ContentSHA256: candidate.ContentSHA256, License: candidate.License, Instructions: candidate.Instructions, Compatibility: candidate.Compatibility}
+	for _, group := range koiCandidateGroups(kind, source, candidates) {
+		candidate := group[0]
 		var id string
 		var err error
 		if target := koiSourceText(source, "updateFromId"); target != "" {
 			id = target
 		} else if kind == "folder" {
 			id, err = koiFolderInstallationID(ctx, q, userID, candidate.ContentSHA256)
+		} else if kind == "github" || kind == "hub" || kind == "migration" {
+			var key string
+			id, key, err = koiRemoteInstallationMatch(ctx, q, userID, kind, source, group)
+			// Keep the installed copy's tracking directory when an upstream
+			// ships identical packages for multiple clients.
+			for _, alias := range group {
+				if koiRemoteSourceKey(kind, koiCandidateSource(source, alias)) == key {
+					candidate = alias
+					break
+				}
+			}
 		} else {
 			err = q.QueryRow(ctx, `SELECT id::text FROM koi_skill_installations WHERE user_id=$1 AND source_key=$2 AND deleted_at IS NULL`, userID, koiRemoteSourceKey(kind, koiCandidateSource(source, candidate))).Scan(&id)
 		}
+		item := koiSkillImportCandidate{ID: candidate.ID, Name: candidate.Name, Description: candidate.Description, EntryPath: candidate.EntryPath, Directory: candidate.Directory, MetadataFormat: candidate.MetadataFormat, FileCount: candidate.FileCount, SizeBytes: candidate.SizeBytes, ContentSHA256: candidate.ContentSHA256, License: candidate.License, Instructions: candidate.Instructions, Compatibility: candidate.Compatibility}
 		if errors.Is(err, pgx.ErrNoRows) {
 			previews = append(previews, item)
 			continue

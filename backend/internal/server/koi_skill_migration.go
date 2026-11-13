@@ -60,6 +60,10 @@ func (a *App) koiAnalyzeLegacyRepositories(ctx context.Context, userID int, sour
 	if workspaceIDs != nil && len(ids) != len(workspaceIDs) {
 		return koiAnalysis{}, errKoiSkillConflict
 	}
+	review, err := loadKoiRepositoryCuration(ctx, a.db)
+	if err != nil {
+		return koiAnalysis{}, err
+	}
 	entries := map[string]any{}
 	analysis := koiAnalysis{source: map[string]any{"kind": "migration", "entries": entries}}
 	content := map[string][]byte{}
@@ -72,13 +76,27 @@ func (a *App) koiAnalyzeLegacyRepositories(ctx context.Context, userID int, sour
 		if err != nil {
 			return koiAnalysis{}, err
 		}
-		candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{RootName: view.Name})
+		candidates, rejected := koiSkillCandidates(files, koiSkillSourceContext{RootName: view.Name, Review: review})
+		var repositoryID int64
+		if view.GitHubSource != nil {
+			repositoryID = view.GitHubSource.RepositoryID
+			if _, reviewed := review.repositories[repositoryID]; reviewed {
+				analysis.source["reviewedSubset"] = true
+			}
+			var skipped []koiSkillRejected
+			candidates, skipped = review.candidates(repositoryID, candidates)
+			rejected = append(rejected, skipped...)
+		}
 		for _, candidate := range candidates {
 			if selected[id] != nil && !selected[id][candidate.Directory] {
 				continue
 			}
 			candidate.ID = "sk-" + koiDigest([]byte(strconv.FormatInt(id, 10) + ":" + candidate.Directory))[:16]
-			entries[candidate.ID] = map[string]any{"kind": "migration", "workspaceId": id, "path": candidate.Directory, "directoryName": view.Name, "revision": view.Revision}
+			entry := map[string]any{"kind": "migration", "workspaceId": id, "path": candidate.Directory, "directoryName": view.Name, "revision": view.Revision}
+			if repositoryID > 0 {
+				entry["repositoryId"] = repositoryID
+			}
+			entries[candidate.ID] = entry
 			analysis.candidates = append(analysis.candidates, candidate)
 		}
 		for _, item := range rejected {

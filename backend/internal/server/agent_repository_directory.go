@@ -34,9 +34,11 @@ type agentRepositoryDirectoryItem struct {
 }
 
 type agentRepositoryDirectoryFacet struct {
-	SystemManaged bool   `json:"systemManaged"`
-	Category      string `json:"category"`
-	Count         int    `json:"count"`
+	SystemManaged       bool   `json:"systemManaged"`
+	Category            string `json:"category"`
+	Count               int    `json:"count"`
+	KoiInstallableCount int    `json:"koiInstallableCount"`
+	KoiPendingCount     int    `json:"koiPendingCount"`
 }
 
 // Counts and filters cover the entire public directory, never just the loaded page.
@@ -47,7 +49,9 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	category, source := r.URL.Query().Get("category"), r.URL.Query().Get("source")
-	if utf8.RuneCountInString(query) > 80 || (category != "" && !agentRepositoryCategoryAllowed(category)) || (source != "" && source != "system" && source != "community") {
+	koiFilter := r.URL.Query().Get("koiInstallable")
+	onlyKoi := koiFilter == "true"
+	if utf8.RuneCountInString(query) > 80 || (category != "" && !agentRepositoryCategoryAllowed(category)) || (source != "" && source != "system" && source != "community") || (koiFilter != "" && !onlyKoi) {
 		httpx.ErrorCode(w, 400, "bad_request", "Invalid directory search or filter")
 		return
 	}
@@ -59,6 +63,9 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		KoiSnapshot    *string   `json:"koiSnapshot,omitempty"`
 	}
 	scope := source + "\n" + category + "\n" + query
+	if onlyKoi {
+		scope += "\nkoiInstallable"
+	}
 	if raw := r.URL.Query().Get("cursor"); raw != "" {
 		if len(raw) > 1200 {
 			httpx.ErrorCode(w, 400, "bad_request", "Invalid cursor")
@@ -105,19 +112,21 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
       COALESCE((SELECT star_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
       EXISTS(SELECT 1 FROM agent_repository_stars s WHERE s.workspace_id=p.workspace_id AND s.user_id=$5),
       COALESCE((SELECT clone_count FROM agent_repository_stats s WHERE s.workspace_id=p.workspace_id),0),
-      COALESCE(p.koi_installable,false),priority.value
+      COALESCE(p.koi_installable AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton),false),priority.value
       FROM agent_repository_publications p JOIN agent_workspaces w ON w.id=p.workspace_id
       CROSS JOIN LATERAL (SELECT CASE WHEN $9 THEN
-        COALESCE(p.koi_installable AND pg_visible_in_snapshot(p.koi_installability_xid,$10::pg_snapshot),false)
+        COALESCE(p.koi_installable AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)
+        AND pg_visible_in_snapshot(p.koi_installability_xid,$10::pg_snapshot),false)
         ELSE false END AS value) priority
       LEFT JOIN agent_repository_publication_files f ON f.workspace_id=p.workspace_id
       WHERE w.deleted_at IS NULL AND ($1::bigint=0 OR
       (priority.value,p.published_at,p.workspace_id)<($8::boolean,$4::timestamptz,$1))
       AND (strpos(lower(p.name||' '||p.description||' '||COALESCE(p.github_source->>'author','')),lower($2))>0 OR $2='')
       AND ($6='' OR w.is_system=($6='system')) AND ($7='' OR w.hub_category=$7)
+      AND (NOT $11::boolean OR priority.value)
       GROUP BY p.workspace_id,w.is_system,w.hub_category,priority.value
       ORDER BY priority.value DESC,p.published_at DESC,p.workspace_id DESC LIMIT $3`,
-		cursor.ID, query, publicRepositoryPageSize+1, cursor.PublishedAt, viewer, source, category, cursorInstallable, prioritizeKoi, cursor.KoiSnapshot)
+		cursor.ID, query, publicRepositoryPageSize+1, cursor.PublishedAt, viewer, source, category, cursorInstallable, prioritizeKoi, cursor.KoiSnapshot, onlyKoi)
 	if err != nil {
 		writeAgentWorkspaceError(w, err)
 		return
@@ -143,8 +152,10 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 	metadata := map[string]any{}
 	if cursor.ID == 0 {
 		facets := []agentRepositoryDirectoryFacet{}
-		total := 0
-		rows, err = tx.Query(r.Context(), `SELECT w.is_system,w.hub_category,count(*) FROM agent_repository_publications p
+		total, pending := 0, 0
+		rows, err = tx.Query(r.Context(), `SELECT w.is_system,w.hub_category,count(*),count(*) FILTER (WHERE p.koi_installable
+      AND p.koi_installability_curation_revision=(SELECT revision FROM agent_repository_curation_state WHERE singleton)),
+      count(*) FILTER (WHERE p.koi_installable IS NULL OR p.koi_installability_curation_revision<>(SELECT revision FROM agent_repository_curation_state WHERE singleton)) FROM agent_repository_publications p
       JOIN agent_workspaces w ON w.id=p.workspace_id WHERE w.deleted_at IS NULL
       AND (strpos(lower(p.name||' '||p.description||' '||COALESCE(p.github_source->>'author','')),lower($1))>0 OR $1='')
       GROUP BY w.is_system,w.hub_category ORDER BY w.is_system,w.hub_category`, query)
@@ -154,14 +165,19 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 		}
 		for rows.Next() {
 			var facet agentRepositoryDirectoryFacet
-			if err = rows.Scan(&facet.SystemManaged, &facet.Category, &facet.Count); err != nil {
+			if err = rows.Scan(&facet.SystemManaged, &facet.Category, &facet.Count, &facet.KoiInstallableCount, &facet.KoiPendingCount); err != nil {
 				rows.Close()
 				writeAgentWorkspaceError(w, err)
 				return
 			}
 			facets = append(facets, facet)
 			if (category == "" || category == facet.Category) && (source == "" || (source == "system") == facet.SystemManaged) {
-				total += facet.Count
+				pending += facet.KoiPendingCount
+				if onlyKoi {
+					total += facet.KoiInstallableCount
+				} else {
+					total += facet.Count
+				}
 			}
 		}
 		err = rows.Err()
@@ -171,6 +187,7 @@ func (a *App) publicAgentRepositoriesList(w http.ResponseWriter, r *http.Request
 			return
 		}
 		metadata["total"], metadata["facets"] = total, facets
+		metadata["koiPending"] = pending
 	}
 	if err = tx.Commit(r.Context()); err != nil {
 		writeAgentWorkspaceError(w, err)

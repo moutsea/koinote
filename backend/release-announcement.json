@@ -1,40 +1,40 @@
 {
-  "version": "1.1.22",
+  "version": "1.1.23",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.22",
+      "title": "What's new in Koinote 1.1.23",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Koi AI can generate article covers with in-chat previews and downloads. Each successful image costs 20 additional Credits, billed separately from text usage, and does not replace the article cover automatically.",
-        "Combined image and writing requests retain both results, with clearer slow-generation, retry and billing status messages.",
-        "Older clients receive installation guidance for GitHub link entries, and repository discovery re-evaluates previously skipped sources under the link collection policy."
+        "Hub adds an “Installable in Koi AI” filter that works with search, source and category filters, while continuing to prioritize writing, knowledge management and research Skills.",
+        "Identical Skill copies from the same repository are grouped for preview and installation, with clearer installation status, supported entry points and availability explanations.",
+        "Skill availability reflects compatibility rule changes while running tasks retain their pinned versions. Temporarily unavailable Skills can also be switched off."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.22 新功能",
+      "title": "Koinote 1.1.23 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi AI 可按文章内容生成封面，支持会话内预览和下载；每张成功生成的封面额外收取 20 Credits，文本费用另计，不会自动替换文章封面。",
-        "同时请求生图和文字建议时，两项成果均会保留；优化慢速生成、失败重试及费用状态提示。",
-        "完善 GitHub 链接仓库在旧客户端的安装引导，并让自动发掘按链接收录规则重新评估此前未收录的来源。"
+        "Hub 新增「Koi AI 可安装」筛选，支持结合搜索、来源与用途分类浏览；继续优先发现写作、知识管理和研究类技能。",
+        "同一仓库中相同内容的技能副本合并展示和安装，技能的已安装状态、可用范围及不可用原因更清晰。",
+        "兼容性规则变化后及时更新技能可用状态，运行中的任务保留原版本；暂不可用的技能也可主动关闭。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.22",
+      "title": "Nouveautés de Koinote 1.1.23",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Koi AI peut générer des couvertures d’articles, avec aperçu et téléchargement dans la conversation. Chaque image générée coûte 20 Credits supplémentaires, hors texte, sans remplacer automatiquement la couverture de l’article.",
-        "Les demandes combinant image et conseils conservent les deux résultats. Les messages de génération lente, de nouvelle tentative et de facturation sont plus clairs.",
-        "Les anciens clients affichent un guide d’installation pour les liens GitHub. La découverte réévalue les sources précédemment ignorées selon les règles de référencement par lien."
+        "Le Hub ajoute un filtre « Installable dans Koi AI », combinable avec la recherche, la source et les catégories, et continue de privilégier les Skills de rédaction, de gestion des connaissances et de recherche.",
+        "Les copies identiques d’un Skill provenant du même dépôt sont regroupées dans l’aperçu et à l’installation. Le statut d’installation, les modes d’utilisation compatibles et les raisons d’indisponibilité sont plus clairs.",
+        "La disponibilité des Skills suit les changements de règles de compatibilité, tandis que les tâches en cours conservent leur version. Les Skills temporairement indisponibles peuvent également être désactivés."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.22 の新機能",
+      "title": "Koinote 1.1.23 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Koi AI が記事の内容に合わせたカバー画像を生成し、会話内でプレビュー・ダウンロードできるようになりました。生成成功時は1枚につき20 Creditsが追加され、テキスト料金は別途精算します。記事のカバーは自動変更しません。",
-        "画像生成と文章の提案を同時に依頼した場合も、両方の結果を保持します。生成に時間がかかる場合や再試行、料金の表示も改善しました。",
-        "旧クライアント向けに GitHub リンク項目のインストール案内を追加し、自動発見では過去に見送ったソースをリンク収録のルールで再評価します。"
+        "Hub に「Koi AI にインストール可能」フィルターを追加しました。検索、掲載元、用途カテゴリと組み合わせて閲覧でき、執筆・知識管理・研究向けスキルを引き続き優先して収集します。",
+        "同じリポジトリ内の内容が同一のスキルをプレビューとインストールでまとめ、インストール状態、利用可能な画面、利用できない理由を分かりやすくしました。",
+        "互換性ルールの変更に応じてスキルの利用可否を更新し、実行中のタスクは元のバージョンを保持します。一時的に利用できないスキルも無効にできます。"
       ]
     }
   }

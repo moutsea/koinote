@@ -36,15 +36,15 @@ type koiSkillInstallation struct {
 }
 
 const koiInstallationColumns = `i.id::text,i.name,i.description,i.source_kind,i.source,i.enabled,i.revision,i.created_at,i.updated_at,
- v.id::text,v.content_sha256,v.entry_path,v.metadata_format,v.license,v.compatibility,v.file_count,v.size_bytes`
+ v.id::text,v.content_sha256,v.entry_path,v.metadata_format,v.license,v.compatibility,v.file_count,v.size_bytes,` + koiInstallationReviewRepositoryID
 
-func scanKoiInstallation(row pgx.Row) (koiSkillInstallation, error) {
+func scanKoiInstallation(row pgx.Row, review koiRepositoryCuration) (koiSkillInstallation, error) {
 	var skill koiSkillInstallation
 	var source, compatibility []byte
-	var versionID, sha, entry, format, license string
+	var versionID, sha, entry, format, license, reviewRepositoryID string
 	err := row.Scan(&skill.ID, &skill.Name, &skill.Description, &skill.SourceKind, &source, &skill.Enabled,
 		&skill.Revision, &skill.InstalledAt, &skill.UpdatedAt, &versionID, &sha, &entry, &format, &license,
-		&compatibility, &skill.FileCount, &skill.SizeBytes)
+		&compatibility, &skill.FileCount, &skill.SizeBytes, &reviewRepositoryID)
 	if err != nil {
 		return skill, err
 	}
@@ -55,6 +55,7 @@ func scanKoiInstallation(row pgx.Row) (koiSkillInstallation, error) {
 	// Use a short content hash as the installed version label.
 	skill.Version = sha[:12]
 	_ = json.Unmarshal(compatibility, &skill.Compatibility)
+	skill.Compatibility = review.compatibility(reviewRepositoryID, sha, skill.Compatibility)
 	return skill, nil
 }
 
@@ -82,9 +83,13 @@ func (a *App) loadKoiInstallation(ctx context.Context, q koiCompatibilityQuerier
 	if err := refreshKoiSkillEntryCompatibility(ctx, q, userID); err != nil {
 		return koiSkillInstallation{}, err
 	}
+	review, err := loadKoiRepositoryCuration(ctx, q)
+	if err != nil {
+		return koiSkillInstallation{}, err
+	}
 	return scanKoiInstallation(q.QueryRow(ctx, `SELECT `+koiInstallationColumns+` FROM koi_skill_installations i
  JOIN koi_skill_versions v ON v.id=i.current_version_id
- WHERE i.user_id=$1 AND i.id=$2 AND i.deleted_at IS NULL`, userID, id))
+ WHERE i.user_id=$1 AND i.id=$2 AND i.deleted_at IS NULL`, userID, id), review)
 }
 
 func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
@@ -126,16 +131,22 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 		writeKoiError(w, err)
 		return
 	}
+	review, err := loadKoiRepositoryCuration(r.Context(), a.db)
+	if err != nil {
+		writeKoiError(w, err)
+		return
+	}
+	available := `(COALESCE((v.compatibility->>'conversation')::boolean,false) AND ` + koiInstallationReviewAllowsSQL("$9", "false") + `)`
 	rows, err := a.db.Query(r.Context(), `SELECT `+koiInstallationColumns+` FROM koi_skill_installations i
  JOIN koi_skill_versions v ON v.id=i.current_version_id
  WHERE i.user_id=$1 AND i.deleted_at IS NULL
  AND (strpos(lower(i.name),lower($4))>0 OR strpos(lower(i.description),lower($4))>0)
- AND ($5='' OR ($5='enabled' AND i.enabled) OR ($5='disabled' AND NOT i.enabled)
- OR ($5='unavailable' AND NOT COALESCE((v.compatibility->>'conversation')::boolean,false)))
+ AND ($5='' OR ($5='enabled' AND i.enabled AND `+available+`) OR ($5='disabled' AND NOT i.enabled AND `+available+`)
+ OR ($5='unavailable' AND NOT `+available+`))
  AND ($6='' OR i.source_kind=$6)
  AND ($7='' OR (i.source_kind='hub' AND i.source->>'workspaceId'=$7))
  AND ($8='' OR (i.source_kind='github' AND i.source->>'repositoryId'=$8))
- ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source, hubWorkspace, githubRepository)
+ ORDER BY i.updated_at DESC,i.id LIMIT $2 OFFSET $3`, user.ID, limit+1, offset, query, state, source, hubWorkspace, githubRepository, review.policiesJSON)
 	if err != nil {
 		writeKoiError(w, err)
 		return
@@ -143,7 +154,7 @@ func (a *App) koiSkillsList(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	skills := []koiSkillInstallation{}
 	for rows.Next() {
-		skill, err := scanKoiInstallation(rows)
+		skill, err := scanKoiInstallation(rows, review)
 		if err != nil {
 			writeKoiError(w, err)
 			return
@@ -393,7 +404,7 @@ func (a *App) koiWriteSkillVersion(ctx context.Context, tx pgx.Tx, userID int, i
 		return "", err
 	}
 	rawMetadata, _ := json.Marshal(candidate.RawMetadata)
-	compatibility, _ := json.Marshal(candidate.Compatibility)
+	compatibility, _ := json.Marshal(koiSkillCompatibilityFor(candidate.RawMetadata))
 	versionID, err := randomUUID()
 	if err != nil {
 		return "", err

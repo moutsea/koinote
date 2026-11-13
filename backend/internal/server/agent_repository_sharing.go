@@ -207,12 +207,7 @@ func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID
 		if err != nil {
 			return err
 		}
-		var installable *bool
-		if githubSource != nil && githubSource.LinkOnly {
-			value := false
-			installable = &value
-		}
-		err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, installable)
+		err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, nil, 0)
 	}
 	if err != nil {
 		return err
@@ -230,7 +225,7 @@ func (a *App) setAgentRepositoryPublicationForOwner(ctx context.Context, ownerID
 	return tx.Commit(ctx)
 }
 
-func replaceAgentRepositoryPublicationFiles(ctx context.Context, tx pgx.Tx, id int64, koiInstallable *bool) error {
+func replaceAgentRepositoryPublicationFiles(ctx context.Context, tx pgx.Tx, id int64, koiInstallable *bool, reviewRevision int64) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM agent_repository_publication_files WHERE workspace_id=$1`, id); err != nil {
 		return err
 	}
@@ -241,8 +236,11 @@ func replaceAgentRepositoryPublicationFiles(ctx context.Context, tx pgx.Tx, id i
 	}
 	// File replacement and its compatibility result/invalidation commit together.
 	_, err = tx.Exec(ctx, `UPDATE agent_repository_publications SET koi_installable=$2,
+ koi_installability_curation_revision=$3,
+ koi_installability_evidence=NULL,
+ koi_installability_attempted_at=NULL,
  koi_installability_checked_at=CASE WHEN $2::boolean IS NULL THEN NULL ELSE now() END,
- koi_installability_xid=CASE WHEN $2::boolean IS NULL THEN NULL ELSE pg_current_xact_id() END WHERE workspace_id=$1`, id, koiInstallable)
+ koi_installability_xid=CASE WHEN $2::boolean IS NULL THEN NULL ELSE pg_current_xact_id() END WHERE workspace_id=$1`, id, koiInstallable, reviewRevision)
 	return err
 }
 

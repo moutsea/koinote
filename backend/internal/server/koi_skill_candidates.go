@@ -41,6 +41,7 @@ type koiSkillRejected struct {
 // Keep the original tree and source context until package boundaries and
 // ancestor notices have been resolved. Directory is repository-relative.
 type koiSkillSourceContext struct {
+	Review    koiRepositoryCuration
 	Directory string
 	RootName  string
 	License   string
@@ -183,12 +184,12 @@ func koiSkillCandidates(files []koiSkillFile, contexts ...koiSkillSourceContext)
 				reject(name, "invalid_runtime_metadata", issues...)
 				continue
 			}
-			candidate.Compatibility = koiSkillCompatibilityFor(raw)
+			candidate.ContentSHA256 = koiSkillContentDigest(rebased)
+			candidate.Compatibility = source.Review.contentCompatibility(candidate.ContentSHA256, koiSkillCompatibilityFor(raw))
 			if !candidate.Compatibility.Conversation {
 				reject(name, "incompatible", candidate.Compatibility.Reasons...)
 				continue
 			}
-			candidate.ContentSHA256 = koiSkillContentDigest(rebased)
 			candidate.ID = "sk-" + koiDigest([]byte(candidate.Directory + ":" + candidate.ContentSHA256))[:16]
 			candidates = append(candidates, candidate)
 		}

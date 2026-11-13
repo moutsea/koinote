@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowDownToLine, ArrowRight, BookOpen, Bot, Clapperboard, Code2, Compass, FileText, FolderGit2, Github, LayoutGrid, LibraryBig, PenLine, PencilRuler, Search, Shapes, Star, TrendingUp, X, type LucideIcon } from "lucide-react";
+import { ArrowDownToLine, ArrowRight, BookOpen, Bot, Clapperboard, Code2, Compass, FileText, FolderGit2, Github, LayoutGrid, LibraryBig, PenLine, PencilRuler, Search, Shapes, Sparkles, Star, TrendingUp, X, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSession } from "../auth";
 import { listPublicAgentRepositories, PUBLIC_REPOSITORIES_QUERY_KEY, type PublicRepositorySummary } from "../agentRepositorySharing";
@@ -20,16 +20,16 @@ export function AgentPublicRepositoriesPage() {
   const session = useSession();
   const directorySearch = useSearch({ from: "/repositories" });
   const navigate = useNavigate({ from: "/repositories" });
-  const { q: search = "", source = "", category = "" } = directorySearch;
+  const { q: search = "", source = "", category = "", koiInstallable } = directorySearch;
   const [input, setInput] = useState(search);
   useEffect(() => { setInput(search); }, [search]);
   function updateFilters(change: RepositoryDirectorySearch) {
     void navigate({ to: "/repositories", search: (previous) => parseRepositoryDirectorySearch({ ...previous, ...change }), resetScroll: false });
   }
   const repositories = useInfiniteQuery({
-    queryKey: [PUBLIC_REPOSITORIES_QUERY_KEY, search, source, category, session.data?.user?.id],
+    queryKey: [PUBLIC_REPOSITORIES_QUERY_KEY, search, source, category, koiInstallable, session.data?.user?.id],
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => listPublicAgentRepositories(search, pageParam, { source, category }),
+    queryFn: ({ pageParam }) => listPublicAgentRepositories(search, pageParam, { source, category, koiInstallable }),
     getNextPageParam: (page) => page.nextCursor ?? undefined, retry: false,
   });
   const items = [...new Map(repositories.data?.pages.flatMap((page) => page.repositories).map((item) => [item.workspaceId, item]) ?? []).values()];
@@ -37,7 +37,8 @@ export function AgentPublicRepositoriesPage() {
   const facets = firstPage?.facets ?? [];
   const categoryLabel = (value: RepositoryCategory | "") => value ? labels[`hubCategory_${value}`] : labels.hubAllCategories;
   const total = firstPage?.total ?? items.length;
-  const hasFilters = Boolean(search || source || category);
+  const pendingKoi = firstPage?.koiPending ?? 0;
+  const hasFilters = Boolean(search || source || category || koiInstallable);
   function clearFilters() { setInput(""); void navigate({ to: "/repositories", search: {}, resetScroll: false }); }
   return <PageContainer className="repository-hub flex-1 py-8 sm:py-12">
     <header className="hub-intro relative overflow-hidden rounded-2xl border p-6 sm:p-8 lg:px-10">
@@ -55,7 +56,7 @@ export function AgentPublicRepositoriesPage() {
       <div role="group" aria-label={labels.hubSources} className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl bg-[var(--ink-wash)] p-1">
         {(["", "system", "community"] as const).map((value) => <button key={value} type="button" aria-pressed={source === value} onClick={() => updateFilters({ source: value || undefined })} className={`hub-source-button inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm transition sm:px-4 ${source === value ? "bg-[var(--ink-paper)] font-medium text-[var(--ink-strong)] shadow-sm" : "text-[var(--ink-mid)] hover:text-[var(--ink-strong)]"}`}>
           {value === "system" ? labels.hubSystemBadge : value === "community" ? labels.hubCommunity : labels.hubAllRepositories}
-          <span className="text-[11px] tabular-nums text-[var(--ink-mid)]">{firstPage ? repositoryFacetCount(facets, value, category) : "—"}</span>
+          <span className="text-[11px] tabular-nums text-[var(--ink-mid)]">{firstPage ? repositoryFacetCount(facets, value, category, koiInstallable) : "—"}</span>
         </button>)}
       </div>
       <form className="flex min-w-0 items-center gap-2 rounded-xl border bg-[var(--ink-paper-soft)] p-1.5 lg:w-[24rem]" role="search" onSubmit={(event) => { event.preventDefault(); updateFilters({ q: input.trim() || undefined }); }}>
@@ -67,31 +68,40 @@ export function AgentPublicRepositoriesPage() {
 
     <div className="grid min-w-0 gap-6 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-8">
       <aside className="min-w-0 self-start lg:sticky lg:top-24">
+        <nav aria-label={labels.hubRepositoryViews} className="mb-5 flex gap-1.5 overflow-x-auto border-b pb-4 lg:flex-col">
+          <button type="button" aria-pressed={Boolean(koiInstallable)} onClick={() => updateFilters({ koiInstallable: koiInstallable ? undefined : true })} className={`hub-view-button flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm transition lg:w-full ${koiInstallable ? "bg-[var(--ink-wash-strong)] font-medium text-[var(--cinnabar)]" : "text-[var(--ink-mid)] hover:bg-[var(--ink-wash)] hover:text-[var(--ink-strong)]"}`}>
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{labels.hubKoiInstallable}</span>
+            <span className="ml-auto pl-2 text-[11px] tabular-nums text-[var(--ink-mid)]">{firstPage ? repositoryFacetCount(facets, source, category, true) : "—"}</span>
+          </button>
+        </nav>
         <h2 className="mb-3 flex items-center gap-2 px-1 text-xs font-medium text-[var(--ink-mid)]"><Compass className="h-3.5 w-3.5" aria-hidden="true" />{labels.hubBrowseCategories}</h2>
         <nav aria-label={labels.hubBrowseCategories} className="flex gap-1.5 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible">
           {(["", ...REPOSITORY_CATEGORIES] as const).map((value) => {
             const Icon = value ? CATEGORY_ICONS[value] : LayoutGrid;
             return <button type="button" key={value} aria-pressed={category === value} onClick={() => updateFilters({ category: value || undefined })} className={`hub-category-button flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm transition lg:w-full ${category === value ? "bg-[var(--ink-wash-strong)] font-medium text-[var(--cinnabar)]" : "text-[var(--ink-mid)] hover:bg-[var(--ink-wash)] hover:text-[var(--ink-strong)]"}`}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{categoryLabel(value)}</span>
-              <span className="ml-auto pl-2 text-[11px] tabular-nums text-[var(--ink-mid)]">{firstPage ? repositoryFacetCount(facets, source, value) : "—"}</span>
+              <span className="ml-auto pl-2 text-[11px] tabular-nums text-[var(--ink-mid)]">{firstPage ? repositoryFacetCount(facets, source, value, koiInstallable) : "—"}</span>
             </button>;
           })}
         </nav>
-        <p className="mt-5 hidden border-t px-1 pt-4 text-xs leading-6 text-[var(--ink-mid)] lg:block">{labels.hubBrowseHint}</p>
+        <p className="mt-5 border-t px-1 pt-4 text-xs leading-6 text-[var(--ink-mid)]">{koiInstallable ? labels.hubKoiInstallableHint : labels.hubBrowseHint}</p>
       </aside>
 
       <section aria-label={labels.hubResults} aria-busy={repositories.isFetching} className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3"><h2 className="text-base font-semibold">{categoryLabel(category)}</h2><span role="status" className="text-xs tabular-nums text-[var(--ink-mid)]">{repositories.isPending ? labels.loading : labels.hubResultCount.replace("{count}", String(total))}</span></div>
-          <span className="text-[11px] text-[var(--ink-mid)]">{labels.publicSortUpdated}</span>
+          <div className="flex flex-wrap items-center gap-3"><h2 className="text-base font-semibold">{koiInstallable ? `${labels.hubKoiInstallable}${category ? ` · ${categoryLabel(category)}` : ""}` : categoryLabel(category)}</h2><span role="status" className="text-xs tabular-nums text-[var(--ink-mid)]">{repositories.isPending ? labels.loading : labels.hubResultCount.replace("{count}", String(total))}</span></div>
+          <span className="text-[11px] text-[var(--ink-mid)]">{koiInstallable ? labels.hubSortLatest : labels.publicSortUpdated}</span>
         </div>
         {hasFilters && <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-[var(--ink-mid)]">
           {search && <span className="rounded-md border px-2 py-1">“{search}”</span>}
           <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 rounded-md px-1 py-1 hover:text-[var(--ink-strong)]"><X className="h-3 w-3" aria-hidden="true" />{labels.hubClearFilters}</button>
         </div>}
+        {koiInstallable && pendingKoi > 0 && <p role="status" className="mb-4 rounded-xl border p-4 text-xs leading-6 text-[var(--ink-mid)]">
+          {labels.hubKoiChecking.replace("{count}", String(pendingKoi))} {labels.hubKoiCheckingHint} <button type="button" disabled={repositories.isFetching} onClick={() => void repositories.refetch()} className="underline disabled:opacity-50">{labels.refresh}</button>
+        </p>}
         {repositories.isPending && <div aria-hidden="true" className="grid gap-4 sm:grid-cols-2">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-56 rounded-xl border bg-[var(--ink-paper-soft)] p-5 motion-safe:animate-pulse"><div className="h-7 w-7 rounded-lg bg-[var(--ink-wash-strong)]" /><div className="mt-5 h-4 w-3/5 rounded bg-[var(--ink-wash-strong)]" /><div className="mt-3 h-3 rounded bg-[var(--ink-wash)]" /><div className="mt-2 h-3 w-4/5 rounded bg-[var(--ink-wash)]" /></div>)}</div>}
         {repositories.isError && <p role="alert" className="mb-4 rounded-xl border p-5 text-sm">{labels.repositoryLoadFailed} <button type="button" disabled={repositories.isFetching} onClick={() => void (repositories.isFetchNextPageError ? repositories.fetchNextPage() : repositories.refetch())} className="underline disabled:opacity-50">{labels.refresh}</button></p>}
-        {!repositories.isPending && !repositories.isError && !items.length && <div className="rounded-xl border border-dashed py-16 text-center"><FolderGit2 className="mx-auto mb-4 h-8 w-8 text-[var(--ink-mid)]" aria-hidden="true" /><h3 className="text-sm font-medium">{labels.publicEmpty}</h3><p className="mx-auto mt-2 max-w-sm px-4 text-xs leading-6 text-[var(--ink-mid)]">{hasFilters ? labels.hubEmptyFiltered : labels.hubEmptyHint}</p>{hasFilters && <button type="button" onClick={clearFilters} className="mt-5 rounded-lg border px-4 py-2 text-xs">{labels.hubClearFilters}</button>}</div>}
+        {!repositories.isPending && !repositories.isError && !items.length && !(koiInstallable && pendingKoi > 0) && <div className="rounded-xl border border-dashed py-16 text-center"><FolderGit2 className="mx-auto mb-4 h-8 w-8 text-[var(--ink-mid)]" aria-hidden="true" /><h3 className="text-sm font-medium">{labels.publicEmpty}</h3><p className="mx-auto mt-2 max-w-sm px-4 text-xs leading-6 text-[var(--ink-mid)]">{hasFilters ? labels.hubEmptyFiltered : labels.hubEmptyHint}</p>{hasFilters && <button type="button" onClick={clearFilters} className="mt-5 rounded-lg border px-4 py-2 text-xs">{labels.hubClearFilters}</button>}</div>}
         <div className="grid gap-4 sm:grid-cols-2">{items.map((item) => <RepositoryCard key={item.workspaceId} item={item} directorySearch={directorySearch} />)}</div>
         {!repositories.isPending && items.length > 0 && <div className="mt-7 flex flex-col items-center gap-3 border-t pt-6">
           <p className="text-xs tabular-nums text-[var(--ink-mid)]">{labels.hubShowing.replace("{shown}", String(items.length)).replace("{total}", String(total))}</p>

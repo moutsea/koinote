@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,9 +27,10 @@ func run() int {
 	id := flag.Int64("workspace-id", 0, "Only update this system repository (default: all)")
 	discover := flag.Bool("discover", false, "Find and publish up to 20 new popular Skills repositories per Shanghai calendar day")
 	convertLinks := flag.Bool("convert-public-to-links", false, "Convert publicly available system GitHub mirrors to links; retain unavailable or hidden sources")
+	checkKoi := flag.Bool("check-koi-installability", false, "Check Koi AI compatibility only; requires --apply")
 	flag.Parse()
-	if flag.NArg() != 0 || *id < 0 || (*discover && (*id != 0 || *convertLinks)) {
-		fmt.Fprintln(os.Stderr, "Use --apply with either --discover or --workspace-id; IDs must be nonnegative")
+	if flag.NArg() != 0 || *id < 0 || (*discover && (*id != 0 || *convertLinks)) || (*checkKoi && (!*apply || *discover || *convertLinks || *id != 0)) {
+		fmt.Fprintln(os.Stderr, "Use one mode: --discover, --workspace-id, --convert-public-to-links, or --check-koi-installability --apply; IDs must be nonnegative")
 		return 2
 	}
 	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
@@ -55,6 +57,7 @@ func run() int {
 	encoder := json.NewEncoder(os.Stdout)
 	app := server.New(cfg, pool)
 	var summary any
+	checked := 0
 	if *convertLinks {
 		summary, err = app.ConvertPublicSystemRepositoriesToLinks(ctx, server.SystemRepositoryLinkOptions{
 			Apply: *apply, WorkspaceID: *id, GitHubToken: token,
@@ -73,7 +76,7 @@ func run() int {
 				}
 			},
 		})
-	} else {
+	} else if !*checkKoi {
 		summary, err = app.SyncSystemAgentRepositories(ctx, server.SystemRepositorySyncOptions{
 			Apply: *apply, WorkspaceID: *id, GitHubToken: token,
 			OnResult: func(result server.SystemRepositorySyncResult) {
@@ -83,7 +86,23 @@ func run() int {
 			},
 		})
 	}
-	if encodeErr := encoder.Encode(map[string]any{"summary": summary, "applied": *apply}); encodeErr != nil {
+	var checkErr error
+	if *checkKoi || (*apply && *id == 0 && !*convertLinks && (err == nil || errors.Is(err, server.ErrSystemRepositoriesNeedAttention))) {
+		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Minute)
+		checked, checkErr = app.RefreshAgentRepositoryKoiInstallability(checkCtx, token)
+		checkCancel()
+	}
+	return finishMaintenance(os.Stdout, os.Stderr, summary, *apply, checked, err, checkErr)
+}
+
+func finishMaintenance(stdout, stderr io.Writer, summary any, applied bool, checked int, err, checkErr error) int {
+	deferred := errors.Is(checkErr, server.ErrKoiInstallabilityDeferred)
+	if deferred {
+		fmt.Fprintf(stderr, "Compatibility checks deferred because GitHub is temporarily unavailable (code=%s); saved results for deferred checks are retained and pending checks remain eligible for a later maintenance run\n", server.SystemRepositoryErrorCode(checkErr))
+	} else if checkErr != nil {
+		err = checkErr
+	}
+	if encodeErr := json.NewEncoder(stdout).Encode(map[string]any{"summary": summary, "applied": applied, "compatibilityChecks": checked, "compatibilityDeferred": deferred}); encodeErr != nil {
 		return 1
 	}
 	if err != nil {
@@ -91,13 +110,13 @@ func run() int {
 			// Every failure is a permanent upstream state that no retry can clear.
 			// The sweep itself succeeded, so stay quiet instead of mailing the
 			// operator once per night until the entries are retired by hand.
-			fmt.Fprintln(os.Stderr, "System repository maintenance completed; entries listed with status=failed need attention and were left unchanged")
+			fmt.Fprintln(stderr, "System repository maintenance completed; entries listed with status=failed need attention and were left unchanged")
 			return 0
 		}
 		// Classify instead of printing the raw error: database/network errors can
 		// contain connection details or credentials. The code keeps the log
 		// actionable, which a bare "did not complete" does not.
-		fmt.Fprintf(os.Stderr, "System repository maintenance did not complete successfully (code=%s); see the results and summary\n", server.SystemRepositoryErrorCode(err))
+		fmt.Fprintf(stderr, "System repository maintenance did not complete successfully (code=%s); see the results and summary\n", server.SystemRepositoryErrorCode(err))
 		return 1
 	}
 	return 0

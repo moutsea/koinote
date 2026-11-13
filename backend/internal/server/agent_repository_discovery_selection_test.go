@@ -44,12 +44,59 @@ func TestSystemRepositoryDiscoveryCategories(t *testing.T) {
 		{"learn-from-materials", "", "research"},
 		{"skills", "Organize an Obsidian knowledge base", "research"},
 		{"notes", "将材料整理成知识库与阅读笔记", "research"},
-		{"bama", "Agent skills to research, clone and build native macOS apps", "agents"},
-		{"skills", "Reusable coding skills", "agents"},
+		{"bama", "Agent skills to research, clone and build native macOS apps", "development"},
+		{"skills", "Reusable coding skills", "development"},
+		{"SwiftUI-Agent-Skill", "Skills for Claude Code", "development"},
+		{"terrashark", "Terraform Skill for Claude Code and Codex", "development"},
+		{"oil-ui", "UI design skill for Claude Code, Codex and other AI agents", "design"},
+		{"hallmark", "Anti-AI-slop design skill for Claude Code, Cursor, and Codex.", "design"},
+		{"beautify-github-readme", "README design skill for Claude Code & Codex.", "design"},
+		{"security-audit-skill", "Security auditing", "development"},
+		{"website-rebuild-skill", "Rebuild websites", "development"},
+		{"HIGAgentSkills", "Apple Human Interface Guidelines for Agents", "design"},
+		{"frontend-slides", "Create beautiful slides using frontend skills", "media"},
+		{"2dimg2motion", "Agent skill for converting 2D characters", "media"},
+		{"superseo-skills", "SEO and article writing", "product"},
+		{"Amazon-Skills", "keyword research and listing audits for Amazon sellers", "product"},
+		{"a-share-skill", "A股数据分析、量化选股与模拟交易 Skill 集合", "research"},
+		{"lieflat-less-ai-tone", "去 AI 味 skill", "writing"},
+		{"document-format-skills", "Word document formatting", "writing"},
+		{"skills", "Agent skills to find and fix software bugs", "development"},
+		{"skills", "中文电商运营技能", "product"},
+		{"skills", "视频配图技能", "media"},
+		{"skills", "UI 界面设计技能", "design"},
+		{"skills", "通用 Agent 技能合集", "agents"},
+		{"workflow", "Coordinate multiple agents and manage skills", "agents"},
+		{"claude-skills", "Skills for sales, marketing, design, engineering, and AI agent architecture", "agents"},
+		{"claude-skills", "Skills covering brand, design, content, SEO, dev, ops, growth, and research", "agents"},
 	} {
-		if got := systemRepositoryDiscoveryCategory(tc.name, tc.description); got != tc.category {
+		if got := systemRepositoryDiscoveryCategory(tc.name, tc.description, ""); got != tc.category {
 			t.Errorf("%q: got %q, want %q", tc.name, got, tc.category)
 		}
+	}
+}
+
+func TestDiscoveryPublishesReviewedPurposeCategory(t *testing.T) {
+	ctx := context.Background()
+	app, _, fixture := newDiscoveryFixture(t, 1)
+	item := &fixture.items[0]
+	item.Owner.Login, item.Name, item.FullName, item.Description = "typesafe-ai", "skills", "typesafe-ai/skills", "Agent tools"
+	koiTestCuration(t, app, koiReviewedRepository{RepositoryID: item.ID, RepositoryURL: "https://github.com/typesafe-ai/skills", Category: "development"})
+	var result SystemRepositoryDiscoveryResult
+	summary, err := app.DiscoverSystemAgentRepositories(ctx, SystemRepositoryDiscoveryOptions{
+		Apply: true, GitHubToken: "discovery-test-token",
+		OnResult: func(value SystemRepositoryDiscoveryResult) {
+			if value.Status == "added" {
+				result = value
+			}
+		},
+	})
+	if err != nil || summary.Added != 1 || result.Category != "development" {
+		t.Fatalf("reviewed discovery: %+v %+v %v", summary, result, err)
+	}
+	var category string
+	if err := app.db.QueryRow(ctx, `SELECT hub_category FROM agent_workspaces WHERE id=$1`, result.WorkspaceID).Scan(&category); err != nil || category != "development" {
+		t.Fatalf("published purpose drifted: %q %v", category, err)
 	}
 }
 
@@ -92,7 +139,7 @@ func TestDiscoveredKoiSkillsMatchInstallationPreview(t *testing.T) {
 					files = append(files, repositoryTestFile(dir+"reference.md", strings.Repeat("a", koiSkillFileBytes)))
 				}
 			}
-			if code := validateDiscoveredKoiSkills(files, "MIT"); code != "koi_preview_too_large" {
+			if code := validateDiscoveredKoiSkills(files, "MIT", 0); code != "koi_preview_too_large" {
 				t.Fatalf("root preview cannot read this collection: %q", code)
 			}
 		})
@@ -169,7 +216,7 @@ func TestDiscoveredRepositoryCategoryBackfillPreservesManualAndPrivateCopies(t *
 		if i == 1 {
 			url = "https://github.com/dmoshehun-prog/learn-from-materials"
 		}
-		if _, err = app.db.Exec(ctx, `UPDATE agent_workspaces SET github_source=jsonb_set(github_source,'{repositoryUrl}',to_jsonb($2::text)) WHERE id=$1`, result.WorkspaceID, url); err != nil {
+		if _, err = app.db.Exec(ctx, `UPDATE agent_workspaces SET hub_category='agents',github_source=jsonb_set(github_source,'{repositoryUrl}',to_jsonb($2::text)) WHERE id=$1`, result.WorkspaceID, url); err != nil {
 			t.Fatal(err)
 		}
 	}

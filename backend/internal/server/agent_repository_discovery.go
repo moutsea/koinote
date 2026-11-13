@@ -242,9 +242,15 @@ func (a *App) searchSystemRepositoryCandidates(ctx context.Context, token string
 	for _, item := range byID {
 		items = append(items, item)
 	}
+	review, err := loadKoiRepositoryCuration(ctx, a.db)
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(items, func(i, j int) bool {
-		preferredI := systemRepositoryDiscoveryCategory(items[i].Name, items[i].Description) != "agents"
-		preferredJ := systemRepositoryDiscoveryCategory(items[j].Name, items[j].Description) != "agents"
+		categoryI := systemRepositoryDiscoveryCategory(items[i].Name, items[i].Description, "https://github.com/"+items[i].FullName, review)
+		categoryJ := systemRepositoryDiscoveryCategory(items[j].Name, items[j].Description, "https://github.com/"+items[j].FullName, review)
+		preferredI := categoryI == "writing" || categoryI == "research"
+		preferredJ := categoryJ == "writing" || categoryJ == "research"
 		if preferredI != preferredJ {
 			return preferredI
 		}
@@ -349,7 +355,7 @@ func compactLicenseRestrictionText(value string) string {
 	}, value)
 }
 
-func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, license string) string {
+func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, license string, reviews ...koiRepositoryCuration) string {
 	hasSkill := false
 	for _, file := range files {
 		if agentRepositorySensitivePath(file.Path) || agentWorkspaceSensitiveContent([]byte(file.Path)) {
@@ -365,13 +371,17 @@ func validateDiscoveredSkills(files []agentWorkspaceFile, repositoryID int64, li
 	if !systemRepositoryLicenseFilesAllowed(files, repositoryID, license) {
 		return "license_review_required"
 	}
-	return validateDiscoveredKoiSkills(files, license)
+	return validateDiscoveredKoiSkills(files, license, repositoryID, reviews...)
 }
 
 // Match the root Hub installation preview, including its aggregate read limits
 // and per-package parsing, size and declared capability checks. Keep the full
 // repository unchanged; a mixed collection needs at least one usable Skill.
-func validateDiscoveredKoiSkills(files []agentWorkspaceFile, license string) string {
+func validateDiscoveredKoiSkills(files []agentWorkspaceFile, license string, repositoryID int64, reviews ...koiRepositoryCuration) string {
+	var review koiRepositoryCuration
+	if len(reviews) > 0 {
+		review = reviews[0]
+	}
 	byPath := make(map[string]koiSkillFile, len(files))
 	for _, file := range files {
 		byPath[file.Path] = koiSkillFile{Path: file.Path, Content: file.Content, MimeType: file.MimeType, SizeBytes: int64(len(file.Content)), SHA256: file.SHA256}
@@ -389,7 +399,8 @@ func validateDiscoveredKoiSkills(files []agentWorkspaceFile, license string) str
 	if len(needed) > koiSkillImportFiles || total > koiSkillImportBytes {
 		return "koi_preview_too_large"
 	}
-	candidates, _ := koiSkillCandidates(selected, koiSkillSourceContext{RootName: "repository", License: license})
+	candidates, _ := koiSkillCandidates(selected, koiSkillSourceContext{RootName: "repository", License: license, Review: review})
+	candidates, _ = review.candidates(repositoryID, candidates)
 	if len(candidates) == 0 {
 		return "no_koi_compatible_skills"
 	}
@@ -481,8 +492,12 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 	if metadata.ID != candidate.ID || metadata.Fork || metadata.Archived || metadata.Disabled || metadata.Stars < agentRepositoryDiscoveryMinStars {
 		return skip("ineligible_source")
 	}
+	review, err := loadKoiRepositoryCuration(ctx, a.db)
+	if err != nil {
+		return result, err
+	}
 	result.Repository, result.Stars = source.RepositoryURL, metadata.Stars
-	result.Category = systemRepositoryDiscoveryCategory(metadata.Name, metadata.Description)
+	result.Category = systemRepositoryDiscoveryCategory(metadata.Name, metadata.Description, source.RepositoryURL, review)
 	if !options.LinkOnly && (discoveryManualLicenseReview(metadata.FullName) || !systemRepositoryLicenseAllowed(source.License)) {
 		return skip("license_review_required")
 	}
@@ -523,7 +538,7 @@ func (a *App) discoverSystemRepository(ctx context.Context, candidate githubRepo
 		if err != nil {
 			return result, err
 		}
-		if code := validateDiscoveredSkills(files, source.RepositoryID, source.License); code != "" {
+		if code := validateDiscoveredSkills(files, source.RepositoryID, source.License, review); code != "" {
 			return skip(code)
 		}
 	}
@@ -571,9 +586,13 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
 	if _, err = checkAgentRepositoryImportCapacity(ctx, tx, nil); err != nil {
 		return 0, err
 	}
+	review, err := loadKoiRepositoryCuration(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
 	var id, revision int64
 	err = tx.QueryRow(ctx, `INSERT INTO agent_workspaces(user_id,is_system,name,description,github_source,hub_category)
-	 VALUES(NULL,true,$1,$2,$3,$4) RETURNING id,revision`, name, description, source, systemRepositoryDiscoveryCategory(name, description)).Scan(&id, &revision)
+	 VALUES(NULL,true,$1,$2,$3,$4) RETURNING id,revision`, name, description, source, systemRepositoryDiscoveryCategory(name, description, source.RepositoryURL, review)).Scan(&id, &revision)
 	if err != nil {
 		return 0, err
 	}
@@ -595,8 +614,12 @@ func (a *App) publishDiscoveredSystemRepository(ctx context.Context, day string,
  VALUES($1,$2,$3,$4,$5,(SELECT github_source-'private' FROM agent_workspaces WHERE id=$1))`, id, revision, name, description, source.License); err != nil {
 		return 0, err
 	}
-	installable := !source.LinkOnly // Mirrors were verified by validateDiscoveredSkills.
-	if err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, &installable); err != nil {
+	var installable *bool
+	if !source.LinkOnly {
+		verified := validateDiscoveredKoiSkills(files, source.License, source.RepositoryID, review) == ""
+		installable = &verified
+	}
+	if err = replaceAgentRepositoryPublicationFiles(ctx, tx, id, installable, review.revision); err != nil {
 		return 0, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO agent_repository_discoveries(github_id,repository_url,github_stars,code,accepted_on,workspace_id)
