@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.25] - 2026-11-14
+
+### Added
+
+- Chaque tour de Koi AI conserve un historique repliable après son exécution : étapes, échecs, nouvelles tentatives et Skills chargés. Les historiques longs permettent de consulter les étapes précédentes.
+- Les indications précisent qu’un Skill chargé ne garantit pas l’application de chaque règle et restent visibles à côté des propositions de modification d’article.
+
+### Fixed
+
+- Amélioration de l’analyse interne des contraintes existantes dans les conversations de suivi pour réduire les échecs de format, avec des messages d’erreur plus clairs.
+
 ## [1.1.24] - 2026-11-14
 
 ### Changed

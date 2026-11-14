@@ -160,7 +160,7 @@ func TestMalformedAgentEventStoresOnlySafeProgress(t *testing.T) {
 	task := bindIntentTaskForTest(t, a, agentTestTask(t, a, u, agentTestSession(t, a, u, "review"), doc, "测试活动"))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"events":[{"seq":1,"event":{"type":"tool.completed","version":"1","input":"RAW_TOOL_ARGUMENT_FIXTURE", "error":"RAW_PRIVATE_FIXTURE"}}],"hasMore":false}`)
+		fmt.Fprint(w, `{"events":[{"seq":1,"event":{"type":"tool.completed","version":"1","input":"RAW_TOOL_ARGUMENT_FIXTURE", "error":"RAW_PRIVATE_FIXTURE"}},{"seq":2,"event":{"type":"task.model_started","stage":"interpret","input":"RAW_MODEL_FIXTURE"}}],"hasMore":false}`)
 	}))
 	defer srv.Close()
 	a.cfg.AgentGPTBaseURL = srv.URL
@@ -174,6 +174,9 @@ func TestMalformedAgentEventStoresOnlySafeProgress(t *testing.T) {
 	}
 	if storedInput != `{"type": "unknown"}` || w.Code != 200 || strings.Contains(w.Body.String(), "FIXTURE") {
 		t.Fatalf("raw diagnostics leaked: stored=%s detail=%s", storedInput, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"stage":"interpret"`) {
+		t.Fatal("task assessment stage was lost from execution history", w.Body)
 	}
 	// A task from an older worker may still have the unfiltered event in storage.
 	if _, err := a.db.Exec(ctx, `UPDATE writing_agent_events SET event='{"type":"tool.completed","error":"OLD_FIXTURE"}' WHERE task_id=$1`, task.ID); err != nil {

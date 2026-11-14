@@ -4,6 +4,7 @@ export type ProgressAction =
   | "documents" | "folders" | "read" | "proposal" | "review"
   | "conversation" | "references" | "search" | "web" | "compute"
   | "save" | "cover" | "work";
+export type AssessmentAction = "assessment" | "interpret" | "scope" | "response";
 export type ProgressPhase =
   | ProgressAction | WritingTask["status"] | "thinking" | "finishing"
   | "retrying" | "cancelling" | "clarification" | "partial";
@@ -24,6 +25,56 @@ const actions = new Map<string, ProgressAction>([
 
 export type ProgressStep = { seq: number; action: ProgressAction; failed: boolean };
 
+function orderedEvents(events: readonly WritingEvent[]) {
+  return [...new Map(events.map(event => [event.seq, event])).values()]
+    .sort((a, b) => a.seq - b.seq);
+}
+
+function eventTool(event: WritingEvent["event"]) {
+  const call = event.toolCall;
+  const name = call && typeof call === "object" && "name" in call
+    ? call.name : event.toolName;
+  return typeof name === "string" ? name.split(/\.|__/).at(-1) ?? "" : "";
+}
+
+export type ActivityStep = {
+  seq: number;
+  action: ProgressAction | AssessmentAction;
+  status: "started" | "completed" | "failed";
+};
+
+/** Pair tool starts with their outcome without hiding failures or repeat calls.
+ * Only semantic action labels reach the UI, never arguments or tool output. */
+export function agentActivitySteps(events: readonly WritingEvent[]): ActivityStep[] {
+  const steps: (ActivityStep & { tool: string })[] = [];
+  const finishAssessment = (status: "completed" | "failed") => {
+    const pending = steps.findLast(step => step.tool === "assessment" && step.status === "started");
+    if (pending) pending.status = status;
+  };
+  for (const { seq, event } of orderedEvents(events)) {
+    if (event.type === "task.model_started") {
+      const stage = typeof event.stage === "string" ? event.stage : "";
+      if (stage) finishAssessment(stage.endsWith(":format-repair") ? "failed" : "completed");
+      const action = stage.startsWith("interpret") || stage.startsWith("clarification-review") ? "interpret"
+        : stage.startsWith("response-review:") ? "response" : stage.startsWith("review:") ? "scope" : "assessment";
+      steps.push({ seq, action, status: "started", tool: "assessment" });
+      continue;
+    }
+    if (["task.interpreted", "task.scope_checked", "task.clarification", "run.completed"].includes(event.type)) finishAssessment("completed");
+    if (event.type === "run.failed") finishAssessment("failed");
+    if (!["tool.started", "tool.completed", "tool.failed"].includes(event.type)) continue;
+    finishAssessment("completed");
+    const tool = eventTool(event);
+    const status = event.type === "tool.started" ? "started"
+      : event.type === "tool.completed" ? "completed" : "failed";
+    const pending = status !== "started"
+      ? steps.findLast(step => step.tool === tool && step.status === "started") : undefined;
+    if (pending) pending.status = status;
+    else steps.push({ seq, action: actions.get(tool) ?? "work", status, tool });
+  }
+  return steps.map(({ tool: _, ...step }) => step);
+}
+
 /** Only describe observed activity. A successful tool call is not proof that
  * document changes were applied: its result may still require approval. */
 export function agentProgress(
@@ -34,16 +85,10 @@ export function agentProgress(
   const steps: ProgressStep[] = [];
   // The API returns the latest 100 events in descending sequence order. Accept
   // either order and duplicates so polling/recovery cannot reverse the timeline.
-  const ordered = [...new Map(events.map(event => [event.seq, event])).values()]
-    .sort((a, b) => a.seq - b.seq);
-  for (const { seq, event } of ordered) {
+  for (const { seq, event } of orderedEvents(events)) {
     if (["tool.started", "tool.completed", "tool.failed"].includes(event.type)) {
-      const call = event.toolCall;
-      const name = call && typeof call === "object" && "name" in call
-        ? call.name : event.toolName;
       // Kernel MCP names are server.tool; also tolerate common __ namespaces.
-      const tool = typeof name === "string" ? name.split(/\.|__/).at(-1) : "";
-      const action = actions.get(tool ?? "") ?? "work";
+      const action = actions.get(eventTool(event)) ?? "work";
       const failed = event.type === "tool.failed";
       const last = steps.at(-1);
       if (last?.action === action) {

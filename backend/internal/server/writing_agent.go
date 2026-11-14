@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -417,7 +418,15 @@ func (a *App) writingTaskGet(w http.ResponseWriter, r *http.Request) {
 		writingError(w, err)
 		return
 	}
-	rows, err := a.db.Query(r.Context(), `SELECT seq,event FROM writing_agent_events WHERE task_id=$1 AND event->>'type' NOT IN ('model.delta','model.started','context.budget') ORDER BY seq DESC LIMIT 100`, t.ID)
+	var before int64
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		before, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || before < 1 {
+			httpx.ErrorCode(w, 400, "bad_request", "Invalid event cursor")
+			return
+		}
+	}
+	rows, err := a.db.Query(r.Context(), `SELECT seq,event FROM writing_agent_events WHERE task_id=$1 AND ($2::bigint=0 OR seq<$2) AND event->>'type' NOT IN ('model.delta','model.started','context.budget') ORDER BY seq DESC LIMIT 101`, t.ID, before)
 	if err != nil {
 		writingError(w, err)
 		return
@@ -428,29 +437,38 @@ func (a *App) writingTaskGet(w http.ResponseWriter, r *http.Request) {
 		Event json.RawMessage `json:"event"`
 	}
 	events := []event{}
+	var nextBefore int64
+	count := 0
 	for rows.Next() {
 		var e event
 		if err = rows.Scan(&e.Seq, &e.Event); err != nil {
 			writingError(w, err)
 			return
 		}
+		count++
+		if count > 100 {
+			nextBefore = events[len(events)-1].Seq
+			break
+		}
 		// Keep full events in storage for reconciliation; send only progress metadata.
 		var progress struct {
 			Type     string `json:"type"`
+			Stage    string `json:"stage,omitempty"`
 			ToolCall *struct {
 				Name string `json:"name"`
 			} `json:"toolCall,omitempty"`
 			ToolName string `json:"toolName,omitempty"`
 			Error    string `json:"error,omitempty"`
 		}
-		if json.Unmarshal(e.Event, &progress) == nil {
-			if t.Conversation {
-				// Older workers could retain raw diagnostics when an event changed shape.
-				progress.Error = ""
-			}
-			e.Event, _ = json.Marshal(progress)
-			events = append(events, e)
+		if json.Unmarshal(e.Event, &progress) != nil {
+			progress.Type = "progress.unavailable"
 		}
+		if t.Conversation {
+			// Older workers could retain raw diagnostics when an event changed shape.
+			progress.Error = ""
+		}
+		e.Event, _ = json.Marshal(progress)
+		events = append(events, e)
 	}
 	if err = rows.Err(); err != nil {
 		writingError(w, err)
@@ -461,7 +479,7 @@ func (a *App) writingTaskGet(w http.ResponseWriter, r *http.Request) {
 		t.Source.Content = ""
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	httpx.JSON(w, 200, map[string]any{"task": t, "events": events})
+	httpx.JSON(w, 200, map[string]any{"task": t, "events": events, "nextBefore": nextBefore})
 }
 func (a *App) writingTaskCancel(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requireLifetimeMember(w, r)

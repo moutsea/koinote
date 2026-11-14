@@ -1,36 +1,36 @@
 {
-  "version": "1.1.24",
+  "version": "1.1.25",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.24",
+      "title": "What's new in Koinote 1.1.25",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Koi AI supports nine reviewed, independent writing Skills from dbskill, preserving their original instructions and reference files. Skills requiring local scripts, local file access or external credentials remain restricted.",
-        "Installation previews explain unavailable Skills and prevent selecting incompatible ones. Hub installability badges, filters and counts now follow the same current compatibility rules."
+        "Each Koi AI turn keeps a collapsible execution record after completion, including steps, failures, retries and loaded Skills, with earlier steps available for longer records.",
+        "Skill records explain that loading does not guarantee every rule was followed and remain visible beside article change proposals."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.24 新功能",
+      "title": "Koinote 1.1.25 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi AI 支持安装 dbskill 中已审核的 9 个独立写作技能，保留原始说明和参考资料；需要本机脚本、文件读写或外部凭证的技能仍受限制。",
-        "安装预览明确展示不可用原因并禁选不兼容技能；Hub 的可安装标记、筛选与数量统一按当前兼容规则更新。"
+        "Koi AI 每轮任务保留可折叠的执行记录，任务结束后仍可查看执行步骤、失败与重试，以及已加载的技能；较长记录支持加载更早步骤。",
+        "技能记录说明加载与实际采用规则的区别，文章侧栏提交修改方案后也能查看。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.24",
+      "title": "Nouveautés de Koinote 1.1.25",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Koi AI permet d’installer neuf Skills de rédaction indépendants de dbskill après vérification, en conservant leurs instructions et références d’origine. Les Skills nécessitant des scripts locaux, un accès aux fichiers de l’ordinateur ou des identifiants externes restent limités.",
-        "L’aperçu explique les indisponibilités et empêche de sélectionner les Skills incompatibles. Les badges, filtres et compteurs du Hub suivent désormais les mêmes règles de compatibilité."
+        "Chaque tour de Koi AI conserve un historique repliable après son exécution : étapes, échecs, nouvelles tentatives et Skills chargés. Les historiques longs permettent de consulter les étapes précédentes.",
+        "Les indications précisent qu’un Skill chargé ne garantit pas l’application de chaque règle et restent visibles à côté des propositions de modification d’article."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.24 の新機能",
+      "title": "Koinote 1.1.25 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "dbskill の審査済みの独立した執筆スキル9件を Koi AI にインストールできるようになりました。元の説明と参考資料を保持します。ローカルスクリプト、PC上のファイル操作、外部認証情報が必要なスキルは引き続き制限されます。",
-        "インストール画面に利用できない理由を表示し、非対応スキルを選択できないようにしました。Hub の対応マーク、絞り込み、件数は同じ最新の互換性ルールに従います。"
+        "Koi AI の各ターンに折りたたみ式の実行履歴を追加しました。完了後も手順、失敗、再試行、読み込み済みスキルを確認でき、長い履歴では以前の手順も表示できます。",
+        "スキルの読み込みは全ルールの適用を保証しないことを明記し、記事の変更案がある場合も履歴を確認できるようにしました。"
       ]
     }
   }

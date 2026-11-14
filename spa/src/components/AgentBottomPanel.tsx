@@ -47,6 +47,7 @@ import { STORAGE_USAGE_KEY } from "./StorageCard";
 import { Logo } from "./Logo";
 import { AgentDiffDialog } from "./AgentDiffDialog";
 import { AgentProgress } from "./AgentProgress";
+import { AgentTaskActivity } from "./AgentTaskActivity";
 import { AgentArtifactCard } from "./AgentArtifactCard";
 import { pushModal } from "../modalStack";
 import {
@@ -1048,6 +1049,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                           <span>{t.writingPartner}</span>
                         </div>
                         <AgentTaskReply task={task} operations={operations} artifacts={artifacts} />
+                        <AgentTaskActivity task={task} />
                         {artifacts
                           .filter((file) => file.taskId === task.id)
                           .map((file) => (

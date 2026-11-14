@@ -1,0 +1,51 @@
+--- a/src/core/task-session.ts
++++ b/src/core/task-session.ts
+@@ -50,0 +51,12 @@
++		// Public/persisted TaskState deliberately omits the internal scope tag.
++		// Present prior constraints in the same shape the interpreter must return,
++		// so copying an unchanged constraint does not require a model repair.
++		// Empty IDs with no forbidden effects stay unresolved, never become a
++		// new global prohibition. No source, effect or stored state is changed.
++		const context = this.input.taskContext!;
++		const referenceContext = context.state ? { ...context, state: {
++			...context.state, constraints: context.state.constraints.map(constraint => ({
++				...constraint, scope: constraint.resourceIds.length ? "resolved"
++					: constraint.forbiddenEffects.length ? "all" : "unresolved",
++			})),
++		} } : context;
+@@ -58 +70 @@
+-		let inferred = await this.checkedGenerate("interpret", INTERPRET_TASK + EFFECTIVE_REQUEST, { context: this.input.taskContext }, interpretationSchema, validate);
++		let inferred = await this.checkedGenerate("interpret", INTERPRET_TASK + EFFECTIVE_REQUEST, { context: referenceContext }, interpretationSchema, validate);
+@@ -60 +72 @@
+-			inferred = await this.checkedGenerate("clarification-review", INTERPRET_TASK + EFFECTIVE_REQUEST + "\nIndependently re-evaluate the proposed question. Earlier assistant speculation is not user scope. Retain clarification only for genuine unresolved user intent. Remove redundant confirmation and facts discoverable with tools; preserve all actual user restrictions. Questions must follow the user's language unless they explicitly requested another language.", { context: this.input.taskContext, candidate: inferred }, interpretationSchema, validate);
++			inferred = await this.checkedGenerate("clarification-review", INTERPRET_TASK + EFFECTIVE_REQUEST + "\nIndependently re-evaluate the proposed question. Earlier assistant speculation is not user scope. Retain clarification only for genuine unresolved user intent. Remove redundant confirmation and facts discoverable with tools; preserve all actual user restrictions. Questions must follow the user's language unless they explicitly requested another language.", { context: referenceContext, candidate: inferred }, interpretationSchema, validate);
+--- a/test/task-intent.spec.ts
++++ b/test/task-intent.spec.ts
+@@ -61,0 +62,27 @@
++	});
++	it("projects persisted constraints into the internal scope schema without changing public task state", async () => {
++		const request = structuredClone(input());
++		request.taskContext!.state!.constraints.push(
++			{ text: "Specific resource", sources: [ref], resourceIds: ["file-a"], forbiddenEffects: [] },
++			{ text: "Resource not resolved", sources: [ref], resourceIds: [], forbiddenEffects: [] },
++		);
++		const original = structuredClone(request);
++		const h = harness("move");
++		const outputs: ModelResponse[] = [{ toolCalls: [{ id: "change", name: h.tool.name, arguments: { id: "file-a" } }] },
++			{ text: JSON.stringify({ decisions: [{ resourceId: "file-a", kind: "move", decision: "allow", reason: "Matches request", sources: [ref] }], question: "" }) }, { text: "Done" }];
++		let calls = 0;
++		h.generate.mockImplementation(async modelRequest => {
++			if (calls++ === 0) {
++				const query = JSON.parse(modelRequest.messages.at(-1)!.content.split("\n").slice(1).join("\n"));
++				const previous = query.referenceData.context.state;
++				expect(previous.constraints.map((c: { scope: string }) => c.scope)).toEqual(["all", "resolved", "unresolved"]);
++				// Models often copy existing constraints verbatim on a follow-up.
++				return { text: JSON.stringify({ change: "continue", changeSources: [{ messageId: "user-2", quote: "By topic" }], state: previous }) };
++			}
++			return outputs.shift()!;
++		});
++		const result = await h.kernel.run(request);
++		expect(result.intentModelCalls).toBe(2);
++		expect(h.execute).toHaveBeenCalledOnce();
++		expect(result.task!.state.constraints).toEqual(original.taskContext!.state!.constraints);
++		expect(request).toEqual(original);

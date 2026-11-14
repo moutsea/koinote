@@ -41,6 +41,7 @@ import {
 import { AgentTaskReply } from "../AgentTaskReply";
 import { AgentArtifactCard } from "../AgentArtifactCard";
 import { AgentProgress } from "../AgentProgress";
+import { AgentTaskActivity } from "../AgentTaskActivity";
 import { AgentDiffDialog } from "../AgentDiffDialog";
 import { AgentReviewSheet } from "./AgentReviewSheet";
 
@@ -546,6 +547,7 @@ export function ArticleAgentPanel({
                 task.taskIntent?.outcome !== "operations_reported") && (
                 <AgentTaskReply task={task} operations={allOps} artifacts={allArtifacts} />
               )}
+              <AgentTaskActivity task={task} />
               {allArtifacts.filter((file) => file.taskId === task.id).map((file) => (
                 <AgentArtifactCard key={file.id} file={file} disabled={busy} />
               ))}

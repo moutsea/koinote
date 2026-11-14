@@ -61,7 +61,8 @@ export async function checkArticleKoi(createClient,url) {
     await evaluate(`(() => {
       const key="article-panel-fixture-server", data=JSON.parse(localStorage.getItem(key));
       const task=Object.values(data.tasks).flat()[0], first=data.operations.find(op=>op.taskId===task.id);
-      Object.assign(task,{message:"帮我校对这篇文章，修正错别字，再润色一下表达。",status:"cancelled", result:"", taskIntent:undefined});
+      Object.assign(task,{message:"帮我校对这篇文章，修正错别字，再润色一下表达。",status:"cancelled", result:"", taskIntent:{outcome:"operations_reported",inputVersion:1},loadedSkills:[{id:"article-writing-v1",name:"文章润色",loadedAt:new Date().toISOString()}]});
+      (data.events??={})[task.id]=[{seq:1,event:{type:"tool.completed",toolCall:{name:"koinote.get_document"}}}];
       first.status="applied"; first.input.explanation="修正了错别字和标点，精简了开头两句，并理顺了段落之间的衔接。原有标题、图片和引用均保留。";
       data.operations.push({...first,id:crypto.randomUUID(),status:"cancelled"});
       localStorage.setItem(key,JSON.stringify(data));
@@ -70,6 +71,12 @@ export async function checkArticleKoi(createClient,url) {
     await wait("document.querySelector('.koi-article-note')?.textContent.includes('已应用的改动已保留')");
     assert.equal(await evaluate("document.querySelector('.koi-article-archived').open"),false);
     assert.equal(await evaluate("document.querySelectorAll('.koi-article-change[data-status=applied]').length"),1);
+    const activity = "document.querySelector('[role=dialog] [data-task-activity]')";
+    await wait(`${activity}?.textContent.includes('文章润色')`);
+    assert.equal(await evaluate(`${activity}.open`), false);
+    await evaluate(`${activity}.querySelector('summary').click()`);
+    await wait(`${activity}.querySelector('.agent-task-activity-steps')?.textContent.includes('阅读文档内容')`);
+    assert.match(await evaluate(`${activity}.textContent`), /文章润色/);
     await capture("article-revision");
     // Regaining window focus refetches the thread while the POST is still held.
     // The refetched task replaces the pending turn instead of doubling the message.

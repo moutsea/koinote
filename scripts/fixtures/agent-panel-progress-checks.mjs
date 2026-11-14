@@ -49,6 +49,44 @@ export async function checkTaskProgress(createClient, url) {
       await peer.send("Page.reload");
       await peer.wait(`${card}?.textContent.includes('正在核对改动状态')`);
     } finally { await peer.close(); }
+    // Finishing used to remove the only progress display. The durable record
+    // must remain available, including Skill receipts and more than 100 events.
+    const longHistory = [...Array.from({ length: 205 }, (_, i) => event(i + 20, "tool.completed", "koinote.get_document")), ...events];
+    const loadedSkills = [{ id: "writing-skill-v1", name: "中文润色", loadedAt: new Date().toISOString() }];
+    await client.evaluate(`window.agentUITest.updateProgress(${JSON.stringify(taskId)},${JSON.stringify(longHistory)},'completed',${JSON.stringify(loadedSkills)})`);
+    const record = `document.querySelector('[data-task-activity="${taskId}"]')`;
+    await client.wait(`${card}===null && ${record}?.textContent.includes('中文润色')`);
+    assert.equal(await client.evaluate(`${record}.open`), false, "finished records start collapsed");
+    await client.evaluate(`${record}.querySelector('summary').click()`);
+    await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===100`);
+    for (const expected of [200, 211]) {
+      await client.evaluate(`${record}.querySelector('.agent-task-activity-older').click()`);
+      await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===${expected}`);
+    }
+    assert.match(await client.evaluate(`${record}.textContent`), /查阅参考资料/);
+    assert.doesNotMatch(await client.evaluate(`${record}.textContent`), /koinote\.|tool\.|model\.|get_document/);
+    assert.equal(await client.evaluate(`${record}.querySelector('.agent-task-activity-older')===null`), true);
+    await client.send("Page.reload");
+    await client.wait(`${record}?.textContent.includes('中文润色')`);
+    assert.equal(await client.evaluate(`${record}.open`), false, "reopened history is compact");
+    assert.equal(await client.evaluate("window.agentUITest.taskDetailRequests"), 0, "collapsed history does not fetch task details");
+    await client.evaluate("window.agentUITest.failTaskDetails=true");
+    await client.evaluate(`${record}.querySelector('summary').click()`);
+    await client.wait(`${record}.querySelector('[role=alert]')?.textContent.includes('执行记录暂时无法读取')`);
+    assert.match(await client.evaluate(`${record}.querySelector('summary').textContent`), /中文润色/);
+    await client.evaluate(`window.agentUITest.failTaskDetails=false;${record}.querySelector('[role=alert] button').click()`);
+    await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===100`);
+    await client.wait(`${record}.querySelector('.agent-task-activity-skills')?.textContent.includes('中文润色')`);
+    const failedTask = await client.evaluate(`window.agentUITest.seedProgress(${JSON.stringify(sessionId)},${JSON.stringify([
+      { seq: 1, event: { type: "task.model_started", stage: "interpret" } },
+      { seq: 2, event: { type: "run.failed" } },
+    ])},'failed')`);
+    const failedRecord = `document.querySelector('[data-task-activity="${failedTask}"]')`;
+    await client.wait(`${failedRecord}`);
+    await client.evaluate(`${failedRecord}.querySelector('summary').click()`);
+    await client.wait(`${failedRecord}.querySelector('.agent-task-activity-steps')?.textContent.includes('解析任务要求')`);
+    assert.match(await client.evaluate(`${failedRecord}.textContent`), /本步未完成/);
+    assert.match(await client.evaluate(`${failedRecord}.textContent`), /暂无技能加载记录/);
     const unknown = [event(12, "tool.started", "private_server.unrecognized_internal_tool")];
     const nextTask = await client.evaluate(`window.agentUITest.seedProgress(${JSON.stringify(sessionId)},${JSON.stringify(unknown)})`);
     const nextCard = `document.querySelector('[data-agent-progress="${nextTask}"]')`;
@@ -59,6 +97,6 @@ export async function checkTaskProgress(createClient, url) {
     assert.ok(bounds.left >= 0 && bounds.right <= bounds.width, "progress fits narrow layouts");
     await client.send("Page.navigate", { url: url.replace("lang=zh", "lang=en") });
     await client.wait(`${nextCard}?.textContent.includes('Working on your task')`);
-    console.log("Agent progress UI passed: readable actions, deduplication, approval/resume, reload/new window, task isolation, unknown tools, narrow layout and English.");
+    console.log("Agent progress UI passed: live approval/resume, completed records, Skills, history pagination, reload, task isolation and narrow layouts.");
   } finally { await client.close(); }
 }

@@ -1,0 +1,42 @@
+.agent-task-activity {
+  margin: 12px 0;
+  border: 1px solid var(--ink-line);
+  border-radius: 10px;
+  color: var(--ink-mid);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.agent-task-activity > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.agent-task-activity > summary::-webkit-details-marker { display: none; }
+.agent-task-activity > summary:focus-visible { outline: 2px solid var(--cinnabar); outline-offset: 2px; border-radius: 10px; }
+.agent-task-activity-chevron { flex-shrink: 0; transition: transform .15s; }
+.agent-task-activity[open] .agent-task-activity-chevron { transform: rotate(90deg); }
+.agent-task-activity-title { color: var(--ink-strong); font-weight: 500; }
+.agent-task-activity-phase { margin-left: auto; font-size: 11px; }
+.agent-task-activity-skill-summary { display: flex; align-items: baseline; gap: 5px; flex-basis: 100%; min-width: 0; padding-left: 22px; }
+.agent-task-activity-skill-summary svg { flex-shrink: 0; align-self: center; }
+.agent-task-activity-body { padding: 0 12px 12px; border-top: 1px solid var(--ink-line); }
+.agent-task-activity-label { margin: 12px 0 6px; font-weight: 500; color: var(--ink-strong); }
+.agent-task-activity-note { margin: 6px 0 0; font-size: 11px; }
+.agent-task-activity-skills ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.agent-task-activity-skills li { display: flex; align-items: baseline; gap: 5px; padding: 2px 8px; border-radius: 6px; background: var(--paper-deep, transparent); }
+.agent-task-activity-skills li svg { flex-shrink: 0; align-self: center; }
+.agent-task-activity-steps { display: grid; gap: 8px; padding: 0; margin: 8px 0 0; list-style: none; }
+.agent-task-activity-steps li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+.agent-task-activity-steps svg { flex-shrink: 0; align-self: center; }
+.agent-task-activity-step-status { margin-left: auto; font-size: 11px; }
+.agent-task-activity-steps [data-step-status="failed"] { color: var(--cinnabar); }
+.agent-task-activity-error { margin: 10px 0; color: var(--cinnabar); }
+.agent-task-activity button { color: var(--cinnabar); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.agent-task-activity button:disabled { opacity: .5; cursor: wait; }
+.agent-task-activity-older { margin: 0 0 4px; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .agent-task-activity-chevron { transition: none; } }

@@ -52,9 +52,9 @@ export const listWritingTasks = (docId: string) =>
   apiJson<{ tasks: Pick<WritingTask, "id" | "message" | "status" | "createdAt">[] }>(
     `/api/writing-agent/tasks?docId=${encodeURIComponent(docId)}`,
   );
-export const getWritingTask = (id: string) =>
-  apiJson<{ task: WritingTask; events: WritingEvent[] }>(
-    `/api/writing-agent/tasks/${encodeURIComponent(id)}`,
+export const getWritingTask = (id: string, before?: number) =>
+  apiJson<{ task: WritingTask; events: WritingEvent[]; nextBefore?: number }>(
+    `/api/writing-agent/tasks/${encodeURIComponent(id)}${before ? `?before=${before}` : ""}`,
   );
 export const createWritingTask = (input: {
   requestId: string;

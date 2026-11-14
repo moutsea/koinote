@@ -318,6 +318,9 @@ func writingFailureMessage(detail string) string {
 	if strings.Contains(lower, "response_contract_failed") {
 		return "模型未能生成符合任务要求的回复，请重试；请以改动记录中的执行状态为准。"
 	}
+	if strings.Contains(lower, "[invalid_intent_response]") {
+		return "Koi 未能完成任务解析或操作核对，请重试；已完成的改动仍保留。"
+	}
 	if strings.Contains(lower, "rate limit") || strings.Contains(lower, "429") {
 		return "模型服务繁忙，请稍后重试；已完成的改动仍保留。"
 	}
@@ -444,6 +447,7 @@ func (a *App) collectWritingEvents(ctx context.Context, t *writingTask, jobPath 
 			if t.Conversation {
 				var summary struct {
 					Type             string              `json:"type"`
+					Stage            string              `json:"stage,omitempty"`
 					InputVersion     int64               `json:"inputVersion,omitempty"`
 					CurrentMessageID string              `json:"currentMessageId,omitempty"`
 					SourceMessageIDs []string            `json:"sourceMessageIds,omitempty"`

@@ -1,17 +1,36 @@
-import type { ProgressAction, ProgressPhase } from "../agentProgress";
+import type { AssessmentAction, ProgressAction, ProgressPhase } from "../agentProgress";
 import type { Locale } from "./types";
 
 type ProgressText = {
   title: string;
   recent: string;
   stepFailed: string;
+  history: string;
+  skills: string;
+  loadedSkills: string;
+  skillNote: string;
+  noSkills: string;
+  steps: string;
+  loading: string;
+  loadError: string;
+  retry: string;
+  older: string;
+  empty: string;
+  stepDone: string;
+  stepUnconfirmed: string;
   phases: Record<ProgressPhase, string>;
-  actions: Record<ProgressAction, string>;
+  actions: Record<ProgressAction | AssessmentAction, string>;
 };
 
 export const agentProgressText: Record<Locale, ProgressText> = {
   zh: {
     title: "执行进度", recent: "最近进展", stepFailed: "本步未完成",
+    history: "执行记录", skills: "技能加载", loadedSkills: "已加载技能",
+    skillNote: "已加载表示技能已提供给本轮任务，不代表每条规则都被采用。",
+    noSkills: "本轮暂无技能加载记录。Koi 会按任务需要加载技能，并非每轮都会使用。",
+    steps: "执行步骤", loading: "正在读取执行记录…", loadError: "执行记录暂时无法读取，请重试。",
+    retry: "重试", older: "查看更早步骤", empty: "暂无工具执行步骤记录。",
+    stepDone: "已完成", stepUnconfirmed: "未记录完成状态",
     phases: {
       preparing: "正在准备任务", queued: "任务已排队，等待开始", running: "正在处理任务",
       thinking: "正在分析任务与下一步", finishing: "正在汇总任务结果",
@@ -24,6 +43,7 @@ export const agentProgressText: Record<Locale, ProgressText> = {
       compute: "正在处理任务资料", save: "正在保存生成结果", cover: "正在生成封面图", work: "正在处理任务",
     },
     actions: {
+      assessment: "解析与核对任务", interpret: "解析任务要求", scope: "核对操作范围", response: "核对回复结果",
       documents: "查找相关文档", folders: "查看目录结构", read: "阅读文档内容",
       proposal: "准备改动方案", review: "核对改动状态", conversation: "回顾会话要求",
       references: "查阅参考资料", search: "搜索相关资料", web: "阅读网页资料",
@@ -32,6 +52,12 @@ export const agentProgressText: Record<Locale, ProgressText> = {
   },
   en: {
     title: "Task progress", recent: "Recent activity", stepFailed: "Step did not finish",
+    history: "Execution record", skills: "Skill loading", loadedSkills: "Loaded skills",
+    skillNote: "Loaded means the skill was provided to this task, not that every rule was followed.",
+    noSkills: "No skill loads are recorded for this turn. Koi loads skills as needed, so some turns need none.",
+    steps: "Execution steps", loading: "Loading execution record…", loadError: "The execution record could not be loaded. Please retry.",
+    retry: "Retry", older: "Show earlier steps", empty: "No tool execution steps are recorded.",
+    stepDone: "Completed", stepUnconfirmed: "Completion not recorded",
     phases: {
       preparing: "Preparing your task", queued: "Queued, waiting to start", running: "Working on your task",
       thinking: "Considering the task and next steps", finishing: "Putting the results together",
@@ -44,6 +70,7 @@ export const agentProgressText: Record<Locale, ProgressText> = {
       compute: "Processing task material", save: "Saving generated results", cover: "Generating a cover image", work: "Working on your task",
     },
     actions: {
+      assessment: "Assess the task", interpret: "Interpret task requirements", scope: "Check operation scope", response: "Check the response",
       documents: "Find relevant documents", folders: "Review folder structure", read: "Read document content",
       proposal: "Prepare proposed changes", review: "Check change status", conversation: "Review your conversation",
       references: "Consult reference material", search: "Search for information", web: "Read web sources",
@@ -52,6 +79,12 @@ export const agentProgressText: Record<Locale, ProgressText> = {
   },
   fr: {
     title: "Progression", recent: "Activité récente", stepFailed: "Étape non terminée",
+    history: "Historique d’exécution", skills: "Chargement des compétences", loadedSkills: "Compétences chargées",
+    skillNote: "Une compétence chargée a été fournie à cette tâche ; cela ne garantit pas le respect de chaque règle.",
+    noSkills: "Aucun chargement de compétence enregistré pour ce tour. Koi les charge selon les besoins.",
+    steps: "Étapes d’exécution", loading: "Chargement de l’historique…", loadError: "Impossible de charger l’historique. Veuillez réessayer.",
+    retry: "Réessayer", older: "Voir les étapes précédentes", empty: "Aucune étape d’outil enregistrée.",
+    stepDone: "Terminée", stepUnconfirmed: "Fin non enregistrée",
     phases: {
       preparing: "Préparation de la tâche", queued: "En attente de démarrage", running: "Traitement de la tâche",
       thinking: "Analyse de la tâche et des prochaines étapes", finishing: "Récapitulatif des résultats en cours",
@@ -64,6 +97,7 @@ export const agentProgressText: Record<Locale, ProgressText> = {
       compute: "Traitement des données", save: "Enregistrement des résultats", cover: "Génération de la couverture", work: "Traitement de la tâche",
     },
     actions: {
+      assessment: "Analyser et vérifier la tâche", interpret: "Analyser la demande", scope: "Vérifier la portée des opérations", response: "Vérifier la réponse",
       documents: "Rechercher les documents", folders: "Examiner les dossiers", read: "Lire les documents",
       proposal: "Préparer les modifications", review: "Vérifier les modifications", conversation: "Relire la conversation",
       references: "Consulter les références", search: "Rechercher des informations", web: "Lire les sources web",
@@ -72,6 +106,12 @@ export const agentProgressText: Record<Locale, ProgressText> = {
   },
   ja: {
     title: "進捗", recent: "最近の作業", stepFailed: "この手順は未完了です",
+    history: "実行履歴", skills: "スキルの読み込み", loadedSkills: "読み込み済みスキル",
+    skillNote: "読み込み済みとは、このタスクにスキルが渡されたことを示します。すべてのルールの適用を保証するものではありません。",
+    noSkills: "このターンのスキル読み込み記録はありません。Koi は必要に応じてスキルを読み込みます。",
+    steps: "実行手順", loading: "実行履歴を読み込んでいます…", loadError: "実行履歴を読み込めませんでした。再試行してください。",
+    retry: "再試行", older: "以前の手順を表示", empty: "ツールの実行手順は記録されていません。",
+    stepDone: "完了", stepUnconfirmed: "完了の記録なし",
     phases: {
       preparing: "タスクを準備しています", queued: "開始を待っています", running: "タスクを処理しています",
       thinking: "依頼と次の手順を検討しています", finishing: "結果をまとめています",
@@ -84,6 +124,7 @@ export const agentProgressText: Record<Locale, ProgressText> = {
       compute: "資料を処理しています", save: "生成した結果を保存しています", cover: "カバー画像を生成しています", work: "タスクを処理しています",
     },
     actions: {
+      assessment: "依頼の解析と確認", interpret: "依頼内容の解析", scope: "操作範囲の確認", response: "回答結果の確認",
       documents: "関連文書の検索", folders: "フォルダー構成の確認", read: "文書の読み取り",
       proposal: "変更案の準備", review: "変更状態の確認", conversation: "会話の確認",
       references: "参考資料の確認", search: "情報の検索", web: "ウェブ資料の読み取り",

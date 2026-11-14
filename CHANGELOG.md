@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.25] - 2026-11-14
+
+### Added
+
+- Each Koi AI turn keeps a collapsible execution record after completion, including steps, failures, retries and loaded Skills, with earlier steps available for longer records.
+- Skill records explain that loading does not guarantee every rule was followed and remain visible beside article change proposals.
+
+### Fixed
+
+- Improve internal parsing of existing task constraints in follow-up conversations to reduce format-check failures, with clearer error messages.
+
 ## [1.1.24] - 2026-11-14
 
 ### Changed

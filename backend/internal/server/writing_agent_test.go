@@ -64,6 +64,66 @@ func writingTestApp(t *testing.T) (*App, model.User, model.Document) {
 	return a, user, doc
 }
 
+func TestWritingTaskActivityHistory(t *testing.T) {
+	a, user, doc := writingTestApp(t)
+	ctx := context.Background()
+	task := bindIntentTaskForTest(t, a, agentTestTask(t, a, user, agentTestSession(t, a, user, "review"), doc, "润色文章"))
+	if _, err := a.db.Exec(ctx, `
+		UPDATE writing_agent_tasks SET status='completed' WHERE id=$1;
+	`, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.db.Exec(ctx, `INSERT INTO writing_agent_events(task_id,seq,event)
+		SELECT $1,n,jsonb_build_object('type','tool.completed','toolCall',jsonb_build_object('name','koinote.get_document','arguments','PRIVATE_ARGUMENT'),'output','PRIVATE_OUTPUT','error','PRIVATE_ERROR')
+		FROM generate_series(1,205) n`, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.db.Exec(ctx, `INSERT INTO writing_agent_events(task_id,seq,event) VALUES($1,206,'{"type":"model.delta","text":"PRIVATE_MODEL"}')`, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	var cursor int64
+	expected := int64(205)
+	for page, count := range []int{100, 100, 5} {
+		path := "/api/writing-agent/tasks/" + task.ID
+		if cursor != 0 {
+			path += "?before=" + strconv.FormatInt(cursor, 10)
+		}
+		w := writingTestRequest(t, a, user, "GET", path, nil)
+		var result struct {
+			Task   writingTask `json:"task"`
+			Events []struct {
+				Seq int64 `json:"seq"`
+			} `json:"events"`
+			NextBefore int64 `json:"nextBefore"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || len(result.Events) != count || result.Task.Status != "completed" {
+			t.Fatalf("history page %d: HTTP %d %s", page, w.Code, w.Body)
+		}
+		if strings.Contains(w.Body.String(), "PRIVATE_") {
+			t.Fatalf("history exposed private tool/model data: %s", w.Body)
+		}
+		for _, event := range result.Events {
+			if event.Seq != expected {
+				t.Fatalf("history lost or repeated an event: got %d want %d", event.Seq, expected)
+			}
+			expected--
+		}
+		cursor = result.NextBefore
+		if (page < 2 && cursor != expected+1) || (page == 2 && cursor != 0) {
+			t.Fatalf("invalid next cursor %d on page %d", cursor, page)
+		}
+	}
+	_, other, _ := writingTestApp(t)
+	if w := writingTestRequest(t, a, other, "GET", "/api/writing-agent/tasks/"+task.ID+"?before=106", nil); w.Code != 404 {
+		t.Fatalf("another account could read history: HTTP %d", w.Code)
+	}
+	for _, cursor := range []string{"invalid", "-1"} {
+		if w := writingTestRequest(t, a, user, "GET", "/api/writing-agent/tasks/"+task.ID+"?before="+cursor, nil); w.Code != 400 {
+			t.Fatalf("invalid cursor accepted: HTTP %d", w.Code)
+		}
+	}
+}
+
 func TestWritingCallbackAndUsageValidation(t *testing.T) {
 	now := time.Unix(1800000000, 0)
 	stamp := strconv.FormatInt(now.Unix(), 10)

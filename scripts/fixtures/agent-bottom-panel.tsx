@@ -96,6 +96,8 @@ const state = {
   },
   failFirst: true,
   failNextOperation: false,
+  failTaskDetails: false,
+  taskDetailRequests: 0,
   loseNextResponse: false,
   holdNextResponse: false,
   // Blocks session page reads, so tests can see what renders before refresh().
@@ -412,8 +414,12 @@ window.fetch = async (request, init) => {
   }
   const taskMatch = path.match(/^\/api\/writing-agent\/tasks\/([^/]+)$/);
   if (taskMatch) {
+    state.taskDetailRequests++;
+    if (state.failTaskDetails) return respond({ error: "Task details temporarily unavailable" }, 503);
     const task = Object.values(server.tasks).flat().find(t => t.id === taskMatch[1]);
-    return task ? respond({ task, events: server.events?.[task.id] ?? [], nextCursor: 0 }) : respond({ error: "not found" }, 404);
+    const before = Number(url.searchParams.get("before"));
+    const events = (server.events?.[taskMatch[1]] ?? []).filter(e => !before || e.seq < before).sort((a, b) => b.seq - a.seq);
+    return task ? respond({ task, events: events.slice(0, 100), nextBefore: events.length > 100 ? events[99].seq : 0 }) : respond({ error: "not found" }, 404);
   }
   const batchMatch = path.match(/^\/api\/agent\/tasks\/([^/]+)\/operations\/(approve|reject|undo)$/);
   if (batchMatch) {
@@ -557,8 +563,10 @@ Object.assign(state, {
     await qc.invalidateQueries({ queryKey: ["agent-sessions"] });
     return taskId;
   },
-  async updateProgress(taskId: string, events: WritingEvent[], status: WritingTask["status"]) {
-    Object.values(server.tasks).flat().find(t => t.id === taskId)!.status = status;
+  async updateProgress(taskId: string, events: WritingEvent[], status: WritingTask["status"], loadedSkills?: WritingTask["loadedSkills"]) {
+    const task = Object.values(server.tasks).flat().find(t => t.id === taskId)!;
+    task.status = status;
+    if (loadedSkills) task.loadedSkills = loadedSkills;
     (server.events ??= {})[taskId] = events;
     persist();
     await qc.invalidateQueries({ queryKey: ["agent-progress"] });

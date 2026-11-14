@@ -20,13 +20,12 @@ export function AgentTaskReply({ task, operations, artifacts }: {
   operations: AgentOperation[];
   artifacts?: AgentArtifact[];
 }) {
-  const { locale, t } = useI18n();
+  const { locale } = useI18n();
   const result = agentTaskResult(task, operations, locale, artifacts);
   const reply = agentTaskReply(task);
-  if (!result && !reply && !task.loadedSkills?.length) return null;
+  if (!result && !reply) return null;
   return (
     <div className="agent-message-body prose prose-sm min-w-0 max-w-none break-words dark:prose-invert" data-task-result={task.id}>
-      {Boolean(task.loadedSkills?.length) && <p className="not-prose mb-2 text-xs" style={{ color: "var(--ink-mid)" }}>{t.koi.loadedSkills} {task.loadedSkills!.map((skill) => skill.name).join(" · ")}</p>}
       {reply && <div data-task-reply={task.id}>
         <Markdown remarkPlugins={plugins} components={components}>{reply}</Markdown>
         <p className="not-prose mb-1 mt-3 text-xs font-medium" style={{ color: "var(--ink-mid)" }}>{agentPanelText[locale].currentResult}</p>

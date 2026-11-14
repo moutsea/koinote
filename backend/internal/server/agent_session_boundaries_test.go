@@ -178,6 +178,9 @@ func TestAgentFailureMessagesDoNotExposeProviderSecrets(t *testing.T) {
 	if !strings.Contains(writingFailureMessage("Model execution timed out after 90000ms"), "超时") {
 		t.Fatal("missing timeout explanation")
 	}
+	if got := writingFailureMessage("[invalid_intent_response] Task interpretation or review did not match its required schema: secret-value"); !strings.Contains(got, "任务解析或操作核对") || strings.Contains(got, "secret-value") {
+		t.Fatal("missing safe task protocol explanation", got)
+	}
 	if strings.Contains(writingFailureMessage("upstream failed: secret-value"), "secret-value") {
 		t.Fatal("raw provider error exposed")
 	}
