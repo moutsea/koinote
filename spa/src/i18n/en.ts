@@ -955,6 +955,7 @@ export const en: Messages = {
     confirmInstall: "Install {count} Skills",
     emptySkills: "No Skills installed yet. Koi's base capabilities are unaffected.",
     enableAfterInstall: "Enable newly installed Skills",
+    autoSkillsOffInstallHint: "Automatic Skill use is off. After installation, turn it on in My Space → Koi AI and make sure the Skill is enabled. New tasks can then load it as needed.",
     enabledToggle: "Enable",
     unavailableEnabledHint: "Your enabled setting is saved, but new tasks cannot use this Skill. Turn it off to keep it disabled if compatibility is restored.",
     entryLabel: "Entry",

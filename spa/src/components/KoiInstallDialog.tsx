@@ -337,6 +337,7 @@ export function KoiInstallDialog({ authUserId, onClose, updateTarget, resumePrev
           {preview.candidates.length === 0 ? <p className="text-sm">{labels.koiNoSkills}</p> : <>
             {preview.candidates.some((candidate) => selected.includes(candidate.id) && !candidate.installedStatus) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enable} disabled={Boolean(busy) || confirmationPending} onChange={(event) => setEnable(event.target.checked)} />{labels.enableAfterInstall}</label>}
             {preview.candidates.some((candidate) => selected.includes(candidate.id) && Boolean(candidate.installedStatus)) && <p className="text-xs" style={{ color: "var(--ink-mid)" }}>{labels.existingKeepsState}</p>}
+            {overview.data?.settings.autoSkills === false && <p role="status" className="rounded-lg p-3 text-xs leading-5" style={{ background: "var(--ink-wash)", color: "var(--ink-mid)" }}>{labels.autoSkillsOffInstallHint}</p>}
             <p className="text-xs leading-5" style={{ color: "var(--ink-mid)" }}>{labels.installNotGuaranteed}</p>
           </>}
         </>}

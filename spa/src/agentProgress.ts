@@ -15,6 +15,7 @@ const actions = new Map<string, ProgressAction>([
   ["propose_document_change", "proposal"], ["validate_operation", "review"],
   ["get_operation_results", "review"], ["get_conversation", "conversation"],
   ["find_skills", "references"], ["load_skill", "references"],
+  ["search_repositories", "references"],
   ["skill_view", "references"], ["skills_list", "references"],
   ["read_file", "references"], ["web_search", "search"],
   ["web_fetch", "web"], ["browser_markdown", "web"],

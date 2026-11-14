@@ -946,6 +946,7 @@ export const ja: Messages = {
     confirmInstall: "{count} 件の Skill をインストール",
     emptySkills: "まだ Skill がありません。Koi の基本機能は変わりません。",
     enableAfterInstall: "新規インストールした Skill を有効化",
+    autoSkillsOffInstallHint: "スキルの自動使用はオフです。インストール後、「マイスペース → Koi AI」で自動使用をオンにし、スキルも有効になっていることを確認してください。以降の新しいタスクで必要に応じて読み込まれます。",
     enabledToggle: "有効にする",
     unavailableEnabledHint: "有効の設定は保持されていますが、新しいタスクでは使用されません。オフにすると、利用可能になっても自動で有効にはなりません。",
     entryLabel: "エントリー",

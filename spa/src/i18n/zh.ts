@@ -932,6 +932,7 @@ export const zh: Messages = {
     confirmInstall: "安装 {count} 个技能",
     emptySkills: "还没有安装技能。Koi 的基础能力不受影响。",
     enableAfterInstall: "启用新安装的技能",
+    autoSkillsOffInstallHint: "自动使用技能已关闭。完成安装后，请到「我的空间 → Koi AI」开启，并确认技能已启用；之后的新任务才会按需加载。",
     enabledToggle: "启用",
     unavailableEnabledHint: "已保留启用状态，但当前不会用于新任务。关闭后，恢复可用也不会自动启用。",
     entryLabel: "入口",

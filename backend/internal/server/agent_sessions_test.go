@@ -81,7 +81,7 @@ func TestAgentSessionContextHistoryAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	assertMCPToolSet(t, client, []string{"find_skills", "load_skill", "get_document", "search_documents", "list_folders", "get_conversation", "get_operation_results", "propose_operations", "propose_document_change", "save_artifact", "validate_operation"})
+	assertMCPToolSet(t, client, []string{"search_repositories", "find_skills", "load_skill", "get_document", "search_documents", "list_folders", "get_conversation", "get_operation_results", "propose_operations", "propose_document_change", "save_artifact", "validate_operation"})
 	result, err := client.CallTool(context.Background(), &mcp.CallToolParams{Name: "get_document", Arguments: map[string]any{}})
 	if err != nil || result.IsError {
 		t.Fatalf("read: %v %v", result, err)

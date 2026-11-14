@@ -1,12 +1,42 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createRouter, createRootRoute, createRoute, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory } from "@tanstack/history";
 
-const dir = await mkdtemp(join(tmpdir(), "koinote-agent-result-"));
+const dir = await mkdtemp(join(process.cwd(), "scripts/.agent-result-"));
 try {
+  // Render actual Markdown and router links: desktop navigation must preserve
+  // installation/management intent without reloading the WebView resource URL.
+  const replyFile = join(dir, "reply.mjs");
+  await build({
+    stdin: { contents: 'export {AgentTaskReply} from "./spa/src/components/AgentTaskReply";export {parseRepositorySearch} from "./spa/src/agentRepositoryMarkdown";export {parseSpaceSearch} from "./spa/src/spaceSearch";export {parseRepositoryDirectorySearch} from "./spa/src/agentRepositoryDirectory";', resolveDir: process.cwd(), loader: "tsx" },
+    outfile: replyFile, bundle: true, format: "esm", platform: "node", packages: "external", jsx: "automatic", logLevel: "silent",
+    plugins: [{ name: "reply-locale", setup(builder) {
+      builder.onResolve({ filter: /^\.\.\/i18n$/ }, () => ({ path: "locale", namespace: "reply-locale" }));
+      builder.onLoad({ filter: /.*/, namespace: "reply-locale" }, () => ({ contents: 'export const useI18n=()=>({locale:"zh"});' }));
+    } }],
+  });
+  const { AgentTaskReply, parseRepositorySearch, parseSpaceSearch, parseRepositoryDirectorySearch } = await import(pathToFileURL(replyFile).href);
+  const links = ["/repositories", "/repositories?koiInstallable=true", "/repositories/42", "/repositories/42?installKoi=true", "/space?tab=koi&section=skills", "/space?tab=koi&section=settings", "https://example.com/repo"];
+  const routeRoot = createRootRoute({ component: () => React.createElement(AgentTaskReply, { task: { id: "links", result: links.map((href, i) => `[link ${i}](${href})`).join("\n\n") }, operations: [] }) });
+  const directoryRoute = createRoute({ getParentRoute: () => routeRoot, path: "/repositories", validateSearch: parseRepositoryDirectorySearch });
+  const detailRoute = createRoute({ getParentRoute: () => routeRoot, path: "/repositories/$repositoryId", validateSearch: parseRepositorySearch });
+  const spaceRoute = createRoute({ getParentRoute: () => routeRoot, path: "/space", validateSearch: parseSpaceSearch });
+  const router = createRouter({ routeTree: routeRoot.addChildren([directoryRoute, detailRoute, spaceRoute]), history: createMemoryHistory({ initialEntries: ["/"] }), isServer: true });
+  await router.load();
+  const html = renderToStaticMarkup(React.createElement(RouterProvider, { router }));
+  assert.deepEqual([...html.matchAll(/href="([^"]*)"/g)].map(match => match[1].replaceAll("&amp;", "&")), links);
+  assert.equal(router.matchRoutes("/repositories/42", { installKoi: true }).at(-1).search.installKoi, true);
+  assert.equal(router.matchRoutes("/repositories", { koiInstallable: true }).at(-1).search.koiInstallable, true);
+  for (const section of ["skills", "settings"]) {
+    assert.equal(router.matchRoutes("/space", { tab: "koi", section }).at(-1).search.section, section);
+  }
+
   const outfile = join(dir, "result.mjs");
   await build({ entryPoints: ["spa/src/agentTaskResult.ts"], bundle: true, format: "esm", platform: "node", outfile, logLevel: "silent" });
   const { agentTaskResult, agentTaskReply } = await import(pathToFileURL(outfile).href);

@@ -1,4 +1,5 @@
 import Markdown, { type Components } from "react-markdown";
+import { Link } from "@tanstack/react-router";
 import remarkGfm from "remark-gfm";
 import type { AgentArtifact, AgentOperation } from "../agentSessions";
 import { agentTaskReply, agentTaskResult } from "../agentTaskResult";
@@ -8,6 +9,20 @@ import type { WritingTask } from "../writingAgent";
 
 const plugins = [remarkGfm];
 const components: Components = {
+  a: ({ href, title, children }) => {
+    // Product and catalog links stay inside the app, including in desktop.
+    if (href === "/repositories" || href === "/repositories?koiInstallable=true") {
+      return <Link to="/repositories" search={href.includes("?") ? { koiInstallable: true } : {}} title={title}>{children}</Link>;
+    }
+    const skills = href?.match(/^\/space\?tab=koi&section=(skills|settings)$/);
+    if (skills) {
+      return <Link to="/space" search={{ tab: "koi", section: skills[1] as "skills" | "settings" }} title={title}>{children}</Link>;
+    }
+    const repository = href?.match(/^\/repositories\/([1-9]\d*)(\?installKoi=true)?$/);
+    return repository
+      ? <Link to="/repositories/$repositoryId" params={{ repositoryId: repository[1] }} search={repository[2] ? { installKoi: true } : {}} title={title}>{children}</Link>
+      : <a href={href} title={title}>{children}</a>;
+  },
   table: ({ children }) => (
     <div className="max-w-full overflow-x-auto">
       <table>{children}</table>

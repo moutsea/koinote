@@ -581,6 +581,7 @@ export interface Messages {
     confirmInstall: string;
     emptySkills: string;
     enableAfterInstall: string;
+    autoSkillsOffInstallHint: string;
     enabledToggle: string;
     unavailableEnabledHint: string;
     entryLabel: string;

@@ -213,6 +213,7 @@ try {
   assert.equal(calls.filter((call) => call.path === "/api/koi/skill-imports").length, createsBeforeRetry, "upload retry reuses its existing preview");
   assert.deepEqual(createInput.declaredPaths.sort(), ["bad/SKILL.md", "bad/guide.md", "review/SKILL.md", "review/guide.md"]);
   assert.ok(document.body.textContent.includes(labels.rejectedTitle));
+  assert.ok(document.querySelector('[role="dialog"]').textContent.includes(labels.autoSkillsOffInstallHint), "installation explains that enabling one Skill does not bypass the account switch");
   assert.ok(document.body.textContent.includes(labels.reject_sensitive_data_detected));
   const previewCard = document.querySelector('input[name="preview-candidate"]').closest("li");
   assert.ok(previewCard.textContent.includes("review/SKILL.md"), "the package path distinguishes similarly named Skills");
@@ -231,6 +232,7 @@ try {
   await click(labels.confirmInstall.replace("{count}", "1"));
   assert.equal(document.querySelector('[role="dialog"]'), null, "lost confirmation response recovers the committed receipt");
   assert.equal(calls.filter((call) => call.path.endsWith("/confirm")).length, 1);
+  assert.equal(settings.autoSkills, false, "installation must preserve the user's automatic-use preference");
   const originalSkills = skills;
   skills = [...Array.from({ length: 21 }, (_, index) => ({ ...installed, id: `folder-${index}`, name: `folder-${index}` })), { ...installed, id: "github-skill", name: "github-skill", sourceKind: "github", enabled: false }];
   const sourceFilter = () => document.querySelector(`select[aria-label="${labels.filterSource}"]`);
