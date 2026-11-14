@@ -1048,8 +1048,8 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                           {t.assistantName}
                           <span>{t.writingPartner}</span>
                         </div>
-                        <AgentTaskReply task={task} operations={operations} artifacts={artifacts} />
                         <AgentTaskActivity task={task} />
+                        <AgentTaskReply task={task} operations={operations} artifacts={artifacts} />
                         {artifacts
                           .filter((file) => file.taskId === task.id)
                           .map((file) => (

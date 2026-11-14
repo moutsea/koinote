@@ -9,7 +9,7 @@ const dir = await mkdtemp(join(tmpdir(), "koinote-agent-progress-"));
 try {
   const outfile = join(dir, "progress.mjs");
   await build({ entryPoints: ["spa/src/agentProgress.ts"], bundle: true, format: "esm", platform: "node", outfile, logLevel: "silent" });
-  const { agentProgress, agentActivitySteps } = await import(pathToFileURL(outfile).href);
+  const { agentProgress, agentActivitySteps, groupAgentActivitySteps } = await import(pathToFileURL(outfile).href);
   const running = { status: "running", cancelRequested: false };
   const tool = (seq, type, name) => ({ seq, event: { type: `tool.${type}`, toolCall: { name } } });
   assert.equal(agentProgress(running, [tool(1, "started", "koinote.generate_cover")]).phase, "cover");
@@ -71,6 +71,20 @@ try {
     { seq: 13, action: "work", status: "started" },
   ], "history retains earlier steps, repeat calls, failures and retries without exposing raw names");
   assert.deepEqual(agentActivitySteps([...events].reverse().concat(events[0])), agentActivitySteps(events));
+  const grouped = groupAgentActivitySteps(history);
+  assert.deepEqual(grouped.map(({ action, status, count }) => [action, status, count]), [
+    ["documents", "completed", 1], ["folders", "completed", 1], ["read", "completed", 2],
+    ["proposal", "failed", 1], ["proposal", "completed", 1], ["work", "started", 1],
+  ], "adjacent repeated actions collapse, but a failed attempt stays distinct from a successful retry");
+  assert.equal(history.length, 7, "grouping never rewrites the original execution record");
+  const references = [
+    ...Array.from({ length: 7 }, (_, i) => tool(i + 1, "completed", "skill_view")),
+    tool(8, "started", "koinote.load_skill"), tool(9, "completed", "koinote.get_document"),
+    tool(10, "completed", "skill_view"),
+  ];
+  assert.deepEqual(groupAgentActivitySteps(agentActivitySteps(references)).map(({ action, status, count }) => [action, status, count]), [
+    ["references", "completed", 7], ["references", "started", 1], ["read", "completed", 1], ["references", "completed", 1],
+  ], "running calls and nonadjacent references remain distinct");
   assert.deepEqual(agentActivitySteps([tool(4, "completed", "get_document")]),
     [{ seq: 4, action: "read", status: "completed" }], "a page boundary may split a start/outcome pair");
   const interpret = (seq, stage) => ({ seq, event: { type: "task.model_started", stage } });

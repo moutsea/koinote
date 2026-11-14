@@ -76,6 +76,20 @@ export function agentActivitySteps(events: readonly WritingEvent[]): ActivitySte
   return steps.map(({ tool: _, ...step }) => step);
 }
 
+/** Compact adjacent equal actions for display, keeping outcome changes visible. */
+export function groupAgentActivitySteps(steps: readonly ActivityStep[]) {
+  const groups: (ActivityStep & { count: number })[] = [];
+  for (const step of steps) {
+    const last = groups.at(-1);
+    if (last?.action === step.action && last.status === step.status) {
+      last.count++;
+    } else {
+      groups.push({ ...step, count: 1 });
+    }
+  }
+  return groups;
+}
+
 /** Only describe observed activity. A successful tool call is not proof that
  * document changes were applied: its result may still require approval. */
 export function agentProgress(

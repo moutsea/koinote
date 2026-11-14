@@ -53,19 +53,38 @@ export async function checkTaskProgress(createClient, url) {
     // must remain available, including Skill receipts and more than 100 events.
     const longHistory = [...Array.from({ length: 205 }, (_, i) => event(i + 20, "tool.completed", "koinote.get_document")), ...events];
     const loadedSkills = [{ id: "writing-skill-v1", name: "中文润色", loadedAt: new Date().toISOString() }];
+    await client.evaluate(`window.agentUITest.server.tasks[${JSON.stringify(sessionId)}].find(task=>task.id===${JSON.stringify(taskId)}).result='已整理文章内容，保留了原有标题和图片。'`);
     await client.evaluate(`window.agentUITest.updateProgress(${JSON.stringify(taskId)},${JSON.stringify(longHistory)},'completed',${JSON.stringify(loadedSkills)})`);
     const record = `document.querySelector('[data-task-activity="${taskId}"]')`;
     await client.wait(`${card}===null && ${record}?.textContent.includes('中文润色')`);
     assert.equal(await client.evaluate(`${record}.open`), false, "finished records start collapsed");
+    assert.equal(await client.evaluate(`Boolean(${record}.compareDocumentPosition(document.querySelector('[data-task-result="${taskId}"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true, "execution record appears before the reply");
+    const countSteps = `${record}.querySelectorAll('.agent-task-activity-steps li')`;
+    const loadedCount = `Array.from(${countSteps}).reduce((total, row) => total + Number(row.dataset.stepCount), 0)`;
     await client.evaluate(`${record}.querySelector('summary').click()`);
-    await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===100`);
+    await client.wait(`${loadedCount}===100`);
+    assert.equal(await client.evaluate(`${countSteps}.length`), 1, "repeated actions on one page appear as one step");
+    assert.match(await client.evaluate(`${record}.textContent`), /×100/);
     for (const expected of [200, 211]) {
       await client.evaluate(`${record}.querySelector('.agent-task-activity-older').click()`);
-      await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===${expected}`);
+      await client.wait(`${loadedCount}===${expected}`);
     }
+    assert.equal(await client.evaluate(`${countSteps}.length`), 6, "adjacent actions merge across history pages while separated reads stay separate");
+    assert.match(await client.evaluate(`${record}.textContent`), /×205/);
     assert.match(await client.evaluate(`${record}.textContent`), /查阅参考资料/);
     assert.doesNotMatch(await client.evaluate(`${record}.textContent`), /koinote\.|tool\.|model\.|get_document/);
     assert.equal(await client.evaluate(`${record}.querySelector('.agent-task-activity-older')===null`), true);
+    await client.evaluate("document.querySelector('button[aria-label=\"最大化\"]')?.click()");
+    await client.evaluate(`${record}.scrollIntoView({block:'center'})`);
+    const historyShot = await client.send("Page.captureScreenshot", { format: "png" });
+    await writeFile("/tmp/koinote-agent-history.png", Buffer.from(historyShot.data, "base64"));
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+    await client.evaluate(`document.documentElement.classList.add('dark');${record}.scrollIntoView({block:'center'})`);
+    assert.equal(await client.evaluate(`${record}.scrollWidth <= ${record}.clientWidth`), true, "expanded execution history fits narrow layouts");
+    const narrowShot = await client.send("Page.captureScreenshot", { format: "png" });
+    await writeFile("/tmp/koinote-agent-history-mobile.png", Buffer.from(narrowShot.data, "base64"));
+    await client.evaluate("document.documentElement.classList.remove('dark')");
+    await client.send("Emulation.clearDeviceMetricsOverride");
     await client.send("Page.reload");
     await client.wait(`${record}?.textContent.includes('中文润色')`);
     assert.equal(await client.evaluate(`${record}.open`), false, "reopened history is compact");
@@ -75,7 +94,7 @@ export async function checkTaskProgress(createClient, url) {
     await client.wait(`${record}.querySelector('[role=alert]')?.textContent.includes('执行记录暂时无法读取')`);
     assert.match(await client.evaluate(`${record}.querySelector('summary').textContent`), /中文润色/);
     await client.evaluate(`window.agentUITest.failTaskDetails=false;${record}.querySelector('[role=alert] button').click()`);
-    await client.wait(`${record}.querySelectorAll('.agent-task-activity-steps li').length===100`);
+    await client.wait(`${loadedCount}===100`);
     await client.wait(`${record}.querySelector('.agent-task-activity-skills')?.textContent.includes('中文润色')`);
     const failedTask = await client.evaluate(`window.agentUITest.seedProgress(${JSON.stringify(sessionId)},${JSON.stringify([
       { seq: 1, event: { type: "task.model_started", stage: "interpret" } },

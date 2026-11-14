@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, CircleAlert, LoaderCircle, Sparkles } from "lucide-react";
-import { agentActivitySteps, agentProgress } from "../agentProgress";
+import { Check, ChevronRight, CircleAlert, ListChecks, LoaderCircle, Sparkles } from "lucide-react";
+import { agentActivitySteps, agentProgress, groupAgentActivitySteps } from "../agentProgress";
 import { useI18n } from "../i18n";
 import { agentProgressText } from "../i18n/agentProgress";
 import { getWritingTask, writingFinished, type WritingTask } from "../writingAgent";
@@ -24,20 +24,20 @@ export function AgentTaskActivity({ task }: { task: WritingTask }) {
   const snapshot = activity.data?.pages[0]?.task;
   const skills = [...new Map([...(snapshot?.loadedSkills ?? []), ...(task.loadedSkills ?? [])]
     .map(skill => [skill.id, skill])).values()];
-  const steps = agentActivitySteps(activity.data?.pages.flatMap(page => page.events) ?? []);
+  const steps = groupAgentActivitySteps(agentActivitySteps(activity.data?.pages.flatMap(page => page.events) ?? []));
   // The conversation owns task status; an older detail request must not move it
   // back from completed/approval to running.
   const { phase } = agentProgress(task);
   return (
-    <details className="agent-task-activity" data-task-activity={task.id} open={open}
+    <details className="agent-task-activity" data-task-activity={task.id} data-phase={phase} open={open}
       onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
-        <ChevronRight size={14} className="agent-task-activity-chevron" aria-hidden="true" />
-        <span className="agent-task-activity-title">{t.history}</span>
+        <span className="agent-task-activity-title"><ListChecks size={15} aria-hidden="true" />{t.history}</span>
         <span className="agent-task-activity-phase">{t.phases[phase]}</span>
+        <ChevronRight size={14} className="agent-task-activity-chevron" aria-hidden="true" />
         {skills.length > 0 && <span className="agent-task-activity-skill-summary">
           <Sparkles size={12} aria-hidden="true" />
-          {t.loadedSkills} · {skills.map(skill => skill.name).join(" · ")}
+          <span title={skills.map(skill => skill.name).join(" · ")}>{t.loadedSkills} · {skills.map(skill => skill.name).join(" · ")}</span>
         </span>}
       </summary>
       {open && <div className="agent-task-activity-body">
@@ -66,10 +66,14 @@ export function AgentTaskActivity({ task }: { task: WritingTask }) {
               const pending = step.status === "started" && !finished;
               const Icon = step.status === "completed" ? Check : step.status === "failed" ? CircleAlert
                 : pending ? LoaderCircle : CircleAlert;
-              return <li key={step.seq} data-step-status={step.status}>
-                <Icon size={13} aria-hidden="true" className={pending ? "agent-progress-spinner" : undefined} />
-                <span>{t.actions[step.action]}</span>
-                <span className="agent-task-activity-step-status">{step.status === "completed" ? t.stepDone
+              return <li key={step.seq} data-step-status={step.status} data-step-count={step.count}>
+                <span className="agent-task-activity-step-icon">
+                  <Icon size={12} aria-hidden="true" className={pending ? "agent-progress-spinner" : undefined} />
+                </span>
+                <span className="agent-task-activity-step-label">{t.actions[step.action]}
+                  {step.count > 1 && <span className="agent-task-activity-step-count">×{step.count}</span>}
+                </span>
+                <span className={step.status === "completed" ? "sr-only" : "agent-task-activity-step-status"}>{step.status === "completed" ? t.stepDone
                   : step.status === "failed" ? t.stepFailed : pending ? t.phases.running : t.stepUnconfirmed}</span>
               </li>;
             })}

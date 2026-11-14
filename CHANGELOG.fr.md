@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.26] - 2026-11-14
+
+### Added
+
+- Koi AI peut expliquer les fonctions de Koinote et leurs accès, et recommander des Skills selon les descriptions publiques du Hub et leur compatibilité actuelle, avec des liens vers l’aperçu d’installation et la gestion des Skills.
+
+### Changed
+
+- L’historique apparaît au-dessus des réponses, avec une carte repliable, des étiquettes de Skills et une chronologie affinées. Les actions consécutives de même type et de même état sont regroupées avec un compteur ; les échecs et nouvelles tentatives restent distincts.
+- Les liens de recommandation s’ouvrent dans l’application. Si l’utilisation automatique des Skills est désactivée, l’installation indique comment l’activer pour les nouvelles tâches.
+
 ## [1.1.25] - 2026-11-14
 
 ### Added

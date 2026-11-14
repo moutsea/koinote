@@ -39,6 +39,7 @@ export async function checkArticleKoi(createClient,url) {
     await wait("document.querySelector('[role=dialog]').textContent.includes('参考乙文，润色甲文开头') && window.agentUITest.prepared===1");
     const reply = '[role=dialog] [data-task-result]';
     await wait(`document.querySelector('${reply} h2')?.textContent === '修改建议'`);
+    assert.equal(await evaluate(`Boolean(document.querySelector('[role=dialog] [data-task-activity]').compareDocumentPosition(document.querySelector('${reply}')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true, "article execution record appears before the reply");
     assert.equal(await evaluate(`document.querySelector('${reply} li strong')?.textContent`), "保留数字");
     assert.equal(await evaluate(`document.querySelector('${reply} pre code')?.textContent.trim()`), "# 原文示例");
     assert.equal(await evaluate(`document.querySelector('${reply} tbody td')?.textContent`), "第一段");

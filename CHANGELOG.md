@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.26] - 2026-11-14
+
+### Added
+
+- Koi AI can explain Koinote features and where to find them, and recommend Skills using public Hub descriptions and current compatibility, with links to installation previews and Skill management.
+
+### Changed
+
+- Execution records now appear above replies, with refined collapsible cards, Skill labels and a step timeline. Consecutive matching actions and statuses show a repeat count; failures and retries remain separate.
+- Skill recommendation links open inside the app. Installation explains how to enable automatic Skill use when it is off, so new tasks can load Skills as needed.
+
 ## [1.1.25] - 2026-11-14
 
 ### Added

@@ -1,36 +1,40 @@
 {
-  "version": "1.1.25",
+  "version": "1.1.26",
   "translations": {
     "en": {
-      "title": "What's new in Koinote 1.1.25",
+      "title": "What's new in Koinote 1.1.26",
       "summary": "A quick look at the improvements now available in Koinote.",
       "highlights": [
-        "Each Koi AI turn keeps a collapsible execution record after completion, including steps, failures, retries and loaded Skills, with earlier steps available for longer records.",
-        "Skill records explain that loading does not guarantee every rule was followed and remain visible beside article change proposals."
+        "Koi AI can explain Koinote features and where to find them, and recommend Skills using public Hub descriptions and current compatibility, with links to installation previews and Skill management.",
+        "Execution records now appear above replies, with refined collapsible cards, Skill labels and a step timeline. Consecutive matching actions and statuses show a repeat count; failures and retries remain separate.",
+        "Skill recommendation links open inside the app. Installation explains how to enable automatic Skill use when it is off, so new tasks can load Skills as needed."
       ]
     },
     "zh": {
-      "title": "Koinote 1.1.25 新功能",
+      "title": "Koinote 1.1.26 新功能",
       "summary": "快速了解这个版本已经可以使用的重要升级。",
       "highlights": [
-        "Koi AI 每轮任务保留可折叠的执行记录，任务结束后仍可查看执行步骤、失败与重试，以及已加载的技能；较长记录支持加载更早步骤。",
-        "技能记录说明加载与实际采用规则的区别，文章侧栏提交修改方案后也能查看。"
+        "Koi AI 可介绍 Koinote 的功能和使用入口，并根据 Hub 的公开描述及当前兼容性推荐技能，提供安装预览和技能管理链接。",
+        "执行记录移到回复结果上方，优化折叠卡片、技能标签和步骤时间线；连续同类且状态相同的步骤合并显示次数，失败与重试仍分开展示。",
+        "技能推荐链接可在应用内打开；安装时若关闭了自动使用技能，会提示如何开启，新任务才会按需加载。"
       ]
     },
     "fr": {
-      "title": "Nouveautés de Koinote 1.1.25",
+      "title": "Nouveautés de Koinote 1.1.26",
       "summary": "Découvrez rapidement les principales améliorations disponibles dans cette version.",
       "highlights": [
-        "Chaque tour de Koi AI conserve un historique repliable après son exécution : étapes, échecs, nouvelles tentatives et Skills chargés. Les historiques longs permettent de consulter les étapes précédentes.",
-        "Les indications précisent qu’un Skill chargé ne garantit pas l’application de chaque règle et restent visibles à côté des propositions de modification d’article."
+        "Koi AI peut expliquer les fonctions de Koinote et leurs accès, et recommander des Skills selon les descriptions publiques du Hub et leur compatibilité actuelle, avec des liens vers l’aperçu d’installation et la gestion des Skills.",
+        "L’historique apparaît au-dessus des réponses, avec une carte repliable, des étiquettes de Skills et une chronologie affinées. Les actions consécutives de même type et de même état sont regroupées avec un compteur ; les échecs et nouvelles tentatives restent distincts.",
+        "Les liens de recommandation s’ouvrent dans l’application. Si l’utilisation automatique des Skills est désactivée, l’installation indique comment l’activer pour les nouvelles tâches."
       ]
     },
     "ja": {
-      "title": "Koinote 1.1.25 の新機能",
+      "title": "Koinote 1.1.26 の新機能",
       "summary": "このバージョンで利用できる主な改善点をすばやく確認できます。",
       "highlights": [
-        "Koi AI の各ターンに折りたたみ式の実行履歴を追加しました。完了後も手順、失敗、再試行、読み込み済みスキルを確認でき、長い履歴では以前の手順も表示できます。",
-        "スキルの読み込みは全ルールの適用を保証しないことを明記し、記事の変更案がある場合も履歴を確認できるようにしました。"
+        "Koi AI が Koinote の機能と利用場所を案内し、Hub の公開説明と現在の互換性に基づいてスキルを推薦できるようになりました。インストールの確認画面とスキル管理へのリンクも表示します。",
+        "実行履歴を回答の上に移動し、折りたたみカード、スキルラベル、手順のタイムラインを改善しました。同じ操作と状態が連続する場合は回数をまとめ、失敗と再試行は分けて表示します。",
+        "スキルの推薦リンクがアプリ内で開くようになりました。自動使用がオフの場合、インストール時に有効化の方法を案内し、新しいタスクから必要に応じてスキルを読み込めるようにします。"
       ]
     }
   }

@@ -1,42 +1,62 @@
 .agent-task-activity {
-  margin: 12px 0;
+  margin: 8px 0 14px;
   border: 1px solid var(--ink-line);
-  border-radius: 10px;
+  border-radius: 12px;
+  background: var(--ink-paper-soft);
   color: var(--ink-mid);
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .agent-task-activity > summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 14px;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 10px 12px;
+  gap: 6px 10px;
+  padding: 11px 13px;
+  border-radius: 11px;
   cursor: pointer;
   list-style: none;
+  transition: background .15s;
 }
+.agent-task-activity > summary:hover { background: var(--ink-wash); }
 .agent-task-activity > summary::-webkit-details-marker { display: none; }
-.agent-task-activity > summary:focus-visible { outline: 2px solid var(--cinnabar); outline-offset: 2px; border-radius: 10px; }
-.agent-task-activity-chevron { flex-shrink: 0; transition: transform .15s; }
+.agent-task-activity > summary:focus-visible { outline: 2px solid var(--cinnabar); outline-offset: -2px; }
+.agent-task-activity-chevron { transition: transform .15s; }
 .agent-task-activity[open] .agent-task-activity-chevron { transform: rotate(90deg); }
-.agent-task-activity-title { color: var(--ink-strong); font-weight: 500; }
-.agent-task-activity-phase { margin-left: auto; font-size: 11px; }
-.agent-task-activity-skill-summary { display: flex; align-items: baseline; gap: 5px; flex-basis: 100%; min-width: 0; padding-left: 22px; }
-.agent-task-activity-skill-summary svg { flex-shrink: 0; align-self: center; }
-.agent-task-activity-body { padding: 0 12px 12px; border-top: 1px solid var(--ink-line); }
-.agent-task-activity-label { margin: 12px 0 6px; font-weight: 500; color: var(--ink-strong); }
-.agent-task-activity-note { margin: 6px 0 0; font-size: 11px; }
+.agent-task-activity-title { display: flex; align-items: center; gap: 7px; color: var(--ink-strong); font-weight: 600; }
+.agent-task-activity-title svg { flex-shrink: 0; color: var(--ink-mid); }
+.agent-task-activity-phase { max-width: 15em; padding: 2px 8px; border-radius: 6px; background: var(--ink-wash); font-size: 11px; }
+.agent-task-activity[data-phase="failed"] .agent-task-activity-phase,
+.agent-task-activity[data-phase="partial"] .agent-task-activity-phase { color: var(--cinnabar); background: var(--cinnabar-soft); }
+.agent-task-activity-skill-summary { grid-column: 1 / -1; display: flex; align-items: center; gap: 5px; min-width: 0; padding-left: 22px; font-size: 11px; }
+.agent-task-activity-skill-summary svg { flex-shrink: 0; }
+.agent-task-activity-skill-summary > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-task-activity-body { padding: 0 14px 13px; border-top: 1px solid var(--ink-line); }
+.agent-task-activity-label { margin: 13px 0 7px; font-size: 11px; font-weight: 600; color: var(--ink-strong); }
+.agent-task-activity-note { margin: 6px 0 0; font-size: 11px; line-height: 1.7; }
 .agent-task-activity-skills ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
-.agent-task-activity-skills li { display: flex; align-items: baseline; gap: 5px; padding: 2px 8px; border-radius: 6px; background: var(--paper-deep, transparent); }
+.agent-task-activity-skills li { display: flex; align-items: baseline; gap: 5px; min-width: 0; padding: 3px 8px; border: 1px solid var(--ink-line); border-radius: 6px; background: var(--ink-wash); }
 .agent-task-activity-skills li svg { flex-shrink: 0; align-self: center; }
-.agent-task-activity-steps { display: grid; gap: 8px; padding: 0; margin: 8px 0 0; list-style: none; }
-.agent-task-activity-steps li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
-.agent-task-activity-steps svg { flex-shrink: 0; align-self: center; }
-.agent-task-activity-step-status { margin-left: auto; font-size: 11px; }
+.agent-task-activity-steps { display: grid; padding: 0; margin: 0; list-style: none; }
+.agent-task-activity-steps li { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 6px 0; }
+.agent-task-activity-steps li:not(:last-child)::before { content: ""; position: absolute; left: 8px; top: 26px; bottom: -4px; width: 1px; background: var(--ink-line); }
+.agent-task-activity-step-icon { display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; background: var(--ink-wash); }
+.agent-task-activity-step-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 7px; min-width: 0; }
+.agent-task-activity-step-count { padding: 0 5px; border-radius: 4px; background: var(--ink-wash-strong); font-size: 10px; font-variant-numeric: tabular-nums; }
+.agent-task-activity-step-status { max-width: 12em; font-size: 11px; text-align: right; }
 .agent-task-activity-steps [data-step-status="failed"] { color: var(--cinnabar); }
+.agent-task-activity-steps [data-step-status="failed"] .agent-task-activity-step-icon { background: var(--cinnabar-soft); }
 .agent-task-activity-error { margin: 10px 0; color: var(--cinnabar); }
-.agent-task-activity button { color: var(--cinnabar); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.agent-task-activity button { border-radius: 5px; color: var(--cinnabar); cursor: pointer; }
+.agent-task-activity button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.agent-task-activity button:focus-visible { outline: 2px solid var(--cinnabar); outline-offset: 2px; }
 .agent-task-activity button:disabled { opacity: .5; cursor: wait; }
-.agent-task-activity-older { margin: 0 0 4px; font-size: 11px; }
-@media (prefers-reduced-motion: reduce) { .agent-task-activity-chevron { transition: none; } }
+.agent-task-activity-older { padding: 3px 0; margin: 0 0 4px; font-size: 11px; }
+@media (max-width: 480px) {
+  .agent-task-activity-phase { max-width: 12em; }
+  .agent-task-activity-step-status { max-width: 9em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-task-activity > summary, .agent-task-activity-chevron { transition: none; }
+}
