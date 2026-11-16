@@ -471,16 +471,21 @@ func (a *App) resolveWechatOfficialAccountRef(ctx context.Context, userID int, a
 func (a *App) loadWechatOfficialCredential(ctx context.Context, account wechatOfficialAccountRef) (wechatOfficialCredential, error) {
 	var credential wechatOfficialCredential
 	var ciphertext []byte
+	var label string
+	var updatedAt time.Time
 	err := a.db.QueryRow(ctx, `
-		SELECT account_id::text, app_id, app_secret_ciphertext
+		SELECT account_id::text, app_id, app_secret_ciphertext, label, updated_at
 		FROM wechat_official_accounts
 		WHERE user_id = $1 AND account_id = $2
-	`, account.UserID, account.AccountID).Scan(&credential.AccountID, &credential.AppID, &ciphertext)
+	`, account.UserID, account.AccountID).Scan(&credential.AccountID, &credential.AppID, &ciphertext, &label, &updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return wechatOfficialCredential{}, errWechatAccountNotBound
 	}
 	if err != nil {
 		return wechatOfficialCredential{}, fmt.Errorf("%w: %v", errWechatPersistence, err)
+	}
+	if !publicationDestinationMatches(ctx, "wechat", account.AccountID, publicationDigest([]any{credential.AppID, label, updatedAt})) {
+		return wechatOfficialCredential{}, errAgentPublicationChanged
 	}
 	credential.AppSecret, err = a.decryptWechatCredential(account.UserID, ciphertext)
 	if err != nil {
@@ -1028,6 +1033,10 @@ func isWechatAccessTokenError(err error) bool {
 }
 
 func writeWechatOfficialError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errAgentPublicationChanged) {
+		httpx.ErrorCode(w, http.StatusConflict, "publication_changed", errAgentPublicationChanged.Error())
+		return
+	}
 	var providerError *wechatProviderError
 	if errors.As(err, &providerError) {
 		switch providerError.Code {

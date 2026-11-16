@@ -1,4 +1,6 @@
-import { apiJson, type Document } from "./api";
+import { apiJson, type Document, type WechatGeoSummary } from "./api";
+import { agentPanelText } from "./i18n/agentPanel";
+import type { Locale } from "./i18n/types";
 import type { WritingTask } from "./writingAgent";
 
 export type AgentPermission = "review" | "assist" | "full";
@@ -19,8 +21,9 @@ export type AgentOperation = {
   taskId: string;
   hash: string;
   input: {
+    geo?: WechatGeoSummary;
     key: string;
-    kind: "update" | "create" | "move" | "trash" | "folder" | "delete_folder";
+    kind: "update" | "create" | "move" | "trash" | "folder" | "delete_folder" | "wechat_geo";
     path?: string;
     title?: string;
     content?: string;
@@ -28,7 +31,7 @@ export type AgentOperation = {
     folderId?: string;
     targetId?: string;
   };
-  before: { folder?: { folderId: string; name: string; parentFolderId: string; organizerKind: string }; document: Document; folderId: string; path: string; sortOrder?: number } | null;
+  before: { geo?: WechatGeoSummary | null; folder?: { folderId: string; name: string; parentFolderId: string; organizerKind: string }; document: Document; folderId: string; path: string; sortOrder?: number } | null;
   status:
     | "pending"
     | "applied"
@@ -43,6 +46,7 @@ export type AgentOperation = {
     folderId?: string;
     revision?: number;
     undoRevision?: number;
+    geoUpdatedAt?: string;
     sortOrder?: number;
     path?: string;
   } | null;
@@ -56,6 +60,7 @@ export type AgentArtifact = {
   bytes: number;
 };
 export type AgentSessionPage = {
+  publications?: AgentPublication[];
   artifacts: AgentArtifact[];
   session: AgentSession;
   tasks: WritingTask[];
@@ -63,6 +68,33 @@ export type AgentSessionPage = {
   nextCursor: string;
 };
 const base = "/api/agent/sessions";
+export type AgentPublication = {
+  id: string;
+  taskId: string;
+  docId: string;
+  revision: number;
+  channel: "wechat" | "x" | "custom";
+  targetId: string;
+  targetLabel: string;
+  hash: string;
+  title: string;
+  credits: number;
+  status: "pending" | "sending" | "sent" | "failed" | "uncertain" | "rejected";
+  resultUrl?: string;
+  resultId?: string;
+  errorCode?: string;
+  createdAt: string;
+};
+export const getAgentPublication = (id: string) => apiJson<{
+  publication: AgentPublication;
+  markdown: string;
+  cover: string;
+  geoText?: string;
+}>(`/api/agent/publications/${encodeURIComponent(id)}`);
+export const actOnAgentPublication = (item: AgentPublication, action: "confirm" | "reject") =>
+  apiJson<{ publication: AgentPublication }>(`/api/agent/publications/${encodeURIComponent(item.id)}/${action}`, {
+    method: "POST", body: JSON.stringify({ hash: item.hash }),
+  });
 export const listAgentSessions = (q = "", sort = "recent", cursor = "") =>
   apiJson<{
     sessions: AgentSession[];
@@ -126,7 +158,7 @@ export function agentTaskIntentFingerprint(
 export const sendAgentMessage = (id: string, input: AgentTaskRequest) =>
   apiJson<{ task: WritingTask }>(`${base}/${encodeURIComponent(id)}/tasks`, {
     method: "POST",
-    headers: { "X-Koinote-Agent-Covers": "1" },
+    headers: { "X-Koinote-Agent-Covers": "1", "X-Koinote-Agent-Publishing": "1", "X-Koinote-Agent-Geo": "1" },
     body: JSON.stringify(input),
   });
 export const actOnAgentOperation = (
@@ -359,4 +391,24 @@ export async function saveAgentPanelLayout(
   } catch {
     /* Cloud history is independent of local layout persistence. */
   }
+}
+
+// GEO is reviewed as literal hidden text, never as rendered article Markdown.
+export function agentOperationPreview(op: AgentOperation, locale: Locale) {
+  const labels = agentPanelText[locale];
+  const geo = op.input.kind === "wechat_geo";
+  const title = op.input.title ?? op.before?.document.title ?? "";
+  const text = (view?: WechatGeoSummary | null) => view
+    ? `${view.enabled ? labels.geoEnabled : labels.geoDisabled}\n\n${view.text}` : labels.geoEmpty;
+  return {
+    beforeTitle: geo ? `${labels.wechat_geo} · ${title}` : op.before?.document.title ?? "",
+    afterTitle: geo ? `${labels.wechat_geo} · ${title}` : title,
+    beforeContent: geo ? text(op.before?.geo) : op.before?.document.content ?? "",
+    afterContent: geo ? text(op.input.geo) : op.input.content ?? "",
+    plainText: geo,
+  };
+}
+export function agentGeoCost(op: AgentOperation, locale: Locale) {
+  return op.input.kind === "wechat_geo" && (op.input.geo?.creditsCharged ?? 0) > 0
+    ? agentPanelText[locale].geoCost.replace("{credits}", String(op.input.geo!.creditsCharged)) : "";
 }

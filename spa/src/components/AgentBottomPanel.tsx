@@ -49,12 +49,15 @@ import { AgentDiffDialog } from "./AgentDiffDialog";
 import { AgentProgress } from "./AgentProgress";
 import { AgentTaskActivity } from "./AgentTaskActivity";
 import { AgentArtifactCard } from "./AgentArtifactCard";
+import { AgentPublicationCard } from "./AgentPublicationCard";
 import { pushModal } from "../modalStack";
 import {
   AGENT_PANEL_OPEN,
   actOnAgentOperation,
   actOnAgentOperationBatch,
   agentApprovalBatch,
+  agentOperationPreview,
+  agentGeoCost,
   createAgentSession,
   deleteAgentSession,
   getAgentFocus,
@@ -292,6 +295,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
   );
   const artifacts =
     conversation.data?.pages.flatMap((page) => page.artifacts ?? []) ?? [];
+  const publications = conversation.data?.pages.flatMap(page => page.publications ?? []) ?? [];
   useEffect(() => {
     if (
       conversation.error instanceof ApiError &&
@@ -359,6 +363,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
       const old = seenOperations.current.get(op.id);
       seenOperations.current.set(op.id, op.status);
       if (
+        op.input.kind !== "wechat_geo" &&
         (op.status === "applied" || op.status === "undone") &&
         old !== op.status
       ) {
@@ -1050,6 +1055,7 @@ function LoadedAgentBottomPanel({ accountKey, onOpenDocument, requests, initialL
                         </div>
                         <AgentTaskActivity task={task} />
                         <AgentTaskReply task={task} operations={operations} artifacts={artifacts} />
+                        {publications.filter(item => item.taskId === task.id).map(item => <AgentPublicationCard key={item.id} item={item} taskStatus={task.status} />)}
                         {artifacts
                           .filter((file) => file.taskId === task.id)
                           .map((file) => (
@@ -1576,7 +1582,7 @@ function OperationCard({
   const { locale } = useI18n();
   const t = agentPanelText[locale];
   const [expanded, setExpanded] = useState(false);
-  const hasContent = op.input.kind === "update" || op.input.kind === "create";
+  const hasContent = op.input.kind === "update" || op.input.kind === "create" || op.input.kind === "wechat_geo";
   const actions = (
       <div className="agent-proposal-actions flex flex-wrap items-center gap-2">
         {onOpenDocument &&
@@ -1614,9 +1620,9 @@ function OperationCard({
             >
               {t.reject}
             </button>
-            <button type="button" className={control} onClick={() => { setExpanded(false); onAdjust(); }}>
+            {op.input.kind !== "wechat_geo" && <button type="button" className={control} onClick={() => { setExpanded(false); onAdjust(); }}>
               {t.adjust}
-            </button>
+            </button>}
           </>
         )}
         {op.status === "applied" && (
@@ -1693,12 +1699,11 @@ function OperationCard({
           <Maximize2 size={13} />
         </button>
       )}
+      {agentGeoCost(op, locale) && <p className="my-2 text-xs">{agentGeoCost(op, locale)}</p>}
       {actions}
       {expanded && <AgentDiffDialog
-        beforeTitle={op.before?.document.title ?? ""}
-        afterTitle={op.input.title ?? op.before?.document.title ?? ""}
-        beforeContent={op.before?.document.content ?? ""}
-        afterContent={op.input.content ?? ""}
+        {...agentOperationPreview(op, locale)}
+        notice={agentGeoCost(op, locale)}
         actions={actions}
         error={error}
         onClose={() => setExpanded(false)}

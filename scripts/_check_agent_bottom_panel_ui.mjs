@@ -1,3 +1,5 @@
+import { checkGeoApproval } from "./fixtures/agent-geo-check.mjs";
+import { checkPublication } from "./fixtures/agent-publication-check.mjs";
 import { checkArticleKoi } from "./fixtures/article-koi-check.mjs";
 import { checkCoverGeneration } from "./fixtures/agent-panel-cover-check.mjs";
 import assert from "node:assert/strict";
@@ -234,7 +236,17 @@ try {
       },
     };
   };
-  if (process.env.AGENT_COVER_UI_ONLY === "1") {
+  if (process.env.AGENT_GEO_UI_ONLY === "1") {
+    await checkGeoApproval(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
+    await checkGeoApproval(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh`);
+    assert.deepEqual(errors, []);
+    console.log("GEO approval UI passed: both entries, literal preview, state, cost, approval and undo.");
+  } else if (process.env.AGENT_PUBLICATION_UI_ONLY === "1") {
+    await checkPublication(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
+    await checkPublication(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh`);
+    assert.deepEqual(errors, []);
+    console.log("Agent publication UI passed: both entries, preview, explicit confirmation, cost, close, double-click, background status and narrow modal.");
+  } else if (process.env.AGENT_COVER_UI_ONLY === "1") {
     await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
     await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh`);
     assert.deepEqual(errors, []);
@@ -1467,6 +1479,7 @@ try {
     } finally { await fresh.close(); }
   } finally { await quotaPeer.close(); }
   const compatibilityURL = `http://127.0.0.1:${server.address().port}/?lang=zh`;
+  await checkPublication(createClient, compatibilityURL);
   await checkMixedVersionRequests(createClient, compatibilityURL);
   await checkOpenDuringRestore(createClient, compatibilityURL);
   await checkLocalDevRestart(createClient, temp);

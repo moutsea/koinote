@@ -85,12 +85,14 @@ function ArticlePreview({ beforeTitle, beforeContent, afterTitle, afterContent }
 }
 
 export function AgentDiffDialog({
-  beforeTitle, afterTitle, beforeContent, afterContent, actions, error, onClose,
+  beforeTitle, afterTitle, beforeContent, afterContent, actions, error, onClose, plainText = false, notice,
 }: {
   beforeTitle: string;
   afterTitle: string;
   beforeContent: string;
   afterContent: string;
+  plainText?: boolean;
+  notice?: string;
   actions: ReactNode;
   error?: string;
   onClose: () => void;
@@ -156,7 +158,11 @@ export function AgentDiffDialog({
           <button type="button" className="agent-control" aria-label={t.editor.shareClose} onClick={onClose}><X size={20} /></button>
         </header>
         <div className="agent-diff-dialog-scroll" tabIndex={0} role="region" aria-labelledby={titleId}>
-          <ArticlePreview {...{ beforeTitle, beforeContent, afterTitle, afterContent }} />
+          {plainText ? <div className="agent-article-preview space-y-4">
+            {notice && <p className="text-sm">{notice}</p>}
+            <section><h3>{agentPanelText[locale].geoBefore}</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm">{beforeContent}</pre></section>
+            <section><h3>{agentPanelText[locale].geoAfter}</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm">{afterContent}</pre></section>
+          </div> : <ArticlePreview {...{ beforeTitle, beforeContent, afterTitle, afterContent }} />}
         </div>
         <footer className="agent-diff-dialog-footer">
           {error && <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">{error}</p>}

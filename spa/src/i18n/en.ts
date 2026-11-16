@@ -3273,6 +3273,7 @@ function hello(name) {
     delete_sync_pending: "Some documents to delete have content not yet synced to the cloud, so nothing was deleted. Try again and confirm, or wait for sync to finish.",
     folder_delete_sync_conflict: "This folder contains documents with sync conflicts. Resolve the conflicts before deleting the folder.",
     document_revision_conflict: "This document changed elsewhere. Refresh and try again",
+    publication_sending: "An article is being sent. Wait for it to finish before deleting this conversation.",
     not_found: "This item doesn't exist or has been deleted",
     image_type_unsupported: "Only PNG, JPEG, GIF and WebP are supported",
     image_type_mismatch: "File contents don't match the declared format",

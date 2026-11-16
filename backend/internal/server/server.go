@@ -261,6 +261,8 @@ func (a *App) Routes() http.Handler {
 	mux.Handle("/mcp", a.mcpHandler())
 
 	mux.HandleFunc("GET /api/agent/artifacts/{artifactId}", a.agentArtifactDownload)
+	mux.HandleFunc("GET /api/agent/publications/{publicationId}", a.agentPublicationGet)
+	mux.HandleFunc("POST /api/agent/publications/{publicationId}/{action}", a.agentPublicationAction)
 	mux.HandleFunc("GET /api/agent/session-settings", a.agentSettings)
 	mux.HandleFunc("PUT /api/agent/session-settings", a.agentSettings)
 	mux.HandleFunc("POST /api/documents/{docId}/koi-session", a.articleAgentSession)
@@ -387,7 +389,7 @@ func (a *App) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+repositoryLinksHeader+", "+agentCoversHeader)
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+repositoryLinksHeader+", "+agentCoversHeader+", "+agentPublishingHeader+", "+agentGeoHeader)
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

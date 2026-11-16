@@ -160,6 +160,18 @@ func (a *App) generateMCPWechatGeoSummary(
 	user model.User,
 	doc model.Document,
 ) (wechatGeoSummaryView, error) {
+	return a.generateWechatGeoSummary(ctx, user, doc, func(ctx context.Context, generated generatedWechatGeoSummary, provider agentLLMProvider, reservationID string, tokens int) (wechatGeoSummaryView, error) {
+		documentID, err := a.loadWechatGeoDocumentID(ctx, user.ID, doc.DocID)
+		if err != nil {
+			return wechatGeoSummaryView{}, err
+		}
+		return a.storeWechatGeoSummary(ctx, user.ID, documentID, doc.DocID, wechatGeoSummaryFingerprint(doc.Title, doc.Content), generated, provider, reservationID, tokens)
+	})
+}
+
+// MCP and Agent entry points share provider selection, credit reservation, generation and
+// parsing. The Agent additionally commits a task receipt in the save transaction.
+func (a *App) generateWechatGeoSummary(ctx context.Context, user model.User, doc model.Document, save func(context.Context, generatedWechatGeoSummary, agentLLMProvider, string, int) (wechatGeoSummaryView, error)) (wechatGeoSummaryView, error) {
 	mode, err := a.loadAgentProviderMode(ctx, user.ID)
 	if err != nil {
 		return wechatGeoSummaryView{}, err
@@ -208,15 +220,7 @@ func (a *App) generateMCPWechatGeoSummary(
 	if err != nil {
 		return wechatGeoSummaryView{}, err
 	}
-	documentID, err := a.loadWechatGeoDocumentID(ctx, user.ID, doc.DocID)
-	if err != nil {
-		return wechatGeoSummaryView{}, err
-	}
-	view, err := a.storeWechatGeoSummary(
-		ctx, user.ID, documentID, doc.DocID,
-		wechatGeoSummaryFingerprint(doc.Title, doc.Content), generation, provider,
-		reservationID, llmResult.TotalTokens,
-	)
+	view, err := save(ctx, generation, provider, reservationID, llmResult.TotalTokens)
 	if err != nil {
 		return wechatGeoSummaryView{}, err
 	}

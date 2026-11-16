@@ -18,10 +18,12 @@ import (
 )
 
 type agentSnapshot struct {
-	Folder   *agentFolderSnapshot `json:"folder,omitempty"`
-	Document model.Document       `json:"document"`
-	FolderID string               `json:"folderId"`
-	Path     string               `json:"path"`
+	Geo           *wechatGeoSummaryView `json:"geo,omitempty"`
+	GeoSourceHash string                `json:"geoSourceHash,omitempty"`
+	Folder        *agentFolderSnapshot  `json:"folder,omitempty"`
+	Document      model.Document        `json:"document"`
+	FolderID      string                `json:"folderId"`
+	Path          string                `json:"path"`
 	// Nil for older snapshots, or projected moves whose order is only known at apply.
 	SortOrder *int64 `json:"sortOrder,omitempty"`
 	// Server-owned dependency within one proposal batch. The snapshot is the
@@ -29,23 +31,25 @@ type agentSnapshot struct {
 	DependsOn string `json:"dependsOn,omitempty"`
 }
 type agentOperationInput struct {
-	ExpectedFolderVersion string `json:"expectedFolderVersion,omitempty" jsonschema:"Required for delete_folder: copy version from list_folders; use its /folders/... path. No document revision is needed."`
-	Key                   string `json:"key" jsonschema:"Unique stable key for this operation in the task. Reuse only for an identical retry."`
-	Kind                  string `json:"kind" jsonschema:"One of update, create, move, trash (documents only), folder (create), delete_folder (empty folders only). Propose related operations together in execution order; trash must be last for that document."`
-	Path                  string `json:"path,omitempty" jsonschema:"Document path from search_documents/get_document for update, move and trash; folder path from list_folders for delete_folder."`
-	ExpectedRevision      int64  `json:"expectedRevision,omitempty" jsonschema:"Version returned by get_document; required for existing documents. Reuse that original revision for every operation on the same document in this batch; the server tracks internal version changes."`
-	Title                 string `json:"title,omitempty"`
-	Content               string `json:"content,omitempty" jsonschema:"Complete Markdown for update or create. Preserve unmodified content."`
-	FolderID              string `json:"folderId,omitempty" jsonschema:"Destination or parent folder ID from list_folders; empty means root."`
-	Explanation           string `json:"explanation"`
-	MinorEdit             bool   `json:"minorEdit,omitempty" jsonschema:"True only after checking the actual diff is a minor correction with no semantic change. The server independently validates this claim."`
-	TargetID              string `json:"targetId,omitempty" jsonschema:"Leave empty; the server assigns new document or folder IDs."`
+	Geo                   *wechatGeoSummaryView `json:"geo,omitempty" jsonschema:"Reserved host field; never supply."`
+	ExpectedFolderVersion string                `json:"expectedFolderVersion,omitempty" jsonschema:"Required for delete_folder: copy version from list_folders; use its /folders/... path. No document revision is needed."`
+	Key                   string                `json:"key" jsonschema:"Unique stable key for this operation in the task. Reuse only for an identical retry."`
+	Kind                  string                `json:"kind" jsonschema:"One of update, create, move, trash (documents only), folder (create), delete_folder (empty folders only). Propose related operations together in execution order; trash must be last for that document."`
+	Path                  string                `json:"path,omitempty" jsonschema:"Document path from search_documents/get_document for update, move and trash; folder path from list_folders for delete_folder."`
+	ExpectedRevision      int64                 `json:"expectedRevision,omitempty" jsonschema:"Version returned by get_document; required for existing documents. Reuse that original revision for every operation on the same document in this batch; the server tracks internal version changes."`
+	Title                 string                `json:"title,omitempty"`
+	Content               string                `json:"content,omitempty" jsonschema:"Complete Markdown for update or create. Preserve unmodified content."`
+	FolderID              string                `json:"folderId,omitempty" jsonschema:"Destination or parent folder ID from list_folders; empty means root."`
+	Explanation           string                `json:"explanation"`
+	MinorEdit             bool                  `json:"minorEdit,omitempty" jsonschema:"True only after checking the actual diff is a minor correction with no semantic change. The server independently validates this claim."`
+	TargetID              string                `json:"targetId,omitempty" jsonschema:"Leave empty; the server assigns new document or folder IDs."`
 }
 type agentOperationResult struct {
-	DocID    string `json:"docId,omitempty"`
-	FolderID string `json:"folderId,omitempty"`
-	Revision int64  `json:"revision,omitempty"`
-	Path     string `json:"path,omitempty"`
+	GeoUpdatedAt *time.Time `json:"geoUpdatedAt,omitempty"`
+	DocID        string     `json:"docId,omitempty"`
+	FolderID     string     `json:"folderId,omitempty"`
+	Revision     int64      `json:"revision,omitempty"`
+	Path         string     `json:"path,omitempty"`
 	// Version produced by undo, separate from the immutable applied revision.
 	// A predecessor can only continue undoing at this exact restored version.
 	UndoRevision int64 `json:"undoRevision,omitempty"`
@@ -507,6 +511,13 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	if o.Status != "pending" {
 		return nil, errAgentSessionConflict
 	}
+	if o.Input.Kind == "wechat_geo" {
+		result, err := a.applyAgentGeoOperationTx(ctx, tx, user.ID, o, false)
+		if err != nil {
+			return nil, err
+		}
+		return nil, storeAppliedAgentOperation(ctx, tx, o, result, approval, reason)
+	}
 	in := o.Input
 	expectedRevision := in.ExpectedRevision
 	var updateTheme string
@@ -618,6 +629,10 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	default:
 		return nil, errAgentInput
 	}
+	return update, storeAppliedAgentOperation(ctx, tx, o, result, approval, reason)
+}
+
+func storeAppliedAgentOperation(ctx context.Context, tx pgx.Tx, o *agentOperation, result agentOperationResult, approval, reason string) error {
 	o.Status = "applied"
 	o.Approval = approval
 	o.Reason = reason
@@ -627,8 +642,8 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	if o.Before != nil {
 		beforeJSON, _ = json.Marshal(o.Before)
 	}
-	_, err = tx.Exec(ctx, `UPDATE agent_operations SET status='applied',approval=$2,reason=$3,result=$4,before_state=$5,updated_at=now() WHERE id=$1`, o.ID, approval, reason, data, beforeJSON)
-	return update, err
+	_, err := tx.Exec(ctx, `UPDATE agent_operations SET status='applied',approval=$2,reason=$3,result=$4,before_state=$5,updated_at=now() WHERE id=$1`, o.ID, approval, reason, data, beforeJSON)
+	return err
 }
 
 func (a *App) agentOperationAction(w http.ResponseWriter, r *http.Request) {
@@ -734,7 +749,12 @@ func (a *App) undoAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.Us
 	}
 	var update *documentUpdateResult
 	result := *o.Result
-	if o.Input.Kind == "delete_folder" {
+	if o.Input.Kind == "wechat_geo" {
+		result, err = a.applyAgentGeoOperationTx(ctx, tx, user.ID, o, true)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.Input.Kind == "delete_folder" {
 		if err := a.restoreAgentFolderTx(ctx, tx, user.ID, o); err != nil {
 			return nil, err
 		}

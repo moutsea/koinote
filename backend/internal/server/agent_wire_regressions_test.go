@@ -214,57 +214,75 @@ func TestAgentWireMixedReceipts(t *testing.T) {
 }
 
 func TestAgentWireRepairsPersistedHistoryOnlyAfterDefinitiveRejection(t *testing.T) {
-	a, u, doc := writingTestApp(t)
-	ctx := context.Background()
-	task := agentTestTask(t, a, u, agentTestSession(t, a, u, "review"), doc, "继续")
-	input := map[string]any{}
-	if err := a.prepareAgentIntentInput(ctx, &task, input, ""); err != nil {
-		t.Fatal(err)
-	}
-	base := input["systemPrompt"].(string)
-	oversized := base + agentReceiptMarker + strings.Repeat("📁", 12000)
-	input["systemPrompt"] = oversized
-	raw, _ := json.Marshal(input)
-	if err := a.db.QueryRow(ctx, `UPDATE writing_agent_tasks SET remote_input=$2,workspace_id='fixture-workspace' WHERE id=$1 RETURNING remote_input,workspace_id`, task.ID, raw).Scan(&task.RemoteInput, &task.WorkspaceID); err != nil {
-		t.Fatal(err)
-	}
-	posts := 0
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		posts++
-		var sent map[string]any
-		if r.URL.Path != "/api/agent/jobs" || r.Header.Get("Idempotency-Key") != "koinote-writing-"+task.ID {
-			t.Error("retry changed task identity")
-		}
-		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
-			t.Error(err)
-		}
-		if posts < 3 && sent["systemPrompt"] != oversized {
-			t.Error("ambiguous request was rewritten")
-		}
-		if posts == 2 {
-			w.WriteHeader(400)
-			fmt.Fprint(w, `{"error":"Invalid systemPrompt"}`)
-			return
-		}
-		if posts == 3 && sent["systemPrompt"] != base+agentReceiptLookup {
-			t.Error("legacy receipt not repaired")
-		}
-		w.WriteHeader(503)
-	}))
-	defer upstream.Close()
-	a.cfg.AgentGPTBaseURL = upstream.URL
-	if err := a.advanceWritingTask(ctx, &task); err == nil {
-		t.Fatal("expected retry after 503")
-	}
-	if err := a.advanceWritingTask(ctx, &task); err != nil {
-		t.Fatal(err)
-	}
-	saved, err := a.loadWritingTask(ctx, task.ID, u.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = a.advanceWritingTask(ctx, &saved); err == nil || posts != 3 {
-		t.Fatal("corrected request was not retried", posts, err)
+	for _, catalogOnly := range []bool{false, true} {
+		t.Run(fmt.Sprint(catalogOnly), func(t *testing.T) {
+			a, u, doc := writingTestApp(t)
+			ctx := context.Background()
+			task := agentTestTask(t, a, u, agentTestSession(t, a, u, "review"), doc, "继续")
+			input := map[string]any{}
+			if err := a.prepareAgentIntentInput(ctx, &task, input, ""); err != nil {
+				t.Fatal(err)
+			}
+			base := input["systemPrompt"].(string)
+			oversized := base + agentReceiptMarker + strings.Repeat("📁", 12000)
+			expected := base + agentReceiptLookup
+			if catalogOnly {
+				// A pre-upgrade request can overflow without containing any receipt history.
+				base = strings.Repeat("a", 17000)
+				skills := make([]koiTaskSkill, 20)
+				for i := range skills {
+					skills[i] = koiTaskSkill{Name: "method", Description: strings.Repeat("写作😀", 100)}
+				}
+				oversized = base + agentSkillCatalogMarker + agentSkillCatalog(skills) + "\nCore task rules."
+				expected = boundedAgentReceiptPrompt(oversized)
+				if len(expected) >= len(oversized) || !strings.Contains(expected, "Core task rules.") {
+					t.Fatal("catalog budget did not repair request")
+				}
+			}
+			input["systemPrompt"] = oversized
+			raw, _ := json.Marshal(input)
+			if err := a.db.QueryRow(ctx, `UPDATE writing_agent_tasks SET remote_input=$2,workspace_id='fixture-workspace' WHERE id=$1 RETURNING remote_input,workspace_id`, task.ID, raw).Scan(&task.RemoteInput, &task.WorkspaceID); err != nil {
+				t.Fatal(err)
+			}
+			posts := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				posts++
+				var sent map[string]any
+				if r.URL.Path != "/api/agent/jobs" || r.Header.Get("Idempotency-Key") != "koinote-writing-"+task.ID {
+					t.Error("retry changed task identity")
+				}
+				if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+					t.Error(err)
+				}
+				if posts < 3 && sent["systemPrompt"] != oversized {
+					t.Error("ambiguous request was rewritten")
+				}
+				if posts == 2 {
+					w.WriteHeader(400)
+					fmt.Fprint(w, `{"error":"Invalid systemPrompt"}`)
+					return
+				}
+				if posts == 3 && sent["systemPrompt"] != expected {
+					t.Error("legacy receipt not repaired")
+				}
+				w.WriteHeader(503)
+			}))
+			defer upstream.Close()
+			a.cfg.AgentGPTBaseURL = upstream.URL
+			if err := a.advanceWritingTask(ctx, &task); err == nil {
+				t.Fatal("expected retry after 503")
+			}
+			if err := a.advanceWritingTask(ctx, &task); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := a.loadWritingTask(ctx, task.ID, u.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = a.advanceWritingTask(ctx, &saved); err == nil || posts != 3 {
+				t.Fatal("corrected request was not retried", posts, err)
+			}
+		})
 	}
 }
 

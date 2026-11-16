@@ -4,6 +4,17 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.27] - 2026-11-16
+
+### Added
+
+- Koi AI peut générer, modifier, activer et désactiver les résumés GEO masqués des articles, avec validation selon les permissions de la conversation et possibilité d’annulation. La génération d’un brouillon utilise des Credits selon l’usage ; un refus ou une annulation ne rembourse pas ce coût.
+- Préparez dans la conversation un aperçu d’envoi vers les brouillons WeChat, X Articles ou un canal personnalisé. Vérifiez le contenu enregistré, la destination et le coût avant de confirmer. WeChat enregistre uniquement des brouillons.
+
+### Changed
+
+- Amélioration de la découverte des Skills installés et de leur sélection pour les tâches de rédaction, comme les suggestions de titres, ainsi que de la stabilité avec des bibliothèques plus grandes.
+
 ## [1.1.26] - 2026-11-14
 
 ### Added

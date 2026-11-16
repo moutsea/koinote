@@ -116,6 +116,12 @@ func TestCORSPreflight(t *testing.T) {
 	if headers := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, agentCoversHeader) {
 		t.Errorf("预检响应应允许生图交付能力协商，实际 %q", headers)
 	}
+	if headers := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, agentPublishingHeader) {
+		t.Errorf("预检响应应允许发布预览能力协商，实际 %q", headers)
+	}
+	if headers := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, agentGeoHeader) {
+		t.Errorf("预检响应应允许 GEO 审批能力协商，实际 %q", headers)
+	}
 }
 
 // ---------- 邮箱归一化 ----------

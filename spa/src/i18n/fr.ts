@@ -3333,6 +3333,7 @@ function hello(name) {
     folder_delete_sync_conflict: "Ce dossier contient des documents en conflit de synchronisation. Résolvez les conflits avant de supprimer le dossier.",
     document_revision_conflict:
       "Ce document a été modifié ailleurs. Actualisez puis réessayez",
+    publication_sending: "Un article est en cours d’envoi. Attendez la fin avant de supprimer cette conversation.",
     not_found: "Cet élément n'existe pas ou a été supprimé",
     image_type_unsupported: "Seuls PNG, JPEG, GIF et WebP sont pris en charge",
     image_type_mismatch: "Le contenu du fichier ne correspond pas à son format",

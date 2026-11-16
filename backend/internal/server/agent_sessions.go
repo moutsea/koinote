@@ -266,7 +266,12 @@ func (a *App) agentSessionGet(w http.ResponseWriter, r *http.Request) {
 		agentError(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"session": s, "tasks": tasks, "operations": ops, "artifacts": artifacts, "nextCursor": cursor})
+	publications, err := a.loadAgentPublications(r.Context(), u.ID, ids)
+	if err != nil {
+		agentError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"session": s, "tasks": tasks, "operations": ops, "artifacts": artifacts, "publications": publications, "nextCursor": cursor})
 }
 
 func (a *App) agentSessionUpdate(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +337,15 @@ func (a *App) agentSessionDelete(w http.ResponseWriter, r *http.Request) {
 		agentError(w, err)
 		return
 	}
+	var sending bool
+	if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM agent_publications p JOIN writing_agent_tasks t ON t.id=p.task_id WHERE t.session_id=$1 AND p.status='sending' AND p.updated_at>now()-interval '15 minutes')`, r.PathValue("sessionId")).Scan(&sending); err != nil {
+		agentError(w, err)
+		return
+	}
+	if sending {
+		httpx.ErrorCode(w, 409, "publication_sending", "正在发送文章，请等待发送结束后再删除会话")
+		return
+	}
 	imageRows, err := tx.Query(r.Context(), `SELECT DISTINCT 'u/'||matches[1]||'/'||matches[2]||'.'||matches[3] FROM agent_session_image_contents CROSS JOIN LATERAL regexp_matches(content,$2,'g') AS matches WHERE session_id=$1`, r.PathValue("sessionId"), imageKeyPattern.String())
 	if err != nil {
 		agentError(w, err)
@@ -360,6 +374,8 @@ func (a *App) agentSessionDelete(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM koi_skill_loads WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM agent_operations WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM agent_artifacts WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
+		`DELETE FROM agent_publications WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
+		`DELETE FROM agent_geo_generations WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 		`DELETE FROM writing_agent_events WHERE task_id IN(SELECT id FROM writing_agent_tasks WHERE session_id=$1)`,
 	} {
 		if _, err = tx.Exec(r.Context(), query, r.PathValue("sessionId")); err != nil {
@@ -464,7 +480,7 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep the original request fields/hash for old-window retries, but every
 	// new conversation discovers optional Skills itself. Base rules are fixed.
-	skill := json.RawMessage(`{"automaticDiscovery":true}`)
+	skill, _ := json.Marshal(map[string]any{"automaticDiscovery": true, "publishingEnabled": r.Header.Get(agentPublishingHeader) == "1", "geoEnabled": r.Header.Get(agentGeoHeader) == "1"})
 	source := writingSource{}
 	if s.WriteDocumentID != "" {
 		if in.Context != nil && agentPathDocumentID(in.Context.Path) != s.WriteDocumentID {

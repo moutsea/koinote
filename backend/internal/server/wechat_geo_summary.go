@@ -387,6 +387,28 @@ func (a *App) storeWechatGeoSummary(
 	reservationID string,
 	totalTokens int,
 ) (wechatGeoSummaryView, error) {
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return wechatGeoSummaryView{}, err
+	}
+	defer tx.Rollback(ctx)
+	view, err := a.storeWechatGeoSummaryTx(ctx, tx, userID, documentID, docID, sourceHash, generated, provider, reservationID, totalTokens)
+	if err != nil {
+		return wechatGeoSummaryView{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return wechatGeoSummaryView{}, err
+	}
+	return view, nil
+}
+
+func (a *App) storeWechatGeoSummaryTx(ctx context.Context, tx pgx.Tx, userID, documentID int, docID, sourceHash string, generated generatedWechatGeoSummary, provider agentLLMProvider, reservationID string, totalTokens int) (wechatGeoSummaryView, error) {
+	// All generators lock in document -> credit order. This also serializes a
+	// web/MCP save with the Agent's final revision/summary check.
+	var lockedID int
+	if err := tx.QueryRow(ctx, `SELECT id FROM documents WHERE id=$1 AND user_id=$2 AND trashed_at IS NULL FOR NO KEY UPDATE`, documentID, userID).Scan(&lockedID); err != nil {
+		return wechatGeoSummaryView{}, err
+	}
 	topicsJSON, err := json.Marshal(generated.Topics)
 	if err != nil {
 		return wechatGeoSummaryView{}, fmt.Errorf("encode WeChat GEO topics: %w", err)
@@ -396,12 +418,6 @@ func (a *App) storeWechatGeoSummary(
 		return wechatGeoSummaryView{}, fmt.Errorf("encode WeChat GEO keywords: %w", err)
 	}
 	renderedText := formatWechatGeoSummary(generated)
-
-	tx, err := a.db.Begin(ctx)
-	if err != nil {
-		return wechatGeoSummaryView{}, fmt.Errorf("begin WeChat GEO save: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck -- commit below owns the successful path
 
 	creditsCharged := int64(0)
 	if provider.Mode == "builtin" {
@@ -450,9 +466,6 @@ func (a *App) storeWechatGeoSummary(
 	}
 	if err != nil {
 		return wechatGeoSummaryView{}, fmt.Errorf("upsert WeChat GEO summary: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return wechatGeoSummaryView{}, fmt.Errorf("commit WeChat GEO summary: %w", err)
 	}
 	return wechatGeoSummaryView{
 		Text:           renderedText,

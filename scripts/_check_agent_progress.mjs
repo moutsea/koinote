@@ -17,6 +17,10 @@ try {
     assert.equal(agentProgress(running, [tool(1, "started", name)]).phase, "references",
       "automatic Skill loading uses a readable progress label");
   }
+  for (const [name, action] of [["get_wechat_geo_summary", "geoRead"], ["generate_wechat_geo_summary", "geoGenerate"], ["update_wechat_geo_summary", "geoUpdate"]]) {
+    assert.equal(agentProgress(running, [tool(1, "started", `koinote.${name}`)]).phase, action);
+    assert.deepEqual(agentActivitySteps([tool(1, "started", name), tool(2, "completed", name)]), [{ seq: 1, action, status: "completed" }]);
+  }
   const events = [
     tool(1, "completed", "koinote.search_documents"),
     tool(2, "completed", "koinote.list_folders"),

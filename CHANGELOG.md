@@ -6,6 +6,17 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.27] - 2026-11-16
+
+### Added
+
+- Koi AI can generate, edit, enable and disable article GEO hidden summaries, with approval based on conversation permissions and undo support. Draft generation uses usage-based Credits; rejection or undo does not refund generation costs.
+- Prepare publication previews for WeChat drafts, X Articles and custom channels in chat. Review saved content, destination and cost before confirming a send. WeChat only saves drafts.
+
+### Changed
+
+- Improve discovery of installed Skills and selection for writing tasks such as title suggestions, with better task stability for larger Skill libraries.
+
 ## [1.1.26] - 2026-11-14
 
 ### Added

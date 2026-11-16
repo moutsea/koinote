@@ -1309,6 +1309,10 @@ func (a *App) wechatPostMultipart(
 }
 
 func writeWechatPublishError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errAgentPublicationChanged) {
+		writeWechatOfficialError(w, err)
+		return
+	}
 	var providerError *wechatProviderError
 	if errors.As(err, &providerError) {
 		writeWechatOfficialError(w, err)

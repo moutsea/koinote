@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"koinote/backend/internal/model"
 )
@@ -72,6 +73,83 @@ func TestAgentAutomaticSkillsBaseAndLegacyRequestRetry(t *testing.T) {
 	w = writingTestRequest(t, a, u, "POST", "/api/agent/sessions/"+s.ID+"/tasks", payload)
 	if w.Code != 409 {
 		t.Fatal("changing a retry payload must not silently accept a different hash")
+	}
+}
+
+func TestAgentAutomaticSkillCatalogUsesFrozenLibrary(t *testing.T) {
+	a, user, doc := writingTestApp(t)
+	a.cfg.KoiSkillTestAccounts = []string{user.AuthUserID}
+	enableRepositoryR2Fixture(t, a)
+	t.Cleanup(func() {
+		if _, err := a.db.Exec(context.Background(), `DELETE FROM users WHERE id=$1`, user.ID); err != nil {
+			t.Error(err)
+		}
+	})
+	title := koiRuntimeInstall(t, a, user, map[string]string{"SKILL.md": "---\nname: dbs-title-cover-intro\ndescription: 用户要写标题、封面文字、开头时使用。\n---\nRead the article and suggest accurate, engaging titles."})
+	disabled := koiRuntimeInstall(t, a, user, map[string]string{"SKILL.md": "---\nname: disabled-method\ndescription: Disabled writing method\n---\nReview prose."})
+	web := koiRuntimeInstall(t, a, user, map[string]string{"SKILL.md": "---\nname: research-method\ndescription: Research the web\nrequiredTools: [web_fetch]\n---\nResearch first."})
+	koiFolderRequest(t, a, user, "PATCH", "/api/koi/skills/"+disabled.ID, map[string]any{"expectedRevision": disabled.Revision, "enabled": false}, 200)
+	tasks := []writingTask{}
+	for _, session := range []agentSession{koiArticleSession(t, a, user, doc), agentTestSession(t, a, user, "review")} {
+		tasks = append(tasks, agentTestTask(t, a, user, session, model.Document{}, "我打算发表在公众号上，帮我起个合适的标题"))
+	}
+	later := koiRuntimeInstall(t, a, user, map[string]string{"SKILL.md": "---\nname: later-method\ndescription: Installed after acceptance\n---\nReview prose."})
+	// Changes after acceptance must not replace the directory for an active task.
+	koiFolderRequest(t, a, user, "DELETE", fmt.Sprintf("/api/koi/skills/%s?expectedRevision=%d", title.ID, title.Revision), nil, 200)
+	for index, task := range tasks {
+		input := map[string]any{"policy": map[string]any{}}
+		if err := a.prepareAgentIntentInput(context.Background(), &task, input, ""); err != nil {
+			t.Fatal(err)
+		}
+		prompt := input["systemPrompt"].(string)
+		for _, expected := range []string{title.ID, title.VersionID, title.Name, "用户要写标题", automaticAgentSkillInstructions} {
+			if !strings.Contains(prompt, expected) {
+				t.Fatalf("entry %d cannot discover the matching pinned title method: %s", index, expected)
+			}
+		}
+		if strings.Contains(prompt, disabled.ID) || strings.Contains(prompt, later.ID) || (index == 0 && strings.Contains(prompt, web.ID)) {
+			t.Fatalf("entry %d exposes an unavailable Skill", index)
+		}
+		if index == 1 && !strings.Contains(prompt, web.ID) {
+			t.Fatal("bottom chat lost its compatible research Skill")
+		}
+		if _, exists := input["selectedSkillId"]; exists {
+			t.Fatal("catalog bypassed native model-invocation policy")
+		}
+		if loads, err := a.loadWritingLoadedSkills(context.Background(), task.ID); err != nil || len(loads) != 0 {
+			t.Fatalf("catalog visibility was recorded as Skill use: %+v %v", loads, err)
+		}
+		// Turning automatic use off for this task must remove both tools and
+		// metadata, even if pinned references are still present.
+		task.SkillSnapshot = json.RawMessage(`{"libraryMode":"installed","automaticDiscovery":false}`)
+		if err := a.prepareAgentIntentInput(context.Background(), &task, input, ""); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(input["systemPrompt"].(string), title.ID) || strings.Contains(fmt.Sprint(input["policy"]), "koinote.load_skill") {
+			t.Fatal("automatic-use switch ignored")
+		}
+	}
+}
+
+func TestAgentSkillCatalogBoundsAndPagination(t *testing.T) {
+	skills := make([]koiTaskSkill, 30)
+	for index := range skills {
+		skills[index] = koiTaskSkill{InstallationID: fmt.Sprintf("skill-%02d", index), VersionID: "version", Name: "method", Description: strings.Repeat("写作😀", 400)}
+	}
+	raw := agentSkillCatalog(skills)
+	var catalog struct {
+		Skills     []struct{ SkillID string } `json:"skills"`
+		NextCursor string                     `json:"nextCursor"`
+	}
+	if err := json.Unmarshal([]byte(raw), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	offset, _, err := parseMCPPage(catalog.NextCursor, 20)
+	if err != nil || offset != len(catalog.Skills) || offset == 0 || offset >= len(skills) || len(utf16.Encode([]rune(raw))) > 8100 {
+		t.Fatalf("large library lost continuation or exceeded prompt budget: count=%d offset=%d err=%v", len(catalog.Skills), offset, err)
+	}
+	if !strings.Contains(agentSkillCatalog(nil), `"skills":[]`) {
+		t.Fatal("empty library must be explicit")
 	}
 }
 

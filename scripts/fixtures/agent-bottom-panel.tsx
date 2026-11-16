@@ -14,6 +14,7 @@ import {
   type AgentSession,
   type AgentOperation,
   type AgentArtifact,
+  type AgentPublication,
 } from "../../spa/src/agentSessions";
 import type { WritingEvent, WritingTask } from "../../spa/src/writingAgent";
 import type { Folder } from "../../spa/src/api";
@@ -33,6 +34,7 @@ function FolderTreeProbe() {
 const firstDoc = "00000000-0000-4000-8000-000000000001";
 const secondDoc = "00000000-0000-4000-8000-000000000002";
 type ServerState = {
+  publications?: AgentPublication[];
   artifacts?: AgentArtifact[];
   events?: Record<string, WritingEvent[]>;
   approvalRequests?: Array<{ taskId: string; count: number; action: string }>;
@@ -69,6 +71,11 @@ const state = {
   coverErrorCode: "",
   coverUsageIncomplete: false,
   coverCapability: "",
+  publishingCapability: "",
+  geoCapability: "",
+  publicationActions: [] as string[],
+  holdPublication: false,
+  releasePublication: () => {},
   openOrganizer: openAgentOrganizer,
   libraryConflicts: [] as string[],
   libraryPreparations: 0,
@@ -205,6 +212,24 @@ window.fetch = async (request, init) => {
   const path = url.pathname;
   const method = init?.method ?? "GET";
   const body = init?.body ? JSON.parse(String(init.body)) : {};
+  const publicationRoute = path.match(/^\/api\/agent\/publications\/([^/]+)(?:\/(confirm|reject))?$/);
+  if (publicationRoute) {
+    let publication = server.publications!.find(item => item.id === publicationRoute[1])!;
+    if (method === "POST") {
+      state.publicationActions.push(publicationRoute[2]);
+      publication.status = publicationRoute[2] === "reject" ? "rejected" : "sending";
+      persist();
+      if (state.holdPublication) await new Promise<void>(resolve => { state.releasePublication = resolve; });
+      if (publicationRoute[2] === "confirm") {
+        // Polls reload the shared fake server while the request is held. Commit
+        // to its current record, as the real database does, not a detached copy.
+        publication = server.publications!.find(item => item.id === publicationRoute[1])!;
+        publication.status = "sent";
+        persist();
+      }
+    }
+    return respond({ publication, markdown: "# 已保存正文\n\n这是将发送的文章内容。", cover: "", geoText: publication.channel === "wechat" ? "我按主题整理资料，保留来源以便复查。" : "" });
+  }
   if (path.startsWith("/api/agent/artifacts/")) {
     const preview = url.searchParams.has("preview");
     if (!preview) state.coverDownloads++;
@@ -272,6 +297,8 @@ window.fetch = async (request, init) => {
     const session = server.sessions.find((s) => s.id === id);
     if (!session) return respond({ error: "not found" }, 404);
     if (sessionMatch[2]) {
+      state.publishingCapability = new Headers(init?.headers).get("X-Koinote-Agent-Publishing") ?? "";
+      state.geoCapability = new Headers(init?.headers).get("X-Koinote-Agent-Geo") ?? "";
       state.submissions.push(body);
       const existing = server.requests[body.requestId];
       if (existing) {
@@ -493,6 +520,7 @@ function page(id: string) {
       tasks.some((task) => task.id === op.taskId),
     ),
     artifacts: (server.artifacts ?? []).filter((file) => tasks.some((task) => task.id === file.taskId)),
+    publications: (server.publications ?? []).filter(item => tasks.some(task => task.id === item.taskId)),
     nextCursor: "",
   });
 }
@@ -553,6 +581,25 @@ const render = () => root.render(
 );
 render();
 Object.assign(state, {
+  async seedGeoOperation() {
+    const task = server.requests[String(state.submissions.at(-1)!.requestId)].task;
+    const geo = {text: '<span hidden>这份摘要需要用户审阅</span>\n[外部链接](https://example.com)', summary: '摘要', topics: ['写作'], keywords: ['标题'], sourceHash: 'source', enabled: true, providerMode: 'builtin' as const, model: 'test', creditsCharged: 3, updatedAt: new Date().toISOString()};
+    const op: AgentOperation = {id: crypto.randomUUID(), taskId: task.id, hash:'geo-proposal', input:{key:'geo', kind:'wechat_geo', title:'云南旅行记录', path:`/documents/${firstDoc}`, explanation:'', geo}, before:{document:{docId:firstDoc,title:'云南旅行记录',revision:4,content:''} as never,folderId:'',path:`/documents/${firstDoc}`,geo:null}, status:'pending', approval:'',reason:'等待审批',result:null,createdAt:new Date().toISOString()};
+    server.operations = [...server.operations.filter(item => item.taskId !== task.id), op];
+    persist();
+    await qc.invalidateQueries({queryKey:['agent-session']});
+    await qc.invalidateQueries({queryKey:['article-koi-session']});
+    return op.id;
+  },
+  async seedPublication(channel: AgentPublication["channel"]) {
+    const task = server.requests[String(state.submissions.at(-1)!.requestId)].task;
+    const publication: AgentPublication = {id: crypto.randomUUID(), taskId: task.id, docId: firstDoc, revision: 1, channel, targetId: "writing-account", targetLabel: "我的写作账号", hash: "saved-version", title: "云南旅行记录", credits: channel === "custom" ? 0 : 20, status: "pending", createdAt: new Date().toISOString()};
+    (server.publications ??= []).push(publication);
+    persist();
+    await qc.invalidateQueries({queryKey: ["agent-session"]});
+    await qc.invalidateQueries({queryKey: ["article-koi-session"]});
+    return publication.id;
+  },
   async seedProgress(sessionId: string, events: WritingEvent[], status: WritingTask["status"] = "running") {
     const taskId = crypto.randomUUID();
     server.tasks[sessionId] = [{ id: taskId, message: "请帮我整理文档", source: { docId: firstDoc, title: "文档", content: "", revision: 0 }, status, result: "", error: "", proposal: null, appliedDocument: null, reservedCredits: 100, chargedCredits: 0, billingStatus: "reserved", usage: null, cancelRequested: false, createdAt: new Date().toISOString() }];

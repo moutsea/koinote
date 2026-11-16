@@ -3,7 +3,7 @@ import type { WritingEvent, WritingTask } from "./writingAgent";
 export type ProgressAction =
   | "documents" | "folders" | "read" | "proposal" | "review"
   | "conversation" | "references" | "search" | "web" | "compute"
-  | "save" | "cover" | "work";
+  | "save" | "cover" | "geoRead" | "geoGenerate" | "geoUpdate" | "publishingTargets" | "publicationPreview" | "work";
 export type AssessmentAction = "assessment" | "interpret" | "scope" | "response";
 export type ProgressPhase =
   | ProgressAction | WritingTask["status"] | "thinking" | "finishing"
@@ -16,6 +16,8 @@ const actions = new Map<string, ProgressAction>([
   ["get_operation_results", "review"], ["get_conversation", "conversation"],
   ["find_skills", "references"], ["load_skill", "references"],
   ["search_repositories", "references"],
+  ["get_wechat_geo_summary", "geoRead"], ["generate_wechat_geo_summary", "geoGenerate"], ["update_wechat_geo_summary", "geoUpdate"],
+  ["list_publishing_targets", "publishingTargets"], ["prepare_publication", "publicationPreview"],
   ["skill_view", "references"], ["skills_list", "references"],
   ["read_file", "references"], ["web_search", "search"],
   ["web_fetch", "web"], ["browser_markdown", "web"],

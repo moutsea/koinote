@@ -305,11 +305,12 @@ func (a *App) customMediaPlatformPublish(w http.ResponseWriter, r *http.Request)
 	var endpointURL, name string
 	var ciphertext []byte
 	var enabled bool
+	var updatedAt time.Time
 	err := a.db.QueryRow(r.Context(), `
-		SELECT name, endpoint_url, auth_token_ciphertext, enabled
+		SELECT name, endpoint_url, auth_token_ciphertext, enabled, updated_at
 		FROM custom_media_platforms
 		WHERE platform_id = $1 AND user_id = $2
-	`, platformID, user.ID).Scan(&name, &endpointURL, &ciphertext, &enabled)
+	`, platformID, user.ID).Scan(&name, &endpointURL, &ciphertext, &enabled, &updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Custom platform not found")
 		return
@@ -321,6 +322,10 @@ func (a *App) customMediaPlatformPublish(w http.ResponseWriter, r *http.Request)
 	}
 	if !enabled {
 		httpx.ErrorCode(w, http.StatusConflict, "custom_media_platform_disabled", "Custom platform is disabled")
+		return
+	}
+	if !publicationDestinationMatches(r.Context(), "custom", platformID, publicationDigest([]any{endpointURL, name, updatedAt})) {
+		httpx.ErrorCode(w, http.StatusConflict, "publication_changed", errAgentPublicationChanged.Error())
 		return
 	}
 	endpointURL, err = normalizeCustomMediaEndpoint(endpointURL)
@@ -338,6 +343,9 @@ func (a *App) customMediaPlatformPublish(w http.ResponseWriter, r *http.Request)
 		log.Printf("custom media document lookup: %v", err)
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
+	}
+	if preview, ok := r.Context().Value(agentPublicationContext{}).(agentPublication); ok {
+		revision = preview.Revision
 	}
 	authToken := ""
 	if len(ciphertext) > 0 {

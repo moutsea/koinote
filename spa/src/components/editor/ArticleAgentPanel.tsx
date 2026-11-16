@@ -24,12 +24,15 @@ import { writingAgentText } from "../../i18n/writingAgent";
 import { agentTaskBilling } from "../../agentTaskBilling";
 import {
   actOnAgentOperation,
+  agentOperationPreview,
+  agentGeoCost,
   deleteAgentSession,
   getAgentSession,
   openArticleAgentSession,
   sendAgentMessage,
   type AgentOperation,
   type AgentArtifact,
+  type AgentPublication,
   type AgentSessionPage,
 } from "../../agentSessions";
 import { notifyAgentDocumentChange } from "../../agentContext";
@@ -40,6 +43,7 @@ import {
 } from "../../writingAgent";
 import { AgentTaskReply } from "../AgentTaskReply";
 import { AgentArtifactCard } from "../AgentArtifactCard";
+import { AgentPublicationCard } from "../AgentPublicationCard";
 import { AgentProgress } from "../AgentProgress";
 import { AgentTaskActivity } from "../AgentTaskActivity";
 import { AgentDiffDialog } from "../AgentDiffDialog";
@@ -169,6 +173,7 @@ export function ArticleAgentPanel({
   >([]);
   const [olderOps, setOlderOps] = useState<AgentOperation[]>([]);
   const [olderArtifacts, setOlderArtifacts] = useState<AgentArtifact[]>([]);
+  const [olderPublications, setOlderPublications] = useState<AgentPublication[]>([]);
   const mounted = useRef(true),
     locked = useRef(false),
     composing = useRef(false);
@@ -261,6 +266,8 @@ export function ArticleAgentPanel({
   ];
   const artifacts = page?.artifacts ?? [];
   const allArtifacts = [...artifacts, ...olderArtifacts.filter((old) => !artifacts.some((file) => file.id === old.id))];
+  const publications = page?.publications ?? [];
+  const allPublications = [...publications, ...olderPublications.filter(old => !publications.some(item => item.id === old.id))];
   useLayoutEffect(() => {
     const el = thread.current;
     if (!el || !page) return;
@@ -274,7 +281,7 @@ export function ArticleAgentPanel({
   }, [page, olderTasks, events.data, sending]);
   const preview = allOps.find((op) => op.id === previewId);
   const changes = ops
-    .filter((op) => op.status === "applied" || op.status === "undone")
+    .filter((op) => op.input.kind !== "wechat_geo" && (op.status === "applied" || op.status === "undone"))
     .map((op) => op.id + op.status)
     .sort()
     .join("|");
@@ -351,7 +358,7 @@ export function ArticleAgentPanel({
         old.map((item) => (item.id === op.id ? result.operation : item)),
       );
       setPreviewId("");
-      if (action !== "reject") notifyAgentDocumentChange(docId);
+      if (action !== "reject" && op.input.kind !== "wechat_geo") notifyAgentDocumentChange(docId);
       await refresh();
     });
   }
@@ -428,6 +435,7 @@ export function ArticleAgentPanel({
                 setOlderTasks([]);
                 setOlderOps([]);
                 setOlderArtifacts([]);
+                setOlderPublications([]);
                 setPreviewId("");
                 await opened.refetch();
               })
@@ -512,6 +520,7 @@ export function ArticleAgentPanel({
                 setOlderTasks((rows) => [...rows, ...older.tasks]);
                 setOlderOps((rows) => [...rows, ...older.operations]);
                 setOlderArtifacts((rows) => [...rows, ...older.artifacts]);
+                setOlderPublications(rows => [...rows, ...(older.publications ?? [])]);
                 setOlderCursor(older.nextCursor || "end");
               })
             }
@@ -551,6 +560,7 @@ export function ArticleAgentPanel({
               {allArtifacts.filter((file) => file.taskId === task.id).map((file) => (
                 <AgentArtifactCard key={file.id} file={file} disabled={busy} />
               ))}
+              {allPublications.filter(item => item.taskId === task.id).map(item => <AgentPublicationCard key={item.id} item={item} taskStatus={task.status} />)}
               {task.status === "cancelled" && (
                 <p className="koi-article-note">
                   {applied ? copy.stopped : writing.cancelled}
@@ -570,6 +580,7 @@ export function ArticleAgentPanel({
                         {op.input.explanation}
                       </p>
                     )}
+                    {agentGeoCost(op, locale) && <p className="koi-article-note">{agentGeoCost(op, locale)}</p>}
                     <div className="koi-article-actions">
                       <button
                         type="button"
@@ -592,7 +603,7 @@ export function ArticleAgentPanel({
                     <details key={op.id} className="koi-article-archived">
                       <summary>
                         <ChevronRight size={14} />
-                        {copy.revision}
+                        {op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}
                         <span>{labels[op.status]}</span>
                       </summary>
                       {details}
@@ -607,7 +618,7 @@ export function ArticleAgentPanel({
                   >
                     <div className="koi-article-change-title">
                       <FilePenLine size={17} />
-                      <strong>{copy.revision}</strong>
+                      <strong>{op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}</strong>
                       <span className="koi-article-badge">
                         {op.status === "applied" && <Check size={12} />}
                         {labels[op.status]}
@@ -737,10 +748,8 @@ export function ArticleAgentPanel({
       )}
       {preview && (
         <AgentDiffDialog
-          beforeTitle={preview.before?.document.title ?? title}
-          afterTitle={preview.input.title ?? title}
-          beforeContent={preview.before?.document.content ?? ""}
-          afterContent={preview.input.content ?? ""}
+          {...agentOperationPreview(preview, locale)}
+          notice={agentGeoCost(preview, locale)}
           actions={actions(preview)}
           error={error}
           onClose={() => setPreviewId("")}

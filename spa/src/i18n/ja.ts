@@ -3255,6 +3255,7 @@ function hello(name) {
     delete_sync_pending: "削除するドキュメントにクラウド未同期の内容があるため、何も削除していません。もう一度操作して確認するか、同期の完了を待ってください。",
     folder_delete_sync_conflict: "このフォルダには同期の競合があるドキュメントが含まれています。競合を解決してからフォルダを削除してください。",
     document_revision_conflict: "この文書は別の場所で変更されました。更新して再試行してください",
+    publication_sending: "記事を送信中です。送信が終わってから会話を削除してください。",
     not_found: "この項目は存在しないか削除されています",
     image_type_unsupported: "PNG / JPEG / GIF / WebP のみ対応しています",
     image_type_mismatch: "ファイルの内容が形式と一致しません",

@@ -1,0 +1,30 @@
+.agent-publication-card { margin: 14px 0; padding: 16px; border: 1px solid var(--ink-line); border-radius: 14px; background: var(--ink-paper); color: var(--ink-strong); }
+.agent-publication-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; font-size: 11px; }
+.agent-publication-channel, .agent-publication-state, .agent-publication-actions a { display: inline-flex; align-items: center; gap: 6px; }
+.agent-publication-state { color: var(--ink-mid); }
+.agent-publication-state[data-status="sent"] { color: var(--cinnabar); }
+.agent-publication-title { margin: 12px 0 6px; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.agent-publication-note { color: var(--ink-mid); font-size: 12px; line-height: 1.7; }
+.agent-publication-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.agent-publication-actions button, .agent-publication-actions a, .agent-publication-dialog header button { min-height: 36px; padding: 8px 12px; border: 1px solid var(--ink-line); border-radius: 9px; font-size: 12px; }
+.agent-publication-actions button:disabled { opacity: .5; cursor: default; }
+.agent-publication-actions .agent-publication-confirm { background: var(--cinnabar); color: white; border-color: transparent; }
+.agent-publication-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); margin: auto; padding: 0; border: 1px solid var(--ink-line); border-radius: 18px; background: var(--ink-paper); color: var(--ink-strong); box-shadow: 0 24px 80px #0003; }
+.agent-publication-dialog[open] { display: flex; flex-direction: column; }
+.agent-publication-dialog:modal { overscroll-behavior: contain; }
+.agent-publication-dialog::backdrop { background: #0005; overflow: hidden; overscroll-behavior: contain; }
+.agent-publication-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--ink-line); }
+.agent-publication-dialog h2 { font-size: 18px; font-weight: 650; margin: 0 0 6px; }
+.agent-publication-dialog header p { color: var(--ink-mid); font-size: 12px; overflow-wrap: anywhere; }
+.agent-publication-preview { padding: 20px 24px; overflow: auto; min-height: 0; }
+.agent-publication-preview h3 { margin: 20px 0 16px; font-size: 22px; font-weight: 650; }
+.agent-publication-source { margin-top: 24px; font-size: 12px; }
+.agent-publication-source summary { cursor: pointer; padding: 8px 0; color: var(--ink-mid); }
+.agent-publication-source pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.agent-publication-dialog footer { padding: 16px 24px 20px; border-top: 1px solid var(--ink-line); font-size: 12px; line-height: 1.7; }
+.agent-publication-cost { margin-top: 6px; font-weight: 600; }
+.agent-publication-cost span { font-weight: 400; color: var(--ink-mid); }
+.agent-publication-dialog [role="alert"] { color: var(--cinnabar); margin-top: 8px; }
+@media (max-width: 480px) { .agent-publication-dialog header, .agent-publication-preview, .agent-publication-dialog footer { padding: 16px; } }
+
+.agent-publication-preview img { max-width: 100%; height: auto; border-radius: 8px; }

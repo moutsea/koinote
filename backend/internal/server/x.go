@@ -429,6 +429,10 @@ func (a *App) xPublish(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusTooManyRequests, "too_many_requests", "Too many X publish requests")
 		return
 	}
+	if !publicationDestinationMatches(r.Context(), "x", oauth2Credential.XUserID, publicationDigest([]string{oauth2Credential.XUserID, oauth2Credential.Username})) {
+		httpx.ErrorCode(w, http.StatusConflict, "publication_changed", errAgentPublicationChanged.Error())
+		return
+	}
 	var articleReservation creditReservation
 	articleCreditsCommitted := false
 	if articleRequest {

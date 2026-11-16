@@ -65,7 +65,7 @@ func checkArticleOperations(docID string, inputs []agentOperationInput) error {
 		return nil
 	}
 	for _, op := range inputs {
-		if op.Kind != "update" || op.Path != agentDocumentPath(docID) || op.FolderID != "" || op.TargetID != "" {
+		if (op.Kind != "update" && op.Kind != "wechat_geo") || op.Path != agentDocumentPath(docID) || op.FolderID != "" || op.TargetID != "" {
 			return errArticleWriteScope
 		}
 	}

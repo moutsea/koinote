@@ -3071,6 +3071,7 @@ function hello(name) {
     delete_sync_pending: "要删除的文档还有内容尚未同步到云端，删除已取消。请重试并确认，或等同步完成后再删除。",
     folder_delete_sync_conflict: "文件夹里有存在同步冲突的文档。请先处理冲突，再删除文件夹。",
     document_revision_conflict: "文档已在其他位置发生变化，请刷新后重试",
+    publication_sending: "正在发送文章，请等待发送结束后再删除会话",
     not_found: "内容不存在或已被删除",
     image_type_unsupported: "只支持 PNG / JPEG / GIF / WebP 格式",
     image_type_mismatch: "文件内容与其格式不符",
