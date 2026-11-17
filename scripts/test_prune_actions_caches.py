@@ -67,6 +67,14 @@ class CacheRetentionTests(unittest.TestCase):
         caches = [cache(i, "refs/heads/main", f"node-cache-macOS-arm64-npm-{i}") for i in (1, 2)]
         self.assertEqual(self.selected_ids(caches, [{"head_branch": "main"}]), set())
 
+    def test_maintenance_does_not_block_its_own_npm_cleanup(self):
+        caches = [cache(i, "refs/heads/main", f"node-cache-macOS-arm64-npm-{i}") for i in (1, 2)]
+        own_run = {"id": 123, "head_branch": "main"}
+        self.assertEqual(self.selected_ids(caches, [own_run], current_run_id="123"), {1})
+        self.assertEqual(self.selected_ids(
+            caches, [own_run, {"id": 456, "head_branch": "main"}], current_run_id="123",
+        ), set())
+
     def test_empty_release_list_does_not_delete_tag_caches(self):
         self.assertEqual(self.selected_ids([cache(1, "refs/tags/desktop-v1")], releases=[]), set())
 

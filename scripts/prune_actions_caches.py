@@ -6,6 +6,7 @@ Read-only unless --apply is supplied. Requires an authenticated GitHub CLI.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from collections import defaultdict
@@ -24,9 +25,11 @@ def desktop_tag(ref):
     return None
 
 
-def select_caches(caches, releases, active_runs, default_branch, keep_releases=2):
+def select_caches(caches, releases, active_runs, default_branch, keep_releases=2, current_run_id=None):
     if keep_releases < 1:
         raise ValueError("At least one desktop release must be retained")
+    # The maintenance workflow also runs on main; it is not a consumer to protect.
+    active_runs = [r for r in active_runs if str(r.get("id")) != current_run_id]
     published = sorted(
         (r for r in releases if not r["draft"] and r.get("published_at")
          and r["tag_name"].startswith("desktop-v")),
@@ -80,6 +83,7 @@ def main():
     caches = read_api(f"{base}/actions/caches?per_page=100", "actions_caches")
     selected = select_caches(
         caches, releases, active_runs, repo["default_branch"], args.keep_releases,
+        current_run_id=os.environ.get("GITHUB_RUN_ID"),
     )
     deleted = []
     for cache in selected:
