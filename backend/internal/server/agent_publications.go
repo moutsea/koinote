@@ -116,6 +116,7 @@ type agentPublicationSnapshot struct {
 	Title       string `json:"title"`
 	Markdown    string `json:"markdown"`
 	Cover       string `json:"cover"`
+	CoverRatio  string `json:"coverRatio,omitempty"`
 	TargetStamp string `json:"targetStamp"`
 	GeoText     string `json:"geoText,omitempty"`
 }
@@ -200,6 +201,10 @@ func (a *App) agentPreparePublication(ctx context.Context, _ *mcp.CallToolReques
 	}
 	p := agentPublication{TaskID: t.ID, DocID: docID, Revision: doc.Document.Revision, Channel: in.Channel, TargetID: in.TargetID, TargetLabel: target.Label, Credits: target.Credits,
 		Snapshot: agentPublicationSnapshot{Title: doc.Document.Title, Markdown: doc.Document.Content, Cover: cover, TargetStamp: target.Stamp}}
+	// Preserve legacy default snapshots/hashes while freezing custom cover ratios.
+	if in.Channel == "wechat" && doc.Document.CoverRatio != wechatCoverRatioWide {
+		p.Snapshot.CoverRatio = doc.Document.CoverRatio
+	}
 	if in.IncludeGeo {
 		if in.Channel != "wechat" {
 			return nil, nil, errors.New("GEO 隐藏摘要仅支持公众号草稿")
@@ -212,7 +217,12 @@ func (a *App) agentPreparePublication(ctx context.Context, _ *mcp.CallToolReques
 	if _, err = a.publicationPayload(p); err != nil {
 		return nil, nil, err
 	}
-	p.Hash = publicationDigest([]any{p.DocID, p.Revision, p.Channel, p.TargetID, p.Snapshot})
+	// Cover changes already advance the document revision. Keep the ratio in
+	// the frozen payload, but omit it from the legacy deduplication identity so
+	// old receipts and pending cards still match without rewriting their hashes.
+	hashSnapshot := p.Snapshot
+	hashSnapshot.CoverRatio = ""
+	p.Hash = publicationDigest([]any{p.DocID, p.Revision, p.Channel, p.TargetID, hashSnapshot})
 	existing, err := scanAgentPublication(tx.QueryRow(ctx, `SELECT `+agentPublicationColumns+` FROM agent_publications p WHERE p.task_id=$1 AND p.doc_id=$2 AND p.channel=$3 AND p.target_id=$4`, t.ID, docID, in.Channel, in.TargetID))
 	if err == nil {
 		if existing.Hash != p.Hash {
@@ -315,7 +325,11 @@ func (a *App) publicationPayload(p agentPublication) (json.RawMessage, error) {
 			if len(html) > wechatDraftHTMLMaxBytes {
 				return nil, errors.New("公众号草稿正文过长，请先调整")
 			}
-			payload = map[string]any{"accountId": p.TargetID, "title": s.Title, "html": html, "coverMode": "default", "coverRatio": wechatCoverRatioWide, "coverImageSource": a.publicationImageSource(s.Cover)}
+			ratio := s.CoverRatio
+			if ratio == "" {
+				ratio = wechatCoverRatioWide
+			}
+			payload = map[string]any{"accountId": p.TargetID, "title": s.Title, "html": html, "coverMode": "default", "coverRatio": ratio, "coverImageSource": a.publicationImageSource(s.Cover)}
 		} else if p.Channel == "custom" {
 			payload = map[string]any{"title": s.Title, "markdown": s.Markdown, "html": html, "coverImageSource": a.publicationImageSource(s.Cover)}
 		} else {

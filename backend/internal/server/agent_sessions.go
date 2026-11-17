@@ -480,7 +480,7 @@ func (a *App) agentTaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep the original request fields/hash for old-window retries, but every
 	// new conversation discovers optional Skills itself. Base rules are fixed.
-	skill, _ := json.Marshal(map[string]any{"automaticDiscovery": true, "publishingEnabled": r.Header.Get(agentPublishingHeader) == "1", "geoEnabled": r.Header.Get(agentGeoHeader) == "1"})
+	skill, _ := json.Marshal(map[string]any{"automaticDiscovery": true, "publishingEnabled": r.Header.Get(agentPublishingHeader) == "1", "geoEnabled": r.Header.Get(agentGeoHeader) == "1", "coverApplyEnabled": r.Header.Get(agentCoverApplyHeader) == "1"})
 	source := writingSource{}
 	if s.WriteDocumentID != "" {
 		if in.Context != nil && agentPathDocumentID(in.Context.Path) != s.WriteDocumentID {

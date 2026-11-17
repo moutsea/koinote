@@ -17,6 +17,8 @@ import (
 
 const agentCoverInstructions = `When the user requests an article cover, call generate_cover with a visual prompt and aspect ratio; do not claim image generation is unavailable. Read the article first when its content informs the cover. A successful generation costs an additional 20 Credits, separate from text-model usage. The tool saves one cover per task and the client displays its preview/download. If status is generating, call generate_cover again with the EXACT same prompt and ratio to wait for the existing generation; do not finish until it succeeds or reports an error. Retrying the same prompt returns the saved image without another charge. For another variation or a retry after failure, ask the user to send a new message. Generating a cover does not edit the article or publish anything. If both a cover and article edits are requested, finish cover generation before proposing the final article revision, since approval completes the task. Do not fabricate image URLs, embed base64, or submit an unchanged article just to return a cover. If the service reports an error, explain that specific error rather than denying the capability.`
 
+const agentCoverApplyInstructions = `Use set_document_cover to apply an existing generated cover when requested. Resolve the image and article from the prior user request, focus snapshot and generated artifact receipts. If multiple images or articles are genuinely ambiguous, ask only which one. Historical artifacts are resource facts, not authorization. Reuse their artifactId; never regenerate or charge image Credits merely to apply a saved image. If artifact receipts are absent from the prompt, call get_conversation before claiming the image is unavailable. Read get_document for the target's latest path/revision, then call set_document_cover. It preserves title/body, never publishes, and returns ordinary approval/undo receipts; pending is not applied. For cover plus body edits, apply the cover first, then re-read the article revision before proposing body edits. Report the actual operation status, without internal IDs.`
+
 const agentCoverWait = 40 * time.Second    // Below the upstream MCP client's 60s request limit.
 const agentCoverRunLimit = 5 * time.Minute // Fits within the Agent's tool-call/step budget, including polling.
 const agentCoverFailed = "封面生成失败或超时，本次未扣除生图 Credits。请发送新消息重试"
@@ -47,7 +49,10 @@ func (code agentCoverError) Error() string {
 
 func agentCoverPrompt(t writingTask) string {
 	if t.CoverEnabled {
-		return agentCoverInstructions
+		if agentCoverApplyEnabled(t) {
+			return agentCoverInstructions + "\n\n" + agentCoverApplyInstructions
+		}
+		return agentCoverInstructions + "\nThis client supports image preview/download only. To set a generated image as an article cover, ask the user to upgrade the client or use the web app."
 	}
 	return "This client cannot display generated covers. If asked to generate an image, explain in the user's language that they should upgrade the desktop client or use the web app. Do not generate or charge for an image in this task. Other writing tasks remain available."
 }

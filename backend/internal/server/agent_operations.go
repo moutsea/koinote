@@ -31,6 +31,7 @@ type agentSnapshot struct {
 	DependsOn string `json:"dependsOn,omitempty"`
 }
 type agentOperationInput struct {
+	Cover                 *agentCoverSelection  `json:"cover,omitempty" jsonschema:"Reserved host field; use set_document_cover instead."`
 	Geo                   *wechatGeoSummaryView `json:"geo,omitempty" jsonschema:"Reserved host field; never supply."`
 	ExpectedFolderVersion string                `json:"expectedFolderVersion,omitempty" jsonschema:"Required for delete_folder: copy version from list_folders; use its /folders/... path. No document revision is needed."`
 	Key                   string                `json:"key" jsonschema:"Unique stable key for this operation in the task. Reuse only for an identical retry."`
@@ -164,7 +165,7 @@ func agentSnapshotAfter(previous agentOperation) (agentSnapshot, error) {
 func (a *App) loadAgentSnapshot(ctx context.Context, q imageUsageQuerier, userID int, id string) (agentSnapshot, error) {
 	var s agentSnapshot
 	s.Path = agentDocumentPath(id)
-	err := q.QueryRow(ctx, `SELECT d.doc_id,d.title,d.content,d.theme,d.revision,d.created_at,d.updated_at,COALESCE(f.folder_id,''),d.sort_order FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.doc_id=$2 AND d.trashed_at IS NULL`, userID, id).Scan(&s.Document.DocID, &s.Document.Title, &s.Document.Content, &s.Document.Theme, &s.Document.Revision, &s.Document.CreatedAt, &s.Document.UpdatedAt, &s.FolderID, &s.SortOrder)
+	err := q.QueryRow(ctx, `SELECT d.doc_id,d.title,d.content,d.theme,d.revision,d.created_at,d.updated_at,COALESCE(f.folder_id,''),d.sort_order,d.cover_mode,d.cover_ratio,d.cover_image_source,d.cover_prompt FROM documents d LEFT JOIN folders f ON f.id=d.folder_id WHERE d.user_id=$1 AND d.doc_id=$2 AND d.trashed_at IS NULL`, userID, id).Scan(&s.Document.DocID, &s.Document.Title, &s.Document.Content, &s.Document.Theme, &s.Document.Revision, &s.Document.CreatedAt, &s.Document.UpdatedAt, &s.FolderID, &s.SortOrder, &s.Document.CoverMode, &s.Document.CoverRatio, &s.Document.CoverImageSource, &s.Document.CoverPrompt)
 	return s, err
 }
 
@@ -327,7 +328,7 @@ func (a *App) proposeAgentOperations(ctx context.Context, t writingTask, inputs 
 	deletedFolders := map[string]bool{}
 	allMinor := true
 	for _, in := range inputs {
-		if len(in.Key) < 1 || len(in.Key) > 100 || keys[in.Key] || in.TargetID != "" || len(in.Explanation) > 8000 || len(in.Content) > 512<<10 {
+		if in.Cover != nil || len(in.Key) < 1 || len(in.Key) > 100 || keys[in.Key] || in.TargetID != "" || len(in.Explanation) > 8000 || len(in.Content) > 512<<10 {
 			return nil, errAgentInput
 		}
 		keys[in.Key] = true
@@ -510,6 +511,13 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 	}
 	if o.Status != "pending" {
 		return nil, errAgentSessionConflict
+	}
+	if o.Input.Kind == "cover" {
+		update, result, err := a.applyAgentCoverTx(ctx, tx, user, o, false)
+		if err != nil {
+			return nil, err
+		}
+		return update, storeAppliedAgentOperation(ctx, tx, o, result, approval, reason)
 	}
 	if o.Input.Kind == "wechat_geo" {
 		result, err := a.applyAgentGeoOperationTx(ctx, tx, user.ID, o, false)
@@ -749,7 +757,12 @@ func (a *App) undoAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.Us
 	}
 	var update *documentUpdateResult
 	result := *o.Result
-	if o.Input.Kind == "wechat_geo" {
+	if o.Input.Kind == "cover" {
+		update, result, err = a.applyAgentCoverTx(ctx, tx, user, o, true)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.Input.Kind == "wechat_geo" {
 		result, err = a.applyAgentGeoOperationTx(ctx, tx, user.ID, o, true)
 		if err != nil {
 			return nil, err

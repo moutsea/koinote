@@ -10,7 +10,7 @@ import (
 	"koinote/backend/internal/httpx"
 )
 
-var errArticleWriteScope = fmt.Errorf("Koi AI 只能编辑当前文章的标题和正文，其他文档只可作为参考: %w", errAgentInput)
+var errArticleWriteScope = fmt.Errorf("Koi AI 只能修改当前文章及其封面、GEO 摘要，其他文档只可作为参考: %w", errAgentInput)
 
 // The document is selected when the session is created. Neither later focus
 // changes nor a model-supplied path can widen this authority.
@@ -65,7 +65,7 @@ func checkArticleOperations(docID string, inputs []agentOperationInput) error {
 		return nil
 	}
 	for _, op := range inputs {
-		if (op.Kind != "update" && op.Kind != "wechat_geo") || op.Path != agentDocumentPath(docID) || op.FolderID != "" || op.TargetID != "" {
+		if (op.Kind != "update" && op.Kind != "wechat_geo" && op.Kind != "cover") || op.Path != agentDocumentPath(docID) || op.FolderID != "" || op.TargetID != "" {
 			return errArticleWriteScope
 		}
 	}

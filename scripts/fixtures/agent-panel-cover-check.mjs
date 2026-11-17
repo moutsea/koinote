@@ -23,7 +23,7 @@ export async function checkCoverGeneration(createClient, url) {
     await wait("document.querySelector('[data-task-reply]')?.textContent.includes('把日子写成诗')");
     assert.equal(await evaluate("document.querySelectorAll('[data-task-reply]').length"), 1, "text is shown once alongside the cover");
     assert.equal(await evaluate("window.agentUITest.coverCapability"), "1", "both panels advertise image delivery support");
-    assert.equal(await evaluate("document.body.textContent.includes('尚未设为文章封面')"), true);
+    assert.equal(await evaluate("document.body.textContent.includes('继续让 Koi 设为文章封面')"), true);
     assert.equal(await evaluate("document.body.textContent.includes('批准应用')"), false, "generating a cover must not propose article changes");
     await evaluate("window.agentUITest.coverDownloadFail=true");
     await download();
@@ -33,6 +33,18 @@ export async function checkCoverGeneration(createClient, url) {
     await send("Page.setDownloadBehavior", { behavior: "deny" });
     await download();
     await wait("window.agentUITest.coverDownloads===2 && !document.body.textContent.includes('下载失败，请重试')");
+    await send("Input.insertText", { text: "帮我设置" });
+    await click("发送");
+    await wait("document.body.textContent.includes('设置文章封面')");
+    assert.equal(await evaluate("window.agentUITest.coverApplyCapability"), "1", "both panels support cover approval");
+    await click("查看差异");
+    await wait("document.querySelector('[role=dialog]') || document.querySelector('dialog')");
+    assert.equal(await evaluate("document.body.textContent.includes('未指定封面，使用默认封面。')"), true, "cover preview compares cover metadata");
+    assert.equal(await evaluate("document.querySelector('[role=dialog],dialog').textContent.includes('完整原文应保留')"), false, "cover preview must not show body replacement");
+    await click("批准应用");
+    await wait("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('撤销改动'))");
+    await click("撤销改动");
+    await wait("document.body.textContent.includes('已撤销')");
     for (const [code,label] of [["insufficient_credits","可用 Credits 不足"],["service_unavailable","封面生成服务暂不可用"],["rate_limited","本小时封面生成次数"],["generation_failed","封面生成失败或超时"]]) {
       await evaluate(`window.agentUITest.coverErrorCode=${JSON.stringify(code)};document.querySelector('textarea').focus()`);
       await send("Input.insertText", {text:"重新生成封面，给三个标题建议"});

@@ -71,6 +71,7 @@ const state = {
   coverErrorCode: "",
   coverUsageIncomplete: false,
   coverCapability: "",
+  coverApplyCapability: "",
   publishingCapability: "",
   geoCapability: "",
   publicationActions: [] as string[],
@@ -343,6 +344,19 @@ window.fetch = async (request, init) => {
       server.tasks[id] = [task, ...(server.tasks[id] ?? [])];
       const auto = session.permission === "full";
       const cover = body.message.includes("生成封面");
+      const applyCover = body.message === "帮我设置";
+      if (applyCover) {
+        state.coverApplyCapability = new Headers(init?.headers).get("X-Koinote-Agent-Cover-Apply") ?? "";
+        const image = server.artifacts!.at(-1)!;
+        task.result = "已准备封面设置，请确认。";
+        task.taskIntent = {outcome: "operations_reported", inputVersion: 1};
+        server.operations.push({
+          id: crypto.randomUUID(), taskId, hash: "cover-proposal", status: "pending", approval: "", reason: "等待审批", result: null, createdAt: new Date().toISOString(),
+          input: {key: "cover", kind: "cover", path: source.path, title: source.title, content: "![文章封面](https://example.com/cover.jpg)", explanation: "将已生成的图片设为文章封面，保留标题和正文。", cover: {artifactId: image.id, source: "https://example.com/cover.jpg", ratio: "16:9"}},
+          before: {document: {docId: source.docId, title: source.title, content: "完整原文应保留", coverMode: "default", coverRatio: "2.35:1", coverImageSource: "", revision: 4} as never, folderId: "", path: source.path ?? ""},
+        });
+        session.pendingOperations = 1;
+      }
       if (cover) {
         state.coverCapability = new Headers(init?.headers).get("X-Koinote-Agent-Covers") ?? "";
         task.result = "封面已生成，可在下方预览和下载。";
@@ -359,7 +373,7 @@ window.fetch = async (request, init) => {
           (server.artifacts ??= []).push({id: crypto.randomUUID(), taskId, name: "koi-cover-fixture.jpg", mimeType: "image/jpeg", bytes: 1024});
         }
       }
-      if (!cover || body.message.includes("润色")) {
+      if ((!cover && !applyCover) || body.message.includes("润色")) {
       server.operations.push({
         id: crypto.randomUUID(),
         taskId,

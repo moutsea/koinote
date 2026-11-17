@@ -4,6 +4,21 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.28] - 2026-11-17
+
+### Added
+
+- Utilisez une image générée par Koi AI comme couverture d’article, avec validation selon les permissions de la conversation et possibilité d’annulation. Réutiliser une image ne la génère pas à nouveau et ne consomme pas de nouveaux Credits de génération d’image ; l’usage du modèle de conversation reste facturé séparément.
+
+### Changed
+
+- Les informations sur les images générées sont incluses dans le contexte des messages suivants pour aider Koi AI à identifier la couverture à utiliser.
+
+### Fixed
+
+- Le rapport largeur/hauteur de l’image est conservé lors de l’application de la couverture et de la préparation d’un brouillon WeChat.
+- Les aperçus d’envoi restent compatibles avec les reçus existants ; une confirmation répétée réutilise le même résultat d’envoi et la même facturation.
+
 ## [1.1.27] - 2026-11-16
 
 ### Added

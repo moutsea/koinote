@@ -29,7 +29,7 @@ func TestAgentFinalPromptBudgetBothEntriesAndSkillPagination(t *testing.T) {
 			if article {
 				session = koiArticleSession(t, a, user, doc)
 			}
-			task := agentTestTask(t, a, user, session, doc, "帮我起标题", http.Header{agentPublishingHeader: {"1"}, agentCoversHeader: {"1"}, agentGeoHeader: {"1"}})
+			task := agentTestTask(t, a, user, session, doc, "帮我起标题", http.Header{agentPublishingHeader: {"1"}, agentCoversHeader: {"1"}, agentCoverApplyHeader: {"1"}, agentGeoHeader: {"1"}})
 			input := map[string]any{"policy": map[string]any{}}
 			if err := a.prepareAgentConversationInput(context.Background(), &task, input, ""); err != nil {
 				t.Fatal(err)
@@ -39,7 +39,7 @@ func TestAgentFinalPromptBudgetBothEntriesAndSkillPagination(t *testing.T) {
 			if length > agentSystemPromptLimit {
 				t.Fatal("final prompt exceeds Agent API limit", length)
 			}
-			for _, rule := range []string{automaticAgentSkillInstructions, agentGeoInstructions, agentPublishingInstructions, agentCoverPrompt(task), agentProductKnowledgeInstructions} {
+			for _, rule := range []string{automaticAgentSkillInstructions, agentGeoInstructions, agentPublishingInstructions, agentCoverPrompt(task), agentProductKnowledgeInstructions, agentConversationContinuityInstructions} {
 				if !strings.Contains(prompt, rule) {
 					t.Fatal("budget removed core capability instructions")
 				}

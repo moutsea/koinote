@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 
 export async function checkPublication(createClient, url) {
-  const { send, evaluate, wait, click, close } = await createClient();
+  const { send, evaluate, wait, click, clickAria, close } = await createClient();
   try {
     await send("Page.navigate", { url });
     if (!url.includes("article=1")) {
       await wait("document.querySelector('[data-agent-panel]')");
-      await evaluate("document.querySelector('.agent-statusbar button').click()");
-      await click("新建会话");
+      await evaluate("{const toggle=document.querySelector('.agent-statusbar button');if(toggle.getAttribute('aria-expanded')!=='true')toggle.click();}");
+      await clickAria("新建会话");
     }
     await wait("document.querySelector('textarea:not(:disabled)')");
     await evaluate("window.agentUITest.failFirst=false;document.querySelector('textarea').focus()");

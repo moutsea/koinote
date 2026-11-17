@@ -193,12 +193,19 @@ async function resolveUser(
 ): Promise<string | null> {
   const cookie = request.headers.get("cookie");
   const authorization = request.headers.get("authorization");
-  if (!cookie && !authorization) return null;
+  const internal = request.headers.get("x-koinote-internal-token");
+  if (internal && (!env.BACKEND_INTERNAL_TOKEN || !timingSafeEqual(internal, env.BACKEND_INTERNAL_TOKEN))) return null;
+  if (!cookie && !authorization && !internal) return null;
 
   const sessionURL = new URL("/api/auth/session", env.BACKEND_URL);
   const headers = new Headers({ accept: "application/json" });
   if (cookie) headers.set("cookie", cookie);
   if (authorization) headers.set("authorization", authorization);
+  // Backend-initiated transfers still resolve the canonical user through Go.
+  if (internal) {
+    headers.set("x-koinote-internal-token", internal);
+    headers.set("x-auth-user-id", request.headers.get("x-auth-user-id") ?? "");
+  }
   const resp = await fetch(sessionURL, {
     headers,
   });

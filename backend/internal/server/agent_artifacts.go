@@ -29,6 +29,23 @@ type agentArtifactInput struct {
 	Base64   string `json:"base64,omitempty" jsonschema:"Binary file content encoded as base64. Maximum decoded size 1 MiB."`
 }
 
+func (a *App) loadAgentArtifacts(ctx context.Context, userID int, ids []string) ([]agentArtifact, error) {
+	rows, err := a.db.Query(ctx, `SELECT id::text,task_id::text,name,mime_type,octet_length(data) FROM agent_artifacts WHERE user_id=$1 AND task_id=ANY($2::uuid[]) ORDER BY created_at,id`, userID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	files := []agentArtifact{}
+	for rows.Next() {
+		var file agentArtifact
+		if err = rows.Scan(&file.ID, &file.TaskID, &file.Name, &file.MimeType, &file.Bytes); err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	return files, rows.Err()
+}
+
 func (a *App) agentSaveArtifact(ctx context.Context, _ *mcp.CallToolRequest, in agentArtifactInput) (*mcp.CallToolResult, agentArtifact, error) {
 	t := ctx.Value(writingMCPContext{}).(writingTask)
 	if strings.HasPrefix(in.Name, "koi-cover-") {

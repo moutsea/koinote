@@ -24,6 +24,7 @@ const actions = new Map<string, ProgressAction>([
   ["browser_links", "web"], ["browser_scrape", "web"],
   ["browser_accessibility", "web"], ["browser_read", "web"],
   ["sandbox_compute", "compute"], ["save_artifact", "save"], ["generate_cover", "cover"],
+  ["set_document_cover", "proposal"],
 ]);
 
 export type ProgressStep = { seq: number; action: ProgressAction; failed: boolean };

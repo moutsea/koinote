@@ -88,6 +88,39 @@ const deleteRequest = (keys = [imageKey]) =>
     body: JSON.stringify({ keys }),
   });
 
+// Backend cover transfers use internal authentication, never browser-supplied
+// user identity alone. Quotas and canonical identity still come from Go.
+{
+  const originalFetch = globalThis.fetch;
+  let authCalls = 0, puts = 0;
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/auth/session") {
+      authCalls++;
+      const headers = new Headers(init.headers);
+      check("内部转存转发共享令牌", headers.get("x-koinote-internal-token"), "internal");
+      check("内部转存转发归属用于后端核验", headers.get("x-auth-user-id"), "alice");
+      return Response.json({ user: { authUserId: "alice" } });
+    }
+    if (path === "/api/images/record") return Response.json({});
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const env = { BACKEND_URL: "https://backend.example.com", BACKEND_INTERNAL_TOKEN: "internal", IMAGES: {
+    put: async () => { puts++; }, delete: async () => {},
+  } };
+  const upload = (token) => handleImageUpload(new Request("https://app.example.com/api/images", {
+    method: "POST", headers: { "content-type": "image/jpeg", "x-auth-user-id": "alice", ...(token ? { "x-koinote-internal-token": token } : {}) },
+    body: new Uint8Array([0xff, 0xd8, 0xff, 0, 0]),
+  }), env);
+  try {
+    check("内部转存成功", (await upload("internal")).status, 200);
+    check("伪造令牌不能转存", (await upload("wrong")).status, 401);
+    check("只有用户头不能转存", (await upload("")).status, 401);
+    check("无效内部身份不回调后端", authCalls, 1);
+    check("无效内部身份不写 R2", puts, 1);
+  } finally { globalThis.fetch = originalFetch; }
+}
+
 {
   const png = new Uint8Array([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,

@@ -68,8 +68,8 @@ try {
   assert.equal(agentTaskReply(task), "", "receipt-only results never manufacture a reply");
   assert.equal(agentTaskReply({...combined,taskIntent:{...combined.taskIntent,outcome:"model_output"}}), "", "ordinary prose must not render twice");
   assert.equal(agentTaskReply({...combined,taskIntent:{...combined.taskIntent,outcome:"partial"}}), titles, "a failed image must not swallow successful text");
-  assert.equal(agentTaskResult(combined, deletions.map(op=>({...op,status:"undone"})), "zh", [cover]), "已保存到会话，可下载；尚未设为文章封面。\n\n已撤销 2 项改动。", "final text never overrides the current host state");
-  assert.equal(agentTaskResult(task, [], "zh", [cover]), "已保存到会话，可下载；尚未设为文章封面。", "generated images use actual host artifacts for completion receipts");
+  assert.equal(agentTaskResult(combined, deletions.map(op=>({...op,status:"undone"})), "zh", [cover]), "图片已保存到会话，可下载或继续让 Koi 设为文章封面。\n\n已撤销 2 项改动。", "final text never overrides the current host state");
+  assert.equal(agentTaskResult(task, [], "zh", [cover]), "图片已保存到会话，可下载或继续让 Koi 设为文章封面。", "generated images use actual host artifacts for completion receipts");
   assert.equal(agentTaskResult(task, [], "zh", [{...cover,taskId:"another-task"}]), "改动结果暂不可用，请重试加载。", "other tasks cannot vouch for cover success");
   const failedCover = { ...task, taskIntent: {outcome:"partial",inputVersion:1}, coverGeneration: {status:"failed",errorCode:"insufficient_credits",chargedCredits:0} };
   const failure = agentTaskResult(failedCover, [], "zh");

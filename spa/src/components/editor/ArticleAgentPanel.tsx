@@ -603,7 +603,7 @@ export function ArticleAgentPanel({
                     <details key={op.id} className="koi-article-archived">
                       <summary>
                         <ChevronRight size={14} />
-                        {op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}
+                        {op.input.kind === "cover" ? labels.cover : op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}
                         <span>{labels[op.status]}</span>
                       </summary>
                       {details}
@@ -618,7 +618,7 @@ export function ArticleAgentPanel({
                   >
                     <div className="koi-article-change-title">
                       <FilePenLine size={17} />
-                      <strong>{op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}</strong>
+                      <strong>{op.input.kind === "cover" ? labels.cover : op.input.kind === "wechat_geo" ? labels.wechat_geo : copy.revision}</strong>
                       <span className="koi-article-badge">
                         {op.status === "applied" && <Check size={12} />}
                         {labels[op.status]}

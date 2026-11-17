@@ -1582,7 +1582,7 @@ function OperationCard({
   const { locale } = useI18n();
   const t = agentPanelText[locale];
   const [expanded, setExpanded] = useState(false);
-  const hasContent = op.input.kind === "update" || op.input.kind === "create" || op.input.kind === "wechat_geo";
+  const hasContent = op.input.kind === "update" || op.input.kind === "create" || op.input.kind === "wechat_geo" || op.input.kind === "cover";
   const actions = (
       <div className="agent-proposal-actions flex flex-wrap items-center gap-2">
         {onOpenDocument &&
@@ -1620,7 +1620,7 @@ function OperationCard({
             >
               {t.reject}
             </button>
-            {op.input.kind !== "wechat_geo" && <button type="button" className={control} onClick={() => { setExpanded(false); onAdjust(); }}>
+            {op.input.kind !== "wechat_geo" && op.input.kind !== "cover" && <button type="button" className={control} onClick={() => { setExpanded(false); onAdjust(); }}>
               {t.adjust}
             </button>}
           </>

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -82,6 +83,22 @@ func TestAgentPublicationConfirmationBillingAndReceipts(t *testing.T) {
 		t.Run(channel, func(t *testing.T) {
 			a, user, doc := writingTestApp(t)
 			ctx := context.Background()
+			if channel == "wechat" {
+				coverKey := "u/" + user.AuthUserID + "/" + strings.Repeat("b", 32) + ".jpg"
+				mode, ratio, source := "article", "16:9", "/images/"+coverKey
+				var err error
+				doc, err = a.updateDocument(ctx, updateDocumentParams{User: user, DocID: doc.DocID, Title: doc.Title, Content: doc.Content, Theme: doc.Theme, ExpectedRevision: doc.Revision, Source: documentSourceWeb, CoverMode: &mode, CoverRatio: &ratio, CoverImageSource: &source})
+				if err != nil {
+					t.Fatal(err)
+				}
+				coverData := testWechatCoverJPEG(t)
+				a.wechatImageHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					if r.URL.Path != "/"+coverKey {
+						return nil, errors.New("unexpected cover image path")
+					}
+					return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"image/jpeg"}}, Body: io.NopCloser(bytes.NewReader(coverData))}, nil
+				})}
+			}
 			target := publicationTestTarget(t, a, user, channel)
 			task := agentTestTask(t, a, user, agentTestSession(t, a, user, "full"), doc, "发送这篇文章", http.Header{agentPublishingHeader: {"1"}})
 			before, _ := a.loadCreditBalance(ctx, user.ID)
@@ -112,6 +129,19 @@ func TestAgentPublicationConfirmationBillingAndReceipts(t *testing.T) {
 				case "/cgi-bin/stable_token":
 					return jsonResponse(`{"access_token":"wechat-token","expires_in":7200}`), nil
 				case "/cgi-bin/material/add_material":
+					reader, err := r.MultipartReader()
+					if err != nil {
+						return nil, err
+					}
+					part, err := reader.NextPart()
+					if err != nil {
+						return nil, err
+					}
+					defer part.Close()
+					configuration, _, err := image.DecodeConfig(part)
+					if err != nil || configuration.Width != 940 || configuration.Height != 529 {
+						t.Errorf("WeChat upload lost saved 16:9 cover ratio: %dx%d, %v", configuration.Width, configuration.Height, err)
+					}
 					return jsonResponse(`{"media_id":"wechat-thumb"}`), nil
 				case "/cgi-bin/draft/add":
 					sends.Add(1)
@@ -298,6 +328,26 @@ func TestAgentPublicationToolsAndImagePayload(t *testing.T) {
 	p.Snapshot.Markdown = "![reference][image]\n\n[image]: https://example.com/image.png"
 	if _, err = a.publicationPayload(p); err == nil {
 		t.Fatal("unsupported image syntax was silently lost")
+	}
+}
+
+func TestAgentPublicationWechatCoverRatioPayload(t *testing.T) {
+	for _, test := range []struct{ ratio, want string }{
+		{"", wechatCoverRatioWide}, // Older publication snapshots have no ratio.
+		{"1:1", "1:1"},
+		{"9.40:5.29", "9.40:5.29"},
+	} {
+		t.Run(test.ratio, func(t *testing.T) {
+			a := &App{}
+			data, err := a.publicationPayload(agentPublication{Channel: "wechat", Snapshot: agentPublicationSnapshot{Title: "Title", Markdown: "Body", CoverRatio: test.ratio}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload struct{ CoverRatio string }
+			if err := json.Unmarshal(data, &payload); err != nil || payload.CoverRatio != test.want {
+				t.Fatal("publication ratio", payload.CoverRatio, test.want, err)
+			}
+		})
 	}
 }
 

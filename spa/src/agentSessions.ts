@@ -22,8 +22,9 @@ export type AgentOperation = {
   hash: string;
   input: {
     geo?: WechatGeoSummary;
+    cover?: { artifactId: string; source: string; ratio: string };
     key: string;
-    kind: "update" | "create" | "move" | "trash" | "folder" | "delete_folder" | "wechat_geo";
+    kind: "update" | "create" | "move" | "trash" | "folder" | "delete_folder" | "wechat_geo" | "cover";
     path?: string;
     title?: string;
     content?: string;
@@ -158,7 +159,7 @@ export function agentTaskIntentFingerprint(
 export const sendAgentMessage = (id: string, input: AgentTaskRequest) =>
   apiJson<{ task: WritingTask }>(`${base}/${encodeURIComponent(id)}/tasks`, {
     method: "POST",
-    headers: { "X-Koinote-Agent-Covers": "1", "X-Koinote-Agent-Publishing": "1", "X-Koinote-Agent-Geo": "1" },
+    headers: { "X-Koinote-Agent-Covers": "1", "X-Koinote-Agent-Cover-Apply": "1", "X-Koinote-Agent-Publishing": "1", "X-Koinote-Agent-Geo": "1" },
     body: JSON.stringify(input),
   });
 export const actOnAgentOperation = (
@@ -397,13 +398,14 @@ export async function saveAgentPanelLayout(
 export function agentOperationPreview(op: AgentOperation, locale: Locale) {
   const labels = agentPanelText[locale];
   const geo = op.input.kind === "wechat_geo";
+  const cover = op.input.kind === "cover";
   const title = op.input.title ?? op.before?.document.title ?? "";
   const text = (view?: WechatGeoSummary | null) => view
     ? `${view.enabled ? labels.geoEnabled : labels.geoDisabled}\n\n${view.text}` : labels.geoEmpty;
   return {
-    beforeTitle: geo ? `${labels.wechat_geo} · ${title}` : op.before?.document.title ?? "",
-    afterTitle: geo ? `${labels.wechat_geo} · ${title}` : title,
-    beforeContent: geo ? text(op.before?.geo) : op.before?.document.content ?? "",
+    beforeTitle: geo || cover ? `${geo ? labels.wechat_geo : labels.cover} · ${title}` : op.before?.document.title ?? "",
+    afterTitle: geo || cover ? `${geo ? labels.wechat_geo : labels.cover} · ${title}` : title,
+    beforeContent: cover ? (op.before?.document.coverImageSource ? `![](${op.before.document.coverImageSource})` : labels.coverDefault) : geo ? text(op.before?.geo) : op.before?.document.content ?? "",
     afterContent: geo ? text(op.input.geo) : op.input.content ?? "",
     plainText: geo,
   };

@@ -250,7 +250,7 @@ try {
     await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
     await checkCoverGeneration(createClient, `http://127.0.0.1:${server.address().port}/?lang=zh`);
     assert.deepEqual(errors, []);
-    console.log("Koi cover UI passed: private image preview, download/retry, restored conversation and preview failure fallback.");
+    console.log("Koi cover UI passed: preview, download/retry, follow-up cover approval/undo in both panels, restored conversation and preview failure fallback.");
   } else if (process.env.ARTICLE_KOI_UI_ONLY === "1") {
     await checkArticleKoi(createClient,`http://127.0.0.1:${server.address().port}/?lang=zh&article=1`);
     assert.deepEqual(errors, []);
