@@ -691,6 +691,12 @@ export const zh: Messages = {
     downloadDesktop: "下载桌面客户端",
   },
   auth: {
+    humanVerification: "人机验证",
+    humanVerificationLoading: "发送邮箱验证码前，请先完成人机验证。",
+    humanVerificationPassed: "人机验证已通过。",
+    humanVerificationExpired: "人机验证已过期，请重新验证。",
+    humanVerificationUnavailable: "人机验证暂时无法加载，请重试。",
+    retryHumanVerification: "重新验证",
     loginTitle: "欢迎回来",
     loginSubtitle: "登录以继续你的创作",
     registerTitle: "创建账号",
@@ -2961,6 +2967,9 @@ function hello(name) {
     },
   },
   errors: {
+    human_verification_required: "请先完成人机验证，再发送邮箱验证码。",
+    human_verification_failed: "人机验证已过期或未通过，请重新验证。",
+    human_verification_unavailable: "人机验证暂时不可用，请稍后重试。",
     bad_request: "请求格式错误",
     feedback_category_invalid: "请选择 Bug 或使用体验反馈。",
     feedback_message_required: "请填写反馈内容。",

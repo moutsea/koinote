@@ -30,6 +30,7 @@ type App struct {
 	cfg                     config.Config
 	db                      *pgxpool.Pool
 	emailSender             verificationEmailSender
+	turnstileHTTPClient     *http.Client
 	limiter                 *rateLimiter
 	limiterOnce             sync.Once
 	stripeCheckout          stripeCheckoutSessionClient
@@ -119,6 +120,7 @@ func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", a.health)
+	mux.HandleFunc("GET /api/auth/turnstile", a.authTurnstileConfig)
 	mux.HandleFunc("POST /api/auth/register", a.authRegister)
 	mux.HandleFunc("POST /api/auth/verification-code", a.authVerificationCode)
 	mux.HandleFunc("POST /api/auth/verify-email", a.authVerifyEmail)

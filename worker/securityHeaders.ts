@@ -14,7 +14,8 @@ import { SEO_GUARD_SCRIPT_HASH } from "./seoGuard";
 /**
  * Content-Security-Policy。
  *
- * script-src 'self'：SPA 的 JS 全部来自同源打包产物，没有 CDN 脚本。内联 <script>
+ * script-src 'self'：SPA 的 JS 来自同源打包产物；仅额外允许 Cloudflare Analytics
+ * 和 Turnstile 的官方脚本域。内联 <script>
  * 只有一段：Worker 写进公开页的语言守卫（seoGuard.ts），按 SHA-256 单独放行，
  * 文本一变哈希就对不上、浏览器拒绝执行。所以这里仍不需要 'unsafe-inline' ——
  * 这是 CSP 最要紧的一条，挡住的正是 XSS 的主要落地方式。
@@ -50,7 +51,8 @@ import { SEO_GUARD_SCRIPT_HASH } from "./seoGuard";
 const CSP = [
   "default-src 'self'",
   // 内联脚本只放行 seoGuard.ts 那一段固定文本（按 SHA-256），不是 'unsafe-inline'
-  `script-src 'self' https://static.cloudflareinsights.com '${SEO_GUARD_SCRIPT_HASH}'`,
+  `script-src 'self' https://static.cloudflareinsights.com https://challenges.cloudflare.com '${SEO_GUARD_SCRIPT_HASH}'`,
+  "frame-src 'self' https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",

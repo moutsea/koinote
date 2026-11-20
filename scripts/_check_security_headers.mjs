@@ -115,11 +115,13 @@ function parseCSP(header) {
     String(csp["script-src"]),
   );
   ok(
-    "script-src 只额外放行 Cloudflare Web Analytics 脚本域",
+    "script-src 额外放行 Cloudflare Analytics 与 Turnstile 官方脚本域",
     (csp["script-src"] ?? []).includes("https://static.cloudflareinsights.com") &&
+      (csp["script-src"] ?? []).includes("https://challenges.cloudflare.com") &&
       !(csp["script-src"] ?? []).includes("https:"),
     String(csp["script-src"]),
   );
+  ok("frame-src 仅允许同源和 Turnstile", JSON.stringify(csp["frame-src"]) === JSON.stringify(["'self'", "https://challenges.cloudflare.com"]), String(csp["frame-src"]));
   ok(
     "worker-src 只允许同源与 blob（fflate 后台压缩/解压需要）",
     (csp["worker-src"] ?? []).includes("'self'") &&

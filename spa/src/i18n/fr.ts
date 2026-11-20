@@ -704,6 +704,12 @@ export const fr: Messages = {
     downloadDesktop: "Télécharger l’application",
   },
   auth: {
+    humanVerification: "Vérification humaine",
+    humanVerificationLoading: "Effectuez le contrôle de sécurité avant de demander un code par e-mail.",
+    humanVerificationPassed: "Vérification humaine réussie.",
+    humanVerificationExpired: "Le contrôle a expiré. Veuillez réessayer.",
+    humanVerificationUnavailable: "Le contrôle de sécurité ne peut pas être chargé. Veuillez réessayer.",
+    retryHumanVerification: "Réessayer le contrôle",
     loginTitle: "Bon retour",
     loginSubtitle: "Connectez-vous pour continuer à écrire",
     registerTitle: "Créer votre compte",
@@ -3171,6 +3177,9 @@ function hello(name) {
     },
   },
   errors: {
+    human_verification_required: "Effectuez le contrôle de sécurité avant de demander un code par e-mail.",
+    human_verification_failed: "Le contrôle a expiré ou a échoué. Veuillez le refaire.",
+    human_verification_unavailable: "La vérification humaine est temporairement indisponible. Réessayez plus tard.",
     bad_request: "Requête invalide",
     feedback_category_invalid: "Choisissez Bug ou Expérience.",
     feedback_message_required: "Saisissez votre commentaire.",

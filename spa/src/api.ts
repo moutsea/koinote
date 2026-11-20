@@ -181,7 +181,11 @@ export function register(params: {
   });
 }
 
-export function sendVerificationCode(email: string, locale: string) {
+export function fetchTurnstileConfig() {
+  return apiJson<{ required: boolean; siteKey: string }>("/api/auth/turnstile");
+}
+
+export function sendVerificationCode(email: string, locale: string, turnstileToken = "") {
   return apiJson<{
     ok: boolean;
     expiresInSeconds: number;
@@ -189,7 +193,7 @@ export function sendVerificationCode(email: string, locale: string) {
     devCode?: string;
   }>("/api/auth/verification-code", {
     method: "POST",
-    body: JSON.stringify({ email, locale }),
+    body: JSON.stringify({ email, locale, turnstileToken }),
   });
 }
 
@@ -204,7 +208,7 @@ export function verifyEmail(params: {
   });
 }
 
-export function sendPasswordResetCode(email: string, locale: string) {
+export function sendPasswordResetCode(email: string, locale: string, turnstileToken = "") {
   return apiJson<{
     ok: boolean;
     expiresInSeconds: number;
@@ -212,7 +216,7 @@ export function sendPasswordResetCode(email: string, locale: string) {
     devCode?: string;
   }>("/api/auth/password-reset-code", {
     method: "POST",
-    body: JSON.stringify({ email, locale }),
+    body: JSON.stringify({ email, locale, turnstileToken }),
   });
 }
 

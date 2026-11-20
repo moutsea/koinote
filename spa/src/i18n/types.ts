@@ -349,6 +349,13 @@ export interface Messages {
     downloadDesktop: string;
   };
   auth: {
+    humanVerification: string;
+    humanVerificationLoading: string;
+    humanVerificationPassed: string;
+    humanVerificationExpired: string;
+    humanVerificationUnavailable: string;
+    retryHumanVerification: string;
+
     loginTitle: string;
     loginSubtitle: string;
     registerTitle: string;

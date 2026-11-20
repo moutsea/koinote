@@ -16,6 +16,7 @@ import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 import { isDesktopRuntime } from "../desktop/runtime";
 import { loginRedirectPath } from "../loginRedirect";
+import { HumanVerification, type HumanVerificationState } from "../components/HumanVerification";
 
 const DesktopLoginPage = lazy(() =>
   import("./DesktopLoginPage").then((module) => ({
@@ -84,6 +85,9 @@ function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const [loading, setLoading] = useState(false);
   const isEmailRecovery = mode === "login" && recoveryEmail !== null;
   const isPasswordReset = mode === "login" && passwordResetOpen;
+  const humanAction = isPasswordReset ? "password_reset" : "email_verification";
+  const [humanVerification, setHumanVerification] = useState<HumanVerificationState>({ action: "", token: "", ready: false });
+  const [humanResetVersion, setHumanResetVersion] = useState(0);
 
   // 把后端错误码翻译成当前语言；未知码回退到后端英文 message 或通用提示。
   function translateError(err: unknown): string {
@@ -128,11 +132,17 @@ function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
       setError(t.errors.invalid_email ?? t.auth.requestFailed);
       return;
     }
+    if (!humanVerification.ready || humanVerification.action !== humanAction) {
+      setError(t.errors.human_verification_required);
+      return;
+    }
+    const turnstileToken = humanVerification.token;
+    setHumanVerification({ action: humanAction, token: "", ready: false });
     setSendingCode(true);
     try {
       const result = isPasswordReset
-        ? await sendPasswordResetCode(targetEmail, locale)
-        : await sendVerificationCode(targetEmail, locale);
+        ? await sendPasswordResetCode(targetEmail, locale, turnstileToken)
+        : await sendVerificationCode(targetEmail, locale, turnstileToken);
       if (result.devCode) setVerificationCode(result.devCode);
       setCodeCooldown(result.retryAfterSeconds || 60);
       setNotice(
@@ -146,6 +156,7 @@ function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
       setError(translateError(err));
     } finally {
       setSendingCode(false);
+      setHumanResetVersion((value) => value + 1);
     }
   }
 
@@ -471,6 +482,13 @@ function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                     {t.auth.forgotPassword}
                   </button>
                 </div>
+              )}
+
+              {(mode === "register" || isEmailRecovery || isPasswordReset) && (
+                <HumanVerification key={humanAction} action={humanAction} resetVersion={humanResetVersion} onChange={(state) => {
+                  setHumanVerification(state);
+                  if (state.ready) setError((current) => [t.errors.human_verification_required, t.errors.human_verification_failed, t.errors.human_verification_unavailable].includes(current ?? "") ? null : current);
+                }} />
               )}
 
               {(mode === "register" || isEmailRecovery || isPasswordReset) && (

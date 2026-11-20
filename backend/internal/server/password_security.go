@@ -51,8 +51,9 @@ func passwordResetCodeResponse(w http.ResponseWriter, devCode string) {
 // 暴露给匿名请求。只有已验证且设置过密码的账号才会真正保存验证码并发信。
 func (a *App) authPasswordResetCode(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Email  string `json:"email"`
-		Locale string `json:"locale"`
+		Email          string `json:"email"`
+		Locale         string `json:"locale"`
+		TurnstileToken string `json:"turnstileToken"`
 	}
 	if !decodeAuthBody(w, r, &body) {
 		return
@@ -60,6 +61,9 @@ func (a *App) authPasswordResetCode(w http.ResponseWriter, r *http.Request) {
 	email := normalizeEmail(body.Email)
 	if !validRegistrationEmail(email) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
+		return
+	}
+	if !a.requireEmailHumanVerification(w, r, body.TurnstileToken, turnstileResetAction) {
 		return
 	}
 

@@ -138,8 +138,9 @@ func normalizeLocale(value string) string {
 
 func (a *App) authVerificationCode(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Email  string `json:"email"`
-		Locale string `json:"locale"`
+		Email          string `json:"email"`
+		Locale         string `json:"locale"`
+		TurnstileToken string `json:"turnstileToken"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, verificationRequestMax)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -155,6 +156,9 @@ func (a *App) authVerificationCode(w http.ResponseWriter, r *http.Request) {
 	email := normalizeEmail(body.Email)
 	if !validRegistrationEmail(email) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
+		return
+	}
+	if !a.requireEmailHumanVerification(w, r, body.TurnstileToken, turnstileEmailAction) {
 		return
 	}
 	code, err := generateVerificationCode()

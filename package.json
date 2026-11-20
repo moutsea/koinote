@@ -105,6 +105,7 @@
     "test:agent-repository-storage": "node scripts/_check_agent_repository_storage.mjs",
     "test:ai-organizer": "esbuild spa/src/components/editor/aiOrganizerCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_ai_organizer_bundle.mjs --log-level=error && node scripts/_check_ai_organizer.mjs && node scripts/_check_ai_organizer_preview.mjs && node scripts/_check_ai_organizer_dialog.mjs && node scripts/_check_ai_organizer_selection.mjs; ec=$?; rm -f scripts/_ai_organizer_bundle.mjs; exit $ec",
     "test:writing-agent-ui": "node scripts/_check_writing_agent_ui.mjs",
+    "test:turnstile-ui": "node scripts/_check_turnstile_ui.mjs",
     "test:koi-local": "node --test deploy/local-koi/*.test.mjs",
     "test:koi-agent-contract": "node scripts/test_koi_agent_contract.mjs",
     "test:agent-bottom-panel-ui": "node scripts/_check_agent_bottom_panel_ui.mjs",

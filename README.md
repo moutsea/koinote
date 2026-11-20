@@ -648,6 +648,17 @@ VPS 的 `.env` 需要把 `WORKER_URL` 设为 `https://koinote.app`，并与 Work
 `BACKEND_INTERNAL_TOKEN`。生产还必须设置独立的 `EMAIL_VERIFICATION_SECRET`；验证码
 仅以 HMAC 形式保存在 Postgres，10 分钟失效。
 
+注册、历史账号补验和找回密码的发码入口使用 Cloudflare Turnstile。后端需要
+`TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`；前者通过公开配置接口提供给页面，
+后者只留在后端。Turnstile 组件允许的域名必须包含 `APP_URL` 的 hostname。
+后端直接调用官方 Siteverify，校验成功、域名及用途后才进入原有发码和限流逻辑；
+注册与补验使用 `email_verification`，找回密码使用 `password_reset`。
+每次请求结束后页面都会重置验证，重发需获取新 token。
+
+生产环境缺少配置或校验服务不可用时不会发送验证码；旧标签页需刷新后验证。
+本地开发两项均不配置时保留原有开发发码流程；配置任一项后则必须配齐并通过验证。
+生产发布应先配置两项 Key，再部署后端，最后部署 SPA 与 Worker 的 CSP。
+
 ### PostgreSQL 异地备份与恢复
 
 `database-backup` 是显式启用的 compose profile。它每 6 小时执行一次 PostgreSQL 16
@@ -771,6 +782,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `CLOUDFLARE_CACHE_PURGE_TOKEN` | 仅授予 Zone / Cache Purge 权限                                                                      |
 | `CLOUDFLARE_ANALYTICS_TOKEN`   | 可选；仅授予目标 Zone 的 Analytics Read，供 Admin 今日 UV / PV 使用                                 |
 | `EMAIL_VERIFICATION_SECRET`    | 验证码 HMAC 独立密钥，部署时安全写入 VPS `.env`                                                     |
+| `TURNSTILE_SECRET_KEY`         | Turnstile 组件的 Secret key，仅后端用于校验发码请求                                                 |
 | `MCP_TOKEN_ENCRYPTION_KEY`     | MCP 令牌及 GitHub 导入凭据的加密根密钥；轮换需迁移密文，否则旧 MCP 令牌无法查看、GitHub Token 需重新保存                                        |
 | `LLM_CREDENTIAL_ENCRYPTION_KEY` | 后台模型渠道 API Key 独立加密密钥；生产必填，轮换前必须迁移既有密文                                       |
 | `CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY` | 自定义自媒体平台令牌独立加密密钥；生产必填，轮换前必须迁移既有密文                    |
@@ -807,6 +819,9 @@ openssl rand -base64 48 | tr -d '\n' | gh secret set WECHAT_CREDENTIAL_ENCRYPTIO
 openssl rand -base64 48 | tr -d '\n' | gh secret set ZHIHU_CREDENTIAL_ENCRYPTION_KEY
 ```
 
+Turnstile 的公开 Sitekey 放在 Actions Variable `TURNSTILE_SITE_KEY`，配对的 Secret key
+放在同名仓库 Secret `TURNSTILE_SECRET_KEY`。这两项均为部署必填项，部署会安全写入 VPS `.env`。
+
 Stripe 密钥可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
 和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史；Credits 的
 公开 Product ID 放在 Actions Variable `STRIPE_CREDITS_PRODUCT_ID`。AI 优化内置模型的 API Key
@@ -828,6 +843,7 @@ VPS 的 `/opt/koinote/.env`。可选的 Analytics Token 配置后也会以同样
 ```bash
 npm test          # 两端 typecheck + 全部前端/Worker 断言套件
 npm run go:test   # go vet + go test；未设 TEST_DATABASE_URL 时数据库集成测试会跳过
+npm run test:turnstile-ui # 先 npm run build；需独立 Chromium，检查真实页面与模拟验证/发码服务
 ```
 
 GitHub Actions 在每次 push 与 PR 上额外构建前后端，并用真实 PostgreSQL 执行

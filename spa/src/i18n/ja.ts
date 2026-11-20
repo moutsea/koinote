@@ -695,6 +695,12 @@ export const ja: Messages = {
     downloadDesktop: "デスクトップ版をダウンロード",
   },
   auth: {
+    humanVerification: "人間による操作の確認",
+    humanVerificationLoading: "メール確認コードを送信する前に、セキュリティ確認を完了してください。",
+    humanVerificationPassed: "セキュリティ確認が完了しました。",
+    humanVerificationExpired: "セキュリティ確認の有効期限が切れました。もう一度お試しください。",
+    humanVerificationUnavailable: "セキュリティ確認を読み込めません。もう一度お試しください。",
+    retryHumanVerification: "もう一度確認する",
     loginTitle: "おかえりなさい",
     loginSubtitle: "ログインして執筆を続けましょう",
     registerTitle: "アカウントを作成",
@@ -3103,6 +3109,9 @@ function hello(name) {
     },
   },
   errors: {
+    human_verification_required: "メール確認コードを要求する前に、セキュリティ確認を完了してください。",
+    human_verification_failed: "セキュリティ確認に失敗したか、有効期限が切れました。もう一度確認してください。",
+    human_verification_unavailable: "セキュリティ確認を一時的に利用できません。後でもう一度お試しください。",
     bad_request: "リクエストの形式が正しくありません",
     feedback_category_invalid: "不具合または使用感を選択してください。",
     feedback_message_required: "フィードバック内容を入力してください。",

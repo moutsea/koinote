@@ -75,6 +75,8 @@ type Config struct {
 	// 开发环境可回退复用 SessionSecret；生产环境由 main.go 强制要求独立配置。
 	EmailVerificationSecret string
 	EnableMockEmail         bool
+	TurnstileSiteKey        string
+	TurnstileSecretKey      string
 
 	// Stripe Checkout：Secret/Webhook 由会员和 Credits 商品共用；两个 Product
 	// 可分别留空以关闭对应购买入口。
@@ -213,6 +215,8 @@ func Load() Config {
 
 		EmailVerificationSecret: os.Getenv("EMAIL_VERIFICATION_SECRET"),
 		EnableMockEmail:         nodeEnv != "production" && getenv("ENABLE_MOCK_EMAIL", "false") == "true",
+		TurnstileSiteKey:        strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY")),
+		TurnstileSecretKey:      strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")),
 
 		StripeSecretKey:         strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
 		StripeWebhookSecret:     strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),

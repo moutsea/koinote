@@ -699,6 +699,12 @@ export const en: Messages = {
     downloadDesktop: "Download desktop app",
   },
   auth: {
+    humanVerification: "Human verification",
+    humanVerificationLoading: "Complete the security check before sending an email code.",
+    humanVerificationPassed: "Human verification passed.",
+    humanVerificationExpired: "The security check expired. Please try again.",
+    humanVerificationUnavailable: "The security check could not load. Please retry.",
+    retryHumanVerification: "Retry security check",
     loginTitle: "Welcome back",
     loginSubtitle: "Log in to continue writing",
     registerTitle: "Create your account",
@@ -3124,6 +3130,9 @@ function hello(name) {
     },
   },
   errors: {
+    human_verification_required: "Complete the security check before requesting an email code.",
+    human_verification_failed: "The security check expired or failed. Please complete it again.",
+    human_verification_unavailable: "Human verification is temporarily unavailable. Please try again later.",
     bad_request: "Invalid request",
     feedback_category_invalid: "Choose Bug or Experience feedback.",
     feedback_message_required: "Enter your feedback.",
