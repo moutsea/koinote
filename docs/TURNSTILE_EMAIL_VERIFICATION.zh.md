@@ -2,9 +2,11 @@
 
 ## 当前状态
 
-本地实现和回归已完成，配对 Key 已安全写入 GitHub 发布配置，尚未部署。
-Secret 已通过官方 Siteverify 的有效性探针；真实 Turnstile 挑战、生产邮件发送
-及上线后的完整流程尚未验收。不能据此记录宣称功能已上线。
+已部署生产，业务提交为 `f4b94d0b41d032d404665f351c05fcfc9af2e768`。
+[完整 CI](https://github.com/moutsea/koinote/actions/runs/44679724775) 与
+[自动部署](https://github.com/moutsea/koinote/actions/runs/44681891230) 均成功。
+配对 Key 已安全写入 GitHub 发布配置并同步到后端，Secret 未下发到浏览器。
+真实人类挑战、有效 token 的首次提交与重放、邮件收取仍待人工验收。
 
 ## 原因与实际改动
 
@@ -45,6 +47,18 @@ Secret 已通过官方 Siteverify 的有效性探针；真实 Turnstile 挑战�
 仍需确认组件允许 `koinote.app`，并验证实际
 Cloudflare 挑战、正确用途与域名的首次提交、重复 token 拒绝，以及生产邮件收取。
 真实环境验收结果应另行记录，不能把模拟服务响应记作生产成功。
+
+## 本轮生产检查
+
+- `GET /api/auth/turnstile` 返回 200、`required: true`、与配置一致的 Sitekey，
+  无 Secret 或其他额外字段，并带 `Cache-Control: no-store`。
+- 注册/补验发码、找回密码发码两个入口分别验证：缺 token 返回
+  400/`human_verification_required`，无效 token 返回 403/`human_verification_failed`。
+  无效 token 经过真实 Go 后端和 Cloudflare Siteverify，未使用模拟响应。
+- 登录页实际返回 200，线上 CSP 包含官方脚本与 iframe 域名，未开放内联或 eval 脚本。
+  独立 Chromium 中已观察到正常显示的 Cloudflare 真人验证复选框。
+- 自动浏览器未完成真人挑战，没有提交有效生产 token，也没有发送真实邮件。
+  生产有效 token 的首次提交、重放拒绝和邮件收取不列为通过项；需在登录页手动试发。
 
 本地未配置两项 Key 时保留原有开发发码流程；配置任一项即启用必需验证。
 生产始终要求验证，即使两项 Key 均被误删也不会绕过。
