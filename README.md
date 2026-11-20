@@ -808,6 +808,10 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `VPS_SSH_KEY`                  | 部署专用私钥（建议单独生成一把，不要复用个人密钥）                                                  |
 | `VPS_HOST_KEY`                 | 服务器的 known_hosts 条目，用于固定 host key                                                        |
 
+部署 SSH 密钥轮换后，可手动执行 `Verify VPS SSH` 工作流，填写预期服务器地址和新公钥的
+SHA256 指纹，验证 GitHub 中实际保存的钥匙可以登录并访问健康接口；工作流不发布或重启服务。
+本次操作与验证边界见[部署 SSH 密钥轮换记录](docs/DEPLOY_SSH_KEY_ROTATION.zh.md)。
+
 首次配置或轮换验证码密钥时，在仓库目录执行：
 
 ```bash
