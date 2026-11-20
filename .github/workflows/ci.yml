@@ -172,6 +172,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify private deployment output
+        run: bash .github/scripts/test-private-deploy-step.sh
 
       - name: 不能提交 env 文件
         run: |

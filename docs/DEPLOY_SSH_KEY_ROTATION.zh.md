@@ -1,7 +1,7 @@
 # GitHub 部署 SSH 密钥轮换记录
 
 日期：2026-11-20。范围为 `moutsea/koinote` 的 `VPS_SSH_KEY` 和
-`172.245.27.245`（`racknerd-b143cc6`）的部署公钥授权。
+`VPS_HOST`的部署公钥授权。
 
 ## 基线与根因
 
@@ -20,7 +20,7 @@
 - Deploy、WeChat Diagnostics、Sync System Repositories 和 Discover System Repositories
   共用此 Secret，后续任务自动使用新钥。服务器地址与 known_hosts 配置未变更。
 - 新增 `verify-vps-ssh.yml` 手动工作流，先核对目标地址及公开指纹，再验证 SSH 与后端健康；
-  只输出公开指纹和主机名，临时私钥由退出清理处理。
+  当前只输出验证结果，临时私钥由退出清理处理。
 - 个人管理钥及其授权保留。此前为避免管理通道中断而临时增加的管理钥和 SSH 配置，
   在确认部署钥与管理钥不同后已全部撤回；其他服务器与 GitHub 账号 SSH Key 未改动。
 
@@ -43,9 +43,8 @@
 先加入新公钥并验证登录，再通过 stdin 更新 Secret，最后运行手动工作流：
 
 ```bash
-gh workflow run verify-vps-ssh.yml --repo moutsea/koinote --ref main \
-  -f expected_host=172.245.27.245 \
-  -f expected_fingerprint='<新钥的 SHA256 公开指纹>'
+gh secret set VPS_DEPLOY_KEY_FINGERPRINT --repo moutsea/koinote
+gh workflow run verify-vps-ssh.yml --repo moutsea/koinote --ref main
 ```
 
 确认实际工作流通过后，撤销属于旧部署钥的授权，并清理临时私钥；不能凭钥匙名称推断

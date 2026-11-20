@@ -418,7 +418,7 @@ ok(
 ok("部署写入封面模型密钥", deploy.includes("WECHAT_COVER_IMAGE_API_KEY"));
 ok(
   "部署可复现微信 API 中转地址",
-  deploy.includes("WECHAT_API_PROXY_URL: ${{ vars.WECHAT_API_PROXY_URL }}") &&
+  deploy.includes("WECHAT_API_PROXY_URL: ${{ secrets.WECHAT_API_PROXY_URL }}") &&
     deploy.includes('printf "WECHAT_API_PROXY_URL=%s\\n"'),
 );
 ok(

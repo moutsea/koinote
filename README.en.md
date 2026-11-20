@@ -596,8 +596,8 @@ The production `.env` should set `POSTGRES_PORT=127.0.0.1:5432` and
 `BACKEND_PORT=127.0.0.1:8080`, plus `NODE_ENV=production`, `APP_URL`, `WORKER_URL`,
 and the session/OAuth credentials. Configure the three backend `ANNOUNCEMENT_LLM_*`
 variables as well if admins should publish manual notices. The hosted deployment keeps the API
-key in an Actions Secret and stores the relay URL and model in Actions Variables named
-`ANNOUNCEMENT_LLM_BASE_URL` and `ANNOUNCEMENT_LLM_MODEL`; leaving all three empty does not block
+key and `ANNOUNCEMENT_LLM_BASE_URL` in Actions Secrets and the model in the
+`ANNOUNCEMENT_LLM_MODEL` variable; leaving all three empty does not block
 an ordinary deployment. The checked-in `koinote.app`, `api.koinote.app`, `img.koinote.app`, and
 `verify@koinote.app` values belong to the hosted deployment; self-hosters must update
 `wrangler.jsonc`, `deploy/Caddyfile`, and their OAuth callback configuration together.

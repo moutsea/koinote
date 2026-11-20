@@ -607,10 +607,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 `BACKEND_PORT=127.0.0.1:8080`，并正确设置 `NODE_ENV=production`、`APP_URL`、
 `WORKER_URL` 以及会话/OAuth 凭据；如需后台手动发布提醒，还要设置三项
 `ANNOUNCEMENT_LLM_*` 后端变量。官方部署 workflow 把 API Key 放在 Actions Secret，
-把中转地址和模型名分别放在 Actions Variable `ANNOUNCEMENT_LLM_BASE_URL` 与
+把中转地址放在 Actions Secret `ANNOUNCEMENT_LLM_BASE_URL`，模型名放在 Actions Variable
 `ANNOUNCEMENT_LLM_MODEL`；三项全空时普通部署不会因此失败。后台模型渠道需要独立的必填 Secret
-`LLM_CREDENTIAL_ENCRYPTION_KEY`；可选的 AI 优化内置模型同样把 API Key 放 Secret，把
-`AGENT_LLM_PROTOCOL`、`AGENT_LLM_BASE_URL`、`AGENT_LLM_MODEL` 和可选的
+`LLM_CREDENTIAL_ENCRYPTION_KEY`；可选的 AI 优化内置模型同样把 API Key 和 `AGENT_LLM_BASE_URL` 放 Secret，把
+`AGENT_LLM_PROTOCOL`、`AGENT_LLM_MODEL` 和可选的
 `AGENT_LLM_THINKING` 放 Actions Variables。
 四项全空时部署保留 VPS 已有值。仓库里的
 `koinote.app`、`api.koinote.app`、`img.koinote.app` 和 `verify@koinote.app` 是当前官方
@@ -801,7 +801,7 @@ Worker 与 SPA、确认首份数据库异地备份成功，最后验活站点 `/
 | `AGENT_LLM_API_KEY`            | 可选；平台 AI 优化内置模型密钥，须与三个 `AGENT_LLM_*` Actions Variables 同时配置                    |
 | `AGENT_LLM_THINKING`           | 可选 Actions Variable；设为 `true` 时通过 `enable_thinking` 开启内置模型思考                        |
 | `WECHAT_COVER_IMAGE_API_KEY`   | 可选；公众号 AI 封面模型密钥，须与 Base URL、模型两个 Actions Variables 同时配置                     |
-| `WECHAT_API_PROXY_URL`         | 可选 Actions Variable；生产微信 API 中转地址，配置后部署会写入 VPS `.env`，未配置时保留服务器已有值 |
+| `WECHAT_API_PROXY_URL`         | 可选 Actions Secret；生产微信 API 中转地址，配置后部署会写入 VPS `.env`，未配置时保留服务器已有值 |
 | `BOT_WEBHOOK`                  | 可选；飞书群机器人 webhook，与 Kimiseek 复用同名配置                                                |
 | `BOT_WEBHOOK_SECRET`           | 可选；飞书群机器人签名密钥，必须与 `BOT_WEBHOOK` 成对配置                                           |
 | `VPS_HOST`                     | 后端服务器地址                                                                                      |
@@ -829,10 +829,10 @@ Turnstile 的公开 Sitekey 放在 Actions Variable `TURNSTILE_SITE_KEY`，配�
 Stripe 密钥可用 `gh secret set STRIPE_SECRET_KEY`、`gh secret set STRIPE_WEBHOOK_SECRET`
 和 `gh secret set STRIPE_LIFETIME_PRODUCT_ID` 交互式写入，避免密钥进入 shell 历史；Credits 的
 公开 Product ID 放在 Actions Variable `STRIPE_CREDITS_PRODUCT_ID`。AI 优化内置模型的 API Key
-放 Secret，其余协议、Base URL、模型放同名 Actions Variables；整组未设置时部署保留 VPS 已有值。
-公众号封面模型同理：API Key 放 `WECHAT_COVER_IMAGE_API_KEY` Secret，Base URL 与模型分别放
-`WECHAT_COVER_IMAGE_BASE_URL`、`WECHAT_COVER_IMAGE_MODEL` Actions Variables；整组未设置时
-部署保留 VPS 已有配置。生产微信中转地址放 `WECHAT_API_PROXY_URL` Actions Variable；未设置时同样
+和 Base URL 放 Secret，其余协议、模型放同名 Actions Variables；整组未设置时部署保留 VPS 已有值。
+公众号封面模型同理：API Key 放 `WECHAT_COVER_IMAGE_API_KEY` Secret，Base URL 放在 `WECHAT_COVER_IMAGE_BASE_URL` Secret，模型放在
+`WECHAT_COVER_IMAGE_MODEL` Actions Variable；整组未设置时
+部署保留 VPS 已有配置。生产微信中转地址放 `WECHAT_API_PROXY_URL` Actions Secret；未设置时同样
 保留 VPS `.env` 里的既有值。
 飞书通知同理使用 `gh secret set BOT_WEBHOOK` 和 `gh secret set BOT_WEBHOOK_SECRET`；两项
 都未设置时，部署会保留 VPS `.env` 里已有的飞书配置。

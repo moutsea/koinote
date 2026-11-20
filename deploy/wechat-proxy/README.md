@@ -12,7 +12,8 @@ be updated separately from the main backend deployment; keep the previous binary
 
 The original production path used the checked-in SSH tunnel unit: the proxy
 listened on the relay's loopback address and the Koinote Docker host forwarded
-`172.18.0.1:18080` to it. WireGuard was planned, but the relay provider did
+`172.18.0.1:18080` to it. Set WECHAT_RELAY_SSH_TARGET=user@host in the root-owned
+/etc/koinote/wechat-relay/tunnel.env before installing or upgrading that unit. WireGuard was planned, but the relay provider did
 not pass UDP 51820. Production now uses the direct HTTPS listener on port
 18443; the SSH tunnel remains available for rollback.
 
@@ -52,7 +53,7 @@ then issue the trusted certificate:
 ```sh
 certbot certonly --preferred-profile shortlived --webroot \
   --webroot-path /var/www/koinote-acme --ip-address <relay-ip> \
-  --cert-name <relay-ip> --non-interactive --agree-tos \
+  --cert-name koinote-wechat-relay --non-interactive --agree-tos \
   --register-unsafely-without-email
 ```
 
@@ -60,12 +61,13 @@ Install `https-cert-deploy-hook.sh` as executable at
 `/etc/letsencrypt/renewal-hooks/deploy/koinote-wechat-proxy-https` before
 issuance. It checks the new certificate and key, copies them to the
 `koinote-wechat-proxy` group's restricted directory, and restarts the HTTPS
-service only when that certificate was renewed. Adjust the hook's expected
-lineage if the relay IP changes. The Certbot snap's `snap.certbot.renew.timer`
+service only when that certificate was renewed. For an existing certificate with a different name, write its absolute
+lineage directory followed by a newline to the root-owned
+/etc/koinote/wechat-relay/cert-lineage before upgrading the hook. The Certbot snap's `snap.certbot.renew.timer`
 must be enabled and active. Verify the renewal path with:
 
 ```sh
-certbot renew --dry-run --cert-name <relay-ip> --non-interactive
+certbot renew --dry-run --cert-name koinote-wechat-relay --non-interactive
 ```
 
 The dry run can pause for a random delay of several minutes. After it passes,
@@ -74,7 +76,7 @@ check that `systemctl is-active koinote-wechat-proxy-https.service` returns
 `--proxy-cacert`. Restrict both the relay's cloud ingress rule and UFW port
 18443 rule to the Koinote host's public IP. Set the same HTTPS URL in the
 production `.env` and the repository's `WECHAT_API_PROXY_URL` deployment
-variable, then recreate the backend container and check its health. Roll back
+secret, then recreate the backend container and check its health. Roll back
 by restoring `WECHAT_API_PROXY_URL=http://172.18.0.1:18080` in both places and
 recreating the backend; leave the SSH tunnel service running.
 
@@ -150,6 +152,6 @@ ssh -N -L 0.0.0.0:18080:127.0.0.1:18080 root@<relay-host>
 ```
 
 The relay's firewall should allow SSH only from the Koinote host where
-possible. The WireGuard UDP rule is restricted to `172.245.27.245`; the
+possible. The WireGuard UDP rule is restricted to the Koinote backend host; the
 plain HTTP CONNECT port is never opened to the public network. A direct HTTPS
 listener must be restricted to the Koinote host at both cloud ingress and UFW.
