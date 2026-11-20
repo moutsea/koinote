@@ -3,6 +3,11 @@ name: Verify VPS SSH
 on:
   workflow_dispatch:
     inputs:
+      expected_host:
+        description: Expected VPS address
+        type: string
+        required: true
+        default: 172.245.27.245
       expected_fingerprint:
         description: Expected SHA256 public-key fingerprint
         type: string
@@ -22,10 +27,15 @@ jobs:
           HOST: ${{ secrets.VPS_HOST }}
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+          EXPECTED_HOST: ${{ inputs.expected_host }}
           EXPECTED_FINGERPRINT: ${{ inputs.expected_fingerprint }}
         run: |
           set -euo pipefail
           test -n "$HOST" && test -n "$SSH_KEY" && test -n "$HOST_KEY"
+          test "$HOST" = "$EXPECTED_HOST" || {
+            echo '::error::VPS_HOST does not match the expected server'
+            exit 1
+          }
           [[ "$EXPECTED_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]] || exit 1
           umask 077
           key_dir=$(mktemp -d)
