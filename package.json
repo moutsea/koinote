@@ -22,6 +22,7 @@
     "cf-typegen": "wrangler types worker-configuration.d.ts --env-file /dev/null --strict-vars=false",
     "typecheck:worker": "npm run cf-typegen -- --check && tsc -p worker/tsconfig.json --noEmit",
     "test:caddy-security": "python3 scripts/check_caddy_security.py",
+    "test:deployment-security": "python3 scripts/check_deployment_security.py",
     "test:backend-origin": "node --test scripts/_check_backend_origin.mjs",
     "test:worker": "esbuild worker/images.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_base_bundle.mjs --log-level=error && node scripts/_check_image_base.mjs; ec=$?; rm -f scripts/_image_base_bundle.mjs; exit $ec",
     "test:image-keys": "esbuild worker/images.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_key_worker_bundle.mjs --log-level=error && esbuild spa/src/components/editor/imageLoading.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_key_loading_bundle.mjs --log-level=error && esbuild spa/src/desktop/offlineImagesCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_key_offline_bundle.mjs --log-level=error && esbuild spa/src/components/editor/rehost.ts --bundle --format=esm --platform=neutral --outfile=scripts/_image_key_rehost_bundle.mjs --log-level=error && node scripts/_check_image_key_patterns.mjs; ec=$?; rm -f scripts/_image_key_worker_bundle.mjs scripts/_image_key_loading_bundle.mjs scripts/_image_key_offline_bundle.mjs scripts/_image_key_rehost_bundle.mjs; exit $ec",

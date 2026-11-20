@@ -31,13 +31,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     # 必须在 checkout 和任何 Secret 注入之前拒绝 PR、fork 及非 main 的运行。
+    # 默认分支已前进时跳过旧 CI，避免用修复前源码覆盖当前发布配置。
     if: >-
       github.repository == 'moutsea/koinote' &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_sha == github.sha
     steps:
       # 显式 checkout CI 跑过的那个 commit。
       #
@@ -166,31 +168,47 @@ jobs:
           STRIPE_LIFETIME_PRODUCT_ID: ${{ secrets.STRIPE_LIFETIME_PRODUCT_ID }}
           STRIPE_CREDITS_PRODUCT_ID: ${{ vars.STRIPE_CREDITS_PRODUCT_ID }}
         run: |
-          set -eu
+          set +x
+          set -euo pipefail
+          umask 077
+          probe_dir=$(mktemp -d)
+          trap 'rm -rf "$probe_dir"' EXIT
+          [[ "$STRIPE_SECRET_KEY" =~ ^(sk|rk)_live_[A-Za-z0-9]+$ ]] || {
+            echo "::error::STRIPE_SECRET_KEY 必须是正式环境的有效密钥格式"
+            exit 1
+          }
           validate_product() {
             product_id="$1"
             label="$2"
             [ -n "$product_id" ] || return 0
 
-            response_file=$(mktemp)
-            status=$(curl --silent --show-error \
-              --output "$response_file" \
-              --write-out '%{http_code}' \
-              --user "$STRIPE_SECRET_KEY:" \
-              "https://api.stripe.com/v1/products/$product_id")
+            response_file="$probe_dir/response.json"
+            # 凭据经 stdin 交给 curl，不出现在进程参数或公开错误输出中。
+            if ! status=$(printf 'user = "%s:"\n' "$STRIPE_SECRET_KEY" | \
+              curl --config - --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                "https://api.stripe.com/v1/products/$product_id" \
+                2>"$probe_dir/transport.log"); then
+              echo "::error::$label 无法连接 Stripe；请在受保护的运维环境排查连接"
+              exit 1
+            fi
+            case "$status" in
+              [0-9][0-9][0-9]) ;;
+              *) status=unavailable ;;
+            esac
             if [ "$status" != "200" ]; then
-              rm -f "$response_file"
-              echo "::error::$label 商品校验失败"
+              # 响应可能回显密钥片段或其他敏感字段，只公开状态码。
+              echo "::error::${label} 读取失败（Stripe HTTP ${status}）；请在 Stripe 请求日志中查看详情"
               exit 1
             fi
             if ! jq -e --arg product_id "$product_id" \
               '.id == $product_id and .object == "product" and .livemode == true and .active == true' \
               "$response_file" >/dev/null; then
-              rm -f "$response_file"
               echo "::error::$label 必须是当前 Stripe 正式模式下的有效 Product"
               exit 1
             fi
-            rm -f "$response_file"
           }
 
           validate_product "$STRIPE_LIFETIME_PRODUCT_ID" "终身会员商品"
@@ -561,9 +579,16 @@ jobs:
           # --build 是必须的：docker compose up -d 不会重建镜像，
           # 少了它容器会继续跑旧代码，而命令照样报 Started（实测踩过，
           # 那次线上镜像比源码旧了 4 天，期间所有"验证"都验的是旧代码）
-          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+          umask 077
+          connection_log=$(mktemp)
+          trap 'rm -f "$connection_log"' EXIT
+          if ! ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
             "root@$HOST" \
-            'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend'
+            'cd /opt/koinote && sh deploy/run-private-command.sh backend-build docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend' \
+            >"$connection_log" 2>&1; then
+            echo '::error::后端发布失败；请在服务器 /var/log/koinote-deploy 查看受保护的构建日志，连接失败请核对 SSH 配置'
+            exit 1
+          fi
 
       # 后端先部署并跑完迁移，再发布会调用新路由的 Worker/SPA。
       # 没有这一步，容器起不来时 workflow 照样绿，
@@ -575,12 +600,17 @@ jobs:
         run: |
           for i in $(seq 1 30); do
             code=$(ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
-              "root@$HOST" 'curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health' || true)
+              "root@$HOST" 'curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health' 2>/dev/null || true)
+            case "$code" in
+              [0-9][0-9][0-9]) ;;
+              *) code=unavailable ;;
+            esac
             if [ "$code" = "200" ]; then
               echo "后端健康检查通过"
               break
             fi
             if [ "$i" = "30" ]; then
+              echo "::error::后端健康检查失败（HTTP ${code}）；详细日志保留在服务器，请由管理员登录查看"
               exit 1
             fi
             sleep 2
@@ -657,9 +687,16 @@ jobs:
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
-          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+          umask 077
+          connection_log=$(mktemp)
+          trap 'rm -f "$connection_log"' EXIT
+          if ! ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
             "root@$HOST" \
-            'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build database-backup'
+            'cd /opt/koinote && sh deploy/run-private-command.sh backup-build docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build database-backup' \
+            >"$connection_log" 2>&1; then
+            echo '::error::数据库备份发布失败；请在服务器 /var/log/koinote-deploy 查看受保护的构建日志，连接失败请核对 SSH 配置'
+            exit 1
+          fi
           for i in $(seq 1 60); do
             status=$(ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
               "root@$HOST" '
@@ -670,12 +707,17 @@ jobs:
                 else
                   docker inspect "$container" --format "{{.State.Health.Status}}"
                 fi
-              ' || true)
+              ' 2>/dev/null || true)
+            case "$status" in
+              healthy|unhealthy|starting|missing) ;;
+              *) status=unavailable ;;
+            esac
             if [ "$status" = "healthy" ]; then
               echo "数据库异地备份已成功写入并通过健康检查"
               break
             fi
             if [ "$i" = "60" ]; then
+              echo "::error::数据库备份未进入 healthy（状态: ${status}）；详细日志保留在服务器，请由管理员登录查看"
               exit 1
             fi
             sleep 5

@@ -101,6 +101,9 @@ jobs:
       - name: Caddy credential redaction
         run: python3 scripts/check_caddy_security.py
 
+      - name: Deployment trust and private diagnostics
+        run: python3 scripts/check_deployment_security.py
+
       - name: go test
         working-directory: backend
         # -race 打开：会话签名、限流器都有并发读写（限流器带 mutex，

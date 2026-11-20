@@ -1,7 +1,7 @@
 # GitHub 部署 SSH 密钥轮换记录
 
 日期：2026-11-20。范围为 `moutsea/koinote` 的 `VPS_SSH_KEY` 和
-`VPS_HOST`的部署公钥授权。
+生产主服务器的部署公钥授权。目标地址仅保存在受保护的运维配置和 `VPS_HOST` Secret 中。
 
 ## 基线与根因
 
@@ -19,8 +19,8 @@
 - 新钥通过 Actions 校验后，本机生成的部署私钥临时副本已删除，由 GitHub Secret 持久保管。
 - Deploy、WeChat Diagnostics、Sync System Repositories 和 Discover System Repositories
   共用此 Secret，后续任务自动使用新钥。服务器地址与 known_hosts 配置未变更。
-- 新增 `verify-vps-ssh.yml` 手动工作流，先核对目标地址及公开指纹，再验证 SSH 与后端健康；
-  当前只输出验证结果，临时私钥由退出清理处理。
+- 新增 `verify-vps-ssh.yml` 手动工作流，核对固定主机公钥及部署钥公开指纹，再验证 SSH 与后端健康；
+  当前版本从 Secret 读取预期公开指纹，不接收明文地址输入或输出主机名，临时私钥由退出清理处理。
 - 个人管理钥及其授权保留。此前为避免管理通道中断而临时增加的管理钥和 SSH 配置，
   在确认部署钥与管理钥不同后已全部撤回；其他服务器与 GitHub 账号 SSH Key 未改动。
 

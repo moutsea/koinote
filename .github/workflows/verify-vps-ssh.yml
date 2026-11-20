@@ -21,6 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HOST" && test -n "$SSH_KEY" && test -n "$HOST_KEY"
+          # 目标地址只取自 Secret；主机身份由固定 known_hosts 验证。
           [[ "$EXPECTED_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]] || exit 1
           umask 077
           key_dir=$(mktemp -d)
@@ -34,7 +35,7 @@ jobs:
             echo '::error::Deployment key fingerprint does not match the expected key'
             exit 1
           }
-          ssh -i "$key_dir/key" \
+          if ! ssh -i "$key_dir/key" \
             -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$key_dir/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
@@ -42,5 +43,8 @@ jobs:
               test -d /opt/koinote && test -w /opt/koinote
               status=$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health)
               test "$status" = 200
-            ' >/dev/null 2>&1
+            ' >"$key_dir/verify.log" 2>&1; then
+            echo '::error::Deployment SSH or backend health verification failed; inspect the private server configuration'
+            exit 1
+          fi
           echo 'Deployment SSH and backend health verified'
