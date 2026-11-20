@@ -53,6 +53,8 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CF_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+          BACKEND_INTERNAL_TOKEN: ${{ secrets.BACKEND_INTERNAL_TOKEN }}
+          BACKEND_ORIGIN_TOKEN: ${{ secrets.BACKEND_ORIGIN_TOKEN }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
@@ -93,7 +95,7 @@ jobs:
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
         run: |
           missing=""
-          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN EMAIL_VERIFICATION_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY X_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID AGENT_GPT_API_KEY AGENT_GPT_APP_ID AGENT_GPT_SIGNING_SECRET VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
+          for name in CF_TOKEN CF_ACCOUNT CF_ZONE CF_PURGE_TOKEN BACKEND_INTERNAL_TOKEN BACKEND_ORIGIN_TOKEN EMAIL_VERIFICATION_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY MCP_TOKEN_ENCRYPTION_KEY LLM_CREDENTIAL_ENCRYPTION_KEY CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY WECHAT_CREDENTIAL_ENCRYPTION_KEY ZHIHU_CREDENTIAL_ENCRYPTION_KEY X_CREDENTIAL_ENCRYPTION_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_LIFETIME_PRODUCT_ID AGENT_GPT_API_KEY AGENT_GPT_APP_ID AGENT_GPT_SIGNING_SECRET VPS_HOST VPS_SSH_KEY VPS_HOST_KEY; do
             eval "value=\${$name}"
             [ -n "$value" ] || missing="$missing $name"
           done
@@ -253,6 +255,8 @@ jobs:
       - name: 更新后端密钥、Stripe、Agent、飞书、提醒翻译与 Analytics 配置
         env:
           HOST: ${{ secrets.VPS_HOST }}
+          BACKEND_INTERNAL_TOKEN: ${{ secrets.BACKEND_INTERNAL_TOKEN }}
+          BACKEND_ORIGIN_TOKEN: ${{ secrets.BACKEND_ORIGIN_TOKEN }}
           EMAIL_VERIFICATION_SECRET: ${{ secrets.EMAIL_VERIFICATION_SECRET }}
           TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
@@ -328,7 +332,9 @@ jobs:
             "$AGENT_GPT_APP_ID" \
             "$AGENT_GPT_SIGNING_SECRET" \
             "$TURNSTILE_SITE_KEY" \
-            "$TURNSTILE_SECRET_KEY" | \
+            "$TURNSTILE_SECRET_KEY" \
+            "$BACKEND_INTERNAL_TOKEN" \
+            "$BACKEND_ORIGIN_TOKEN" | \
             ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
               "root@$HOST" '
                 set -eu
@@ -369,6 +375,11 @@ jobs:
                 IFS= read -r agent_gpt_signing_secret
                 IFS= read -r turnstile_site_key
                 IFS= read -r turnstile_secret_key
+                IFS= read -r backend_internal_token
+                IFS= read -r backend_origin_token
+                test -n "$backend_internal_token" && test -n "$backend_origin_token"
+                test "${#backend_internal_token}" -ge 32 && test "${#backend_origin_token}" -ge 32
+                test "$backend_internal_token" != "$backend_origin_token"
                 test -n "$turnstile_site_key" && test -n "$turnstile_secret_key"
                 test -n "$agent_gpt_api_key" && test -n "$agent_gpt_app_id" && test -n "$agent_gpt_signing_secret" || exit 1
                 test -n "$email_verification_secret"
@@ -452,6 +463,7 @@ jobs:
                 # Analytics、Credits 商品、Agent、飞书和提醒翻译都是可选项。GitHub 没配时保留 VPS 上已有值，
                 # 不让一次普通部署意外关闭已经工作的能力。
                 awk -v replace_analytics="$replace_analytics" -v replace_bot="$replace_bot" -v replace_announcement_llm="$replace_announcement_llm" -v replace_stripe_credits="$replace_stripe_credits" -v replace_agent_llm="$replace_agent_llm" -v replace_wechat_cover="$replace_wechat_cover" -v replace_wechat_proxy="$replace_wechat_proxy" -v replace_x_oauth2="$replace_x_oauth2" -v replace_feishu="$replace_feishu" "
+                  /^(BACKEND_INTERNAL_TOKEN|BACKEND_ORIGIN_TOKEN)=/ { next }
                   /^(EMAIL_VERIFICATION_SECRET|TURNSTILE_SITE_KEY|TURNSTILE_SECRET_KEY|MCP_TOKEN_ENCRYPTION_KEY|LLM_CREDENTIAL_ENCRYPTION_KEY|CUSTOM_MEDIA_CREDENTIAL_ENCRYPTION_KEY|WECHAT_CREDENTIAL_ENCRYPTION_KEY|ZHIHU_CREDENTIAL_ENCRYPTION_KEY|X_CREDENTIAL_ENCRYPTION_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_LIFETIME_PRICE_ID|STRIPE_LIFETIME_PRODUCT_ID|CLOUDFLARE_ZONE_ID|CLOUDFLARE_ANALYTICS_HOST)=/ { next }
                   replace_stripe_credits == 1 && /^STRIPE_CREDITS_PRODUCT_ID=/ { next }
                   /^AGENT_GPT_(API_KEY|APP_ID|SIGNING_SECRET|SIGN_REQUESTS|PUBLIC_URL|USER_NAMESPACE)=/ { next }
@@ -466,6 +478,8 @@ jobs:
                   { print }
                 " "$env_file" > "$temp_file"
                 printf "EMAIL_VERIFICATION_SECRET=%s\n" "$email_verification_secret" >> "$temp_file"
+                printf "BACKEND_INTERNAL_TOKEN=%s\n" "$backend_internal_token" >> "$temp_file"
+                printf "BACKEND_ORIGIN_TOKEN=%s\n" "$backend_origin_token" >> "$temp_file"
                 printf "TURNSTILE_SITE_KEY=%s\n" "$turnstile_site_key" >> "$temp_file"
                 printf "TURNSTILE_SECRET_KEY=%s\n" "$turnstile_secret_key" >> "$temp_file"
                 printf "MCP_TOKEN_ENCRYPTION_KEY=%s\n" "$mcp_token_encryption_key" >> "$temp_file"
@@ -588,9 +602,29 @@ jobs:
           secrets: |
             CLOUDFLARE_ZONE_ID
             CLOUDFLARE_CACHE_PURGE_TOKEN
+            BACKEND_INTERNAL_TOKEN
+            BACKEND_ORIGIN_TOKEN
         env:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+          BACKEND_INTERNAL_TOKEN: ${{ secrets.BACKEND_INTERNAL_TOKEN }}
+          BACKEND_ORIGIN_TOKEN: ${{ secrets.BACKEND_ORIGIN_TOKEN }}
+
+      # Recreate the file bind mount as well as the origin credential environment.
+      # Reloading the old mount after rsync's atomic rename can retain old config.
+      - name: 更新源站访问保护
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "root@$HOST" 'sh -s' <<'REMOTE'
+          set -eu
+          cd /opt/koinote
+          # Adapt output includes the origin credential: never print it to CI logs.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps --entrypoint caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --force-recreate caddy
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          REMOTE
 
       - name: 验证仓库 R2 访问
         env:

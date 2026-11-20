@@ -48,6 +48,7 @@
   // 生产环境的 secret（不入库，用命令设）：
   //   wrangler secret put BACKEND_URL --env production
   //   wrangler secret put BACKEND_INTERNAL_TOKEN --env production
+  //   wrangler secret put BACKEND_ORIGIN_TOKEN --env production
   //   wrangler secret put CLOUDFLARE_ZONE_ID --env production
   //   wrangler secret put CLOUDFLARE_CACHE_PURGE_TOKEN --env production
   // Email Sending 使用上面的 EMAIL binding，不需要额外 API token。
@@ -102,6 +103,8 @@
         }
       ],
       "vars": {
+        // Unrecognized successful-login source during the 2026-11-20 incident.
+        "SECURITY_BLOCKED_IPS": "45.137.180.141",
         // 图片走 R2 自定义域名（已在 Cloudflare 后台连好，ssl_status active），
         // 不再消耗 Worker 请求数。配错时会回落到 Worker 代理且图片照样显示，
         // 所以部署后必须用 /api/images/config 自查，不能只看图能不能打开。

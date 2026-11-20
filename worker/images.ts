@@ -7,6 +7,7 @@
  */
 
 import { checkFetchTarget } from "./ssrf";
+import { backendHeaders } from "./backend";
 
 export type ImagesEnv = {
   IMAGES: R2Bucket;
@@ -16,6 +17,7 @@ export type ImagesEnv = {
   IMAGE_READ_FALLBACK_BASE?: string;
   /** 后端调删除端点时用的共享令牌。缺省时删除端点一律 503 */
   BACKEND_INTERNAL_TOKEN?: string;
+  BACKEND_ORIGIN_TOKEN?: string;
   /** R2 自定义域名所在 zone。CDN 模式删除对象时用于全局 purge */
   CLOUDFLARE_ZONE_ID?: string;
   /** 仅授予 Zone / Cache Purge 权限的 API token */
@@ -128,12 +130,13 @@ async function recordUsage(
   try {
     const resp = await fetch(url, {
       method: "POST",
-      headers: {
+      headers: backendHeaders(env, {
         "Content-Type": "application/json",
         // 内部令牌 + 用户头：后端的 authUserIDFromRequest 认这一对
         "X-Koinote-Internal-Token": env.BACKEND_INTERNAL_TOKEN,
         "X-Auth-User-Id": authUserId,
-      },
+      }),
+      redirect: "manual",
       body: JSON.stringify({ key, bytes, purpose }),
       signal: controller.signal,
     });
@@ -198,7 +201,7 @@ async function resolveUser(
   if (!cookie && !authorization && !internal) return null;
 
   const sessionURL = new URL("/api/auth/session", env.BACKEND_URL);
-  const headers = new Headers({ accept: "application/json" });
+  const headers = backendHeaders(env, { accept: "application/json" });
   if (cookie) headers.set("cookie", cookie);
   if (authorization) headers.set("authorization", authorization);
   // Backend-initiated transfers still resolve the canonical user through Go.
@@ -208,6 +211,7 @@ async function resolveUser(
   }
   const resp = await fetch(sessionURL, {
     headers,
+    redirect: "manual",
   });
   if (!resp.ok) return null;
 

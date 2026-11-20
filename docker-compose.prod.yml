@@ -80,6 +80,8 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    environment:
+      BACKEND_ORIGIN_TOKEN: ${BACKEND_ORIGIN_TOKEN:?Set a dedicated Worker-to-origin credential}
     # host 网络模式：caddy 要能同时访问 127.0.0.1:8080（后端）与公网 80/443。
     # 用 bridge 网络的话 127.0.0.1 指向容器自己，连不到后端。
     network_mode: host

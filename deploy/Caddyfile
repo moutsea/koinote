@@ -8,7 +8,29 @@
 # caddy 自动申请并续期 Let's Encrypt 证书，不需要 certbot 那套 cron。
 # 证书存在 caddy-data 卷里（见 docker-compose.prod.yml），重启不会重签。
 
+{
+	# Proxy failures use the runtime logger as well as the access logger.
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>headers delete
+				resp_headers delete
+				request>uri regexp "[?].*$" ""
+			}
+		}
+	}
+}
+
 api.koinote.app {
+	# Public clients enter through the Worker. The origin credential is separate
+	# from internal API authority; knowing an internal token alone cannot enter here.
+	@untrusted {
+		not path /health
+		not header X-Koinote-Origin-Token {$BACKEND_ORIGIN_TOKEN}
+	}
+	respond @untrusted "Forbidden" 403
+
 	# 后端在主机的回环口上（compose.prod 把它绑到 127.0.0.1:8080）
 	reverse_proxy 127.0.0.1:8080 {
 		# 把真实客户端 IP 传给后端。
@@ -24,18 +46,28 @@ api.koinote.app {
 		header_up X-Real-IP {http.request.header.CF-Connecting-IP}
 	}
 
-	# 只接受来自 Cloudflare 的请求会更严，但那需要维护 CF 的 IP 段列表，
-	# 且列表变动时会静默拒绝所有流量。这里不做 —— 源站 IP 已被橙云隐藏，
-	# 而真正的鉴权在应用层（会话 cookie + 内部令牌）。
+	# The Worker strips caller-supplied forwarding and identity headers. Only its
+	# authenticated origin requests can reach protected backend routes.
 
 	encode gzip
+	log_append forwarded_client_ip {http.request.header.CF-Connecting-IP}
+	log_append user_agent {http.request.header.User-Agent}
 
 	log {
-		output file /data/access.log {
+		output file /data/access-safe.log {
+			mode 0600
 			roll_size 10mb
 			roll_keep 3
 		}
-		# 不记录请求体与 cookie —— 那里面有会话令牌和文档内容
-		format json
+		# 只保留排障需要的 IP、UA、路径和状态；自定义内部鉴权头也不能落盘。
+		# Query 中可能包含 OAuth code、签名或临时令牌，一并从日志中移除。
+		format filter {
+			wrap json
+			fields {
+				request>headers delete
+				resp_headers delete
+				request>uri regexp "[?].*$" ""
+			}
+		}
 	}
 }

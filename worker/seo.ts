@@ -16,6 +16,7 @@
  * detectLocale 的规则保持一致，渲染结果才不会和 JS 接管后的页面打架。
  */
 import { en } from "../spa/src/i18n/en";
+import { backendHeaders } from "./backend";
 import { fr } from "../spa/src/i18n/fr";
 import { ja } from "../spa/src/i18n/ja";
 import { zh } from "../spa/src/i18n/zh";
@@ -51,6 +52,7 @@ export interface SeoEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   BACKEND_URL: string;
   BACKEND_INTERNAL_TOKEN?: string;
+  BACKEND_ORIGIN_TOKEN?: string;
 }
 
 const MESSAGES: Record<Locale, Messages> = { en, zh, fr, ja };
@@ -524,7 +526,7 @@ async function backendJSON<T>(
 ): Promise<{ status: number; data?: T } | null> {
   if (!ctx.env.BACKEND_URL) return null;
   if (options.optional && ctx.request.method === "HEAD") return null;
-  const headers = new Headers({ "x-koinote-worker": "cloudflare" });
+  const headers = backendHeaders(ctx.env, { "x-koinote-worker": "cloudflare" });
   if (ctx.env.BACKEND_INTERNAL_TOKEN) {
     headers.set("x-koinote-internal-token", ctx.env.BACKEND_INTERNAL_TOKEN);
   }

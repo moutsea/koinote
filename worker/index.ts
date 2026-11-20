@@ -1,4 +1,5 @@
 import { handleAgentRepositoryObject } from "./agentRepositoryObjects";
+import { backendHeaders } from "./backend";
 /**
  * Koinote Cloudflare Worker
  *
@@ -32,6 +33,8 @@ import {
 export interface Env extends Cloudflare.Env {
   BACKEND_URL: string;
   BACKEND_INTERNAL_TOKEN?: string;
+  BACKEND_ORIGIN_TOKEN?: string;
+  SECURITY_BLOCKED_IPS?: string;
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_CACHE_PURGE_TOKEN?: string;
   IMAGE_PUBLIC_BASE: string;
@@ -45,6 +48,11 @@ const DESKTOP_RELEASES_URL =
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const clientIP = request.headers.get("cf-connecting-ip");
+    const blockedIPs = (env.SECURITY_BLOCKED_IPS ?? "").split(",").map(ip => ip.trim()).filter(Boolean);
+    if (clientIP && blockedIPs.includes(clientIP)) {
+      return applySecurityHeaders(new Response("Forbidden", { status: 403, headers: { "Cache-Control": "no-store" } }), url);
+    }
     // 安全头在这一层统一加，而不是在每个分支里各加一次：
     // 下面有 7 条返回路径，逐个加迟早漏一条，而漏掉的那条不会有任何报错 ——
     // 只是那个端点静默地少了防护。包在唯一入口上，漏不掉。
@@ -176,9 +184,10 @@ async function handleSharePage(request: Request, env: Env): Promise<Response> {
   let meta: ShareMeta | null = null;
   try {
     const response = await fetch(metaURL, {
-      headers: env.BACKEND_INTERNAL_TOKEN
+      headers: backendHeaders(env, env.BACKEND_INTERNAL_TOKEN
         ? { "x-koinote-internal-token": env.BACKEND_INTERNAL_TOKEN }
-        : undefined,
+        : undefined),
+      redirect: "manual",
     });
     if (response.ok) meta = (await response.json()) as ShareMeta;
   } catch {
@@ -256,7 +265,7 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
     env.BACKEND_URL,
   );
 
-  const headers = new Headers(request.headers);
+  const headers = backendHeaders(env, request.headers);
   // 剥掉客户端可伪造的信任头，避免越权
   headers.delete("host");
   headers.delete("x-auth-user-id");
