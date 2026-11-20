@@ -1,0 +1,53 @@
+name: Verify VPS SSH
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_fingerprint:
+        description: Expected SHA256 public-key fingerprint
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'moutsea/koinote' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify deployment key and backend connectivity
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+          EXPECTED_FINGERPRINT: ${{ inputs.expected_fingerprint }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$SSH_KEY" && test -n "$HOST_KEY"
+          [[ "$EXPECTED_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]] || exit 1
+          umask 077
+          key_dir=$(mktemp -d)
+          trap 'rm -rf "$key_dir"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$key_dir/key"
+          printf '%s\n' "$HOST_KEY" > "$key_dir/known_hosts"
+          ssh-keygen -y -f "$key_dir/key" > "$key_dir/key.pub"
+          fingerprint=$(ssh-keygen -lf "$key_dir/key.pub" -E sha256 | awk '{print $2}')
+          # Only the public fingerprint is logged; private material stays in the temp directory.
+          printf 'Deployment key fingerprint: %s\n' "$fingerprint"
+          test "$fingerprint" = "$EXPECTED_FINGERPRINT" || {
+            echo '::error::Deployment key fingerprint does not match the expected key'
+            exit 1
+          }
+          ssh -i "$key_dir/key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$key_dir/known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
+            "root@$HOST" 'set -eu
+              hostname
+              test -d /opt/koinote && test -w /opt/koinote
+              status=$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health)
+              test "$status" = 200
+            '
+          echo 'Deployment SSH and backend health verified'
