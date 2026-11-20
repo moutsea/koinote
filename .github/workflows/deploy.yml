@@ -5,8 +5,8 @@ name: Deploy
 # 为什么用 workflow_run 而不是在 ci.yml 里加个 deploy job：
 # 同一个 workflow 里的 job 只能靠 needs 串联，而 ci.yml 也跑在 pull_request 上 ——
 # 那样得在每个部署步骤上重复 if 条件判断事件类型和分支，漏一个就是"PR 触发了生产
-# 部署"。workflow_run 天然只在指定 workflow 完成后触发，再加一道 conclusion 判断
-# 就够了，条件只写一处。
+# 部署"。workflow_run 能访问生产 Secret，必须同时核对来源事件、仓库、分支及结果；
+# 仅凭分支名和 CI 成功不能信任外部 PR，条件统一放在 job 开始前。
 #
 # 代价是这个文件的改动要先合进 main 才生效（workflow_run 读的是默认分支的定义），
 # 所以调试它没法靠开 PR 看效果。
@@ -24,12 +24,20 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # CI 失败/取消时绝不部署。workflow_run 在 CI 结束就触发，
-    # 不管它是绿是红 —— 少了这条判断等于没有 CI 门禁。
-    if: github.event.workflow_run.conclusion == 'success'
+    # 必须在 checkout 和任何 Secret 注入之前拒绝 PR、fork 及非 main 的运行。
+    if: >-
+      github.repository == 'moutsea/koinote' &&
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     steps:
       # 显式 checkout CI 跑过的那个 commit。
       #
@@ -37,6 +45,7 @@ jobs:
       # 如果期间又有新 push，部署的就不是刚验证过的那份代码。
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: actions/setup-node@v4
