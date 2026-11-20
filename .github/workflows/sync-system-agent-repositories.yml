@@ -71,7 +71,7 @@ jobs:
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile=~/.ssh/repository_sync_known_hosts \
             -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-            "root@$HOST" "sh /opt/koinote/deploy/sync-system-agent-repositories.sh $args"
+            "root@$HOST" "sh /opt/koinote/deploy/sync-system-agent-repositories.sh $args" >/dev/null 2>&1
 
       - name: Remove SSH credentials
         if: always()

@@ -82,7 +82,7 @@ ok(
 );
 ok("LLM API Key 没有进入 SPA 或 Worker", !spaAndWorker.includes("ANNOUNCEMENT_LLM_API_KEY"));
 ok("部署不把提醒翻译密钥列为必需 secret", !/for name in [^\n]*ANNOUNCEMENT_LLM_API_KEY/.test(deployWorkflow));
-ok("部署从 Actions Variable 读取中转地址和模型", deployWorkflow.includes("vars.ANNOUNCEMENT_LLM_BASE_URL") && deployWorkflow.includes("vars.ANNOUNCEMENT_LLM_MODEL"));
+ok("部署从 Secret 读取中转地址、从 Variable 读取模型", deployWorkflow.includes("secrets.ANNOUNCEMENT_LLM_BASE_URL") && deployWorkflow.includes("vars.ANNOUNCEMENT_LLM_MODEL"));
 ok("部署 workflow 不硬编码翻译中转域名", !deployWorkflow.includes("cfjwlpro.com"));
 
 console.log(`announcements: ${passed} passed, ${failed} failed`);

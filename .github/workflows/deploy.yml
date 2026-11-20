@@ -86,18 +86,18 @@ jobs:
           AGENT_GPT_APP_ID: ${{ vars.AGENT_GPT_APP_ID }}
           AGENT_GPT_SIGNING_SECRET: ${{ secrets.AGENT_GPT_SIGNING_SECRET }}
           AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
-          AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
+          AGENT_LLM_BASE_URL: ${{ secrets.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
           AGENT_LLM_THINKING: ${{ vars.AGENT_LLM_THINKING }}
-          WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
+          WECHAT_COVER_IMAGE_BASE_URL: ${{ secrets.WECHAT_COVER_IMAGE_BASE_URL }}
           WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
           WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
-          WECHAT_API_PROXY_URL: ${{ vars.WECHAT_API_PROXY_URL }}
+          WECHAT_API_PROXY_URL: ${{ secrets.WECHAT_API_PROXY_URL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           ANNOUNCEMENT_LLM_API_KEY: ${{ secrets.ANNOUNCEMENT_LLM_API_KEY }}
-          ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
+          ANNOUNCEMENT_LLM_BASE_URL: ${{ secrets.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -179,9 +179,8 @@ jobs:
               --user "$STRIPE_SECRET_KEY:" \
               "https://api.stripe.com/v1/products/$product_id")
             if [ "$status" != "200" ]; then
-              message=$(jq -r '.error.message // "Stripe 商品读取失败"' "$response_file")
               rm -f "$response_file"
-              echo "::error::$label 配置无效：$message"
+              echo "::error::$label 商品校验失败"
               exit 1
             fi
             if ! jq -e --arg product_id "$product_id" \
@@ -204,6 +203,7 @@ jobs:
       - run: npm run build
 
       - name: 准备私有仓库 R2 存储
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -244,6 +244,7 @@ jobs:
           }
 
       - name: 同步后端源码到 VPS
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -262,6 +263,7 @@ jobs:
       # 后端密钥通过 stdin 送到远端，不出现在 SSH 命令参数和日志里。
       # 远端用同目录临时文件原子替换，避免部署中断留下半行或空文件。
       - name: 更新后端密钥、Stripe、Agent、飞书、提醒翻译与 Analytics 配置
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
           BACKEND_INTERNAL_TOKEN: ${{ secrets.BACKEND_INTERNAL_TOKEN }}
@@ -288,20 +290,20 @@ jobs:
           AGENT_GPT_APP_ID: ${{ vars.AGENT_GPT_APP_ID }}
           AGENT_GPT_SIGNING_SECRET: ${{ secrets.AGENT_GPT_SIGNING_SECRET }}
           AGENT_LLM_PROTOCOL: ${{ vars.AGENT_LLM_PROTOCOL }}
-          AGENT_LLM_BASE_URL: ${{ vars.AGENT_LLM_BASE_URL }}
+          AGENT_LLM_BASE_URL: ${{ secrets.AGENT_LLM_BASE_URL }}
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           AGENT_LLM_MODEL: ${{ vars.AGENT_LLM_MODEL }}
           AGENT_LLM_THINKING: ${{ vars.AGENT_LLM_THINKING }}
-          WECHAT_COVER_IMAGE_BASE_URL: ${{ vars.WECHAT_COVER_IMAGE_BASE_URL }}
+          WECHAT_COVER_IMAGE_BASE_URL: ${{ secrets.WECHAT_COVER_IMAGE_BASE_URL }}
           WECHAT_COVER_IMAGE_API_KEY: ${{ secrets.WECHAT_COVER_IMAGE_API_KEY }}
           WECHAT_COVER_IMAGE_MODEL: ${{ vars.WECHAT_COVER_IMAGE_MODEL }}
-          WECHAT_API_PROXY_URL: ${{ vars.WECHAT_API_PROXY_URL }}
+          WECHAT_API_PROXY_URL: ${{ secrets.WECHAT_API_PROXY_URL }}
           BOT_WEBHOOK: ${{ secrets.BOT_WEBHOOK }}
           BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
           ANNOUNCEMENT_LLM_API_KEY: ${{ secrets.ANNOUNCEMENT_LLM_API_KEY }}
-          ANNOUNCEMENT_LLM_BASE_URL: ${{ vars.ANNOUNCEMENT_LLM_BASE_URL }}
+          ANNOUNCEMENT_LLM_BASE_URL: ${{ secrets.ANNOUNCEMENT_LLM_BASE_URL }}
           ANNOUNCEMENT_LLM_MODEL: ${{ vars.ANNOUNCEMENT_LLM_MODEL }}
         run: |
           printf '%s\n' \
@@ -552,6 +554,7 @@ jobs:
               '
 
       - name: 重建并重启后端
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -566,6 +569,7 @@ jobs:
       # 没有这一步，容器起不来时 workflow 照样绿，
       # 而故障要等用户来报
       - name: 验活
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -577,9 +581,6 @@ jobs:
               break
             fi
             if [ "$i" = "30" ]; then
-              echo "后端 30 次探测都没通过（最后一次 HTTP $code），转印容器日志："
-              ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
-                "root@$HOST" 'cd /opt/koinote && docker compose logs --tail=50 backend'
               exit 1
             fi
             sleep 2
@@ -588,6 +589,7 @@ jobs:
       # 可重试的 GitHub 故障由命令记录为 deferred，保留缓存并留待维护任务重试。
       # 凭据、数据库或存储故障仍返回非零退出码，不能用 continue-on-error 忽略。
       - name: 回填 Koi AI 安装兼容性
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
           SYNC_GITHUB_TOKEN: ${{ github.token }}
@@ -622,6 +624,7 @@ jobs:
       # Recreate the file bind mount as well as the origin credential environment.
       # Reloading the old mount after rsync's atomic rename can retain old config.
       - name: 更新源站访问保护
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -636,6 +639,7 @@ jobs:
           REMOTE
 
       - name: 验证仓库 R2 访问
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -649,6 +653,7 @@ jobs:
           REMOTE
 
       - name: 启动并验证数据库异地备份
+        shell: bash .github/scripts/private-deploy-step.sh {0}
         env:
           HOST: ${{ secrets.VPS_HOST }}
         run: |
@@ -671,9 +676,6 @@ jobs:
               break
             fi
             if [ "$i" = "60" ]; then
-              echo "数据库备份容器未进入 healthy（最后状态: $status）"
-              ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts \
-                "root@$HOST" 'cd /opt/koinote && docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 database-backup'
               exit 1
             fi
             sleep 5

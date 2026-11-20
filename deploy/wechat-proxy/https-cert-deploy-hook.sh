@@ -3,7 +3,10 @@
 # successful issuance/renewal of the relay's IP-address certificate.
 set -eu
 
-lineage=/etc/letsencrypt/live/122.51.97.242
+lineage=/etc/letsencrypt/live/koinote-wechat-relay
+if [ -f /etc/koinote/wechat-relay/cert-lineage ]; then
+    IFS= read -r lineage < /etc/koinote/wechat-relay/cert-lineage
+fi
 [ "${RENEWED_LINEAGE:-}" = "$lineage" ] || exit 0
 
 target=/etc/koinote/wechat-relay

@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/ssh -N -T -i /etc/koinote/wechat-relay/relay_key -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/koinote/wechat-relay/known_hosts -o IdentitiesOnly=yes -L 172.18.0.1:18080:127.0.0.1:18080 root@122.51.97.242
+EnvironmentFile=/etc/koinote/wechat-relay/tunnel.env
+ExecStart=/usr/bin/ssh -N -T -i /etc/koinote/wechat-relay/relay_key -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/koinote/wechat-relay/known_hosts -o IdentitiesOnly=yes -L 172.18.0.1:18080:127.0.0.1:18080 ${WECHAT_RELAY_SSH_TARGET}
 Restart=always
 RestartSec=5s
 User=root
