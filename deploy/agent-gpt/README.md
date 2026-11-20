@@ -1,4 +1,12 @@
-# Koi task constraint parsing patch
+# Coordinated Koi Agent fixes
+
+## Executor connection recovery (2026-11-20)
+
+`executor-connection-recovery.patch` fixes the VPS executor staying alive after its control WebSocket stops making progress, including a stuck shutdown. It adds six process-level connection regressions and preserves leased-work handling and normal reconnect backoff. This updates the executor client only; it does not redeploy the shared Worker or rebuild the Sandbox image. Runtime files, production checks and validation boundaries are recorded in [the recovery report](../../docs/KOI_AI_EXECUTOR_RECOVERY.zh.md).
+
+Before installing a VPS client from a Worker source archive, check the live client SHA and the executor-specific release recorded in `~/.config/agent-gpt/production/release-state.json`. A Worker archive may contain an older VPS client. Preserve this recovery fix when merging later executor changes.
+
+## Task constraint parsing
 
 `task-constraint-scope.patch` contains the Agent service change required by Koinote 1.1.25, including its regression test. It projects persisted constraints into the interpreter’s internal scope schema without changing persisted state, authorization or billing.
 
@@ -23,3 +31,5 @@ The Koinote fixture `TestAgentCoverConversationContext` exports the host envelop
 The no-cover-capability counterfactual still produced unnecessary clarification even with the core changes. Do not describe the patch as a complete solution to general context understanding. The supported cover workflow and genuine-ambiguity control passed real-model replay; prompt-only or capability-free replay did not consistently pass.
 
 Deployed on 2026-11-17 as `e507c4d6-bc94-4491-82f6-81ca2bda7b7e`, based on the live-verified `23ecf95f-9a1c-4e50-85e6-c5e87540d207` archive. Only `src/core/agent.ts`, `src/core/task-session.ts` and their two regression files changed. The existing recovery test now distinguishes intent interpretation from operation/response review when checking the application contract. Validation: 116 files / 1,836 tests passed, one skipped, plus 25 paired host contracts, configuration/types and VPS/script checks. The baseline archive omits admin sources; its compiled admin assets were preserved byte-for-byte rather than rebuilt. Health returned 200; readiness returned the same pre-existing 503 before and after this release. Source, bundle, checks and the updated shared manifest are archived under the new version directory. See `docs/KOI_AI_COVER_APPLICATION.zh.md` for Koinote 1.1.28 production checks and remaining limitations. Always re-query production before preparing any later release.
+
+The readiness failure recorded above was resolved on 2026-11-20 by the executor-only recovery release described at the top of this file. The Worker version remains unchanged.
