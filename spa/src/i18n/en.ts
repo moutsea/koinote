@@ -1,3 +1,4 @@
+import { WECHAT_CLOUD_EGRESS_IP } from "../wechatEgress";
 import type { Messages } from "./types";
 import { agentWorkspace } from "./agentWorkspace";
 
@@ -382,7 +383,7 @@ export const en: Messages = {
     prerequisites: [
       "One or more verified WeChat Official Accounts with access to draft and material APIs.",
       "The account's AppID and AppSecret. Enter the AppSecret only in Koinote's binding form; never send it in chat or feedback.",
-      "Koinote Cloud's current WeChat API egress IP is 122.51.97.242; self-hosted deployments should use the server's public egress address.",
+      `Koinote Cloud's current WeChat API egress IP is ${WECHAT_CLOUD_EGRESS_IP}; self-hosted deployments should use the server's public egress address.`,
       "A signed-in Koinote Lifetime member account; binding, cover generation, and draft delivery are available to paid members. Desktop local mode cannot connect to WeChat or generate covers.",
     ],
     platformTitle: "Configure the WeChat developer platform",
@@ -399,7 +400,7 @@ export const en: Messages = {
       },
       {
         title: "Add the IP allowlist entry",
-        desc: "For Koinote Cloud, add 122.51.97.242 (the WeChat API egress IP); self-hosted deployments should add their server's public egress IP. Enter one address per line when required by WeChat.",
+        desc: `For Koinote Cloud, add ${WECHAT_CLOUD_EGRESS_IP} (the WeChat API egress IP); self-hosted deployments should add their server's public egress IP. Enter one address per line when required by WeChat.`,
       },
       {
         title: "Prepare developer credentials",
@@ -409,10 +410,10 @@ export const en: Messages = {
     platformScreenshotAlt:
       "Example of the API IP allowlist in the WeChat developer platform",
     platformScreenshotCaption:
-      "Example: add Koinote Cloud's egress IP, 122.51.97.242, to the API IP allowlist.",
+      "Interface example: the IP shown in the screenshot is illustrative. Use the current egress IP in the instructions above.",
     ipTitle: "Why is the IP allowlist required?",
     ipBody:
-      "WeChat verifies the server making each API request. Koinote calls WeChat only from its backend, so the allowlist must contain the server's egress IP—not your computer's IP. For Koinote Cloud, use 122.51.97.242; self-hosted deployments should use their server's public egress address.",
+      `WeChat verifies the server making each API request. Koinote calls WeChat only from its backend, so the allowlist must contain the server's egress IP—not your computer's IP. For Koinote Cloud, use ${WECHAT_CLOUD_EGRESS_IP}; self-hosted deployments should use their server's public egress address.`,
     koinoteTitle: "Bind and push from Koinote",
     koinoteIntro:
       "Once the WeChat settings are ready, bind the account in Koinote and save an article as a draft from the editor. Koinote never publishes the article directly, so you can review it in WeChat first.",
@@ -431,7 +432,7 @@ export const en: Messages = {
       {
         problem: "The backend IP is not allowlisted",
         solution:
-          "Return to API management on the WeChat developer platform. Koinote Cloud uses 122.51.97.242; self-hosted deployments should add their server's public egress IP, not the local computer address.",
+          `Return to API management on the WeChat developer platform. Koinote Cloud uses ${WECHAT_CLOUD_EGRESS_IP}; self-hosted deployments should add their server's public egress IP, not the local computer address.`,
       },
       {
         problem: "The account lacks API access",

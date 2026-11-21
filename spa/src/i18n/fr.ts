@@ -1,3 +1,4 @@
+import { WECHAT_CLOUD_EGRESS_IP } from "../wechatEgress";
 import type { Messages } from "./types";
 import { agentWorkspaceFr } from "./agentWorkspace";
 
@@ -386,7 +387,7 @@ export const fr: Messages = {
     prerequisites: [
       "Un ou plusieurs comptes officiels WeChat vérifiés, avec accès aux API de brouillons et de médias.",
       "L’AppID et l’AppSecret du compte. Saisissez l’AppSecret uniquement dans le formulaire Koinote ; ne l’envoyez jamais par chat ou commentaire.",
-      "L’IP actuelle de sortie de l’API WeChat de Koinote Cloud est 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
+      `L’IP actuelle de sortie de l’API WeChat de Koinote Cloud est ${WECHAT_CLOUD_EGRESS_IP} ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.`,
       "Un compte Koinote connecté avec un abonnement à vie ; l’association, la génération de couverture et l’envoi de brouillons sont disponibles pour les membres payants. Le mode local du bureau ne peut pas contacter WeChat ni générer de couverture.",
     ],
     platformTitle: "Configurer la plateforme développeur WeChat",
@@ -403,7 +404,7 @@ export const fr: Messages = {
       },
       {
         title: "Ajouter l’IP à la liste blanche",
-        desc: "Pour Koinote Cloud, ajoutez 122.51.97.242 (IP de sortie de l’API WeChat) ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur. Saisissez une adresse par ligne si WeChat le demande.",
+        desc: `Pour Koinote Cloud, ajoutez ${WECHAT_CLOUD_EGRESS_IP} (IP de sortie de l’API WeChat) ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur. Saisissez une adresse par ligne si WeChat le demande.`,
       },
       {
         title: "Préparer les identifiants",
@@ -413,10 +414,10 @@ export const fr: Messages = {
     platformScreenshotAlt:
       "Exemple de liste blanche IP des API sur la plateforme développeur WeChat",
     platformScreenshotCaption:
-      "Exemple : ajoutez l’IP de sortie de Koinote Cloud, 122.51.97.242, à la liste blanche des API.",
+      "Exemple d’interface : l’IP de la capture est illustrative. Utilisez l’IP de sortie actuelle indiquée ci-dessus.",
     ipTitle: "Pourquoi l’IP de sortie est-elle nécessaire ?",
     ipBody:
-      "WeChat vérifie le serveur qui effectue chaque requête API. Koinote appelle WeChat uniquement depuis son backend : la liste blanche doit donc contenir l’IP de sortie du serveur, pas celle de votre ordinateur. Pour Koinote Cloud, utilisez 122.51.97.242 ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.",
+      `WeChat vérifie le serveur qui effectue chaque requête API. Koinote appelle WeChat uniquement depuis son backend : la liste blanche doit donc contenir l’IP de sortie du serveur, pas celle de votre ordinateur. Pour Koinote Cloud, utilisez ${WECHAT_CLOUD_EGRESS_IP} ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.`,
     koinoteTitle: "Associer et envoyer depuis Koinote",
     koinoteIntro:
       "Une fois les réglages WeChat terminés, associez le compte dans Koinote et enregistrez l’article comme brouillon depuis l’éditeur. Koinote ne publie jamais directement l’article : vous pouvez le vérifier dans WeChat avant publication.",
@@ -435,7 +436,7 @@ export const fr: Messages = {
       {
         problem: "L’IP du backend n’est pas autorisée",
         solution:
-          "Retournez dans la gestion des API de la plateforme développeur WeChat. Koinote Cloud utilise 122.51.97.242 ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur, pas celle de votre ordinateur.",
+          `Retournez dans la gestion des API de la plateforme développeur WeChat. Koinote Cloud utilise ${WECHAT_CLOUD_EGRESS_IP} ; en auto-hébergement, ajoutez l’IP publique de sortie du serveur, pas celle de votre ordinateur.`,
       },
       {
         problem: "Le compte n’a pas accès aux API",

@@ -1,3 +1,4 @@
+import { WECHAT_CLOUD_EGRESS_IP } from "../wechatEgress";
 import type { Messages } from "./types";
 import { agentWorkspaceZh } from "./agentWorkspace";
 
@@ -379,7 +380,7 @@ export const zh: Messages = {
     prerequisites: [
       "一个或多个已认证的微信公众号，并确认每个账号都可以使用草稿和素材接口。",
       "公众号后台的 AppID 和 AppSecret。AppSecret 只应交给 Koinote 的绑定表单，不要发到聊天或反馈中。",
-      "Koinote 云端服务当前的微信 API 出口 IP 是 122.51.97.242；自部署用户填写服务器访问微信时使用的公网出口 IP。",
+      `Koinote 云端服务当前的微信 API 出口 IP 是 ${WECHAT_CLOUD_EGRESS_IP}；自部署用户填写服务器访问微信时使用的公网出口 IP。`,
       "已登录的 Koinote 终生会员账号；绑定、封面生成和草稿推送对付费会员开放，桌面端本地模式不能连接微信或生成封面。",
     ],
     platformTitle: "在微信开发者平台配置",
@@ -396,7 +397,7 @@ export const zh: Messages = {
       },
       {
         title: "添加 IP 白名单",
-        desc: "Koinote 云端服务请填写 122.51.97.242（微信 API 出口 IP）；自部署用户填写自己的服务器公网出口 IP。多个地址按微信后台要求逐行填写。",
+        desc: `Koinote 云端服务请填写 ${WECHAT_CLOUD_EGRESS_IP}（微信 API 出口 IP）；自部署用户填写自己的服务器公网出口 IP。多个地址按微信后台要求逐行填写。`,
       },
       {
         title: "准备开发者凭据",
@@ -405,10 +406,10 @@ export const zh: Messages = {
     ],
     platformScreenshotAlt: "微信公众号开发者平台中的 API IP 白名单设置示例",
     platformScreenshotCaption:
-      "示例：在开发者平台的 API IP 白名单中添加 Koinote 云端出口 IP 122.51.97.242。",
+      "界面示意：截图中的 IP 仅为示例，请按上方说明填写当前出口 IP。",
     ipTitle: "为什么必须设置 IP 白名单？",
     ipBody:
-      "微信会校验调用接口的服务器来源。Koinote 只在服务端请求微信，因此白名单里要填服务端出口 IP，而不是你当前电脑的 IP。Koinote 云端服务当前请填写 122.51.97.242；自部署时填写服务器的公网出口地址。",
+      `微信会校验调用接口的服务器来源。Koinote 只在服务端请求微信，因此白名单里要填服务端出口 IP，而不是你当前电脑的 IP。Koinote 云端服务当前请填写 ${WECHAT_CLOUD_EGRESS_IP}；自部署时填写服务器的公网出口地址。`,
     koinoteTitle: "在 Koinote 中绑定并推送",
     koinoteIntro:
       "微信侧配置完成后，接下来在 Koinote 绑定账号，并从编辑器把文章保存为草稿。整个流程不会直接发布文章，你仍可在公众号后台检查后再发布。",
@@ -427,7 +428,7 @@ export const zh: Messages = {
       {
         problem: "后端出口 IP 不在白名单",
         solution:
-          "回到微信开发者平台的开发接口管理；Koinote 云端服务填写 122.51.97.242，自部署填写服务器公网出口 IP，不要填写本机地址。",
+          `回到微信开发者平台的开发接口管理；Koinote 云端服务填写 ${WECHAT_CLOUD_EGRESS_IP}，自部署填写服务器公网出口 IP，不要填写本机地址。`,
       },
       {
         problem: "公众号没有接口权限",

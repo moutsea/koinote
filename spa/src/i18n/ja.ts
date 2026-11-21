@@ -1,3 +1,4 @@
+import { WECHAT_CLOUD_EGRESS_IP } from "../wechatEgress";
 import type { Messages } from "./types";
 import { agentWorkspaceJa } from "./agentWorkspace";
 
@@ -380,7 +381,7 @@ export const ja: Messages = {
     prerequisites: [
       "下書き・素材 API を利用できる、認証済みの WeChat 公式アカウント（1 件以上）。",
       "アカウントの AppID と AppSecret。AppSecret は Koinote の連携フォームだけに入力し、チャットやフィードバックには送らないでください。",
-      "Koinote Cloud の現在の WeChat API 送信元 IP は 122.51.97.242 です。セルフホストではサーバーの公開送信元アドレスを使います。",
+      `Koinote Cloud の現在の WeChat API 送信元 IP は ${WECHAT_CLOUD_EGRESS_IP} です。セルフホストではサーバーの公開送信元アドレスを使います。`,
       "ログイン済みの Koinote 永久会員アカウント。連携、カバー生成、下書き送信は有料会員が利用できます。デスクトップのローカルモードでは WeChat 接続やカバー生成はできません。",
     ],
     platformTitle: "WeChat 開発者プラットフォームを設定する",
@@ -397,7 +398,7 @@ export const ja: Messages = {
       },
       {
         title: "IP ホワイトリストに追加",
-        desc: "Koinote Cloud は 122.51.97.242（WeChat API の送信元 IP）を追加します。セルフホストではサーバーの公開送信元 IP を追加してください。複数の場合は WeChat の形式に従って入力します。",
+        desc: `Koinote Cloud は ${WECHAT_CLOUD_EGRESS_IP}（WeChat API の送信元 IP）を追加します。セルフホストではサーバーの公開送信元 IP を追加してください。複数の場合は WeChat の形式に従って入力します。`,
       },
       {
         title: "開発者情報を準備",
@@ -407,10 +408,10 @@ export const ja: Messages = {
     platformScreenshotAlt:
       "WeChat 開発者プラットフォームの API IP ホワイトリスト設定例",
     platformScreenshotCaption:
-      "例：Koinote Cloud の送信元 IP 122.51.97.242 を API IP ホワイトリストに追加します。",
+      "画面の例です。画像内の IP は例示用のため、上の説明にある現在の送信元 IP を登録してください。",
     ipTitle: "なぜ IP ホワイトリストが必要ですか？",
     ipBody:
-      "WeChat は API リクエストを行うサーバーを検証します。Koinote はバックエンドからのみ WeChat を呼び出すため、登録するのはパソコンの IP ではなくサーバーの送信元 IP です。Koinote Cloud は 122.51.97.242、セルフホストではサーバーの公開送信元アドレスを登録してください。",
+      `WeChat は API リクエストを行うサーバーを検証します。Koinote はバックエンドからのみ WeChat を呼び出すため、登録するのはパソコンの IP ではなくサーバーの送信元 IP です。Koinote Cloud は ${WECHAT_CLOUD_EGRESS_IP}、セルフホストではサーバーの公開送信元アドレスを登録してください。`,
     koinoteTitle: "Koinote で連携して送信する",
     koinoteIntro:
       "WeChat 側の設定が終わったら、Koinote でアカウントを連携し、エディターから記事を下書きとして保存します。Koinote が直接公開することはないため、WeChat 側で内容を確認してから公開できます。",
@@ -429,7 +430,7 @@ export const ja: Messages = {
       {
         problem: "バックエンドの IP が許可されていない",
         solution:
-          "WeChat 開発者プラットフォームの開発インターフェース管理に戻り、Koinote Cloud は 122.51.97.242、セルフホストはサーバーの公開送信元 IP を追加してください。ローカル PC のアドレスは使用しません。",
+          `WeChat 開発者プラットフォームの開発インターフェース管理に戻り、Koinote Cloud は ${WECHAT_CLOUD_EGRESS_IP}、セルフホストはサーバーの公開送信元 IP を追加してください。ローカル PC のアドレスは使用しません。`,
       },
       {
         problem: "アカウントに API 権限がない",

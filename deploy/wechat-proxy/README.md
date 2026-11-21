@@ -10,12 +10,21 @@ Run `GO111MODULE=off go test -race ./deploy/wechat-proxy` from the repository ro
 deploying a proxy change. The relay binary and `koinote-wechat-proxy` systemd service must
 be updated separately from the main backend deployment; keep the previous binary for rollback.
 
-The original production path used the checked-in SSH tunnel unit: the proxy
-listened on the relay's loopback address and the Koinote Docker host forwarded
+The current production path uses the checked-in SSH tunnel unit: the proxy
+listens on the relay's loopback address and the Koinote Docker host forwards
 `172.18.0.1:18080` to it. Set WECHAT_RELAY_SSH_TARGET=user@host in the root-owned
-/etc/koinote/wechat-relay/tunnel.env before installing or upgrading that unit. WireGuard was planned, but the relay provider did
-not pass UDP 51820. Production now uses the direct HTTPS listener on port
-18443; the SSH tunnel remains available for rollback.
+/etc/koinote/wechat-relay/tunnel.env before installing or upgrading that unit.
+The 2026-11-21 relay migration uses a dedicated SSH key and pinned host key;
+the relay listener is not exposed publicly. WireGuard was previously planned,
+but the former relay provider did not pass UDP 51820. The direct HTTPS listener
+on port 18443 described below is an alternative deployment, not the current route.
+
+When changing the relay, update the private tunnel target, host key, restricted
+client-key authorization, and each linked Official Account's API IP allowlist.
+Keep the production `.env` and GitHub `WECHAT_API_PROXY_URL` Secret consistent.
+An unauthenticated API probe verifies connectivity, not access-token permission
+or successful draft creation. See the [migration record](../../docs/WECHAT_RELAY_MIGRATION.zh.md)
+for the current migration's validation and remaining checks.
 
 ## Direct HTTPS relay
 
