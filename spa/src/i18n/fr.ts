@@ -412,9 +412,9 @@ export const fr: Messages = {
       },
     ],
     platformScreenshotAlt:
-      "Exemple de liste blanche IP des API sur la plateforme développeur WeChat",
+      "Liste blanche IP des API sur la page des clés de développement WeChat",
     platformScreenshotCaption:
-      "Exemple d’interface : l’IP de la capture est illustrative. Utilisez l’IP de sortie actuelle indiquée ci-dessus.",
+      `IP de sortie WeChat actuelle de Koinote : ${WECHAT_CLOUD_EGRESS_IP}. Ajoutez-la à la liste blanche des API de chaque compte officiel associé.`,
     ipTitle: "Pourquoi l’IP de sortie est-elle nécessaire ?",
     ipBody:
       `WeChat vérifie le serveur qui effectue chaque requête API. Koinote appelle WeChat uniquement depuis son backend : la liste blanche doit donc contenir l’IP de sortie du serveur, pas celle de votre ordinateur. Pour Koinote Cloud, utilisez ${WECHAT_CLOUD_EGRESS_IP} ; en auto-hébergement, utilisez l’adresse publique de sortie du serveur.`,

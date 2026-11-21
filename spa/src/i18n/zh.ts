@@ -404,9 +404,9 @@ export const zh: Messages = {
         desc: "复制 AppID，并生成或复制 AppSecret。微信可能只展示一次，请先保存在密码管理器中。",
       },
     ],
-    platformScreenshotAlt: "微信公众号开发者平台中的 API IP 白名单设置示例",
+    platformScreenshotAlt: "微信公众号开发密钥页面中的 API IP 白名单",
     platformScreenshotCaption:
-      "界面示意：截图中的 IP 仅为示例，请按上方说明填写当前出口 IP。",
+      `当前 Koinote 微信出口 IP：${WECHAT_CLOUD_EGRESS_IP}。请为每个绑定公众号分别添加到 API IP 白名单。`,
     ipTitle: "为什么必须设置 IP 白名单？",
     ipBody:
       `微信会校验调用接口的服务器来源。Koinote 只在服务端请求微信，因此白名单里要填服务端出口 IP，而不是你当前电脑的 IP。Koinote 云端服务当前请填写 ${WECHAT_CLOUD_EGRESS_IP}；自部署时填写服务器的公网出口地址。`,

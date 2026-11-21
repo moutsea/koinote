@@ -4,7 +4,7 @@ import { InkClouds, PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useI18n } from "../i18n";
 
-const PLATFORM_SCREENSHOT = "/docs/wechat-platform-ip-allowlist.png";
+const PLATFORM_SCREENSHOT = "/docs/wechat-platform-ip-allowlist-20261121.png";
 
 export function WechatOfficialAccountGuidePage() {
   const { t } = useI18n();

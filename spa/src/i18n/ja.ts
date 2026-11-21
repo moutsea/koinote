@@ -406,9 +406,9 @@ export const ja: Messages = {
       },
     ],
     platformScreenshotAlt:
-      "WeChat 開発者プラットフォームの API IP ホワイトリスト設定例",
+      "WeChat 開発キー画面の API IP ホワイトリスト",
     platformScreenshotCaption:
-      "画面の例です。画像内の IP は例示用のため、上の説明にある現在の送信元 IP を登録してください。",
+      `Koinote の現在の WeChat 送信元 IP：${WECHAT_CLOUD_EGRESS_IP}。連携する各公式アカウントの API IP ホワイトリストに追加してください。`,
     ipTitle: "なぜ IP ホワイトリストが必要ですか？",
     ipBody:
       `WeChat は API リクエストを行うサーバーを検証します。Koinote はバックエンドからのみ WeChat を呼び出すため、登録するのはパソコンの IP ではなくサーバーの送信元 IP です。Koinote Cloud は ${WECHAT_CLOUD_EGRESS_IP}、セルフホストではサーバーの公開送信元アドレスを登録してください。`,

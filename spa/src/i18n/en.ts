@@ -408,9 +408,9 @@ export const en: Messages = {
       },
     ],
     platformScreenshotAlt:
-      "Example of the API IP allowlist in the WeChat developer platform",
+      "API IP allowlist on the WeChat developer credentials page",
     platformScreenshotCaption:
-      "Interface example: the IP shown in the screenshot is illustrative. Use the current egress IP in the instructions above.",
+      `Current Koinote WeChat egress IP: ${WECHAT_CLOUD_EGRESS_IP}. Add it to the API IP allowlist for each linked Official Account.`,
     ipTitle: "Why is the IP allowlist required?",
     ipBody:
       `WeChat verifies the server making each API request. Koinote calls WeChat only from its backend, so the allowlist must contain the server's egress IP—not your computer's IP. For Koinote Cloud, use ${WECHAT_CLOUD_EGRESS_IP}; self-hosted deployments should use their server's public egress address.`,
