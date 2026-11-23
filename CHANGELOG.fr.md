@@ -4,6 +4,25 @@ Ce fichier présente les changements de Koinote les plus utiles aux utilisateurs
 
 ## [Unreleased]
 
+## [1.1.29] - 2026-11-23
+
+### Added
+
+- Les imports continuent lorsque vous changez de page et peuvent reprendre après une interruption sans recréer les documents déjà importés. Un import s’arrête automatiquement si le compte connecté change, afin de ne rien écrire dans un autre compte.
+
+### Changed
+
+- Les images supprimées pendant la modification sont conservées 30 minutes : annuler ou les coller à nouveau suffit à les restaurer. Si l’enregistrement échoue de façon répétée, l’éditeur en affiche la raison.
+- Chaque compte dispose d’une limite de documents (10 000 par défaut, corbeille incluse) et de dossiers (1 000 par défaut) dans le cloud, avec des conseils de nettoyage lorsqu’elle est atteinte. L’application de bureau ne met en attente que les éléments concernés et continue de synchroniser les autres modifications.
+- Une page partagée très sollicitée affiche désormais une invitation à réessayer au lieu d’indiquer que le contenu n’existe pas.
+
+### Fixed
+
+- Sur l’application de bureau, vider le cache d’images ne supprime plus les originaux que le cloud n’a pas encore confirmés, et les images dont le délai d’envoi a expiré sont renvoyées depuis l’original local.
+- La synchronisation de bureau ne considère plus les images envoyées anciennement comme manquantes et ne les renvoie plus.
+- Les sauvegardes locales des brouillons non enregistrés sont séparées par compte : la déconnexion n’efface que celles du compte concerné, et changer de compte n’affiche plus le contenu en cache du compte précédent.
+- Un envoi d’image interrompu libère l’espace réservé, et les images déjà envoyées restent visibles pendant la maintenance du serveur.
+
 ## [1.1.28] - 2026-11-17
 
 ### Added

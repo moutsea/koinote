@@ -6,6 +6,25 @@ Notable user-facing changes to Koinote are recorded here. The project follows
 
 ## [Unreleased]
 
+## [1.1.29] - 2026-11-23
+
+### Added
+
+- Imports keep running when you switch pages and can resume after an interruption without creating already-imported documents again. An import stops automatically if the signed-in account changes, so nothing is written to another account.
+
+### Changed
+
+- Images removed while editing are kept for 30 minutes, so undo or pasting them again restores them. When saving keeps failing, the editor shows the reason.
+- Each account has a limit on cloud documents (10,000 by default, including trash) and folders (1,000 by default), with guidance on cleaning up when it is reached. The desktop app defers only the affected items and keeps syncing other changes.
+- A busy shared page now shows a retry prompt instead of reporting that the content does not exist.
+
+### Fixed
+
+- On desktop, clearing the image cache no longer removes original images that the cloud has not yet confirmed, and images whose upload period expired are uploaded again from the local original.
+- Desktop sync no longer treats early uploaded images as missing or uploads them again.
+- Local backups of unsaved drafts are kept per account: signing out clears only that account's backups, and switching accounts no longer shows the previous account's cached content.
+- A failed image upload releases the storage it reserved, and uploaded images stay visible during backend maintenance.
+
 ## [1.1.28] - 2026-11-17
 
 ### Added
