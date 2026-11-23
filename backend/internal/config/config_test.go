@@ -6,6 +6,32 @@ import (
 	"testing"
 )
 
+func TestFolderCountLimitConfig(t *testing.T) {
+	for _, raw := range []string{"", "0", "-1", "oops", "1000001"} {
+		t.Setenv("FOLDER_COUNT_LIMIT", raw)
+		if got := folderCountLimit(); got != DefaultFolderCountLimit {
+			t.Fatalf("%q: %d", raw, got)
+		}
+	}
+	t.Setenv("FOLDER_COUNT_LIMIT", "42")
+	if got := folderCountLimit(); got != 42 {
+		t.Fatalf("configured folder limit: %d", got)
+	}
+}
+
+func TestDocumentCountLimitConfig(t *testing.T) {
+	for _, raw := range []string{"", "0", "-1", "not-a-number", "1000001"} {
+		t.Setenv("DOCUMENT_COUNT_LIMIT", raw)
+		if got := documentCountLimit(); got != DefaultDocumentCountLimit {
+			t.Fatalf("invalid count limit %q disabled protection: %d", raw, got)
+		}
+	}
+	t.Setenv("DOCUMENT_COUNT_LIMIT", "25")
+	if got := documentCountLimit(); got != 25 {
+		t.Fatal(got)
+	}
+}
+
 // chdir 切到临时目录并在测试结束后自动切回。
 func chdir(t *testing.T, dir string) {
 	t.Helper()

@@ -90,12 +90,8 @@ ok(
   /catch\s*\([^)]*\)\s*\{[\s\S]{0,1200}["']failed["'][\s\S]{0,500}return false/.test(bareSaver),
   "失败不能被吞成成功",
 );
-ok(
-  "所有保存异常都会保留本地草稿",
-  /catch\s*\([^)]*\)\s*\{[\s\S]{0,650}storeConflictDraft\([\s\S]{0,120}current\.pending,[\s\S]{0,120}revisionConflict/.test(bareSaver) &&
-    /const storeConflictDraft[\s\S]{0,650}localStorage\.setItem[\s\S]{0,180}JSON\.stringify\(draft\)/.test(bareSaver),
-  "数据库或网络失败后刷新页面也不能静默丢掉本地内容",
-);
+// Conflict and ordinary-error recovery are verified by _check_draft_recovery.mjs.
+
 ok(
   "恢复草稿显式区分冲突与普通保存失败",
   /const draft = \{ \.\.\.snapshot, conflict \}/.test(bareSaver) &&
@@ -109,21 +105,10 @@ ok(
   /conflicted\s*=\s*parsed\.conflict !== false/.test(bareSaver),
   "旧版本只在 revision 冲突时写草稿，缺少字段不能降级成普通失败",
 );
-ok(
-  "备份写入失败会删除可能过期的旧草稿",
-  /catch\s*\{[\s\S]{0,180}lastStoredDrafts\.current\.delete\(docId\)[\s\S]{0,120}clearConflictDraft\(docId\)/.test(bareSaver),
-  "QuotaExceededError 后不能在刷新时恢复更旧的正文",
-);
-ok(
-  "相同恢复草稿不会重复同步写入",
-  /sameStoredDraft\(previous, draft\)[\s\S]{0,180}localStorage\.getItem\(key\) !== null[\s\S]{0,80}return true[\s\S]{0,300}JSON\.stringify\(draft\)/.test(bareSaver),
-  "持续离线编辑时不应为同一快照反复 stringify 和 setItem",
-);
-ok(
-  "内存去重前确认 localStorage 草稿仍存在",
-  /sameStoredDraft\(previous, draft\)[\s\S]{0,180}localStorage\.getItem\(key\) !== null/.test(bareSaver),
-  "其他标签页登出或浏览器回收存储后必须重新写入草稿",
-);
+// Backup failure semantics are exercised by _check_draft_recovery.mjs.
+
+// Backup deduplication and cross-tab ownership are covered by behavioral tests.
+
 ok(
   "草稿备份结果会决定恢复提示",
   /const backedUp\s*=\s*storeConflictDraft[\s\S]{0,500}backedUp[\s\S]{0,120}["']backed-up["'][\s\S]{0,120}["']failed["']/.test(bareSaver),
@@ -157,8 +142,10 @@ ok(
 );
 ok(
   "保存失败提示同时说明备份结果",
-  /`\$\{t\.editor\.saveFailed\} · \$\{t\.editor\.saveFailedBackedUp\}`/.test(bareMarkdownEditor) &&
-    /`\$\{t\.editor\.saveFailed\} · \$\{t\.editor\.saveBackupFailed\}`/.test(bareMarkdownEditor),
+  /`\$\{t\.editor\.saveFailed\}\$\{saveFailureDetail\} · \$\{t\.editor\.saveFailedBackedUp\}`/.test(bareMarkdownEditor) &&
+    /`\$\{t\.editor\.saveFailed\}\$\{saveFailureDetail\} · \$\{t\.editor\.saveBackupFailed\}`/.test(bareMarkdownEditor) &&
+    // The optional server reason is appended; it never replaces "save failed".
+    /saveFailureReason = saveErrorCode && t\.errors\[saveErrorCode\]/.test(bareMarkdownEditor),
   "只有“草稿已备份”会掩盖真正的保存失败",
 );
 ok(
@@ -176,15 +163,8 @@ ok(
   /const acceptRemote[\s\S]{0,1000}clearStoredDraft\(docId\)/.test(bareSaver),
   "用户解决冲突后不应在下次刷新重新进入冲突状态",
 );
-ok(
-  "登出会清除所有冲突草稿",
-  /const clearClientSession[\s\S]{0,240}clearAllConflictDrafts\(\)/.test(auth) &&
-    /if \(isDesktopRuntime\(\)\)[\s\S]{0,300}await apiLogout\(\)[\s\S]{0,300}finally[\s\S]{0,180}clearClientSession\(\)/.test(auth) &&
-    /await apiLogout\(\);[\s\S]{0,100}clearClientSession\(\)/.test(auth) &&
-    /CONFLICT_DRAFT_PREFIX\s*=\s*["']koinote:conflict-draft:["']/.test(conflictDrafts) &&
-    /localStorage\.removeItem\(key\)/.test(conflictDrafts),
-  "完整正文不应在账号退出后继续留在共用设备上",
-);
+// Draft ownership and logout cleanup are exercised with real storage semantics
+// in _check_draft_recovery.mjs, rather than inferred from source text.
 ok(
   "编辑器等待冲突草稿恢复后再挂载",
   /seededDocId\s*===\s*docId/.test(bareLiveEditor) &&

@@ -52,6 +52,9 @@ func (a *App) agentUser(ctx context.Context, id int) (model.User, error) {
 	return u, err
 }
 func agentError(w http.ResponseWriter, err error) {
+	if writeDocumentCreateLimitError(w, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, errDocumentQuotaExceeded):
 		httpx.ErrorCode(w, 409, "storage_quota_exceeded", "云端空间不足，请清理会话或扩容后重试")

@@ -1,7 +1,8 @@
+import { useDocumentImport } from "../useDocumentImport";
+import { ImportRecoveryActions } from "../components/ImportRecoveryActions";
 import { DesktopAccountMismatchError } from "../desktop/sessionErrors";
 import { DesktopSessionError } from "../components/DesktopSessionError";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CloudOff,
@@ -22,10 +23,7 @@ import { DocumentTemplateDialog } from "../components/DocumentTemplateDialog";
 import { PaperCard } from "../components/Ink";
 import { PageContainer } from "../components/PageContainer";
 import { useCreateDocument, useDocumentList } from "../documents";
-import {
-  getImportErrorMessage,
-  importDocumentsFromFiles,
-} from "../documentTransfer";
+import { getImportErrorMessage } from "../documentTransfer";
 import { IMPORT_FILE_ACCEPT } from "../documentTransferCore";
 import {
   desktopClearRemoteImageCache,
@@ -52,15 +50,15 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function DesktopHomePage() {
   const session = useSession();
+  const importer = useDocumentImport();
   const user = session.data?.user;
   const localMode = Boolean(user?.isLocalMode);
   const documents = useDocumentList(Boolean(user));
   const create = useCreateDocument();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { locale, t } = useI18n();
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [importing, setImporting] = useState(false);
+  const importing = importer.busy;
   const [importNotice, setImportNotice] = useState<{ error: boolean; message: string } | null>(null);
   const [imageCache, setImageCache] = useState<DesktopImageCacheSummary | null>(null);
   const [clearingImageCache, setClearingImageCache] = useState(false);
@@ -137,36 +135,16 @@ export function DesktopHomePage() {
     });
   }
 
-  async function importDocuments(files: File[]) {
-    if (files.length === 0) return;
-    setImporting(true);
+  async function importDocuments(files?: File[]) {
+    if (importing || (files && (files.length === 0 || importer.blocked))) return;
     setImportNotice(null);
     try {
-      const result = await importDocumentsFromFiles(files);
-      const success = interpolate(t.transfer.importSuccess, {
-        count: result.imported,
-      });
-      const gifNotice = result.flattenedGifCount
-        ? ` ${interpolate(t.transfer.importGifFlattened, {
-            count: result.flattenedGifCount,
-          })}`
-        : "";
-      setImportNotice({
-        error: false,
-        message: `${success}${gifNotice}`,
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["documents"] }),
-        queryClient.invalidateQueries({ queryKey: ["folders"] }),
-        queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
-      ]);
+      await importer.run(files);
     } catch (error) {
       setImportNotice({
         error: true,
-        message: getImportErrorMessage(error, t.transfer),
+        message: getImportErrorMessage(error, t.transfer, t.errors),
       });
-    } finally {
-      setImporting(false);
     }
   }
 
@@ -218,7 +196,7 @@ export function DesktopHomePage() {
             />
             <button
               type="button"
-              disabled={importing}
+              disabled={importer.blocked}
               onClick={() => importInputRef.current?.click()}
               className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-60"
               style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
@@ -244,7 +222,9 @@ export function DesktopHomePage() {
             {t.desktopHome.createFailed}
           </p>
         )}
-        {importNotice && (
+        <ImportRecoveryActions pending={importer.pending} busy={importing} waiting={importer.waiting}
+          onResume={() => void importDocuments()} onDiscard={() => { importer.discard(); setImportNotice(null); }} />
+        {!importer.pending && !importer.waiting && importNotice && (
           <p
             className="mt-4 text-sm"
             role={importNotice.error ? "alert" : "status"}

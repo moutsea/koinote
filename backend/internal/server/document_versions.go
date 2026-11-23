@@ -105,6 +105,9 @@ func (a *App) documentVersionRestore(w http.ResponseWriter, r *http.Request) {
 		Theme: version.Theme, Content: version.Content, ExpectedRevision: body.ExpectedRevision,
 		Source: documentSourceRestore,
 	})
+	if writeImageReferenceError(w, err) {
+		return
+	}
 	if errors.Is(err, errDocumentNotFound) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return

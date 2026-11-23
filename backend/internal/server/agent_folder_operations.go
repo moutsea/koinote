@@ -165,6 +165,9 @@ func (a *App) restoreAgentFolderTx(ctx context.Context, tx pgx.Tx, userID int, o
 	if exists {
 		return fmt.Errorf("文件夹标识已被占用，无法撤销删除: %w", errAgentSessionConflict)
 	}
+	if err := a.admitFolderCreate(ctx, tx, userID, f.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,parent_id,name,organizer_kind,created_at,updated_at) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,clock_timestamp())`, f.ID, userID, parent, f.Name, f.OrganizerKind, f.CreatedAt)
 	return err
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LoaderCircle, Trash2 } from "lucide-react";
 import { ApiError, deleteAccount, type User } from "../api";
-import { clearAllConflictDrafts } from "../conflictDrafts";
+import { clearConflictDrafts } from "../conflictDrafts";
 import { confirmAction } from "../confirmAction";
 import { interpolate, useI18n } from "../i18n";
 import { PaperCard } from "./Ink";
@@ -22,7 +22,7 @@ export function AccountDeletionCard({ user }: { user: User }) {
     setError(null);
     try {
       const result = await deleteAccount(confirmation.trim());
-      clearAllConflictDrafts();
+      clearConflictDrafts(user.authUserId);
       queryClient.clear();
       if (result.localCleanupFailed) {
         window.alert(t.accountDeletion.localCleanupFailed);

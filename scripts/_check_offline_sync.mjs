@@ -275,7 +275,7 @@ assert.deepEqual(
     async recordSuccess() {},
     reportMaintenanceFailure() { throw new Error("logger_failed"); },
   }),
-  { state: "error", message: "image_quota_exceeded" },
+  { state: "error", message: "image_quota_exceeded", partial: true },
   "维护日志失败不能覆盖真正的待上传图片错误",
 );
 
@@ -790,7 +790,7 @@ assert.match(
 );
 assert.match(
   pushDocumentsSection,
-  /catch \(error\) \{\s*if \(error instanceof OfflineImageUploadError\) \{\s*imageUploadIssues\.push\(error\.code\);[\s\S]*?continue;/,
+  /catch \(error\) \{\s*if \(error instanceof OfflineImageUploadError\) \{\s*await deferDocument\(row, error\.code\);[\s\S]*?continue;/,
   "单张图片被拒绝时必须继续同步后续文档",
 );
 assert.match(
@@ -854,16 +854,7 @@ assert.match(
   /SET object_key = \$3, remote_url = \$4, last_error = NULL,\s*is_local_origin = 1/,
   "图片上传完成但正文尚未替换时必须继续保护本地副本",
 );
-assert.match(
-  uploadOfflineImageSection,
-  /const replacedDocuments = await applyUploadedImageMapping\([\s\S]*?row\.image_id,[\s\S]*?result\.image\.url,[\s\S]*?if \(replacedDocuments > 0\)[\s\S]*?UPDATE offline_images SET is_local_origin = 0/,
-  "本地图片只有在所有占位地址替换完成后才能转为可清理的远端缓存",
-);
-assert.match(
-  uploadOfflineImageSection,
-  /if \(row\.remote_url\)[\s\S]*?const replacedDocuments = await applyUploadedImageMapping\([\s\S]*?row\.image_id,[\s\S]*?row\.remote_url,[\s\S]*?if \(replacedDocuments > 0\)/,
-  "恢复半完成上传时也必须等持久化正文完成占位地址替换",
-);
+// Pending-image protection and recovery are exercised against SQLite in _check_offline_sync_limits.mjs.
 assert.match(
   offlineStore,
   /applyUploadedImageMapping[\s\S]*?if \(result\.rowsAffected > 0 && typeof window !== "undefined"\)/,

@@ -1608,6 +1608,15 @@ export const fr: Messages = {
     importGifFlattened:
       "{count} GIF de plus de 10 Mo ont été convertis en images WebP statiques ; l’animation n’a pas été conservée.",
     exportSuccess: "L’archive de migration est prête.",
+    importPartial: "{count}/{total} documents importés avec confirmation. {reason} Vous pouvez poursuivre les éléments restants.",
+    importUncertain: "{count}/{total} documents importés avec confirmation. {reason} Le fichier actuel est peut-être déjà enregistré. Vérifiez la liste avant de réimporter pour éviter les doublons.",
+    importResume: "Poursuivre les éléments restants",
+    importAcknowledge: "Compris",
+    importFinish: "Terminer cet import",
+    importSessionCheckFailed: "Impossible de vérifier votre session pour le moment. Vérifiez la connexion puis poursuivez.",
+    importImageCheckFailed: "Impossible de vérifier les images téléversées. Vérifiez la connexion puis poursuivez.",
+    importKeepSaved: "Les documents enregistrés sont conservés. Vous pouvez libérer de l’espace sur une autre page de l’application, puis revenir et poursuivre. Actualiser ou fermer la fenêtre termine cette session d’import.",
+    importWaiting: "Trop de requêtes. L’import reprendra automatiquement après le délai demandé par le serveur. Ne lancez pas un autre import.",
     importFailed:
       "Échec de l’import. Vérifiez le format, la taille des images et le quota.",
     unsupportedImportFormat:
@@ -2710,6 +2719,7 @@ function hello(name) {
 `,
   },
   common: {
+    retry: "Réessayer",
     theme: "Changer de thème",
     language: "Langue",
   },
@@ -2853,11 +2863,11 @@ function hello(name) {
       "Les documents et images sont conservés sur cet appareil. Vous pouvez coller des images et écrire hors ligne ; elles seront envoyées et remplacées par leurs URL au retour du réseau.",
     documentCount: "{count} documents disponibles localement",
     imageCacheUsage:
-      "Images locales {total} ; cache hébergé {cached} / {limit}, en attente {pending}",
+      "Images locales {total} ; cache hébergé {cached} / {limit}, originaux à synchroniser {pending}",
     clearImageCache: "Vider le cache d’images hébergées",
     clearingImageCache: "Nettoyage…",
     imageCacheCleared:
-      "Le cache d’images a été vidé. Les images seront remises en cache à l’ouverture des documents.",
+      "Le cache supprimable a été vidé ; les originaux en attente de synchronisation ont été conservés. Les images seront remises en cache à l’ouverture des documents.",
     imageMaintenanceDelayed:
       "La maintenance des images est retardée. Vos documents sont synchronisés et l’application réessaiera automatiquement.",
   },
@@ -2883,6 +2893,7 @@ function hello(name) {
     close: "Fermer",
   },
   desktopSync: {
+    partial: "Certaines modifications restent à synchroniser",
     synced: "Synchronisé",
     syncing: "Synchronisation",
     offline: "Modification hors ligne",
@@ -3358,8 +3369,18 @@ function hello(name) {
       "Le brouillon n’est pas encore dans le stockage des documents. Réessayez d’abord de l’enregistrer.",
     image_cache_full:
       "Le cache d’images local est plein. Videz-le depuis l’accueil de l’application.",
+    image_unavailable: "Une image a expiré ou est en cours de suppression. Importez-la à nouveau avant d’enregistrer.",
     local_image_missing:
       "Une image locale est introuvable. Retirez-la du document puis insérez-la de nouveau.",
+    import_account_changed: "Le compte connecté a changé. L’import a été arrêté. Vérifiez les documents déjà enregistrés dans le compte initial.",
+    session_changed: "Le compte connecté a changé. Réessayez avec le compte actuel.",
+    image_record_failed: "L’image n’a pas été téléversée. Vérifiez la connexion et réessayez.",
+    image_rate_limited: "Trop d’images téléversées. Réessayez plus tard.",
+    image_upload_unavailable: "Le téléversement d’images est temporairement indisponible. Réessayez plus tard.",
+    folder_sync_pending: "Le dossier de destination n’est pas encore synchronisé. Réessayez plus tard.",
+    folder_count_limit_reached: "La limite de dossiers est atteinte. Supprimez les dossiers inutiles puis réessayez.",
+    document_count_limit_reached: "Le nombre maximal de documents cloud est atteint, corbeille comprise. Supprimez définitivement les documents inutiles, puis réessayez.",
+    share_unavailable: "Ce partage est temporairement occupé. Veuillez réessayer dans un instant.",
     storage_quota_exceeded:
       "Stockage cloud plein — supprimez définitivement les documents inutiles depuis la corbeille",
     image_empty: "L'image est vide",

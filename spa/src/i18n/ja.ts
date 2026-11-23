@@ -1579,6 +1579,15 @@ export const ja: Messages = {
     importGifFlattened:
       "10 MB を超える GIF {count} 件を静止 WebP に圧縮しました。アニメーションは保持されません。",
     exportSuccess: "移行用アーカイブを作成しました。",
+    importPartial: "{count}/{total} 件のインポートを確認しました。{reason} 残りのインポートを再開できます。",
+    importUncertain: "{count}/{total} 件のインポートを確認しました。{reason} 現在のファイルは保存済みの可能性があります。重複を防ぐため、再インポート前に一覧を確認してください。",
+    importResume: "残りのインポートを再開",
+    importAcknowledge: "確認",
+    importFinish: "今回のインポートを終了",
+    importSessionCheckFailed: "現在ログイン状態を確認できません。接続を確認してから再開してください。",
+    importImageCheckFailed: "アップロード済み画像の状態を確認できません。接続を確認してから再開してください。",
+    importKeepSaved: "保存済みの内容は保持されます。アプリ内の別ページで容量を空けてから戻って再開できます。画面を再読み込みするかウィンドウを閉じると、今回の進捗は終了します。",
+    importWaiting: "リクエストが多いため、サーバー指定の時間待機して自動的に再開します。再度インポートしないでください。",
     importFailed:
       "インポートに失敗しました。形式、画像サイズ、容量をご確認ください。",
     unsupportedImportFormat:
@@ -2650,6 +2659,7 @@ function hello(name) {
 `,
   },
   common: {
+    retry: "再試行",
     theme: "テーマ切り替え",
     language: "言語",
   },
@@ -2790,11 +2800,11 @@ function hello(name) {
       "文書と画像はこの端末に保存されます。オフラインでも画像を貼り付けて編集でき、接続後に自動でアップロードして画像 URL を置き換えます。",
     documentCount: "ローカルで利用可能な文書：{count} 件",
     imageCacheUsage:
-      "ローカル画像 {total}、ホスト画像キャッシュ {cached} / {limit}、送信待ち {pending}",
+      "ローカル画像 {total}、ホスト画像キャッシュ {cached} / {limit}、同期待ちの原本 {pending}",
     clearImageCache: "ホスト画像キャッシュを消去",
     clearingImageCache: "消去中…",
     imageCacheCleared:
-      "画像キャッシュを消去しました。文書を開くと必要な画像が再びキャッシュされます。",
+      "削除可能な画像キャッシュを消去し、同期待ちの原本は保持しました。文書を開くと必要な画像が再びキャッシュされます。",
     imageMaintenanceDelayed:
       "画像のバックグラウンド整理が遅れています。文書は同期済みで、アプリが自動的に再試行します。",
   },
@@ -2819,6 +2829,7 @@ function hello(name) {
     close: "閉じる",
   },
   desktopSync: {
+    partial: "未同期の変更があります",
     synced: "同期済み",
     syncing: "同期中",
     offline: "オフラインで編集中",
@@ -3279,8 +3290,18 @@ function hello(name) {
       "現在の下書きはまだ文書ストアに保存されていません。先に保存を再試行してください",
     image_cache_full:
       "ローカル画像キャッシュがいっぱいです。デスクトップのホーム画面から消去してください",
+    image_unavailable: "画像の有効期限が切れたか、削除中です。画像を再アップロードして保存してください。",
     local_image_missing:
       "ローカル画像が見つかりません。文書から削除して、もう一度挿入してください",
+    import_account_changed: "ログイン中のアカウントが変更されたため、インポートを停止しました。元のアカウントに保存済みの内容を確認してください。",
+    session_changed: "ログイン中のアカウントが変更されました。現在のアカウントで再試行してください。",
+    image_record_failed: "画像のアップロードが完了しませんでした。接続を確認して再試行してください。",
+    image_rate_limited: "画像のアップロードが多すぎます。しばらくしてから再試行してください。",
+    image_upload_unavailable: "画像のアップロードは一時的に利用できません。しばらくしてから再試行してください。",
+    folder_sync_pending: "移動先のフォルダーはまだ同期されていません。しばらくしてから再試行してください。",
+    folder_count_limit_reached: "クラウドのフォルダー数が上限に達しました。不要なフォルダーを削除して再試行してください。",
+    document_count_limit_reached: "クラウド文書数が上限に達しました（ゴミ箱を含む）。不要な文書を完全に削除してから再試行してください。",
+    share_unavailable: "共有へのアクセスが混み合っています。しばらくしてから再試行してください。",
     storage_quota_exceeded:
       "クラウドの容量がいっぱいです。ゴミ箱から不要なドキュメントを完全に削除してください",
     image_empty: "画像が空です",

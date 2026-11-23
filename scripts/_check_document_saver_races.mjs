@@ -9,6 +9,8 @@ const require = createRequire(import.meta.url);
 Object.assign(globalThis, { window, document: window.document, IS_REACT_ACT_ENVIRONMENT: true });
 const storage = new Map();
 window.localStorage = {
+  get length() { return storage.size; },
+  key: index => [...storage.keys()][index] ?? null,
   getItem: key => storage.get(key) ?? null,
   setItem: (key, value) => storage.set(key, value),
   removeItem: key => storage.delete(key),
@@ -59,7 +61,7 @@ const { createElement, act, createRoot, useDocumentSaver, LiveEditor, getAgentFo
 const root = createRoot(document.getElementById("root"));
 let saver;
 function Harness({ liveDocId }) {
-  saver = useDocumentSaver();
+  saver = useDocumentSaver(undefined, "test-account");
   return liveDocId ? createElement(LiveEditor, { docId: liveDocId, saver, visible: true, member: true, localMode: false }) : null;
 }
 const original = { title: "Article", content: "Body", theme: "minimal", revision: 1 };

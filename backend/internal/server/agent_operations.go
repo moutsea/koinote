@@ -630,6 +630,9 @@ func (a *App) applyAgentOperationTx(ctx context.Context, tx pgx.Tx, user model.U
 		if exists {
 			return nil, errors.New("目标位置已有同名文件夹")
 		}
+		if err := a.admitFolderCreate(ctx, tx, user.ID, in.TargetID); err != nil {
+			return nil, err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name,parent_id) VALUES($1,$2,$3,$4)`, in.TargetID, user.ID, in.Title, folder); err != nil {
 			return nil, err
 		}

@@ -1151,6 +1151,15 @@ export interface Messages {
     importSuccess: string;
     importGifFlattened: string;
     exportSuccess: string;
+    importPartial: string;
+    importUncertain: string;
+    importResume: string;
+    importAcknowledge: string;
+    importFinish: string;
+    importSessionCheckFailed: string;
+    importImageCheckFailed: string;
+    importKeepSaved: string;
+    importWaiting: string;
     importFailed: string;
     unsupportedImportFormat: string;
     importTooManyFiles: string;
@@ -2001,6 +2010,7 @@ export interface Messages {
     };
   };
   common: {
+    retry: string;
     theme: string;
     language: string;
   };
@@ -2132,6 +2142,7 @@ export interface Messages {
     close: string;
   };
   desktopSync: {
+    partial: string;
     synced: string;
     syncing: string;
     offline: string;

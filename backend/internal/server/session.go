@@ -241,6 +241,13 @@ func (a *App) requireUserWithErrorHandler(w http.ResponseWriter, r *http.Request
 		}
 		return model.User{}, false
 	}
+	// This is an expected identity, never an authentication credential. Comparing
+	// it with this request's authenticated user pins an import to its original
+	// account even if another browser tab replaces the session cookie.
+	if expected := r.Header.Get("X-Koinote-Import-Owner"); expected != "" && expected != user.AuthUserID {
+		httpx.ErrorCode(w, http.StatusConflict, "import_account_changed", "The signed-in account changed; import stopped")
+		return model.User{}, false
+	}
 	a.noteUserActivity(user.ID)
 	if client != "" {
 		a.noteUserClient(user.ID, client)

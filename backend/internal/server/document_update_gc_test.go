@@ -16,6 +16,7 @@ import (
 
 	"koinote/backend/internal/config"
 	"koinote/backend/internal/migrations"
+	"koinote/backend/internal/model"
 )
 
 // 保存时回收被删掉的图片。
@@ -118,7 +119,10 @@ func pendingKeys(t *testing.T, pool *pgxpool.Pool, authUserID string) []string {
 	t.Helper()
 	rows, err := pool.Query(context.Background(),
 		`SELECT object_key FROM pending_image_deletions
-		 WHERE object_key LIKE 'u/' || $1 || '/%' ORDER BY object_key`,
+		 WHERE object_key LIKE 'u/' || $1 || '/%'
+           AND (upload_aborted_at IS NULL OR last_error IS NOT NULL
+             OR EXISTS(SELECT 1 FROM image_objects i WHERE i.object_key=pending_image_deletions.object_key))
+         ORDER BY object_key`,
 		authUserID)
 	if err != nil {
 		t.Fatalf("查待删队列失败: %v", err)
@@ -450,6 +454,10 @@ func TestGCSettlesDeletedKeysWhenWorkerRejectsAnother(t *testing.T) {
 	if len(got) != 1 || got[0] != second {
 		t.Fatalf("只该留下 Worker 拒绝的 key，实际 %v", got)
 	}
+	var retired bool
+	if err := pool.QueryRow(context.Background(), `SELECT upload_aborted_at IS NOT NULL AND next_try_at>now() FROM pending_image_deletions WHERE object_key=$1`, first).Scan(&retired); err != nil || !retired {
+		t.Fatalf("successful deletion lost retirement guard: %v %v", retired, err)
+	}
 	var attempts int
 	var lastError string
 	if err := pool.QueryRow(context.Background(), `
@@ -640,5 +648,53 @@ func TestGCBackoffFallsBackToDailyRetries(t *testing.T) {
 	}
 	if got := gcBackoff(1000); got != gcSlowRetryInterval {
 		t.Fatalf("高 attempts 仍应每日重试，实际 %s", got)
+	}
+}
+
+// 删图后撤销是最常见的误删恢复路径。认领后的图片会被数据库拒绝引用，整篇文档
+// 都存不进去，所以编辑移除的图片必须等宽限期过后才进入 GC，期间再次保存会撤销删除令。
+func TestEditedOutImageWaitsForUndoGrace(t *testing.T) {
+	pool := newGCTestPool(t)
+	key := gcKey("gc-edit-grace", gcHexA)
+	withImage := "![](https://img.koinote.app/" + key + ")\n\n正文"
+	ref, docID := seedGCUser(t, pool, "gc-edit-grace", withImage)
+	worker, calls := newGCWorker(t, func(keys []string) imageDeleteResult {
+		return imageDeleteResult{Deleted: keys}
+	})
+	app := gcTestApp(pool, worker.URL)
+	ctx := context.Background()
+	user := model.User{ID: ref.ID, AuthUserID: ref.AuthUserID}
+	save := func(content string) {
+		t.Helper()
+		var title, theme string
+		var revision int64
+		if err := pool.QueryRow(ctx, `SELECT title, theme, revision FROM documents WHERE doc_id=$1`, docID).Scan(&title, &theme, &revision); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := app.updateDocument(ctx, updateDocumentParams{User: user, DocID: docID, Title: title, Theme: theme, Content: content, ExpectedRevision: revision, Source: documentSourceWeb}); err != nil {
+			t.Fatalf("save rejected: %v", err)
+		}
+	}
+
+	save("正文")
+	var wait time.Duration
+	if err := pool.QueryRow(ctx, `SELECT EXTRACT(EPOCH FROM next_try_at-now())::bigint FROM pending_image_deletions WHERE object_key=$1 AND upload_aborted_at IS NULL`, key).Scan(&wait); err != nil {
+		t.Fatalf("edited-out image not queued: %v", err)
+	}
+	// Absolute floor: the grace must outlast an ordinary undo, not merely match the constant.
+	if wait = wait * time.Second; wait < 10*time.Minute || wait > editedImageGrace+time.Minute {
+		t.Fatalf("edited-out image skipped the undo grace: due in %s", wait)
+	}
+	defer isolateGCQueue(t, pool, []string{key})()
+	if err := app.runImageGCOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("GC claimed an image inside its undo grace")
+	}
+
+	save(withImage) // Ctrl+Z restores the image within the grace period.
+	if got := pendingKeys(t, pool, ref.AuthUserID); len(got) != 0 {
+		t.Fatalf("restoring the image did not cancel its deletion: %v", got)
 	}
 }

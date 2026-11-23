@@ -57,10 +57,11 @@ export type AsyncSerialQueueScope = {
 export type DesktopSyncSequenceResult = {
   state: "idle" | "error";
   message?: string;
+  partial?: boolean;
 };
 
 export type DesktopSyncSequenceSteps = {
-  pushFolders: () => Promise<void>;
+  pushFolders: () => Promise<void | string[]>;
   pushDocuments: () => Promise<string[]>;
   pullRemoteSnapshot: () => Promise<void>;
   maintain: () => Promise<void>;
@@ -71,8 +72,8 @@ export type DesktopSyncSequenceSteps = {
 export async function runDesktopSyncSequence(
   steps: DesktopSyncSequenceSteps,
 ): Promise<DesktopSyncSequenceResult> {
-  await steps.pushFolders();
-  const imageUploadIssues = await steps.pushDocuments();
+  const folderIssues = await steps.pushFolders();
+  const documentIssues = [...(folderIssues ?? []), ...await steps.pushDocuments()];
   await steps.pullRemoteSnapshot();
   try {
     await steps.maintain();
@@ -81,10 +82,10 @@ export async function runDesktopSyncSequence(
       steps.reportMaintenanceFailure?.(error);
     } catch {}
   }
-  await steps.recordSuccess();
+  if (documentIssues.length === 0) await steps.recordSuccess();
   return {
-    state: imageUploadIssues.length > 0 ? "error" : "idle",
-    ...(imageUploadIssues[0] ? { message: imageUploadIssues[0] } : {}),
+    state: documentIssues.length > 0 ? "error" : "idle",
+    ...(documentIssues[0] ? { message: documentIssues[0], partial: true } : {}),
   };
 }
 

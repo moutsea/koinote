@@ -91,13 +91,16 @@ function ShareReader({ token, viewerKey, revocationVersion }: {
 
   const shared = currentUnlock ?? query.data?.document;
   const needsPassword = !currentUnlock && query.data?.requiresPassword === true;
-  const missing = !query.isLoading && (query.isError || (!shared && !needsPassword));
+  const missing = !query.isLoading && (query.isError
+    ? query.error instanceof ApiError && query.error.status === 404
+    : !shared && !needsPassword);
 
   // AppShell 不管本页标题（见 seoMeta.pageOwnsMeta），打开成功时由 SharedView 设置。
   // 链接失效时也要换掉，否则站内点进来的会一直挂着上一页的标题
   useEffect(() => {
     if (missing) document.title = notFoundTitle(t);
-  }, [missing, t]);
+    else if (query.isError) document.title = `${t.errors.share_unavailable} — Koinote`;
+  }, [missing, query.isError, t]);
 
   if (query.isLoading) {
     return <Centered>{t.editor.loading}</Centered>;
@@ -107,9 +110,17 @@ function ShareReader({ token, viewerKey, revocationVersion }: {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-24 text-center">
         <FileText className="h-10 w-10" style={{ color: "var(--ink-faint)" }} />
-        <p className="text-sm" style={{ color: "var(--ink-mid)" }}>
-          {t.editor.sharedNotFound}
+        <p role={missing ? undefined : "alert"} className="text-sm" style={{ color: "var(--ink-mid)" }}>
+          {missing ? t.editor.sharedNotFound :
+            (query.error instanceof ApiError && query.error.code && t.errors[query.error.code]) || t.errors.share_unavailable}
         </p>
+        {!missing && <button
+          type="button"
+          disabled={query.isFetching}
+          onClick={() => { void query.refetch(); }}
+          className="rounded-full px-4 py-2 text-sm font-medium disabled:opacity-60"
+          style={{ background: "var(--cinnabar-soft)", color: "var(--cinnabar)" }}
+        >{t.common.retry}</button>}
         <Link
           to="/"
           className="text-sm font-medium hover:underline"

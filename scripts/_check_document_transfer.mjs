@@ -186,7 +186,6 @@ assert.match(transferSource, /unpackImportArchiveFile/);
 assert.doesNotMatch(transferSource, /unzipSync/);
 assert.match(transferSource, /prepareImportedImage/);
 assert.match(transferSource, /IMPORT_IMAGE_CONCURRENCY = 3/);
-assert.match(transferSource, /releaseUnusedImages\(\[\.\.\.uploadedImageKeys\]\)/);
 assert.match(
   transferSource,
   /targetFolderId\?: string \| null[\s\S]*?targetFolderId === undefined/,

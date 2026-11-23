@@ -95,6 +95,7 @@ function imageFilesFrom(list: FileList | null | undefined): File[] {
 export default function MarkdownEditor({
   document,
   status,
+  saveErrorCode,
   onChange,
   onContentLoaded,
   onImageSourceMapped,
@@ -111,6 +112,8 @@ export default function MarkdownEditor({
   document: Document;
   /** 保存状态由页面给 —— 待存内容不再随实例存亡，见 useDocumentSaver */
   status: SaveStatus;
+  /** 保存失败的服务端错误码，用来说明重试为什么仍会失败 */
+  saveErrorCode?: string;
   onChange: (patch: DocPatch) => void;
   /** 记录真正喂给编辑器的 Markdown，供同步判断是否需要重建实例。 */
   onContentLoaded?: (content: string) => void;
@@ -694,15 +697,18 @@ export default function MarkdownEditor({
     ];
   }, [editor, t, tableContextMenu]);
 
+  // A known server reason (e.g. an expired image) explains why retrying fails.
+  const saveFailureReason = saveErrorCode && t.errors[saveErrorCode];
+  const saveFailureDetail = saveFailureReason ? ` · ${saveFailureReason}` : "";
   const statusText =
     status === "saving"
       ? t.editor.saving
       : status === "saved"
         ? t.editor.saved
         : status === "backed-up"
-          ? `${t.editor.saveFailed} · ${t.editor.saveFailedBackedUp}`
+          ? `${t.editor.saveFailed}${saveFailureDetail} · ${t.editor.saveFailedBackedUp}`
           : status === "failed"
-            ? `${t.editor.saveFailed} · ${t.editor.saveBackupFailed}`
+            ? `${t.editor.saveFailed}${saveFailureDetail} · ${t.editor.saveBackupFailed}`
             : status === "conflict"
               ? t.editor.resolveConflict
               : "";

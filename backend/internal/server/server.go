@@ -33,6 +33,10 @@ type App struct {
 	turnstileHTTPClient     *http.Client
 	limiter                 *rateLimiter
 	limiterOnce             sync.Once
+	shareReadOnce           sync.Once
+	shareReadSlots          chan struct{}
+	documentCreateOnce      sync.Once
+	documentCreateSlots     chan struct{}
 	stripeCheckout          stripeCheckoutSessionClient
 	paymentNotifier         paymentNotifier
 	siteAnalytics           siteAnalyticsClient
@@ -327,6 +331,7 @@ func (a *App) Routes() http.Handler {
 	// 取图处理，"usage" 会被它当成一个 key 截走，永远到不了这里。
 	mux.HandleFunc("GET /api/storage/usage", a.storageUsage)
 	mux.HandleFunc("POST /api/storage/release-images", a.imageReleaseUnused)
+	mux.HandleFunc("POST /api/storage/retain-import-images", a.imageRetainImport)
 	mux.HandleFunc("GET /api/config-snapshots", a.configSnapshotsList)
 	mux.HandleFunc("POST /api/config-snapshots/{snapshotId}/agent-sync", a.configSyncCreate)
 	mux.HandleFunc("DELETE /api/config-snapshots/{snapshotId}/agent-sync", a.configSyncRevoke)
@@ -338,6 +343,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/config-snapshots/{snapshotId}", a.configSnapshotDelete)
 	// Worker 写完 R2 来报账。鉴权走内部令牌 + X-Auth-User-Id（见 authUserIDFromRequest）
 	mux.HandleFunc("POST /api/images/record", a.imageRecord)
+	mux.HandleFunc("POST /api/images/admit", a.imageAdmit)
+	mux.HandleFunc("POST /api/images/rollback", a.imageRollback)
 
 	mux.HandleFunc("GET /api/documents", a.documentsList)
 	mux.HandleFunc("GET /api/documents/search", a.documentsSearch)

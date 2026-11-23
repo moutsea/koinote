@@ -24,6 +24,41 @@ type rateEntry struct {
 	expiresAt time.Time
 }
 
+type rateBudget struct {
+	key    string
+	limit  int
+	window time.Duration
+}
+
+// Admit all budgets together: a rejected actor cannot spend the shared budget,
+// and a saturated shared budget cannot create unlimited actor entries.
+func (r *rateLimiter) allowBudgets(budgets ...rateBudget) time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	r.sweepLocked(now, time.Minute)
+	var retryAfter time.Duration
+	for _, budget := range budgets {
+		if entry := r.entries[budget.key]; entry != nil && now.Before(entry.expiresAt) && entry.count >= budget.limit {
+			if delay := entry.expiresAt.Sub(now); delay > retryAfter {
+				retryAfter = delay
+			}
+		}
+	}
+	if retryAfter > 0 {
+		return retryAfter
+	}
+	for _, budget := range budgets {
+		entry := r.entries[budget.key]
+		if entry == nil || !now.Before(entry.expiresAt) {
+			entry = &rateEntry{expiresAt: now.Add(budget.window)}
+			r.entries[budget.key] = entry
+		}
+		entry.count++
+	}
+	return 0
+}
+
 func newRateLimiter() *rateLimiter {
 	return &rateLimiter{
 		entries:   make(map[string]*rateEntry),
@@ -42,15 +77,7 @@ func (r *rateLimiter) allow(key string, limit int, window time.Duration) bool {
 
 	now := time.Now()
 
-	// 摊销清理：每个窗口最多扫一次全表，避免每次请求都遍历
-	if now.Sub(r.lastSweep) >= window {
-		for k, e := range r.entries {
-			if now.After(e.expiresAt) {
-				delete(r.entries, k)
-			}
-		}
-		r.lastSweep = now
-	}
+	r.sweepLocked(now, window)
 
 	entry, found := r.entries[key]
 	if !found || now.After(entry.expiresAt) {
@@ -60,6 +87,44 @@ func (r *rateLimiter) allow(key string, limit int, window time.Duration) bool {
 
 	entry.count++
 	return entry.count <= limit
+}
+
+// Check an actor and global budget atomically. Denied actors cannot consume the
+// global allowance; exhausted global budgets cannot allocate new actor buckets.
+func (r *rateLimiter) allowWithGlobal(key string, limit int, globalKey string, globalLimit int, window time.Duration) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	r.sweepLocked(now, window)
+	global := r.entries[globalKey]
+	if global == nil || !now.Before(global.expiresAt) {
+		global = &rateEntry{expiresAt: now.Add(window)}
+	}
+	if global.count >= globalLimit {
+		return false
+	}
+	entry := r.entries[key]
+	if entry == nil || !now.Before(entry.expiresAt) {
+		entry = &rateEntry{expiresAt: now.Add(window)}
+	}
+	if entry.count >= limit {
+		return false
+	}
+	entry.count++
+	global.count++
+	r.entries[key], r.entries[globalKey] = entry, global
+	return true
+}
+
+func (r *rateLimiter) sweepLocked(now time.Time, window time.Duration) {
+	if now.Sub(r.lastSweep) >= window {
+		for key, entry := range r.entries {
+			if !now.Before(entry.expiresAt) {
+				delete(r.entries, key)
+			}
+		}
+		r.lastSweep = now
+	}
 }
 
 // reset 清掉某个 key 的计数。密码验证成功后调用，
@@ -89,14 +154,27 @@ func requestIP(r *http.Request) string {
 
 // Public endpoints may also be reached directly. Trust forwarding metadata only
 // from our authenticated Worker; a caller-controlled XFF must not create a bucket.
+// The result is only a rate-limit key: IPv6 sources collapse to their /64, since
+// one host normally controls the whole prefix and could otherwise rotate freely.
 func (a *App) publicRepositoryRequestIP(r *http.Request) string {
 	if a.hasInternalToken(r) {
 		if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Forwarded-For"))); ip != nil {
-			return ip.String()
+			return rateLimitAddress(ip)
 		}
 	}
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
 	}
-	return r.RemoteAddr
+	if ip := net.ParseIP(host); ip != nil {
+		return rateLimitAddress(ip)
+	}
+	return host
+}
+
+func rateLimitAddress(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }

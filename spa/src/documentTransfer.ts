@@ -1,10 +1,13 @@
 import { strFromU8, strToU8, zip } from "fflate";
 import {
+  ApiError,
   createDocument,
   createFolder,
+  getSession,
   fetchAppResource,
   getDocument,
   releaseUnusedImages,
+  retainImportImages,
   trackProductEvent,
   uploadImage,
   type DocumentSummary,
@@ -34,6 +37,8 @@ import {
 import { prepareImportedImage } from "./importImageCompression";
 import { unpackImportArchiveFile } from "./importArchive";
 import { desktopLocalImageID } from "./desktop/offlineImagesCore";
+import { IMPORT_ACCOUNT_CHANGED_CODE, ImportInterruptedError, type ImportRunOptions, type ImportDocumentsResult, type TransferProgress } from "./documentImportCore";
+export { ImportInterruptedError, type ImportRunOptions, type ImportDocumentsResult, type TransferProgress } from "./documentImportCore";
 
 export {
   rewriteImageReferences,
@@ -52,8 +57,6 @@ const IMAGE_TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-export type TransferProgress = (done: number, total: number) => void;
-
 type ImportErrorMessages = {
   importFailed: string;
   unsupportedImportFormat: string;
@@ -61,6 +64,10 @@ type ImportErrorMessages = {
   importTooLarge: string;
   importDocumentTooLarge: string;
   importImageTooLarge: string;
+  importPartial: string;
+  importUncertain: string;
+  importSessionCheckFailed: string;
+  importImageCheckFailed: string;
 };
 
 function withFilename(template: string, filename?: string): string {
@@ -70,7 +77,20 @@ function withFilename(template: string, filename?: string): string {
 export function getImportErrorMessage(
   error: unknown,
   messages: ImportErrorMessages,
+  errors: Record<string, string> = {},
 ): string {
+  if (error instanceof ImportInterruptedError) {
+    const reason = error.phase === "image-check"
+      ? messages.importImageCheckFailed
+      : error.phase === "session-check"
+      ? messages.importSessionCheckFailed
+      : getImportErrorMessage(error.cause, messages, errors);
+    return (error.canResume ? messages.importPartial : messages.importUncertain)
+      .replace("{count}", () => String(error.imported))
+      .replace("{total}", () => String(error.total))
+      .replace("{reason}", () => reason);
+  }
+  if (error instanceof ApiError && error.code && errors[error.code]) return errors[error.code];
   if (error instanceof UnsupportedImportFormatError) {
     return withFilename(messages.unsupportedImportFormat, error.filename);
   }
@@ -195,6 +215,7 @@ async function uploadArchiveImage(
   path: string,
   bytes: Uint8Array,
   compress = false,
+  owner?: string,
 ): Promise<{ image: UploadedImage; flattenedAnimation: boolean }> {
   const mime = IMAGE_TYPES[extension(path)];
   if (!mime) throw new Error("unsupported_image");
@@ -203,21 +224,39 @@ async function uploadArchiveImage(
     ? await prepareImportedImage(original)
     : { file: original, flattenedAnimation: false };
   return {
-    image: await uploadImage(prepared.file),
+    image: await uploadImage(prepared.file, "persistent", owner),
     flattenedAnimation: prepared.flattenedAnimation,
   };
 }
 
-export type ImportDocumentsResult = {
-  imported: number;
-  flattenedGifCount: number;
-};
+class ImportSessionCheckError extends Error {
+  constructor(readonly cause: unknown, readonly phase: "session-check" | "image-check" = "session-check") {
+    super("Import session check failed before writing");
+  }
+}
+
+function waitForImportRetry(delay: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const aborted = () => { clearTimeout(timer); reject(signal?.reason); };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", aborted);
+      resolve();
+    }, delay);
+    signal?.addEventListener("abort", aborted, { once: true });
+  });
+}
 
 export async function importDocumentsFromFiles(
   files: File[],
   onProgress?: TransferProgress,
   targetFolderId?: string | null,
+  initialOptions: ImportRunOptions = {},
 ): Promise<ImportDocumentsResult> {
+  // Capture once for the entire plan, including resumes and unused-image cleanup.
+  const resolvedOwner = initialOptions.owner ?? (await getSession()).user?.authUserId;
+  if (!resolvedOwner) throw new ApiError(401, "Not logged in", "unauthorized");
+  const importOwner: string = resolvedOwner;
   const entries = await filesToEntries(files);
   const markdownPaths = [...entries.keys()]
     .filter((path) => extension(path) === "md")
@@ -226,6 +265,7 @@ export async function importDocumentsFromFiles(
 
   const folderIDs = new Map<string, string | null>([["", null]]);
   const uploadedImages = new Map<string, string>();
+  const uploadedImageDetails = new Map<string, { key: string; flattened: boolean }>();
   const uploadedImageKeys = new Set<string>();
   const plannedDocuments: Array<{
     path: string;
@@ -236,15 +276,55 @@ export async function importDocumentsFromFiles(
   let imported = 0;
   let flattenedGifCount = 0;
   let completedWork = 0;
+  let disposed = false;
+  let running = false;
+  let waiting = 0;
+  let options = initialOptions;
+  let progress = onProgress;
+
+  function assertActive() {
+    options.signal?.throwIfAborted();
+    if (disposed) throw new DOMException("Import ended", "AbortError");
+    options.assertActive?.();
+  }
+
+  async function checkSession() {
+    try {
+      await options.checkSession?.();
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      // This GET has not submitted the next write. Retain the plan so a
+      // transient outage can be retried without replaying confirmed documents.
+      throw new ImportSessionCheckError(error);
+    }
+  }
+
+  async function mutation<T>(write: () => Promise<T>): Promise<T> {
+    for (let retries = 0; ; retries++) {
+      assertActive();
+      try { return await write(); } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 429 || retries >= 3) throw error;
+        const delay = error.retryAfterMs ?? 60_000;
+        if (!Number.isFinite(delay) || delay > 120_000) throw error;
+        options.onWaitingChange?.(++waiting > 0);
+        try {
+          await waitForImportRetry(Math.max(1_000, delay), options.signal);
+          assertActive();
+          await checkSession();
+          assertActive();
+        } finally { options.onWaitingChange?.(--waiting > 0); }
+      }
+    }
+  }
 
   async function ensureFolder(path: string): Promise<string | null> {
     if (folderIDs.has(path)) return folderIDs.get(path) ?? null;
     const parentPath = dirname(path);
     const parentFolderId = await ensureFolder(parentPath);
-    const result = await createFolder({
+    const result = await mutation(() => createFolder({
       name: truncateUnicode(basename(path), 100) || "Imported",
       parentFolderId,
-    });
+    }, importOwner));
     folderIDs.set(path, result.folder.folderId);
     return result.folder.folderId;
   }
@@ -265,50 +345,120 @@ export async function importDocumentsFromFiles(
     plannedDocuments.push({ path: markdownPath, content, references });
   }
 
-  const totalWork = referencedImages.size + plannedDocuments.length;
-  onProgress?.(0, totalWork);
-  try {
-    await forEachConcurrent(
-      [...referencedImages],
-      IMPORT_IMAGE_CONCURRENCY,
-      async (imagePath) => {
-        const entry = entries.get(imagePath);
-        if (!entry) return;
-        const bytes = await entry.read();
-        const uploaded = await uploadArchiveImage(imagePath, bytes, true);
-        uploadedImageKeys.add(uploaded.image.key);
-        uploadedImages.set(imagePath, uploaded.image.url);
-        if (uploaded.flattenedAnimation) flattenedGifCount += 1;
-        entries.delete(imagePath);
-        completedWork += 1;
-        onProgress?.(completedWork, totalWork);
-      },
-    );
+  const totalDocuments = plannedDocuments.length;
+  const totalWork = referencedImages.size + totalDocuments;
+  async function discard() {
+    disposed = true;
+    if (running) return; // Active uploads settle before their keys are released.
+    const keys = [...uploadedImageKeys];
+    uploadedImageKeys.clear();
+    entries.clear();
+    plannedDocuments.length = 0;
+    uploadedImages.clear();
+    uploadedImageDetails.clear();
+    folderIDs.clear();
+    await releaseUnusedImages(keys, importOwner).catch(() => undefined);
+  }
 
-    for (const planned of plannedDocuments) {
-      const replacements = new Map<string, string>();
-      for (const reference of planned.references) {
-        const uploadedURL = uploadedImages.get(reference.resolved);
-        if (uploadedURL) replacements.set(reference.original, uploadedURL);
+  async function execute(
+    nextProgress = progress,
+    nextOptions = options,
+  ): Promise<ImportDocumentsResult> {
+    if (running) throw new Error("import_already_running");
+    running = true;
+    progress = nextProgress;
+    options = nextOptions;
+    try {
+      assertActive();
+      await checkSession();
+      assertActive();
+      if (uploadedImageKeys.size > 0) {
+        let missingKeys: string[];
+        let unrecordedKeys: string[] | undefined;
+        try {
+          ({ missingKeys, unrecordedKeys } = await mutation(() => retainImportImages([...uploadedImageKeys], importOwner)));
+        } catch (error) {
+          if (error instanceof ApiError && error.code === IMPORT_ACCOUNT_CHANGED_CODE) throw error;
+          // No next document has been submitted yet; the plan remains safe to resume.
+          throw new ImportSessionCheckError(error, "image-check");
+        }
+        // This plan recorded every upload before writing it, so a key without a
+        // ledger row was already collected and must be uploaded again.
+        const missing = new Set([...missingKeys, ...(unrecordedKeys ?? [])]);
+        for (const [path, details] of uploadedImageDetails) {
+          if (!missing.has(details.key)) continue;
+          uploadedImages.delete(path);
+          uploadedImageKeys.delete(details.key);
+          uploadedImageDetails.delete(path);
+          completedWork -= 1;
+          if (details.flattened) flattenedGifCount -= 1;
+        }
       }
-      const folderId =
-        targetFolderId === undefined
+      progress?.(completedWork, totalWork);
+      await forEachConcurrent(
+        [...referencedImages].filter(path => !uploadedImages.has(path)),
+        IMPORT_IMAGE_CONCURRENCY,
+        async (imagePath) => {
+          assertActive();
+          const entry = entries.get(imagePath);
+          if (!entry) return;
+          const bytes = await entry.read();
+          const uploaded = await mutation(() => uploadArchiveImage(imagePath, bytes, true, importOwner));
+          uploadedImageKeys.add(uploaded.image.key);
+          uploadedImages.set(imagePath, uploaded.image.url);
+          uploadedImageDetails.set(imagePath, { key: uploaded.image.key, flattened: uploaded.flattenedAnimation });
+          if (uploaded.flattenedAnimation) flattenedGifCount += 1;
+          // Retain source files until the plan ends, so an expired upload can
+          // be recreated when a long-paused import resumes.
+          completedWork += 1;
+          assertActive();
+          progress?.(completedWork, totalWork);
+        },
+      );
+
+      while (imported < totalDocuments) {
+        assertActive();
+        const planned = plannedDocuments[imported];
+        const replacements = new Map<string, string>();
+        for (const reference of planned.references) {
+          const uploadedURL = uploadedImages.get(reference.resolved);
+          if (uploadedURL) replacements.set(reference.original, uploadedURL);
+        }
+        const folderId = targetFolderId === undefined
           ? await ensureFolder(dirname(planned.path))
           : targetFolderId;
-      await createDocument({
-        title: truncateUnicode(withoutExtension(basename(planned.path)), 200),
-        content: rewriteImageReferences(planned.content, replacements),
-        folderId,
-      });
-      imported += 1;
-      completedWork += 1;
-      onProgress?.(completedWork, totalWork);
+        await mutation(() => createDocument({
+          title: truncateUnicode(withoutExtension(basename(planned.path)), 200),
+          content: rewriteImageReferences(planned.content, replacements),
+          folderId,
+        }, importOwner));
+        imported += 1;
+        completedWork += 1;
+        progress?.(completedWork, totalWork);
+      }
+      return { imported, flattenedGifCount };
+    } catch (error) {
+      if (error instanceof ApiError && error.code === IMPORT_ACCOUNT_CHANGED_CODE) {
+        await discard();
+        throw error;
+      }
+      if (options.signal?.aborted || disposed) throw error;
+      // Session checks are read-only; writes may be replayed only after an
+      // explicit refusal. A lost POST response may already have committed.
+      const sessionCheckFailed = error instanceof ImportSessionCheckError;
+      const canResume = sessionCheckFailed || error instanceof ApiError && (error.status === 429 ||
+        ["folder_count_limit_reached", "document_count_limit_reached", "storage_quota_exceeded", "image_quota_exceeded", "image_record_failed", "image_upload_unavailable", "image_unavailable"].includes(error.code ?? ""));
+      throw new ImportInterruptedError(sessionCheckFailed ? error.cause : error, imported, totalDocuments, canResume,
+        (nextProgress, nextOptions) => {
+          if (!canResume) return Promise.reject(new Error("import_result_uncertain"));
+          return execute(nextProgress, nextOptions);
+        }, discard, sessionCheckFailed ? error.phase : "write");
+    } finally {
+      running = false;
+      if (disposed || options.signal?.aborted || imported === totalDocuments) await discard();
     }
-    return { imported, flattenedGifCount };
-  } catch (error) {
-    await releaseUnusedImages([...uploadedImageKeys]).catch(() => undefined);
-    throw error;
   }
+  return execute();
 }
 
 function folderPath(folderId: string | null, folders: Folder[]): string {

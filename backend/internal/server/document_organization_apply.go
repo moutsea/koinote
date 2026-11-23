@@ -217,7 +217,7 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 		return err
 	}
 	if undo {
-		folders, err = restoreOrganizationTimeFolders(ctx, tx, userID, data, folders)
+		folders, err = a.restoreOrganizationTimeFolders(ctx, tx, userID, data, folders)
 		if err != nil {
 			return err
 		}
@@ -383,6 +383,9 @@ func (a *App) applyOrganizationAttempt(ctx context.Context, userID int, id strin
 				}
 				nextID, e := randomUUID()
 				if e != nil {
+					return e
+				}
+				if e := a.admitFolderCreate(ctx, tx, userID, nextID); e != nil {
 					return e
 				}
 				_, e = tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name,parent_id) VALUES($1,$2,$3,(SELECT id FROM folders WHERE user_id=$2 AND folder_id=$4))`, nextID, userID, name, folderID)

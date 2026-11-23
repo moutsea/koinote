@@ -47,6 +47,29 @@ test("blocked sources cannot reach backend or internal storage routes", async t 
   }
 });
 
+test("public proxy never forwards Worker-only backend callbacks", async t => {
+  // The proxy attaches the internal token, so forwarding these would let any
+  // caller act as the Worker (record usage, admit uploads, roll back objects).
+  mockFetch(t, async () => { throw new Error("Worker-only callback reached the backend"); });
+  for (const path of ["/api/images/record", "/api/images/admit", "/api/images/rollback", "/api/images/rollback/", "/api/images/%72ollback", "/api/images/%E0%A4%A"]) {
+    const response = await worker.fetch(new Request("https://app.example" + path, { method: "POST", headers: { "cf-connecting-ip": "203.0.113.7", "x-auth-user-id": "victim" }, body: "{}" }), environment());
+    assert.equal(response.status, 404, path);
+  }
+});
+
+test("share metadata forwards the client address for same-zone CF-Connecting-IP", async t => {
+  const token = "c".repeat(32);
+  mockFetch(t, async (input, init) => {
+    const { url, headers } = backendRequest(input, init);
+    assert.equal(url.pathname, `/api/share/${token}/meta`);
+    assert.equal(headers.get("x-forwarded-for"), "2001:db8::77");
+    assert.equal(headers.get("x-real-ip"), "2001:db8::77");
+    return new Response(null, { status: 404 });
+  });
+  const response = await worker.fetch(new Request(`https://app.example/share/${token}`, { headers: { "cf-connecting-ip": "2001:db8::77", "x-real-ip": "forged" } }), environment());
+  assert.equal(response.status, 200);
+});
+
 test("local mode strips caller origin credentials when none are configured", async t => {
   mockFetch(t, async (_input, init) => {
     assert.equal(new Headers(init.headers).get("x-koinote-origin-token"), null);
@@ -82,13 +105,14 @@ test("image session verification and quota recording both authenticate origin", 
   mockFetch(t, async (input, init) => {
     const { url, headers } = backendRequest(input, init); paths.push(url.pathname);
     if (url.pathname === "/api/auth/session") return Response.json({ user: { authUserId: "fixture-user" } });
+    if (url.pathname === "/api/images/admit") return new Response(null, { status: 204 });
     assert.equal(url.pathname, "/api/images/record");
     assert.equal(headers.get("x-koinote-internal-token"), internal);
     assert.equal(headers.get("x-auth-user-id"), "fixture-user");
     return Response.json({ usedBytes: 12 });
   });
   const response = await worker.fetch(new Request("https://app.example/api/images", { method: "POST", headers: { cookie: "fixture-session", "content-type": "image/png" }, body: png }), environment());
-  assert.equal(response.status, 200); assert.deepEqual(paths, ["/api/auth/session", "/api/images/record"]);
+  assert.equal(response.status, 200); assert.deepEqual(paths, ["/api/auth/session", "/api/images/admit", "/api/images/record", "/api/images/record"]);
 });
 
 test("external image requests never receive either backend credential", async t => {
@@ -96,6 +120,7 @@ test("external image requests never receive either backend credential", async t 
   mockFetch(t, async (input, init) => {
     const url = new URL(input.url ?? input);
     if (url.origin === "https://backend.example") {
+      if (url.pathname === "/api/images/admit") { backendRequest(input, init); return new Response(null, { status: 204 }); }
       backendRequest(input, init);
       return Response.json(url.pathname === "/api/auth/session" ? { user: { authUserId: "fixture-user" } } : { usedBytes: 12 });
     }
@@ -109,4 +134,79 @@ test("external image requests never receive either backend credential", async t 
   });
   const response = await worker.fetch(new Request("https://app.example/api/images/fetch", { method: "POST", headers: { cookie: "fixture-session", "content-type": "application/json" }, body: JSON.stringify({ url: "https://images.example/test.png" }) }), environment());
   assert.equal(response.status, 200); assert.equal(externalRequests, 1);
+});
+
+test("import owner hint survives proxying but cannot authorize an image write", async t => {
+  let puts=0,reads=0;
+  const env=environment();env.IMAGES.put=async()=>{puts++};
+  mockFetch(t,async(input,init)=>{
+    const {url,headers}=backendRequest(input,init);
+    if(url.pathname==="/api/auth/session")return Response.json({user:{authUserId:"account-B"}});
+    assert.equal(headers.get("x-koinote-import-owner"),"account-A");
+    return Response.json({code:"import_account_changed"},{status:409});
+  });
+  const rejected=await worker.fetch(new Request("https://app.example/api/documents",{method:"POST",headers:{cookie:"session=B","X-Koinote-Import-Owner":"account-A"},body:"{}"}),env);
+  assert.equal(rejected.status,409);
+  for(const path of ["/api/images","/api/images/fetch"]){
+    const request=new Request("https://app.example"+path,{method:"POST",headers:{cookie:"session=B","X-Koinote-Import-Owner":"account-A","Content-Type":"image/png"},body:png});
+    request.arrayBuffer=async()=>{reads++;throw Error("must reject before reading image bytes")};
+    request.json=async()=>{reads++;throw Error("must reject before external-image lookup")};
+    const response=await worker.fetch(request,env);
+    assert.equal(response.status,409);assert.equal((await response.json()).code,"import_account_changed");
+  }
+  assert.equal(puts,0);assert.equal(reads,0);
+  const anonymous=await worker.fetch(new Request("https://app.example/api/images",{method:"POST",headers:{"X-Koinote-Import-Owner":"account-B"},body:png}),env);
+  assert.equal(anonymous.status,401);assert.equal(puts,0);
+});
+
+test("import image uploads require durable cleanup registration", async t => {
+  let puts=0,deletes=0,recorded;const phases=[];
+  const env=environment();env.IMAGES.put=async()=>{puts++};env.IMAGES.delete=async()=>{deletes++};
+  mockFetch(t,async(input,init)=>{
+    const {url}=backendRequest(input,init);
+    if(url.pathname==="/api/auth/session")return Response.json({user:{authUserId:"account-A"}});
+    if(url.pathname==="/api/images/admit")return new Response(null,{status:204});
+    if(url.pathname==="/api/images/rollback"){
+      assert.equal(new Headers(init.headers).get("x-auth-user-id"),"account-A");
+      const body=JSON.parse(init.body);phases.push(body.deleted);
+      if(body.deleted)assert.equal(deletes,1);else assert.equal(deletes,0);
+      return Response.json({rollbackAllowed:true});
+    }
+    assert.equal(url.pathname,"/api/images/record");recorded=JSON.parse(init.body);
+    return Response.json({code:"server_error"},{status:500});
+  });
+  const result=await worker.fetch(new Request("https://app.example/api/images",{method:"POST",headers:{cookie:"session=A","X-Koinote-Import-Owner":"account-A","Content-Type":"image/png"},body:png}),env);
+  assert.equal(result.status,503);assert.equal(recorded.import,true);assert.equal(recorded.purpose,"persistent");
+  assert.equal(puts,0);assert.equal(deletes,1);
+  assert.deepEqual(phases,[false,true]);
+});
+
+test("import rollback keeps an image when the backend finds a persisted reference",async t=>{
+  const env=environment();let deletes=0;env.IMAGES.delete=async()=>{deletes++};
+  mockFetch(t,async(input,init)=>{
+    const {url}=backendRequest(input,init);
+    if(url.pathname==="/api/auth/session")return Response.json({user:{authUserId:"account-A"}});
+    if(url.pathname==="/api/images/admit")return new Response(null,{status:204});
+    if(url.pathname==="/api/images/rollback")return Response.json({rollbackAllowed:false});
+    return Response.json({code:"server_error"},{status:500});
+  });
+  const result=await worker.fetch(new Request("https://app.example/api/images",{method:"POST",headers:{cookie:"session=A","X-Koinote-Import-Owner":"account-A","Content-Type":"image/png"},body:png}),env);
+  assert.equal(result.status,503);assert.equal(deletes,0);
+});
+
+test("both import rollback acknowledgements can be retried without another deletion",async t=>{
+  const env=environment();const phases=[];let deletes=0;
+  env.IMAGES.delete=async()=>{deletes++};
+  mockFetch(t,async(input,init)=>{
+    const {url}=backendRequest(input,init);
+    if(url.pathname==="/api/auth/session")return Response.json({user:{authUserId:"account-A"}});
+    if(url.pathname==="/api/images/admit")return new Response(null,{status:204});
+    if(url.pathname==="/api/images/record")return Response.json({code:"server_error"},{status:500});
+    assert.equal(url.pathname,"/api/images/rollback");
+    const {deleted}=JSON.parse(init.body);phases.push(deleted);
+    if(phases.length===1||phases.length===3)throw new TypeError("Rollback committed but response lost");
+    return Response.json({rollbackAllowed:true});
+  });
+  const result=await worker.fetch(new Request("https://app.example/api/images",{method:"POST",headers:{cookie:"session=A","X-Koinote-Import-Owner":"account-A","Content-Type":"image/png"},body:png}),env);
+  assert.equal(result.status,503);assert.equal(deletes,1);assert.deepEqual(phases,[false,false,true,true]);
 });

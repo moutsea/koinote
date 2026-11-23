@@ -8,9 +8,12 @@
 
 import { checkFetchTarget } from "./ssrf";
 import { backendHeaders } from "./backend";
+import { rateLimitAddress } from "./rateLimitAddress";
+import { IMPORT_OWNER_HEADER, IMPORT_ACCOUNT_CHANGED_CODE } from "../spa/src/documentImportCore";
 
 export type ImagesEnv = {
   IMAGES: R2Bucket;
+  IMAGE_READ_LIMITER?: RateLimit;
   BACKEND_URL: string;
   IMAGE_PUBLIC_BASE?: string;
   /** 本地模拟 R2 缺图时使用的只读回源；生产环境不配置 */
@@ -101,10 +104,8 @@ const RECORD_TIMEOUT_MS = 5_000;
  * 返回结构化结果。超额时必须保留后端错误码，否则主配额与临时导出配额会被折叠，
  * 前端无法给出正确的处理建议。
  *
- * 为什么在写 R2 之后才报账、而不是先问"还够不够"：
- *   先问后写的话，两次调用之间有窗口，并发上传各自都会得到"够"的答复。把判定放在
- *   后端那条 INSERT ... WHERE 里、写完再报，才能让配额判定是原子的。代价是超额时
- *   白写一次 R2，随后删掉 —— 那是超额路径，不是常规路径。
+ * 在写 R2 之前原子预留配额，并登记待回收租期。并发预留仍由后端事务锁串行
+ * 判断；预留响应丢失或对象写入失败时，统一回滚，后台 GC 处理未完成的补偿。
  */
 async function recordUsage(
   key: string,
@@ -112,16 +113,11 @@ async function recordUsage(
   authUserId: string,
   purpose: ImagePurpose,
   env: ImagesEnv,
+  imported = false,
+  complete = false,
 ): Promise<RecordUsageResult> {
   if (!env.BACKEND_INTERNAL_TOKEN) {
-    if (purpose === "wechat-export") {
-      console.warn("images: BACKEND_INTERNAL_TOKEN 未配置，无法安排临时图片回收");
-      return { outcome: "error" };
-    }
-    // 普通正文图片仍优先可用性：配额是运营诉求，而配置缺失导致所有人不能贴图
-    // 是更坏的故障。公式图不能走这条降级，因为没有回收任务就会永久泄漏。
-    console.warn("images: BACKEND_INTERNAL_TOKEN 未配置，跳过用量记账");
-    return { outcome: "ok" };
+    return { outcome: "error" };
   }
 
   const url = new URL("/api/images/record", env.BACKEND_URL);
@@ -137,7 +133,7 @@ async function recordUsage(
         "X-Auth-User-Id": authUserId,
       }),
       redirect: "manual",
-      body: JSON.stringify({ key, bytes, purpose }),
+      body: JSON.stringify({ key, bytes, purpose, upload: true, complete, ...(imported ? { import: true } : {}) }),
       signal: controller.signal,
     });
     if (resp.status === 409) {
@@ -187,6 +183,66 @@ async function recordUsage(
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function registerImageRollback(key: string, authUserId: string, deleted: boolean, env: ImagesEnv, purpose: ImagePurpose): Promise<boolean | null> {
+  if (!env.BACKEND_INTERNAL_TOKEN) return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(new URL("/api/images/rollback", env.BACKEND_URL), {
+        method: "POST",
+        headers: backendHeaders(env, {
+          "Content-Type": "application/json",
+          "X-Koinote-Internal-Token": env.BACKEND_INTERNAL_TOKEN,
+          "X-Auth-User-Id": authUserId,
+        }),
+        body: JSON.stringify({ key, deleted, purpose }), redirect: "manual",
+        signal: AbortSignal.timeout(RECORD_TIMEOUT_MS),
+      });
+      if (response.ok) return (await response.json() as { rollbackAllowed?: boolean }).rollbackAllowed === true;
+      if (response.status < 500) return null;
+    } catch { /* Both rollback phases are safe to retry after a lost response. */ }
+  }
+  return null;
+}
+
+async function rollbackImageUpload(key: string, authUserId: string, env: ImagesEnv, purpose: ImagePurpose): Promise<void> {
+  const registered = await registerImageRollback(key, authUserId, false, env, purpose);
+  if (registered === false) return; // A persisted reference forbids deletion.
+  try {
+    await env.IMAGES.delete(key);
+  } catch {
+    // The durable abort entry lets GC retry the physical deletion.
+    console.error("images: rollback deletion delayed", { registered });
+    return;
+  }
+  if (registered && await registerImageRollback(key, authUserId, true, env, purpose)) return;
+  // An unavailable origin cannot confirm reconciliation. Registered entries
+  // remain retryable by GC; do not claim completion without acknowledgement.
+  console.error("images: rollback reconciliation pending", { registered });
+}
+
+async function admitImageWrite(authUserId: string, env: ImagesEnv): Promise<Response | null> {
+  if (env.BACKEND_INTERNAL_TOKEN) {
+    try {
+      const response = await fetch(new URL("/api/images/admit", env.BACKEND_URL), {
+        method: "POST", redirect: "manual", signal: AbortSignal.timeout(RECORD_TIMEOUT_MS),
+        headers: backendHeaders(env, {
+          "X-Koinote-Internal-Token": env.BACKEND_INTERNAL_TOKEN,
+          "X-Auth-User-Id": authUserId,
+        }),
+      });
+      if (response.ok) return null;
+      if (response.status === 429) {
+        const retry = response.headers.get("Retry-After") ?? "60";
+        return new Response(JSON.stringify({ code: "image_rate_limited", error: "Too many image uploads; please retry later" }), {
+          status: 429, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", "Retry-After": /^\d+$/.test(retry) ? retry : "60" },
+        });
+      }
+      if (response.status === 401 || response.status === 403) return errorCode(401, "unauthorized", "Not logged in");
+    } catch { /* Admission is required; an unavailable origin must not allow R2 writes. */ }
+  }
+  return errorCode(503, "image_upload_unavailable", "Image uploads are temporarily unavailable");
 }
 
 /** 回调后端校验浏览器 cookie 或桌面 Bearer token，返回 authUserId。 */
@@ -249,13 +305,6 @@ function randomKey(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function contentHash(buffer: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
-
 /**
  * 校验字节并写入 R2。上传与代抓共用。
  *
@@ -268,6 +317,7 @@ async function storeImage(
   authUserId: string,
   env: ImagesEnv,
   purpose: ImagePurpose = "persistent",
+  imported = false,
 ): Promise<Response> {
   if (buffer.byteLength === 0) {
     return errorCode(400, "image_empty", "Empty image");
@@ -297,38 +347,23 @@ async function storeImage(
 
   const extension = ALLOWED.get(sniffed)!;
   // key 里带 authUserId 前缀：便于按用户列举与配额统计，也天然隔离
-  const stem = purpose === "wechat-export" ? await contentHash(buffer) : randomKey();
+  // Each upload owns an immutable object, including temporary formula images.
+  // Export-local formula caching stays in wechatMath; unrelated requests must
+  // never share a key that one failed request can later roll back.
+  const stem = randomKey();
   const key = `u/${authUserId}/${stem}.${extension}`;
-  const existing = purpose === "wechat-export" ? await env.IMAGES.head(key) : null;
-
-  if (!existing) {
-    await env.IMAGES.put(key, buffer, {
-      httpMetadata: {
-        contentType: sniffed,
-        cacheControl: "public, max-age=31536000, immutable",
-      },
-      customMetadata: { authUserId, purpose },
-    });
-  }
-
-  // 报账。配额判定在后端（那条 INSERT ... WHERE 是原子的），这里只按结果行事
+  // Atomically reserve quota and a cleanup lease before writing any R2 bytes.
+  // An unconfirmed reservation is rolled back, even for ordinary editor uploads.
   const recorded = await recordUsage(
     key,
     buffer.byteLength,
     authUserId,
     purpose,
     env,
+    imported,
   );
 
   if (recorded.outcome === "quota") {
-    // 超额：把刚写的对象删掉，别留下不计入账本的孤儿。
-    // 删失败也只能记日志 —— 此时回收队列里没有它（那张表是删文档时才入队的），
-    // 所以这是唯一的清理时机，失败就成了真正的孤儿对象
-    try {
-      await env.IMAGES.delete(key);
-    } catch (err) {
-      console.error(`images: 超额回滚删除失败，${key} 成为孤儿对象`, err);
-    }
     return json(413, {
       code: recorded.code,
       error:
@@ -351,24 +386,28 @@ async function storeImage(
   }
 
   if (recorded.outcome === "error") {
-    if (purpose === "wechat-export") {
-      if (!existing) {
-        try {
-          await env.IMAGES.delete(key);
-        } catch (err) {
-          console.error(`images: 临时对象记账失败且回滚失败，${key} 成为孤儿对象`, err);
-        }
-      }
-      return errorCode(
-        503,
-        "image_record_failed",
-        "Could not schedule temporary image cleanup",
-      );
-    }
-    // 报账失败但对象已经写进去了。放行 —— 此时用量会少算这一张。
-    // 反过来（删掉并报错）会让后端抖一下就贴不了图，那更糟。
-    // 少算的后果是配额略微宽松，且可以靠对账补回来
-    console.warn(`images: ${key} 已写入但未计入用量`);
+    await rollbackImageUpload(key, authUserId, env, purpose);
+    return errorCode(503, "image_record_failed", "Could not confirm image storage reservation");
+  }
+
+  try {
+    await env.IMAGES.put(key, buffer, {
+      httpMetadata: { contentType: sniffed, cacheControl: "public, max-age=31536000, immutable" },
+      customMetadata: { authUserId, purpose },
+    });
+  } catch {
+    // R2 may have committed despite a lost response. The reservation already
+    // contains a durable lease; rollback/GC can settle either outcome safely.
+    await rollbackImageUpload(key, authUserId, env, purpose);
+    return errorCode(503, "image_upload_unavailable", "Could not complete image upload");
+  }
+
+  // A short initial lease releases reservations if this Worker stops mid-upload.
+  // Only an acknowledged completion promotes the object to its recovery lease.
+  const completed = await recordUsage(key, buffer.byteLength, authUserId, purpose, env, imported, true);
+  if (completed.outcome !== "ok") {
+    await rollbackImageUpload(key, authUserId, env, purpose);
+    return errorCode(503, "image_record_failed", "Could not confirm completed image upload");
   }
 
   return json(200, {
@@ -390,6 +429,13 @@ export async function handleImageUpload(
   if (!authUserId) {
     return errorCode(401, "unauthorized", "Not logged in");
   }
+  const expectedOwner = request.headers.get(IMPORT_OWNER_HEADER);
+  if (expectedOwner && expectedOwner !== authUserId) {
+    return errorCode(409, IMPORT_ACCOUNT_CHANGED_CODE, "The signed-in account changed; import stopped");
+  }
+
+  const admission = await admitImageWrite(authUserId, env);
+  if (admission) return admission;
 
   const declared = (request.headers.get("content-type") ?? "")
     .split(";")[0]
@@ -407,12 +453,13 @@ export async function handleImageUpload(
   }
 
   // 真实长度由 storeImage 再挡一道：Content-Length 可以撒谎
-  const buffer = await request.arrayBuffer();
+  const buffer = await readCapped(new Response(request.body), MAX_BYTES);
+  if (buffer === null) return errorCode(413, "image_too_large", "Image is too large");
   const purposeHeader = request.headers.get(IMAGE_PURPOSE_HEADER) ?? "persistent";
   if (purposeHeader !== "persistent" && purposeHeader !== "wechat-export") {
     return errorCode(400, "bad_request", "Invalid image purpose");
   }
-  return storeImage(buffer, declared, authUserId, env, purposeHeader);
+  return storeImage(buffer, declared, authUserId, env, purposeHeader, Boolean(expectedOwner));
 }
 
 /** 代抓时最多跟几跳重定向。图床类地址正常一两跳就到 */
@@ -439,6 +486,13 @@ export async function handleImageFetch(
   if (!authUserId) {
     return errorCode(401, "unauthorized", "Not logged in");
   }
+  const expectedOwner = request.headers.get(IMPORT_OWNER_HEADER);
+  if (expectedOwner && expectedOwner !== authUserId) {
+    return errorCode(409, IMPORT_ACCOUNT_CHANGED_CODE, "The signed-in account changed; import stopped");
+  }
+
+  const admission = await admitImageWrite(authUserId, env);
+  if (admission) return admission;
 
   let body: { url?: string };
   try {
@@ -531,7 +585,7 @@ export async function handleImageFetch(
   const sniffed = sniffImageType(new Uint8Array(buffer));
   const effective = ALLOWED.has(declared) ? declared : (sniffed ?? declared);
 
-  return storeImage(buffer, effective, authUserId, env);
+  return storeImage(buffer, effective, authUserId, env, "persistent", Boolean(expectedOwner));
 }
 
 /**
@@ -915,6 +969,21 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+async function admitImageRead(request: Request, env: ImagesEnv): Promise<Response | null> {
+  const unavailable = () => new Response(null, { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": "1" } });
+  // Public immutable objects must stay readable while the origin restarts, and a
+  // shared origin budget would let a few sources break every reader. Admission
+  // is edge-only; missing/failed admission still never reaches billable R2.
+  if (!env.IMAGE_READ_LIMITER) return unavailable();
+  try {
+    const key = `koinote:image-read:${rateLimitAddress(request.headers.get("cf-connecting-ip"))}`;
+    if ((await env.IMAGE_READ_LIMITER.limit({ key })).success) return null;
+    return new Response(null, { status: 429, headers: { "Cache-Control": "private, no-store", "Retry-After": "60" } });
+  } catch {
+    return unavailable();
+  }
+}
+
 /**
  * GET /images/<key> —— 未配自定义域名时的回落读取路径。
  * 公开可读（用户已选择公开 bucket 模式），key 随机不可枚举。
@@ -924,11 +993,13 @@ export async function handleImageGet(
   env: ImagesEnv,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const requestedKey = decodeURIComponent(url.pathname.replace(/^\/images\//, ""));
-  if (!requestedKey || requestedKey.includes("..")) {
-    return new Response("Not found", { status: 404 });
-  }
+  let requestedKey: string;
+  try { requestedKey = decodeURIComponent(url.pathname.replace(/^\/images\//, "")); }
+  catch { return new Response("Not found", { status: 404 }); }
   const alias = PUBLIC_IMAGE_ALIASES.get(requestedKey);
+  if (!alias && !isSafeImageKey(requestedKey)) return new Response("Not found", { status: 404 });
+  const admission = await admitImageRead(request, env);
+  if (admission) return admission;
 
   // HEAD 只需要元数据，不必把对象体拉出来
   if (request.method === "HEAD") {

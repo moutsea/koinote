@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, releaseUnusedImages, uploadImage, type UploadedImage, type WechatCoverMode, type WechatCoverRatio } from "../../api";
-import { conflictDraftKey } from "../../conflictDrafts";
+import { canStoreConflictDraft, conflictDraftKey, conflictDraftRevision, currentConflictDraftOwner, rememberLegacyConflictDraft } from "../../conflictDrafts";
 import { replaceDesktopLocalImageURLs } from "../../desktop/offlineImagesCore";
 import { useSaveDocument } from "../../documents";
 import { documentCoverState, type DocumentCoverState, type SaveDocumentCover } from "./documentCoverState";
@@ -110,6 +110,8 @@ export type DocumentSaver = {
   /** 同步 SQLite 已完成的图片地址替换，不把内部映射误记成一次用户编辑。 */
   applyImageMapping: (docId: string, localURL: string, remoteURL: string) => boolean;
   status: (docId: string) => SaveStatus;
+  /** 最近一次失败保存的服务端错误码；成功或进入其他状态后清空。 */
+  errorCode: (docId: string) => string | undefined;
   isDirty: (docId: string) => boolean;
   /** 当前是否有保存请求正在等待响应。 */
   isSaving: (docId: string) => boolean;
@@ -156,20 +158,31 @@ function isDocumentRevisionConflict(error: unknown): boolean {
   );
 }
 
-function clearConflictDraft(docId: string) {
-  if (typeof window === "undefined") return;
+type StoredDraftRecord = { draft: StoredDocumentDraft; key: string; value: string };
+
+function clearConflictDraft(record: StoredDraftRecord | undefined) {
+  if (!record || typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(conflictDraftKey(docId));
+    // Storage is shared by tabs. A successful save may discard only the exact
+    // backup this saver wrote/recovered, never another tab's newer snapshot.
+    if (window.localStorage.getItem(record.key) === record.value) {
+      window.localStorage.removeItem(record.key);
+    }
   } catch {
     // 与写入同理：清理本地兜底失败不应破坏已经完成的服务端操作。
   }
 }
 
-export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
+export function useDocumentSaver(onTitleCommitted?: () => void, accountId?: string): DocumentSaver {
+  const owner = accountId ?? currentConflictDraftOwner();
+  const draftRevision = useMemo(() => conflictDraftRevision(owner), [owner]);
   const entries = useRef<Map<string, Entry>>(new Map());
-  const lastStoredDrafts = useRef<Map<string, StoredDocumentDraft>>(new Map());
+  const lastStoredDrafts = useRef<Map<string, StoredDraftRecord>>(new Map());
   // 状态要驱动标签栏渲染，所以进 state；待存内容留在 ref，避免每次打字都渲染
   const [statuses, setStatuses] = useState<Record<string, SaveStatus>>({});
+  // Server code of the latest failed save, so the UI can say why a retry keeps
+  // failing (for example an expired image) instead of a generic message.
+  const [errorCodes, setErrorCodes] = useState<Record<string, string>>({});
 
   const save = useSaveDocument();
   // mutateAsync 在 react-query v5 里身份稳定，但存进 ref 更保险 ——
@@ -180,41 +193,73 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
   const titleCommitted = useRef(onTitleCommitted);
   titleCommitted.current = onTitleCommitted;
 
-  const setStatus = useCallback((docId: string, status: SaveStatus) => {
+  const setStatus = useCallback((docId: string, status: SaveStatus, errorCode?: string) => {
     setStatuses((prev) =>
       prev[docId] === status ? prev : { ...prev, [docId]: status },
     );
+    // Only a failure that is still being reported keeps its reason.
+    const keep = (status === "backed-up" || status === "failed") ? errorCode : undefined;
+    setErrorCodes((prev) => {
+      if (prev[docId] === keep) return prev;
+      const next = { ...prev };
+      if (keep) next[docId] = keep;
+      else delete next[docId];
+      return next;
+    });
   }, []);
 
   const storeConflictDraft = useCallback(
     (docId: string, snapshot: DocumentSnapshot, conflict: boolean): boolean => {
-      if (typeof window === "undefined") return false;
+      if (typeof window === "undefined" || !canStoreConflictDraft(owner, draftRevision)) return false;
       const draft = { ...snapshot, conflict };
-      const key = conflictDraftKey(docId);
+      const key = conflictDraftKey(docId, owner);
+      const legacyKey = conflictDraftKey(docId);
       const previous = lastStoredDrafts.current.get(docId);
-      if (previous && sameStoredDraft(previous, draft)) {
+      if (previous && sameStoredDraft(previous.draft, draft)) {
         try {
-          if (window.localStorage.getItem(key) !== null) return true;
+          if (window.localStorage.getItem(previous.key) === previous.value) return true;
         } catch {
           // 继续走写入分支，由统一的失败处理清掉内存记录和可能过期的旧草稿。
         }
       }
       try {
-        window.localStorage.setItem(key, JSON.stringify(draft));
-        lastStoredDrafts.current.set(docId, draft);
+        const value = JSON.stringify(draft);
+        window.localStorage.setItem(key, value);
+        if (!canStoreConflictDraft(owner, draftRevision)) {
+          clearConflictDraft({ draft, key, value });
+          return false;
+        }
+        lastStoredDrafts.current.set(docId, { draft, key, value });
+        if (previous?.key === legacyKey) clearConflictDraft(previous);
         return true;
       } catch {
+        // A nearly-full store may fit the existing legacy value but not a
+        // second copy under the new key. Update that authorized draft in place
+        // until a later load can complete its account-namespace migration.
+        try {
+          if (previous?.key === legacyKey && window.localStorage.getItem(key) === null && window.localStorage.getItem(legacyKey) === previous.value) {
+            const value = JSON.stringify({ ...draft, owner });
+            window.localStorage.setItem(legacyKey, value);
+            if (!canStoreConflictDraft(owner, draftRevision)) {
+              clearConflictDraft({ draft, key: legacyKey, value });
+              return false;
+            }
+            lastStoredDrafts.current.set(docId, { draft, key: legacyKey, value });
+            return true;
+          }
+        } catch { /* Fall through to the failed-backup handling. */ }
         lastStoredDrafts.current.delete(docId);
-        clearConflictDraft(docId);
+        clearConflictDraft(previous);
         return false;
       }
     },
-    [],
+    [owner, draftRevision],
   );
 
   const clearStoredDraft = useCallback((docId: string) => {
+    const previous = lastStoredDrafts.current.get(docId);
     lastStoredDrafts.current.delete(docId);
-    clearConflictDraft(docId);
+    clearConflictDraft(previous);
   }, []);
 
   const doSave = useCallback(
@@ -274,6 +319,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
                   : backedUp
                     ? "backed-up"
                     : "failed",
+                error instanceof ApiError ? error.code : undefined,
               );
             }
             return false;
@@ -329,17 +375,22 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     let pending = snapshot;
     let recovered = false;
     let conflicted = false;
-    if (typeof window !== "undefined") {
+    if (owner && typeof window !== "undefined" && canStoreConflictDraft(owner, draftRevision)) {
       try {
-        const stored = window.localStorage.getItem(conflictDraftKey(docId));
+        const scopedKey = conflictDraftKey(docId, owner);
+        const legacyKey = conflictDraftKey(docId);
+        const scoped = window.localStorage.getItem(scopedKey);
+        let stored = scoped ?? window.localStorage.getItem(legacyKey);
+        const key = scoped === null ? legacyKey : scopedKey;
         if (stored) {
-          const parsed = JSON.parse(stored) as Partial<StoredDocumentDraft>;
+          const parsed = JSON.parse(stored) as Partial<StoredDocumentDraft> & { owner?: string };
           if (
             typeof parsed.title === "string" &&
             typeof parsed.content === "string" &&
             typeof parsed.theme === "string" &&
-            typeof parsed.revision === "number"
+            typeof parsed.revision === "number" && (!parsed.owner || parsed.owner === owner)
           ) {
+            if (key === legacyKey) stored = rememberLegacyConflictDraft(owner, docId, stored, draftRevision);
             pending = {
               title: parsed.title,
               content: parsed.content,
@@ -354,15 +405,24 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
             // 旧版本只在真实 revision 冲突时写这份草稿，因此缺少字段要按冲突兼容；
             // 新版本会为普通保存失败显式写 conflict:false。
             conflicted = parsed.conflict !== false;
-            lastStoredDrafts.current.set(docId, {
-              ...pending,
-              conflict: conflicted,
-            });
+            const draft = { ...pending, conflict: conflicted };
+            lastStoredDrafts.current.set(docId, { draft, key, value: stored });
+            // seed receives the current account's authorized document. Keep
+            // legacy data if migration cannot be persisted, so recovery survives.
+            try {
+              if (canStoreConflictDraft(owner, draftRevision)) {
+                window.localStorage.setItem(scopedKey, stored);
+                if (canStoreConflictDraft(owner, draftRevision)) {
+                  lastStoredDrafts.current.set(docId, { draft, key: scopedKey, value: stored });
+                  if (key === legacyKey) clearConflictDraft({ draft, key, value: stored });
+                } else {
+                  clearConflictDraft({ draft, key: scopedKey, value: stored });
+                }
+              }
+            } catch { /* Recovery remains in memory and the original key. */ }
           }
         }
-      } catch {
-        clearConflictDraft(docId);
-      }
+      } catch { /* An unreadable backup must not delete another tab's recovery data. */ }
     }
     entries.current.set(docId, {
       pending: { ...pending },
@@ -375,7 +435,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       revisionConflict: conflicted,
     });
     if (recovered) setStatus(docId, conflicted ? "conflict" : "backed-up");
-  }, [setStatus]);
+  }, [setStatus, owner, draftRevision]);
 
   const queue = useCallback(
     (docId: string, patch: DocPatch) => {
@@ -602,6 +662,11 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
     [statuses],
   );
 
+  const errorCode = useCallback(
+    (docId: string): string | undefined => errorCodes[docId],
+    [errorCodes],
+  );
+
   const isDirty = useCallback(
     (docId: string) => entries.current.get(docId)?.dirty ?? false,
     [],
@@ -640,6 +705,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       peek,
       applyImageMapping,
       status,
+      errorCode,
       isDirty,
       isSaving,
       forget,
@@ -658,6 +724,7 @@ export function useDocumentSaver(onTitleCommitted?: () => void): DocumentSaver {
       peek,
       applyImageMapping,
       status,
+      errorCode,
       isDirty,
       isSaving,
       forget,

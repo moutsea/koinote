@@ -5,8 +5,9 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { ApiError, getSession, logout as apiLogout, type User } from "./api";
-import { clearAllConflictDrafts } from "./conflictDrafts";
+import { clearConflictDrafts } from "./conflictDrafts";
 import { isDesktopRuntime } from "./desktop/runtime";
+import { installSessionCacheIsolation } from "./sessionCache";
 
 export type SessionSnapshot = Awaited<ReturnType<typeof getSession>> & {
   revocationVersion?: number;
@@ -14,6 +15,7 @@ export type SessionSnapshot = Awaited<ReturnType<typeof getSession>> & {
 
 // 会话状态集中放在 react-query 缓存的 ["session"] key 下，全站共享。
 export function sessionQueryOptions(queryClient: QueryClient) {
+  installSessionCacheIsolation(queryClient);
   const revocationVersion = () =>
     queryClient.getQueryData<SessionSnapshot>(["session"])?.revocationVersion ?? 0;
   return queryOptions({
@@ -77,8 +79,10 @@ export function useCurrentUser(): User | undefined {
 export function useLogout() {
   const queryClient = useQueryClient();
   return async () => {
+    const owner = queryClient.getQueryData<SessionSnapshot>(["session"])?.user?.authUserId;
     const clearClientSession = () => {
-      clearAllConflictDrafts();
+      clearConflictDrafts(owner);
+      if (queryClient.getQueryData<SessionSnapshot>(["session"])?.user?.authUserId !== owner) return;
       queryClient.removeQueries({ queryKey: ["share"] });
       queryClient.setQueryData(["session"], undefined);
       queryClient.removeQueries({ queryKey: ["session"] });

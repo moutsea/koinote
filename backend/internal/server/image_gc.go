@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // 图片回收：删文档后把不再被引用的 R2 对象排队删掉。
@@ -38,6 +40,16 @@ const (
 // enqueueOrphanedImages）。这里不再判归属 —— 判归属需要 authUserId，而这个函数
 // 只拿到 userID。
 func (a *App) enqueueImageDeletions(ctx context.Context, userID int, keys []string) error {
+	return a.scheduleImageDeletions(ctx, userID, keys, 0)
+}
+
+// editedImageGrace keeps an image removed by an edit recoverable through undo or
+// re-paste. A later save containing it again cancels the still-unclaimed entry;
+// once claimed, every new reference is rejected (see migrations/0125), which
+// would block saving the whole document.
+const editedImageGrace = 30 * time.Minute
+
+func (a *App) scheduleImageDeletions(ctx context.Context, userID int, keys []string, delay time.Duration) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -55,16 +67,16 @@ func (a *App) enqueueImageDeletions(ctx context.Context, userID int, keys []stri
 	}
 
 	// 重新入队时恢复尝试次数。旧任务可能因长期故障累计了很多 attempts；既然对象再次
-	// 被确认成孤儿，就应立即给它一次新的回收机会。
+	// 被确认成孤儿，就应在 delay 之后给它一次新的回收机会。
 	_, err := a.db.Exec(ctx, `
-		INSERT INTO pending_image_deletions (object_key, user_id)
-		SELECT unnest($1::text[]), $2
+		INSERT INTO pending_image_deletions (object_key, user_id, next_try_at)
+		SELECT unnest($1::text[]), $2, now() + $3::interval
 		ON CONFLICT (object_key) DO UPDATE SET
 			user_id = EXCLUDED.user_id,
 			attempts = 0,
 			last_error = NULL,
-			next_try_at = now()
-	`, safe, userID)
+			next_try_at = EXCLUDED.next_try_at
+	`, safe, userID, delay.String())
 	return err
 }
 
@@ -80,7 +92,7 @@ func (a *App) cancelPendingImageDeletions(ctx context.Context, user userRef, con
 	}
 	if _, err := a.db.Exec(ctx, `
 		DELETE FROM pending_image_deletions
-		WHERE user_id = $1 AND object_key = ANY($2)
+		WHERE user_id = $1 AND object_key = ANY($2) AND upload_aborted_at IS NULL
 	`, user.ID, keys); err != nil {
 		// 取消失败不该让正文保存失败；GC 的删除前复查仍是最后一道安全网。
 		log.Printf("image gc: 撤销仍被引用的待删记录失败: %v", err)
@@ -97,7 +109,14 @@ func (a *App) cancelPendingImageDeletions(ctx context.Context, user userRef, con
 // 调用时机是文档已经从表里删掉之后 —— 所以下面那条查询天然不会把自己算进引用方。
 func (a *App) enqueueOrphanedImages(ctx context.Context, user userRef, content string) {
 	keys := extractOwnedImageKeys(content, user.AuthUserID)
-	a.enqueueOrphanedImageKeys(ctx, user, keys)
+	a.queueOrphanedImageKeys(ctx, user, keys, 0)
+}
+
+// enqueueEditedOutImages handles images an edit removed from content or cover.
+// Unlike deletions, edits are routinely undone, so collection waits for a grace period.
+func (a *App) enqueueEditedOutImages(ctx context.Context, user userRef, content string) {
+	keys := extractOwnedImageKeys(content, user.AuthUserID)
+	a.queueOrphanedImageKeys(ctx, user, keys, editedImageGrace)
 }
 
 // enqueueOrphanedImageKeys 批量确认候选 key 是否仍被引用。
@@ -105,7 +124,11 @@ func (a *App) enqueueOrphanedImages(ctx context.Context, user userRef, content s
 // 先从该用户的当前文档和历史版本中一次性抽出全部图片 key，再与候选集合做差集。
 // 这样删除一篇含多张图片的文档时只扫描一次正文，而不是每个 key 都全表扫描一遍。
 func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys []string) {
-	queued, err := a.enqueueOrphanedImageKeysChecked(ctx, user, keys)
+	a.queueOrphanedImageKeys(ctx, user, keys, 0)
+}
+
+func (a *App) queueOrphanedImageKeys(ctx context.Context, user userRef, keys []string, delay time.Duration) {
+	queued, err := a.scheduleOrphanedImageKeys(ctx, user, keys, delay)
 	if err != nil {
 		// 入队失败只记日志：触发回收的文档写操作已经成功，不能再回滚正文。
 		log.Printf("image gc: 入队失败（候选 %d 个）: %v", len(keys), err)
@@ -119,6 +142,10 @@ func (a *App) enqueueOrphanedImageKeys(ctx context.Context, user userRef, keys [
 // enqueueOrphanedImageKeysChecked 与 enqueueOrphanedImageKeys 做同样的归属和引用复查，
 // 但把错误返回给需要向用户确认结果的调用方（例如失败导入的图片回滚接口）。
 func (a *App) enqueueOrphanedImageKeysChecked(ctx context.Context, user userRef, keys []string) (int, error) {
+	return a.scheduleOrphanedImageKeys(ctx, user, keys, 0)
+}
+
+func (a *App) scheduleOrphanedImageKeys(ctx context.Context, user userRef, keys []string, delay time.Duration) (int, error) {
 	if len(keys) == 0 {
 		return 0, nil
 	}
@@ -184,7 +211,7 @@ func (a *App) enqueueOrphanedImageKeysChecked(ctx context.Context, user userRef,
 		return 0, fmt.Errorf("遍历孤儿 key: %w", err)
 	}
 
-	if err := a.enqueueImageDeletions(ctx, user.ID, orphans); err != nil {
+	if err := a.scheduleImageDeletions(ctx, user.ID, orphans, delay); err != nil {
 		return 0, fmt.Errorf("写入回收队列: %w", err)
 	}
 	return len(orphans), nil
@@ -227,7 +254,7 @@ func (a *App) StartImageGC(ctx context.Context) {
 // runImageGCOnce 处理一批到期的待删记录。
 func (a *App) runImageGCOnce(ctx context.Context) error {
 	rows, err := a.db.Query(ctx, `
-		SELECT id, object_key, user_id, attempts
+		SELECT id, object_key, user_id, attempts, upload_aborted_at
 		FROM pending_image_deletions
 		WHERE next_try_at <= now()
 		ORDER BY next_try_at
@@ -237,16 +264,10 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		return fmt.Errorf("取待删记录: %w", err)
 	}
 
-	type pending struct {
-		id       int
-		key      string
-		userID   sql.NullInt64
-		attempts int
-	}
-	var batch []pending
+	var batch []pendingImageDeletion
 	for rows.Next() {
-		var p pending
-		if err := rows.Scan(&p.id, &p.key, &p.userID, &p.attempts); err != nil {
+		var p pendingImageDeletion
+		if err := rows.Scan(&p.id, &p.key, &p.userID, &p.attempts, &p.abortedAt); err != nil {
 			rows.Close()
 			return fmt.Errorf("扫描待删记录: %w", err)
 		}
@@ -260,69 +281,28 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		return nil
 	}
 
-	// 删之前复查一次引用，把重新被用起来的图从这批里剔掉。
-	//
-	// 入队时判定过一次，但那是至少 30 秒前的事（轮询间隔），退避后可能是几十分钟前。
-	// 这中间图可能重新回到正文里：
-	//   · 用户删了图又按 Ctrl+Z 撤销
-	//   · 把同一张图重新粘贴/复制到别处
-	//   · 多标签编辑，自己的另一篇文档引用了它
-	// 少了这道复查，上面任一情形都会在 30 秒后把一张正在显示的图删掉 —— 用户看到
-	// 的是"图片加载失败"，而正文里的地址看着完全正常。实测在生产上发生过。
-	//
-	// 复查放在这里而不是入队时加锁：加锁要横跨一次 HTTP 调用（删 R2），
-	// 而这里只要在删之前的最后一刻确认一次，代价是一条查询。
+	// Commit the retirement before network I/O. Reference writers use the same
+	// user lock and reject this marker, including after an ambiguous deletion.
 	keys := make([]string, 0, len(batch))
 	ids := make([]int, 0, len(batch))
-	var revived []int
-	userIDs := make([]int64, 0, len(batch))
-	ownedKeys := make([]string, 0, len(batch))
-	for _, pendingImage := range batch {
-		if pendingImage.userID.Valid {
-			userIDs = append(userIDs, pendingImage.userID.Int64)
-			ownedKeys = append(ownedKeys, pendingImage.key)
+	pendingByKey := make(map[string]pendingImageDeletion, len(batch))
+	groups := make(map[sql.NullInt64][]pendingImageDeletion)
+	for _, candidate := range batch {
+		groups[candidate.userID] = append(groups[candidate.userID], candidate)
+	}
+	for _, candidates := range groups {
+		claimed, err := a.claimImageDeletions(ctx, candidates)
+		if err != nil {
+			return err
+		}
+		for _, p := range claimed {
+			keys = append(keys, p.key)
+			ids = append(ids, p.id)
+			pendingByKey[p.key] = p
 		}
 	}
-	referencedKeys, referenceErr := a.referencedImageKeys(ctx, userIDs, ownedKeys)
-	if referenceErr != nil {
-		// 用户仍存在的对象全部留到下轮。user_id 已为 NULL 的账号删除遗留对象不需要
-		// 查引用，仍可继续回收。
-		log.Printf("image gc: 删除前批量复查引用失败: %v", referenceErr)
-	}
-	for _, p := range batch {
-		if p.userID.Valid && referenceErr != nil {
-			continue
-		}
-		// user_id 为 NULL 说明账号已经删除。此时已没有「所有者自己的文档」，
-		// 别人正文里的同 URL 只是外链，不能让这个对象永久占着存储。
-		if _, referenced := referencedKeys[p.key]; referenced {
-			// 重新被引用了，撤销这条删除令
-			revived = append(revived, p.id)
-			continue
-		}
-		keys = append(keys, p.key)
-		ids = append(ids, p.id)
-	}
-
-	// 复活的直接从队列里删掉。留着的话每轮都要复查一次，且 attempts 到上限后
-	// 会以"失败"的形态永久留在表里，看起来像有问题
-	if len(revived) > 0 {
-		if _, err := a.db.Exec(ctx,
-			`DELETE FROM pending_image_deletions WHERE id = ANY($1)`, revived,
-		); err != nil {
-			log.Printf("image gc: 移除已复活记录失败: %v", err)
-		} else {
-			log.Printf("image gc: %d 个对象重新被引用，已撤销删除", len(revived))
-		}
-	}
-
 	if len(keys) == 0 {
 		return nil
-	}
-
-	pendingByKey := make(map[string]pending, len(batch))
-	for _, p := range batch {
-		pendingByKey[p.key] = p
 	}
 
 	result, err := a.deleteImagesViaWorker(ctx, keys)
@@ -389,10 +369,25 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 		}
 		return fmt.Errorf("从用量账本移除（%d 个 key）: %w", len(keys), err)
 	}
+	// Keep aborted keys briefly after deletion, preventing a late original
+	// record request from restoring their quota. A later GC pass removes them.
+	removeIDs := make([]int, 0, len(ids))
+	for _, key := range keys {
+		p := pendingByKey[key]
+		if p.abortedAt != nil && time.Since(*p.abortedAt) < imageRollbackRetention {
+			if _, err := a.db.Exec(ctx, `UPDATE pending_image_deletions
+				SET next_try_at=upload_aborted_at+$2::interval, attempts=0, last_error=NULL
+				WHERE id=$1`, p.id, imageRollbackRetention.String()); err != nil {
+				return err
+			}
+		} else {
+			removeIDs = append(removeIDs, p.id)
+		}
+	}
 
 	// 删成功就把记录清掉，不留档 —— 留着只会让表无限长
 	if _, err := a.db.Exec(ctx,
-		`DELETE FROM pending_image_deletions WHERE id = ANY($1)`, ids,
+		`DELETE FROM pending_image_deletions WHERE id = ANY($1)`, removeIDs,
 	); err != nil {
 		// 对象已经删了但记录没清掉。下轮会重试，R2 的 delete 是幂等的，
 		// 重复删不会报错
@@ -403,12 +398,126 @@ func (a *App) runImageGCOnce(ctx context.Context) error {
 	return nil
 }
 
+type pendingImageDeletion struct {
+	id        int
+	key       string
+	userID    sql.NullInt64
+	attempts  int
+	abortedAt *time.Time
+}
+
+func (a *App) claimImageDeletions(ctx context.Context, candidates []pendingImageDeletion) ([]pendingImageDeletion, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	owner := candidates[0].userID
+	if owner.Valid {
+		if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, owner.Int64); err != nil {
+			return nil, err
+		}
+	}
+	ids := make([]int, 0, len(candidates))
+	for _, candidate := range candidates {
+		ids = append(ids, candidate.id)
+	}
+	rows, err := tx.Query(ctx, `SELECT id,object_key,user_id,attempts,upload_aborted_at
+		FROM pending_image_deletions WHERE id=ANY($1) AND next_try_at<=now() ORDER BY id FOR UPDATE`, ids)
+	if err != nil {
+		return nil, err
+	}
+	var current []pendingImageDeletion
+	var keys []string
+	var owners []int64
+	for rows.Next() {
+		var p pendingImageDeletion
+		if err = rows.Scan(&p.id, &p.key, &p.userID, &p.attempts, &p.abortedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		current = append(current, p)
+		if p.userID.Valid {
+			keys = append(keys, p.key)
+			owners = append(owners, p.userID.Int64)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	refs, err := referencedImageKeysForQuerier(ctx, tx, owners, keys)
+	if err != nil {
+		return nil, err
+	}
+	var claimed []pendingImageDeletion
+	var revived []int
+	ids = ids[:0]
+	for _, p := range current {
+		if _, used := refs[p.key]; used {
+			revived = append(revived, p.id)
+		} else {
+			claimed = append(claimed, p)
+			ids = append(ids, p.id)
+		}
+	}
+	if len(revived) > 0 {
+		if _, err = tx.Exec(ctx, `DELETE FROM pending_image_deletions WHERE id=ANY($1)`, revived); err != nil {
+			return nil, err
+		}
+	}
+	// Commit the tombstone before the external deletion. The retry lease also
+	// prevents concurrent collectors from repeatedly claiming this batch.
+	if len(ids) > 0 {
+		rows, err = tx.Query(ctx, `UPDATE pending_image_deletions
+			SET upload_aborted_at=COALESCE(upload_aborted_at,now()),next_try_at=now()+$2::interval
+			WHERE id=ANY($1) RETURNING id,upload_aborted_at`, ids, (gcRequestTimeout + time.Minute).String())
+		if err != nil {
+			return nil, err
+		}
+		marked := map[int]time.Time{}
+		for rows.Next() {
+			var id int
+			var at time.Time
+			if err = rows.Scan(&id, &at); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			marked[id] = at
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		for index := range claimed {
+			at := marked[claimed[index].id]
+			claimed[index].abortedAt = &at
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return claimed, nil
+}
+
+type imageReferenceQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
 func (a *App) referencedImageKeys(ctx context.Context, userIDs []int64, keys []string) (map[string]struct{}, error) {
+	return referencedImageKeysForQuerier(ctx, a.db, userIDs, keys)
+}
+
+func referencedImageKeysForQuerier(ctx context.Context, q imageReferenceQuerier, userIDs []int64, keys []string) (map[string]struct{}, error) {
 	referenced := make(map[string]struct{})
 	if len(keys) == 0 {
 		return referenced, nil
 	}
-	rows, err := a.db.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		WITH candidates AS (
 			SELECT user_id, object_key
 			FROM unnest($1::bigint[], $2::text[]) AS candidate(user_id, object_key)

@@ -1,5 +1,6 @@
+import { useDocumentImport } from "../useDocumentImport";
+import { ImportRecoveryActions } from "../components/ImportRecoveryActions";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   FileText,
@@ -17,7 +18,6 @@ import { PageContainer } from "../components/PageContainer";
 import {
   exportDocumentsArchive,
   getImportErrorMessage,
-  importDocumentsFromFiles,
 } from "../documentTransfer";
 import { IMPORT_FILE_ACCEPT } from "../documentTransferCore";
 
@@ -30,10 +30,10 @@ const DATE_LOCALE: Record<Locale, string> = {
 
 export function DocumentsPage() {
   const session = useSession();
+  const importer = useDocumentImport();
   const { t, locale } = useI18n();
   const documents = useDocumentList(Boolean(session.data?.user));
   const folders = useFolderList(Boolean(session.data?.user));
-  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const [transfer, setTransfer] = useState<{
@@ -43,6 +43,9 @@ export function DocumentsPage() {
   } | null>(null);
   const [transferNotice, setTransferNotice] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const currentTransfer = importer.busy
+    ? { kind: "import" as const, done: importer.progress?.done ?? 0, total: importer.progress?.total ?? 0 }
+    : transfer;
 
   useEffect(() => {
     if (!transferNotice && !transferError) return;
@@ -53,38 +56,19 @@ export function DocumentsPage() {
     return () => window.clearTimeout(timer);
   }, [transferNotice, transferError]);
 
-  async function handleImport(files: File[]) {
-    if (files.length === 0) return;
+  async function handleImport(files?: File[]) {
+    if (currentTransfer || (files && (files.length === 0 || importer.blocked))) return;
     setTransferError(null);
     setTransferNotice(null);
-    setTransfer({ kind: "import", done: 0, total: 0 });
     try {
-      const result = await importDocumentsFromFiles(files, (done, total) =>
-        setTransfer({ kind: "import", done, total }),
-      );
-      const success = interpolate(t.transfer.importSuccess, {
-        count: String(result.imported),
-      });
-      const gifNotice = result.flattenedGifCount
-        ? ` ${interpolate(t.transfer.importGifFlattened, {
-            count: String(result.flattenedGifCount),
-          })}`
-        : "";
-      setTransferNotice(`${success}${gifNotice}`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["documents"] }),
-        queryClient.invalidateQueries({ queryKey: ["folders"] }),
-        queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
-      ]);
+      await importer.run(files);
     } catch (error) {
-      setTransferError(getImportErrorMessage(error, t.transfer));
-    } finally {
-      setTransfer(null);
+      setTransferError(getImportErrorMessage(error, t.transfer, t.errors));
     }
   }
 
   async function handleExport() {
-    if (!documents.data?.length) return;
+    if (currentTransfer || !documents.data?.length) return;
     setTransferError(null);
     setTransferNotice(null);
     setTransfer({ kind: "export", done: 0, total: documents.data.length });
@@ -184,7 +168,7 @@ export function DocumentsPage() {
           />
           <button
             type="button"
-            disabled={Boolean(transfer)}
+            disabled={Boolean(currentTransfer) || importer.blocked}
             onClick={() => inputRef.current?.click()}
             className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
             style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
@@ -194,7 +178,7 @@ export function DocumentsPage() {
           </button>
           <button
             type="button"
-            disabled={Boolean(transfer)}
+            disabled={Boolean(currentTransfer) || importer.blocked}
             onClick={() => folderInputRef.current?.click()}
             className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
             style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
@@ -204,7 +188,7 @@ export function DocumentsPage() {
           </button>
           <button
             type="button"
-            disabled={Boolean(transfer) || !documents.data?.length}
+            disabled={Boolean(currentTransfer) || !documents.data?.length}
             onClick={() => void handleExport()}
             className="hidden items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50 sm:inline-flex"
             style={{ borderColor: "var(--ink-line)", color: "var(--ink-mid)" }}
@@ -238,7 +222,7 @@ export function DocumentsPage() {
       >
         <button
           type="button"
-          disabled={Boolean(transfer)}
+          disabled={Boolean(currentTransfer) || importer.blocked}
           onClick={() => inputRef.current?.click()}
           className="inline-flex items-center gap-1.5 font-medium sm:hidden"
           style={{ color: "var(--cinnabar)" }}
@@ -248,7 +232,7 @@ export function DocumentsPage() {
         </button>
         <button
           type="button"
-          disabled={Boolean(transfer)}
+          disabled={Boolean(currentTransfer) || importer.blocked}
           onClick={() => folderInputRef.current?.click()}
           className="inline-flex items-center gap-1.5 font-medium sm:hidden"
           style={{ color: "var(--cinnabar)" }}
@@ -258,7 +242,7 @@ export function DocumentsPage() {
         </button>
         <button
           type="button"
-          disabled={Boolean(transfer) || !documents.data?.length}
+          disabled={Boolean(currentTransfer) || !documents.data?.length}
           onClick={() => void handleExport()}
           className="inline-flex items-center gap-1.5 font-medium disabled:opacity-50 sm:hidden"
           style={{ color: "var(--cinnabar)" }}
@@ -269,7 +253,10 @@ export function DocumentsPage() {
         <span>{t.transfer.importHint}</span>
       </div>
 
-      {(transfer || transferNotice || transferError) && (
+      <ImportRecoveryActions pending={importer.pending} busy={importer.busy || Boolean(currentTransfer)} waiting={importer.waiting}
+        onResume={() => void handleImport()} onDiscard={() => { importer.discard(); setTransferError(null); setTransferNotice(null); }} />
+
+      {!importer.pending && !importer.waiting && (currentTransfer || transferNotice || transferError) && (
         <div
           className="mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
           style={{
@@ -278,12 +265,12 @@ export function DocumentsPage() {
           }}
           role={transferError ? "alert" : "status"}
         >
-          {transfer && (
+          {currentTransfer && (
             <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
           )}
           <span>
-            {transfer
-              ? `${transfer.kind === "import" ? t.transfer.importing : t.transfer.exporting}${transfer.total > 0 ? ` ${transfer.done}/${transfer.total}` : ""}`
+            {currentTransfer
+              ? `${currentTransfer.kind === "import" ? t.transfer.importing : t.transfer.exporting}${currentTransfer.total > 0 ? ` ${currentTransfer.done}/${currentTransfer.total}` : ""}`
               : transferError || transferNotice}
           </span>
         </div>
@@ -357,7 +344,7 @@ export function DocumentsPage() {
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              disabled={Boolean(transfer)}
+              disabled={Boolean(currentTransfer) || importer.blocked}
               onClick={() => inputRef.current?.click()}
               className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
               style={{
@@ -370,7 +357,7 @@ export function DocumentsPage() {
             </button>
             <button
               type="button"
-              disabled={Boolean(transfer)}
+              disabled={Boolean(currentTransfer) || importer.blocked}
               onClick={() => folderInputRef.current?.click()}
               className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--ink-wash-strong)] disabled:opacity-50"
               style={{

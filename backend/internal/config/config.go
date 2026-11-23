@@ -63,6 +63,9 @@ type Config struct {
 	// 放环境变量而不是代码常量：这是运营旋钮，改它不该要重新编译，dev、自部署、
 	// 生产也本该能给不同的值。
 	ImageQuotaBytes int64
+	// DocumentCountLimit includes trash: empty documents still occupy database rows and indexes.
+	DocumentCountLimit int
+	FolderCountLimit   int
 
 	// OAuth：用于拼回调地址的对外基址，及各 provider 的凭证
 	AppURL            string
@@ -201,7 +204,9 @@ func Load() Config {
 		AgentRepositoryStorage:        strings.ToLower(strings.TrimSpace(getenv("AGENT_REPOSITORY_STORAGE", "r2"))),
 		KoiSkillTestAccounts:          strings.Split(os.Getenv("KOI_SKILL_TEST_ACCOUNTS"), ","),
 
-		ImageQuotaBytes: imageQuotaBytes(),
+		ImageQuotaBytes:    imageQuotaBytes(),
+		DocumentCountLimit: documentCountLimit(),
+		FolderCountLimit:   folderCountLimit(),
 
 		// OAuth 回调基址：本地 dev 默认走 Vite dev server（前端同源代理 /api 到后端）。
 		// 5273 要与 vite.config.ts 的 DEV_PORT 回落值一致 —— 这两处默认值不一致时，
@@ -557,6 +562,35 @@ func agentGPTModelTimeoutMS() int {
 
 // DefaultImageQuotaMB 是没配 IMAGE_QUOTA_MB 时的默认值。
 const DefaultImageQuotaMB int64 = 500
+
+const DefaultDocumentCountLimit = 10_000
+const DefaultFolderCountLimit = 1_000
+
+func folderCountLimit() int {
+	raw := strings.TrimSpace(os.Getenv("FOLDER_COUNT_LIMIT"))
+	if raw == "" {
+		return DefaultFolderCountLimit
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit <= 0 || limit > 1_000_000 {
+		log.Printf("FOLDER_COUNT_LIMIT is invalid; using %d", DefaultFolderCountLimit)
+		return DefaultFolderCountLimit
+	}
+	return limit
+}
+
+func documentCountLimit() int {
+	raw := strings.TrimSpace(os.Getenv("DOCUMENT_COUNT_LIMIT"))
+	if raw == "" {
+		return DefaultDocumentCountLimit
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit <= 0 || limit > 1_000_000 {
+		log.Printf("DOCUMENT_COUNT_LIMIT is invalid; using %d", DefaultDocumentCountLimit)
+		return DefaultDocumentCountLimit
+	}
+	return limit
+}
 
 // imageQuotaBytes 读 IMAGE_QUOTA_MB 并换成字节。
 //

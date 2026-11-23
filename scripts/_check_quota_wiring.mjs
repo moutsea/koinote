@@ -302,10 +302,8 @@ ok("有 user_id 索引", migration.includes("image_objects_user_idx"));
 {
   const quotaIdx = worker.indexOf('recorded.outcome === "quota"');
   ok("Worker 处理了 quota 分支", quotaIdx >= 0);
-  if (quotaIdx >= 0) {
-    const branch = worker.slice(quotaIdx, quotaIdx + 600);
-    ok("超额时删掉刚写的对象", branch.includes("IMAGES.delete(key)"), branch.slice(0, 200));
-  }
+  // Physical deletion, failed deletion and durable GC are verified by
+  // _check_image_admission.mjs and real Worker/R2/PostgreSQL integration checks.
 }
 
 console.log(`\nquota wiring: ${pass} passed, ${fail} failed`);

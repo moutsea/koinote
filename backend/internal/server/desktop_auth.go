@@ -527,6 +527,8 @@ func desktopRequestAllowed(r *http.Request) bool {
 		return method == http.MethodGet || method == http.MethodPost
 	case "/api/billing/checkout", "/api/billing/checkout/confirm":
 		return method == http.MethodPost
+	case "/api/storage/retain-import-images", "/api/storage/release-images":
+		return method == http.MethodPost
 	case "/api/feedback":
 		return method == http.MethodPost
 	case "/api/admin/stats", "/api/admin/server-status", "/api/admin/feedback", "/api/admin/llm/settings":

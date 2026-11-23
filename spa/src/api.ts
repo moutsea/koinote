@@ -6,6 +6,19 @@ import { isDesktopRuntime } from "./desktop/runtime";
 import { DesktopAccountMismatchError, DesktopCredentialStoreError } from "./desktop/sessionErrors";
 import { isDesktopAuthenticationRejection } from "./desktop/networkPolicy";
 import { isDesktopLocalImageURL } from "./desktop/offlineImagesCore";
+import { IMPORT_OWNER_HEADER, IMPORT_ACCOUNT_CHANGED_CODE } from "./documentImportCore";
+import { sessionIdentityEpoch } from "./sessionCache";
+
+function importOwnerHeaders(owner?: string): Record<string, string> {
+  return owner ? { [IMPORT_OWNER_HEADER]: owner } : {};
+}
+
+function rethrowImportOwnerError(error: unknown): never {
+  if (error instanceof Error && error.message === IMPORT_ACCOUNT_CHANGED_CODE) {
+    throw new ApiError(409, "The signed-in account changed; import stopped", IMPORT_ACCOUNT_CHANGED_CODE);
+  }
+  throw error;
+}
 
 export type User = {
   id: number;
@@ -136,6 +149,12 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const epoch = sessionIdentityEpoch();
+  const assertCurrentSession = () => {
+    if (path !== "/api/auth/session" && epoch !== sessionIdentityEpoch()) {
+      throw new ApiError(409, "The signed-in account changed; retry this operation", "session_changed");
+    }
+  };
   const response = await fetchAppResource(path, {
     credentials: "include",
     ...init,
@@ -144,10 +163,13 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
+  assertCurrentSession();
   if (!response.ok) {
     throw await toApiError(response);
   }
-  return response.json() as Promise<T>;
+  const data = await response.json() as T;
+  assertCurrentSession();
+  return data;
 }
 
 export async function fetchAppResource(
@@ -1753,14 +1775,15 @@ export function createDocument(params?: {
   theme?: string;
   /** 直接建在这个文件夹里。省掉「建到根下再移动」那一步的闪烁 */
   folderId?: string | null;
-}) {
+}, importOwner?: string) {
   if (isDesktopRuntime()) {
     return import("./desktop/offlineStore").then(({ desktopCreateDocument }) =>
-      desktopCreateDocument(params),
-    );
+      desktopCreateDocument(params, importOwner),
+    ).catch(rethrowImportOwnerError);
   }
   return apiJson<{ document: Document }>("/api/documents", {
     method: "POST",
+    headers: importOwnerHeaders(importOwner),
     body: JSON.stringify(params ?? {}),
   });
 }
@@ -1939,14 +1962,15 @@ export function createFolder(params: {
   name: string;
   parentFolderId: string | null;
   organizerKind?: Folder["organizerKind"];
-}) {
+}, importOwner?: string) {
   if (isDesktopRuntime()) {
     return import("./desktop/offlineStore").then(({ desktopCreateFolder }) =>
-      desktopCreateFolder(params),
-    );
+      desktopCreateFolder(params, importOwner),
+    ).catch(rethrowImportOwnerError);
   }
   return apiJson<{ folder: Folder; created?: boolean }>("/api/folders", {
     method: "POST",
+    headers: importOwnerHeaders(importOwner),
     body: JSON.stringify(params),
   });
 }
@@ -2227,6 +2251,7 @@ export type ImageUploadPurpose = "persistent" | "wechat-export";
 export async function uploadImage(
   file: File,
   purpose: ImageUploadPurpose = "persistent",
+  importOwner?: string,
 ): Promise<UploadedImage> {
   if (!isUploadableImage(file)) {
     // 前端先挡一道：服务端也会拒，但等一趟往返才报错体验更差
@@ -2245,14 +2270,14 @@ export async function uploadImage(
       }
       const { desktopStoreLocalImage } = await import("./desktop/offlineStore");
       return {
-        ...(await desktopStoreLocalImage(localFile)),
+        ...(await desktopStoreLocalImage(localFile, importOwner)),
         ...(flattenedAnimation ? { flattenedAnimation: true } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.message === "image_too_large") {
         throw new ApiError(413, "Image is too large", "image_too_large");
       }
-      throw error;
+      rethrowImportOwnerError(error);
     }
   }
 
@@ -2262,6 +2287,7 @@ export async function uploadImage(
     headers: {
       "Content-Type": file.type,
       "X-Koinote-Image-Purpose": purpose,
+      ...importOwnerHeaders(importOwner),
     },
     body: file,
   });
@@ -2387,7 +2413,7 @@ export function updateConfigSnapshot(snapshotId: string, input: ConfigSnapshotIn
   );
 }
 
-export async function releaseUnusedImages(keys: string[]) {
+export async function releaseUnusedImages(keys: string[], importOwner?: string) {
   if (keys.length === 0) return Promise.resolve({ queued: 0 });
   let remoteKeys = keys;
   if (isDesktopRuntime()) {
@@ -2400,7 +2426,7 @@ export async function releaseUnusedImages(keys: string[]) {
     if (localKeys.length > 0) {
       const { desktopReleaseUnusedImages } =
         await import("./desktop/offlineStore");
-      await desktopReleaseUnusedImages(localKeys);
+      await desktopReleaseUnusedImages(localKeys, importOwner).catch(rethrowImportOwnerError);
     }
     const { isDesktopLocalModeSelected } = await import("./desktop/localMode");
     if (isDesktopLocalModeSelected()) return { queued: 0 };
@@ -2408,7 +2434,17 @@ export async function releaseUnusedImages(keys: string[]) {
   if (remoteKeys.length === 0) return { queued: 0 };
   return apiJson<{ queued: number }>("/api/storage/release-images", {
     method: "POST",
+    headers: importOwnerHeaders(importOwner),
     body: JSON.stringify({ keys: remoteKeys }),
+  });
+}
+
+export async function retainImportImages(keys: string[], importOwner: string) {
+  if (keys.length === 0 || isDesktopRuntime()) return { missingKeys: [] as string[], unrecordedKeys: [] as string[] };
+  return apiJson<{ missingKeys: string[]; unrecordedKeys?: string[] }>("/api/storage/retain-import-images", {
+    method: "POST",
+    headers: importOwnerHeaders(importOwner),
+    body: JSON.stringify({ keys }),
   });
 }
 

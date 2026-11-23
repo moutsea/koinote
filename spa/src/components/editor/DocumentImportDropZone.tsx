@@ -3,9 +3,10 @@ import { FileUp } from "lucide-react";
 import { useI18n } from "../../i18n";
 import { hasExternalFileDrag, markdownFilesFromDataTransfer } from "./treeDrag";
 
-export function DocumentImportDropZone({ children, importing, notice, onImport }: {
+export function DocumentImportDropZone({ children, importing, importBlocked = false, notice, onImport }: {
   children: ReactNode;
   importing: boolean;
+  importBlocked?: boolean;
   notice: { error: boolean; message: string } | null;
   onImport: (files: File[]) => void;
 }) {
@@ -23,8 +24,8 @@ export function DocumentImportDropZone({ children, importing, notice, onImport }
         const items = Array.from(transfer.items).filter((item) => item.kind === "file");
         if (items.length > 0 && items.every((item) => item.type.startsWith("image/"))) return;
         event.preventDefault();
-        transfer.dropEffect = importing ? "none" : "copy";
-        setOver(true);
+        transfer.dropEffect = importing || importBlocked ? "none" : "copy";
+        setOver(!importBlocked);
       }}
       onDragLeaveCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(false);
@@ -37,7 +38,7 @@ export function DocumentImportDropZone({ children, importing, notice, onImport }
         // 在 ProseMirror 之前接住文件，避免同时插入正文或触发图片上传。
         event.preventDefault();
         event.stopPropagation();
-        if (importing) return;
+        if (importing || importBlocked) return;
         setShowResult(true);
         onImport(files);
       }}

@@ -52,7 +52,7 @@ includes("网页仍使用营销首页", main, ": HomePage;");
 includes("桌面未登录显示授权页", home, "if (!user) return <DesktopLoginPage />;");
 includes("桌面首页读取本地文档", home, "useDocumentList(Boolean(user))");
 includes("桌面首页支持新建文档", home, "useCreateDocument()");
-includes("桌面首页可直接导入 Markdown", home, "importDocumentsFromFiles(files)");
+includes("桌面首页可直接导入 Markdown", home, "importer.run(files)");
 includes("桌面导入显示具体错误", home, "getImportErrorMessage");
 includes("桌面导入提示会自动消失", home, "setImportNotice(null), 5_000");
 includes("桌面导入选择器限制格式", home, "accept={IMPORT_FILE_ACCEPT}");

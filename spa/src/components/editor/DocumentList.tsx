@@ -90,6 +90,7 @@ export function DocumentList({
   onMoveFolder,
   onCollapse,
   importing,
+  importBlocked = false,
   onImport,
   notice,
   error,
@@ -123,6 +124,7 @@ export function DocumentList({
   onMoveFolder: (folderId: string, parentFolderId: string | null) => void;
   onCollapse: () => void;
   importing: boolean;
+  importBlocked?: boolean;
   onImport: (files: File[], targetFolderId?: string | null) => void;
   notice?: string | null;
   onOrganize: (
@@ -716,7 +718,7 @@ export function DocumentList({
 
   const onImportFiles = useCallback(
     (files: File[], targetFolderId: string | null) => {
-      if (importing || files.length === 0) return;
+      if (importing || importBlocked || files.length === 0) return;
       setRootOverDrag(null);
       setRootFileOver(false);
       if (targetFolderId) {
@@ -724,7 +726,7 @@ export function DocumentList({
       }
       onImport(files, targetFolderId);
     },
-    [importing, onImport],
+    [importing, importBlocked, onImport],
   );
 
   const canReorderDoc = useCallback(
@@ -1057,7 +1059,7 @@ export function DocumentList({
         />
         <button
           type="button"
-          disabled={importing}
+          disabled={importing || importBlocked}
           onClick={() => importInputRef.current?.click()}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-2 text-xs font-medium text-neutral-500 transition hover:border-cinnabar-400 hover:bg-cinnabar-50/60 hover:text-cinnabar-700 disabled:opacity-50 dark:border-white/10 dark:text-neutral-400 dark:hover:border-cinnabar-500/60 dark:hover:bg-cinnabar-950/30 dark:hover:text-cinnabar-300"
           title={t.transfer.importHint}
@@ -1076,6 +1078,12 @@ export function DocumentList({
       <div
         ref={selectionAreaRef}
         onPointerDown={beginSelectionBox}
+        onDragOverCapture={(event) => {
+          if (!(importing || importBlocked) || !hasExternalFileDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "none";
+        }}
         onDragOver={(e) => {
           if (hasExternalFileDrag(e.dataTransfer)) {
             e.preventDefault();

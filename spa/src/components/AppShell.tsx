@@ -1,4 +1,6 @@
 import { AgentBottomPanel } from "./AgentBottomPanel";
+import { DocumentImportProvider } from "../useDocumentImport";
+import { ImportTaskNotice } from "./ImportTaskNotice";
 import {
   Link,
   Outlet,
@@ -623,41 +625,44 @@ export function AppShell() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col">
-        {localModeRouteBlocked ? (
-          <div className="flex flex-1 items-center justify-center px-4 py-16">
-            <div
-              className="w-full max-w-lg rounded-2xl border p-7 text-center"
-              style={{
-                borderColor: "var(--ink-line)",
-                background: "var(--ink-paper-soft)",
-              }}
-            >
-              <CloudOff
-                className="mx-auto h-8 w-8"
-                style={{ color: "var(--ink-mid)" }}
-              />
-              <h1 className="kn-heading-cn mt-4 text-xl font-semibold">
-                {t.desktopLocalMode.badge}
-              </h1>
-              <p
-                className="mt-3 text-sm leading-6"
-                style={{ color: "var(--ink-mid)" }}
+        <DocumentImportProvider owner={user?.authUserId}>
+          <ImportTaskNotice />
+          {localModeRouteBlocked ? (
+            <div className="flex flex-1 items-center justify-center px-4 py-16">
+              <div
+                className="w-full max-w-lg rounded-2xl border p-7 text-center"
+                style={{
+                  borderColor: "var(--ink-line)",
+                  background: "var(--ink-paper-soft)",
+                }}
               >
-                {t.desktopLocalMode.networkDisabled}
-              </p>
-              <button
-                type="button"
-                onClick={() => void handleUseAccount()}
-                className="mt-5 rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
-                style={{ background: "var(--cinnabar)" }}
-              >
-                {t.desktopLocalMode.useAccount}
-              </button>
+                <CloudOff
+                  className="mx-auto h-8 w-8"
+                  style={{ color: "var(--ink-mid)" }}
+                />
+                <h1 className="kn-heading-cn mt-4 text-xl font-semibold">
+                  {t.desktopLocalMode.badge}
+                </h1>
+                <p
+                  className="mt-3 text-sm leading-6"
+                  style={{ color: "var(--ink-mid)" }}
+                >
+                  {t.desktopLocalMode.networkDisabled}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleUseAccount()}
+                  className="mt-5 rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
+                  style={{ background: "var(--cinnabar)" }}
+                >
+                  {t.desktopLocalMode.useAccount}
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <Outlet />
-        )}
+          ) : (
+            <Outlet />
+          )}
+        </DocumentImportProvider>
       </main>
 
       {user?.membershipTier === "lifetime" && !localMode && (

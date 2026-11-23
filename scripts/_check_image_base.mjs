@@ -2,11 +2,15 @@
 import {
   handleImageConfig,
   handleImageDelete,
-  handleImageGet,
+  handleImageGet as guardedImageGet,
   handleImageUpload,
   isCachePurgeConfigured,
   normalizeImageBase,
 } from "./_image_base_bundle.mjs";
+
+// Reads are admitted by the edge limiter alone (see _check_image_read.mjs).
+const readAdmission = { IMAGE_READ_LIMITER: { limit: async () => ({ success: true }) } };
+const handleImageGet = (request, env) => guardedImageGet(request, { ...readAdmission, ...env });
 
 let pass = 0, fail = 0;
 const check = (name, got, want) => {
@@ -102,6 +106,7 @@ const deleteRequest = (keys = [imageKey]) =>
       check("内部转存转发归属用于后端核验", headers.get("x-auth-user-id"), "alice");
       return Response.json({ user: { authUserId: "alice" } });
     }
+    if (path === "/api/images/admit") return new Response(null, { status: 204 });
     if (path === "/api/images/record") return Response.json({});
     throw new Error(`unexpected fetch ${url}`);
   };
@@ -142,6 +147,7 @@ const deleteRequest = (keys = [imageKey]) =>
     if (path === "/api/auth/session") {
       return Response.json({ user: { authUserId: "alice" } });
     }
+    if (path === "/api/images/admit") return new Response(null, { status: 204 });
     if (path === "/api/images/record") {
       recorded.push(JSON.parse(String(init?.body)));
       return Response.json({});
@@ -172,14 +178,14 @@ const deleteRequest = (keys = [imageKey]) =>
     const secondBody = await second.json();
     check("公式图首次上传成功", first.status, 200);
     check("相同公式图再次上传成功", second.status, 200);
-    check("相同公式图只写一次 R2", puts, 1);
-    check("相同字节跨请求使用同一 key", firstBody.image.key, secondBody.image.key);
+    check("公式图请求各自写入独立对象", puts, 2);
+    check("相同字节跨请求隔离 key", firstBody.image.key !== secondBody.image.key, true);
     check(
-      "内容寻址 key 使用 SHA-256",
+      "公式图使用独立随机 key",
       firstBody.image.key.split("/").pop().split(".")[0].length,
-      64,
+      32,
     );
-    check("公式图两次都续期", recorded.length, 2);
+    check("公式图两次均完成预留及确认", recorded.length, 4);
     check("公式图记账带临时用途", recorded[0].purpose, "wechat-export");
   } finally {
     globalThis.fetch = originalFetch;
@@ -217,7 +223,7 @@ const deleteRequest = (keys = [imageKey]) =>
       },
     );
     check("公式图缺记账令牌时拒绝", response.status, 503);
-    check("公式图缺记账令牌时回滚 R2", deleted, 1);
+    check("公式图缺记账令牌时在写入前拒绝，无需删除", deleted, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -252,6 +258,7 @@ for (const quotaCase of [
     if (path === "/api/auth/session") {
       return Response.json({ user: { authUserId: "alice" } });
     }
+    if (path === "/api/images/admit") return new Response(null, { status: 204 });
     if (path === "/api/images/record") {
       return Response.json(quotaCase.backend, { status: 409 });
     }
@@ -287,7 +294,7 @@ for (const quotaCase of [
     check(`${quotaCase.name}上传返回 413`, response.status, 413);
     check(`${quotaCase.name}错误码不被折叠`, body.code, quotaCase.backend.code);
     check(`${quotaCase.name}保留 quotaBytes`, body.quotaBytes, quotaCase.backend.quotaBytes);
-    check(`${quotaCase.name}回滚新写入对象`, deleted, 1);
+    check(`${quotaCase.name}预留超额未写对象，无需删除`, deleted, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -303,6 +310,7 @@ for (const quotaCase of [
     if (path === "/api/auth/session") {
       return Response.json({ user: { authUserId: "alice" } });
     }
+    if (path === "/api/images/admit") return new Response(null, { status: 204 });
     if (path === "/api/images/record") {
       return new Response("broken response", { status: 409 });
     }

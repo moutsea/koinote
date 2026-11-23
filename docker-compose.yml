@@ -98,6 +98,8 @@ services:
       # 每用户云端存储上限（文档正文 + 图片），单位 MB。留空用后端默认的 500。
       # 非正数或非数字会回落到默认值，不会变成"谁都传不了图"
       IMAGE_QUOTA_MB: ${IMAGE_QUOTA_MB:-}
+      DOCUMENT_COUNT_LIMIT: ${DOCUMENT_COUNT_LIMIT:-10000}
+      FOLDER_COUNT_LIMIT: ${FOLDER_COUNT_LIMIT:-1000}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5273,http://localhost:3000}
       # OAuth：APP_URL 用于拼回调地址，须与各 provider 后台登记的地址完全一致。
       # 凭证留空时后端的 start 端点返回 501 oauth_not_configured。

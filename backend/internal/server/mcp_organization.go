@@ -382,6 +382,9 @@ func (a *App) mcpCreateFolder(ctx context.Context, _ *mcp.CallToolRequest, input
 			return nil, mcpFolderSummary{}, errors.New("folder nesting is too deep")
 		}
 	}
+	if err := a.admitFolderCreate(ctx, tx, principal.User.ID, folderID); err != nil {
+		return nil, mcpFolderSummary{}, err
+	}
 	var created mcpFolderSummary
 	var storedParent string
 	if err := tx.QueryRow(ctx, `

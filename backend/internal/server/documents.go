@@ -125,6 +125,9 @@ func (a *App) documentCreate(w http.ResponseWriter, r *http.Request) {
 		User: user, DocID: body.DocID, Title: title, Theme: theme, Content: content, FolderID: body.FolderID,
 		CoverMode: body.CoverMode, CoverRatio: body.CoverRatio, CoverImageSource: body.CoverImageSource, CoverPrompt: body.CoverPrompt,
 	})
+	if writeDocumentCreateLimitError(w, err) {
+		return
+	}
 	if errors.Is(err, errDocumentCoverInvalid) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "document_cover_invalid", "Invalid document cover")
 		return
@@ -248,6 +251,9 @@ func (a *App) documentUpdate(w http.ResponseWriter, r *http.Request) {
 		CoverMode:    body.CoverMode, CoverRatio: body.CoverRatio,
 		CoverImageSource: body.CoverImageSource, CoverPrompt: body.CoverPrompt,
 	})
+	if writeImageReferenceError(w, err) {
+		return
+	}
 	if errors.Is(err, errDocumentNotFound) {
 		httpx.ErrorCode(w, http.StatusNotFound, "not_found", "Document not found")
 		return

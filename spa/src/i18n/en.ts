@@ -1594,6 +1594,15 @@ export const en: Messages = {
     importGifFlattened:
       "{count} GIFs over 10 MB were compressed to static WebP images; animation was not preserved.",
     exportSuccess: "Your migration archive is ready.",
+    importPartial: "Confirmed {count}/{total} documents imported. {reason} You can continue the remaining import.",
+    importUncertain: "Confirmed {count}/{total} documents imported. {reason} The current file may already be saved. Check the document list before importing again to avoid duplicates.",
+    importResume: "Continue remaining import",
+    importAcknowledge: "Got it",
+    importFinish: "End this import",
+    importSessionCheckFailed: "Unable to check your session right now. Check your connection, then continue.",
+    importImageCheckFailed: "Unable to check uploaded images right now. Check your connection, then continue.",
+    importKeepSaved: "Saved documents are kept. You can visit another page in this app to free space, then return and continue. Refreshing or closing the window ends this import session.",
+    importWaiting: "Too many requests. Waiting as requested by the server, then continuing automatically. Please do not start another import.",
     importFailed:
       "Import failed. Check the file format, image sizes, and storage quota.",
     unsupportedImportFormat:
@@ -2674,6 +2683,7 @@ function hello(name) {
 `,
   },
   common: {
+    retry: "Retry",
     theme: "Toggle theme",
     language: "Language",
   },
@@ -2814,11 +2824,11 @@ function hello(name) {
       "Documents and images live on this device. You can paste images and keep editing offline; they upload and switch to hosted URLs when connectivity returns.",
     documentCount: "{count} documents available locally",
     imageCacheUsage:
-      "Local images {total}; hosted cache {cached} / {limit}, pending {pending}",
+      "Local images {total}; hosted cache {cached} / {limit}, originals awaiting sync {pending}",
     clearImageCache: "Clear hosted-image cache",
     clearingImageCache: "Clearing…",
     imageCacheCleared:
-      "The image cache was cleared. Images are cached again as you open documents.",
+      "Removable image cache was cleared; originals awaiting sync were kept. Images are cached again as you open documents.",
     imageMaintenanceDelayed:
       "Background image maintenance is delayed. Your documents are synced, and the app will retry automatically.",
   },
@@ -2844,6 +2854,7 @@ function hello(name) {
     close: "Close",
   },
   desktopSync: {
+    partial: "Some changes are still unsynced",
     synced: "Synced",
     syncing: "Syncing",
     offline: "Editing offline",
@@ -3297,8 +3308,18 @@ function hello(name) {
       "The current draft is not in the document store yet. Retry saving it first.",
     image_cache_full:
       "The local image cache is full. Clear it from the desktop home page.",
+    image_unavailable: "An image has expired or is being removed. Upload it again before saving.",
     local_image_missing:
       "A local image is missing. Remove it from the document and insert it again.",
+    import_account_changed: "The signed-in account changed, so the import stopped. Check the documents already saved in the original account.",
+    session_changed: "The signed-in account changed. Retry this operation in the current account.",
+    image_record_failed: "Image upload did not complete. Check your connection and retry.",
+    image_rate_limited: "Too many image uploads. Please retry later.",
+    image_upload_unavailable: "Image uploads are temporarily unavailable. Please retry later.",
+    folder_sync_pending: "The destination folder has not synced yet. Please retry later.",
+    folder_count_limit_reached: "Cloud folder limit reached. Delete unneeded folders and retry.",
+    document_count_limit_reached: "The cloud document count limit has been reached (including trash). Permanently delete unneeded documents and retry.",
+    share_unavailable: "This share is temporarily busy. Please try again shortly.",
     storage_quota_exceeded:
       "Cloud storage is full — permanently delete unneeded documents from Trash",
     image_empty: "The image is empty",

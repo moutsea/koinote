@@ -1,3 +1,5 @@
+import { useDocumentImport } from "../useDocumentImport";
+import { ImportRecoveryActions } from "../components/ImportRecoveryActions";
 import { DesktopAccountMismatchError } from "../desktop/sessionErrors";
 import { DesktopSessionError } from "../components/DesktopSessionError";
 import {
@@ -75,10 +77,7 @@ import { isDesktopRuntime } from "../desktop/runtime";
 import { useDesktopMenuActions } from "../desktop/menu";
 import { registerDesktopSyncPreparation } from "../desktop/logoutGuard";
 import { confirmAction } from "../confirmAction";
-import {
-  getImportErrorMessage,
-  importDocumentsFromFiles,
-} from "../documentTransfer";
+import { getImportErrorMessage } from "../documentTransfer";
 import {
   applyDocumentOrganization,
   type ApplyDocumentOrganizationResult,
@@ -125,6 +124,7 @@ function errorCodeOf(error: unknown): string | undefined {
 export function EditorPage() {
   const { locale, t } = useI18n();
   const session = useSession();
+  const importer = useDocumentImport();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { docId?: string };
@@ -159,8 +159,7 @@ export function EditorPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
   const [mobileOutlineOpen, setMobileOutlineOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const importingRef = useRef(false);
+  const importing = importer.busy;
   const [importNotice, setImportNotice] = useState<{
     error: boolean;
     message: string;
@@ -179,7 +178,7 @@ export function EditorPage() {
   const [tabState, setTabState] = useState<TabState>(EMPTY_TABS);
   const tabStateRef = useRef(tabState);
   tabStateRef.current = tabState;
-  const saver = useDocumentSaver(refreshList);
+  const saver = useDocumentSaver(refreshList, session.data?.user?.authUserId);
   const [closingAll, setClosingAll] = useState(false);
   const closingAllRef = useRef(false);
   const mountedRef = useRef(true);
@@ -1225,42 +1224,20 @@ export function EditorPage() {
   );
 
   const handleImport = useCallback(
-    async (files: File[], targetFolderId?: string | null) => {
-      if (importingRef.current || files.length === 0) return;
-      importingRef.current = true;
-      setImporting(true);
+    async (files?: File[], targetFolderId?: string | null) => {
+      if (importer.busy || (files && (files.length === 0 || importer.blocked))) return;
       setImportNotice(null);
       setOrganizationNotice(null);
       try {
-        const result = await importDocumentsFromFiles(files, undefined, targetFolderId);
-        const success = interpolate(t.transfer.importSuccess, {
-          count: String(result.imported),
-        });
-        const gifNotice = result.flattenedGifCount
-          ? ` ${interpolate(t.transfer.importGifFlattened, {
-              count: String(result.flattenedGifCount),
-            })}`
-          : "";
-        setImportNotice({
-          error: false,
-          message: `${success}${gifNotice}`,
-        });
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["documents"] }),
-          queryClient.invalidateQueries({ queryKey: ["folders"] }),
-          queryClient.invalidateQueries({ queryKey: ["storage-usage"] }),
-        ]);
+        await importer.run(files, targetFolderId);
       } catch (error) {
         setImportNotice({
           error: true,
-          message: getImportErrorMessage(error, t.transfer),
+          message: getImportErrorMessage(error, t.transfer, t.errors),
         });
-      } finally {
-        importingRef.current = false;
-        setImporting(false);
       }
     },
-    [queryClient, t.transfer],
+    [importer.run, importer.busy, importer.blocked, t.transfer, t.errors],
   );
 
   const handleOpenAIOrganizer = () => {
@@ -1430,17 +1407,18 @@ export function EditorPage() {
             onMoveFolder={handleMoveFolder}
             onCollapse={() => setDocsOpen(false)}
             importing={importing}
+            importBlocked={importer.blocked}
             onImport={(files, targetFolderId) => void handleImport(files, targetFolderId)}
             notice={
               organizationNotice?.error
                 ? null
                 : organizationNotice?.message ??
-                  (importNotice?.error ? null : importNotice?.message)
+                  (importer.pending || importer.waiting || importNotice?.error ? null : importNotice?.message)
             }
             error={
               organizationNotice?.error
                 ? organizationNotice.message
-                : importNotice?.error
+                : !importer.pending && !importer.waiting && importNotice?.error
                   ? importNotice.message
                   : folderError
             }
@@ -1455,9 +1433,12 @@ export function EditorPage() {
       {/* 右：正文。大纲作为正文的一部分渲染在其内部，不再是独立的一列。 */}
       <DocumentImportDropZone
         importing={importing}
-        notice={importNotice}
+        importBlocked={importer.blocked}
+        notice={importer.pending || importer.waiting ? null : importNotice}
         onImport={(files) => void handleImport(files, null)}
       >
+        <ImportRecoveryActions pending={importer.pending} busy={importing} waiting={importer.waiting}
+          onResume={() => void handleImport()} onDiscard={() => { importer.discard(); setImportNotice(null); }} />
         {/* 面板都收起、或文档尚未就绪时，展开入口需要独立一行兜住；
             文档就绪后按钮并入标题栏（见下方 leadingControls）。 */}
         {(!docsOpen || !outlineOpen) && !doc.data && (
@@ -1705,17 +1686,18 @@ export function EditorPage() {
               onMoveFolder={handleMoveFolder}
               onCollapse={() => setMobileDocsOpen(false)}
               importing={importing}
+              importBlocked={importer.blocked}
               onImport={(files, targetFolderId) => void handleImport(files, targetFolderId)}
               notice={
                 organizationNotice?.error
                   ? null
                   : organizationNotice?.message ??
-                    (importNotice?.error ? null : importNotice?.message)
+                    (importer.pending || importer.waiting || importNotice?.error ? null : importNotice?.message)
               }
               error={
                 organizationNotice?.error
                   ? organizationNotice.message
-                  : importNotice?.error
+                  : !importer.pending && !importer.waiting && importNotice?.error
                     ? importNotice.message
                     : folderError
               }

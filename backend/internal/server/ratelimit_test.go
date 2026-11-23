@@ -21,6 +21,36 @@ func TestRateLimiterAllowsUpToLimit(t *testing.T) {
 	}
 }
 
+func TestRateLimiterGlobalBudgetIsAtomic(t *testing.T) {
+	limiter := newRateLimiter()
+	var wg sync.WaitGroup
+	results := make(chan bool, 100)
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results <- limiter.allowWithGlobal(fmt.Sprintf("actor:%d", i), 2, "global", 5, time.Minute)
+		}(i)
+	}
+	wg.Wait()
+	close(results)
+	allowed := 0
+	for success := range results {
+		if success {
+			allowed++
+		}
+	}
+	if allowed != 5 || len(limiter.entries) != 6 {
+		t.Fatalf("global admission overshot or allocated rejected buckets: allowed=%d buckets=%d", allowed, len(limiter.entries))
+	}
+	for _, entry := range limiter.entries {
+		entry.expiresAt = time.Now().Add(-time.Second)
+	}
+	if !limiter.allowWithGlobal("fresh", 2, "global", 5, time.Minute) {
+		t.Fatal("expired budgets did not reopen")
+	}
+}
+
 func TestRateLimiterZeroLimitDisables(t *testing.T) {
 	limiter := newRateLimiter()
 	for i := 0; i < 100; i++ {

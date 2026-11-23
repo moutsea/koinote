@@ -207,7 +207,7 @@ func pruneOrganizationFolders(ctx context.Context, tx pgx.Tx, userID int, data *
 	return nil
 }
 
-func restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, data organizationData, current []organizationFolder) ([]organizationFolder, error) {
+func (a *App) restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, data organizationData, current []organizationFolder) ([]organizationFolder, error) {
 	virtual := slices.Clone(current)
 	present := map[string]bool{}
 	for _, folder := range current {
@@ -233,6 +233,9 @@ func restoreOrganizationTimeFolders(ctx context.Context, tx pgx.Tx, userID int, 
 				value = "smart" // Snapshots saved before kinds were recorded.
 			}
 			kind = &value
+		}
+		if err := a.admitFolderCreate(ctx, tx, userID, folder.ID); err != nil {
+			return nil, err
 		}
 		result, err := tx.Exec(ctx, `INSERT INTO folders(folder_id,user_id,name,parent_id,organizer_kind,created_at,updated_at)
             VALUES($1,$2,$3,(SELECT id FROM folders WHERE user_id=$2 AND folder_id=$4),$7,$5,$6)

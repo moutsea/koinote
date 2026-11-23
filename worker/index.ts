@@ -1,5 +1,6 @@
 import { handleAgentRepositoryObject } from "./agentRepositoryObjects";
 import { backendHeaders } from "./backend";
+import { rateLimitAddress } from "./rateLimitAddress";
 /**
  * Koinote Cloudflare Worker
  *
@@ -42,8 +43,56 @@ export interface Env extends Cloudflare.Env {
 }
 
 const API_PREFIXES = ["/api/", "/health"];
+// Worker → Go callbacks. The public proxy must never forward these paths.
+const WORKER_ONLY_BACKEND_PATHS = new Set(["/api/images/record", "/api/images/admit", "/api/images/rollback"]);
 const DESKTOP_RELEASES_URL =
   "https://github.com/moutsea/koinote/releases/latest";
+const SHARE_BACKEND_TIMEOUT_MS = 4_000;
+
+function isShareReadRequest(request: Request, url: URL): boolean {
+  return (
+    ((request.method === "GET" || request.method === "HEAD") &&
+      (/^\/share\/[0-9a-f]{32}$/.test(url.pathname) ||
+        /^\/api\/share\/[0-9a-f]{32}(?:\/meta)?$/.test(url.pathname))) ||
+    (request.method === "POST" && /^\/api\/share\/[0-9a-f]{32}\/verify$/.test(url.pathname))
+  );
+}
+
+function shareUnavailable(): Response {
+  return Response.json(
+    { code: "share_unavailable", error: "Share is temporarily busy; please retry shortly" },
+    { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": "1" } },
+  );
+}
+
+// A navigation must remain readable even when no SPA assets or origin work are
+// allowed. API callers still receive the machine-readable error contract.
+function shareFailureResponse(request: Request, status: 429 | 503): Response {
+  const headers = {
+    "Cache-Control": "private, no-store",
+    "Retry-After": status === 429 ? "60" : "1",
+    "X-Robots-Tag": "noindex, nofollow",
+  };
+  const pathname = new URL(request.url).pathname;
+  if (!/^\/share\/[0-9a-f]{32}$/.test(pathname)) {
+    return Response.json({
+      code: status === 429 ? "too_many_requests" : "share_unavailable",
+      error: "Share is temporarily busy; please retry shortly",
+    }, { status, headers });
+  }
+  const language = request.headers.get("accept-language")?.split(",", 1)[0]?.trim().split("-", 1)[0];
+  const locale = language === "zh" || language === "fr" || language === "ja" ? language : "en";
+  const copy = {
+    zh: ["分享页面暂时繁忙", status === 429 ? "访问较多，请等待约一分钟后重试。" : "服务暂时不可用，请稍后重试。", "重试", "返回首页"],
+    en: ["Share temporarily unavailable", status === 429 ? "There are too many requests. Please wait about a minute and retry." : "The service is temporarily unavailable. Please retry shortly.", "Retry", "Home"],
+    fr: ["Partage temporairement indisponible", status === 429 ? "Trop de requêtes. Patientez environ une minute puis réessayez." : "Le service est temporairement indisponible. Réessayez dans un instant.", "Réessayer", "Accueil"],
+    ja: ["共有ページは一時的に利用できません", status === 429 ? "アクセスが集中しています。約1分待ってから再試行してください。" : "サービスを一時的に利用できません。少し待って再試行してください。", "再試行", "ホーム"],
+  }[locale];
+  const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${copy[0]} · Koinote</title><style>body{margin:0;background:#f8f6f1;color:#292822;font:16px/1.7 system-ui,sans-serif}main{max-width:38rem;margin:12vh auto;padding:2rem}h1{font-size:1.6rem}nav{display:flex;flex-wrap:wrap;gap:1rem}a{display:inline-block;padding:.5rem 1rem;border:1px solid #777064;border-radius:.5rem;color:inherit}a:focus-visible{outline:3px solid #a63f2b;outline-offset:3px}</style></head><body><main><h1>${copy[0]}</h1><p>${copy[1]}</p><nav><a href="${pathname}">${copy[2]}</a><a href="/">${copy[3]}</a></nav></main></body></html>`;
+  return new Response(request.method === "HEAD" ? null : html, {
+    status, headers: { ...headers, "Content-Type": "text/html; charset=utf-8", "Content-Language": locale },
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -52,6 +101,33 @@ export default {
     const blockedIPs = (env.SECURITY_BLOCKED_IPS ?? "").split(",").map(ip => ip.trim()).filter(Boolean);
     if (clientIP && blockedIPs.includes(clientIP)) {
       return applySecurityHeaders(new Response("Forbidden", { status: 403, headers: { "Cache-Control": "no-store" } }), url);
+    }
+    // Reject abusive sources before session lookups, body reads or external fetches.
+    // The Go admission endpoint additionally shares account/global budgets across locations.
+    if (request.method === "POST" && (url.pathname === "/api/images" || url.pathname === "/api/images/fetch") && env.IMAGE_WRITE_LIMITER) {
+      try {
+        const { success } = await env.IMAGE_WRITE_LIMITER.limit({ key: `koinote:image-write:${rateLimitAddress(clientIP)}` });
+        if (!success) return applySecurityHeaders(Response.json({ code: "image_rate_limited", error: "Too many image uploads; please retry later" }, {
+          status: 429, headers: { "Retry-After": "60", "Cache-Control": "private, no-store" },
+        }), url);
+      } catch {
+        return applySecurityHeaders(Response.json({ code: "image_upload_unavailable", error: "Image uploads are temporarily unavailable" }, {
+          status: 503, headers: { "Cache-Control": "private, no-store" },
+        }), url);
+      }
+    }
+    // The binding limits work before either metadata or API requests reach Go.
+    // It is approximate per Cloudflare location; Go enforces the global budget.
+    // Local-only configurations may omit the binding and retain Go's protection.
+    if (isShareReadRequest(request, url) && env.SHARE_READ_LIMITER) {
+      try {
+        const { success } = await env.SHARE_READ_LIMITER.limit({ key: `koinote:share:${rateLimitAddress(clientIP)}` });
+        if (!success) {
+          return applySecurityHeaders(shareFailureResponse(request, 429), url);
+        }
+      } catch {
+        return applySecurityHeaders(shareFailureResponse(request, 503), url);
+      }
     }
     // 安全头在这一层统一加，而不是在每个分支里各加一次：
     // 下面有 7 条返回路径，逐个加迟早漏一条，而漏掉的那条不会有任何报错 ——
@@ -134,7 +210,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (
-    request.method === "GET" &&
+    (request.method === "GET" || request.method === "HEAD") &&
     /^\/share\/[0-9a-f]{32}$/.test(url.pathname)
   ) {
     return handleSharePage(request, env);
@@ -183,11 +259,20 @@ async function handleSharePage(request: Request, env: Env): Promise<Response> {
   );
   let meta: ShareMeta | null = null;
   try {
+    const headers = backendHeaders(env, env.BACKEND_INTERNAL_TOKEN
+      ? { "x-koinote-internal-token": env.BACKEND_INTERNAL_TOKEN }
+      : undefined);
+    const clientIP = request.headers.get("cf-connecting-ip");
+    // Match proxyToBackend: Caddy derives X-Forwarded-For from the same-zone
+    // subrequest's CF-Connecting-IP, which follows x-real-ip.
+    if (clientIP) {
+      headers.set("x-forwarded-for", clientIP);
+      headers.set("x-real-ip", clientIP);
+    }
     const response = await fetch(metaURL, {
-      headers: backendHeaders(env, env.BACKEND_INTERNAL_TOKEN
-        ? { "x-koinote-internal-token": env.BACKEND_INTERNAL_TOKEN }
-        : undefined),
+      headers,
       redirect: "manual",
+      signal: AbortSignal.timeout(SHARE_BACKEND_TIMEOUT_MS),
     });
     if (response.ok) meta = (await response.json()) as ShareMeta;
   } catch {
@@ -260,6 +345,15 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   }
 
   const incomingUrl = new URL(request.url);
+  // The public proxy attaches the internal token below. Backend endpoints that
+  // only the Worker itself may call must therefore never be forwarded from the
+  // internet. Compare the decoded path because Go routes unescaped segments.
+  let decodedPath: string;
+  try { decodedPath = decodeURIComponent(incomingUrl.pathname).replace(/\/+$/, ""); }
+  catch { decodedPath = ""; }
+  if (!decodedPath || WORKER_ONLY_BACKEND_PATHS.has(decodedPath)) {
+    return Response.json({ code: "not_found", error: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
   const targetUrl = new URL(
     incomingUrl.pathname + incomingUrl.search,
     env.BACKEND_URL,
@@ -291,16 +385,25 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
     /^\/api\/documents\/[^/]+\/wechat-draft$/.test(incomingUrl.pathname);
   if (isWechatDraft) headers.set("accept", WECHAT_DRAFT_STREAM_TYPE);
 
-  const backendResponse = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body:
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : request.body,
-    redirect: "manual",
-    ...(isWechatDraft ? { signal: request.signal } : {}),
-  });
+  const shareRead = isShareReadRequest(request, incomingUrl);
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body:
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : request.body,
+      redirect: "manual",
+      ...(shareRead
+        ? { signal: AbortSignal.timeout(SHARE_BACKEND_TIMEOUT_MS) }
+        : isWechatDraft ? { signal: request.signal } : {}),
+    });
+  } catch (error) {
+    if (shareRead) return shareUnavailable();
+    throw error;
+  }
 
   if (
     isWechatDraft &&

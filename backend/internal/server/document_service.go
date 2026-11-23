@@ -144,6 +144,8 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 	if _, _, _, _, err := validateCreateDocumentCover(params); err != nil {
 		return model.Document{}, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, documentCreateTimeout)
+	defer cancel()
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return model.Document{}, err
@@ -162,6 +164,15 @@ func (a *App) createDocument(ctx context.Context, params createDocumentParams) (
 }
 
 func (a *App) createDocumentTx(ctx context.Context, tx pgx.Tx, params createDocumentParams) (model.Document, error) {
+	ctx, cancel := context.WithTimeout(ctx, documentCreateTimeout)
+	defer cancel()
+	a.documentCreateOnce.Do(func() { a.documentCreateSlots = make(chan struct{}, documentCreateConcurrency) })
+	select {
+	case a.documentCreateSlots <- struct{}{}:
+		defer func() { <-a.documentCreateSlots }()
+	default:
+		return model.Document{}, errDocumentCreateRateLimited
+	}
 	docID := strings.TrimSpace(params.DocID)
 	if docID == "" {
 		var err error
@@ -181,6 +192,47 @@ func (a *App) createDocumentTx(ctx context.Context, tx pgx.Tx, params createDocu
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, params.User.ID); err != nil {
 		return model.Document{}, err
+	}
+	// Replays must still succeed at the count/rate limit, especially when a
+	// desktop client lost the response to a successfully committed create.
+	if params.DocID != "" {
+		var existing model.Document
+		var folderID string
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT d.doc_id, d.title, d.theme, d.content, d.cover_mode, d.cover_ratio, d.cover_image_source, d.cover_prompt, d.revision,
+			       d.created_at, d.updated_at, COALESCE(f.folder_id, '')
+			FROM documents d LEFT JOIN folders f ON f.id = d.folder_id
+			WHERE d.doc_id = $1 AND d.user_id = $2 AND d.trashed_at IS NULL
+		`, docID, params.User.ID).Scan(
+			&existing.DocID, &existing.Title, &existing.Theme, &existing.Content,
+			&existing.CoverMode, &existing.CoverRatio, &existing.CoverImageSource, &existing.CoverPrompt,
+			&existing.Revision, &existing.CreatedAt, &existing.UpdatedAt, &folderID,
+		)
+		if lookupErr == nil {
+			if existing.Title == params.Title && existing.Theme == theme && existing.Content == params.Content &&
+				existing.CoverMode == coverMode && existing.CoverRatio == coverRatio && existing.CoverImageSource == coverImageSource &&
+				existing.CoverPrompt == coverPrompt && folderID == derefOrEmpty(params.FolderID) {
+				return existing, nil
+			}
+			return model.Document{}, errDocumentIDConflict
+		}
+		if !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return model.Document{}, lookupErr
+		}
+	}
+	if err := a.takeDocumentCreateAttempt(params.User.ID); err != nil {
+		return model.Document{}, err
+	}
+	// Serialized with all user document mutations; trash remains counted until
+	// permanent deletion. LIMIT also bounds work for pre-existing oversized accounts.
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM (
+		SELECT 1 FROM documents WHERE user_id=$1 LIMIT $2
+	) counted`, params.User.ID, a.documentCountLimit()).Scan(&count); err != nil {
+		return model.Document{}, err
+	}
+	if count >= a.documentCountLimit() {
+		return model.Document{}, errDocumentCountLimit
 	}
 
 	var doc model.Document
@@ -222,32 +274,6 @@ func (a *App) createDocumentTx(ctx context.Context, tx pgx.Tx, params createDocu
 		&doc.DocID, &doc.Title, &doc.Theme, &doc.Content, &doc.CoverMode, &doc.CoverRatio, &doc.CoverImageSource, &doc.CoverPrompt, &doc.Revision, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if params.DocID != "" {
-			var existing model.Document
-			var folderID string
-			lookupErr := tx.QueryRow(ctx, `
-				SELECT d.doc_id, d.title, d.theme, d.content, d.cover_mode, d.cover_ratio, d.cover_image_source, d.cover_prompt, d.revision,
-				       d.created_at, d.updated_at, COALESCE(f.folder_id, '')
-				FROM documents d
-				LEFT JOIN folders f ON f.id = d.folder_id
-				WHERE d.doc_id = $1 AND d.user_id = $2 AND d.trashed_at IS NULL
-			`, docID, params.User.ID).Scan(
-				&existing.DocID, &existing.Title, &existing.Theme, &existing.Content,
-				&existing.CoverMode, &existing.CoverRatio, &existing.CoverImageSource, &existing.CoverPrompt,
-				&existing.Revision, &existing.CreatedAt, &existing.UpdatedAt, &folderID,
-			)
-			if lookupErr == nil && existing.Title == params.Title && existing.Theme == theme &&
-				existing.Content == params.Content && existing.CoverMode == coverMode && existing.CoverRatio == coverRatio && existing.CoverImageSource == coverImageSource && existing.CoverPrompt == coverPrompt && folderID == derefOrEmpty(params.FolderID) {
-				return existing, nil
-			}
-			if lookupErr == nil || errors.Is(lookupErr, pgx.ErrNoRows) {
-				if lookupErr == nil {
-					return model.Document{}, errDocumentIDConflict
-				}
-				return model.Document{}, errDocumentQuotaExceeded
-			}
-			return model.Document{}, lookupErr
-		}
 		return model.Document{}, errDocumentQuotaExceeded
 	}
 	if err != nil {
@@ -467,11 +493,11 @@ func (a *App) finishDocumentUpdate(ctx context.Context, user model.User, result 
 	ref := userRef{ID: user.ID, AuthUserID: user.AuthUserID}
 	if result.ContentChanged {
 		a.cancelPendingImageDeletions(gcCtx, ref, result.Document.Content)
-		a.enqueueOrphanedImages(gcCtx, ref, result.PreviousContent)
+		a.enqueueEditedOutImages(gcCtx, ref, result.PreviousContent)
 	}
 	if result.CoverChanged {
 		a.cancelPendingImageDeletions(gcCtx, ref, result.Document.CoverImageSource)
-		a.enqueueOrphanedImages(gcCtx, ref, result.PreviousCoverImageSource)
+		a.enqueueEditedOutImages(gcCtx, ref, result.PreviousCoverImageSource)
 	}
 	if len(result.PrunedContents) > 0 {
 		a.enqueueOrphanedImages(gcCtx, ref, strings.Join(result.PrunedContents, "\n"))

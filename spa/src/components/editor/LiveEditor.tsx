@@ -463,6 +463,7 @@ export function LiveEditor({
         key={`${docId}:${editorGeneration}`}
         document={merged}
         status={status}
+        saveErrorCode={saver.errorCode(docId)}
         onChange={handleEditorChange}
         onContentLoaded={handleContentLoaded}
         onImageSourceMapped={handleImageSourceMapped}

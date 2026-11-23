@@ -42,7 +42,7 @@ function fixture() {
     remote = { title: input.title, content: input.content, theme: input.theme, revision: remote.revision + 1 };
     return { document: { ...remote } };
   };
-  const saver = useDocumentSaver();
+  const saver = useDocumentSaver(undefined, "test-account");
   return {
     saver, storage, writes,
     load: async () => { loads++; return { ...remote }; },

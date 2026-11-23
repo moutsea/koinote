@@ -1094,6 +1094,14 @@ func mcpPrincipalFromContext(ctx context.Context) mcpPrincipal {
 
 func mapMCPDocumentError(err error) error {
 	switch {
+	case isImageReferenceUnavailable(err):
+		return errors.New("image has expired or is being removed; upload it again before saving")
+	case errors.Is(err, errFolderCountLimit):
+		return errFolderCountLimit
+	case errors.Is(err, errDocumentCountLimit):
+		return errDocumentCountLimit
+	case errors.Is(err, errDocumentCreateRateLimited):
+		return errDocumentCreateRateLimited
 	case errors.Is(err, errDocumentNotFound):
 		return errors.New("document not found")
 	case errors.Is(err, errDocumentQuotaExceeded):

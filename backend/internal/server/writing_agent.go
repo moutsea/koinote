@@ -152,6 +152,9 @@ func (a *App) loadWritingTask(ctx context.Context, id string, userID int) (writi
 	return t, err
 }
 func writingError(w http.ResponseWriter, err error) {
+	if writeDocumentCreateLimitError(w, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, pgx.ErrNoRows), errors.Is(err, errDocumentNotFound):
 		httpx.ErrorCode(w, 404, "not_found", "Task or document not found")

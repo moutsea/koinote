@@ -211,7 +211,7 @@ globalThis.__coverPublishDraft = async (id, input) => {
   return { draft: { mediaId: "saved-draft" } };
 };
 function EditorHarness({ docId }) {
-  const saver = useDocumentSaver();
+  const saver = useDocumentSaver(undefined, "test-account");
   documentSaver = saver;
   const [headerOpen, setHeaderOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(true);

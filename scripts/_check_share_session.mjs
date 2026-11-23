@@ -27,7 +27,7 @@ try {
     "../documentTransfer": "export const copySharedDocument = () => { throw new Error('unexpected copy'); };",
     "../i18n": `
       const strings = new Proxy({}, {get: (_, key) => key});
-      export const useI18n = () => ({locale:'en', t:{editor:strings,auth:strings,errors:{}}});
+      export const useI18n = () => ({locale:'en', t:{editor:strings,auth:strings,errors:strings,common:strings,notFound:strings}});
       export const interpolate = (text) => text;
     `,
   };
@@ -71,7 +71,7 @@ try {
   const full = { title: "Article", content: "VISIBLE HALF — HIDDEN HALF", isPreview: false, viewCount: 1 };
   const preview = { ...full, content: "VISIBLE HALF", isPreview: true };
   const shareKey = ["share", "release-review", user.authUserId];
-  let sessionStatus, protectedShare, delayedVerification, delayedShare, delayedSession;
+  let sessionStatus, protectedShare, delayedVerification, delayedShare, delayedSession, shareFailure;
   const response = (value, status = 200) => new Response(JSON.stringify(value), { status });
   globalThis.fetch = async (path) => {
     if (path === "/api/auth/session") {
@@ -88,6 +88,7 @@ try {
       return response({ document: sessionStatus === 200 ? full : preview });
     }
     if (path === "/api/share/release-review") {
+      if (shareFailure) return response({ code: shareFailure === 404 ? "share_not_found" : "share_unavailable" }, shareFailure);
       if (delayedShare) {
         const pending = delayedShare;
         delayedShare = null;
@@ -117,6 +118,7 @@ try {
     sessionStatus = initialStatus;
     protectedShare = protectedMode;
     delayedVerification = delayedShare = delayedSession = null;
+    shareFailure = null;
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -285,7 +287,27 @@ try {
     assert.equal(hasFull(), true);
   });
 
-  console.log("share session checks passed (expiry, re-login, transient errors, guest-key unlocks, previews, in-flight responses)");
+  for (const status of [429, 503, 404]) {
+    await scenario(false, async (qc) => {
+      shareFailure = status;
+      await flush(() => qc.invalidateQueries({ queryKey: shareKey }));
+      if (status === 404) {
+        await waitFor(() => document.body.textContent.includes("sharedNotFound"));
+        assert.equal(document.querySelector('[role="alert"]'), null);
+      } else {
+        await waitFor(() => Boolean(document.querySelector('[role="alert"]')));
+        assert.equal(document.body.textContent.includes("sharedNotFound"), false, "temporary failures must not claim the link is invalid");
+        assert.ok(document.querySelector('[role="alert"]').textContent.includes("share_unavailable"));
+        shareFailure = null;
+        const retry = [...document.querySelectorAll("button")].find((button) => button.textContent === "retry");
+        assert.ok(retry, "temporary failure has no retry action");
+        await flush(() => retry.dispatchEvent(new window.Event("click", { bubbles: true })));
+        await waitFor(hasFull);
+      }
+    });
+  }
+
+  console.log("share session checks passed (expiry, re-login, transient errors, guest-key unlocks, previews, in-flight responses, throttling and retry)");
 } finally {
   rmSync(tempDir, { recursive: true, force: true });
 }

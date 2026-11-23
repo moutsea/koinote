@@ -276,12 +276,12 @@ func (a *App) sharedDocumentByToken(ctx context.Context, token string) (sharedDo
 
 // shareGet 对所有持有 token 的访问者开放；未登录时只返回前半篇。
 func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
-	setShareResponseHeaders(w)
-	token := strings.TrimSpace(r.PathValue("token"))
-	if token == "" {
-		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
+	r, finish, allowed := a.beginShareRead(w, r)
+	if !allowed {
 		return
 	}
+	defer finish()
+	token := r.PathValue("token")
 
 	doc, err := a.sharedDocumentByToken(r.Context(), token)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -291,7 +291,7 @@ func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("share get: %v", err)
-		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		writeShareReadError(w, err)
 		return
 	}
 
@@ -300,19 +300,21 @@ func (a *App) shareGet(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{"requiresPassword": true})
 		return
 	}
-	doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
+	if r.Method != http.MethodHead {
+		doc.ViewCount = a.incrementShareView(r.Context(), doc.ID, doc.ViewCount)
+	}
 
 	writeSharedDocument(w, doc, !a.authenticatedShareViewer(r))
 }
 
 // shareVerify 校验口令后返回正文。两层限流防爆破。
 func (a *App) shareVerify(w http.ResponseWriter, r *http.Request) {
-	setShareResponseHeaders(w)
-	token := strings.TrimSpace(r.PathValue("token"))
-	if token == "" {
-		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
+	r, finish, allowed := a.beginShareRead(w, r)
+	if !allowed {
 		return
 	}
+	defer finish()
+	token := r.PathValue("token")
 
 	limiter := a.rateLimit()
 	if !limiter.allow("share-pw:ip:"+requestIP(r), sharePasswordIPAttempts, sharePasswordWindow) {
@@ -347,7 +349,7 @@ func (a *App) shareVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("share verify: %v", err)
-		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		writeShareReadError(w, err)
 		return
 	}
 
@@ -394,14 +396,24 @@ func (a *App) authenticatedShareViewer(r *http.Request) bool {
 }
 
 func (a *App) incrementShareView(ctx context.Context, documentID int, fallback int64) int64 {
+	// Counting is best effort. Never queue a public read behind an editor's row lock
+	// or consume a pool connection for seconds just to update an analytics counter.
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
 	var count int64
 	if err := a.db.QueryRow(ctx, `
 		UPDATE documents
 		SET share_view_count = share_view_count + 1
-		WHERE id = $1 AND share_token IS NOT NULL AND trashed_at IS NULL
+		WHERE id = (
+			SELECT id FROM documents
+			WHERE id = $1 AND share_token IS NOT NULL AND trashed_at IS NULL
+			FOR UPDATE SKIP LOCKED
+		)
 		RETURNING share_view_count
 	`, documentID).Scan(&count); err != nil {
-		log.Printf("share view count: %v", err)
+		if !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			log.Printf("share view count: %v", err)
+		}
 		return fallback
 	}
 	return count
@@ -449,12 +461,12 @@ func shareDescription(content string) string {
 // shareMeta 只给 Worker 注入 OpenGraph 使用。口令分享不暴露标题、摘要或封面；
 // 普通链接分享的摘要和封面也只来自匿名可读的前半篇。
 func (a *App) shareMeta(w http.ResponseWriter, r *http.Request) {
-	setShareResponseHeaders(w)
-	token := strings.TrimSpace(r.PathValue("token"))
-	if token == "" {
-		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
+	r, finish, allowed := a.beginShareRead(w, r)
+	if !allowed {
 		return
 	}
+	defer finish()
+	token := r.PathValue("token")
 	doc, err := a.sharedDocumentByToken(r.Context(), token)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.ErrorCode(w, http.StatusNotFound, "share_not_found", "Share link not found")
@@ -462,7 +474,7 @@ func (a *App) shareMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("share meta: %v", err)
-		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		writeShareReadError(w, err)
 		return
 	}
 	if doc.PasswordHash.Valid && strings.TrimSpace(doc.PasswordHash.String) != "" {

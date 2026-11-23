@@ -8,6 +8,7 @@ const search = read("spa/src/components/GlobalSearch.tsx");
 const documents = read("spa/src/pages/DocumentsPage.tsx");
 const documentList = read("spa/src/components/editor/DocumentList.tsx");
 const editor = read("spa/src/pages/EditorPage.tsx");
+const importTask = read("spa/src/useDocumentImport.ts");
 const share = read("spa/src/pages/SharePage.tsx");
 const admin = read("spa/src/pages/AdminPage.tsx");
 const home = read("spa/src/pages/HomePage.tsx");
@@ -17,7 +18,8 @@ const productionCompose = read("docker-compose.prod.yml");
 assert.match(shell, /<GlobalSearch\s*\/>/);
 assert.match(search, /globalSearchShortcutMode\(event, platform, desktop\)/);
 assert.match(search, /<mark/);
-assert.match(documents, /importDocumentsFromFiles/);
+assert.match(documents, /importer\.run\(files\)/);
+assert.match(importTask, /importDocumentsFromFiles\(files, onProgress, targetFolderId, options\)/);
 assert.match(documents, /exportDocumentsArchive/);
 assert.match(documents, /webkitdirectory/);
 assert.match(documents, /importFolderButton/);
@@ -26,7 +28,7 @@ assert.match(documents, /setTimeout\([\s\S]*?5_000/);
 assert.match(documentList, /onImport\(files\)/);
 assert.match(documentList, /transfer\.importButton/);
 assert.match(documentList, /accept=\{IMPORT_FILE_ACCEPT\}/);
-assert.match(editor, /importDocumentsFromFiles\(files[\s\S]*?targetFolderId\)/);
+assert.match(editor, /importer\.run\(files, targetFolderId\)/);
 assert.ok(
   (editor.match(/onImport=\{\(files, targetFolderId\) => void handleImport\(files, targetFolderId\)\}/g) ?? [])
     .length >= 2,

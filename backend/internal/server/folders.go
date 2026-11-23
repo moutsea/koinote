@@ -82,6 +82,10 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), documentCreateTimeout)
+	defer cancel()
+	r = r.WithContext(ctx)
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 
 	var body struct {
 		FolderID       string  `json:"folderId"`
@@ -161,6 +165,9 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 			*body.OrganizerKind,
 		)
 		if err != nil {
+			if writeDocumentCreateLimitError(w, err) {
+				return
+			}
 			log.Printf("organizer folder create: %v", err)
 			httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 			return
@@ -177,7 +184,19 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 	// （落到根下）而不是报外键错误 —— 后者会泄露「该文件夹存在」
 	var created model.Folder
 	var parent string
-	err = a.db.QueryRow(r.Context(), `
+	tx, err := a.db.Begin(r.Context())
+	if err != nil {
+		httpx.ErrorCode(w, 503, "server_error", "Could not create folder")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if err := a.admitFolderCreate(r.Context(), tx, user.ID, folderID); err != nil {
+		if !writeDocumentCreateLimitError(w, err) {
+			httpx.ErrorCode(w, 503, "server_error", "Could not create folder")
+		}
+		return
+	}
+	err = tx.QueryRow(r.Context(), `
 		WITH ins AS (
 			INSERT INTO folders (folder_id, user_id, parent_id, name, organizer_kind)
 			VALUES (
@@ -185,6 +204,7 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 				(SELECT id FROM folders WHERE folder_id = $3 AND user_id = $2),
 				$4, $5
 			)
+			ON CONFLICT (folder_id) DO NOTHING
 			RETURNING folder_id, name, parent_id, organizer_kind
 		)
 		SELECT ins.folder_id, ins.name, COALESCE(p.folder_id, ''), ins.organizer_kind
@@ -193,10 +213,10 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		Scan(&created.FolderID, &created.Name, &parent, &created.OrganizerKind)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if body.FolderID != "" && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if body.FolderID != "" && (errors.Is(err, pgx.ErrNoRows) || errors.As(err, &pgErr) && pgErr.Code == "23505") {
 			var existing model.Folder
 			var existingParent string
-			lookupErr := a.db.QueryRow(r.Context(), `
+			lookupErr := tx.QueryRow(r.Context(), `
 				SELECT f.folder_id, f.name, COALESCE(p.folder_id, ''), f.organizer_kind
 				FROM folders f LEFT JOIN folders p ON p.id = f.parent_id
 				WHERE f.folder_id = $1 AND f.user_id = $2
@@ -204,6 +224,10 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 			if lookupErr == nil && existing.Name == name && existingParent == derefOrEmpty(body.ParentFolderID) && equalOptionalString(existing.OrganizerKind, body.OrganizerKind) {
 				if existingParent != "" {
 					existing.ParentFolderID = &existingParent
+				}
+				if err := tx.Commit(r.Context()); err != nil {
+					httpx.ErrorCode(w, 503, "server_error", "Could not create folder")
+					return
 				}
 				httpx.JSON(w, http.StatusOK, map[string]any{"folder": existing, "created": false})
 				return
@@ -221,6 +245,10 @@ func (a *App) folderCreate(w http.ResponseWriter, r *http.Request) {
 		created.ParentFolderID = &parent
 	}
 
+	if err := tx.Commit(r.Context()); err != nil {
+		httpx.ErrorCode(w, 503, "server_error", "Could not create folder")
+		return
+	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"folder": created, "created": true})
 }
 
@@ -237,6 +265,9 @@ func (a *App) createOrganizerFolder(
 		return model.Folder{}, false, false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
+		return model.Folder{}, false, false, err
+	}
 
 	var parentID *int
 	if requestedParent != "" {
@@ -338,6 +369,9 @@ func (a *App) createOrganizerFolder(
 
 	var created model.Folder
 	var createdParent string
+	if err := a.admitFolderCreate(ctx, tx, userID, folderID); err != nil {
+		return model.Folder{}, false, false, err
+	}
 	err = tx.QueryRow(ctx, `
 		WITH ins AS (
 			INSERT INTO folders (folder_id, user_id, parent_id, name, organizer_kind)

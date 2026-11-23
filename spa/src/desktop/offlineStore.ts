@@ -10,6 +10,7 @@ import type {
   TreeMutationItem,
 } from "../api";
 import { invoke } from "@tauri-apps/api/core";
+import { IMPORT_ACCOUNT_CHANGED_CODE, IMPORT_OWNER_HEADER } from "../documentImportCore";
 import {
   forEachConcurrent,
   imageReferences,
@@ -113,6 +114,7 @@ export type DesktopSyncSummary = {
   conflicts: number;
   lastSyncedAt: string | null;
   message?: string;
+  partial?: boolean;
 };
 
 type DesktopSyncOptions = {
@@ -232,12 +234,18 @@ async function database() {
   return databasePromise;
 }
 
-async function accountID(): Promise<string> {
-  if (isDesktopLocalModeUnlocked()) return DESKTOP_LOCAL_ACCOUNT_ID;
-  if (isDesktopLocalModeSelected()) throw new Error("local_mode_locked");
-  const session = await getStoredDesktopSession();
-  if (!session?.accountId) throw new Error("Desktop session is unavailable");
-  return session.accountId;
+async function accountID(expectedAccount?: string): Promise<string> {
+  let account: string;
+  if (isDesktopLocalModeUnlocked()) {
+    account = DESKTOP_LOCAL_ACCOUNT_ID;
+  } else {
+    if (isDesktopLocalModeSelected()) throw new Error("local_mode_locked");
+    const session = await getStoredDesktopSession();
+    if (!session?.accountId) throw new Error("Desktop session is unavailable");
+    account = session.accountId;
+  }
+  if (expectedAccount && account !== expectedAccount) throw desktopOperationError(IMPORT_ACCOUNT_CHANGED_CODE);
+  return account;
 }
 
 function isLocalAccount(account: string): boolean {
@@ -405,7 +413,7 @@ async function imageCacheSummaryForAccount(
       COALESCE(SUM(byte_size), 0) AS used_bytes,
       COALESCE(SUM(CASE WHEN is_local_origin = 0 THEN byte_size ELSE 0 END), 0)
         AS remote_cache_bytes,
-      COALESCE(SUM(CASE WHEN is_local_origin = 1 AND object_key IS NULL
+      COALESCE(SUM(CASE WHEN is_local_origin = 1
         THEN byte_size ELSE 0 END), 0) AS pending_local_bytes
     FROM offline_images WHERE account_id = $1
   `, [account]);
@@ -475,14 +483,14 @@ class OfflineImageUploadError extends Error {
   }
 }
 
-export async function desktopStoreLocalImage(file: File): Promise<UploadedImage> {
+export async function desktopStoreLocalImage(file: File, expectedAccount?: string): Promise<UploadedImage> {
   if (!DESKTOP_IMAGE_TYPES.has(file.type) || file.size <= 0) {
     throw new Error("image_type_unsupported");
   }
   if (file.size > MAX_IMPORT_UPLOAD_IMAGE_BYTES) {
     throw new Error("image_too_large");
   }
-  const account = await accountID();
+  const account = await accountID(expectedAccount);
   const imageID = crypto.randomUUID();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const base64Data = await storedLocalValue(account, bytesToBase64(bytes));
@@ -552,6 +560,11 @@ export async function desktopClearRemoteImageCache(): Promise<DesktopImageCacheS
     await db.execute(`
       DELETE FROM offline_images
       WHERE account_id = $1 AND is_local_origin = 0
+        AND NOT EXISTS (SELECT 1 FROM offline_documents d WHERE d.account_id=$1
+          AND d.sync_state IN ('create','update','conflict')
+          AND (instr(d.content,offline_images.object_key)>0 OR instr(d.cover_image_source,offline_images.object_key)>0
+            OR instr(d.content,'koinote-local-image://'||offline_images.image_id)>0
+            OR instr(d.cover_image_source,'koinote-local-image://'||offline_images.image_id)>0))
     `, [account]);
     await db.execute(`
       INSERT INTO offline_meta (account_id, key, value)
@@ -629,21 +642,13 @@ async function uploadOfflineImage(
   row: OfflineImageRow,
 ): Promise<string> {
   if (row.remote_url) {
-    const replacedDocuments = await applyUploadedImageMapping(
+    await applyUploadedImageMapping(
       account,
       row.image_id,
       row.remote_url,
     );
-    // Keep a recovered upload protected until its local placeholders have
-    // been replaced in SQLite. This also repairs rows left half-finished by a
-    // crash or a cache-clear action between the two writes.
-    if (replacedDocuments > 0) {
-      const db = await database();
-      await db.execute(`
-        UPDATE offline_images SET is_local_origin = 0, last_error = NULL
-        WHERE account_id = $1 AND image_id = $2
-      `, [account, row.image_id]);
-    }
+    // A mapped URL is not proof that its document reached the cloud.
+    // Keep the source protected until every pending reference is acknowledged.
     return row.remote_url;
   }
   const bytes = base64ToBytes(row.base64_data);
@@ -683,21 +688,8 @@ async function uploadOfflineImage(
         is_local_origin = 1
     WHERE account_id = $1 AND image_id = $2
   `, [account, row.image_id, result.image.key, result.image.url]);
-  const replacedDocuments = await applyUploadedImageMapping(
-    account,
-    row.image_id,
-    result.image.url,
-  );
-  // The editor can still have the image only in its in-memory document while
-  // the sync runs. Do not turn the only local copy into an evictable cache
-  // entry until at least one persisted document has had its placeholder
-  // replaced. The next sync will retry the mapping after the editor saves.
-  if (replacedDocuments > 0) {
-    await db.execute(`
-      UPDATE offline_images SET is_local_origin = 0
-      WHERE account_id = $1 AND image_id = $2
-    `, [account, row.image_id]);
-  }
+  await applyUploadedImageMapping(account, row.image_id, result.image.url);
+  // SQLite mapping alone must not turn the only recoverable file into cache.
   return result.image.url;
 }
 
@@ -790,6 +782,126 @@ async function prepareDocumentCoverForRemote(account: string, source: string): P
   return uploadOfflineImage(account, row);
 }
 
+// Recheck pending remote URLs too: their upload lease can expire while a
+// document waits for quota. A local placeholder is no longer present after
+// the first successful upload, so the normal local-image uploader cannot help.
+//
+// Every sync after a local edit runs this check, so a verified unrecorded
+// image is trusted for a while. A key that was unrecorded (no cleanup entry)
+// when verified can only be deleted through the cleanup queue afterwards, and
+// that leaves a tombstone the backend reports as missing for 24 hours; a cache
+// far shorter than that cannot mask the deletion.
+const UNRECORDED_IMAGE_CHECK_TTL_MS = 60 * 60_000;
+const UNRECORDED_IMAGE_CHECK_CONCURRENCY = 6;
+const verifiedUnrecordedImages = new Map<string, number>();
+async function preparePendingRemoteImages(account: string): Promise<Map<string, string>> {
+  const db = await database();
+  const documents = await db.select<Pick<DocumentRow, "content" | "cover_image_source">[]>(`
+    SELECT content,cover_image_source FROM offline_documents
+    WHERE account_id=$1 AND sync_state IN ('create','update','conflict')
+  `, [account]);
+  const sources = new Map<string, string>();
+  for (const source of documents.flatMap(doc => [...imageReferences(doc.content), doc.cover_image_source])) {
+    const key = imageObjectKeyFromSource(source);
+    if (key?.startsWith(`u/${account}/`) && !sources.has(key)) sources.set(key, source);
+  }
+  const keys = [...sources.keys()];
+  const failures = new Map<string, string>();
+  for (let offset = 0; offset < keys.length; offset += 500) {
+    const chunk = keys.slice(offset, offset + 500);
+    const placeholders = chunk.map((_, index) => `$${index + 2}`).join(",");
+    await db.execute(`UPDATE offline_images SET is_local_origin=1
+      WHERE account_id=$1 AND object_key IN (${placeholders})`, [account, ...chunk]);
+    let missing: string[];
+    let unrecorded: string[];
+    try {
+      const retained = await remoteJSON<{ missingKeys: string[]; unrecordedKeys?: string[] }>("/api/storage/retain-import-images", {
+        method: "POST", headers: { [IMPORT_OWNER_HEADER]: account }, body: JSON.stringify({ keys: chunk }),
+      });
+      const listed = (value: unknown): value is string[] =>
+        Array.isArray(value) && value.every(key => typeof key === "string" && chunk.includes(key));
+      if (!listed(retained.missingKeys) || !listed(retained.unrecordedKeys ?? [])) throw new Error("invalid_image_retention");
+      missing = [...retained.missingKeys];
+      unrecorded = retained.unrecordedKeys ?? [];
+    } catch (error) {
+      if (error instanceof RemoteHTTPError && (error.status === 401 || error.code === IMPORT_ACCOUNT_CHANGED_CODE)) throw error;
+      const code = error instanceof RemoteHTTPError && error.status === 429 ? error.code ?? "too_many_requests" : "image_upload_unavailable";
+      for (const key of keys.slice(offset)) failures.set(key, code);
+      break;
+    }
+    // No ledger row and no cleanup entry: an image uploaded before usage was
+    // recorded (or whose record failed) still exists, while one collected long
+    // ago does not. Only the object itself can tell; never re-upload or block
+    // an image that is still being served.
+    const unchecked = unrecorded.filter((key) => {
+      const cacheKey = `${account}\n${key}`;
+      if ((verifiedUnrecordedImages.get(cacheKey) ?? 0) > Date.now()) return false;
+      verifiedUnrecordedImages.delete(cacheKey);
+      return true;
+    });
+    await forEachConcurrent(unchecked, UNRECORDED_IMAGE_CHECK_CONCURRENCY, async (key) => {
+      try {
+        const response = await desktopFetch(imageFetchURL(sources.get(key)!), { method: "HEAD" });
+        if (response.ok) verifiedUnrecordedImages.set(`${account}\n${key}`, Date.now() + UNRECORDED_IMAGE_CHECK_TTL_MS);
+        else if (response.status === 404) missing.push(key);
+        else failures.set(key, response.status === 429 ? "too_many_requests" : "image_upload_unavailable");
+      } catch {
+        failures.set(key, "image_upload_unavailable");
+      }
+    });
+    for (const key of missing) {
+      let cached = await selectOfflineImageByObjectKey(account, key);
+      const recoveryKey = `pending-image-replacement:${key}`;
+      if (!cached) {
+        const recovery = await db.select<{ value: string }[]>(`SELECT value FROM offline_meta WHERE account_id=$1 AND key=$2`, [account, recoveryKey]);
+        if (recovery[0]) cached = await selectOfflineImageByID(account, recovery[0].value);
+      }
+      if (!cached) { failures.set(key, "local_image_missing"); continue; }
+      try {
+        // Keep the old key's local identity across a crash between updating the
+        // uploaded image row and replacing remote URLs in pending documents.
+        await db.execute(`INSERT INTO offline_meta(account_id,key,value) VALUES($1,$2,$3)
+          ON CONFLICT(account_id,key) DO UPDATE SET value=excluded.value`, [account,recoveryKey,cached.image_id]);
+        const url = await uploadOfflineImage(account, { ...await readableImageRow(account, cached), remote_url: null, object_key: null });
+        const replacement = imageObjectKeyFromSource(url);
+        if (!replacement) throw new Error("invalid_uploaded_image");
+        await serializeMutation(async () => {
+          await db.execute(`UPDATE offline_documents
+            SET content=replace(content,$2,$3),cover_image_source=replace(cover_image_source,$2,$3),
+              change_seq=change_seq+1,last_error=NULL,
+              sync_state=CASE WHEN sync_state='clean' THEN 'update' ELSE sync_state END
+            WHERE account_id=$1 AND sync_state<>'trash'
+              AND (instr(content,$2)>0 OR instr(cover_image_source,$2)>0)`, [account, key, replacement]);
+        });
+      } catch (error) {
+        if (error instanceof RemoteHTTPError && (error.status === 401 || error.code === IMPORT_ACCOUNT_CHANGED_CODE)) throw error;
+        failures.set(key, error instanceof OfflineImageUploadError ? error.code : "image_upload_unavailable");
+      }
+    }
+  }
+  return failures;
+}
+
+async function releaseConfirmedOfflineImages(account: string): Promise<void> {
+  const db = await database();
+  await db.execute(`DELETE FROM offline_meta WHERE account_id=$1 AND key LIKE 'pending-image-replacement:%'
+    AND NOT EXISTS (SELECT 1 FROM offline_documents d WHERE d.account_id=$1
+      AND (instr(d.content,substr(offline_meta.key,27))>0 OR instr(d.cover_image_source,substr(offline_meta.key,27))>0
+        OR instr(d.remote_snapshot,substr(offline_meta.key,27))>0))`, [account]);
+  await db.execute(`UPDATE offline_images SET is_local_origin=0
+    WHERE account_id=$1 AND is_local_origin=1 AND object_key IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM offline_meta m WHERE m.account_id=$1
+        AND m.key LIKE 'pending-image-replacement:%' AND m.value=offline_images.image_id)
+      AND EXISTS (SELECT 1 FROM offline_documents d WHERE d.account_id=$1
+        AND d.sync_state='clean' AND d.base_revision>0
+        AND (instr(d.content,offline_images.object_key)>0 OR instr(d.cover_image_source,offline_images.object_key)>0))
+      AND NOT EXISTS (SELECT 1 FROM offline_documents d WHERE d.account_id=$1
+        AND d.sync_state IN ('create','update','conflict')
+        AND (instr(d.content,offline_images.object_key)>0 OR instr(d.cover_image_source,offline_images.object_key)>0
+          OR instr(d.content,$2||offline_images.image_id)>0 OR instr(d.cover_image_source,$2||offline_images.image_id)>0))`,
+    [account, "koinote-local-image://"]);
+}
+
 async function cacheDocumentImages(account: string, content: string, extraSource = ""): Promise<void> {
   const remoteSources = [...new Set(
     [...imageReferences(content), extraSource].filter((source) => imageObjectKeyFromSource(source)),
@@ -872,8 +984,8 @@ async function maintainOfflineImages(account: string): Promise<void> {
   console.warn("Desktop image maintenance delayed", state);
 }
 
-export async function desktopReleaseUnusedImages(sources: string[]): Promise<void> {
-  const account = await accountID();
+export async function desktopReleaseUnusedImages(sources: string[], expectedAccount?: string): Promise<void> {
+  const account = await accountID(expectedAccount);
   const imageIDs = [...new Set(
     sources.map(desktopLocalImageID).filter((value): value is string => Boolean(value)),
   )];
@@ -1152,9 +1264,9 @@ export async function desktopCreateDocument(params?: {
   content?: string;
   theme?: string;
   folderId?: string | null;
-}): Promise<{ document: Document }> {
+}, expectedAccount?: string): Promise<{ document: Document }> {
   return serializeMutation(async () => {
-    const account = await accountID();
+    const account = await accountID(expectedAccount);
     const db = await database();
     const now = new Date().toISOString();
     const local = isLocalAccount(account);
@@ -1679,9 +1791,9 @@ export async function desktopCreateFolder(params: {
   name: string;
   parentFolderId: string | null;
   organizerKind?: Folder["organizerKind"];
-}): Promise<{ folder: Folder; created: boolean }> {
+}, expectedAccount?: string): Promise<{ folder: Folder; created: boolean }> {
   return serializeMutation(async () => {
-    const account = await accountID();
+    const account = await accountID(expectedAccount);
     const db = await database();
     const local = isLocalAccount(account);
     const folder: Folder = {
@@ -2610,6 +2722,7 @@ async function performSync(
       account,
       outcome.state,
       outcome.message,
+      outcome.partial,
     );
     notify(summary);
     return summary;
@@ -2634,6 +2747,7 @@ async function performSync(
 
 async function pushFolders(account: string) {
   const db = await database();
+  const issues: string[] = [];
   let pendingCreates = await db.select<FolderRow[]>(`
     SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state = 'create'
   `, [account]);
@@ -2642,7 +2756,8 @@ async function pushFolders(account: string) {
     const ready = pendingCreates.filter((row) => !row.parent_folder_id || !pendingIDs.has(row.parent_folder_id));
     if (ready.length === 0) break;
     for (const row of ready) {
-      const result = await remoteJSON<{ folder: Folder; created?: boolean }>("/api/folders", {
+      let result: { folder: Folder; created?: boolean };
+      try { result = await remoteJSON<{ folder: Folder; created?: boolean }>("/api/folders", {
         method: "POST",
         body: JSON.stringify({
           folderId: row.folder_id,
@@ -2650,13 +2765,20 @@ async function pushFolders(account: string) {
           parentFolderId: row.parent_folder_id,
           organizerKind: row.organizer_kind,
         }),
-      });
+      }); } catch (error) {
+        if (!(error instanceof RemoteHTTPError) || (error.status !== 429 && error.code !== "folder_count_limit_reached")) throw error;
+        const code = error.code ?? "too_many_requests";
+        issues.push(code);
+        await db.execute(`UPDATE offline_folders SET last_error=$2 WHERE account_id=$1 AND sync_state='create'`, [account, code]);
+        break;
+      }
       if (result.folder.folderId === row.folder_id) {
         await acknowledgeFolder(account, row, result.folder);
       } else {
         await reconcileFolderIdentity(account, row, result.folder);
       }
     }
+    if (issues.length) break;
     pendingCreates = await db.select<FolderRow[]>(`
       SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state = 'create'
     `, [account]);
@@ -2666,6 +2788,8 @@ async function pushFolders(account: string) {
     SELECT * FROM offline_folders WHERE account_id = $1 AND sync_state = 'update'
   `, [account]);
   for (const row of updates) {
+    const blocked = await pendingRemoteFolderIssue(account, row.parent_folder_id);
+    if (blocked) { issues.push(blocked); continue; }
     await remoteJSON(`/api/folders/${encodeURIComponent(row.folder_id)}`, {
       method: "PUT", body: JSON.stringify({ name: row.name }),
     });
@@ -2694,6 +2818,15 @@ async function pushFolders(account: string) {
     }
     await db.execute(`DELETE FROM offline_folders WHERE account_id = $1 AND folder_id = $2`, [account, row.folder_id]);
   }
+  return issues;
+}
+
+async function pendingRemoteFolderIssue(account: string, folderID: string | null): Promise<string | undefined> {
+  if (!folderID) return undefined;
+  const db = await database();
+  const rows = await db.select<{ last_error: string | null }[]>(
+    `SELECT last_error FROM offline_folders WHERE account_id=$1 AND folder_id=$2 AND sync_state='create'`, [account, folderID]);
+  return rows.length ? rows[0].last_error ?? "folder_sync_pending" : undefined;
 }
 
 async function pushPendingDocumentTreeMoves(account: string) {
@@ -2712,6 +2845,7 @@ async function pushPendingDocumentTreeMoves(account: string) {
   }
   for (const group of groups.values()) {
     const folderId = group[0]?.folder_id ?? null;
+    if (await pendingRemoteFolderIssue(account, folderId)) continue;
     const items: TreeMutationItem[] = group.map((row) => ({
       kind: "doc",
       id: row.doc_id,
@@ -2791,7 +2925,20 @@ async function pushDocuments(account: string): Promise<string[]> {
   const db = await database();
   await pushPendingDocumentTreeMoves(account);
   await pushPendingDocumentTrash(account);
-  const imageUploadIssues: string[] = [];
+  const imageFailures = await preparePendingRemoteImages(account);
+  const documentIssues: string[] = [];
+  let blockedCreation: string | undefined;
+  async function deferDocument(row: DocumentRow, code: string) {
+    documentIssues.push(code);
+    // Image URL replacement advances change_seq without changing the document's
+    // content revision. A real user edit advances local_revision instead.
+    await db.execute(`
+      UPDATE offline_documents SET last_error = $3
+      WHERE account_id = $1 AND doc_id = $2
+        AND local_revision = $4 AND base_revision = $5 AND sync_state = $6
+        AND sync_state NOT IN ('trash', 'conflict')
+    `, [account, row.doc_id, code, row.local_revision, row.base_revision, row.sync_state]);
+  }
   const rows = await db.select<DocumentRow[]>(`
     SELECT * FROM offline_documents
     WHERE account_id = $1 AND (sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1)
@@ -2799,6 +2946,12 @@ async function pushDocuments(account: string): Promise<string[]> {
   `, [account]);
   for (const row of rows) {
     if (row.sync_state === "conflict") continue;
+    const folderIssue = row.sync_state !== "trash" ? await pendingRemoteFolderIssue(account, row.folder_id) : undefined;
+    if (folderIssue) { await deferDocument(row, folderIssue); continue; }
+    if (row.sync_state === "create" && blockedCreation) {
+      await deferDocument(row, blockedCreation);
+      continue;
+    }
     if (row.sync_state === "trash") {
       if (row.base_revision === 0) {
         await db.execute(`DELETE FROM offline_documents WHERE account_id = $1 AND doc_id = $2`, [account, row.doc_id]);
@@ -2813,6 +2966,9 @@ async function pushDocuments(account: string): Promise<string[]> {
       continue;
     }
 
+    const imageIssue = [...imageReferences(row.content), row.cover_image_source]
+      .map(source => imageFailures.get(imageObjectKeyFromSource(source) ?? "")).find(Boolean);
+    if (imageIssue) { await deferDocument(row, imageIssue); continue; }
     try {
       const remoteContent = await prepareDocumentContentForRemote(account, row.content);
       const remoteCoverSource = await prepareDocumentCoverForRemote(account, row.cover_image_source);
@@ -2910,12 +3066,16 @@ async function pushDocuments(account: string): Promise<string[]> {
       }
     } catch (error) {
       if (error instanceof OfflineImageUploadError) {
-        imageUploadIssues.push(error.code);
-        await db.execute(`
-          UPDATE offline_documents SET last_error = $3
-          WHERE account_id = $1 AND doc_id = $2
-            AND sync_state NOT IN ('trash', 'conflict')
-        `, [account, row.doc_id, error.code]);
+        await deferDocument(row, error.code);
+        continue;
+      }
+      if (error instanceof RemoteHTTPError && (
+        error.code === "document_count_limit_reached" || error.code === "storage_quota_exceeded" || error.code === "image_unavailable" ||
+        (row.sync_state === "create" && error.status === 429)
+      )) {
+        const code = error.code ?? "too_many_requests";
+        await deferDocument(row, code);
+        if (row.sync_state === "create") blockedCreation = code;
         continue;
       }
       if (
@@ -2936,7 +3096,8 @@ async function pushDocuments(account: string): Promise<string[]> {
       throw error;
     }
   }
-  return imageUploadIssues;
+  await releaseConfirmedOfflineImages(account);
+  return documentIssues;
 }
 
 async function recoverDeletedRemoteDocument(row: DocumentRow): Promise<Document> {
@@ -3487,6 +3648,7 @@ async function calculateSummary(
   account: string,
   state: DesktopSyncSummary["state"],
   message?: string,
+  partial = false,
 ): Promise<DesktopSyncSummary> {
   const db = await database();
   const counts = await db.select<{ pending: number; conflicts: number }[]>(`
@@ -3500,6 +3662,7 @@ async function calculateSummary(
   `, [account]);
   const storedIssues = await db.select<{ error_code: string | null }[]>(`
     SELECT COALESCE(
+      (SELECT last_error FROM offline_folders WHERE account_id=$1 AND sync_state<>'clean' AND last_error IS NOT NULL ORDER BY folder_id LIMIT 1),
       (SELECT last_error FROM offline_documents
        WHERE account_id = $1 AND last_error IS NOT NULL
          AND (sync_state <> 'clean' OR folder_dirty = 1 OR order_dirty = 1)
@@ -3525,6 +3688,7 @@ async function calculateSummary(
     conflicts: Number(counts[0]?.conflicts ?? 0),
     lastSyncedAt: meta[0]?.value ?? null,
     ...(effectiveMessage ? { message: effectiveMessage } : {}),
+    ...(partial || (storedIssues[0]?.error_code && Number(counts[0]?.pending ?? 0) > 0) ? { partial: true } : {}),
   };
 }
 

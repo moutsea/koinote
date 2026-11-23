@@ -151,6 +151,26 @@ func TestPublicRepositoryForwardedIPRequiresTrustedProxy(t *testing.T) {
 	if got := app.publicRepositoryRequestIP(req); got != "192.0.2.1" {
 		t.Fatal("ambiguous forwarding chain trusted", got)
 	}
+	// One host controls its IPv6 /64; rotating within it must not mint buckets.
+	for _, ip := range []string{"2001:db8:1:2::1", "2001:0db8:0001:0002:ffff:ffff:ffff:ffff"} {
+		req.Header.Set("X-Forwarded-For", ip)
+		if got := app.publicRepositoryRequestIP(req); got != "2001:db8:1:2::/64" {
+			t.Fatal("IPv6 source not collapsed to its /64", ip, got)
+		}
+	}
+	req.Header.Set("X-Forwarded-For", "2001:db8:1:3::1")
+	if got := app.publicRepositoryRequestIP(req); got != "2001:db8:1:3::/64" {
+		t.Fatal("neighbouring /64 merged", got)
+	}
+	req.Header.Set("X-Forwarded-For", "::ffff:198.51.100.7")
+	if got := app.publicRepositoryRequestIP(req); got != "198.51.100.7" {
+		t.Fatal("IPv4-mapped source not treated as IPv4", got)
+	}
+	direct := httptest.NewRequest("GET", "/", nil)
+	direct.RemoteAddr = "[2001:db8:9:9::5]:443"
+	if got := app.publicRepositoryRequestIP(direct); got != "2001:db8:9:9::/64" {
+		t.Fatal("direct IPv6 peer not collapsed", got)
+	}
 	for i := 0; i < 31; i++ {
 		req := httptest.NewRequest("POST", "/api/agent/repositories/1/clone", strings.NewReader("{}"))
 		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i))

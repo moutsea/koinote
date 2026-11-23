@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -45,9 +46,12 @@ func (a *App) imageQuota() int64 {
 const lifetimeStorageQuotaBytes int64 = 10 * 1024 * 1024 * 1024
 
 const (
-	imagePurposePersistent   = "persistent"
-	imagePurposeWechatExport = "wechat-export"
-	wechatExportImageTTL     = 7 * 24 * time.Hour
+	imagePurposePersistent    = "persistent"
+	imagePurposeWechatExport  = "wechat-export"
+	wechatExportImageTTL      = 7 * 24 * time.Hour
+	importImageTTL            = 7 * 24 * time.Hour
+	unattachedImageTTL        = 30 * 24 * time.Hour
+	imageUploadReservationTTL = 10 * time.Minute
 	// purpose 由浏览器请求头传入，不能把它当成可信的“不计费”标记。公式图走独立的小额度：
 	// 不挤占正文云存储，同时也不能被伪造 purpose 用来无限上传任意图片。
 	wechatExportQuotaBytes int64 = 100 * 1024 * 1024
@@ -130,7 +134,7 @@ func storageUsageForQuerier(
 	return out, err
 }
 
-// recordImageObject 把一个刚写进 R2 的对象记进账本，超额则拒绝。
+// recordImageObject 原子预留/记录一个 R2 对象的用量，超额则拒绝。
 //
 // 校验与写入是同一条语句，这是这个函数存在的理由：
 //
@@ -182,6 +186,15 @@ func (a *App) recordImageObject(
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, userID); err != nil {
 		return storageBreakdown{}, err
+	}
+	var aborted bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM pending_image_deletions WHERE object_key=$1 AND upload_aborted_at IS NOT NULL
+	)`, key).Scan(&aborted); err != nil {
+		return storageBreakdown{}, err
+	}
+	if aborted {
+		return storageBreakdown{}, errImageUploadAborted
 	}
 
 	tag, err := tx.Exec(ctx, `
@@ -311,23 +324,27 @@ func (a *App) storageUsage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// imageRecord 处理 POST /api/images/record —— Worker 写完 R2 后来报账。
+// imageRecord 处理 POST /api/images/record —— Worker 写入 R2 前预留，完成后确认。
 //
 // 鉴权走既有的那条路：内部令牌 + X-Auth-User-Id 头，requireUser 会解析出用户
 // （见 authUserIDFromRequest）。所以这里不需要另一套令牌校验。
 //
-// 它必须能拒绝：超额时返回 409，Worker 收到后把刚写的对象删掉。配额判定因此只有一个
-// 实现，在数据库里。
+// 超额时返回 409，Worker 不再写入 R2。预留与配额判定在同一数据库事务中完成。
 func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 	// 必须带内部令牌 —— 只有 Worker 该调这个端点。
 	//
 	// 光用 requireUser 不够：它也接受浏览器的会话 cookie，于是任何登录用户都能自己
 	// 报账。危害具体是这样的：对一个记账曾经失败的 key 报 bytes=1，ON CONFLICT
 	// DO NOTHING 会把这个错误的大小固定下来，之后再没人纠正 —— 等于绕过配额。
-	if !a.hasInternalToken(r) {
+	// The public API proxy also adds its internal token, but strips this
+	// canonical identity header. A browser cookie must never authorize billing.
+	if !a.hasInternalToken(r) || strings.TrimSpace(r.Header.Get("X-Auth-User-Id")) == "" {
 		httpx.ErrorCode(w, http.StatusUnauthorized, "unauthorized", "Not logged in")
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	r = r.WithContext(ctx)
 
 	user, ok := a.requireUser(w, r)
 	if !ok {
@@ -335,9 +352,12 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Key     string `json:"key"`
-		Bytes   int64  `json:"bytes"`
-		Purpose string `json:"purpose"`
+		Key      string `json:"key"`
+		Bytes    int64  `json:"bytes"`
+		Purpose  string `json:"purpose"`
+		Import   bool   `json:"import"`
+		Upload   bool   `json:"upload"`
+		Complete bool   `json:"complete"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid request")
@@ -369,11 +389,32 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusBadRequest, "bad_request", "Invalid image purpose")
 		return
 	}
+	if body.Import && purpose == imagePurposePersistent {
+		// An abandoned import must remain collectible even after its browser
+		// changes accounts. The normal GC reference check protects saved images.
+		expires := time.Now().Add(importImageTTL)
+		deleteAt = &expires
+	} else if body.Upload && purpose == imagePurposePersistent {
+		// Ordinary unsaved editor images get a longer recovery window. Saving
+		// a document/cover cancels this lease through the existing reference path.
+		expires := time.Now().Add(unattachedImageTTL)
+		deleteAt = &expires
+	}
+	if body.Upload && !body.Complete {
+		// Incomplete reservations must not occupy quota for an entire recovery
+		// period when a Worker or client disappears before R2 completion.
+		expires := time.Now().Add(imageUploadReservationTTL)
+		deleteAt = &expires
+	}
 
 	quotaBytes := a.storageQuotaFor(user)
 	used, err := a.recordImageObject(
 		r.Context(), user.ID, body.Key, body.Bytes, quotaBytes, purpose, deleteAt,
 	)
+	if errors.Is(err, errImageUploadAborted) {
+		httpx.ErrorCode(w, http.StatusGone, "image_upload_aborted", "Image upload was rolled back")
+		return
+	}
 	if errors.Is(err, errQuotaExceeded) {
 		// 409 而不是 413：413 是"这一张太大"，这里是"总量满了"。
 		// Worker 要据此区分回给前端哪个错误码
@@ -402,7 +443,7 @@ func (a *App) imageRecord(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
-	if purpose == imagePurposePersistent {
+	if purpose == imagePurposePersistent && (!body.Upload || body.Complete) {
 		a.recordProductMilestone(r.Context(), user.ID, milestoneFirstUpload)
 	}
 

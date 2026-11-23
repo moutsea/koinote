@@ -224,7 +224,8 @@ function syncLabel(
   if (summary.state === "offline") return summary.pending > 0 ? `${copy.offline} · ${summary.pending} ${copy.pending}` : copy.offline;
   if (summary.state === "error") {
     const code = summary.message?.replace(/^Error:\s*/, "");
-    return (code && errors[code]) || copy.error;
+    const detail = (code && errors[code]) || copy.error;
+    return summary.partial ? `${copy.partial}: ${detail}` : detail;
   }
   if (summary.pending > 0) return `${summary.pending} ${copy.pending}`;
   return copy.synced;
