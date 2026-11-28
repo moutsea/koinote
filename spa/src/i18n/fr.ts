@@ -160,7 +160,7 @@ export const fr: Messages = {
       },
       {
         title: "Gérer documents et versions",
-        desc: "Classez vos documents par dossiers et recherchez dans les titres et le contenu. Les membres à vie peuvent configurer l’historique complet. Un dernier instantané de sécurité est conservé quand il est désactivé.",
+        desc: "Classez vos documents par dossiers et recherchez dans les titres et le contenu. Les membres à vie peuvent configurer l’historique complet. Lorsque l’historique complet MCP est désactivé, les écritures MCP conservent le dernier instantané de sécurité.",
       },
       {
         title: "Images hébergées par Koinote",

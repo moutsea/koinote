@@ -160,7 +160,7 @@ export const en: Messages = {
       },
       {
         title: "Manage documents and versions",
-        desc: "Organize with folders and search titles and content. Lifetime members can configure full version history, with a latest safety snapshot retained when history is off.",
+        desc: "Organize with folders and search titles and content. Lifetime members can configure full version history. MCP writes retain the latest safety snapshot when full MCP history is off.",
       },
       {
         title: "Koinote image hosting",

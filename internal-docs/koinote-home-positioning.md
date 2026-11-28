@@ -251,3 +251,30 @@ SEO 日志中的 `seo render failed { path: '/docs', error: 'Error: asset fetch 
 本轮未执行真实数据库验收、真实外部平台发布/扣费、桌面原生平台编译或生产验收。PR 的仓库 CI 还包括 PostgreSQL、后端 race 和 macOS/Windows 桌面编译等检查，须在开 PR 阶段记录各 job 的真实结果。本地记录保存在 `/tmp`，持久结论与命令在本文件，自动化测试已进入代码仓库。
 
 独立评审须审 BASE_SHA 至最终交付 HEAD 的完整差异，覆盖四语正文/README、SEO/Worker/浏览器、共享页脚与相关回归。用户约束为单卡单 PR、保持 OPEN。评审通过后复用本分支推进唯一 PR，完成自动合并关闭及状态读回。
+
+## 独立评审 P1 返工（2026-11-28）
+
+返工起点为 `b24a98d88fc74b3df4b2893d74701e7b4e479734`，完整需求的 BASE_SHA 为 `7b5c59d1f8f99d9011c891f5cb889285a04da0a6`。独立评审只发现一项阻塞，四语首页的版本说明扩大了关闭历史后的安全快照承诺。
+
+### 根因、改动与受影响链路
+
+四语 `home.features[2].desc` 省略了 MCP 写入的条件，普通会员用户关闭文档历史后在网页修改文档，也会以为存在最近恢复点。实际 `backend/internal/server/document_service.go` 的 `documentVersionModeForMutation` 对关闭历史的网页写入返回 `documentVersionNone`，对 MCP 写入返回 `documentVersionSafety`。既有 `TestDocumentVersionSnapshotPolicy` 覆盖这两个分支。
+
+本次在四语源字段中明确“关闭 MCP 完整历史后，MCP 写入仍保留最近安全快照”。该字段由 `HomePage.tsx` 的功能卡和 `worker/seo.ts` 的静态首页直接消费，源文案修正覆盖两条展示路径。返工差异由四处译文、现有 i18n 测试中的四条范围断言及本节内部记录组成。
+
+### 修前失败与修后通过
+
+先只添加 `scripts/_check_i18n.mjs` 的范围断言，在旧四语文案上执行 `npm run test:i18n`，退出 1，输出 `i18n: 859 passed, 4 failed`，四条失败均为“关闭历史后的安全快照仅承诺 MCP 写入”。证据为 `/tmp/koinote-home-rework-red.log`。
+
+随后修正四处译文，同一命令退出 0，输出 `i18n: 863 passed, 0 failed`。证据为 `/tmp/koinote-home-rework-green.log`。断言检查版本说明中的 MCP 写入及关闭 MCP 完整历史条件，既有 HomePage DOM 测试继续验证每张功能卡使用对应语言的完整描述。
+
+### 本轮完整回归与剩余限制
+
+- `PATH="/tmp/d43ace76-tools/go/bin:$PATH" npm test` 退出 0，77 个专项脚本及 SPA/Worker 类型检查通过。SEO 通过，首页 DOM 为 60 次语言渲染、12 组生命周期，i18n 为 863 通过、0 失败，文档中心 14/0，layout 149/0，header-nav 通过。日志为 `/tmp/koinote-home-rework-test.log`。
+- `npm run build` 退出 0，5.68 秒，复制 20 个字体。日志为 `/tmp/koinote-home-rework-build.log`。既有大于 500kB chunk 提示仍存在。
+- `node --check scripts/_check_i18n.mjs` 与 `git diff --check` 通过。仓库没有独立 lint script。
+- 使用既有临时 Go overlay 运行 `TestDocumentVersionSnapshotPolicy` 与 `TestHomepageInternalDocumentIsolation`，二者 PASS。前者执行真实策略函数并验证网页/MCP 的不同结果，后者执行真实 `App.Routes()`，三个内部/API 路径均返回 404。日志为 `/tmp/koinote-home-rework-policy.log`。未连接数据库。
+- 本地 Wrangler 加载本轮产物，五个首页 URL 均返回 200，四语正文包含准确的 MCP 快照范围，title/description/OG/JSON-LD 一致。原有入口可达，下载入口沿用 GitHub release 跳转。20 个字体均 HTTP 200，141 个前端/Worker 产物无内部文档标记，两个 Worker 内部文档路径均 404。日志为 `/tmp/koinote-home-rework-http.log`，明细与 HTML 位于 `/tmp/koinote-home-rework-http/`。
+- Chromium 四语 × 390/1440px 共 8 组通过，32 次语言切换、8 次指南往返均核对实际正文中的 MCP 快照限定语，页面异常和横向溢出均为零。人工查看法语手机截图，新增句子可读且卡片布局完整。日志为 `/tmp/koinote-home-rework-browser.log`，截图与结果位于 `/tmp/koinote-home-rework-browser/`。
+
+重测试与构建启动前均检查宿主机 load、可用内存和其他重活，按串行顺序执行。浏览器 API 使用未登录模拟响应。本轮真实数据库、实际外部发布/扣费、桌面原生编译及生产验收未执行，远端 CI 在唯一 PR 创建后核对。复审仍须覆盖原 BASE_SHA 到返工提交的完整需求差异，返工提交 SHA 记录于任务计划与阶段交接。

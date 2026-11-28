@@ -36,6 +36,14 @@ function eq(label, got, want) {
   }
 }
 
+// 快照兜底只适用于 MCP 写入，不能承诺关闭历史后网页编辑仍有恢复点。
+const HOME_SNAPSHOT_SCOPE = {
+  en: /MCP writes[^.]*safety snapshot[^.]*full MCP history is off/,
+  zh: /关闭 MCP 完整历史后，MCP 写入[^。]*安全快照/,
+  fr: /historique complet MCP est désactivé, les écritures MCP[^.]*instantané de sécurité/,
+  ja: /MCP の完全な履歴を無効にしても、MCP による書き込み[^。]*安全スナップショット/,
+};
+
 // 首页摘要完整保留定位、Markdown 和 MCP，四语正文均覆盖会员与发布边界。
 for (const [locale, messages] of Object.entries(LOCALES)) {
   const home = messages.home;
@@ -44,6 +52,11 @@ for (const [locale, messages] of Object.entries(LOCALES)) {
   eq(`${locale} 摘要无截断`, meta.description, home.subtitle);
   ok(`${locale} 摘要包含 Markdown/MCP`, /Markdown/.test(meta.description) && /MCP/.test(meta.description));
   eq(`${locale} 首页功能卡完整`, home.features.length, 6);
+  ok(
+    `${locale} 关闭历史后的安全快照仅承诺 MCP 写入`,
+    HOME_SNAPSHOT_SCOPE[locale].test(home.features[2].desc),
+    home.features[2].desc,
+  );
   for (const field of ["access", "desktop"]) ok(`${locale} ${field} 非空`, home[field].trim().length > 0);
   const text = JSON.stringify(home);
   for (const format of ["Markdown", "HTML", "DOCX", "PDF", "OpenAPI", "credits"]) ok(`${locale} 首页包含 ${format}`, text.includes(format));
