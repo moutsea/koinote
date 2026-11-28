@@ -17,6 +17,8 @@ import {
   DEFAULT_FREE_STORAGE_QUOTA_BYTES,
   DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES,
   formatBillingPrice,
+  billingPriceFor,
+  validMembershipPrices,
 } from "../billingCore";
 import { PageContainer } from "../components/PageContainer";
 import { formatCreditPackPrice } from "../components/AgentCreditsCard";
@@ -30,9 +32,8 @@ export function PricingPage() {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
   const { t, locale } = useI18n();
-  const [selectedCurrency, setSelectedCurrency] = useState(
-    () => DEFAULT_CURRENCY_BY_LOCALE[locale] ?? "usd",
-  );
+  const [chosenCurrency, setSelectedCurrency] = useState<string>();
+  const selectedCurrency = chosenCurrency ?? DEFAULT_CURRENCY_BY_LOCALE[locale] ?? "usd";
   const pricing = useQuery({
     queryKey: PRICING_KEY,
     queryFn: getBillingPricing,
@@ -75,9 +76,10 @@ export function PricingPage() {
   });
 
   const data = pricing.data?.pricing;
-  const selectedPrice =
-    data?.prices.find((price) => price.currency.toLowerCase() === selectedCurrency) ??
-    data?.prices[0];
+  const prices = validMembershipPrices(data?.prices);
+  const selectedPrice = prices.length > 0
+    ? billingPriceFor(prices, selectedCurrency, prices[0])
+    : undefined;
   const freeStorage = formatBytes(data?.freeStorageQuotaBytes ?? DEFAULT_FREE_STORAGE_QUOTA_BYTES, locale);
   const lifetimeStorage = formatBytes(data?.lifetimeStorageQuotaBytes ?? DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES, locale);
   const lifetimePrice = selectedPrice
@@ -109,22 +111,23 @@ export function PricingPage() {
           </p>
         </div>
 
-        {pricing.isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-24 text-sm" style={{ color: "var(--ink-mid)" }}>
+        {pricing.isLoading && (
+          <div className="flex items-center justify-center gap-2 mt-6 text-sm" style={{ color: "var(--ink-mid)" }}>
             <LoaderCircle className="h-4 w-4 animate-spin" />
             {t.pricing.loading}
           </div>
-        ) : pricing.isError || !data ? (
-          <p className="py-24 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
+        )}
+        {!pricing.isLoading && (pricing.isError || !selectedPrice) && (
+          <p role="status" className="mt-6 text-center text-sm" style={{ color: "var(--ink-mid)" }}>
             {t.pricing.loadFailed}
           </p>
-        ) : (
+        )}
           <>
             <div className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2">
               <PricingCard
                 name={t.pricing.freeName}
                 description={t.pricing.freeDescription}
-                price={t.pricing.freePrice}
+                price={formatBillingPrice(0, selectedPrice?.currency ?? selectedCurrency, locale)}
                 period={t.pricing.freePeriod}
                 included={t.pricing.included}
                 features={t.pricing.freeFeatures.map((feature) =>
@@ -148,7 +151,7 @@ export function PricingPage() {
                 price={lifetimePrice}
                 period={t.pricing.lifetimePeriod}
                 priceControl={
-                  data.prices.length > 1 ? (
+                  prices.length > 1 ? (
                     <label className="mt-4 block max-w-56 text-xs" style={{ color: "var(--ink-mid)" }}>
                       <span className="mb-1.5 block">{t.membership.currencyLabel}</span>
                       <select
@@ -158,7 +161,7 @@ export function PricingPage() {
                         className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
                         style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                       >
-                        {data.prices.map((price) => (
+                        {prices.map((price) => (
                           <option key={price.currency} value={price.currency.toLowerCase()}>
                             {price.currency.toUpperCase()} · {formatBillingPrice(price.amount, price.currency, locale)}
                           </option>
@@ -187,7 +190,7 @@ export function PricingPage() {
                       type="button"
                       onClick={() => selectedPrice && checkout.mutate(selectedPrice.currency)}
                       disabled={
-                        !data.billingEnabled ||
+                        !data?.billingEnabled ||
                         !selectedPrice ||
                         checkout.isPending ||
                         checkoutInProgress
@@ -211,7 +214,7 @@ export function PricingPage() {
                 note={
                   active
                     ? t.pricing.active
-                    : !data.billingEnabled
+                    : data && !data.billingEnabled
                       ? t.pricing.unavailable
                       : checkoutErrorCode === "checkout_in_progress"
                         ? t.membership.checkoutPending
@@ -233,7 +236,7 @@ export function PricingPage() {
                 <p className="mt-3 text-sm leading-6" style={{ color: "var(--ink-mid)" }}>
                   {t.pricing.creditsDescription}
                 </p>
-                {data.prices.length > 1 && (
+                {prices.length > 1 && (
                   <label className="mx-auto mt-5 block max-w-56 text-left text-xs" style={{ color: "var(--ink-mid)" }}>
                     <span className="mb-1.5 block">{t.membership.currencyLabel}</span>
                     <select
@@ -243,7 +246,7 @@ export function PricingPage() {
                       className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-60"
                       style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                     >
-                      {data.prices.map((price) => (
+                      {prices.map((price) => (
                         <option key={price.currency} value={price.currency.toLowerCase()}>
                           {price.currency.toUpperCase()}
                         </option>
@@ -266,7 +269,7 @@ export function PricingPage() {
                           pack,
                           currency: selectedPrice?.currency ?? selectedCurrency,
                         })}
-                        disabled={!data.creditPurchaseEnabled || creditCheckout.isPending}
+                        disabled={!data?.creditPurchaseEnabled || creditCheckout.isPending}
                         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition hover:bg-[var(--ink-wash)] disabled:cursor-not-allowed disabled:opacity-50"
                         style={{ borderColor: "var(--ink-line)", color: "var(--ink-strong)" }}
                       >
@@ -282,7 +285,7 @@ export function PricingPage() {
               <p className="mt-4 text-center text-xs leading-5" style={{ color: creditCheckout.isError ? "var(--cinnabar)" : "var(--ink-faint)" }}>
                 {!active
                   ? t.pricing.creditsMembersOnly
-                  : !data.creditPurchaseEnabled
+                  : !data?.creditPurchaseEnabled
                     ? t.agentCredits.purchaseUnavailable
                     : creditCheckout.isError
                       ? t.agentCredits.checkoutFailed
@@ -308,7 +311,6 @@ export function PricingPage() {
               </div>
             </section>
           </>
-        )}
       </PageContainer>
     </div>
   );

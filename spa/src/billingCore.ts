@@ -27,17 +27,36 @@ export function billingPriceFor(
   ) ?? fallback;
 }
 
+// Membership prices come from a public API. Ignore incomplete or invalid entries
+// before they reach either the purchase controls or search-engine offers.
+export function validMembershipPrices(prices: unknown): BillingPrice[] {
+  if (!Array.isArray(prices)) return [];
+  const currencies = Object.values(DEFAULT_CURRENCY_BY_LOCALE);
+  return prices
+    .filter((price): price is BillingPrice =>
+      price != null &&
+      Number.isSafeInteger(price.amount) && price.amount > 0 &&
+      typeof price.currency === "string" && currencies.includes(price.currency.toLowerCase()),
+    )
+    .map((price) => ({ amount: price.amount, currency: price.currency.toLowerCase() }));
+}
+
+export function billingPriceAmount(amount: number, currency: string): string {
+  const zeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase());
+  return (amount / (zeroDecimal ? 1 : 100)).toFixed(zeroDecimal ? 0 : 2);
+}
+
 export function formatBillingPrice(amount: number, currency: string, locale: string) {
   const normalizedCurrency = currency.toLowerCase();
-  const divisor = ZERO_DECIMAL_CURRENCIES.has(normalizedCurrency) ? 1 : 100;
+  const value = billingPriceAmount(amount, normalizedCurrency);
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: normalizedCurrency.toUpperCase(),
       currencyDisplay: "narrowSymbol",
-    }).format(amount / divisor);
+    }).format(Number(value));
   } catch {
-    return `${normalizedCurrency.toUpperCase()} ${(amount / divisor).toFixed(divisor === 1 ? 0 : 2)}`;
+    return `${normalizedCurrency.toUpperCase()} ${value}`;
   }
 }
 
