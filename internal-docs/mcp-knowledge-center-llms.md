@@ -216,3 +216,55 @@ SEO 用例调用实际 Worker handler，但当前测试中的 ASSETS 与后端 f
 - 已对 49 个工具名逐一检查本文件覆盖，并核实三组工具注册源文件与已确认的 origin/main 一致。公开源码对 internal-docs 的引用扫描、需求必需字段检查和文档空白检查均通过。`git diff --no-index --check /dev/null internal-docs/mcp-knowledge-center-llms.md` 无空白错误输出，因新增文件差异返回 1。最终构建产物与 HTTP 隔离检查列为 A8 的开发验收。
 
 后续关闭每个 review 问题时，在任务计划或 PR 验证记录中逐项填写根因、实际改动、受影响链路、运行结果及剩余限制，并指向对应 BASE_SHA/HEAD_SHA。设计说明、历史验证记录、跳过的测试与测试原型不能替代最终实现证据。
+
+## 开发交付记录（2026-11-29）
+
+本节补充开发阶段事实，上节为需求评审时的历史记录。
+
+### 实际基线、依赖和提交
+
+- BASE_SHA 为 `201df9a26308a143e8021ec341aba34a42256514`。开发开始前已 fetch 并 rebase 到该 main，保留 Hub noindex。2026-11-29 再次只读查询远端 main，SHA 仍相同。
+- Kandev 关联查询返回 `blocked_by: []`、`blockers: []`。功能开发没有等待其它卡的正式 PASS。
+- PR #5 仍为 OPEN、非 draft，head 为 `c0254a335b882fc97bdbcde6b8e0194d05e4f911`，web、backend、两平台 desktop、secrets 五项 CI 均 SUCCESS。文件冲突仍为 `spa/src/main.tsx`。开 PR 阶段须继续执行既定整合顺序和等待规则，独立评审后才能交付本卡 PR。
+- `da0c2a2` 提交内部需求与 A1–A9，提交前核对需求、分支策略及内部隔离。
+- `f4d9ed9a8b35c6ee6846dec2e62f2a1eaea3523a` 提交完整四语页面、目录、配置、Worker 正文与 llms.txt、README 及对应测试。提交前按公开内容 → SPA → Worker → README → 回归逐项自审。
+- `d77194c` 提交自审发现的 README 会员和正文权限限定及回归断言。
+- 最终 HEAD 由开发阶段任务计划与独立评审交接记录固定，评审覆盖上述 BASE_SHA 到最终 HEAD 的完整 diff。
+
+### 交付与验收覆盖
+
+| 编号 | 开发证据 | 后续限制 |
+| --- | --- | --- |
+| A1 | Go 注册集合静态比对覆盖文档35、仓库12、配置同步2。五种 PAT scope 同时通过真实进程内协议测试。四语原始 HTML 和浏览器总览逐项含49个注册名。 | 工具注册与 scope 已核验，数据库操作另需其环境。 |
+| A2 | 共用四语字段覆盖 OAuth、子串检索、folderId、默认私有、revision、日志、publish、删除及费用。浏览器逐句比对七条边界，SSR检查关键词与完整目录。 | 本卡只描述当前后端行为。 |
+| A3 | 16个客户端/语言组合完成站内进入、直接加载、刷新与返回。36次真实剪贴板读取逐字等于源配置。JSON解析及 Python tomllib 解析成功，Bash引用测试成功。OpenClaw 2026.6.10 实测帮助和 `--no-probe` 保存，落盘保留字面量环境引用。 | Codex、Claude Code、OpenCode 未运行真实客户端连接。OpenClaw 本轮验证范围为帮助与落盘，历史联通记录保留其版本限定。 |
+| A4 | 真实本地 Worker GET/HEAD 均200，Content-Type为 `text/plain; charset=utf-8`，HEAD空正文。四语关键摘要齐全。模拟依赖用例证明不需ASSETS或后端。 | 线上响应留给获准的发布验收。 |
+| A5 | 中英法日原始 HTML lang、标题、canonical、5条hreflang及sitemap通过。浏览器接管后的标题与服务端一致，语言菜单切换至日文并刷新成功。 | 无已知开发阻塞。 |
+| A6 | 四子页互链通过，`/docs`、版本历史、设置、仓库设置、公开仓库目录返回200。390px宽度无整页横向溢出，代码块可横向滚动。复制拒绝分支提供手动复制提示。Hub noindex及sitemap排除通过既有SEO回归。 | 设置与仓库路径使用匿名本地环境验证入口，涉及账号功能由既有测试覆盖。 |
+| A7 | 完整 `npm test` 退出0，包含类型、MCP、文档中心、SEO、i18n及既有链路。构建退出0。新增脚本 `node --check` 和 `git diff --check` 通过。 | 仓库没有独立lint命令。构建保留已有字体解析及大chunk警告。 |
+| A8 | 扫描133个SPA产物文件与32个输入构成的Worker bundle，内部路径、需求标题、卡号均未出现。源码公开引用扫描无匹配。本地内部文档路径404，`/api/docs` 经本地模拟后端返回404且无内部标记。 | `/api/docs` 使用404模拟后端，未声称真实后端或数据库验收。 |
+| A9 | 一张顶层卡，四次逻辑提交含卡号，完整清单交接独立评审。 | 整卡独立PASS与单一开放PR由后续工作流完成。授权上限仍为开PR，后续阶段也禁止合并、部署和生产操作。 |
+
+### 实际命令和输出
+
+运行环境为 Node `v22.18.0`、npm `10.9.3`、Go `go1.25.0 linux/amd64`、Chromium `156.0.8078.4`。Go 与浏览器工具复用主机已有临时安装，缓存与浏览器脚本放 `/tmp/koinote-mcp-validation/`。本卡未修改项目依赖清单及锁文件。
+
+- 完整 `npm test` 退出0，末项为 `Koi Skill UI passed`。关键输出为 `MCP 接线：28 通过，0 失败`、`MCP 知识库检查通过：49 个工具、5 种 PAT scope、4 种语言及客户端配置`、`文档中心：14 通过，0 失败`、`SEO checks passed`、`i18n: 795 passed, 0 failed`。记录于 `npm-test-final.log`，最终HEAD复验另记 `npm-test-head.log`。
+- `npm run build` 退出0，输出 `built in 5.56s` 和 `[katex] 已复制 20 个字体到 assets/fonts`。字体构建时解析与500kB chunk警告为当前构建已存在的提示，输出目录正常生成。
+- 在 backend 目录运行 `go test ./internal/server -run '^TestMCPScopeControlsExposedTools$' -count=1 -v`，输出 `--- PASS: TestMCPScopeControlsExposedTools (0.02s)` 及 `ok koinote/backend/internal/server 0.030s`。这是进程内协议验证。
+- 临时浏览器脚本 `browser.mjs` 启动 `wrangler dev --local`，仅监听127.0.0.1，使用真实构建资源和本地401/404后端模拟。输出 `clientLocalePages: 16`、`clipboardChecks: 36`、`pageErrors: []`，语言切换、复制拒绝、GET/HEAD、旧路由及内部隔离均通过。结果在 `browser-results.json`，移动端截图在 `openclaw-mobile.png`。
+- OpenClaw `2026.6.10 (aa69b12)` 使用符合其要求的 Node `v22.23.5`，临时安装禁用安装脚本并隔离状态目录。`mcp add --help` 与 `mcp doctor --help` 均退出0。使用假令牌环境变量运行示例保存动作，输出 `Saved MCP server "koinote"`，JSON中仍为 `Bearer ${KOINOTE_MCP_TOKEN}`，无假令牌明文。使用 `--no-probe`，本轮未请求生产端点。
+- 产物检查输出 `SPA artifact isolation passed: 133 files`、`Worker bundle isolation passed: 32 inputs, 1637717 bytes`、`Codex configuration TOML parse passed`。
+- 每次重活前检查全机进程、load与MemAvailable，曾因其它工作区完整测试运行而等待。测试、构建、浏览器与Go测试串行，运行前可用内存约22–23GiB。
+
+### 自审问题与修复闭环
+
+| 问题与根因 | 实际改动与受影响链路 | 验证结果 | 限制 |
+| --- | --- | --- | --- |
+| 旧总览、README与Worker正文分别维护，缺少仓库/配置同步目录，权限和费用表述过宽。 | 引入小型公开内容模块及四语字段，SPA、SEO、llms共用，README同步版本与权限。Go注册 → 目录 → 两端正文 → README链路逐项核对。 | 注册集合检查、五scope进程内测试、四语HTML和浏览器检查通过。 | 外部服务费用与扣费行为保持源实现，未真实扣费。 |
+| 新增PublicPage键后，首次类型检查发现Worker switch缺分支。 | 在现有 `pageBody` 中加入四子页分支，配置通过escapeHTML进入正文。 | 后续完整类型检查、16组GET/HEAD及浏览器刷新通过。 | 使用匿名本地后端模拟。 |
+| 标点整理误改同一行TypeScript接口分隔符，首轮完整npm test在类型检查失败。 | 恢复类型分隔符，收窄到文案标点，检查完整文件。 | 完整npm test重跑退出0。失败日志保留于 `npm-test.log`。 | 此失误在提交前修复。 |
+| README英文旧句漏列publish，会员复查泛指全部MCP，中文把GEO修改与“无文档修改权限”混写。 | 补齐publish的读取/摘要/推送，会员检查明确为文档MCP，无修改权限明确为文档正文。加入对应静态回归断言。 | `npm run test:mcp` 28项及目录/文案断言通过，README差异自审完成。 | README的其它功能说明沿用原有范围。 |
+| 沙箱拦截Bash子进程或Wrangler日志写入，工具返回EPERM/只读错误。 | 经工具授权在受控外部环境重跑，缓存及日志隔离到/tmp。 | 完整npm test、构建和针对性MCP测试均实际退出0。 | 沙箱失败记录不计为验证通过。 |
+
+本轮没有真实PostgreSQL数据验证，没有真实客户端到账号的联通或外部服务写入，没有生产验收。全量测试中包含既有SQLite测试，不能将其等同于本卡的PostgreSQL验证。浏览器与Worker验收的后端为显式模拟。独立评审需要基于最终HEAD复查，开PR阶段再查同文件冲突并遵守用户硬性授权。
