@@ -1,29 +1,85 @@
-import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Bot,
   Clock3,
-  Eye,
+  FolderOpen,
   ImageIcon,
   KeyRound,
   Sparkles,
   Download,
   FileText,
   ShieldCheck,
-  Zap,
+  Share2,
 } from "lucide-react";
 import { useCurrentUser } from "../auth";
-import { useI18n } from "../i18n";
+import { LOCALES, useI18n } from "../i18n";
 import { PageContainer } from "../components/PageContainer";
 import { InkSeal, InkClouds, ScrollRod, PaperCard } from "../components/Ink";
 import { DESKTOP_DOWNLOAD_URL } from "../desktopDownload";
+import {
+  HTML_LANG,
+  PAGE_STRUCTURED_DATA_ID,
+  SITE_OG_IMAGE_PATH,
+  homeStructuredData,
+  publicPageMeta,
+} from "../seoMeta";
 
 // 图标与文案一一对应，文案按语言从 t.home.features 取。
-const FEATURE_ICONS = [Eye, FileText, ImageIcon, Sparkles, Download, Zap];
+const FEATURE_ICONS = [FileText, Bot, FolderOpen, ImageIcon, Download, Share2];
 const MCP_STEP_ICONS = [KeyRound, ShieldCheck, Clock3];
 
 export function HomePage() {
   const user = useCurrentUser();
   const { t, locale } = useI18n();
+  const searchStr = useRouterState({ select: (state) => state.location.searchStr });
+
+  // 首页进入和切换语言时同步 Worker 首屏的社交信息与实体，离开时归还原来的 head。
+  useEffect(() => {
+    const meta = publicPageMeta("home", t, locale);
+    const origin = window.location.origin;
+    const requested = new URLSearchParams(searchStr).get("lang");
+    const lang = LOCALES.find((value) => value === requested);
+    const url = `${origin}/${lang ? `?lang=${lang}` : ""}`;
+    const tags = [
+      ["property", "og:type", "website"],
+      ["property", "og:site_name", "Koinote"],
+      ["property", "og:locale", HTML_LANG[locale].replace("-", "_")],
+      ["property", "og:title", meta.title],
+      ["property", "og:description", meta.description],
+      ["property", "og:url", url],
+      ["property", "og:image", `${origin}${SITE_OG_IMAGE_PATH}`],
+      ["name", "twitter:card", "summary_large_image"],
+      ["name", "twitter:title", meta.title],
+      ["name", "twitter:description", meta.description],
+      ["name", "twitter:image", `${origin}${SITE_OG_IMAGE_PATH}`],
+    ];
+    const restoreTags = tags.map(([attribute, name, content]) => {
+      const existing = document.querySelector<HTMLMetaElement>(`meta[${attribute}="${name}"]`);
+      const tag = existing ?? document.createElement("meta");
+      const previous = tag.getAttribute("content");
+      tag.setAttribute(attribute, name);
+      tag.content = content;
+      if (!existing) document.head.appendChild(tag);
+      return () => {
+        if (!existing) tag.remove();
+        else if (previous === null) tag.removeAttribute("content");
+        else tag.content = previous;
+      };
+    });
+    const existing = document.getElementById(PAGE_STRUCTURED_DATA_ID);
+    const script = existing ?? document.createElement("script");
+    const previous = script.textContent;
+    script.id = PAGE_STRUCTURED_DATA_ID;
+    script.setAttribute("type", "application/ld+json");
+    script.textContent = JSON.stringify(homeStructuredData(t, locale, origin));
+    if (!existing) document.head.appendChild(script);
+    return () => {
+      restoreTags.forEach((restore) => restore());
+      if (existing) script.textContent = previous;
+      else script.remove();
+    };
+  }, [locale, t, searchStr]);
 
   return (
     <div className="flex flex-1 flex-col" style={{ background: "var(--ink-paper)" }}>
@@ -76,6 +132,13 @@ export function HomePage() {
             style={{ color: "var(--ink-mid)" }}
           >
             {t.home.subtitle}
+          </p>
+
+          <p
+            className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed"
+            style={{ color: "var(--ink-mid)" }}
+          >
+            {t.home.access}
           </p>
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -148,6 +211,9 @@ export function HomePage() {
               );
             })}
           </div>
+          <p className="mt-8 text-sm leading-relaxed" style={{ color: "var(--ink-mid)" }}>
+            {t.home.desktop}
+          </p>
         </PageContainer>
       </section>
 

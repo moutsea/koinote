@@ -28,7 +28,9 @@ import {
   notFoundTitle,
   publicPageMeta,
   repositoryPageTitle,
-  SITE_TAGLINE,
+  homeStructuredData,
+  SITE_OG_IMAGE_PATH,
+  PAGE_STRUCTURED_DATA_ID,
   clipDescription,
   type PublicPage,
 } from "../spa/src/seoMeta";
@@ -64,7 +66,6 @@ const CHANGELOGS: Record<Locale, { markdown: string; file: string }> = {
 };
 /** 静态正文只放最近几个版本：够爬虫理解页面，又不至于把 HTML 撑到几百 KB */
 const CHANGELOG_RELEASES = 8;
-const OG_IMAGE_PATH = "/og-image.png";
 /** 这些页面以前是纯静态资源，后端慢时宁可少一段正文，也不能拖住首字节 */
 const BACKEND_TIMEOUT_MS = 1500;
 /** sitemap 的仓库清单是一次性取全量，数据比页面正文多，超时放宽一些 */
@@ -288,7 +289,9 @@ async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
         p(t.home.badge),
         h1(t.home.title),
         p(t.home.subtitle),
+        p(t.home.access),
         titled(t.home.features),
+        p(t.home.desktop),
         section(t.home.mcp.title, p(t.home.mcp.description), titled(t.home.mcp.steps)),
         `<p>${link("/editor", t.home.ctaStart)} · ${link("/download", t.home.ctaDownload)}</p>`,
       ].join("");
@@ -583,7 +586,7 @@ function renderDocument(template: string, origin: string, meta: DocumentMeta): s
   const title = escapeHTML(meta.title);
   const description = escapeHTML(meta.description);
   const canonical = escapeHTML(meta.canonical);
-  const image = escapeHTML(`${origin}${OG_IMAGE_PATH}`);
+  const image = escapeHTML(`${origin}${SITE_OG_IMAGE_PATH}`);
   const tags = [`<link rel="canonical" href="${canonical}">`];
   if (meta.alternatesPath !== undefined) {
     for (const locale of LOCALES) {
@@ -613,7 +616,7 @@ function renderDocument(template: string, origin: string, meta: DocumentMeta): s
     `<meta name="twitter:image" content="${image}">`,
   );
   if (meta.jsonLd) {
-    tags.push(`<script type="application/ld+json">${jsonForScript(meta.jsonLd)}</script>`);
+    tags.push(`<script type="application/ld+json" id="${PAGE_STRUCTURED_DATA_ID}">${jsonForScript(meta.jsonLd)}</script>`);
   }
   tags.push(STATIC_HEAD);
 
@@ -635,31 +638,7 @@ function renderDocument(template: string, origin: string, meta: DocumentMeta): s
 function structuredData(page: PublicPage, ctx: RenderContext, meta: { title: string; description: string }, url: string) {
   const home = `${ctx.origin}/`;
   if (page === "home") {
-    return {
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "WebSite",
-          name: "Koinote",
-          alternateName: ctx.t.footer.brandCn,
-          url: home,
-          inLanguage: HTML_LANG[ctx.locale],
-        },
-        {
-          "@type": "SoftwareApplication",
-          name: "Koinote",
-          alternateName: SITE_TAGLINE[ctx.locale],
-          url: home,
-          description: meta.description,
-          applicationCategory: "UtilitiesApplication",
-          operatingSystem: "Web, macOS, Windows",
-          downloadUrl: `${ctx.origin}/download`,
-          image: `${ctx.origin}${OG_IMAGE_PATH}`,
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-          publisher: { "@type": "Organization", name: ctx.t.footer.companyName },
-        },
-      ],
-    };
+    return homeStructuredData(ctx.t, ctx.locale, ctx.origin);
   }
   const crumbs: Array<{ name: string; item: string }> = [{ name: ctx.t.footer.home, item: home }];
   if (PUBLIC_PAGE_PATHS[page].startsWith("/docs/")) {

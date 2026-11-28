@@ -44,10 +44,10 @@ export function publicPageForPath(pathname: string): PublicPage | null {
 
 /** 首页标题里的品类词。搜索词靠它命中，i18n 里没有现成的短语。 */
 export const SITE_TAGLINE: Record<Locale, string> = {
-  zh: "在线 Markdown 编辑器",
-  en: "Online Markdown Editor",
-  fr: "Éditeur Markdown en ligne",
-  ja: "オンライン Markdown エディタ",
+  zh: "个人 AI 知识文档库",
+  en: "Personal AI Knowledge-Document Library",
+  fr: "Bibliothèque personnelle de documents et de connaissances pour l’IA",
+  ja: "AI と使う個人用ナレッジ・ドキュメントライブラリ",
 };
 
 /** <html lang> 与 hreflang 使用的 BCP 47 代码 */
@@ -129,4 +129,35 @@ export function publicPageMeta(
         t.agentWorkspace.hubIntro,
       );
   }
+}
+
+/** 首页实体与社交图片由 Worker 和浏览器共用。 */
+export const SITE_OG_IMAGE_PATH = "/og-image.png";
+export const PAGE_STRUCTURED_DATA_ID = "koinote-page-structured-data";
+
+export function homeStructuredData(t: Messages, locale: Locale, origin: string) {
+  const meta = publicPageMeta("home", t, locale);
+  const identity = {
+    name: meta.title,
+    alternateName: SITE_TAGLINE[locale],
+    description: meta.description,
+    url: `${origin}/`,
+    inLanguage: HTML_LANG[locale],
+  };
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", ...identity },
+      {
+        "@type": "SoftwareApplication",
+        ...identity,
+        applicationCategory: "ProductivityApplication",
+        operatingSystem: "Web, macOS, Windows",
+        downloadUrl: `${origin}/download`,
+        image: `${origin}${SITE_OG_IMAGE_PATH}`,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        publisher: { "@type": "Organization", name: t.footer.companyName },
+      },
+    ],
+  };
 }

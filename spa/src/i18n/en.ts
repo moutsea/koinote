@@ -141,44 +141,44 @@ export const en: Messages = {
     },
   },
   home: {
-    badge: "Markdown × Agents, built for writing",
-    title: "Writing, back to its purest form",
-    subtitle:
-      "Koinote is a Typora-style online Markdown editor. Render as you type, upload images inline, and let your agents work safely with your documents.",
+    badge: "Markdown writing with your agents",
+    title: "Your personal AI knowledge-document library",
+    subtitle: "A personal AI knowledge-document library. Write and organize in Markdown, and let your agents securely search, read, and edit documents through MCP.",
+    access: "Free includes editing, sync, image hosting, exports, and read-only sharing. MCP and the built-in AI assistant require lifetime membership. Built-in AI uses credits based on usage.",
+    desktop: "The desktop app supports local-first work and a fully local encrypted mode for documents and images. Online agents, cloud sync, and publishing require cloud mode.",
     ctaStart: "Start writing",
     ctaDownload: "Download desktop app",
     ctaRegister: "Create account",
     features: [
       {
-        title: "What you see is what you get",
-        desc: "Typora-style single-pane editing. Render as you type — no split source/preview.",
+        title: "Write in Markdown",
+        desc: "Capture and organize knowledge with live Markdown rendering and automatic saving as you type.",
       },
       {
-        title: "Markdown fidelity",
-        desc: "CommonMark at the core. Import and export round-trip cleanly, migrate anytime.",
+        title: "Work with agents",
+        desc: "Lifetime members can authorize agents through MCP to search, read, and edit documents, and use the built-in AI assistant for writing and organization.",
       },
       {
-        title: "Deep image hosting",
-        desc: "Drag & paste to upload. Bring your own image host; keep clean links in the body.",
+        title: "Manage documents and versions",
+        desc: "Organize with folders and search titles and content. Lifetime members can configure full version history, with a latest safety snapshot retained when history is off.",
       },
       {
-        title: "Agent collaboration",
-        desc: "Connect Codex, Claude Code, OpenCode, and other agents through MCP with scoped document access.",
+        title: "Koinote image hosting",
+        desc: "Paste or drop images to upload them to Koinote image hosting, with image links stored in your document.",
       },
       {
-        title: "Easy export & share",
-        desc: "Markdown / HTML export out of the box. Share via read-only links in one click.",
+        title: "Export and share",
+        desc: "Export Markdown / HTML / DOCX / PDF for free and share documents through read-only links.",
       },
       {
-        title: "Auto save",
-        desc: "Saved as you type, with revision conflicts preventing browser and agent edits from silently overwriting each other.",
+        title: "Publish and sync",
+        desc: "After connecting and authorizing accounts, save to WeChat Official Account drafts or publish to Zhihu via OpenAPI or copy assistance (direct publishing currently excludes images). X Articles require account/API permissions and use credits. Lifetime members can sync documents one way to Feishu.",
       },
     ],
     mcp: {
       eyebrow: "Open MCP access",
       title: "Bring agents into your writing workflow",
-      description:
-        "No browser extension required. Create a revocable, expiring personal token and let standard MCP clients such as Codex, Claude Code, and OpenCode search, read, and edit Koinote documents within the scope you grant.",
+      description: "Lifetime members can create read-only or read-write tokens, set an expiration, and revoke access anytime. MCP-compatible agents such as Codex, Claude Code, OpenCode, and OpenClaw can search titles and content, read, and edit Koinote documents within the granted scope.",
       agents: "Works with Streamable HTTP MCP clients",
       steps: [
         {

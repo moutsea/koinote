@@ -7,9 +7,9 @@
   <img src="public/logo.png" alt="Koinote" width="96" height="96">
 </picture>
 
-# Koinote 锦鲤笔记 —— 所见即所得的在线 Markdown 编辑器
+# Koinote 锦鲤笔记 —— 个人 AI 知识文档库
 
-边写边渲染，图片粘贴即进图床，一键导出到微信公众号、知乎、PDF 和 Word。
+用 Markdown 写作与整理，通过 MCP 让 Agent 安全检索、读取和修改文档。免费版支持编辑、同步、Koinote 图床、导出与只读分享，MCP 和站内 AI 助手需要终身会员。
 
 **[koinote.app](https://koinote.app)** —— 打开即用，不必自己部署
 

@@ -154,6 +154,8 @@ export interface Messages {
     badge: string;
     title: string;
     subtitle: string;
+    access: string;
+    desktop: string;
     ctaStart: string;
     ctaDownload: string;
     ctaRegister: string;

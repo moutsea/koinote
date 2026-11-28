@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { parseHTML } from "linkedom";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import worker from "./_seo_bundle.mjs";
@@ -141,10 +142,60 @@ try {
   assert.equal(enHome.headers.get("vary"), "Accept-Language");
   const enHTML = await enHome.text();
   assert.match(enHTML, /<html lang="en"/);
-  assert.match(enHTML, /<title>Koinote — Online Markdown Editor<\/title>/);
+  assert.match(enHTML, /<title>Koinote — Personal AI Knowledge-Document Library<\/title>/);
   assert.match(enHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/">/);
   assert.match(enHTML, /"@type":"SoftwareApplication"/);
   assert.match(enHTML, /<a href="\/pricing">/);
+
+  // 四语首页既核对独立的产品语义，也核对 head、实体和可见正文之间的一致性。
+  const homeLocales = {
+    zh: { category: "个人 AI 知识文档库", membership: /终身会员/, assistant: /站内 AI 助手/, draft: /微信公众号草稿箱/, feishu: /单向同步到飞书/ },
+    en: { category: "Personal AI Knowledge-Document Library", membership: /[Ll]ifetime membership/, assistant: /built-in AI assistant/, draft: /WeChat Official Account drafts/, feishu: /one way to Feishu/ },
+    fr: { category: "Bibliothèque personnelle de documents et de connaissances pour l’IA", membership: /adhésion à vie/, assistant: /assistant IA intégré/, draft: /brouillons WeChat Official Account/, feishu: /sens unique vers Feishu/ },
+    ja: { category: "AI と使う個人用ナレッジ・ドキュメントライブラリ", membership: /終身会員/, assistant: /内蔵 AI アシスタント/, draft: /WeChat 公式アカウントの下書き/, feishu: /飛書へ一方向/ },
+  };
+  for (const [locale, expected] of Object.entries(homeLocales)) {
+    const response = await get(`/?lang=${locale}`, { "accept-language": "de" });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    const { document } = parseHTML(html);
+    const content = (selector) => document.querySelector(selector)?.getAttribute("content");
+    const title = `Koinote — ${expected.category}`;
+    assert.equal(document.title, title);
+    assert.equal(document.querySelectorAll("title").length, 1);
+    assert.equal(document.querySelectorAll('meta[name="description"]').length, 1);
+    const description = content('meta[name="description"]');
+    assert.ok(description.length <= 160 && !description.endsWith("…"), `${locale} 摘要应完整`);
+    assert.match(description, /Markdown/);
+    assert.match(description, /MCP/);
+    assert.equal(content('meta[property="og:title"]'), title);
+    assert.equal(content('meta[property="og:description"]'), description);
+    assert.equal(content('meta[name="twitter:description"]'), description);
+    assert.equal(document.querySelectorAll("h1").length, 1);
+    assert.equal(document.querySelector('link[rel="canonical"]').href, `https://koinote.app/?lang=${locale}`);
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    assert.equal(scripts.length, 1);
+    assert.equal(scripts[0].id, "koinote-page-structured-data");
+    const graph = JSON.parse(scripts[0].textContent)["@graph"];
+    assert.deepEqual(graph.map((entity) => entity["@type"]), ["WebSite", "SoftwareApplication"]);
+    for (const entity of graph) {
+      assert.equal(entity.name, title);
+      assert.equal(entity.alternateName, expected.category);
+      assert.equal(entity.description, description);
+      assert.equal(entity.inLanguage, locale === "zh" ? "zh-CN" : locale);
+    }
+    assert.equal(graph[1].applicationCategory, "ProductivityApplication");
+    assert.equal(graph[1].offers.price, "0");
+    const body = document.getElementById("root").textContent;
+    for (const pattern of [expected.membership, expected.assistant, expected.draft, expected.feishu, /Markdown \/ HTML \/ DOCX \/ PDF/, /OpenAPI/, /X/, /credits/]) {
+      assert.match(body, pattern, `${locale} 首页缺少能力或条件`);
+    }
+    assert.doesNotMatch(body, /接你自己的图床|own image host|propre hébergeur|自分の画像ホスト|语义检索|RAG|双向链接/);
+    assert.doesNotMatch(html, /Online Markdown Editor|在线 Markdown 编辑器|Éditeur Markdown en ligne|オンライン Markdown エディタ/);
+  }
+  const internalDocument = await get("/internal-docs/koinote-home-positioning.md");
+  assert.equal(internalDocument.status, 404);
+  assert.doesNotMatch(await internalDocument.text(), /需求评审|BASE_SHA|PR 负责人/);
 
   const weighted = await (await get("/docs", { "accept-language": "en;q=0.4, ja;q=0.9" })).text();
   assert.match(weighted, /<html lang="ja"/);

@@ -141,44 +141,44 @@ export const zh: Messages = {
     },
   },
   home: {
-    badge: "Markdown × Agent，为创作而生",
-    title: "写作，回到最纯粹的样子",
-    subtitle:
-      "Koinote 是一个 Typora 式的在线 Markdown 编辑器。边写边渲染、图床直连，还能让你的 Agent 安全地读写文档。",
+    badge: "Markdown 写作与 Agent 协作",
+    title: "个人 AI 知识文档库",
+    subtitle: "Koinote 是个人 AI 知识文档库。用 Markdown 写作与整理，通过 MCP 让你的 Agent 安全检索、读取和修改文档。",
+    access: "免费版支持编辑、同步、图床、导出和只读分享。MCP 与站内 AI 助手需要终身会员，站内 AI 按用量消耗 credits。",
+    desktop: "桌面端支持本地优先，也可选择完全本地加密模式，在本机保存文档与图片。联网 Agent、云同步和发布需要云端模式。",
     ctaStart: "立即开始写作",
     ctaDownload: "下载桌面客户端",
     ctaRegister: "注册账号",
     features: [
       {
-        title: "所见即所得",
-        desc: "Typora 式单栏编辑，边写边渲染，告别源码/预览分屏。",
+        title: "写 · Markdown 写作",
+        desc: "边写边渲染，用 Markdown 记录与整理知识，输入时自动保存。",
       },
       {
-        title: "Markdown 保真",
-        desc: "以 CommonMark 为核心，导入导出往返一致，随时迁移。",
+        title: "用 · Agent 协作",
+        desc: "终身会员可通过 MCP 授权 Agent 检索、读取和修改文档，也可使用站内 AI 助手整理与写作。",
       },
       {
-        title: "图床深度集成",
-        desc: "拖拽粘贴即传，接你自己的图床，正文只存干净链接。",
+        title: "管 · 文档与版本",
+        desc: "用文件夹整理文档，搜索标题和正文。终身会员可配置完整版本历史，关闭后仍保留最近安全快照。",
       },
       {
-        title: "Agent 协作",
-        desc: "通过 MCP 连接 Codex、Claude Code、OpenCode 等 Agent，在授权范围内读写文档。",
+        title: "Koinote 图床",
+        desc: "粘贴或拖入图片即可上传到 Koinote 图床，正文中保存图片链接。",
       },
       {
-        title: "便捷导出分享",
-        desc: "Markdown / HTML 基础导出，只读链接一键分享。",
+        title: "导出与分享",
+        desc: "免费导出 Markdown / HTML / DOCX / PDF，并通过只读链接分享文档。",
       },
       {
-        title: "自动保存",
-        desc: "输入即存，revision 冲突检测避免网页与 Agent 互相覆盖，云端多端同步。",
+        title: "发布与同步",
+        desc: "绑定并授权后可保存到微信公众号草稿箱，或通过知乎 OpenAPI 直发、复制辅助发布（直发暂不支持图片）。X 文章发布需要相应账号/API 权限并消耗 credits。终身会员可将文档单向同步到飞书。",
       },
     ],
     mcp: {
       eyebrow: "开放的 MCP 接口",
       title: "让 Agent 进入你的写作工作流",
-      description:
-        "无需浏览器插件。创建一枚可撤销、可设置期限或永久有效的个人令牌，Codex、Claude Code、OpenCode 等标准 MCP 客户端就能在你的授权范围内查找、读取和编辑 Koinote 文档。",
+      description: "终身会员可创建只读或读写令牌，设置有效期并随时撤销。兼容 MCP 的 Codex、Claude Code、OpenCode、OpenClaw 等 Agent 可在授权范围内搜索标题和正文、读取及修改 Koinote 文档。",
       agents: "兼容 Streamable HTTP MCP 的 Agent",
       steps: [
         {

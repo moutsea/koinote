@@ -141,44 +141,44 @@ export const fr: Messages = {
     },
   },
   home: {
-    badge: "Markdown × Agents, conçu pour l'écriture",
-    title: "L'écriture, sous sa forme la plus pure",
-    subtitle:
-      "Koinote est un éditeur Markdown en ligne façon Typora. Rendu en temps réel, images intégrées et agents autorisés à travailler avec vos documents en toute sécurité.",
+    badge: "Écriture Markdown avec vos agents",
+    title: "Votre bibliothèque personnelle de documents et de connaissances pour l’IA",
+    subtitle: "Bibliothèque personnelle de documents et de connaissances pour l’IA. Écriture Markdown, recherche, lecture et modification sécurisées par vos agents via MCP.",
+    access: "L’offre gratuite inclut édition, synchronisation, images hébergées, exports et partage en lecture seule. MCP et l’assistant IA intégré nécessitent l’adhésion à vie. L’IA intégrée consomme des credits selon l’usage.",
+    desktop: "L’application de bureau privilégie le travail local et propose un mode entièrement local chiffré pour les documents et images. Les agents en ligne, la synchronisation et la publication nécessitent le mode cloud.",
     ctaStart: "Commencer à écrire",
     ctaDownload: "Télécharger l’application",
     ctaRegister: "Créer un compte",
     features: [
       {
-        title: "Ce que vous voyez est ce que vous obtenez",
-        desc: "Édition en volet unique façon Typora. Rendu en temps réel, sans séparation source/aperçu.",
+        title: "Écrire en Markdown",
+        desc: "Rédigez et organisez vos connaissances avec un rendu Markdown immédiat et une sauvegarde automatique pendant la saisie.",
       },
       {
-        title: "Fidélité Markdown",
-        desc: "CommonMark au cœur. Import et export sans perte, migration à tout moment.",
+        title: "Utiliser vos agents",
+        desc: "L’adhésion à vie permet d’autoriser vos agents via MCP à rechercher, lire et modifier vos documents, et d’utiliser l’assistant IA intégré pour écrire et organiser.",
       },
       {
-        title: "Hébergement d'images intégré",
-        desc: "Glisser-déposer pour téléverser. Utilisez votre propre hébergeur ; liens propres dans le corps.",
+        title: "Gérer documents et versions",
+        desc: "Classez vos documents par dossiers et recherchez dans les titres et le contenu. Les membres à vie peuvent configurer l’historique complet. Un dernier instantané de sécurité est conservé quand il est désactivé.",
       },
       {
-        title: "Collaboration avec les agents",
-        desc: "Connectez Codex, Claude Code, OpenCode et d'autres agents via MCP avec des accès limités.",
+        title: "Images hébergées par Koinote",
+        desc: "Collez ou déposez des images pour les téléverser sur l’hébergement Koinote. Le document conserve leurs liens.",
       },
       {
-        title: "Export et partage faciles",
-        desc: "Export Markdown / HTML d'origine. Partage par lien en lecture seule en un clic.",
+        title: "Exporter et partager",
+        desc: "Exportez gratuitement en Markdown / HTML / DOCX / PDF et partagez vos documents par des liens en lecture seule.",
       },
       {
-        title: "Sauvegarde automatique",
-        desc: "Sauvegarde au fil de la frappe et contrôle des révisions pour éviter les écrasements silencieux entre navigateur et Agent.",
+        title: "Publier et synchroniser",
+        desc: "Après connexion et autorisation des comptes, enregistrez dans les brouillons WeChat Official Account ou publiez sur Zhihu via OpenAPI ou copie assistée (sans images en publication directe). X Articles nécessite les droits du compte/API et consomme des credits. L’adhésion à vie permet une synchronisation à sens unique vers Feishu.",
       },
     ],
     mcp: {
       eyebrow: "Accès MCP ouvert",
       title: "Intégrez les agents à votre écriture",
-      description:
-        "Aucune extension requise. Créez un jeton personnel révocable et à durée limitée pour permettre à Codex, Claude Code, OpenCode et aux autres clients MCP compatibles de rechercher, lire et modifier vos documents selon les droits accordés.",
+      description: "Les membres à vie peuvent créer des jetons en lecture seule ou en lecture-écriture, fixer leur expiration et les révoquer à tout moment. Les agents compatibles MCP comme Codex, Claude Code, OpenCode et OpenClaw peuvent rechercher dans les titres et le contenu, lire et modifier les documents Koinote dans le périmètre autorisé.",
       agents: "Compatible avec les clients MCP Streamable HTTP",
       steps: [
         {

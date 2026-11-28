@@ -141,44 +141,44 @@ export const ja: Messages = {
     },
   },
   home: {
-    badge: "Markdown × Agent、書くために生まれた",
-    title: "書くこと、最もピュアなかたちへ",
-    subtitle:
-      "Koinote は Typora ライクなオンライン Markdown エディタです。書きながらレンダリングし、画像を直接アップロードし、許可した Agent が文書を安全に操作できます。",
+    badge: "Markdown 執筆と Agent の連携",
+    title: "AI と使う個人用ナレッジ・ドキュメントライブラリ",
+    subtitle: "Koinote は AI と使う個人用ナレッジ・ドキュメントライブラリです。Markdown で執筆・整理し、MCP を通じて Agent が文書を安全に検索・閲覧・編集できます。",
+    access: "無料版で編集、同期、画像ホスティング、エクスポート、読み取り専用共有を利用できます。MCP と内蔵 AI アシスタントには終身会員が必要です。内蔵 AI は利用量に応じて credits を消費します。",
+    desktop: "デスクトップ版はローカル優先で動作し、文書と画像を端末に保存する完全ローカル暗号化モードも選べます。オンライン Agent、クラウド同期、公開にはクラウドモードが必要です。",
     ctaStart: "今すぐ書き始める",
     ctaDownload: "デスクトップ版をダウンロード",
     ctaRegister: "アカウント登録",
     features: [
       {
-        title: "見たままが結果になる",
-        desc: "Typora ライクな単一ペイン編集。書きながらレンダリング、ソースとプレビューの分割なし。",
+        title: "書く · Markdown 執筆",
+        desc: "入力と同時に表示が整う Markdown で知識を記録・整理し、入力中に自動保存します。",
       },
       {
-        title: "Markdown の忠実さ",
-        desc: "CommonMark を中核に。インポート／エクスポートは往復で崩れず、いつでも移行可能。",
+        title: "使う · Agent 連携",
+        desc: "終身会員は MCP で Agent に検索・閲覧・編集を許可でき、内蔵 AI アシスタントで執筆や整理も行えます。",
       },
       {
-        title: "画像ホスティング統合",
-        desc: "ドラッグ＆ペーストでアップロード。自分の画像ホストを利用でき、本文にはクリーンなリンクのみ。",
+        title: "管理する · 文書と履歴",
+        desc: "フォルダーで整理し、タイトルと本文を検索できます。終身会員は完全な履歴を設定でき、無効時も直近の安全スナップショットを保持します。",
       },
       {
-        title: "Agent との共同作業",
-        desc: "MCP を通じて Codex、Claude Code、OpenCode などに範囲を限定した文書アクセスを許可します。",
+        title: "Koinote の画像ホスティング",
+        desc: "画像を貼り付けるかドロップすると Koinote の画像ホスティングにアップロードされ、本文に画像リンクが保存されます。",
       },
       {
-        title: "簡単なエクスポートと共有",
-        desc: "Markdown / HTML の基本エクスポート。読み取り専用リンクでワンクリック共有。",
+        title: "エクスポートと共有",
+        desc: "Markdown / HTML / DOCX / PDF を無料で書き出し、読み取り専用リンクで文書を共有できます。",
       },
       {
-        title: "自動保存",
-        desc: "入力するたびに保存し、revision の競合検出でブラウザと Agent の上書きを防ぎます。",
+        title: "公開と同期",
+        desc: "アカウント連携と承認後、WeChat 公式アカウントの下書き保存、知乎 OpenAPI での直接公開やコピー補助を利用できます（直接公開は現在画像非対応）。X Articles にはアカウント/API 権限が必要で、credits を消費します。終身会員は飛書へ一方向に同期できます。",
       },
     ],
     mcp: {
       eyebrow: "オープンな MCP アクセス",
       title: "Agent を執筆ワークフローへ",
-      description:
-        "ブラウザ拡張は不要です。期限付きまたは無期限で取り消し可能な個人トークンを作成すると、Codex、Claude Code、OpenCode などの標準 MCP クライアントが許可範囲内で Koinote 文書を検索・閲覧・編集できます。",
+      description: "終身会員は読み取り専用または読み書きトークンを作成し、有効期限を設定していつでも取り消せます。Codex、Claude Code、OpenCode、OpenClaw などの MCP 対応 Agent が、許可範囲内で Koinote 文書のタイトル・本文を検索し、閲覧・編集できます。",
       agents: "Streamable HTTP MCP クライアントに対応",
       steps: [
         {

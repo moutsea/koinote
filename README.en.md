@@ -9,10 +9,10 @@
 
 # Koinote
 
-**A WYSIWYG Markdown editor for the web**
+**A personal AI knowledge-document library**
 
-Renders as you type, uploads images straight to your own bucket,
-exports and shares in one click.
+Write and organize in Markdown, with MCP access that lets agents securely search, read, and edit documents.
+Free includes editing, sync, Koinote image hosting, exports, and read-only sharing. MCP and the built-in AI assistant require lifetime membership.
 
 **[koinote.app](https://koinote.app)** — try it without deploying anything
 
