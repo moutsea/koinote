@@ -161,3 +161,12 @@ npm run build
 - 实际数据库验证未执行。Worker 后端/ASSETS 和前端 API/路由使用模拟，R2 使用本地 Workerd/Miniflare；实际修改后的 Worker 与 React 组件均已执行。完整浏览器视觉、真实登录会话、外部服务真实调用及生产验收未执行。
 - 本卡完成两个独立自审提交。实际 base 为 `7b5c59d1f8f99d9011c891f5cb889285a04da0a6`，最终 head SHA 记录在 Kandev 任务计划和交接消息，避免文档自引用提交 SHA。后续独立评审覆盖 base 至 head 全部 diff，再由开 PR 阶段创建或复用本卡唯一 PR。
 - 上线后仍需按本文抽查清单验证热门仓库的真实状态，并由获授权人员将 `https://koinote.app/sitemap.xml` 提交 GSC、观察索引变化。本卡授权范围止于开放 PR。
+
+## PR CI 回归修正 · 2026-11-28
+
+- PR 为 `moutsea/koinote#6`，首轮 CI `46137086945` 的 web job 在 `test:backend-origin` 失败。根因是 `scripts/_check_backend_origin.mjs` 仍要求 sitemap 调用旧仓库 feed 一次，本卡已移除该调用，实际为零；先前定向验证遗漏了这个既有套件。
+- 最小修正将同一回源鉴权用例改为请求 `/repositories/7` 与 `/api/agent/repositories/7`，响应使用有效的公开仓库 fixture。保留来源令牌校验、禁止跟随重定向和一次回源断言。sitemap 零回源继续由 `_check_seo.mjs` 的 GET/HEAD 和后端故障用例覆盖。
+- 修改前本地 `npm run test:backend-origin` 实测 23 通过、1 失败，错误与 CI 一致，为 `0 !== 1`。修改后的完整 `npm test` 中该套件为 24 通过、0 失败，SEO 和分享页检查也通过。
+- 完整 `npm test` 在后续 `test:share-preview` 因本机没有可执行 Go 编译器报 `spawnSync go EACCES`，未将其余未执行套件计作通过。此前 typecheck 已再次通过；本次仅修改测试与内部记录，既有功能构建证据仍对应相同运行时代码。
+- 外部 HTTP 使用模拟，当前修正没有实际数据库或生产验证。首轮 CI 的 desktop macOS、Windows 和 secrets job 已通过，backend 当时仍在运行，最终结果以 GitHub Checks 为准。
+- 本修正提交改变 HEAD，原 `ca21e0903a738b640548e65cfc44156675bfbd3d` 的独立 PASS 不覆盖新提交。推送后须对最终 HEAD 重新独立评审，完整检查通过前不发开 PR 阶段完成信号。仍只保留同一开放 PR，等待人工合并。

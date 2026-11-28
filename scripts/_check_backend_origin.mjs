@@ -89,14 +89,14 @@ test("share metadata authenticates origin and does not follow a redirect", async
   assert.equal(response.status, 200); assert.equal(calls, 1);
 });
 
-test("sitemap backend lookup authenticates origin", async t => {
+test("repository SEO lookup authenticates origin", async t => {
   let calls = 0;
   mockFetch(t, async (input, init) => {
     calls += 1; const { url } = backendRequest(input, init);
-    assert.equal(url.pathname, "/api/agent/repositories/sitemap");
-    return Response.json({ repositories: [] });
+    assert.equal(url.pathname, "/api/agent/repositories/7");
+    return Response.json({ repository: { name: "Fixture repository", files: [] } });
   });
-  assert.equal((await worker.fetch(new Request("https://app.example/sitemap.xml"), environment())).status, 200);
+  assert.equal((await worker.fetch(new Request("https://app.example/repositories/7"), environment())).status, 200);
   assert.equal(calls, 1);
 });
 
