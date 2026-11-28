@@ -5,6 +5,7 @@
 //   - body 是空数组或空字符串（渲染出一个只有标题的条款）
 //   - 联系邮箱在某一份译文里写错（法律页上的错邮箱等于没有联系方式）
 //   - 某个语言把 legal 整份复制成了另一语言（漏译时最常见的偷懒）
+import { publicPageMeta, SITE_TAGLINE, homeStructuredData } from "./_i18n_bundle.mjs";
 import { en } from "./_i18n_bundle.mjs";
 import { zh } from "./_i18n_bundle.mjs";
 import { fr } from "./_i18n_bundle.mjs";
@@ -32,6 +33,25 @@ function eq(label, got, want) {
   else {
     fail += 1;
     console.error(`FAIL  ${label} —— 得到 ${g}，期望 ${w}`);
+  }
+}
+
+// 首页摘要完整保留定位、Markdown 和 MCP，四语正文均覆盖会员与发布边界。
+for (const [locale, messages] of Object.entries(LOCALES)) {
+  const home = messages.home;
+  const meta = publicPageMeta("home", messages, locale);
+  eq(`${locale} 首页标题共用定位`, meta.title, `Koinote — ${SITE_TAGLINE[locale]}`);
+  eq(`${locale} 摘要无截断`, meta.description, home.subtitle);
+  ok(`${locale} 摘要包含 Markdown/MCP`, /Markdown/.test(meta.description) && /MCP/.test(meta.description));
+  eq(`${locale} 首页功能卡完整`, home.features.length, 6);
+  for (const field of ["access", "desktop"]) ok(`${locale} ${field} 非空`, home[field].trim().length > 0);
+  const text = JSON.stringify(home);
+  for (const format of ["Markdown", "HTML", "DOCX", "PDF", "OpenAPI", "credits"]) ok(`${locale} 首页包含 ${format}`, text.includes(format));
+  ok(`${locale} 清除自定义图床承诺`, !/接你自己的图床|own image host|propre hébergeur|自分の画像ホスト/.test(text));
+  const graph = homeStructuredData(messages, locale, "https://koinote.app")["@graph"];
+  for (const entity of graph) {
+    eq(`${locale} ${entity["@type"]} 标题一致`, entity.name, meta.title);
+    eq(`${locale} ${entity["@type"]} 摘要一致`, entity.description, meta.description);
   }
 }
 
@@ -129,8 +149,8 @@ for (let i = 0; i < legalBlobs.length; i += 1) {
   }
 }
 
-// 页脚同理。tagline 是各语言都要自己写的一段话
-const taglines = Object.entries(LOCALES).map(([name, m]) => [name, m.footer.tagline]);
+// 首页与页脚复用的摘要也必须提供各自译文。
+const taglines = Object.entries(LOCALES).map(([name, m]) => [name, m.home.subtitle]);
 for (let i = 0; i < taglines.length; i += 1) {
   for (let j = i + 1; j < taglines.length; j += 1) {
     const [a, tA] = taglines[i];
@@ -143,7 +163,6 @@ for (let i = 0; i < taglines.length; i += 1) {
 //
 // 页脚是全站唯一的条款入口，这几个 key 空了就等于那三页没人能点到。
 const FOOTER_REQUIRED = [
-  "tagline",
   "brandCn",
   "product",
   "legal",

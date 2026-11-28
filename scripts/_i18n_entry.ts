@@ -10,3 +10,5 @@ export {
   WECHAT_THEMES,
   WECHAT_THEME_GROUPS,
 } from "../spa/src/components/editor/wechatThemes";
+
+export { publicPageMeta, SITE_TAGLINE, homeStructuredData } from "../spa/src/seoMeta";

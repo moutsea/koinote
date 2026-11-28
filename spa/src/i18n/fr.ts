@@ -2912,8 +2912,6 @@ function hello(name) {
       "Les modifications actuelles n’ont pas pu être enregistrées localement ; la déconnexion a été annulée. Réessayez ou copiez le contenu avant de vous déconnecter.",
   },
   footer: {
-    tagline:
-      "Koinote est un éditeur Markdown en ligne WYSIWYG : rendu au fil de la frappe, images envoyées directement vers votre hébergeur, export et partage en un clic.",
     brandCn: "锦鲤笔记",
     product: "Produit",
     editor: "Éditeur",

@@ -2873,8 +2873,6 @@ function hello(name) {
       "The current edits could not be saved locally, so logout was cancelled. Try again or copy the content before signing out.",
   },
   footer: {
-    tagline:
-      "Koinote is a WYSIWYG online Markdown editor: render as you type, upload images straight to your image store, export and share in one click.",
     brandCn: "锦鲤笔记",
     product: "Product",
     editor: "Editor",

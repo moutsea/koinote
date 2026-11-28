@@ -2160,7 +2160,6 @@ export interface Messages {
     logoutSaveFailed: string;
   };
   footer: {
-    tagline: string;
     brandCn: string;
     product: string;
     editor: string;

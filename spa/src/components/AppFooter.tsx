@@ -79,7 +79,7 @@ export function AppFooter() {
               className="max-w-md text-sm leading-relaxed"
               style={{ color: "var(--ink-mid)" }}
             >
-              {t.footer.tagline}
+              {t.home.subtitle}
             </p>
             <div className="flex items-center gap-3 pt-1">
               <SocialLink href="https://github.com/moutsea" label="GitHub">

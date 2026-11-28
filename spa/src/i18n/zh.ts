@@ -2716,8 +2716,6 @@ function hello(name) {
       "无法先保存当前编辑内容，已取消登出。请重试，或复制正文备份后再退出。",
   },
   footer: {
-    tagline:
-      "Koinote 是一个所见即所得的在线 Markdown 编辑器：边写边渲染、图片直传图床、一键导出与分享。",
     brandCn: "锦鲤笔记",
     product: "产品",
     editor: "编辑器",
