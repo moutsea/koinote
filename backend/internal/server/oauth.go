@@ -1,10 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +28,13 @@ type oauthProviderConfig struct {
 
 // state 载荷：签名后放进 koinote_oauth_state cookie，callback 时校验。
 type oauthStatePayload struct {
-	Provider              string `json:"provider"`
-	RedirectTo            string `json:"redirectTo"`
-	InvitationCode        string `json:"invitationCode,omitempty"`
-	InvitationCodeInvalid bool   `json:"invitationCodeInvalid,omitempty"`
-	Nonce                 string `json:"nonce"`
-	ExpiresAt             int64  `json:"expiresAt"`
+	Registration          registrationContext `json:"registration,omitempty"`
+	Provider              string              `json:"provider"`
+	RedirectTo            string              `json:"redirectTo"`
+	InvitationCode        string              `json:"invitationCode,omitempty"`
+	InvitationCodeInvalid bool                `json:"invitationCodeInvalid,omitempty"`
+	Nonce                 string              `json:"nonce"`
+	ExpiresAt             int64               `json:"expiresAt"`
 }
 
 type oauthTokenResponse struct {
@@ -106,6 +109,10 @@ func (a *App) oauthStart(w http.ResponseWriter, r *http.Request) {
 		invitationCode = ""
 	}
 	statePayload := oauthStatePayload{
+		Registration: registrationContext{
+			FirstTouch:  a.cleanRegistrationAttribution(json.RawMessage(r.URL.Query().Get("firstTouch"))),
+			ShareSignup: a.registrationShareSource(r.Context(), json.RawMessage(strconv.Quote(r.URL.Query().Get("shareSignupToken")))),
+		},
 		Provider:              provider.Name,
 		RedirectTo:            sanitizeRedirectPath(r.URL.Query().Get("redirectTo")),
 		InvitationCode:        invitationCode,
@@ -186,6 +193,7 @@ func (a *App) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		profile,
 		statePayload.InvitationCode,
 		statePayload.InvitationCodeInvalid,
+		statePayload.Registration,
 	)
 	if err != nil {
 		if errors.Is(err, errInvalidInvitationCode) {

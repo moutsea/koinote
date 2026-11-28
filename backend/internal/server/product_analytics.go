@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -14,6 +15,7 @@ type productMilestone string
 
 const (
 	milestoneRegistered        productMilestone = "registered"
+	milestoneShareSignup       productMilestone = "share_signup"
 	milestoneFirstDocument     productMilestone = "first_document"
 	milestoneFirstUpload       productMilestone = "first_upload"
 	milestoneFirstExport       productMilestone = "first_export"
@@ -79,16 +81,32 @@ func (t *activityTracker) firstToday(userID int, now time.Time) bool {
 	return true
 }
 
-func (a *App) recordProductMilestone(ctx context.Context, userID int, event productMilestone) {
+func (a *App) recordProductMilestone(ctx context.Context, userID int, event productMilestone, sources ...signupShareSource) {
 	if a.db == nil || userID <= 0 {
 		return
 	}
-	if err := a.insertProductMilestone(ctx, userID, event); err != nil {
+	if err := a.insertProductMilestone(ctx, userID, event, sources...); err != nil {
 		log.Printf("product milestone %s: %v", event, err)
 	}
 }
 
-func (a *App) insertProductMilestone(ctx context.Context, userID int, event productMilestone) error {
+func (a *App) insertProductMilestone(ctx context.Context, userID int, event productMilestone, sources ...signupShareSource) error {
+	if event == milestoneShareSignup {
+		if len(sources) != 1 || !shareSourceKeyPattern.MatchString(sources[0].Key) {
+			return errors.New("share signup requires verified source")
+		}
+		// 新账号提交后尽力记录，OAuth 期间撤销、轮换或删除的分享不会计数。
+		_, err := a.db.Exec(ctx, `
+            INSERT INTO product_milestones (user_id, event_name, share_source_key)
+            SELECT u.id, 'share_signup', $3::text
+            FROM users u JOIN documents d ON d.id = $2
+            WHERE u.id = $1 AND d.trashed_at IS NULL
+              AND encode(sha256(convert_to(d.share_token, 'UTF8')), 'hex') = $3::text
+            FOR KEY SHARE OF u
+            ON CONFLICT (user_id, event_name) DO NOTHING
+        `, userID, sources[0].DocumentID, sources[0].Key)
+		return err
+	}
 	_, err := a.db.Exec(ctx, `
 		INSERT INTO product_milestones (user_id, event_name, occurred_at)
 		SELECT id, $2, now() FROM users WHERE id = $1 FOR KEY SHARE

@@ -1,4 +1,5 @@
 import React from "react";
+import { captureRegistrationFirstTouch } from "./registrationAttribution";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -24,6 +25,7 @@ import { parseSpaceSearch } from "./spaceSearch";
 
 const queryClient = new QueryClient();
 const desktopRuntime = isDesktopRuntime();
+if (!desktopRuntime) void captureRegistrationFirstTouch();
 
 installDropNavigationGuard();
 

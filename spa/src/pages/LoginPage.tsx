@@ -15,6 +15,7 @@ import { GoogleIcon, GitHubIcon } from "../components/BrandIcons";
 import { InkClouds, PaperCard } from "../components/Ink";
 import { Logo } from "../components/Logo";
 import { isDesktopRuntime } from "../desktop/runtime";
+import { registrationContext } from "../registrationAttribution";
 import { loginRedirectPath } from "../loginRedirect";
 import { HumanVerification, type HumanVerificationState } from "../components/HumanVerification";
 
@@ -27,12 +28,15 @@ const DesktopLoginPage = lazy(() =>
 type Mode = "login" | "register";
 
 // OAuth 走整页跳转到后端 start 端点，成功后由后端签发会话并跳回 redirectTo。
-function startOAuth(
+async function startOAuth(
   provider: "google" | "github",
   invitationCode: string,
   redirectTo: string,
 ) {
   const search = new URLSearchParams({ redirectTo });
+  const context = await registrationContext();
+  if (context.firstTouch) search.set("firstTouch", JSON.stringify(context.firstTouch));
+  if (context.shareSignupToken) search.set("shareSignupToken", context.shareSignupToken);
   if (invitationCode.trim()) search.set("invite", invitationCode.trim());
   window.location.assign(
     `/api/auth/oauth/${provider}/start?${search.toString()}`,
@@ -200,6 +204,7 @@ function WebLoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
           return;
         }
         await register({
+          ...(await registrationContext()),
           username,
           email,
           password,

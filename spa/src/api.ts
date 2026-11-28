@@ -1,3 +1,4 @@
+import type { RegistrationFirstTouch } from "./registrationAttribution";
 // Koinote 前端 API 封装
 // 所有请求走同源 /api/*，dev 由 Vite 代理转发到 Go 后端，prod 由 Worker 代理。
 // credentials:"include" 让浏览器带上 koinote_session cookie，实现基于 cookie 的会话。
@@ -191,6 +192,8 @@ export async function fetchAppResource(
 }
 
 export function register(params: {
+  firstTouch?: RegistrationFirstTouch;
+  shareSignupToken?: string;
   username: string;
   email: string;
   password: string;

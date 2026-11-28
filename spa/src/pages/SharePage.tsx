@@ -1,3 +1,4 @@
+import { shareRegistrationHref } from "../registrationAttribution";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -349,7 +350,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             <a
-              href={`/register?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              href={shareRegistrationHref(window.location.pathname)}
               className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ background: "var(--cinnabar)" }}
             >
@@ -398,7 +399,7 @@ function SharedView({ shared }: { shared: SharedDocument }) {
               {t.editor.sharedSignupPrompt}
             </p>
             <a
-              href={`/register?redirectTo=${encodeURIComponent(window.location.pathname)}`}
+              href={shareRegistrationHref(window.location.pathname)}
               className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ background: "var(--cinnabar)" }}
             >

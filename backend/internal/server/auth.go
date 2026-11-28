@@ -111,11 +111,13 @@ func (a *App) takeLoginAttempt(w http.ResponseWriter, r *http.Request, identifie
 // 任一步失败都会回滚，用户可以用原验证码重试，不会出现“验证码吃掉了但账号没建成”。
 func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username         string `json:"username"`
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		VerificationCode string `json:"verificationCode"`
-		InvitationCode   string `json:"invitationCode"`
+		Username         string          `json:"username"`
+		Email            string          `json:"email"`
+		Password         string          `json:"password"`
+		VerificationCode string          `json:"verificationCode"`
+		InvitationCode   string          `json:"invitationCode"`
+		FirstTouch       json.RawMessage `json:"firstTouch"`
+		ShareSignupToken json.RawMessage `json:"shareSignupToken"`
 	}
 	if !decodeAuthBody(w, r, &body) {
 		return
@@ -186,6 +188,10 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	registration := registrationContext{
+		FirstTouch:  a.cleanRegistrationAttribution(body.FirstTouch),
+		ShareSignup: a.registrationShareSource(r.Context(), body.ShareSignupToken),
+	}
 	tx, err := a.db.Begin(r.Context())
 	if err != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
@@ -234,6 +240,10 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
 	}
+	if err = insertRegistrationAttribution(r.Context(), tx, newUserID, registration); err != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
+		return
+	}
 	if _, err = tx.Exec(r.Context(), `DELETE FROM email_verification_codes WHERE email = $1`, body.Email); err != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "server_error", "Server error, please try again later")
 		return
@@ -249,6 +259,9 @@ func (a *App) authRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.recordProductMilestone(r.Context(), user.ID, milestoneRegistered)
+	if registration.ShareSignup != nil {
+		a.recordProductMilestone(r.Context(), user.ID, milestoneShareSignup, *registration.ShareSignup)
+	}
 	a.noteUserActivity(user.ID)
 	a.noteUserClient(user.ID, userClientWeb)
 
