@@ -248,6 +248,7 @@ func (a *App) getOrCreateOAuthUser(
 	profile oauthProfile,
 	rawInvitationCode string,
 	invalidInvitationCode bool,
+	registrations ...registrationContext,
 ) (model.User, error) {
 	authUserID := profile.Provider + "_" + profile.ProviderUserID
 
@@ -326,12 +327,22 @@ func (a *App) getOrCreateOAuthUser(
 	if err := applyInvitationReward(ctx, tx, newUserID, rawInvitationCode); err != nil {
 		return model.User{}, err
 	}
+	var registration registrationContext
+	if len(registrations) > 0 {
+		registration = registrations[0]
+	}
+	if err := insertRegistrationAttribution(ctx, tx, newUserID, registration); err != nil {
+		return model.User{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return model.User{}, err
 	}
 	user, err := a.getUserByAuthUserID(ctx, authUserID)
 	if err == nil {
 		a.recordProductMilestone(ctx, user.ID, milestoneRegistered)
+		if registration.ShareSignup != nil {
+			a.recordProductMilestone(ctx, user.ID, milestoneShareSignup, *registration.ShareSignup)
+		}
 		a.noteUserActivity(user.ID)
 	}
 	return user, err
