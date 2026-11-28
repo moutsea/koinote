@@ -201,7 +201,7 @@ export const en: Messages = {
     eyebrow: "Simple, transparent pricing",
     title: "Upgrade once, write with confidence",
     subtitle:
-      "Free covers everyday writing. Lifetime adds more storage, MCP access, and version history with one payment.",
+      "Edit, sync, host images, export and share for free. Lifetime membership unlocks MCP document access and the in-app AI assistant, with platform model usage charged in credits.",
     freeName: "Free",
     freeDescription:
       "Everything needed to start writing and try the complete editor workflow.",
@@ -209,22 +209,27 @@ export const en: Messages = {
     freePeriod: "Use it for as long as you like",
     lifetimeName: "Lifetime",
     lifetimeDescription: "Built for long-term writing and agent collaboration.",
-    lifetimePeriod: "One payment, lifetime access",
+    lifetimePeriod:
+      "One-time payment, lifetime access, no automatic renewal",
     recommended: "Recommended",
     included: "What's included",
     freeFeatures: [
-      "{storage} cloud storage for documents and images",
-      "Full Markdown editing, autosave, and cross-device sync",
-      "Image hosting, exports, and read-only sharing",
-      "Earn extra cloud storage by inviting friends",
+      "{storage} base cloud storage, plus invitation rewards",
+      "Full Markdown editing, autosave and multi-device sync",
+      "Image hosting, exports and read-only sharing",
+      "Save and update 1 encrypted configuration snapshot within your storage quota",
     ],
     lifetimeFeatures: [
-      "{storage} cloud storage for documents and images",
-      "MCP access for Codex, Claude Code, OpenCode, and other agents",
-      "Configurable version history and safety-snapshot recovery",
-      "AI optimization with 1,000 credits",
-      "Ten advanced management, writing, product, research, and technical templates",
-      "Everything in Free",
+      "{storage} base cloud storage and all free features",
+      "Authorize compatible agents to search, read and edit documents through MCP",
+      "Configurable version history and safety snapshots for MCP writes",
+      "In-app AI drafting, organizing and review, charged by platform model usage",
+      "1,000 credits included when membership is activated",
+      "WeChat draft sync and AI cover generation, charged per successful operation",
+      "One-way document sync to Feishu after linking your account",
+      "Hub private repositories and Fork with repositories enabled",
+      "Multiple encrypted configuration snapshots within your storage quota",
+      "10 premium management, writing, product, research and technical templates",
     ],
     loginToUpgrade: "Log in to upgrade",
     manageMembership: "Manage AI and MCP",
@@ -234,7 +239,7 @@ export const en: Messages = {
     unavailable: "Online checkout is not configured for this deployment.",
     creditsTitle: "AI credits",
     creditsDescription:
-      "AI optimization uses the platform model and consumes credits based on actual usage.",
+      "The in-app AI assistant and platform models consume credits based on actual usage. Personal LLM channels have been disabled.",
     creditsMembersOnly:
       "Credits are available to lifetime members. Upgrade above before purchasing a pack.",
     creditsNote:
@@ -245,22 +250,42 @@ export const en: Messages = {
       {
         question: "Is this a subscription?",
         answer:
-          "No. Lifetime membership is a one-time payment with no automatic renewal.",
+          "Lifetime membership is a one-time payment with no automatic renewal.",
+      },
+      {
+        question: "Can free accounts use MCP and the in-app AI assistant?",
+        answer:
+          "MCP document access and the in-app AI assistant require lifetime membership. Free accounts include editing, sync, image hosting, exports, sharing and 1 encrypted configuration snapshot.",
       },
       {
         question: "What can MCP do?",
         answer:
-          "It lets authorized agents search, read, create, append, update, restore, and move documents to trash. Permanent deletion remains a web-only action.",
+          "Lifetime members can authorize compatible agents to search, read, create, append, edit, restore and move documents to the trash. Your agent supplies model capabilities for ordinary document tools. Tools that call Koinote platform models consume credits.",
       },
       {
-        question: "Can I recover after disabling full MCP history?",
+        question: "Can I recover documents with full MCP history disabled?",
         answer:
-          "Yes. Member Agent writes always maintain at least the latest safety snapshot, sharing the normal version limits.",
+          "Yes. Member MCP writes retain at least the latest safety snapshot, sharing the version limit with regular history.",
       },
       {
-        question: "How is AI optimization billed?",
+        question: "How is in-app AI billed?",
         answer:
-          "Lifetime membership includes 1,000 credits. Built-in model usage consumes credits based on actual usage; your own OpenAI-compatible or Anthropic channel consumes no credits.",
+          "Lifetime membership includes 1,000 credits on activation. The in-app AI assistant and platform models consume credits based on actual usage. Personal LLM channels are disabled and models are configured by the administrator.",
+      },
+      {
+        question: "How are publishing and AI covers billed?",
+        answer:
+          "Each successful WeChat draft sync costs 20 credits, and failed syncs release reserved credits. Each successful AI cover generation costs an additional 20 credits. X Article publishing costs 20 credits, including when an X draft is created but publication fails. MCP WeChat sync is exempt only under a specific operator-managed grant. AI covers are charged separately.",
+      },
+      {
+        question: "What do integrations require?",
+        answer:
+          "WeChat drafts, AI covers, Feishu sync, Hub private repositories and Fork require lifetime membership. Enable the relevant feature and link or authorize the platform first. AI and paid publishing also require enough credits and available service configuration. X publishing requires sign-in, an enabled platform and X authorization, with sufficient credits for Articles. Feishu sync runs one way from Koinote to Feishu.",
+      },
+      {
+        question: "What are the storage and configuration snapshot limits?",
+        answer:
+          "Free accounts can save and update 1 encrypted configuration snapshot. Members can save multiple snapshots within their storage quota. Documents, images, configuration snapshots, Agent sessions and Skills use cloud storage under the existing rules, and Hub expansion reserves storage. Invitation rewards add to the base quota.",
       },
     ],
   },
@@ -648,7 +673,7 @@ export const en: Messages = {
           "Headline appeal score with model-generated alternatives",
           "Copy, structure, hierarchy, layout, and mobile readability checks",
           "Apply individual suggestions, apply all, or dismiss them",
-          "Use built-in credits or your own OpenAI / Anthropic channel",
+          "Draft and organize with platform models, billed in credits by actual usage",
         ],
       },
       {
@@ -1117,12 +1142,13 @@ export const en: Messages = {
   agentModelSettings: {
     title: "AI model",
     description:
-      "Choose whether AI optimization uses the built-in model or your own LLM. The editor uses this setting without asking again.",
+      "Personal LLM channels are disabled. In-app AI uses administrator-configured platform models and consumes credits based on actual usage.",
     membersOnly: "AI optimization is available to lifetime members.",
     builtIn: "Built-in model",
     builtInHint: "Uses credits based on actual usage.",
     byok: "Your own LLM",
-    byokUnavailable: "Add a model channel below first.",
+    byokUnavailable:
+      "Personal LLM channels are disabled. In-app AI uses administrator-configured platform models and consumes credits based on actual usage.",
     loading: "Loading model settings…",
     loadFailed: "Could not load model settings. Please try again.",
     saveFailed: "Could not save model settings. Please try again.",
@@ -1131,8 +1157,9 @@ export const en: Messages = {
   llmChannels: {
     title: "Your LLM channels",
     description:
-      "Configure an OpenAI-compatible endpoint or Anthropic Messages API. AI optimization uses the default channel; keys are encrypted and BYOK uses no credits.",
-    membersOnly: "Custom LLM channels are available to lifetime members.",
+      "Personal LLM channels are disabled. In-app AI uses administrator-configured platform models and consumes credits based on actual usage.",
+    membersOnly:
+      "Personal LLM channels are disabled. In-app AI uses administrator-configured platform models and consumes credits based on actual usage.",
     add: "Add channel",
     loading: "Loading channels…",
     loadFailed: "Could not load channels. Please try again.",
@@ -1171,7 +1198,8 @@ export const en: Messages = {
     builtIn: "Built-in model",
     builtInHint: "Uses credits based on actual token usage.",
     byok: "Your channel",
-    byokHint: "Uses your API key and no credits.",
+    byokHint:
+      "Personal LLM channels are disabled. In-app AI uses administrator-configured platform models and consumes credits based on actual usage.",
     channel: "Default channel",
     configureChannels: "Manage model channels",
     availableCredits: "{count} credits available",
@@ -1521,7 +1549,7 @@ export const en: Messages = {
     upgrade: "Upgrade membership",
     aiLockedTitle: "Upgrade to unlock AI features",
     aiLockedDescription:
-      "AI optimization, custom model channels, MCP access, and credits are available to lifetime members.",
+      "The in-app AI assistant, MCP document access and credits require lifetime membership.",
     invitedUsers: "Invited people",
     invitedUsersEmpty: "No one has joined through your invitation yet.",
     invitedAt: "Joined {date}",
@@ -2335,7 +2363,7 @@ export const en: Messages = {
       "Only X Premium and Premium+ accounts can publish a complete X Article. Each successful publish costs 20 Koinote credits and becomes public immediately.",
     xCoverImage: "Cover image",
     xPublishOAuth2BillingHint:
-      "Publishing uses X's official OAuth 2.0 and Articles API. Koinote deducts 20 credits after a successful publish.",
+      "Publishing uses X's official OAuth 2.0 and Articles API. Successful publication costs 20 credits. Creating an X draft also costs 20 credits if publication then fails.",
     xPublishFailed: "Could not publish to X. Please try again.",
     xPublishTooLong:
       "This article exceeds X's 25-post thread limit. Shorten it and try again.",
@@ -3250,7 +3278,7 @@ function hello(name) {
     x_article_unavailable:
       "This X account or developer app cannot use the Articles API. Check X Premium and developer access",
     x_article_draft_only:
-      "X saved the Article draft but could not publish it. Check your X Article drafts before retrying to avoid duplicates",
+      "X saved the Article draft and charged 20 credits, but could not publish it. Check your X Article drafts before retrying to avoid duplicates",
     x_image_source_unavailable:
       "An image in this article is no longer available. Re-upload it before publishing",
     x_image_upload_failed:

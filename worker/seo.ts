@@ -33,6 +33,12 @@ import {
   type PublicPage,
 } from "../spa/src/seoMeta";
 import {
+  DEFAULT_CURRENCY_BY_LOCALE,
+  billingPriceAmount,
+  billingPriceFor,
+  formatBillingPrice,
+  validMembershipPrices,
+  type BillingPrice,
   DEFAULT_FREE_STORAGE_QUOTA_BYTES,
   DEFAULT_LIFETIME_STORAGE_QUOTA_BYTES,
 } from "../spa/src/billingCore";
@@ -252,6 +258,8 @@ type RenderContext = {
   origin: string;
   env: SeoEnv;
   request: Request;
+  pricing?: PublicPricing;
+  membershipPrice?: BillingPrice;
 };
 
 /** 站内链接：显式指定了语言就沿用，爬虫顺着链接才能爬完同一语言的整站 */
@@ -294,7 +302,9 @@ async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
       ].join("");
     case "pricing": {
       // 容量的真值在后端，与前端价格页读同一个接口；读不到时用同一组兜底常量
-      const quota = await pricingQuota(ctx);
+      const quota = ctx.pricing;
+      const price = ctx.membershipPrice;
+      const currency = price?.currency ?? DEFAULT_CURRENCY_BY_LOCALE[ctx.locale];
       const free = {
         storage: formatBytes(positiveBytes(quota?.freeStorageQuotaBytes) ?? DEFAULT_FREE_STORAGE_QUOTA_BYTES, ctx.locale),
       };
@@ -308,13 +318,16 @@ async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
         h1(t.pricing.title),
         p(t.pricing.subtitle),
         section(
-          `${t.pricing.freeName} · ${t.pricing.freePrice}`,
+          `${t.pricing.freeName} · ${formatBillingPrice(0, currency, ctx.locale)}`,
           p(t.pricing.freeDescription),
           ul(t.pricing.freeFeatures.map((item) => fill(item, free))),
         ),
         section(
-          `${t.pricing.lifetimeName} · ${t.pricing.lifetimePeriod}`,
+          `${t.pricing.lifetimeName} · ${price ? formatBillingPrice(price.amount, price.currency, ctx.locale) : "—"}`,
+          p(t.pricing.lifetimePeriod),
           p(t.pricing.lifetimeDescription),
+          ...(!price ? [p(t.pricing.loadFailed)] : []),
+          ...(price && !quota?.billingEnabled ? [p(t.pricing.unavailable)] : []),
           ul(t.pricing.lifetimeFeatures.map((item) => fill(item, lifetime))),
         ),
         section(t.pricing.creditsTitle, p(t.pricing.creditsDescription), p(t.pricing.creditsNote)),
@@ -538,18 +551,27 @@ async function backendJSON<T>(
   }
 }
 
-type PricingQuota = { freeStorageQuotaBytes?: number; lifetimeStorageQuotaBytes?: number };
-let pricingCache: { backend: string; expires: number; value: PricingQuota } | null = null;
+type PublicPricing = {
+  freeStorageQuotaBytes?: number;
+  lifetimeStorageQuotaBytes?: number;
+  prices: BillingPrice[];
+  billingEnabled?: boolean;
+};
+let pricingCache: { backend: string; expires: number; value: PublicPricing } | null = null;
 
-async function pricingQuota(ctx: { env: SeoEnv; request: Request }): Promise<PricingQuota | undefined> {
+async function publicPricing(ctx: { env: SeoEnv; request: Request }): Promise<PublicPricing | undefined> {
   const now = Date.now();
   if (pricingCache && pricingCache.backend === ctx.env.BACKEND_URL && pricingCache.expires > now) {
     return pricingCache.value;
   }
-  const response = await backendJSON<{ pricing?: PricingQuota }>(ctx, "/api/billing/pricing", { optional: true });
-  const value = response?.status === 200 ? response.data?.pricing : undefined;
-  if (value && typeof value === "object") {
-    pricingCache = { backend: ctx.env.BACKEND_URL, expires: now + PRICING_CACHE_MS, value };
+  const response = await backendJSON<{ pricing?: PublicPricing }>(ctx, "/api/billing/pricing", { optional: true });
+  const pricing = response?.status === 200 ? response.data?.pricing : undefined;
+  if (pricing && typeof pricing === "object") {
+    const value = { ...pricing, prices: validMembershipPrices(pricing.prices) };
+    // Let the next request retry an empty/invalid price list.
+    if (value.prices.length > 0) {
+      pricingCache = { backend: ctx.env.BACKEND_URL, expires: now + PRICING_CACHE_MS, value };
+    }
     return value;
   }
   return undefined;
@@ -659,7 +681,7 @@ function structuredData(page: PublicPage, ctx: RenderContext, meta: { title: str
     crumbs.push({ name: ctx.t.footer.aiGuide, item: `${ctx.origin}${PUBLIC_PAGE_PATHS.aiGuide}` });
   }
   crumbs.push({ name: meta.title.replace(/ — Koinote$/, ""), item: url });
-  return {
+  const breadcrumb = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: crumbs.map((crumb, index) => ({
@@ -668,6 +690,39 @@ function structuredData(page: PublicPage, ctx: RenderContext, meta: { title: str
       name: crumb.name,
       item: crumb.item,
     })),
+  };
+  if (page !== "pricing") return breadcrumb;
+  const price = ctx.membershipPrice;
+  const currency = (price?.currency ?? DEFAULT_CURRENCY_BY_LOCALE[ctx.locale]).toUpperCase();
+  const offers = [{
+    "@type": "Offer",
+    name: ctx.t.pricing.freeName,
+    description: ctx.t.pricing.freeDescription,
+    price: "0",
+    priceCurrency: currency,
+    url,
+  }];
+  if (price) {
+    offers.push({
+      "@type": "Offer",
+      name: ctx.t.pricing.lifetimeName,
+      description: ctx.t.pricing.lifetimePeriod,
+      price: billingPriceAmount(price.amount, price.currency),
+      priceCurrency: currency,
+      url,
+    });
+  }
+  return {
+    "@context": "https://schema.org",
+    "@graph": [breadcrumb, {
+      "@type": "SoftwareApplication",
+      name: "Koinote",
+      url: home,
+      description: meta.description,
+      applicationCategory: "UtilitiesApplication",
+      operatingSystem: "Web, macOS, Windows",
+      offers,
+    }],
   };
 }
 
@@ -749,8 +804,19 @@ async function renderPublicPage(page: PublicPage, request: Request, env: SeoEnv)
   const path = PUBLIC_PAGE_PATHS[page];
   const canonical = `${url.origin}${path}${explicit ? `?lang=${explicit}` : ""}`;
   const meta = publicPageMeta(page, ctx.t, locale);
-  const [shell, body] = await Promise.all([fetchShell(request, env), pageBody(page, ctx)]);
+  const [shell, pricing] = await Promise.all([
+    fetchShell(request, env),
+    page === "pricing" ? publicPricing(ctx) : undefined,
+  ]);
   if (!shell.ok) return shell;
+  if (page === "pricing") {
+    ctx.pricing = pricing;
+    const prices = ctx.pricing?.prices ?? [];
+    if (prices.length > 0) {
+      ctx.membershipPrice = billingPriceFor(prices, DEFAULT_CURRENCY_BY_LOCALE[locale], prices[0]);
+    }
+  }
+  const body = await pageBody(page, ctx);
   const html = renderDocument(await shell.text(), url.origin, {
     locale,
     title: meta.title,

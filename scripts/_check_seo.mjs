@@ -64,7 +64,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (url.pathname === "/api/billing/pricing") {
     return Response.json({
-      pricing: { freeStorageQuotaBytes: 2 * 1024 * 1024 * 1024, lifetimeStorageQuotaBytes: 50 * 1024 * 1024 * 1024 },
+      pricing: { billingEnabled: true, prices: [{ amount: 399, currency: "usd" }, { amount: 2900, currency: "cny" }], freeStorageQuotaBytes: 2 * 1024 * 1024 * 1024, lifetimeStorageQuotaBytes: 50 * 1024 * 1024 * 1024 },
     });
   }
   if (url.pathname === "/api/agent/repositories/404") {
@@ -508,3 +508,5 @@ assert.ok(classifyPath("/editor/doc-1"));
 assert.equal(classifyPath("/definitely-not-a-route"), null);
 
 console.log("SEO checks passed");
+
+await import("./_check_pricing.mjs");
