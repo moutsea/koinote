@@ -2,8 +2,11 @@
 // 避免两边各写一套、改了一边另一边静默过期。
 // 只依赖 i18n 的类型，不碰 window/document，Worker 里也能直接引用。
 import type { Locale, Messages } from "./i18n/types";
+import { mcpKnowledge } from "./i18n/mcpKnowledge";
+import { MCP_CLIENTS, type MCPClientPage } from "./mcpKnowledge";
 
 export type PublicPage =
+  | MCPClientPage
   | "home"
   | "pricing"
   | "docs"
@@ -23,6 +26,10 @@ export const PUBLIC_PAGE_PATHS: Record<PublicPage, string> = {
   pricing: "/pricing",
   docs: "/docs",
   mcpGuide: "/docs/mcp",
+  mcpCodex: "/docs/mcp/codex",
+  mcpClaudeCode: "/docs/mcp/claude-code",
+  mcpOpenCode: "/docs/mcp/opencode",
+  mcpOpenClaw: "/docs/mcp/openclaw",
   versionGuide: "/docs/version-history",
   aiGuide: "/docs/ai-optimization",
   aiCase: "/docs/ai-optimization/case",
@@ -107,7 +114,14 @@ export function publicPageMeta(
     case "docs":
       return page(t.footer.docsCenter, t.docsCenter.title, t.docsCenter.subtitle);
     case "mcpGuide":
-      return page(t.footer.mcpGuide, t.mcpGuide.title, t.mcpGuide.subtitle);
+      return page(mcpKnowledge[locale].title, null, mcpKnowledge[locale].positioning);
+    case "mcpCodex":
+    case "mcpClaudeCode":
+    case "mcpOpenCode":
+    case "mcpOpenClaw": {
+      const client = MCP_CLIENTS.find((item) => item.page === target)!;
+      return page(client.name, mcpKnowledge[locale].clientTitle, mcpKnowledge[locale].positioning);
+    }
     case "versionGuide":
       return page(t.footer.versionHistoryGuide, t.versionGuide.title, t.versionGuide.subtitle);
     case "aiGuide":

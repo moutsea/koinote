@@ -217,14 +217,18 @@ invalidation remain authoritative. New clients persist a random retry secret in 
 
 Lifetime members can create a personal access token (PAT) in the Dashboard's
 “Agent document access (MCP)” card and connect any Streamable HTTP MCP client to
-`https://koinote.app/mcp`. The public [MCP guide](https://koinote.app/docs/mcp)
-covers Codex, Claude Code, OpenCode, OpenClaw, WorkBuddy, generic clients, and version
-control. Koinote itself only handles authorization, document I/O,
-versioning, and audit metadata. It **does not call an LLM and needs no OpenAI,
-Anthropic, or other model API key**; Codex or Claude Code supplies the model capability.
+`https://koinote.app/mcp`. The [MCP knowledge base](https://koinote.app/docs/mcp)
+lists document, repository, and configuration-sync tools and their boundaries, with
+[Codex](https://koinote.app/docs/mcp/codex), [Claude Code](https://koinote.app/docs/mcp/claude-code),
+[OpenCode](https://koinote.app/docs/mcp/opencode), and [OpenClaw](https://koinote.app/docs/mcp/openclaw)
+setup guides. AI systems can read [llms.txt](https://koinote.app/llms.txt).
+Ordinary document operations handle authorization, document I/O, versioning, and audit metadata,
+with model capability supplied by the client. GEO summary generation and AI covers use the
+platform’s managed models and consume credits. Users do not configure a model API key in Koinote.
 
-PATs have read or write scope, a 1–365 day or permanent lifetime, editable expiry,
-and individual revocation.
+Document PATs support read, write, or publish scope, a 1–365 day or permanent lifetime,
+editable expiry, and individual revocation. The publish scope includes document reading,
+GEO summary generation and editing, and WeChat draft delivery. WeChat delivery requires publish.
 PostgreSQL authenticates with a SHA-256 hash and keeps a separate AES-GCM-encrypted
 recovery copy. The account owner can reveal it on demand, while list responses never
 include complete tokens. Every MCP request rechecks membership, expiry, and revocation.
@@ -259,8 +263,27 @@ Claude Code (save to the project’s `.mcp.json`; set the token environment vari
 }
 ```
 
-OpenCode (put this in a global or project-level `opencode.json`; see the
-[official MCP documentation](https://opencode.ai/docs/mcp-servers/)):
+Choose the configuration for your OpenCode major version and merge it into a global or project-level `opencode.json`. The V2 example follows the current official documentation; V1 follows the existing integration. Keep existing server entries when adding `koinote`. See the [OpenCode guide](https://koinote.app/docs/mcp/opencode).
+
+OpenCode V2 uses `mcp.servers`.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "koinote": {
+        "type": "remote",
+        "url": "https://koinote.app/mcp",
+        "oauth": false,
+        "headers": { "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}" }
+      }
+    }
+  }
+}
+```
+
+OpenCode V1 uses `mcp`.
 
 ```json
 {
@@ -270,9 +293,7 @@ OpenCode (put this in a global or project-level `opencode.json`; see the
       "type": "remote",
       "url": "https://koinote.app/mcp",
       "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}"
-      }
+      "headers": { "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}" }
     }
   }
 }
@@ -289,7 +310,7 @@ openclaw mcp add koinote \
 openclaw mcp doctor koinote --probe
 ```
 
-Use `--no-probe` to save the environment reference first, then `doctor --probe` to resolve it from the saved configuration and check the connection. Verified with OpenClaw 2026.6.10 against a local Koinote MCP server; the saved configuration contains no plaintext token.
+Use `--no-probe` to save the environment reference first, then `doctor --probe` to resolve it from the saved configuration and check the connection. Current official documentation requires the Gateway to be stopped for probes; check your installed version’s help first. The repository previously verified OpenClaw 2026.6.10 against a local Koinote MCP server with no plaintext token saved. That record applies to the version tested then.
 
 OpenClaw 2026.6.10 may report `headers.Authorization contains a literal sensitive value` during `doctor`. If the saved configuration still contains the environment reference shown above, this is a false positive on the value expanded at runtime and can be ignored.
 

@@ -16,6 +16,9 @@
  * detectLocale 的规则保持一致，渲染结果才不会和 JS 接管后的页面打架。
  */
 import { en } from "../spa/src/i18n/en";
+import { mcpKnowledge } from "../spa/src/i18n/mcpKnowledge";
+import { MCP_CLIENTS, MCP_CONNECTIONS, MCP_TOOL_GROUPS, MCP_TOKEN_SETUP } from "../spa/src/mcpKnowledge";
+import { llmsTxt } from "./llms";
 import { backendHeaders } from "./backend";
 import { fr } from "../spa/src/i18n/fr";
 import { ja } from "../spa/src/i18n/ja";
@@ -185,6 +188,9 @@ const titled = (items: Array<{ title: string; desc: string }>) =>
   `<ul>${items
     .map((item) => `<li><strong>${escapeHTML(item.title)}</strong> — ${escapeHTML(item.desc)}</li>`)
     .join("")}</ul>`;
+function codeBlock(label: string, code: string): string {
+  return `<section><h3>${escapeHTML(label)}</h3><pre><code>${escapeHTML(code)}</code></pre></section>`;
+}
 function section(title: string, ...content: string[]): string {
   return `<section><h2>${escapeHTML(title)}</h2>${content.join("")}</section>`;
 }
@@ -282,7 +288,27 @@ function siteNav(ctx: RenderContext): string {
 
 async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
   const { t } = ctx;
+  const copy = mcpKnowledge[ctx.locale];
   switch (page) {
+    case "mcpCodex":
+    case "mcpClaudeCode":
+    case "mcpOpenCode":
+    case "mcpOpenClaw": {
+      const client = MCP_CLIENTS.find((item) => item.page === page)!;
+      return [
+        link(localHref(ctx, "/docs/mcp"), copy.back),
+        h1(`${client.name} · ${copy.clientTitle}`),
+        p(copy.clientDescriptions[client.id]),
+        p(copy.membership),
+        link("/settings?section=ai#mcp", t.mcpGuide.tokensCta),
+        section(copy.environmentTitle, p(copy.environmentHelp), codeBlock("Bash", MCP_TOKEN_SETUP)),
+        ...client.blocks.map((block) => codeBlock(block.label, block.code)),
+        p(copy.clientNotes[client.id]),
+        link(client.source, copy.official),
+        section(copy.verifyTitle, p(copy.verify), p(copy.repositorySetup)),
+        link(localHref(ctx, "/docs/mcp"), copy.back),
+      ].join("");
+    }
     case "home":
       return [
         p(t.home.badge),
@@ -349,16 +375,27 @@ async function pageBody(page: PublicPage, ctx: RenderContext): Promise<string> {
       ].join("");
     }
     case "mcpGuide": {
-      const g = t.mcpGuide;
+      const connections = MCP_CONNECTIONS.map((connection) => section(
+        copy.connections[connection.id].title,
+        p(copy.connections[connection.id].description),
+        p(`${connection.name} · ${connection.endpoint}`),
+        connection.id === "repositories" ? link("/space/settings", t.agentWorkspace.tokenSettingsTitle) : "",
+        section(copy.toolsTitle, ...MCP_TOOL_GROUPS.filter((group) => group.connection === connection.id).map((group) =>
+          `<h3>${escapeHTML(copy.kinds[group.kind])} (${group.tools.length})</h3>${p(`${copy.scopeLabel} ${group.scopes.join(" / ")}`)}${ul([...group.tools])}`,
+        )),
+      ));
       return [
-        p(g.eyebrow),
-        h1(g.title),
-        p(g.subtitle),
-        section(g.overviewTitle, p(g.overviewBody)),
-        section(g.setupTitle, titled(g.setupSteps)),
-        section(g.clientsTitle, p(g.clientsSubtitle), ul(g.clientDescriptions)),
-        section(g.usageTitle, p(g.usageBody), p(g.verifyLabel), ul(g.prompts)),
-        section(g.permissionsTitle, ul(g.permissions)),
+        h1(copy.title), p(copy.positioning),
+        link("/settings?section=ai#mcp", t.mcpGuide.tokensCta),
+        link(localHref(ctx, "/docs/version-history"), t.mcpGuide.historyCta),
+        link(localHref(ctx, "/pricing"), t.mcpGuide.pricingCta),
+        section(copy.connectionsTitle, p(copy.membership), p(copy.toolsIntro), ...connections),
+        section(copy.clientTitle, p(copy.environmentHelp),
+          ...MCP_CLIENTS.map((item) => `<h3>${link(localHref(ctx, item.path), item.name)}</h3>${p(copy.clientDescriptions[item.id])}`)),
+        section(copy.genericTitle, p(copy.genericHelp)),
+        section(copy.effectsTitle, ul(copy.effects)),
+        section(copy.boundariesTitle, ul(copy.boundaries)),
+        link("/llms.txt", "llms.txt"),
       ].join("");
     }
     case "versionGuide": {
@@ -898,6 +935,7 @@ async function routeSeoRequest(
 ): Promise<Response | null> {
   const { pathname } = url;
 
+  if (pathname === "/llms.txt") return llmsTxt(request);
   if (pathname === "/robots.txt") return robotsTxt(url.origin, previewHost);
   if (pathname === "/sitemap.xml") return sitemapXml(request);
 

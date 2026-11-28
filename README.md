@@ -220,8 +220,10 @@ PostgreSQL ──pg_dump / AES-256-GCM──▶ 私有备份 R2（每 6 小时�
 
 终生会员可以在 Dashboard 的「Agent 文档访问（MCP）」区域创建个人访问令牌（PAT），
 然后让支持 Streamable HTTP MCP 的客户端连接 `https://koinote.app/mcp`。站内的
-[MCP 接入指南](https://koinote.app/docs/mcp)汇总了 Codex、Claude Code、OpenCode、OpenClaw、
-WorkBuddy 与通用客户端的配置及版本控制说明。常规 MCP 文档工具只负责鉴权、文档读写、版本控制
+[MCP 知识库中心](https://koinote.app/docs/mcp)列出文档、仓库和配置同步工具与能力边界，并提供
+[Codex](https://koinote.app/docs/mcp/codex)、[Claude Code](https://koinote.app/docs/mcp/claude-code)、
+[OpenCode](https://koinote.app/docs/mcp/opencode) 和 [OpenClaw](https://koinote.app/docs/mcp/openclaw)
+独立指南。AI 系统可读取 [llms.txt](https://koinote.app/llms.txt)。常规 MCP 文档工具只负责鉴权、文档读写、版本控制
 与审计，由客户端提供模型能力；微信公众号 GEO 摘要生成和封面生成由平台统一配置的模型提供，
 并消耗 credits。用户无需在 Koinote 配置模型 API Key。
 
@@ -258,8 +260,27 @@ Claude Code（写入项目的 `.mcp.json`；在启动客户端的环境中设置
 }
 ```
 
-OpenCode（写入全局或项目级 `opencode.json`；配置格式见其
-[MCP 官方文档](https://opencode.ai/docs/mcp-servers/)）：
+OpenCode 配置需按主版本选择，可合入全局或项目级 `opencode.json`。V2 示例依据当前官方文档，V1 示例与既有接入方式一致。已有其它服务时保留它们，只添加 `koinote` 条目。详见 [OpenCode 指南](https://koinote.app/docs/mcp/opencode)。
+
+OpenCode V2 使用 `mcp.servers`。
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "koinote": {
+        "type": "remote",
+        "url": "https://koinote.app/mcp",
+        "oauth": false,
+        "headers": { "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}" }
+      }
+    }
+  }
+}
+```
+
+OpenCode V1 使用 `mcp`。
 
 ```json
 {
@@ -269,9 +290,7 @@ OpenCode（写入全局或项目级 `opencode.json`；配置格式见其
       "type": "remote",
       "url": "https://koinote.app/mcp",
       "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}"
-      }
+      "headers": { "Authorization": "Bearer {env:KOINOTE_MCP_TOKEN}" }
     }
   }
 }
@@ -288,7 +307,7 @@ openclaw mcp add koinote \
 openclaw mcp doctor koinote --probe
 ```
 
-使用 `--no-probe` 先保存环境变量引用，再用 `doctor --probe` 从已保存的配置读取令牌并检查连接。已在 OpenClaw 2026.6.10 上连接本地 Koinote MCP 验证；配置文件未保存令牌明文。
+使用 `--no-probe` 先保存环境变量引用，再用 `doctor --probe` 从已保存的配置读取令牌并检查连接。当前官方文档要求在 Gateway 停止时运行 probe，请先核对所用版本的帮助说明。仓库曾在 OpenClaw 2026.6.10 上连接本地 Koinote MCP 验证，配置文件未保存令牌明文；此记录对应当时版本。
 
 OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a literal sensitive value`；若配置文件仍保存上述环境变量引用，这是对运行时展开值的误报，可忽略。
 
@@ -302,7 +321,7 @@ OpenClaw 2026.6.10 的 `doctor` 可能提示 `headers.Authorization contains a l
 
 读写令牌还可以调用 `sync_document_to_feishu`，从 Koinote 一键创建或更新已绑定的飞书文档。使用前请先在「设置 → 飞书」完成账号绑定；该工具只做 Koinote 到飞书的单向同步，以 Koinote 标题和正文覆盖飞书内容，不处理双向同步或冲突合并。
 
-需要向微信公众号草稿箱推送时，请创建“仅发布”令牌。Agent 可先调用 `list_wechat_accounts` 选择默认账号或指定账号；该令牌只能读取文档并调用
+需要向微信公众号草稿箱推送时，请创建“仅发布”令牌。Agent 可先调用 `list_wechat_accounts` 选择默认账号或指定账号；该令牌可读取文档、生成或维护 GEO 摘要，并调用
 `push_wechat_draft`，不会获得修改文档或删除文档的权限；推送会在服务端生成基础 HTML，不会套用文档的 Koinote 微信主题，并使用已绑定的公众号上传文章图片，属于外部副作用。每次成功推送消耗 20 credits。
 封面默认为 Koinote 默认封面，也可选择正文图片或 AI 生成封面（每张 AI 封面额外消耗 20 credits）。
 

@@ -74,6 +74,80 @@ globalThis.fetch = async (input, init) => {
 };
 
 try {
+  const clientPaths = ["codex", "claude-code", "opencode", "openclaw"].map((id) => `/docs/mcp/${id}`);
+  const backendBeforeMCP = backendCalls;
+  const toolNames = [
+    "mcp.go", "mcp_agent_workspace_tools.go", "config_sync.go",
+  ].flatMap((file) => {
+    let source = readFileSync(new URL(`../backend/internal/server/${file}`, import.meta.url), "utf8");
+    if (file === "mcp.go") source = source.split("func (a *App) newMCPServer")[1].split("type mcpDocumentHistorySettingsInput")[0];
+    if (file === "config_sync.go") source = source.split("func (a *App) configSyncMCPHandler")[1].split("type configSyncInfo")[0];
+    return [...source.matchAll(/\bName:\s*"([a-z][a-z0-9_]+)"/g)].map((match) => match[1]);
+  });
+  assert.equal(new Set(toolNames).size, 49);
+  for (const [locale, htmlLanguage] of Object.entries({ en: "en", zh: "zh-CN", fr: "fr", ja: "ja" })) {
+    const overview = await get(`/docs/mcp?lang=${locale}`);
+    assert.equal(overview.status, 200);
+    const overviewHTML = await overview.text();
+    const overviewDOM = new DOMParser().parseFromString(overviewHTML, "text/html");
+    for (const name of toolNames) assert.ok(overviewDOM.querySelector("main").textContent.includes(name), `${locale} HTML 缺少 ${name}`);
+    assert.equal(overviewDOM.documentElement.lang, htmlLanguage);
+    for (const term of ["OAuth", "RAG", "folderId", "expectedRevision", "180"]) assert.ok(overviewHTML.includes(term));
+    for (const path of clientPaths) {
+      assert.ok(overviewHTML.includes(`${path}?lang=${locale}`));
+      const response = await get(`${path}?lang=${locale}`);
+      assert.equal(response.status, 200, path);
+      const html = await response.text();
+      const dom = new DOMParser().parseFromString(html, "text/html");
+      assert.equal(dom.documentElement.lang, htmlLanguage);
+      assert.ok(dom.querySelector("h1").textContent.trim());
+      assert.ok(dom.querySelector("pre code").textContent.includes("export KOINOTE_MCP_TOKEN="));
+      assert.match([...dom.querySelectorAll("pre code")].slice(1).map((node) => node.textContent).join("\n"), /https:\/\/koinote\.app\/mcp/);
+      assert.equal(dom.querySelector('link[rel="canonical"]').getAttribute("href"), `https://koinote.app${path}?lang=${locale}`);
+      assert.equal(dom.querySelectorAll('link[rel="alternate"]').length, 5);
+      assert.ok(html.includes(`/docs/mcp?lang=${locale}`));
+      assert.doesNotMatch(dom.querySelector("title").textContent, /Koi AI/);
+      assert.doesNotMatch(html, /c29e20c7|internal-docs|MCP 知识库中心与 llms.txt 需求评审/);
+      const head = await worker.fetch(new Request(`https://koinote.app${path}?lang=${locale}`, { method: "HEAD" }), env());
+      assert.equal(head.status, 200);
+      assert.equal(await head.text(), "");
+    }
+  }
+  const llms = await get("/llms.txt");
+  assert.equal(llms.status, 200);
+  assert.match(llms.headers.get("content-type"), /^text\/plain; charset=utf-8$/i);
+  assert.ok(llms.headers.get("x-content-type-options"));
+  const llmsText = await llms.text();
+  assert.match(llmsText, /^# Koinote\n/);
+  assert.ok(llmsText.includes("个人 AI 知识文档库：Markdown 写作与整理，并通过 MCP 让你的 Agent 安全检索、读取和修改文档。"));
+  for (const locale of ["en", "zh", "fr", "ja"]) assert.ok(llmsText.includes(`## ${locale}\n`));
+  for (const path of clientPaths) assert.ok(llmsText.includes(`https://koinote.app${path}`));
+  for (const term of ["OAuth", "RAG", "180", "koinote-config-sync", "30 minutes"]) assert.ok(llmsText.includes(term));
+  assert.doesNotMatch(llmsText, /<html|c29e20c7|internal-docs/);
+  const llmsHead = await worker.fetch(new Request("https://koinote.app/llms.txt", { method: "HEAD" }), env());
+  assert.equal(llmsHead.status, 200);
+  assert.equal(llmsHead.headers.get("content-type"), llms.headers.get("content-type"));
+  assert.equal(await llmsHead.text(), "");
+  const independent = await worker.fetch(new Request("https://koinote.app/llms.txt"), env({ ASSETS: { fetch() { throw new Error("llms must not need assets"); } } }));
+  assert.equal(await independent.text(), llmsText);
+  assert.equal(backendCalls, backendBeforeMCP, "公开 MCP 文档不得读取账号数据或依赖后端");
+  const previewLlms = await worker.fetch(new Request("https://koinote.example.workers.dev/llms.txt"), env());
+  assert.equal(previewLlms.headers.get("x-robots-tag"), "noindex");
+  assert.equal((await get("/llms-full.txt")).status, 404);
+  for (const path of ["/internal-docs/mcp-knowledge-center-llms.md", "/docs/mcp-knowledge-center-llms"]) {
+    const privatePage = await get(path);
+    assert.equal(privatePage.status, 404);
+    assert.doesNotMatch(await privatePage.text(), /c29e20c7|A1–A9|MCP 知识库中心与 llms.txt 需求评审/);
+  }
+  const publicBackendMock = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(new URL(input.url ?? input).pathname, "/api/docs");
+    return Response.json({ error: "not_found" }, { status: 404 });
+  };
+  const docsAPI = await get("/api/docs");
+  assert.equal(docsAPI.status, 404);
+  assert.doesNotMatch(await docsAPI.text(), /c29e20c7|internal-docs/);
+  globalThis.fetch = publicBackendMock;
   // robots.txt / sitemap.xml 不能再落到 SPA 外壳
   const robots = await get("/robots.txt");
   assert.equal(robots.status, 200);
@@ -99,6 +173,7 @@ try {
     "/", "/pricing", "/docs", "/docs/mcp", "/docs/version-history", "/docs/ai-optimization",
     "/docs/ai-optimization/case", "/docs/wechat-official-account", "/changelog",
     "/privacy", "/terms", "/cookies", "/repositories",
+    "/docs/mcp/codex", "/docs/mcp/claude-code", "/docs/mcp/opencode", "/docs/mcp/openclaw",
   ];
   const languages = { zh: "zh-CN", en: "en", fr: "fr", ja: "ja" };
   const expectedUrls = publicPaths.flatMap((path) => [

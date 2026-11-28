@@ -91,6 +91,26 @@ const mcpGuideRoute = createRoute({
     "MCPGuidePage",
   ),
 });
+const mcpCodexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/mcp/codex",
+  component: lazyRouteComponent(() => import("./pages/MCPClientGuidePage"), "CodexMCPGuidePage"),
+});
+const mcpClaudeCodeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/mcp/claude-code",
+  component: lazyRouteComponent(() => import("./pages/MCPClientGuidePage"), "ClaudeCodeMCPGuidePage"),
+});
+const mcpOpenCodeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/mcp/opencode",
+  component: lazyRouteComponent(() => import("./pages/MCPClientGuidePage"), "OpenCodeMCPGuidePage"),
+});
+const mcpOpenClawRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/docs/mcp/openclaw",
+  component: lazyRouteComponent(() => import("./pages/MCPClientGuidePage"), "OpenClawMCPGuidePage"),
+});
 const versionHistoryGuideRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/docs/version-history",
@@ -406,6 +426,10 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   docsRoute,
   mcpGuideRoute,
+  mcpCodexRoute,
+  mcpClaudeCodeRoute,
+  mcpOpenCodeRoute,
+  mcpOpenClawRoute,
   versionHistoryGuideRoute,
   aiOptimizationGuideRoute,
   aiOptimizationCaseRoute,

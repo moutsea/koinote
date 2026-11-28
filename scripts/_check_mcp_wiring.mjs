@@ -11,6 +11,8 @@ function ok(label, condition, detail) {
   }
 }
 
+const knowledge = readFileSync(new URL("../spa/src/mcpKnowledge.ts", import.meta.url), "utf8");
+
 const worker = readFileSync(
   new URL("../worker/index.ts", import.meta.url),
   "utf8",
@@ -310,8 +312,8 @@ ok(
 ok(
   "公开 MCP 指南覆盖客户端配置且链接独立版本文档",
   /path:\s*["']\/docs\/mcp["']/.test(main) &&
-    /name: ["']OpenClaw["']/.test(guide) &&
-    /name: ["']WorkBuddy \/ Other clients["']/.test(guide) &&
+    /name: ["']OpenClaw["']/.test(knowledge) &&
+    /copy\.genericHelp/.test(guide) &&
     /to=["']\/docs\/version-history["']/.test(guide) &&
     !/t\.mcpGuide\.historyFeatures/.test(guide),
   "MCP 接入方式与版本控制不应继续混在同一篇文档里",
@@ -335,4 +337,5 @@ ok(
 );
 
 console.log(`MCP 接线：${pass} 通过，${fail} 失败`);
+if (fail === 0) await import("./_check_mcp_knowledge.mjs");
 process.exit(fail === 0 ? 0 : 1);

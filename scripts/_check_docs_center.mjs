@@ -95,7 +95,7 @@ ok(
 ok(
   "非 AI 文档页把操作入口放在正文之前",
   page.indexOf("t.docsCenter.openEditor") < page.indexOf("t.docsCenter.quickStartTitle") &&
-    mcpGuide.indexOf("t.mcpGuide.tokensCta") < mcpGuide.indexOf("t.mcpGuide.overviewTitle") &&
+    mcpGuide.indexOf("t.mcpGuide.tokensCta") < mcpGuide.indexOf("copy.connectionsTitle") &&
     versionGuide.indexOf("t.versionGuide.settingsCta") < versionGuide.indexOf("t.versionGuide.overviewTitle"),
   "文档中心、MCP 和版本历史的主要按钮应紧跟标题简介，不应压在全文末尾",
 );
