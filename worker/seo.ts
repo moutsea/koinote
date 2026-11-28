@@ -65,10 +65,10 @@ const CHANGELOGS: Record<Locale, { markdown: string; file: string }> = {
 /** 静态正文只放最近几个版本：够爬虫理解页面，又不至于把 HTML 撑到几百 KB */
 const CHANGELOG_RELEASES = 8;
 const OG_IMAGE_PATH = "/og-image.png";
+// 详情组件接管并在离开时移除，避免 SPA 导航把 noindex 留在公开页。
+const REPOSITORY_ROBOTS_META = '<meta name="robots" content="noindex" data-repository-robots>';
 /** 这些页面以前是纯静态资源，后端慢时宁可少一段正文，也不能拖住首字节 */
 const BACKEND_TIMEOUT_MS = 1500;
-/** sitemap 的仓库清单是一次性取全量，数据比页面正文多，超时放宽一些 */
-const SITEMAP_BACKEND_TIMEOUT_MS = 3000;
 /** 价格接口后端自己声明了 max-age=300，isolate 内按同样时长复用 */
 const PRICING_CACHE_MS = 5 * 60 * 1000;
 
@@ -504,19 +504,9 @@ function validRepositories(value: unknown): RepositorySummary[] {
   );
 }
 
-/** sitemap 清单只有 ID 和时间，不像列表条目那样要求有名字 */
-function sitemapRepositories(value: unknown): Array<{ workspaceId: number; updatedAt?: unknown }> {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (item): item is { workspaceId: number; updatedAt?: unknown } =>
-      Boolean(item) && Number.isSafeInteger(item.workspaceId) && item.workspaceId > 0,
-  );
-}
-
 type BackendOptions = {
   /** 只影响正文、不影响状态码的请求：HEAD 没有正文，直接跳过 */
   optional?: boolean;
-  timeoutMs?: number;
 };
 
 async function backendJSON<T>(
@@ -538,7 +528,7 @@ async function backendJSON<T>(
       headers,
       // 与 proxyToBackend 一致不跟随跳转：跟随跨域 30x 时自定义头（内部令牌）会被带过去
       redirect: "manual",
-      signal: AbortSignal.timeout(options.timeoutMs ?? BACKEND_TIMEOUT_MS),
+      signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });
     if (!response.ok) return { status: response.status };
     return { status: response.status, data: (await response.json()) as T };
@@ -775,6 +765,22 @@ async function renderPublicPage(page: PublicPage, request: Request, env: SeoEnv)
   return htmlResponse(request, shell, html, 200, explicit ? {} : { vary: "Accept-Language" });
 }
 
+function repositoryFallbackResponse(id: string, request: Request, shell: Response, template: string): Response {
+  const canonical = escapeHTML(`${new URL(request.url).origin}/repositories/${id}`);
+  const html = template.replace("</head>", () => `<link rel="canonical" href="${canonical}">
+</head>`);
+  return htmlResponse(request, shell, html, 200, { "x-robots-tag": "noindex", "cache-control": "no-store" });
+}
+
+/** SEO 渲染异常时仍返回可恢复的仓库外壳，并去掉旧静态资源的条件请求头。 */
+export async function renderRepositoryFallback(id: string, request: Request, env: SeoEnv): Promise<Response> {
+  const shell = await fetchShell(request, env);
+  if (!shell.ok) return shell;
+  const template = (await shell.text()).replace("</head>", () => `${REPOSITORY_ROBOTS_META}
+</head>`);
+  return repositoryFallbackResponse(id, request, shell, template);
+}
+
 async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): Promise<Response> {
   const url = new URL(request.url);
   const explicit = requestedLocale(url);
@@ -785,13 +791,14 @@ async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): 
     backendJSON<{ repository?: RepositoryDetail }>({ env, request }, `/api/agent/repositories/${id}`),
   ]);
   if (!shell.ok) return shell;
-  const template = await shell.text();
+  const template = (await shell.text()).replace("</head>", () => `${REPOSITORY_ROBOTS_META}
+</head>`);
   // 后端对不存在、已撤回或格式不对的 ID 返回 404/400
   if (detail?.status === 404 || detail?.status === 400) return notFoundResponse(request, shell, template);
   const repository = detail?.status === 200 ? detail.data?.repository : undefined;
-  // 后端暂时不可用：给原样的 SPA，让前端自己重试，别把错误状态写进索引
+  // 后端暂时不可用：保留 SPA 外壳与索引指令，让前端自己重试。
   if (!repository || !text(repository.name)) {
-    return htmlResponse(request, shell, template, 200, { "cache-control": "no-store" });
+    return repositoryFallbackResponse(id, request, shell, template);
   }
 
   const summary = text(repository.description).trim() || labels.hubNoDescription;
@@ -815,7 +822,10 @@ async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): 
       `<p>${link(PUBLIC_PAGE_PATHS.repositories, labels.publicRepositories)}</p>`,
     ].join(""),
   });
-  return htmlResponse(request, shell, html, 200, explicit ? {} : { vary: "Accept-Language" });
+  return htmlResponse(request, shell, html, 200, {
+    "x-robots-tag": "noindex",
+    ...(explicit ? {} : { vary: "Accept-Language" }),
+  });
 }
 
 function robotsTxt(origin: string, previewHost: boolean): Response {
@@ -838,7 +848,7 @@ function robotsTxt(origin: string, previewHost: boolean): Response {
   });
 }
 
-async function sitemapXml(request: Request, env: SeoEnv): Promise<Response> {
+function sitemapXml(request: Request): Response {
   const origin = new URL(request.url).origin;
   const entries: string[] = [];
   for (const path of Object.values(PUBLIC_PAGE_PATHS)) {
@@ -853,20 +863,6 @@ async function sitemapXml(request: Request, env: SeoEnv): Promise<Response> {
     for (const loc of [`${origin}${path}`, ...LOCALES.map((locale) => `${origin}${path}?lang=${locale}`)]) {
       entries.push(`<url><loc>${escapeHTML(loc)}</loc>${alternates}</url>`);
     }
-  }
-
-  // 后端一次给出全部已公开仓库（/api/agent/repositories/sitemap）。不再翻 Hub 列表：
-  // 那个接口每页 12 个、靠游标串行翻，边缘上翻不完整个目录。
-  // 部署流程先发后端、验活后才部署 Worker，不需要兼容没有这个接口的旧后端；
-  // 取不到时 sitemap 照常输出公开页，只是这一次没有仓库条目。
-  const feed = await backendJSON<{ repositories?: unknown }>({ env, request }, "/api/agent/repositories/sitemap", {
-    optional: true,
-    timeoutMs: SITEMAP_BACKEND_TIMEOUT_MS,
-  });
-  for (const repository of sitemapRepositories(feed?.status === 200 ? feed.data?.repositories : undefined)) {
-    const date = /^\d{4}-\d{2}-\d{2}/.exec(text(repository.updatedAt))?.[0];
-    const lastmod = date ? `<lastmod>${date}</lastmod>` : "";
-    entries.push(`<url><loc>${escapeHTML(`${origin}/repositories/${repository.workspaceId}`)}</loc>${lastmod}</url>`);
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -903,7 +899,7 @@ async function routeSeoRequest(
   const { pathname } = url;
 
   if (pathname === "/robots.txt") return robotsTxt(url.origin, previewHost);
-  if (pathname === "/sitemap.xml") return sitemapXml(request, env);
+  if (pathname === "/sitemap.xml") return sitemapXml(request);
 
   // /pricing/、/Pricing 与 /pricing 是同一页，301 到规范地址，避免收录出重复 URL
   const trimmed = pathname.length > 1 ? pathname.replace(/\/+$/, "") || "/" : pathname;

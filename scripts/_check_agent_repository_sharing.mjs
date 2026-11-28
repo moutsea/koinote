@@ -183,6 +183,8 @@ const bundle = await build({
     export { AgentRepositoryForkNotice } from "./spa/src/components/AgentRepositoryForkNotice";
     export { AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY } from "./spa/src/agentRepositorySyncFeedback";
     export { AgentPublicRepositoriesPage } from "./spa/src/pages/AgentPublicRepositoriesPage";
+    export { HomePage } from "./spa/src/pages/HomePage";
+    export { PricingPage } from "./spa/src/pages/PricingPage";
     export { parseRepositoryDirectorySearch } from "./spa/src/agentRepositoryDirectory";
     export { RepositoryMarkdown } from "./spa/src/components/RepositoryMarkdown";
     export { repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, REPOSITORY_PREVIEW_BYTES } from "./spa/src/agentRepositoryMarkdown";
@@ -196,7 +198,14 @@ const bundle = await build({
       export const apiJson=(...args)=>globalThis.__sharingTest.api(...args);
       export const getAgentWorkspaceSettings=async()=>({enabled:globalThis.__sharingTest.enabled});
       export const getAgentWorkspace=()=>{globalThis.__sharingTest.privateCalls++;throw new Error('Private API used');};
-      export const getAgentWorkspaceFile=getAgentWorkspace;`;
+      export const getAgentWorkspaceFile=getAgentWorkspace;
+      export const getBillingPricing=async()=>({pricing:{prices:[],creditPacks:[]}});
+      export const getMembershipStatus=async()=>({membership:{active:false}});
+      export const createMembershipCheckout=()=>{throw new Error('Unexpected checkout');};
+      export const createAgentCreditsCheckout=createMembershipCheckout;
+      export const confirmAgentCreditsCheckout=createMembershipCheckout;
+      export const getAgentCredits=()=>{throw new Error('Unexpected credits request');};
+      export const AGENT_CREDITS_QUERY_KEY=['agent-credits'];`;
     const adapters = {
       "../api": api, "./api": api,
       "../auth": `import {useSyncExternalStore} from 'react';
@@ -205,11 +214,13 @@ const bundle = await build({
         // useSyncExternalStore needs a stable snapshot per user.
         let seen, snapshot;
         const read=()=>{const user=globalThis.__sharingTest.user;if(user!==seen){seen=user;snapshot={data:{user}};}return snapshot;};
-        export const useSession=()=>useSyncExternalStore(subscribe,read);`,
-      "../i18n": "export const useI18n=()=>({t:globalThis.__sharingTest.labels,locale:'zh'});",
+        export const useSession=()=>useSyncExternalStore(subscribe,read);
+        export const useCurrentUser=()=>useSession().data?.user;`,
+      "../i18n": `export const useI18n=()=>({t:globalThis.__sharingTest.labels,locale:'zh'});
+        export const interpolate=(text,values)=>Object.entries(values).reduce((result,[key,value])=>result.replaceAll('{'+key+'}',String(value)),text);`,
       "../confirmAction": "export const confirmAction=(...args)=>globalThis.__sharingTest.confirm(...args);",
       "../desktop/runtime": "export const isDesktopRuntime=()=>false;",
-      "./desktop/runtime": "export const isDesktopRuntime=()=>false;",
+      "./desktop/runtime": "export const isDesktopRuntime=()=>false; export const desktopAPIOrigin=()=>undefined;",
       "../modalStack": "export const pushModal=()=>()=>{};",
       "@tanstack/react-router": `import {createElement,useSyncExternalStore} from 'react';
         import {defaultStringifySearch} from '@tanstack/router-core';
@@ -231,7 +242,7 @@ const bundle = await build({
     builder.onResolve({ filter: /^(?:react(?:-dom)?(?:\/|$)|@tanstack\/(?:react-query|router-core)$|lucide-react$)/ }, ({path})=>({path:pathToFileURL(require.resolve(path)).href,external:true}));
   }}],
 });
-const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentRepositoryForkNotice, AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, AgentPublicRepositoriesPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, getPublicAgentRepository, syncPublicAgentRepository, refreshPublicAgentRepository, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { createElement, act, createRoot, QueryClient, QueryClientProvider, useQuery, ApiError, githubImportErrorMessage, SystemRepositoriesAdminPanel, AgentGitHubImportForm, AgentGitHubCredentialCard, AgentRepositorySharingCard, AgentPublicRepositoryPage, AgentRepositoryForkNotice, AGENT_REPOSITORY_FORK_NOTICE_QUERY_KEY, AgentPublicRepositoriesPage, HomePage, PricingPage, RepositoryMarkdown, repositoryResource, repositoryReadme, repositoryPreview, repositoryFileHref, parseRepositorySearch, parseRepositoryDirectorySearch, REPOSITORY_PREVIEW_BYTES, publicAgentRepositoryTransferSource, publicRepositoryClonePrompt, getPublicAgentRepository, syncPublicAgentRepository, refreshPublicAgentRepository, loadAgentWorkspaceFiles, zh } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 h.labels = zh;
 const labels = zh.agentWorkspace;
 assert.equal(githubImportErrorMessage(new ApiError(503, "GitHub unavailable", "github_temporarily_unavailable"), labels), labels.githubTemporarilyUnavailable, "transient GitHub failures use the dedicated retry message");
@@ -319,7 +330,42 @@ try {
   await click(labels.revokeSharing);
   delete h.detailWorkspace;
 
+  // Worker 首屏标记由真实详情组件接管，离开详情时必须清理。
+  const ssrRobots = document.createElement("meta");
+  ssrRobots.name = "robots";
+  ssrRobots.content = "noindex";
+  ssrRobots.setAttribute("data-repository-robots", "");
+  document.head.appendChild(ssrRobots);
   h.user={id:2,membershipTier:'free'};
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelectorAll('meta[name="robots"]').length, 1);
+  assert.equal(document.querySelector('meta[data-repository-robots]'), ssrRobots, "reuse the SSR marker");
+  await mount(AgentPublicRepositoriesPage);
+  assert.equal(document.querySelector('meta[data-repository-robots]'), null, "directory navigation removes repository noindex");
+  // 从站内进入详情时也添加标记，清理仅作用于本页拥有的节点。
+  const otherRobots = document.createElement("meta");
+  otherRobots.name = "robots";
+  otherRobots.content = "noindex, nofollow";
+  document.head.appendChild(otherRobots);
+  await mount(AgentPublicRepositoryPage);
+  assert.equal(document.querySelector('meta[data-repository-robots]')?.content, "noindex");
+  await mount(AgentPublicRepositoriesPage);
+  assert.equal(document.querySelector('meta[data-repository-robots]'), null);
+  assert.equal(document.querySelector('meta[name="robots"]'), otherRobots, "preserve other page policies");
+  otherRobots.remove();
+  // 同一个 React 根节点往返真实页面组件，覆盖匿名访客与详情组件重新挂载。
+  for (const destination of [AgentPublicRepositoriesPage, HomePage, PricingPage]) {
+    await mount(AgentPublicRepositoryPage);
+    await act(async () => h.setUser(null)); await settle();
+    assert.equal(document.querySelectorAll('meta[name="robots"]').length, 1);
+    assert.equal(document.querySelector('meta[data-repository-robots]')?.content, 'noindex');
+    await act(async () => h.setRepository('8')); await settle();
+    assert.equal(document.querySelectorAll('meta[name="robots"]').length, 1);
+    await act(async () => root.render(createElement(QueryClientProvider, { client }, createElement(destination))));
+    await settle();
+    assert.equal(document.querySelectorAll('meta[name="robots"]').length, 0, `${destination.name} has no repository noindex`);
+    await act(async () => h.setUser({ id: 2, membershipTier: 'free' }));
+  }
   await mount(AgentPublicRepositoryPage);
   assert.equal(document.querySelector('.repository-markdown h1')?.textContent,'Shared skill','SKILL.md is a rendered fallback when README is absent');
   await click(labels.readmeSource);
@@ -1078,6 +1124,7 @@ try {
   h.extraFiles={...h.extraFiles,'/api/agent/repositories/7/files/31?revision=3':guideFile};
   h.search={...detailSearch,file:guideFile.path};h.hash='';
   await act(async()=>root.render(createElement(QueryClientProvider,{client},createElement(AgentPublicRepositoryPage))));await settle();
+  assert.equal(document.querySelector('meta[data-repository-robots]')?.content, 'noindex');
   await click(labels.readmeBack);
   assert.deepEqual(parseRepositoryDirectorySearch(navigations.at(-1).search),savedFilters,'README navigation preserves the directory context');
   const backHref=[...document.querySelectorAll('a')].find(a=>a.textContent===`← ${labels.publicRepositories}`).getAttribute('href');
@@ -1086,6 +1133,7 @@ try {
   publicRepository.files=originalFiles;
   await act(async()=>root.render(createElement(QueryClientProvider,{client},createElement(AgentPublicRepositoriesPage))));await settle();
   assert.deepEqual(cards(),selectedCards,'returning to the directory retains filters and loaded pages');
+  assert.equal(document.querySelector('meta[data-repository-robots]'), null, 'client navigation removes noindex');
   assert.equal(document.querySelector('input[type="search"]').value,'Portable');
   assert.equal(document.querySelector('.hub-source-button[aria-pressed="true"]').textContent,`${labels.hubSystemBadge}3`);
   assert.equal(document.querySelector('.hub-category-button[aria-pressed="true"]').textContent,`${labels.hubCategory_design}3`);
@@ -1448,7 +1496,7 @@ try {
   assert.ok(document.body.textContent.includes(labels.githubUpstreamPrivateNotice));
   assert.ok(!document.body.textContent.includes('已保存的公开版本'), 'the private notice must not claim this workspace is published');
 
-  console.log('Repository sharing/category retention, system ownership, Hub filters/navigation/pagination, real-router URL validation, refetch/page retries, confirmed revisions, Star, Clone, attribution, and late route/account sync races passed');
+  console.log('Repository sharing/category retention, system ownership, Hub filters/navigation/pagination, real-router URL validation, refetch/page retries, confirmed revisions, Star, Clone, attribution, late route/account sync races, and repository robots lifecycle passed');
 } finally {
   await act(async()=>root.unmount());client?.clear();stop();delete globalThis.__sharingTest;
 }

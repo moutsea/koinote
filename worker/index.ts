@@ -25,7 +25,7 @@ import {
   handleDatabaseBackupUpload,
 } from "./backups";
 import { applySecurityHeaders } from "./securityHeaders";
-import { handleSeoRequest } from "./seo";
+import { classifyPath, handleSeoRequest, renderRepositoryFallback } from "./seo";
 import {
   readWechatDraftResponse,
   WECHAT_DRAFT_STREAM_TYPE,
@@ -225,6 +225,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (seoResponse) return seoResponse;
   } catch (error) {
     console.error("seo render failed", { path: url.pathname, error: String(error) });
+    const failedRoute = classifyPath(url.pathname);
+    if (failedRoute?.kind === "repository") return renderRepositoryFallback(failedRoute.id, request, env);
   }
 
   // 静态资源（SPA），404 交给 not_found_handling: single-page-application

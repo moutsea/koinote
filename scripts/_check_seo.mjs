@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { DOMParser } from "linkedom";
 import worker from "./_seo_bundle.mjs";
 import { classifyPath, SEO_GUARD_SCRIPT, SEO_GUARD_SCRIPT_HASH } from "./_seo_routes_bundle.mjs";
 
@@ -41,15 +42,6 @@ const repositories = [
   { workspaceId: 8, name: null, description: 3, updatedAt: 20261001 },
   { workspaceId: "9", name: "String id" },
 ];
-// sitemap 的仓库清单：远超 Hub 列表一页（12 个）乘以旧的翻页上限（10 页）
-const sitemapFeed = [
-  { workspaceId: 7, updatedAt: "2026-10-01T08:00:00+08:00" },
-  ...Array.from({ length: 180 }, (_, index) => ({ workspaceId: 1000 + index, updatedAt: "2026-09-01T00:00:00Z" })),
-  // 类型不对的条目跳过
-  { workspaceId: "9" },
-  { workspaceId: 0 },
-  null,
-];
 let backendCalls = 0;
 globalThis.fetch = async (input, init) => {
   backendCalls++;
@@ -57,16 +49,15 @@ globalThis.fetch = async (input, init) => {
   const headers = new Headers(init?.headers);
   assert.equal(headers.get("x-koinote-internal-token"), "internal");
   assert.equal(init?.redirect, "manual", "带内部令牌的请求不能跟随跳转");
+  assert.equal(headers.get("cookie"), null, "SEO 只读取公开仓库数据");
+  assert.equal(headers.get("authorization"), null);
   if (url.pathname === "/api/agent/repositories/400") {
     return Response.json({ error: "bad_request" }, { status: 400 });
-  }
-  if (url.pathname === "/api/agent/repositories/sitemap") {
-    return Response.json({ repositories: sitemapFeed });
   }
   if (url.pathname === "/api/agent/repositories") {
     return Response.json({ repositories, nextCursor: null });
   }
-  if (url.pathname === "/api/agent/repositories/7") {
+  if (/^\/api\/agent\/repositories\/(7|117|130|168|224|530)$/.test(url.pathname)) {
     return Response.json({
       repository: { ...repositories[0], license: "MIT", files: [{ path: "SKILL.md" }] },
     });
@@ -98,22 +89,50 @@ try {
   assert.equal(previewPage.headers.get("x-robots-tag"), "noindex");
   assert.doesNotMatch(robotsText, /Disallow: \/editor/, "应用页靠 noindex，不能被 Disallow 挡住");
 
+  const beforeSitemap = backendCalls;
   const sitemap = await get("/sitemap.xml");
+  assert.equal(sitemap.status, 200);
   assert.match(sitemap.headers.get("content-type"), /application\/xml/);
+  assert.equal(sitemap.headers.get("cache-control"), "public, max-age=3600");
   const sitemapXml = await sitemap.text();
-  for (const path of ["/", "/pricing", "/docs/mcp", "/changelog", "/privacy"]) {
-    assert.ok(sitemapXml.includes(`<loc>https://koinote.app${path}</loc>`), `sitemap 缺少 ${path}`);
+  const publicPaths = [
+    "/", "/pricing", "/docs", "/docs/mcp", "/docs/version-history", "/docs/ai-optimization",
+    "/docs/ai-optimization/case", "/docs/wechat-official-account", "/changelog",
+    "/privacy", "/terms", "/cookies", "/repositories",
+  ];
+  const languages = { zh: "zh-CN", en: "en", fr: "fr", ja: "ja" };
+  const expectedUrls = publicPaths.flatMap((path) => [
+    `https://koinote.app${path}`,
+    ...Object.keys(languages).map((locale) => `https://koinote.app${path}?lang=${locale}`),
+  ]);
+  const xml = new DOMParser().parseFromString(sitemapXml, "text/xml");
+  assert.equal(xml.documentElement.tagName, "urlset");
+  assert.equal(xml.documentElement.getAttribute("xmlns"), "http://www.sitemaps.org/schemas/sitemap/0.9");
+  assert.equal(xml.documentElement.getAttribute("xmlns:xhtml"), "http://www.w3.org/1999/xhtml");
+  assert.deepEqual([...xml.querySelectorAll("loc")].map((node) => node.textContent).sort(), expectedUrls.sort());
+  for (const entry of xml.querySelectorAll("url")) {
+    const canonical = new URL(entry.querySelector("loc").textContent);
+    const base = canonical.origin + canonical.pathname;
+    const alternates = [...entry.getElementsByTagName("xhtml:link")];
+    assert.equal(alternates.length, 5);
+    const alternateUrls = Object.fromEntries(alternates.map((node) => [
+      node.getAttribute("hreflang"), node.getAttribute("href"),
+    ]));
+    const expectedAlternates = Object.fromEntries([
+      ...Object.entries(languages).map(([locale, lang]) => [lang, `${base}?lang=${locale}`]),
+      ["x-default", base],
+    ]);
+    assert.deepEqual(alternateUrls, expectedAlternates);
+    for (const alternate of alternates) assert.equal(alternate.getAttribute("rel"), "alternate");
   }
-  assert.ok(sitemapXml.includes("<loc>https://koinote.app/pricing?lang=ja</loc>"));
-  assert.ok(sitemapXml.includes('hreflang="zh-CN" href="https://koinote.app/docs?lang=zh"'));
-  assert.ok(sitemapXml.includes("<loc>https://koinote.app/repositories/7</loc><lastmod>2026-10-01</lastmod>"));
-  assert.equal(
-    (sitemapXml.match(/<loc>https:\/\/koinote\.app\/repositories\/\d+<\/loc>/g) ?? []).length,
-    181,
-    "sitemap 要列出后端给的全部仓库，不能停在前几页",
-  );
-  assert.doesNotMatch(sitemapXml, /repositories\/(0|9)</, "字段类型不对的仓库不进 sitemap");
+  assert.doesNotMatch(sitemapXml, /\/repositories\//, "loc 和 hreflang 都不含仓库详情地址");
   assert.doesNotMatch(sitemapXml, /\/editor|\/settings|\/share\//);
+  const sitemapHead = await worker.fetch(new Request("https://koinote.app/sitemap.xml", { method: "HEAD" }), env());
+  assert.equal(sitemapHead.status, 200);
+  assert.equal(sitemapHead.headers.get("content-type"), sitemap.headers.get("content-type"));
+  assert.equal(sitemapHead.headers.get("cache-control"), sitemap.headers.get("cache-control"));
+  assert.equal(await sitemapHead.text(), "");
+  assert.equal(backendCalls, beforeSitemap, "sitemap GET/HEAD 均不依赖后端仓库 feed");
 
   // 公开页：按语言渲染独立的 meta 与正文
   const zhPricing = await get("/pricing?lang=zh", { "if-none-match": '"shell"' });
@@ -179,12 +198,48 @@ try {
   assert.doesNotMatch(hub, /repositories\/(8|9)"/);
   const repository = await get("/repositories/7?lang=zh");
   assert.equal(repository.status, 200);
+  assert.equal(repository.headers.get("x-robots-tag"), "noindex");
   const repositoryHTML = await repository.text();
+  assert.match(repositoryHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
   assert.match(repositoryHTML, /<title>Writer &lt;Skill&gt; — Skills\/Agent Hub — Koinote<\/title>/);
   assert.match(repositoryHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
   assert.match(repositoryHTML, /许可证: MIT/);
   assert.match(repositoryHTML, /<li>SKILL\.md<\/li>/);
   assert.equal(repository.headers.get("vary"), null, "显式 lang 的仓库页内容固定");
+  // 参数只控制 UI；GET/HEAD 的索引策略与登录态无关。
+  for (const query of ["", "?lang=en", "?lang=fr", "?lang=ja", "?lang=de", "?file=SKILL.md", "?file=docs%2Fguide%20zh.md&lang=zh", "?lang=ja&file=&source=system&installKoi=true"]) {
+    for (const method of ["GET", "HEAD"]) {
+      for (const cookie of ["", "session=test-viewer"]) {
+        const response = await worker.fetch(new Request(`https://koinote.app/repositories/7${query}`, { method, headers: { cookie } }), env());
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("x-robots-tag"), "noindex");
+        const html = await response.text();
+        if (method === "HEAD") {
+          assert.equal(html, "");
+        } else {
+          assert.equal((html.match(/name="robots"/g) ?? []).length, 1);
+          assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+          assert.equal((html.match(/rel="canonical"/g) ?? []).length, 1);
+          assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+          assert.match(html, /<li>SKILL\.md<\/li>/);
+        }
+      }
+    }
+  }
+  for (const query of ["", "?lang=zh", "?lang=en", "?lang=fr", "?lang=ja"]) {
+    const directory = await get(`/repositories${query}`);
+    assert.equal(directory.status, 200);
+    assert.equal(directory.headers.get("x-robots-tag"), null);
+    assert.doesNotMatch(await directory.text(), /name="robots"[^>]*noindex/);
+  }
+  assert.doesNotMatch(robotsText, /Disallow:.*repositories|Disallow:.*file/);
+  // 同号模拟数据只验证路由策略；这些生产仓库的状态由上线后验收。
+  for (const id of [224, 530, 130, 168, 117]) {
+    const response = await get(`/repositories/${id}?file=SKILL.md`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-robots-tag"), "noindex");
+    assert.ok((await response.text()).includes(`<link rel="canonical" href="https://koinote.app/repositories/${id}">`));
+  }
   const negotiatedRepository = await get("/repositories/7", { "accept-language": "ja" });
   assert.equal(negotiatedRepository.headers.get("vary"), "Accept-Language");
   assert.match(await negotiatedRepository.text(), /<html lang="ja"/);
@@ -196,6 +251,23 @@ try {
   const zeroPadded = await get("/repositories/0007?lang=en");
   assert.equal(zeroPadded.status, 301);
   assert.equal(zeroPadded.headers.get("location"), "https://koinote.app/repositories/7?lang=en");
+
+  for (const path of ["/repositories/404?file=SKILL.md", "/repositories/400?lang=zh", "/repositories/0", "/repositories/invalid"]) {
+    for (const method of ["GET", "HEAD"]) {
+      const response = await worker.fetch(new Request(`https://koinote.app${path}`, { method }), env());
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get("x-robots-tag"), "noindex");
+      const html = await response.text();
+      if (method === "HEAD") assert.equal(html, "");
+      else assert.doesNotMatch(html, /rel="canonical"/);
+    }
+  }
+  const normalized = await get("/Repositories/0007/?file=SKILL.md&lang=fr");
+  assert.equal(normalized.status, 301);
+  assert.equal(normalized.headers.get("location"), "https://koinote.app/repositories/7?file=SKILL.md&lang=fr");
+  const destination = await get(new URL(normalized.headers.get("location")).pathname + new URL(normalized.headers.get("location")).search);
+  assert.equal(destination.status, 200);
+  assert.equal(destination.headers.get("x-robots-tag"), "noindex");
 
   // HEAD 没有正文，不该为正文去打后端
   backendCalls = 0;
@@ -210,7 +282,10 @@ try {
   assert.equal(backendCalls, 0, "价格应命中缓存");
 
   // 后端不可用时退回普通 SPA，不写错误状态
-  globalThis.fetch = async () => { throw new Error("backend down"); };
+  let offlineSitemapCalls = 0;
+  globalThis.fetch = async () => { offlineSitemapCalls++; throw new Error("backend down"); };
+  assert.equal(await (await get("/sitemap.xml")).text(), sitemapXml);
+  assert.equal(offlineSitemapCalls, 0, "后端故障时 sitemap 仍由公开页面清单生成");
   // 换一个后端地址，绕开上面的价格缓存
   const offlinePricing = await (
     await worker.fetch(new Request("https://koinote.app/pricing?lang=zh"), env({ BACKEND_URL: "https://down.example" }))
@@ -231,7 +306,39 @@ try {
   const fallback = await get("/repositories/7");
   assert.equal(fallback.status, 200);
   assert.equal(fallback.headers.get("cache-control"), "no-store");
-  assert.match(await fallback.text(), /<div id="root"><\/div>/);
+  assert.equal(fallback.headers.get("x-robots-tag"), "noindex");
+  const fallbackHTML = await fallback.text();
+  assert.match(fallbackHTML, /<div id="root"><\/div>/);
+  assert.match(fallbackHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
+  assert.match(fallbackHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+  for (const backendFailure of [
+    async () => { throw new Error("backend down"); },
+    async () => new Response("unavailable", { status: 503 }),
+    async () => Response.json({ repository: { name: null } }),
+    async () => new Response("invalid json", { headers: { "content-type": "application/json" } }),
+    (_input, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason))),
+  ]) {
+    globalThis.fetch = backendFailure;
+    const timer = setTimeout(() => {}, 10_000);
+    try {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md&lang=zh", { method }), env());
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("x-robots-tag"), "noindex");
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        const html = await response.text();
+        if (method === "HEAD") assert.equal(html, "");
+        else {
+          assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+          assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+          assert.match(html, /<div id="root"><\/div>/);
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  globalThis.fetch = async () => { throw new Error("backend down"); };
 
   // 渲染中途抛错：退回原样的静态资源，而不是整页 500
   let shellCalls = 0;
@@ -247,6 +354,55 @@ try {
   const recovered = await worker.fetch(new Request("https://koinote.app/docs"), flaky);
   assert.equal(recovered.status, 200);
   assert.match(await recovered.text(), /<div id="root"><\/div>/);
+
+  // SEO 抛错后的仓库回退也要覆盖旧 ETag 和 HEAD。
+  for (const method of ["GET", "HEAD"]) {
+    let attempts = 0;
+    const recoveredRepository = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md&lang=zh", {
+      method, headers: { "if-none-match": '"shell"' },
+    }), env({
+      ASSETS: { fetch: async (request) => {
+        attempts++;
+        if (attempts === 1) throw new Error("asset fetch failed");
+        assert.equal(request.headers.get("if-none-match"), null);
+        assert.equal(request.method, "GET");
+        return new Response(shell, { headers: { "content-type": "text/html", etag: '"shell"' } });
+      } },
+    }));
+    assert.equal(attempts, 2);
+    assert.equal(recoveredRepository.status, 200);
+    assert.equal(recoveredRepository.headers.get("x-robots-tag"), "noindex");
+    assert.equal(recoveredRepository.headers.get("cache-control"), "no-store");
+    assert.equal(recoveredRepository.headers.get("etag"), null);
+    const html = await recoveredRepository.text();
+    if (method === "HEAD") assert.equal(html, "");
+    else {
+      assert.equal((html.match(/name="robots"/g) ?? []).length, 1);
+      assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+      assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+    }
+  }
+
+  // ASSETS 成功返回响应后，读取 HTML 流仍可能失败。
+  globalThis.fetch = async () => Response.json({ repository: { name: "Writer", files: [] } });
+  let bodyAttempts = 0;
+  const brokenContent = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md"), env({
+    ASSETS: { fetch: async () => {
+      bodyAttempts++;
+      const body = bodyAttempts === 1
+        ? new ReadableStream({ start(controller) { controller.error(new Error("asset body failed")); } })
+        : shell;
+      return new Response(body, { headers: { "content-type": "text/html" } });
+    } },
+  }));
+  assert.equal(bodyAttempts, 2);
+  assert.equal(brokenContent.status, 200);
+  assert.equal(brokenContent.headers.get("x-robots-tag"), "noindex");
+  assert.equal(brokenContent.headers.get("cache-control"), "no-store");
+  const brokenHTML = await brokenContent.text();
+  assert.match(brokenHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
+  assert.match(brokenHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+  globalThis.fetch = async () => { throw new Error("backend down"); };
 
   // 应用页 noindex，未知路径真正 404，静态资源原样
   for (const path of ["/editor", "/editor/abc", "/settings", "/login", "/space/settings", "/share/not-a-token"]) {
