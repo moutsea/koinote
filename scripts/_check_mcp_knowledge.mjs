@@ -103,4 +103,8 @@ for (const filename of ["README.md", "README.en.md"]) {
   for (const client of MCP_CLIENTS) assert.ok(readme.includes(`https://koinote.app${client.path}`));
   for (const block of MCP_CLIENTS.find((client) => client.id === "opencode").blocks) assert.ok(readme.includes(block.code));
 }
+
+assert.ok(read("README.md").includes("每次文档 MCP\n请求都会重新检查会员状态"));
+assert.ok(read("README.md").includes("不会获得修改文档正文或删除文档的权限"));
+assert.ok(read("README.en.md").includes("Every document MCP request rechecks membership"));
 console.log("MCP 知识库检查通过：49 个工具、5 种 PAT scope、4 种语言及客户端配置");

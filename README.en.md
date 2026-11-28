@@ -231,7 +231,7 @@ editable expiry, and individual revocation. The publish scope includes document 
 GEO summary generation and editing, and WeChat draft delivery. WeChat delivery requires publish.
 PostgreSQL authenticates with a SHA-256 hash and keeps a separate AES-GCM-encrypted
 recovery copy. The account owner can reveal it on demand, while list responses never
-include complete tokens. Every MCP request rechecks membership, expiry, and revocation.
+include complete tokens. Every document MCP request rechecks membership, expiry, and revocation.
 Prefer a read-only token unless the client actually needs to modify documents. Dashboard also
 shows a paginated 180-day activity log of tools, linked documents, outcomes, and duration without
 storing document bodies or bearer-token values.
