@@ -201,29 +201,34 @@ export const zh: Messages = {
     eyebrow: "简单透明的价格",
     title: "一次升级，长期安心写作",
     subtitle:
-      "免费版覆盖日常写作；终生会员一次付费，解锁更大空间、MCP 和版本历史。",
+      "免费版支持编辑、同步、图床、导出与分享。终生会员解锁 MCP 文档访问和站内 AI 助手，平台模型按实际用量扣 credits。",
     freeName: "免费版",
     freeDescription: "适合开始写作与体验完整编辑流程。",
     freePrice: "免费",
     freePeriod: "长期使用",
     lifetimeName: "终生会员",
     lifetimeDescription: "为长期写作与 Agent 协作准备。",
-    lifetimePeriod: "一次付费，终生有效",
+    lifetimePeriod:
+      "一次性付款，终生有效，无自动续费",
     recommended: "推荐",
     included: "包含权益",
     freeFeatures: [
-      "{storage} 云端存储（文档与图片合计）",
+      "{storage} 云端存储（基础额度），邀请奖励另计",
       "完整 Markdown 编辑、自动保存与多端同步",
       "图片托管、导出与只读分享",
-      "邀请好友可获得额外云端空间",
+      "可保存并更新 1 份加密配置快照（占用云空间）",
     ],
     lifetimeFeatures: [
-      "{storage} 云端存储（文档与图片合计）",
-      "MCP 连接 Codex、Claude Code、OpenCode 等 Agent",
-      "可配置版本历史与安全快照恢复",
-      "AI 优化与 1,000 credits",
+      "{storage} 云端存储（基础额度），包含免费版全部能力",
+      "MCP 授权兼容 Agent 检索、读取和修改文档",
+      "可配置版本历史，MCP 写入保留安全快照",
+      "站内 AI 助手改稿、整理与审阅，平台模型按用量扣 credits",
+      "开通赠送 1,000 credits",
+      "公众号草稿同步与 AI 封面生成，按次扣 credits",
+      "绑定飞书后单向同步文档到飞书",
+      "Hub 私有仓库与 Fork，需启用仓库功能",
+      "可保存多份加密配置快照（受云空间限制）",
       "10 款管理、写作、产品、研究与技术高级模板",
-      "包含免费版全部能力",
     ],
     loginToUpgrade: "登录后升级",
     manageMembership: "管理 AI 与 MCP",
@@ -233,7 +238,7 @@ export const zh: Messages = {
     unavailable: "当前部署尚未配置在线支付。",
     creditsTitle: "AI Credits",
     creditsDescription:
-      "AI 优化统一使用平台模型，并按实际用量消耗 credits。",
+      "站内 AI 助手和平台模型按实际用量扣 credits。个人 LLM 渠道已停用。",
     creditsMembersOnly:
       "Credits 仅供终生会员购买和使用；可先在上方开通终生会员。",
     creditsNote:
@@ -243,22 +248,43 @@ export const zh: Messages = {
     faqs: [
       {
         question: "这是订阅吗？",
-        answer: "不是。终生会员是一次性付款，不会自动续费。",
+        answer:
+          "终生会员采用一次性付款，无自动续费。",
+      },
+      {
+        question: "免费用户可以使用 MCP 和站内 AI 吗？",
+        answer:
+          "MCP 文档访问与站内 AI 助手需要终生会员。免费版支持编辑、同步、图床、导出、分享及 1 份加密配置快照。",
       },
       {
         question: "MCP 能做什么？",
         answer:
-          "它允许你授权兼容的 Agent 查找、读取、创建、追加、更新、恢复和移入回收站中的文档；永久删除仍需在网页完成。",
+          "终生会员可授权兼容 Agent 检索、读取、创建、追加、修改、恢复和将文档移入回收站。普通文档工具由 Agent 提供模型能力；调用 Koinote 平台模型的工具会消耗 credits。",
       },
       {
         question: "关闭 MCP 完整历史后还能恢复吗？",
         answer:
-          "可以。会员的 Agent 写入始终至少维护最近 1 个安全快照，并与普通版本共享版本上限。",
+          "可以。会员的 MCP 写入始终至少保留最近 1 个安全快照，并与普通版本共享版本上限。",
       },
       {
-        question: "AI 优化如何计费？",
+        question: "站内 AI 如何计费？",
         answer:
-          "终生会员会获得 1,000 credits。使用内置模型时按实际用量扣除 credits；配置自己的 OpenAI 兼容或 Anthropic 渠道则不消耗 credits。",
+          "开通终生会员赠送 1,000 credits。站内 AI 助手与平台模型按实际用量扣 credits。个人 LLM 渠道已停用，模型由管理员统一配置。",
+      },
+      {
+        question: "发布与 AI 封面如何计费？",
+        answer:
+          "公众号草稿每次成功同步消耗 20 credits，失败释放预留；AI 封面每次成功生成另消耗 20 credits。X Article 成功发布消耗 20 credits；已在 X 创建草稿但发布失败时也扣 20 credits。MCP 微信同步仅在符合运营方专门授权条件时免扣，AI 封面仍另计。",
+      },
+      {
+        question: "使用这些集成需要什么？",
+        answer:
+          "公众号草稿、AI 封面、飞书同步及 Hub 私有仓库和 Fork 需要终生会员。使用前需启用相关功能并完成平台绑定或授权，AI 及收费发布还需足额 credits 与可用服务配置。X 发布需登录、启用平台并完成 X 授权，Article 需足额 credits。飞书为 Koinote 到飞书的单向同步。",
+      },
+      {
+        question: "存储和配置快照有什么限制？",
+        answer:
+          "免费账号可保存并更新 1 份加密配置快照，会员可保存多份。配置快照、文档、图片、Agent 会话及 Skills 等按现有规则占用云空间，Hub 扩容也占用划拨空间。各项均受对应额度限制，邀请奖励另计。",
       },
     ],
   },
@@ -641,7 +667,7 @@ export const zh: Messages = {
           "标题吸引力评分与模型生成的候选标题",
           "正文表达、结构层级、排版和移动端可读性检查",
           "逐条落实、全部落实或忽略建议",
-          "使用内置 credits，或接入自己的 OpenAI / Anthropic 渠道",
+          "使用平台模型改稿与整理，按实际用量扣 credits",
         ],
       },
       {
@@ -1094,12 +1120,13 @@ export const zh: Messages = {
   agentModelSettings: {
     title: "AI 模型",
     description:
-      "选择 AI 优化默认使用内置模型还是自有 LLM。编辑器会直接使用这里的设置，不再重复询问。",
+      "个人 LLM 渠道已停用。站内 AI 使用管理员配置的平台模型，按实际用量扣 credits。",
     membersOnly: "AI 优化是终生会员权益。",
     builtIn: "内置模型",
     builtInHint: "按实际用量消耗 credits。",
     byok: "自有 LLM",
-    byokUnavailable: "请先在下方添加一个模型渠道。",
+    byokUnavailable:
+      "个人 LLM 渠道已停用。站内 AI 使用管理员配置的平台模型，按实际用量扣 credits。",
     loading: "正在读取模型设置…",
     loadFailed: "模型设置加载失败，请稍后重试。",
     saveFailed: "模型设置保存失败，请稍后重试。",
@@ -1108,8 +1135,9 @@ export const zh: Messages = {
   llmChannels: {
     title: "自有 LLM 渠道",
     description:
-      "配置 OpenAI 兼容接口或 Anthropic Messages API。默认渠道会用于 AI 优化，密钥加密保存且不消耗 credits。",
-    membersOnly: "自有 LLM 渠道是终生会员权益。",
+      "个人 LLM 渠道已停用。站内 AI 使用管理员配置的平台模型，按实际用量扣 credits。",
+    membersOnly:
+      "个人 LLM 渠道已停用。站内 AI 使用管理员配置的平台模型，按实际用量扣 credits。",
     add: "添加渠道",
     loading: "正在加载渠道…",
     loadFailed: "渠道列表加载失败，请稍后重试。",
@@ -1145,7 +1173,8 @@ export const zh: Messages = {
     builtIn: "内置模型",
     builtInHint: "按实际 token 使用量扣除 credits。",
     byok: "自有渠道",
-    byokHint: "使用你的 API Key，不消耗 credits。",
+    byokHint:
+      "个人 LLM 渠道已停用。站内 AI 使用管理员配置的平台模型，按实际用量扣 credits。",
     channel: "默认渠道",
     configureChannels: "管理模型渠道",
     availableCredits: "可用 {count} credits",
@@ -1464,7 +1493,7 @@ export const zh: Messages = {
     upgrade: "升级会员",
     aiLockedTitle: "升级会员后开启 AI 功能",
     aiLockedDescription:
-      "AI 优化、自有模型渠道、MCP 文档访问与 credits 功能仅向终生会员开放。",
+      "站内 AI 助手、MCP 文档访问与 credits 功能需要终生会员。",
     invitedUsers: "受邀列表",
     invitedUsersEmpty: "还没有用户通过你的邀请加入。",
     invitedAt: "加入于 {date}",
@@ -2212,7 +2241,7 @@ export const zh: Messages = {
       "只有 X Premium 或 Premium+ 账号可以发布完整的 X 文章。每次成功发布消耗 20 Koinote credits，发布后会立即公开。",
     xCoverImage: "封面图片",
     xPublishOAuth2BillingHint:
-      "发布会通过 X 官方 OAuth 2.0 和 Articles API，Koinote 会在成功发布后扣除 20 credits。",
+      "发布使用 X 官方 OAuth 2.0 和 Articles API。成功发布扣除 20 credits；已创建 X 草稿但发布失败时也扣除 20 credits。",
     xPublishFailed: "发布到 X 失败，请稍后重试",
     xPublishTooLong: "文章拆分后超过 X 串文的 25 条上限，请缩短正文后重试",
     xPublishTooManyImages:
@@ -3057,7 +3086,7 @@ function hello(name) {
     x_article_unavailable:
       "当前 X 账号或开发者应用没有 Articles API 权限，请检查 X Premium 和开发者权限",
     x_article_draft_only:
-      "X 已保存文章草稿，但未能公开发布。请先到 X 文章草稿中检查，避免重复创建",
+      "X 已保存文章草稿并扣除 20 credits，但未能公开发布。请先到 X 文章草稿中检查，避免重复创建",
     x_image_source_unavailable: "文章中有图片已失效，请重新上传图片后再发布",
     x_image_upload_failed: "X 无法上传文章图片，请检查图片后重试",
     x_provider_unavailable: "X 服务暂时不可用，请稍后重试",

@@ -201,7 +201,7 @@ export const ja: Messages = {
     eyebrow: "シンプルで透明な料金",
     title: "一度のアップグレードで、安心して書き続ける",
     subtitle:
-      "無料版は日常の執筆に。終身会員は一度の支払いで容量、MCP、バージョン履歴を追加します。",
+      "編集、同期、画像ホスティング、エクスポート、共有は無料です。終身会員は MCP 文書アクセスとアプリ内 AI アシスタントを利用でき、プラットフォームモデルは実際の使用量に応じて credits を消費します。",
     freeName: "無料",
     freeDescription:
       "執筆を始め、エディタの全体的な流れを試すための基本プランです。",
@@ -209,22 +209,27 @@ export const ja: Messages = {
     freePeriod: "期間制限なし",
     lifetimeName: "終身会員",
     lifetimeDescription: "長期の執筆と Agent との共同作業に。",
-    lifetimePeriod: "一度の支払いで終身利用",
+    lifetimePeriod:
+      "一回限りの支払い、終身アクセス、自動更新なし",
     recommended: "おすすめ",
     included: "含まれるもの",
     freeFeatures: [
-      "文書と画像に {storage} のクラウド容量",
-      "完全な Markdown 編集、自動保存、端末間同期",
+      "基本クラウド容量 {storage}、招待特典は別途加算",
+      "Markdown 編集、自動保存、複数端末間の同期",
       "画像ホスティング、エクスポート、読み取り専用共有",
-      "友達招待による追加クラウド容量",
+      "容量の範囲内で暗号化設定スナップショットを 1 件保存・更新",
     ],
     lifetimeFeatures: [
-      "文書と画像に {storage} のクラウド容量",
-      "Codex、Claude Code、OpenCode などの MCP アクセス",
-      "設定可能なバージョン履歴と安全スナップショット復元",
-      "AI 最適化と 1,000 credits",
-      "目標管理、執筆、製品、研究、技術向けの 10 種類の高度なテンプレート",
-      "無料版のすべての機能",
+      "基本クラウド容量 {storage} と無料版の全機能",
+      "互換 Agent に MCP 経由の文書検索・読み取り・編集を許可",
+      "設定可能なバージョン履歴と MCP 書き込み時の安全スナップショット",
+      "アプリ内 AI による推敲・整理・レビュー、モデルの使用量に応じて課金",
+      "会員有効化時に 1,000 credits を付与",
+      "WeChat 下書き同期と AI カバー生成は成功ごとに credits を消費",
+      "アカウント連携後、文書を Feishu へ一方向に同期",
+      "リポジトリ機能を有効にして Hub 非公開リポジトリと Fork を利用",
+      "容量の範囲内で複数の暗号化設定スナップショットを保存",
+      "管理・執筆・製品・研究・技術向けの上級テンプレート 10 種",
     ],
     loginToUpgrade: "ログインしてアップグレード",
     manageMembership: "AI と MCP を管理",
@@ -234,7 +239,7 @@ export const ja: Messages = {
     unavailable: "この環境ではオンライン決済が設定されていません。",
     creditsTitle: "AI credits",
     creditsDescription:
-      "AI 最適化は共通のプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
+      "アプリ内 AI とプラットフォームモデルは実際の使用量に応じて credits を消費します。個人 LLM チャネルは無効化されています。",
     creditsMembersOnly:
       "Credits は終身会員のみ購入・利用できます。先に上の終身会員プランへアップグレードしてください。",
     creditsNote:
@@ -244,22 +249,43 @@ export const ja: Messages = {
     faqs: [
       {
         question: "サブスクリプションですか？",
-        answer: "いいえ。終身会員は一度だけの支払いで、自動更新はありません。",
+        answer:
+          "終身会員は一回限りの支払いで、自動更新はありません。",
+      },
+      {
+        question: "無料アカウントで MCP とアプリ内 AI を使えますか？",
+        answer:
+          "MCP 文書アクセスとアプリ内 AI アシスタントには終身会員が必要です。無料版には編集、同期、画像ホスティング、エクスポート、共有、暗号化設定スナップショット 1 件が含まれます。",
       },
       {
         question: "MCP では何ができますか？",
         answer:
-          "許可した Agent は文書の検索、閲覧、作成、追記、更新、復元、ゴミ箱への移動ができます。完全削除は Web のみです。",
+          "終身会員は互換 Agent に文書の検索、読み取り、作成、追記、編集、復元、ゴミ箱への移動を許可できます。通常の文書ツールでは Agent がモデル機能を提供します。Koinote のプラットフォームモデルを呼び出すツールは credits を消費します。",
       },
       {
-        question: "MCP の完全履歴を無効にしても復元できますか？",
+        question: "MCP の完全な履歴を無効にしても復元できますか？",
         answer:
-          "はい。会員の Agent 書き込みは常に最低 1 件の最新安全スナップショットを保持します。",
+          "はい。会員の MCP 書き込みでは少なくとも最新の安全スナップショット 1 件を保持し、通常の履歴とバージョン上限を共有します。",
       },
       {
-        question: "AI 最適化の料金はどうなりますか？",
+        question: "アプリ内 AI の料金は？",
         answer:
-          "終身会員には 1,000 credits が含まれます。内蔵モデルは実際の使用量に応じて credits を消費し、独自の OpenAI 互換または Anthropic チャネルは消費しません。",
+          "終身会員の有効化時に 1,000 credits が付与されます。アプリ内 AI とプラットフォームモデルは実際の使用量に応じて credits を消費します。個人 LLM チャネルは無効化され、モデルは管理者が設定します。",
+      },
+      {
+        question: "公開と AI カバーの料金は？",
+        answer:
+          "WeChat 下書きの同期成功ごとに 20 credits を消費し、失敗時は予約を解除します。AI カバーは生成成功ごとに別途 20 credits を消費します。X Article の公開は 20 credits で、X 下書きの作成後に公開が失敗した場合も 20 credits を消費します。MCP WeChat 同期の免除は運営者の個別許可条件を満たす場合に限られ、AI カバーは別料金です。",
+      },
+      {
+        question: "連携機能には何が必要ですか？",
+        answer:
+          "WeChat 下書き、AI カバー、Feishu 同期、Hub 非公開リポジトリと Fork には終身会員が必要です。機能を有効にし、各サービスの連携や認証を完了してください。AI と有料公開には十分な credits と利用可能なサービス設定も必要です。X 公開にはログイン、機能の有効化、X 認証が必要で、Article には十分な credits が必要です。Feishu 同期は Koinote から Feishu への一方向です。",
+      },
+      {
+        question: "ストレージと設定スナップショットの制限は？",
+        answer:
+          "無料アカウントは暗号化設定スナップショットを 1 件保存・更新でき、会員は容量の範囲内で複数保存できます。文書、画像、設定スナップショット、Agent セッション、Skills などが既存のルールに従いクラウド容量を使用し、Hub 拡張にも容量が割り当てられます。招待特典は基本容量に加算されます。",
       },
     ],
   },
@@ -644,7 +670,7 @@ export const ja: Messages = {
           "タイトル魅力度スコアとモデル生成の候補",
           "本文、構造、階層、レイアウト、モバイル可読性の確認",
           "提案ごとの適用、一括適用、または無視",
-          "内蔵 credits または独自 OpenAI / Anthropic チャネル",
+          "プラットフォームモデルで推敲・整理し、実際の使用量に応じて credits を消費",
         ],
       },
       {
@@ -1108,12 +1134,13 @@ export const ja: Messages = {
   agentModelSettings: {
     title: "AI モデル",
     description:
-      "AI 最適化で内蔵モデルか独自 LLM のどちらを使うか選びます。エディタはこの設定をそのまま使用します。",
+      "個人 LLM チャネルは無効化されています。アプリ内 AI は管理者が設定したプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     membersOnly: "AI 最適化は永久会員向け機能です。",
     builtIn: "内蔵モデル",
     builtInHint: "実際の使用量に応じて credits を消費します。",
     byok: "独自 LLM",
-    byokUnavailable: "先に下でモデルチャネルを追加してください。",
+    byokUnavailable:
+      "個人 LLM チャネルは無効化されています。アプリ内 AI は管理者が設定したプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     loading: "モデル設定を読み込み中…",
     loadFailed: "モデル設定を読み込めませんでした。もう一度お試しください。",
     saveFailed: "モデル設定を保存できませんでした。もう一度お試しください。",
@@ -1122,8 +1149,9 @@ export const ja: Messages = {
   llmChannels: {
     title: "自分の LLM チャネル",
     description:
-      "OpenAI 互換 API または Anthropic Messages API を設定できます。AI 最適化はデフォルトチャネルを使い、キーは暗号化されて credits を消費しません。",
-    membersOnly: "カスタム LLM チャネルは永久会員向け機能です。",
+      "個人 LLM チャネルは無効化されています。アプリ内 AI は管理者が設定したプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
+    membersOnly:
+      "個人 LLM チャネルは無効化されています。アプリ内 AI は管理者が設定したプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     add: "チャネルを追加",
     loading: "チャネルを読み込み中…",
     loadFailed: "チャネルを読み込めませんでした。もう一度お試しください。",
@@ -1162,7 +1190,8 @@ export const ja: Messages = {
     builtIn: "内蔵モデル",
     builtInHint: "実際の token 使用量に応じて credits を消費します。",
     byok: "自分のチャネル",
-    byokHint: "自分の API Key を使い、credits を消費しません。",
+    byokHint:
+      "個人 LLM チャネルは無効化されています。アプリ内 AI は管理者が設定したプラットフォームモデルを使用し、実際の使用量に応じて credits を消費します。",
     channel: "デフォルトチャネル",
     configureChannels: "モデルチャネルを管理",
     availableCredits: "利用可能 {count} credits",
@@ -1506,7 +1535,7 @@ export const ja: Messages = {
     upgrade: "会員にアップグレード",
     aiLockedTitle: "会員になると AI 機能を利用できます",
     aiLockedDescription:
-      "AI 最適化、独自モデル、MCP 文書アクセス、credits は永久会員向け機能です。",
+      "アプリ内 AI アシスタント、MCP 文書アクセス、credits には終身会員が必要です。",
     invitedUsers: "招待したユーザー",
     invitedUsersEmpty: "招待から参加したユーザーはまだいません。",
     invitedAt: "{date} に参加",
@@ -2313,7 +2342,7 @@ export const ja: Messages = {
       "X Premium または Premium+ のアカウントだけが完全な X Article を公開できます。公開に成功するたび 20 Koinote credits を消費し、すぐに一般公開されます。",
     xCoverImage: "カバー画像",
     xPublishOAuth2BillingHint:
-      "公開には X 公式 OAuth 2.0 と Articles API を使用します。Koinote は公開成功時に 20 credits を差し引きます。",
+      "公開には X 公式 OAuth 2.0 と Articles API を使用します。公開成功時に 20 credits を消費し、X 下書きの作成後に公開が失敗した場合も 20 credits を消費します。",
     xPublishFailed: "X に公開できませんでした。もう一度お試しください。",
     xPublishTooLong:
       "この記事は X スレッドの上限 25 件を超えています。本文を短くして再試行してください。",
@@ -3228,7 +3257,7 @@ function hello(name) {
     x_article_unavailable:
       "この X アカウントまたは開発者アプリは Articles API を利用できません。X Premium と開発者権限を確認してください",
     x_article_draft_only:
-      "X に Article の下書きは保存されましたが、公開できませんでした。重複を避けるため、再試行前に X の下書きを確認してください",
+      "X に Article の下書きが保存され、20 credits が差し引かれましたが、公開できませんでした。重複を避けるため、再試行前に X の下書きを確認してください",
     x_image_source_unavailable:
       "記事内の画像が利用できません。公開前に画像を再アップロードしてください",
     x_image_upload_failed:

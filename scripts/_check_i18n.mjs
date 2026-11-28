@@ -5,6 +5,7 @@
 //   - body 是空数组或空字符串（渲染出一个只有标题的条款）
 //   - 联系邮箱在某一份译文里写错（法律页上的错邮箱等于没有联系方式）
 //   - 某个语言把 legal 整份复制成了另一语言（漏译时最常见的偷懒）
+import { readFileSync } from "node:fs";
 import { en } from "./_i18n_bundle.mjs";
 import { zh } from "./_i18n_bundle.mjs";
 import { fr } from "./_i18n_bundle.mjs";
@@ -190,6 +191,44 @@ for (const [path, tokens] of Object.entries(PLACEHOLDERS)) {
       ok(`${name}.${path} 含 ${token}`, String(value).includes(token), value);
     }
   }
+}
+
+// Pricing copy is consumed by both Worker SSR and React. Tie the advertised
+// allowances to the existing backend constants so a rule change requires review.
+for (const [file, pattern] of [
+  ["backend/internal/server/credits.go", /lifetimeMembershipGrantCredits\s*=\s*int64\(1_000\)/],
+  ["backend/internal/server/wechat_official_publish.go", /wechatDraftSyncCredits\s*=\s*int64\(20\)/],
+  ["backend/internal/server/wechat_official_publish.go", /wechatCoverGenerationCredits\s*=\s*int64\(20\)/],
+  ["backend/internal/server/x.go", /xArticlePublishCredits\s*=\s*int64\(20\)/],
+  ["backend/internal/server/config_snapshots.go", /configSnapshotFreeLimit\s*=\s*1\b/],
+]) {
+  ok(`pricing rules match ${pattern.source}`, pattern.test(readFileSync(file, "utf8")));
+}
+const disabledWords = { zh: "已停用", en: "disabled", fr: "désactivés", ja: "無効化" };
+const renewalWords = { zh: "无自动续费", en: "no automatic renewal", fr: "sans renouvellement automatique", ja: "自動更新なし" };
+const obsoleteClaims = /不消耗 credits|消費しません|no credits|n’en consomme aucun|sans consommer de credits|ne consomme aucun credit/i;
+for (const [locale, messages] of Object.entries(LOCALES)) {
+  const pricing = messages.pricing;
+  const pricingText = JSON.stringify(pricing);
+  ok(`${locale} pricing explains one-time renewal terms`, pricing.lifetimePeriod.includes(renewalWords[locale]));
+  ok(`${locale} pricing retains membership credit grant`, /1[, ]000 credits/.test(pricingText));
+  ok(`${locale} pricing covers three paid operations`, (pricingText.match(/20 credits/g) ?? []).length >= 3);
+  for (const term of ["MCP", "Hub", "Fork", "LLM", "X Article"]) {
+    ok(`${locale} pricing covers ${term}`, pricingText.includes(term));
+  }
+  eq(`${locale} pricing FAQ count`, pricing.faqs.length, en.pricing.faqs.length);
+  eq(`${locale} lifetime feature count`, pricing.lifetimeFeatures.length, en.pricing.lifetimeFeatures.length);
+  for (const [label, text] of Object.entries({
+    pricing: pricing.creditsDescription,
+    model: messages.agentModelSettings.description,
+    channels: messages.llmChannels.description,
+    oldProviderHint: messages.agentReview.byokHint,
+  })) {
+    ok(`${locale}.${label} explains disabled personal channels`, text.includes(disabledWords[locale]));
+    ok(`${locale}.${label} removes free BYOK claim`, !obsoleteClaims.test(text));
+  }
+  ok(`${locale} pricing removes free BYOK claim`, !obsoleteClaims.test(pricingText));
+  ok(`${locale} X draft error discloses charged credits`, messages.errors.x_article_draft_only.includes("20 credits"));
 }
 
 console.log(`\ni18n: ${pass} passed, ${fail} failed`);

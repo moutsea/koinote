@@ -201,7 +201,7 @@ export const fr: Messages = {
     eyebrow: "Des tarifs simples et transparents",
     title: "Une mise à niveau, une écriture sereine",
     subtitle:
-      "L'offre gratuite couvre l'écriture quotidienne. L'accès à vie ajoute stockage, MCP et historique en un seul paiement.",
+      "Édition, synchronisation, hébergement d’images, export et partage gratuits. L’accès à vie ouvre les documents via MCP et l’assistant IA intégré, avec des credits facturés selon l’utilisation des modèles de la plateforme.",
     freeName: "Gratuit",
     freeDescription:
       "Tout ce qu'il faut pour commencer à écrire et découvrir l'éditeur.",
@@ -210,22 +210,27 @@ export const fr: Messages = {
     lifetimeName: "À vie",
     lifetimeDescription:
       "Pour l'écriture au long cours et la collaboration avec les agents.",
-    lifetimePeriod: "Un paiement, accès à vie",
+    lifetimePeriod:
+      "Paiement unique, accès à vie, sans renouvellement automatique",
     recommended: "Recommandé",
     included: "Inclus",
     freeFeatures: [
-      "{storage} de stockage cloud pour documents et images",
-      "Édition Markdown complète, sauvegarde automatique et synchronisation",
-      "Hébergement d'images, exports et partage en lecture seule",
-      "Stockage supplémentaire grâce aux invitations",
+      "{storage} de stockage cloud de base, plus les bonus d’invitation",
+      "Édition Markdown complète, sauvegarde automatique et synchronisation multi-appareils",
+      "Hébergement d’images, export et partage en lecture seule",
+      "Enregistrer et mettre à jour 1 instantané de configuration chiffré dans votre quota de stockage",
     ],
     lifetimeFeatures: [
-      "{storage} de stockage cloud pour documents et images",
-      "Accès MCP pour Codex, Claude Code, OpenCode et d'autres agents",
-      "Historique configurable et restauration par instantané de sécurité",
-      "Optimisation IA avec 1 000 credits",
-      "Dix modèles avancés pour le pilotage, l’écriture, le produit, la recherche et la technique",
-      "Toutes les fonctions de l'offre gratuite",
+      "{storage} de stockage cloud de base et toutes les fonctions gratuites",
+      "Autoriser des agents compatibles à rechercher, lire et modifier les documents via MCP",
+      "Historique configurable et instantanés de sécurité pour les écritures MCP",
+      "Assistant IA intégré pour réviser et organiser, facturé selon l’utilisation des modèles",
+      "1 000 credits offerts à l’activation de l’accès à vie",
+      "Synchronisation des brouillons WeChat et couvertures IA facturées par opération réussie",
+      "Synchronisation à sens unique vers Feishu après association du compte",
+      "Dépôts privés Hub et Fork après activation des dépôts",
+      "Plusieurs instantanés de configuration chiffrés dans votre quota de stockage",
+      "10 modèles premium de gestion, rédaction, produit, recherche et technique",
     ],
     loginToUpgrade: "Se connecter pour passer membre",
     manageMembership: "Gérer l’IA et MCP",
@@ -235,7 +240,7 @@ export const fr: Messages = {
     unavailable: "Le paiement en ligne n'est pas configuré sur ce déploiement.",
     creditsTitle: "Credits IA",
     creditsDescription:
-      "L’optimisation IA utilise le modèle de la plateforme et consomme des credits selon l’utilisation réelle.",
+      "L’assistant IA intégré et les modèles de la plateforme consomment des credits selon l’utilisation réelle. Les canaux LLM personnels sont désactivés.",
     creditsMembersOnly:
       "Les credits sont réservés aux membres à vie. Activez d’abord l’offre ci-dessus avant d’acheter un pack.",
     creditsNote:
@@ -246,23 +251,42 @@ export const fr: Messages = {
       {
         question: "Est-ce un abonnement ?",
         answer:
-          "Non. L'accès à vie est un paiement unique sans renouvellement automatique.",
+          "L’accès à vie est un paiement unique sans renouvellement automatique.",
+      },
+      {
+        question: "Les comptes gratuits peuvent-ils utiliser MCP et l’assistant IA ?",
+        answer:
+          "L’accès aux documents via MCP et l’assistant IA intégré nécessitent l’accès à vie. Les comptes gratuits disposent de l’édition, de la synchronisation, de l’hébergement d’images, de l’export, du partage et de 1 instantané de configuration chiffré.",
       },
       {
         question: "Que permet MCP ?",
         answer:
-          "Les agents autorisés peuvent rechercher, lire, créer, compléter, modifier, restaurer et mettre des documents à la corbeille. La suppression définitive reste réservée au Web.",
+          "Les membres à vie peuvent autoriser des agents compatibles à rechercher, lire, créer, compléter, modifier, restaurer et déplacer des documents vers la corbeille. Votre agent fournit le modèle pour les outils documentaires ordinaires. Les outils qui appellent les modèles de Koinote consomment des credits.",
       },
       {
-        question:
-          "Puis-je restaurer après avoir désactivé l'historique MCP complet ?",
+        question: "Puis-je restaurer un document sans historique MCP complet ?",
         answer:
-          "Oui. Les écritures Agent des membres conservent toujours au moins le dernier instantané de sécurité.",
+          "Oui. Les écritures MCP des membres conservent au moins le dernier instantané de sécurité, dans la même limite de versions que l’historique ordinaire.",
       },
       {
-        question: "Comment l’optimisation IA est-elle facturée ?",
+        question: "Comment l’IA intégrée est-elle facturée ?",
         answer:
-          "L’accès à vie inclut 1 000 credits. Le modèle intégré consomme des credits selon l’utilisation réelle ; votre propre canal compatible OpenAI ou Anthropic n’en consomme aucun.",
+          "L’activation de l’accès à vie inclut 1 000 credits. L’assistant IA et les modèles de la plateforme consomment des credits selon l’utilisation réelle. Les canaux LLM personnels sont désactivés et les modèles sont configurés par l’administrateur.",
+      },
+      {
+        question: "Comment les publications et couvertures IA sont-elles facturées ?",
+        answer:
+          "Chaque synchronisation réussie d’un brouillon WeChat coûte 20 credits. Un échec libère la réservation. Chaque couverture IA générée avec succès coûte 20 credits supplémentaires. Un X Article coûte 20 credits à la publication, y compris si un brouillon X est créé mais que sa publication échoue. Une exemption MCP WeChat exige une autorisation spécifique de l’opérateur. Les couvertures IA restent facturées séparément.",
+      },
+      {
+        question: "Quels sont les prérequis des intégrations ?",
+        answer:
+          "Les brouillons WeChat, couvertures IA, la synchronisation Feishu, les dépôts privés Hub et Fork nécessitent l’accès à vie. Activez la fonction et associez ou autorisez la plateforme. L’IA et les publications payantes exigent aussi assez de credits et un service configuré. X exige une connexion, une plateforme activée et une autorisation X, avec assez de credits pour les Articles. La synchronisation Feishu va de Koinote vers Feishu.",
+      },
+      {
+        question: "Quelles sont les limites de stockage et des instantanés ?",
+        answer:
+          "Les comptes gratuits peuvent enregistrer et mettre à jour 1 instantané de configuration chiffré. Les membres peuvent en enregistrer plusieurs dans leur quota. Documents, images, instantanés, sessions Agent et Skills occupent le stockage selon les règles existantes. L’extension Hub réserve aussi de l’espace. Les bonus d’invitation s’ajoutent au quota de base.",
       },
     ],
   },
@@ -653,7 +677,7 @@ export const fr: Messages = {
           "Score d’attractivité du titre et alternatives générées par le modèle",
           "Contrôle du texte, de la structure, de la mise en page et de la lecture mobile",
           "Application suggestion par suggestion, en bloc, ou rejet",
-          "Credits intégrés ou canal OpenAI / Anthropic personnel",
+          "Rédaction et organisation avec les modèles de la plateforme, facturées en credits selon l’utilisation",
         ],
       },
       {
@@ -1125,12 +1149,13 @@ export const fr: Messages = {
   agentModelSettings: {
     title: "Modèle IA",
     description:
-      "Choisissez si l’optimisation IA utilise le modèle intégré ou votre propre LLM. L’éditeur appliquera ce réglage sans redemander.",
+      "Les canaux LLM personnels sont désactivés. L’IA intégrée utilise les modèles configurés par l’administrateur et consomme des credits selon l’utilisation réelle.",
     membersOnly: "L’optimisation IA est réservée aux membres à vie.",
     builtIn: "Modèle intégré",
     builtInHint: "Consomme des credits selon l’utilisation réelle.",
     byok: "Votre propre LLM",
-    byokUnavailable: "Ajoutez d’abord un canal de modèle ci-dessous.",
+    byokUnavailable:
+      "Les canaux LLM personnels sont désactivés. L’IA intégrée utilise les modèles configurés par l’administrateur et consomme des credits selon l’utilisation réelle.",
     loading: "Chargement des paramètres du modèle…",
     loadFailed: "Impossible de charger les paramètres du modèle. Réessayez.",
     saveFailed: "Impossible d’enregistrer les paramètres du modèle. Réessayez.",
@@ -1139,9 +1164,9 @@ export const fr: Messages = {
   llmChannels: {
     title: "Vos canaux LLM",
     description:
-      "Configurez une API compatible OpenAI ou l’API Anthropic Messages. Les analyses utilisent le canal par défaut ; les clés sont chiffrées et BYOK ne consomme aucun credit.",
+      "Les canaux LLM personnels sont désactivés. L’IA intégrée utilise les modèles configurés par l’administrateur et consomme des credits selon l’utilisation réelle.",
     membersOnly:
-      "Les canaux LLM personnalisés sont réservés aux membres à vie.",
+      "Les canaux LLM personnels sont désactivés. L’IA intégrée utilise les modèles configurés par l’administrateur et consomme des credits selon l’utilisation réelle.",
     add: "Ajouter un canal",
     loading: "Chargement des canaux…",
     loadFailed: "Impossible de charger les canaux. Réessayez.",
@@ -1180,7 +1205,8 @@ export const fr: Messages = {
     builtIn: "Modèle intégré",
     builtInHint: "Consomme des credits selon le nombre réel de tokens.",
     byok: "Votre canal",
-    byokHint: "Utilise votre clé API sans consommer de credits.",
+    byokHint:
+      "Les canaux LLM personnels sont désactivés. L’IA intégrée utilise les modèles configurés par l’administrateur et consomme des credits selon l’utilisation réelle.",
     channel: "Canal par défaut",
     configureChannels: "Gérer les canaux de modèles",
     availableCredits: "{count} credits disponibles",
@@ -1532,7 +1558,7 @@ export const fr: Messages = {
     upgrade: "Mettre à niveau",
     aiLockedTitle: "Passez membre pour activer l’IA",
     aiLockedDescription:
-      "L’optimisation IA, les modèles personnalisés, l’accès MCP et les credits sont réservés aux membres à vie.",
+      "L’assistant IA intégré, l’accès aux documents MCP et les credits nécessitent l’accès à vie.",
     invitedUsers: "Personnes invitées",
     invitedUsersEmpty:
       "Personne n’a encore rejoint Koinote avec votre invitation.",
@@ -2367,7 +2393,7 @@ export const fr: Messages = {
       "Seuls les comptes X Premium et Premium+ peuvent publier un Article X complet. Chaque publication réussie coûte 20 credits Koinote et devient immédiatement publique.",
     xCoverImage: "Image de couverture",
     xPublishOAuth2BillingHint:
-      "La publication utilise OAuth 2.0 officiel et l’API Articles de X. Koinote déduit 20 credits après une publication réussie.",
+      "La publication utilise OAuth 2.0 officiel et l’API Articles de X. Une publication réussie coûte 20 credits. La création du brouillon X coûte aussi 20 credits si la publication échoue ensuite.",
     xPublishFailed: "Impossible de publier sur X. Réessayez.",
     xPublishTooLong:
       "Cet article dépasse la limite de 25 publications d’un fil X. Raccourcissez-le puis réessayez.",
@@ -3302,7 +3328,7 @@ function hello(name) {
     x_article_unavailable:
       "Ce compte X ou cette application développeur n’a pas accès à l’API Articles. Vérifiez X Premium et les autorisations développeur",
     x_article_draft_only:
-      "X a enregistré le brouillon de l’Article sans pouvoir le publier. Vérifiez vos brouillons X avant de réessayer afin d’éviter les doublons",
+      "X a enregistré le brouillon de l’Article et déduit 20 credits sans pouvoir le publier. Vérifiez vos brouillons X avant de réessayer afin d’éviter les doublons",
     x_image_source_unavailable:
       "Une image de cet article n’est plus disponible. Téléversez-la à nouveau avant de publier",
     x_image_upload_failed:
