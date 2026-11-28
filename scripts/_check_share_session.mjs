@@ -11,9 +11,9 @@ try {
   const mocks = {
     "@tanstack/react-router": `
       import React from 'react';
-      export const useParams = () => ({token: 'release-review'});
+      export const useParams = () => ({token: 'abcdef0123456789abcdef0123456789'});
       export const useNavigate = () => () => {};
-      export const useRouterState = ({select}) => select({location:{pathname:'/share/release-review'}});
+      export const useRouterState = ({select}) => select({location:{pathname:'/share/abcdef0123456789abcdef0123456789'}});
       export const Link = ({children}) => React.createElement('a', null, children);
     `,
     "@tiptap/react": `
@@ -61,7 +61,7 @@ try {
   const { window } = parseHTML("<html><head><title>Test</title></head><body></body></html>");
   globalThis.window = window;
   globalThis.document = window.document;
-  window.location = { pathname: "/share/release-review" };
+  window.location = { pathname: "/share/abcdef0123456789abcdef0123456789" };
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const [{ default: React, act }, { createRoot }, { QueryClient, QueryClientProvider }, { SharePage, sessionQueryOptions }] = await Promise.all([
     import("react"), import("react-dom/client"), import("@tanstack/react-query"), import(pathToFileURL(bundlePath).href),
@@ -70,7 +70,7 @@ try {
   const user = { authUserId: "review-user", nickname: "review" };
   const full = { title: "Article", content: "VISIBLE HALF — HIDDEN HALF", isPreview: false, viewCount: 1 };
   const preview = { ...full, content: "VISIBLE HALF", isPreview: true };
-  const shareKey = ["share", "release-review", user.authUserId];
+  const shareKey = ["share", "abcdef0123456789abcdef0123456789", user.authUserId];
   let sessionStatus, protectedShare, delayedVerification, delayedShare, delayedSession, shareFailure;
   const response = (value, status = 200) => new Response(JSON.stringify(value), { status });
   globalThis.fetch = async (path) => {
@@ -83,11 +83,11 @@ try {
       if (sessionStatus === "offline") throw new TypeError("Failed to fetch");
       return sessionStatus === 200 ? response({ user }) : response({ error: "rejected" }, sessionStatus);
     }
-    if (path === "/api/share/release-review/verify") {
+    if (path === "/api/share/abcdef0123456789abcdef0123456789/verify") {
       if (delayedVerification) return delayedVerification;
       return response({ document: sessionStatus === 200 ? full : preview });
     }
-    if (path === "/api/share/release-review") {
+    if (path === "/api/share/abcdef0123456789abcdef0123456789") {
       if (shareFailure) return response({ code: shareFailure === 404 ? "share_not_found" : "share_unavailable" }, shareFailure);
       if (delayedShare) {
         const pending = delayedShare;
@@ -126,7 +126,7 @@ try {
     const refresh = () => qc.fetchQuery({ ...sessionQueryOptions(qc), staleTime: 0 });
     try {
       await flush(() => root.render(React.createElement(QueryClientProvider, { client: qc }, React.createElement(SharePage))));
-      await waitFor(protectedMode ? hasGate : hasFull);
+      await waitFor(protectedMode ? hasGate : initialStatus === 200 ? hasFull : hasPreview);
       await run(qc, refresh);
     } finally {
       await flush(() => root.unmount());
@@ -205,7 +205,7 @@ try {
     sessionStatus = 401;
     await flush(refresh);
     await waitFor(hasPreview);
-    const guestKey = ["share", "release-review", "guest"];
+    const guestKey = ["share", "abcdef0123456789abcdef0123456789", "guest"];
     await flush(() => qc.setQueryData(guestKey, { document: full }));
     await waitFor(hasFull);
     await flush(refresh);
@@ -306,6 +306,26 @@ try {
       }
     });
   }
+
+  await scenario(false, async (qc) => {
+    function assertRegistrationCTA(label) {
+      const registrations = [...document.querySelectorAll('a[href^="/register?"]')];
+      assert.equal(registrations.length, 1);
+      assert.equal(registrations[0].textContent, label);
+      const url = new URL(registrations[0].getAttribute("href"), "https://koinote.app");
+      assert.equal(url.searchParams.get("shareSignupToken"), "abcdef0123456789abcdef0123456789");
+      assert.equal(url.searchParams.get("redirectTo"), "/share/abcdef0123456789abcdef0123456789");
+      for (const link of document.querySelectorAll('a[href^="/login?"]')) {
+        assert.equal(link.getAttribute("href").includes("shareSignupToken"), false);
+      }
+    }
+    await waitFor(hasPreview);
+    assertRegistrationCTA("sharedReadFull");
+    // 会话尚未确认时收到全文的既有兼容分支会展示页尾注册 CTA。
+    await flush(() => qc.setQueryData(["share", "abcdef0123456789abcdef0123456789", "guest"], { document: full }));
+    await waitFor(hasFull);
+    assertRegistrationCTA("sharedSignup");
+  }, 401);
 
   console.log("share session checks passed (expiry, re-login, transient errors, guest-key unlocks, previews, in-flight responses, throttling and retry)");
 } finally {

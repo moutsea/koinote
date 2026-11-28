@@ -68,7 +68,7 @@
     "test:admin-llm": "node scripts/_check_admin_llm.mjs",
     "test:account-pages": "node scripts/_check_account_pages.mjs",
     "test:password-security-ui": "node scripts/_check_password_security_ui.mjs",
-    "test:growth-ui": "node scripts/_check_growth_ui.mjs",
+    "test:growth-ui": "node scripts/_check_growth_ui.mjs && node scripts/_check_registration_attribution.mjs && node scripts/_check_registration_flow.mjs",
     "test:share-session": "node scripts/_check_share_session.mjs && node scripts/_check_session_cache.mjs",
     "test:share-preview": "node scripts/_check_share_preview.mjs",
     "test:changelog": "esbuild spa/src/changelogCore.ts --bundle --format=esm --platform=neutral --outfile=scripts/_changelog_core_bundle.mjs --log-level=error && node scripts/_check_changelog.mjs; ec=$?; rm -f scripts/_changelog_core_bundle.mjs; exit $ec",
