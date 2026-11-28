@@ -65,6 +65,8 @@ const CHANGELOGS: Record<Locale, { markdown: string; file: string }> = {
 /** 静态正文只放最近几个版本：够爬虫理解页面，又不至于把 HTML 撑到几百 KB */
 const CHANGELOG_RELEASES = 8;
 const OG_IMAGE_PATH = "/og-image.png";
+// 详情组件接管并在离开时移除，避免 SPA 导航把 noindex 留在公开页。
+const REPOSITORY_ROBOTS_META = '<meta name="robots" content="noindex" data-repository-robots>';
 /** 这些页面以前是纯静态资源，后端慢时宁可少一段正文，也不能拖住首字节 */
 const BACKEND_TIMEOUT_MS = 1500;
 /** sitemap 的仓库清单是一次性取全量，数据比页面正文多，超时放宽一些 */
@@ -775,6 +777,22 @@ async function renderPublicPage(page: PublicPage, request: Request, env: SeoEnv)
   return htmlResponse(request, shell, html, 200, explicit ? {} : { vary: "Accept-Language" });
 }
 
+function repositoryFallbackResponse(id: string, request: Request, shell: Response, template: string): Response {
+  const canonical = escapeHTML(`${new URL(request.url).origin}/repositories/${id}`);
+  const html = template.replace("</head>", () => `<link rel="canonical" href="${canonical}">
+</head>`);
+  return htmlResponse(request, shell, html, 200, { "x-robots-tag": "noindex", "cache-control": "no-store" });
+}
+
+/** SEO 渲染异常时仍返回可恢复的仓库外壳，并去掉旧静态资源的条件请求头。 */
+export async function renderRepositoryFallback(id: string, request: Request, env: SeoEnv): Promise<Response> {
+  const shell = await fetchShell(request, env);
+  if (!shell.ok) return shell;
+  const template = (await shell.text()).replace("</head>", () => `${REPOSITORY_ROBOTS_META}
+</head>`);
+  return repositoryFallbackResponse(id, request, shell, template);
+}
+
 async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): Promise<Response> {
   const url = new URL(request.url);
   const explicit = requestedLocale(url);
@@ -785,13 +803,14 @@ async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): 
     backendJSON<{ repository?: RepositoryDetail }>({ env, request }, `/api/agent/repositories/${id}`),
   ]);
   if (!shell.ok) return shell;
-  const template = await shell.text();
+  const template = (await shell.text()).replace("</head>", () => `${REPOSITORY_ROBOTS_META}
+</head>`);
   // 后端对不存在、已撤回或格式不对的 ID 返回 404/400
   if (detail?.status === 404 || detail?.status === 400) return notFoundResponse(request, shell, template);
   const repository = detail?.status === 200 ? detail.data?.repository : undefined;
-  // 后端暂时不可用：给原样的 SPA，让前端自己重试，别把错误状态写进索引
+  // 后端暂时不可用：保留 SPA 外壳与索引指令，让前端自己重试。
   if (!repository || !text(repository.name)) {
-    return htmlResponse(request, shell, template, 200, { "cache-control": "no-store" });
+    return repositoryFallbackResponse(id, request, shell, template);
   }
 
   const summary = text(repository.description).trim() || labels.hubNoDescription;
@@ -815,7 +834,10 @@ async function renderRepositoryPage(id: string, request: Request, env: SeoEnv): 
       `<p>${link(PUBLIC_PAGE_PATHS.repositories, labels.publicRepositories)}</p>`,
     ].join(""),
   });
-  return htmlResponse(request, shell, html, 200, explicit ? {} : { vary: "Accept-Language" });
+  return htmlResponse(request, shell, html, 200, {
+    "x-robots-tag": "noindex",
+    ...(explicit ? {} : { vary: "Accept-Language" }),
+  });
 }
 
 function robotsTxt(origin: string, previewHost: boolean): Response {

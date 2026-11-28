@@ -80,6 +80,16 @@ function AgentPublicRepositoryDetail({ repositoryId, user }: { repositoryId: str
     if (member && hasSkills) openKoi();
     else if (hasSkills) setKoiMessage(t.koi.koiMembersOnly);
   }, [routeSearch.installKoi, repository, user, member, hasSkills]);
+  // 接管 Worker 的标记；站内进入时补建，离开时只清理本页拥有的节点。
+  useEffect(() => {
+    const robots = document.querySelector<HTMLMetaElement>("meta[data-repository-robots]") ?? document.createElement("meta");
+    robots.name = "robots";
+    robots.content = "noindex";
+    robots.setAttribute("data-repository-robots", "");
+    document.head.appendChild(robots);
+    return () => robots.remove();
+  }, []);
+
   // AppShell 的统一同步不管本页的标题和描述（见 seoMeta.pageOwnsMeta），由这里按仓库
   // 数据设置，与 Worker 首屏渲染的保持一致。
   // 数据回来之前不改：首屏已由 Worker 按仓库写好，先改成通用标题会闪一下。

@@ -57,6 +57,8 @@ globalThis.fetch = async (input, init) => {
   const headers = new Headers(init?.headers);
   assert.equal(headers.get("x-koinote-internal-token"), "internal");
   assert.equal(init?.redirect, "manual", "带内部令牌的请求不能跟随跳转");
+  assert.equal(headers.get("cookie"), null, "SEO 只读取公开仓库数据");
+  assert.equal(headers.get("authorization"), null);
   if (url.pathname === "/api/agent/repositories/400") {
     return Response.json({ error: "bad_request" }, { status: 400 });
   }
@@ -66,7 +68,7 @@ globalThis.fetch = async (input, init) => {
   if (url.pathname === "/api/agent/repositories") {
     return Response.json({ repositories, nextCursor: null });
   }
-  if (url.pathname === "/api/agent/repositories/7") {
+  if (/^\/api\/agent\/repositories\/(7|117|130|168|224|530)$/.test(url.pathname)) {
     return Response.json({
       repository: { ...repositories[0], license: "MIT", files: [{ path: "SKILL.md" }] },
     });
@@ -179,12 +181,48 @@ try {
   assert.doesNotMatch(hub, /repositories\/(8|9)"/);
   const repository = await get("/repositories/7?lang=zh");
   assert.equal(repository.status, 200);
+  assert.equal(repository.headers.get("x-robots-tag"), "noindex");
   const repositoryHTML = await repository.text();
+  assert.match(repositoryHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
   assert.match(repositoryHTML, /<title>Writer &lt;Skill&gt; — Skills\/Agent Hub — Koinote<\/title>/);
   assert.match(repositoryHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
   assert.match(repositoryHTML, /许可证: MIT/);
   assert.match(repositoryHTML, /<li>SKILL\.md<\/li>/);
   assert.equal(repository.headers.get("vary"), null, "显式 lang 的仓库页内容固定");
+  // 参数只控制 UI；GET/HEAD 的索引策略与登录态无关。
+  for (const query of ["", "?lang=en", "?lang=fr", "?lang=ja", "?lang=de", "?file=SKILL.md", "?file=docs%2Fguide%20zh.md&lang=zh", "?lang=ja&file=&source=system&installKoi=true"]) {
+    for (const method of ["GET", "HEAD"]) {
+      for (const cookie of ["", "session=test-viewer"]) {
+        const response = await worker.fetch(new Request(`https://koinote.app/repositories/7${query}`, { method, headers: { cookie } }), env());
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("x-robots-tag"), "noindex");
+        const html = await response.text();
+        if (method === "HEAD") {
+          assert.equal(html, "");
+        } else {
+          assert.equal((html.match(/name="robots"/g) ?? []).length, 1);
+          assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+          assert.equal((html.match(/rel="canonical"/g) ?? []).length, 1);
+          assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+          assert.match(html, /<li>SKILL\.md<\/li>/);
+        }
+      }
+    }
+  }
+  for (const query of ["", "?lang=zh", "?lang=en", "?lang=fr", "?lang=ja"]) {
+    const directory = await get(`/repositories${query}`);
+    assert.equal(directory.status, 200);
+    assert.equal(directory.headers.get("x-robots-tag"), null);
+    assert.doesNotMatch(await directory.text(), /name="robots"[^>]*noindex/);
+  }
+  assert.doesNotMatch(robotsText, /Disallow:.*repositories|Disallow:.*file/);
+  // 同号模拟数据只验证路由策略；这些生产仓库的状态由上线后验收。
+  for (const id of [224, 530, 130, 168, 117]) {
+    const response = await get(`/repositories/${id}?file=SKILL.md`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-robots-tag"), "noindex");
+    assert.ok((await response.text()).includes(`<link rel="canonical" href="https://koinote.app/repositories/${id}">`));
+  }
   const negotiatedRepository = await get("/repositories/7", { "accept-language": "ja" });
   assert.equal(negotiatedRepository.headers.get("vary"), "Accept-Language");
   assert.match(await negotiatedRepository.text(), /<html lang="ja"/);
@@ -196,6 +234,23 @@ try {
   const zeroPadded = await get("/repositories/0007?lang=en");
   assert.equal(zeroPadded.status, 301);
   assert.equal(zeroPadded.headers.get("location"), "https://koinote.app/repositories/7?lang=en");
+
+  for (const path of ["/repositories/404?file=SKILL.md", "/repositories/400?lang=zh", "/repositories/0", "/repositories/invalid"]) {
+    for (const method of ["GET", "HEAD"]) {
+      const response = await worker.fetch(new Request(`https://koinote.app${path}`, { method }), env());
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get("x-robots-tag"), "noindex");
+      const html = await response.text();
+      if (method === "HEAD") assert.equal(html, "");
+      else assert.doesNotMatch(html, /rel="canonical"/);
+    }
+  }
+  const normalized = await get("/Repositories/0007/?file=SKILL.md&lang=fr");
+  assert.equal(normalized.status, 301);
+  assert.equal(normalized.headers.get("location"), "https://koinote.app/repositories/7?file=SKILL.md&lang=fr");
+  const destination = await get(new URL(normalized.headers.get("location")).pathname + new URL(normalized.headers.get("location")).search);
+  assert.equal(destination.status, 200);
+  assert.equal(destination.headers.get("x-robots-tag"), "noindex");
 
   // HEAD 没有正文，不该为正文去打后端
   backendCalls = 0;
@@ -231,7 +286,39 @@ try {
   const fallback = await get("/repositories/7");
   assert.equal(fallback.status, 200);
   assert.equal(fallback.headers.get("cache-control"), "no-store");
-  assert.match(await fallback.text(), /<div id="root"><\/div>/);
+  assert.equal(fallback.headers.get("x-robots-tag"), "noindex");
+  const fallbackHTML = await fallback.text();
+  assert.match(fallbackHTML, /<div id="root"><\/div>/);
+  assert.match(fallbackHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
+  assert.match(fallbackHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+  for (const backendFailure of [
+    async () => { throw new Error("backend down"); },
+    async () => new Response("unavailable", { status: 503 }),
+    async () => Response.json({ repository: { name: null } }),
+    async () => new Response("invalid json", { headers: { "content-type": "application/json" } }),
+    (_input, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason))),
+  ]) {
+    globalThis.fetch = backendFailure;
+    const timer = setTimeout(() => {}, 10_000);
+    try {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md&lang=zh", { method }), env());
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("x-robots-tag"), "noindex");
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        const html = await response.text();
+        if (method === "HEAD") assert.equal(html, "");
+        else {
+          assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+          assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+          assert.match(html, /<div id="root"><\/div>/);
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  globalThis.fetch = async () => { throw new Error("backend down"); };
 
   // 渲染中途抛错：退回原样的静态资源，而不是整页 500
   let shellCalls = 0;
@@ -247,6 +334,55 @@ try {
   const recovered = await worker.fetch(new Request("https://koinote.app/docs"), flaky);
   assert.equal(recovered.status, 200);
   assert.match(await recovered.text(), /<div id="root"><\/div>/);
+
+  // SEO 抛错后的仓库回退也要覆盖旧 ETag 和 HEAD。
+  for (const method of ["GET", "HEAD"]) {
+    let attempts = 0;
+    const recoveredRepository = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md&lang=zh", {
+      method, headers: { "if-none-match": '"shell"' },
+    }), env({
+      ASSETS: { fetch: async (request) => {
+        attempts++;
+        if (attempts === 1) throw new Error("asset fetch failed");
+        assert.equal(request.headers.get("if-none-match"), null);
+        assert.equal(request.method, "GET");
+        return new Response(shell, { headers: { "content-type": "text/html", etag: '"shell"' } });
+      } },
+    }));
+    assert.equal(attempts, 2);
+    assert.equal(recoveredRepository.status, 200);
+    assert.equal(recoveredRepository.headers.get("x-robots-tag"), "noindex");
+    assert.equal(recoveredRepository.headers.get("cache-control"), "no-store");
+    assert.equal(recoveredRepository.headers.get("etag"), null);
+    const html = await recoveredRepository.text();
+    if (method === "HEAD") assert.equal(html, "");
+    else {
+      assert.equal((html.match(/name="robots"/g) ?? []).length, 1);
+      assert.match(html, /<meta name="robots" content="noindex" data-repository-robots>/);
+      assert.match(html, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+    }
+  }
+
+  // ASSETS 成功返回响应后，读取 HTML 流仍可能失败。
+  globalThis.fetch = async () => Response.json({ repository: { name: "Writer", files: [] } });
+  let bodyAttempts = 0;
+  const brokenContent = await worker.fetch(new Request("https://koinote.app/repositories/7?file=SKILL.md"), env({
+    ASSETS: { fetch: async () => {
+      bodyAttempts++;
+      const body = bodyAttempts === 1
+        ? new ReadableStream({ start(controller) { controller.error(new Error("asset body failed")); } })
+        : shell;
+      return new Response(body, { headers: { "content-type": "text/html" } });
+    } },
+  }));
+  assert.equal(bodyAttempts, 2);
+  assert.equal(brokenContent.status, 200);
+  assert.equal(brokenContent.headers.get("x-robots-tag"), "noindex");
+  assert.equal(brokenContent.headers.get("cache-control"), "no-store");
+  const brokenHTML = await brokenContent.text();
+  assert.match(brokenHTML, /<meta name="robots" content="noindex" data-repository-robots>/);
+  assert.match(brokenHTML, /<link rel="canonical" href="https:\/\/koinote\.app\/repositories\/7">/);
+  globalThis.fetch = async () => { throw new Error("backend down"); };
 
   // 应用页 noindex，未知路径真正 404，静态资源原样
   for (const path of ["/editor", "/editor/abc", "/settings", "/login", "/space/settings", "/share/not-a-token"]) {
