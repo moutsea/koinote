@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { DOMParser } from "linkedom";
 import worker from "./_seo_bundle.mjs";
 import { classifyPath, SEO_GUARD_SCRIPT, SEO_GUARD_SCRIPT_HASH } from "./_seo_routes_bundle.mjs";
 
@@ -41,15 +42,6 @@ const repositories = [
   { workspaceId: 8, name: null, description: 3, updatedAt: 20261001 },
   { workspaceId: "9", name: "String id" },
 ];
-// sitemap 的仓库清单：远超 Hub 列表一页（12 个）乘以旧的翻页上限（10 页）
-const sitemapFeed = [
-  { workspaceId: 7, updatedAt: "2026-10-01T08:00:00+08:00" },
-  ...Array.from({ length: 180 }, (_, index) => ({ workspaceId: 1000 + index, updatedAt: "2026-09-01T00:00:00Z" })),
-  // 类型不对的条目跳过
-  { workspaceId: "9" },
-  { workspaceId: 0 },
-  null,
-];
 let backendCalls = 0;
 globalThis.fetch = async (input, init) => {
   backendCalls++;
@@ -61,9 +53,6 @@ globalThis.fetch = async (input, init) => {
   assert.equal(headers.get("authorization"), null);
   if (url.pathname === "/api/agent/repositories/400") {
     return Response.json({ error: "bad_request" }, { status: 400 });
-  }
-  if (url.pathname === "/api/agent/repositories/sitemap") {
-    return Response.json({ repositories: sitemapFeed });
   }
   if (url.pathname === "/api/agent/repositories") {
     return Response.json({ repositories, nextCursor: null });
@@ -100,22 +89,50 @@ try {
   assert.equal(previewPage.headers.get("x-robots-tag"), "noindex");
   assert.doesNotMatch(robotsText, /Disallow: \/editor/, "应用页靠 noindex，不能被 Disallow 挡住");
 
+  const beforeSitemap = backendCalls;
   const sitemap = await get("/sitemap.xml");
+  assert.equal(sitemap.status, 200);
   assert.match(sitemap.headers.get("content-type"), /application\/xml/);
+  assert.equal(sitemap.headers.get("cache-control"), "public, max-age=3600");
   const sitemapXml = await sitemap.text();
-  for (const path of ["/", "/pricing", "/docs/mcp", "/changelog", "/privacy"]) {
-    assert.ok(sitemapXml.includes(`<loc>https://koinote.app${path}</loc>`), `sitemap 缺少 ${path}`);
+  const publicPaths = [
+    "/", "/pricing", "/docs", "/docs/mcp", "/docs/version-history", "/docs/ai-optimization",
+    "/docs/ai-optimization/case", "/docs/wechat-official-account", "/changelog",
+    "/privacy", "/terms", "/cookies", "/repositories",
+  ];
+  const languages = { zh: "zh-CN", en: "en", fr: "fr", ja: "ja" };
+  const expectedUrls = publicPaths.flatMap((path) => [
+    `https://koinote.app${path}`,
+    ...Object.keys(languages).map((locale) => `https://koinote.app${path}?lang=${locale}`),
+  ]);
+  const xml = new DOMParser().parseFromString(sitemapXml, "text/xml");
+  assert.equal(xml.documentElement.tagName, "urlset");
+  assert.equal(xml.documentElement.getAttribute("xmlns"), "http://www.sitemaps.org/schemas/sitemap/0.9");
+  assert.equal(xml.documentElement.getAttribute("xmlns:xhtml"), "http://www.w3.org/1999/xhtml");
+  assert.deepEqual([...xml.querySelectorAll("loc")].map((node) => node.textContent).sort(), expectedUrls.sort());
+  for (const entry of xml.querySelectorAll("url")) {
+    const canonical = new URL(entry.querySelector("loc").textContent);
+    const base = canonical.origin + canonical.pathname;
+    const alternates = [...entry.getElementsByTagName("xhtml:link")];
+    assert.equal(alternates.length, 5);
+    const alternateUrls = Object.fromEntries(alternates.map((node) => [
+      node.getAttribute("hreflang"), node.getAttribute("href"),
+    ]));
+    const expectedAlternates = Object.fromEntries([
+      ...Object.entries(languages).map(([locale, lang]) => [lang, `${base}?lang=${locale}`]),
+      ["x-default", base],
+    ]);
+    assert.deepEqual(alternateUrls, expectedAlternates);
+    for (const alternate of alternates) assert.equal(alternate.getAttribute("rel"), "alternate");
   }
-  assert.ok(sitemapXml.includes("<loc>https://koinote.app/pricing?lang=ja</loc>"));
-  assert.ok(sitemapXml.includes('hreflang="zh-CN" href="https://koinote.app/docs?lang=zh"'));
-  assert.ok(sitemapXml.includes("<loc>https://koinote.app/repositories/7</loc><lastmod>2026-10-01</lastmod>"));
-  assert.equal(
-    (sitemapXml.match(/<loc>https:\/\/koinote\.app\/repositories\/\d+<\/loc>/g) ?? []).length,
-    181,
-    "sitemap 要列出后端给的全部仓库，不能停在前几页",
-  );
-  assert.doesNotMatch(sitemapXml, /repositories\/(0|9)</, "字段类型不对的仓库不进 sitemap");
+  assert.doesNotMatch(sitemapXml, /\/repositories\//, "loc 和 hreflang 都不含仓库详情地址");
   assert.doesNotMatch(sitemapXml, /\/editor|\/settings|\/share\//);
+  const sitemapHead = await worker.fetch(new Request("https://koinote.app/sitemap.xml", { method: "HEAD" }), env());
+  assert.equal(sitemapHead.status, 200);
+  assert.equal(sitemapHead.headers.get("content-type"), sitemap.headers.get("content-type"));
+  assert.equal(sitemapHead.headers.get("cache-control"), sitemap.headers.get("cache-control"));
+  assert.equal(await sitemapHead.text(), "");
+  assert.equal(backendCalls, beforeSitemap, "sitemap GET/HEAD 均不依赖后端仓库 feed");
 
   // 公开页：按语言渲染独立的 meta 与正文
   const zhPricing = await get("/pricing?lang=zh", { "if-none-match": '"shell"' });
@@ -265,7 +282,10 @@ try {
   assert.equal(backendCalls, 0, "价格应命中缓存");
 
   // 后端不可用时退回普通 SPA，不写错误状态
-  globalThis.fetch = async () => { throw new Error("backend down"); };
+  let offlineSitemapCalls = 0;
+  globalThis.fetch = async () => { offlineSitemapCalls++; throw new Error("backend down"); };
+  assert.equal(await (await get("/sitemap.xml")).text(), sitemapXml);
+  assert.equal(offlineSitemapCalls, 0, "后端故障时 sitemap 仍由公开页面清单生成");
   // 换一个后端地址，绕开上面的价格缓存
   const offlinePricing = await (
     await worker.fetch(new Request("https://koinote.app/pricing?lang=zh"), env({ BACKEND_URL: "https://down.example" }))

@@ -18,7 +18,7 @@
 
 原始需求依据 2026-11-26 的审计记录。近 28 天 Hub 页有 166 个 URL、992 次展示、7 次点击，sitemap 当时含 616 条仓库详情页，另有 84 个带 `file` 的 URL 出现在 GSC。以上数据沿用任务描述，当前环境缺少 `/workspace/seo-reports/2026-11-26/koinote-audit/`，本轮未独立复算 GSC 或 Cloudflare 数据。搜索表现变化留待上线后观察。
 
-上一会话仅做只读评审，工作区没有遗留实现或测试修改。本轮重新检查了相关源码，并补齐内部需求文档。
+需求评审开始时工作区没有遗留实现或测试修改。该阶段重新检查了相关源码，并补齐内部需求文档。后续开发进展按时间记录在本文末尾。
 
 ## 基线、分支与冲突面
 
@@ -135,3 +135,29 @@ npm run build
 - 类型检查。`npm run typecheck` 退出 0，SPA 与 Worker 的 `tsc --noEmit` 通过，Wrangler 输出 `Types at worker-configuration.d.ts are up to date.`。首次运行的本地日志写入被沙箱拒绝，随后获准重跑，结果通过且无日志错误。
 - 自审。逐文件检查 Worker 请求入口、公开后端回源、HTML 转义、条件请求头、前端生命周期和现有操作回归。响应使用公开数据，测试断言 SEO 回源不转发 Cookie 或 Authorization。`git diff --check` 通过。
 - 验证限制。热门 ID 的同号数据属于模拟验证。实际数据库、外部服务真实请求、完整浏览器导航/视觉验收和生产抽查未执行。类型检查及组件测试不代表这些环境已验收。sitemap 清理与最终构建隔离核查在第二个提交完成。
+
+
+## 开发记录二 · sitemap 与最终回归
+
+第一个提交为 `27d06d16b1fa67639e24fe3a90e637358a7ac650`，提交信息包含本卡完整 ID。提交后复核其全部文件与空白检查通过。
+
+- 根因与改动。`sitemapXml` 原先主动查询公开仓库 feed 并追加详情地址。现已移除该回源、条目拼接、专用数据过滤器与超时参数，改为同步生成公开页面清单。后端 sitemap 路由仍定义于 `backend/internal/server/server.go`，本卡仅清理 Worker 的调用方。
+- 受影响链路。浏览器或爬虫请求 `/sitemap.xml`，由 Worker 按 `PUBLIC_PAGE_PATHS` 生成 XML。13 类公开页面各保留无参数、四语言变体，共 65 个 loc，每项含完整的 5 个 hreflang 链接。详情页全部排除，GET/HEAD 都无后端回源。
+- 自审。核对 sitemap 生成的上游路由、公开页面集合、下游 XML 与 hreflang，以及普通页面仍使用的后端超时。删除的超时选项原先只有仓库 feed 使用。回归通过 XML DOM 对完整 URL 集合和每组 hreflang 进行比较，并断言后端请求计数为零，包含后端故障情形。
+- 已完成的相关命令与真实结果。`npm run test:seo` 输出 `SEO checks passed`，`npm run test:security-headers` 输出 `安全响应头：39 通过，0 失败`，`npm run test:share-og` 输出 `share OpenGraph checks passed`，`npm run test:docs-center` 输出 `文档中心：14 通过，0 失败`，以上最终退出码均为 0。
+- 仓库存储回归。`npm run test:agent-repository-storage` 首次因沙箱禁止监听 `127.0.0.1` 返回 EPERM，获准重跑后退出 0，输出 `Repository R2: authentication, bounded uploads, hashes, immutable retries, empty/max files and ranges passed.`。这是本地 Workerd/Miniflare R2 实现验证。
+- 工作区回归。`npm run test:agent-workspace` 首次因沙箱禁止测试子进程调用 `/bin/sh` 返回 EPERM，获准重跑后退出 0。实际执行 workspace、access、sharing 和 retry 四段脚本，最终输出包含 `repository robots lifecycle passed` 和 `Repository HTTP Retry-After, 601-file resume, shared cooldown, cancellation and withdrawal checks passed`。Node 输出 MockTimers 实验性 API 提示。
+- 资源记录。串行验证前 load 为 `1.46 / 2.13 / 3.42`，MemAvailable 为 `24238428 kB`。构建前发现其他 Node 测试占用约 330% CPU，load 升至 `9.58 / 7.46 / 5.13`，MemAvailable 为 `24116876 kB`，因此等待该重任务结束。
+
+### 最终验证与限制
+
+- 资源恢复后 load 为 `2.42 / 4.62 / 4.56`，MemAvailable 为 `25296476 kB`，重测试进程已退出，随后串行完成类型检查、SPA 构建和 Worker 本地打包。
+- `WRANGLER_LOG_PATH=/tmp/koinote-noindex-validation/wrangler npm run typecheck` 退出 0，耗时 10.6 秒。SPA 与 Worker 的 `tsc --noEmit` 通过，生成类型检查输出 `Types at worker-configuration.d.ts are up to date.`。日志路径通过已安装 Wrangler 的实现确认，只作用于本次命令。
+- `npm run build` 退出 0，耗时 6.7 秒，输出 `2758 modules transformed`、`built in 6.01s`、`已复制 20 个字体到 assets/fonts`。构建存在部分 chunk 超过 500 kB 的提示，最大主包约 1,970.68 kB，gzip 622.61 kB。该提示属于体积检查结果。
+- 已先查询 `wrangler deploy --help`，再执行 `WRANGLER_LOG_PATH=/tmp/koinote-noindex-validation/wrangler ./node_modules/.bin/wrangler deploy --dry-run --env production --env-file /dev/null --outdir /tmp/koinote-noindex-validation/worker --metafile /tmp/koinote-noindex-validation/worker-meta.json`。退出 0，输出 `Total Upload: 1481.03 KiB / gzip: 372.37 KiB` 和 `--dry-run: exiting now.`。这一步为本地编译与配置检查。Wrangler 提示顶层 `BACKEND_URL`、`IMAGE_READ_FALLBACK_BASE` 未出现在生产 vars，配置中的生产后端使用 secret，实际生产绑定由上线验收核实。
+- 产物隔离核查。扫描 `spa/dist` 的 132 个文件和 Worker 输出目录的 7 个文件，对 `internal-docs`、完整文件名、卡号及需求标题均得到 0 匹配；Worker metafile 的 43 项输入中没有内部文档，输出 Markdown 模块仅为四语言 CHANGELOG。最初使用短词 `koinote-hub-noindex` 检索时命中 source map 中的工作区目录名，随后核实来源并改为完整文件名和正文标识检查。
+- 源码隔离核查。worker、spa/src、public、backend 搜索 `internal-docs`、需求文件名与 `/api/docs`，结果均为空。已核对 Vite publicDir、构建输出路径和 Wrangler assets 配置。此项为源码及构建产物检查。
+- `node --check scripts/_check_seo.mjs`、`node --check scripts/_check_agent_repository_sharing.mjs` 和 `git diff --check` 均退出 0。`package.json` 没有 lint 命令，仓库也没有 ESLint/Biome 配置，因此 lint 项记录为未配置。
+- 实际数据库验证未执行。Worker 后端/ASSETS 和前端 API/路由使用模拟，R2 使用本地 Workerd/Miniflare；实际修改后的 Worker 与 React 组件均已执行。完整浏览器视觉、真实登录会话、外部服务真实调用及生产验收未执行。
+- 本卡完成两个独立自审提交。实际 base 为 `7b5c59d1f8f99d9011c891f5cb889285a04da0a6`，最终 head SHA 记录在 Kandev 任务计划和交接消息，避免文档自引用提交 SHA。后续独立评审覆盖 base 至 head 全部 diff，再由开 PR 阶段创建或复用本卡唯一 PR。
+- 上线后仍需按本文抽查清单验证热门仓库的真实状态，并由获授权人员将 `https://koinote.app/sitemap.xml` 提交 GSC、观察索引变化。本卡授权范围止于开放 PR。
